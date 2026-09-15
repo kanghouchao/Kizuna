@@ -362,13 +362,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
             HttpMethod.POST,
-            new HttpEntity<>(
-                "{\"expected_version\":"
-                    + orderVersion(storeHeaders(STORE_A), orderId)
-                    + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
-                    + totalFee
-                    + "}]}",
-                storeHeaders(STORE_A)),
+            completionFixtureRequest(orderId, totalFee, null, storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(completed.getStatusCode()).as("前提: 受注を完了できること").isEqualTo(HttpStatus.OK);
     String raw = completed.getBody().path("receipt_token").asString();
@@ -391,7 +385,7 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
             + "\"}";
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/store/orders", new HttpEntity<>(body, storeHeaders(STORE_A)), JsonNode.class);
+            "/store/orders", orderFixtureRequest(body, storeHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
     return created.getBody().path("id").asString();
   }

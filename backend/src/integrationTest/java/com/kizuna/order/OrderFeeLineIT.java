@@ -19,7 +19,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * 受注明細と導出合計の不変量を本物の PostgreSQL で検証する統合テスト。
  *
- * <p>固定するのは #751 の裁定 — 合計が常に行の総和であること、種別ごとの符号 CHECK が集約を迂回した書き込みを DB で塞ぐこと、ポイント利用の行が完了処理の専有であること。
+ * <p>固定するのは 合計が常に行の総和であること、種別ごとの符号 CHECK が集約を迂回した書き込みを DB で塞ぐこと、ポイント利用の行が完了処理の専有であること。
  *
  * <p>符号 CHECK は素の SQL でしか確かめられない。集約は同じ判定を先に行うため、API 経由の要求は DB へ届く前に 400 で撥ねられ、DDL
  * の制約が実在するかは分からないままになる。
@@ -36,13 +36,12 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
     String orderId =
         createOrder(
             """
-            "course_name": "90 分コース",
             "fee_lines": [
-              {"kind": "BASE_COURSE", "amount": 18000},
               {"kind": "OPTION", "name": "指名オプション", "amount": 3000},
               {"kind": "DISCOUNT", "name": "初回割", "amount": 5000}
             ]
-            """);
+            """,
+            18000);
 
     JsonNode detail = orderJson(orderId);
     assertThat(detail.path("total_fee").asInt()).isEqualTo(16000);
@@ -52,7 +51,7 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
     JsonNode lines = detail.path("fee_lines");
     assertThat(lines).hasSize(3);
     // 基本コース料金の名称はコース名の写しから採る
-    assertThat(lines.get(0).path("name").asString()).isEqualTo("90 分コース");
+    assertThat(lines.get(0).path("name").asString()).isEqualTo("試験用コース");
     // 減項は正値で返る（引くことは種別が表す）
     assertThat(lines.get(2).path("kind").asString()).isEqualTo("DISCOUNT");
     assertThat(lines.get(2).path("amount").asInt()).isEqualTo(5000);
@@ -68,12 +67,12 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
         update(
             orderId, "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"B\", \"amount\": 7000}]");
     assertThat(replaced.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(storedTotalFee(orderId)).isEqualTo(7000);
-    assertThat(storedLineCount(orderId)).as("差し替えは前の行を残さないこと").isEqualTo(1);
+    assertThat(storedTotalFee(orderId)).isEqualTo(7100);
+    assertThat(storedLineCount(orderId)).as("基本コースを保持し、他の行を差し替えること").isEqualTo(2);
 
     assertThat(update(orderId, "\"fee_lines\": []").getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(storedTotalFee(orderId)).isZero();
-    assertThat(storedLineCount(orderId)).isZero();
+    assertThat(storedTotalFee(orderId)).isEqualTo(100);
+    assertThat(storedLineCount(orderId)).isEqualTo(1);
   }
 
   @Test
@@ -88,8 +87,8 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
 
     assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     // 理由まで縛る。指名・受付担当の守衛も 400 を返すため、状態だけ見ると別の理由で緑になる
-    assertThat(rejected.getBody().path("error").asString()).contains("ポイント利用の明細");
-    assertThat(storedLineCount(orderId)).isZero();
+    assertThat(rejected.getBody().path("error").asString()).contains("コースとポイントの明細");
+    assertThat(storedLineCount(orderId)).isEqualTo(1);
   }
 
   @Test
@@ -109,7 +108,7 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
             orderId, "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"追加\", \"amount\": -1}]");
     assertThat(negativeOption.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(negativeOption.getBody().path("error").asString()).contains("符号約定");
-    assertThat(storedLineCount(orderId)).isZero();
+    assertThat(storedLineCount(orderId)).isEqualTo(1);
   }
 
   @Test
@@ -131,7 +130,7 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
 
     // 手動調整だけが符号を縛られない
     insertLine(orderId, "MANUAL_ADJUST", "迂回", -1);
-    assertThat(storedLineCount(orderId)).isEqualTo(1);
+    assertThat(storedLineCount(orderId)).isEqualTo(2);
   }
 
   @Test
@@ -146,7 +145,7 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
                 + " {\"kind\": \"DISCOUNT\", \"name\": \"割引\", \"amount\": 2000}]");
     assertThat(negativeTotal.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(negativeTotal.getBody().path("error").asString()).contains("内訳の総和が負になっています");
-    assertThat(storedLineCount(orderId)).as("撥ねた差し替えは行を残さないこと").isZero();
+    assertThat(storedLineCount(orderId)).as("拒否された差し替えは採用コースだけを保持すること").isEqualTo(1);
 
     // 二重の守り: 集約を迂回した書き込みも DB が塞ぐ。0 が通ることが「何でも撥ねている」ではない証明
     assertThatThrownBy(() -> setTotalFee(orderId, -1))
@@ -166,12 +165,16 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
 
     assertThat(storedTotalFee(orderId)).isEqualTo(12000);
     assertThat(storedLineSum(orderId)).as("和と合計は常に一致すること").isEqualTo(12000);
-    assertThat(storedLineCount(orderId)).as("会計の内訳が仮の行を置き換えていること").isEqualTo(1);
+    assertThat(storedLineCount(orderId)).as("採用コースと会計の内訳が残ること").isEqualTo(2);
   }
 
   // ==================== 補助 ====================
 
   private String createOrder(String extraFields) {
+    return createOrder(extraFields, 100);
+  }
+
+  private String createOrder(String extraFields, int coursePrice) {
     String body =
         "{\"business_date\": \""
             + LocalDate.now()
@@ -182,7 +185,9 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
             + "}";
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/store/orders", new HttpEntity<>(body, storeHeaders(STORE_A)), JsonNode.class);
+            "/store/orders",
+            orderFixtureRequest(body, storeHeaders(STORE_A), coursePrice),
+            JsonNode.class);
     assertThat(created.getStatusCode()).as("前提: 受注作成が成功すること").isEqualTo(HttpStatus.CREATED);
     return created.getBody().path("id").asString();
   }
@@ -196,30 +201,27 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
   private ResponseEntity<JsonNode> update(String orderId, String extraFields) {
     JsonNode current = orderJson(orderId);
     String body =
-        "{\"cast_id\": \""
+        "{\"expected_version\":"
+            + current.path("version").asLong()
+            + ",\"cast_id\": \""
             + current.path("cast_id").asString()
             + "\", \"receptionist_id\": "
             + current.path("receptionist_id").asLong()
             + ", "
             + extraFields
             + "}";
-    return rest.exchange(
+    return submitPreviewed(
         "/store/orders/" + orderId,
         HttpMethod.PUT,
-        new HttpEntity<>(body, storeHeaders(STORE_A)),
-        JsonNode.class);
+        "/store/orders/" + orderId + "/preview",
+        body,
+        storeHeaders(STORE_A));
   }
 
   private ResponseEntity<JsonNode> complete(String orderId, Integer usePoints) {
-    String body =
-        "{\"expected_version\": "
-            + orderVersion(storeHeaders(STORE_A), orderId)
-            + ", \"fee_lines\": [{\"kind\": \"SURCHARGE\", \"name\": \"会計\", \"amount\": 12000}]"
-            + (usePoints == null ? "" : ", \"use_points\": " + usePoints)
-            + "}";
     return rest.postForEntity(
         "/store/orders/" + orderId + "/completion",
-        new HttpEntity<>(body, storeHeaders(STORE_A)),
+        completionFixtureRequest(orderId, 12000, usePoints, storeHeaders(STORE_A)),
         JsonNode.class);
   }
 

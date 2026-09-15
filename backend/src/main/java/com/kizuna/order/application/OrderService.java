@@ -15,11 +15,11 @@ import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
-import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
+import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
@@ -44,7 +44,6 @@ import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
-import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
@@ -96,6 +95,7 @@ public class OrderService {
   private final StoreContext storeContext;
   private final BusinessDateService businessDateService;
   private final OrderMapper orderMapper;
+  private final OrderCourseCalculation courseCalculation;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -204,10 +204,8 @@ public class OrderService {
   }
 
   /**
-   * 店舗・HQ が起こす受注を作成する。この経路の受注は<b>確定で出生する</b>（出生状態は {@link OrderMapper#toEntity} が持つ）—
-   * 電話口で受けると決めた時点で 可否は判断済みであり、画面上でもう一度確定し直す段は無い。
-   *
-   * @param actorEmail 実行者。受付担当が省略されたときの補完先になる
+   * 店舗が起こす受注を作成する。この経路の受注は<b>確定で出生する</b>（出生状態は {@link OrderMapper#toEntity} が持つ）— 電話口で受けると決めた時点で
+   * 可否は判断済みであり、画面上でもう一度確定し直す段は無い。
    */
   @StoreScoped
   @Transactional
@@ -221,16 +219,18 @@ public class OrderService {
     // MapStructを使用して基本的なフィールドをマッピング（store_id は StoreScopeStampListener が @PrePersist で採番）
     Order order = orderMapper.toEntity(request);
 
-    // 内訳は集約に差し替えさせる。合計は行の総和として集約が導出するので、作成の契約は合計を受け取らない。
-    if (request.getFeeLines() != null) {
-      order.replaceStoreFeeLines(orderMapper.toFeeLineDrafts(request.getFeeLines()));
-    }
-
     // 指名は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
     // 店舗が起こす受注は常に新しい指名を立てるため、据え置きの余地は無く無条件に要求する。
     nominatableCast
         .findForUpdate(storeContext.getStoreId(), request.getCastId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
+    var course = courseCalculation.current(request.getCourseId(), true);
+    var calculated = courseCalculation.calculate(null, course, request.getFeeLines());
+    courseCalculation.verify(
+        request.getConfirmationToken(),
+        courseCalculation.preview("CREATE", "", request, calculated, null));
+    order.adoptCourse(course, calculated.editableFeeLines());
+
     handleCustomerLinking(request, order);
     order.assignCast(request.getCastId());
     order.assignReceptionist(resolveReceptionist(request.getReceptionistId(), actorEmail));
@@ -263,7 +263,11 @@ public class OrderService {
   @Transactional
   public OrderWorkQueueResponse update(String id, OrderUpdateRequest request) {
     Order order =
-        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+        orderRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+
+    courseCalculation.requireVersion(order, request.getExpectedVersion());
 
     // 判定は「終端か」の単一述語で行い、状態ごとに書き分けない。書き分けは同じ規則を二箇所に持たせ、
     // 片方だけが更新される入口になる（ADR 0013）。完了後の内容訂正は権限付き・記録付きの別経路が担う。
@@ -277,35 +281,7 @@ public class OrderService {
         (request.getCastId() == null || request.getCastId().isBlank()) ? null : request.getCastId();
     Long receptionistId = request.getReceptionistId();
 
-    // 指名・受付担当の検証は書き換えより先に済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
-    // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
-    //
-    // 必須性は契約ではなく受注の状態が決める。未設定のまま確定した受注（指名を外した
-    // 会員申請、受付候補でない実行者が確定したもの）は未設定のまま他項目を直せなければならない一方、
-    // 既に付いているものを省略で外せると、この汎用更新が指名解除・受付担当解除の裏口になる。
-    if (receptionistId != null) {
-      // 指名と同じく、縛るのは差し替えだけで据え置き（同じ受付担当の再送）は素通しする。この経路は
-      // 受付担当の付いた受注に receptionist_id の再送を必須にしているため、無条件に適格を要求すると、
-      // 受付担当が退職・権限剥奪・他店異動で適格でなくなった受注が備考・人数の修正もできなくなる。
-      if (!receptionistId.equals(order.getReceptionistId())) {
-        validateReceptionist(receptionistId);
-      }
-    } else if (order.getReceptionistId() != null) {
-      throw new ServiceException("受付担当を外すことはできません。受付担当を指定してください");
-    }
-    if (castId != null) {
-      // 縛るのは新しく立てる指名と差し替えだけで、据え置き（同じ指名の再送）は素通しする。この経路は指名済みの
-      // 受注に cast_id の再送を必須にしているため、無条件に在籍中を要求すると、指名者が在籍停止になった確定済みの
-      // 受注が備考・人数の修正も完了への遷移もできなくなる。据え置かれた指名は成立した時点で検証済みで、
-      // cast_id には FK も掛かっているので、素通しが存在しないキャストを通すことにはならない。
-      if (!castId.equals(order.getCastId())) {
-        nominatableCast
-            .findForUpdate(storeContext.getStoreId(), castId)
-            .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
-      }
-    } else if (order.getCastId() != null) {
-      throw new ServiceException("指名を外すことはできません。キャストを指定してください");
-    }
+    validateUpdateAssignments(order, castId, receptionistId);
 
     // 連絡先の訂正も書き換えより先に判定させる。顧客が着いた受注では集約が撥ねる（黙って捨てない）。
     // 送られなかった要求で呼ばないのは、顧客が着いた受注の他項目の編集まで巻き添えで撥ねないため。
@@ -314,6 +290,15 @@ public class OrderService {
     }
 
     // 非nullフィールドのみをドメインの部分更新コマンドとして適用
+    var course =
+        request.getCourseId() == null
+            ? order.getCourse()
+            : courseCalculation.current(request.getCourseId(), true);
+    var calculated = courseCalculation.calculate(order, course, request.getFeeLines());
+    courseCalculation.verify(
+        request.getConfirmationToken(),
+        courseCalculation.preview("UPDATE", id, request, calculated, null));
+    order.adoptCourse(course, calculated.editableFeeLines());
     order.apply(orderMapper.toPatch(request));
 
     // 関連 ID の更新（存在確認は上で済ませている）
@@ -404,7 +389,7 @@ public class OrderService {
       String id, OrderApplicationConfirmationRequest request, String actorEmail) {
     OrderApplication application =
         orderApplicationRepository
-            .findById(id)
+            .findForUpdate(id)
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
 
     // 検証は書き換えより先にすべて済ませる。撥ねる要求が集約や台帳を触った後だと、拒否の健全さが
@@ -426,14 +411,17 @@ public class OrderService {
     validateCustomerChoice(application, request);
     Long actorId = actorIdentityService.requireUserId(actorEmail);
 
+    var course = courseCalculation.current(request.getCourseId(), true);
+    var calculated = courseCalculation.calculate(null, course, request.getFeeLines());
+    courseCalculation.verify(
+        request.getConfirmationToken(),
+        courseCalculation.preview("CONFIRM", id, request, calculated, null));
     Order order =
         Order.builder()
             .businessDate(request.getBusinessDate())
             .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())
             .arrivalScheduledEndTime(request.getArrivalScheduledEndTime())
             .pax(request.getPax())
-            .courseName(request.getCourseName())
-            .courseMinutes(request.getCourseMinutes())
             .remarks(request.getRemarks())
             .status(OrderStatus.CONFIRMED)
             // 受付経路は申請が入ってきた入口を写す。店舗の作成経路（create）はこの群を拒否する。
@@ -445,6 +433,7 @@ public class OrderService {
             .requesterMemberCode(application.getRequesterMemberCode())
             .requesterDeclaredName(application.getRequesterDeclaredName())
             .build();
+    order.adoptCourse(course, calculated.editableFeeLines());
     if (request.getCastId() != null) {
       order.assignCast(request.getCastId());
     }
@@ -521,7 +510,9 @@ public class OrderService {
   public OrderCompletionResponse complete(
       String id, OrderCompletionRequest request, String actorEmail) {
     Order order =
-        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+        orderRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
     // 検証は台帳を触るより先に済ませる。撥ねる要求が仕訳を積んだ後だと、拒否の健全さがトランザクションの
     // 巻き戻しだけに掛かる（同一トランザクション内の後続の読みには積んだ仕訳が見えてしまう）。
@@ -531,7 +522,8 @@ public class OrderService {
     // 終端の受注へ現物と一致する版が届くことは無い（完了・取消が版を上げる）ので、順序を入れ替えても
     // 状態の検査が守る範囲は変わらない。
     if (!Objects.equals(order.getVersion(), request.getExpectedVersion())) {
-      throw new ConflictException("この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
+      throw new OrderConfirmationConflict(
+          "expected_version", "この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
     }
     if (order.getStatus() != OrderStatus.CONFIRMED) {
       throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
@@ -539,9 +531,7 @@ public class OrderService {
 
     // 会計の場で確定した内訳を先に当てる。合計は行の総和として集約が導出するので、以降の判定はすべて
     // その総和を基準にする。撥ねる要求はトランザクションごと巻き戻る（台帳へはまだ何も積んでいない）。
-    order.apply(
-        OrderPatch.ofAccounting(
-            request.getCourseName(), orderMapper.toFeeLineDrafts(request.getFeeLines())));
+    order.apply(OrderPatch.ofAccounting(orderMapper.toFeeLineDrafts(request.getFeeLines())));
     // 付与の基準と利用の上限は、ポイント利用の行を除いた総和で決める。利用の行を入れた後の合計は
     // ポイント控除後の請求額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
     int chargeAmount = order.grantBasisAmount();
@@ -563,6 +553,12 @@ public class OrderService {
       throw new ServiceException("利用ポイントは会計金額を超えられません");
     }
 
+    var pointsPreview = completionPoints(order, usePoints);
+    var calculated = courseCalculation.calculate(order, order.getCourse(), request.getFeeLines());
+    calculated.completeWith(usePoints, pointsPreview.grantPoints());
+    courseCalculation.verify(
+        request.getConfirmationToken(),
+        courseCalculation.preview("COMPLETE", id, request, calculated, pointsPreview));
     int granted = 0;
     String receiptToken = null;
     if (memberId != null) {
@@ -583,6 +579,10 @@ public class OrderService {
       receiptToken = issueReceiptToken(id, chargeAmount);
     }
 
+    if (granted != pointsPreview.grantPoints()
+        || pointLedgerService.usageUnit() != pointsPreview.usageUnit()) {
+      throw new OrderConfirmationConflict("confirmation_token");
+    }
     // ポイント利用は減算の明細行として内訳へ入る（台帳の減算仕訳と対になる記録）。合計はそのぶん下がる。
     order.completeWith(usePoints, granted);
     orderRepository.save(order);
@@ -609,31 +609,152 @@ public class OrderService {
     return generated.raw();
   }
 
-  /**
-   * 完了処理の事前計算。入力された会計金額でいくら付与されるか、会員なら残高がいくらかを返す。
-   *
-   * <p>付与額も利用単位も確定と同じサービス（{@link PointLedgerService}）から引く。事前計算が独自に計算すると、
-   * 画面に出した見込みと確定の結果が設定変更のたびに食い違う。
-   */
   @StoreScoped
-  @Transactional(readOnly = true)
-  public OrderCompletionPreviewResponse completionPreview(String id, int totalFee) {
-    // 会計金額は要求パラメータのため、契約の下限を持てない。負の金額は付与の計算を素通りして
-    // 負の付与になるので、台帳へ問い合わせる前に撥ねる。
-    if (totalFee < 0) {
-      throw new ServiceException("会計金額は 0 以上で指定してください");
-    }
-    Order order =
-        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+  @Transactional
+  public OrderPreviewResponse previewCreate(OrderCreateRequest request, String actor) {
+    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    if (request.getReceptionRoute() != null && !request.getReceptionRoute().isStoreSelectable())
+      throw new ServiceException("受付経路に Web 申請は指定できません");
+    nominatableCast
+        .findForUpdate(storeContext.getStoreId(), request.getCastId())
+        .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
+    resolveReceptionist(request.getReceptionistId(), actor);
+    if (request.getCustomerId() != null)
+      customerReferenceResolver.resolveForWrite(request.getCustomerId());
+    var course = courseCalculation.current(request.getCourseId(), false);
+    return courseCalculation.preview(
+        "CREATE",
+        "",
+        request,
+        courseCalculation.calculate(null, course, request.getFeeLines()),
+        null);
+  }
 
-    Long memberId = activeLink(order).map(CustomerMemberLink::getMemberId).orElse(null);
-    return OrderCompletionPreviewResponse.builder()
-        .memberLinked(memberId != null)
-        .pointBalance(memberId == null ? null : pointLedgerService.balance(memberId))
-        .usageUnit(pointLedgerService.usageUnit())
-        // 非会員の受注は確定でも付与しない。見込みだけ付与を返すと、同じ画面が出した予定と確定の結果が食い違う。
-        .grantPoints(memberId == null ? 0 : pointLedgerService.previewGrant(totalFee))
-        .build();
+  @StoreScoped
+  @Transactional
+  public OrderPreviewResponse previewConfirmation(
+      String id, OrderApplicationConfirmationRequest request) {
+    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    var application =
+        orderApplicationRepository
+            .findForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("予約申請が見つかりません"));
+    application.ensureDecidable(businessDateService.currentBusinessDate());
+    validateCustomerChoice(application, request);
+    if (request.getCastId() != null) {
+      nominatableCast
+          .findForUpdate(storeContext.getStoreId(), request.getCastId())
+          .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
+      if (!confirmedShiftLookupService.hasConfirmedShift(
+          storeContext.getStoreId(), request.getCastId(), request.getBusinessDate()))
+        throw new ServiceException("確定シフトがありません");
+    }
+    if (request.getReceptionistId() != null) validateReceptionist(request.getReceptionistId());
+    if (request.getCustomerId() != null)
+      customerReferenceResolver.resolveForWrite(request.getCustomerId());
+    var course = courseCalculation.current(request.getCourseId(), false);
+    return courseCalculation.preview(
+        "CONFIRM",
+        id,
+        request,
+        courseCalculation.calculate(null, course, request.getFeeLines()),
+        null);
+  }
+
+  private void validateUpdateAssignments(Order order, String castId, Long receptionistId) {
+    // 指名・受付担当の検証は書き換えより先に済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
+    // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
+    //
+    // 必須性は契約ではなく受注の状態が決める。未設定のまま確定した受注（指名を外した
+    // 会員申請、受付候補でない実行者が確定したもの）は未設定のまま他項目を直せなければならない一方、
+    // 既に付いているものを省略で外せると、この汎用更新が指名解除・受付担当解除の裏口になる。
+    if (receptionistId != null) {
+      // 指名と同じく、縛るのは差し替えだけで据え置き（同じ受付担当の再送）は素通しする。この経路は
+      // 受付担当の付いた受注に receptionist_id の再送を必須にしているため、無条件に適格を要求すると、
+      // 受付担当が退職・権限剥奪・他店異動で適格でなくなった受注が備考・人数の修正もできなくなる。
+      if (!receptionistId.equals(order.getReceptionistId())) {
+        validateReceptionist(receptionistId);
+      }
+    } else if (order.getReceptionistId() != null) {
+      throw new ServiceException("受付担当を外すことはできません。受付担当を指定してください");
+    }
+    if (castId != null) {
+      // 縛るのは新しく立てる指名と差し替えだけで、据え置き（同じ指名の再送）は素通しする。この経路は指名済みの
+      // 受注に cast_id の再送を必須にしているため、無条件に在籍中を要求すると、指名者が在籍停止になった確定済みの
+      // 受注が備考・人数の修正も完了への遷移もできなくなる。据え置かれた指名は成立した時点で検証済みで、
+      // cast_id には FK も掛かっているので、素通しが存在しないキャストを通すことにはならない。
+      if (!castId.equals(order.getCastId())) {
+        nominatableCast
+            .findForUpdate(storeContext.getStoreId(), castId)
+            .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
+      }
+    } else if (order.getCastId() != null) {
+      throw new ServiceException("指名を外すことはできません。キャストを指定してください");
+    }
+  }
+
+  @StoreScoped
+  @Transactional
+  public OrderPreviewResponse previewUpdate(String id, OrderUpdateRequest request) {
+    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    var order =
+        orderRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    courseCalculation.requireVersion(order, request.getExpectedVersion());
+    if (order.getStatus().isTerminal()) throw new ServiceException("完了・取消済みの受注は編集できません");
+    String castId =
+        request.getCastId() == null || request.getCastId().isBlank() ? null : request.getCastId();
+    validateUpdateAssignments(order, castId, request.getReceptionistId());
+    if (request.getContactName() != null || request.getContactPhoneNumber() != null) {
+      if (order.getCustomerId() != null) throw new ServiceException("顧客が設定された受注の連絡先は変更できません");
+    }
+    var course =
+        request.getCourseId() == null
+            ? order.getCourse()
+            : courseCalculation.current(request.getCourseId(), false);
+    return courseCalculation.preview(
+        "UPDATE",
+        id,
+        request,
+        courseCalculation.calculate(order, course, request.getFeeLines()),
+        null);
+  }
+
+  @StoreScoped
+  @Transactional
+  public OrderPreviewResponse completionPreview(String id, OrderCompletionRequest request) {
+    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    var order =
+        orderRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    courseCalculation.requireVersion(order, request.getExpectedVersion());
+    if (order.getStatus() != OrderStatus.CONFIRMED) throw new ServiceException("確定した受注だけを完了できます");
+    if (order.getCustomerId() != null) customerRepository.findByIdForUpdate(order.getCustomerId());
+    var calculated = courseCalculation.calculate(order, order.getCourse(), request.getFeeLines());
+    calculated.linkCustomer(order.getCustomerId());
+    int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
+    var points = completionPoints(calculated, usePoints);
+    calculated.completeWith(usePoints, points.grantPoints());
+    return courseCalculation.preview("COMPLETE", id, request, calculated, points);
+  }
+
+  private OrderPreviewResponse.Points completionPoints(Order order, int usePoints) {
+    var link = activeLink(order).orElse(null);
+    int unit = pointLedgerService.usageUnit();
+    Long balance = link == null ? null : pointLedgerService.balance(link.getMemberId());
+    if (usePoints < 0
+        || usePoints > order.grantBasisAmount()
+        || (usePoints > 0 && (balance == null || balance < usePoints || usePoints % unit != 0)))
+      throw new ServiceException("ポイントの利用資格・残高・利用単位・会計金額を確認してください");
+    return new OrderPreviewResponse.Points(
+        link != null,
+        balance,
+        link == null ? null : link.getMemberCode(),
+        unit,
+        usePoints,
+        link == null ? 0 : pointLedgerService.previewGrant(order.grantBasisAmount()));
   }
 
   /**
@@ -723,6 +844,9 @@ public class OrderService {
             .map(orderMapper::toResponse)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + order.getId()));
     response.setFeeLines(orderMapper.toFeeLineResponses(order.getFeeLines()));
+    response.getFeeLines().stream()
+        .filter(line -> "BASE_COURSE".equals(line.getKind()))
+        .forEach(line -> line.setRemuneration(order.getCourse().remuneration()));
     return response;
   }
 

@@ -1,15 +1,21 @@
 package com.kizuna.order.domain;
 
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface OrderApplicationRepository extends JpaRepository<OrderApplication, String> {
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select a from OrderApplication a where a.id = :id")
+  Optional<OrderApplication> findForUpdate(String id);
 
   // キャストの表示名は ID 参照のため JPQL join で取得する。
   String VIEW_SELECT =

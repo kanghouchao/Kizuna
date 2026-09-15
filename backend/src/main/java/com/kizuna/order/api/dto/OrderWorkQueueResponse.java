@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.domain.OrderCourse;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import lombok.AllArgsConstructor;
@@ -17,6 +18,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderWorkQueueResponse {
+  private OrderCourse course;
   private String id;
   private Long receptionistId;
   private String receptionistName;
@@ -25,7 +27,6 @@ public class OrderWorkQueueResponse {
   private String castId;
   private String castName;
   private Integer pax;
-  private Integer courseMinutes;
   private String remarks;
   private String status;
   private String receptionRoute;

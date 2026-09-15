@@ -1,13 +1,16 @@
 'use client';
 
+import { useOrderConfirmation } from './useOrderConfirmation';
+
 import { OrderForm, OrderFormData } from './OrderForm';
 import { notify } from '@/shared/notify';
 import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { OrderCreateRequest, orderApi, toFeeLineInputs } from '@/entities/order';
-import { storePath } from '@/shared/lib';
+import { getApiErrorMessage, storePath } from '@/shared/lib';
 
 export default function CreateOrderPage() {
+  const confirmation = useOrderConfirmation();
   const router = useRouter();
   const params = useParams();
   const storeId = params.storeId as string;
@@ -29,31 +32,34 @@ export default function CreateOrderPage() {
           : undefined,
         // 空欄は「未入力」として送らない — Number('') は 0 になり、サーバ側の @Min(1) に撥ねられる
         pax: `${data.pax ?? ''}` === '' ? undefined : Number(data.pax),
-        course_minutes: Number(data.course_minutes),
         extension_minutes: Number(data.extension_minutes),
         fee_lines: toFeeLineInputs(data.fee_lines),
       };
 
-      await orderApi.create(request);
+      const token = await confirmation.confirm(() => orderApi.previewCreate(request));
+      if (!token) return;
+      await orderApi.create({ ...request, confirmation_token: token });
 
       notify.success('オーダーを登録しました');
       router.push(storePath(storeId, '/orders'));
     } catch (error) {
-      console.error(error);
-      notify.error('オーダーの登録に失敗しました');
+      notify.error(getApiErrorMessage(error, 'オーダーの登録に失敗しました'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">新規オーダー登録</h1>
-        <p className="text-sm text-muted-foreground mt-1">新しい注文情報を入力してください。</p>
-      </div>
+    <>
+      {confirmation.dialog}
+      <div>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-foreground">新規オーダー登録</h1>
+          <p className="text-sm text-muted-foreground mt-1">新しい注文情報を入力してください。</p>
+        </div>
 
-      <OrderForm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
-    </div>
+        <OrderForm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+      </div>
+    </>
   );
 }

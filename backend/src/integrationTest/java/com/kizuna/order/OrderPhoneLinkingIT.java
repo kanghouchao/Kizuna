@@ -100,7 +100,7 @@ class OrderPhoneLinkingIT extends CrossStoreTestSupport {
             + phone
             + "\"}";
     return rest.postForEntity(
-        "/store/orders", new HttpEntity<>(body, storeHeaders(STORE_A)), JsonNode.class);
+        "/store/orders", orderFixtureRequest(body, storeHeaders(STORE_A)), JsonNode.class);
   }
 
   private String createCustomer(String name, String phone) {

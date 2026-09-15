@@ -97,7 +97,7 @@ class CustomerDeletionIT extends CrossStoreTestSupport {
             + "\"}";
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/store/orders", new HttpEntity<>(body, managerHeaders(STORE_A)), JsonNode.class);
+            "/store/orders", orderFixtureRequest(body, managerHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
   }
 

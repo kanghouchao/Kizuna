@@ -1,3 +1,4 @@
+import { chooseCourse, confirmPreview } from '../lib/orderTestSupport';
 jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1' }) }));
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { OrderApplicationConfirmModal } from '../ui/OrderApplicationConfirmModal';
@@ -6,8 +7,15 @@ import { customerApi } from '@/entities/customer';
 
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order/model/types'),
-  orderApi: { listReceptionists: jest.fn(), listCastCandidates: jest.fn() },
-  orderApplicationApi: { confirm: jest.fn() },
+  orderApi: {
+    ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
+    listReceptionists: jest.fn(),
+    listCastCandidates: jest.fn(),
+  },
+  orderApplicationApi: {
+    ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
+    confirm: jest.fn(),
+  },
 }));
 
 jest.mock('@/entities/customer', () => ({
@@ -82,7 +90,9 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
     const item = await screen.findByRole('option', { name: '受付花子' });
     fireEvent.pointerDown(item);
     fireEvent.click(item);
+    await chooseCourse();
     fireEvent.click(confirmButton());
+    await confirmPreview();
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
     expect(mockedConfirm.mock.calls[0][1].receptionist_id).toBe(7);
   });
@@ -114,7 +124,9 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
     renderModal(guestApplication());
     await screen.findByText('顧客（ゲスト申請）');
 
+    await chooseCourse();
     fireEvent.click(confirmButton());
+    await confirmPreview();
 
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
     // 既定で台帳行を起こすと、店員が判断しないまま重複した行が積み上がる
@@ -129,7 +141,9 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
     await pickCustomerMode('新規に台帳へ登録する');
     await screen.findByLabelText('お客様名');
 
+    await chooseCourse();
     fireEvent.click(confirmButton());
+    await confirmPreview();
 
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
     expect(mockedConfirm.mock.calls[0][1].new_customer).toEqual({
@@ -151,28 +165,29 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '検索' }));
     fireEvent.click(await screen.findByRole('button', { name: /ゲスト花子/ }));
+    await chooseCourse();
     fireEvent.click(confirmButton());
+    await confirmPreview();
 
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
     expect(mockedConfirm.mock.calls[0][1].customer_id).toBe('cust-1');
     expect(mockedConfirm.mock.calls[0][1].new_customer).toBeUndefined();
   });
 
-  it('ゲスト申請の確定でも、顧客の決め方と一緒にコース名の快照を運ぶ', async () => {
+  it('ゲスト申請の確定でも、顧客の決め方と一緒に選択したコースを運ぶ', async () => {
     // 確定は受注の出生なので、快照が写る経路は会員申請とゲスト申請で分かれない。
     // 顧客の決め方（ゲスト専用）と快照（両方）が同じ要求に同居することを固定する
     renderModal(guestApplication());
     await screen.findByText('顧客（ゲスト申請）');
     await pickCustomerMode('新規に台帳へ登録する');
     await screen.findByLabelText('お客様名');
-    fireEvent.change(screen.getByLabelText('コース名（任意）'), {
-      target: { value: '90 分コース' },
-    });
 
+    await chooseCourse();
     fireEvent.click(confirmButton());
+    await confirmPreview();
 
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
-    expect(mockedConfirm.mock.calls[0][1].course_name).toBe('90 分コース');
+    expect(mockedConfirm.mock.calls[0][1].course_id).toBe('course-1');
     expect(mockedConfirm.mock.calls[0][1].new_customer).toEqual({
       name: 'ゲスト花子',
       phone_number: '09000000000',

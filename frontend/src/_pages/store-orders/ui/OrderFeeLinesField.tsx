@@ -46,8 +46,6 @@ interface OrderFeeLinesFieldProps {
    * 送信の対象にも入らない。
    */
   systemLines?: OrderFeeLine[];
-  /** 適用中のコース名。基本コース料金の行の名称はこの写しから採るため、空だとその種別を選べない。 */
-  courseName?: string;
 }
 
 /**
@@ -59,14 +57,13 @@ interface OrderFeeLinesFieldProps {
  *
  * ポイント利用の行は台帳の減算仕訳と対で書かれた記録なので、この欄からは触れない。
  */
-export function OrderFeeLinesField({ systemLines = [], courseName }: OrderFeeLinesFieldProps) {
+export function OrderFeeLinesField({ systemLines = [] }: OrderFeeLinesFieldProps) {
   const { control, watch } = useFormContext<OrderFeeLinesFormValues>();
   const { fields, append, remove } = useFieldArray<OrderFeeLinesFormValues, 'fee_lines'>({
     control,
     name: 'fee_lines',
   });
   const lines = watch('fee_lines') ?? [];
-  const hasCourseName = (courseName ?? '').trim() !== '';
 
   return (
     <div className="space-y-3">
@@ -90,7 +87,6 @@ export function OrderFeeLinesField({ systemLines = [], courseName }: OrderFeeLin
         <div className="space-y-3">
           {fields.map((field, index) => {
             const kind = lines[index]?.kind ?? 'OPTION';
-            const nameFromCourse = kind === 'BASE_COURSE';
             return (
               <div key={field.id} className="flex items-start gap-3 rounded-lg border p-3">
                 <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-3">
@@ -112,12 +108,7 @@ export function OrderFeeLinesField({ systemLines = [], courseName }: OrderFeeLin
                           </FormControl>
                           <SelectContent>
                             {KIND_ITEMS.map(item => (
-                              <SelectItem
-                                key={item.value}
-                                value={item.value}
-                                // コース名が無いと行の名称の写し元が無いため、集約が撥ねる
-                                disabled={item.value === 'BASE_COURSE' && !hasCourseName}
-                              >
+                              <SelectItem key={item.value} value={item.value}>
                                 {item.label}
                               </SelectItem>
                             ))}
@@ -132,9 +123,7 @@ export function OrderFeeLinesField({ systemLines = [], courseName }: OrderFeeLin
                     name={`fee_lines.${index}.name`}
                     rules={{
                       validate: value =>
-                        nameFromCourse ||
-                        (value ?? '').trim() !== '' ||
-                        '明細の名称を入力してください',
+                        (value ?? '').trim() !== '' || '明細の名称を入力してください',
                     }}
                     render={({ field: nameField }) => (
                       <FormItem>
@@ -142,9 +131,7 @@ export function OrderFeeLinesField({ systemLines = [], courseName }: OrderFeeLin
                         <FormControl>
                           <Input
                             {...nameField}
-                            value={nameFromCourse ? (courseName ?? '') : (nameField.value ?? '')}
-                            // 基本コース料金の名称はコース名の写し。行の側に別の名前を名乗らせない
-                            disabled={nameFromCourse}
+                            value={nameField.value ?? ''}
                             aria-label={`明細${index + 1}の名称`}
                           />
                         </FormControl>

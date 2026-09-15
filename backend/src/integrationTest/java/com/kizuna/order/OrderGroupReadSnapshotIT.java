@@ -96,7 +96,12 @@ class OrderGroupReadSnapshotIT extends CrossStoreTestSupport {
 
   private String seedOrder() {
     Order order =
-        Order.builder().businessDate(LocalDate.now()).pax(2).status(OrderStatus.CONFIRMED).build();
+        Order.builder()
+            .course(courseFixture(STORE_A, 100))
+            .businessDate(LocalDate.now())
+            .pax(2)
+            .status(OrderStatus.CONFIRMED)
+            .build();
     order.setStoreId(STORE_A);
     return orderRepository.save(order).getId();
   }

@@ -51,6 +51,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
   void managerCorrectsTheCompletedOrderAndLeavesAChainOfPriorValues() {
     String orderId = completedMemberOrder("鎖");
     long pointEntries = pointEntryRepository.count();
+    var revisedCourse = courseFixture(STORE_A, "120 分コース", 120, 18000);
 
     ResponseEntity<JsonNode> first =
         correct(
@@ -58,10 +59,10 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             orderId,
             """
             {"reason":"コースの取り違え","actual_arrival_time":"20:15:00","actual_end_time":"22:40:00",
-             "course_name":"120 分コース","course_minutes":120,"extension_minutes":30,
-             "fee_lines":[{"kind":"BASE_COURSE","amount":18000},
-                          {"kind":"OPTION","name":"指名","amount":2000}]}
-            """);
+             "course_revision_id":"%s","extension_minutes":30,
+             "fee_lines":[{"kind":"OPTION","name":"指名","amount":2000}]}
+            """
+                .formatted(revisedCourse.revisionId()));
 
     assertThat(first.getStatusCode()).as("痕を生む操作なので 201").isEqualTo(HttpStatus.CREATED);
     assertThat(first.getBody().path("previous_total_fee").asInt()).isEqualTo(COMPLETED_FEE);
@@ -74,8 +75,8 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(detail.path("status").asString()).as("訂正は状態を戻さないこと").isEqualTo("COMPLETED");
     assertThat(detail.path("actual_arrival_time").asString()).isEqualTo("20:15:00");
     assertThat(detail.path("actual_end_time").asString()).isEqualTo("22:40:00");
-    assertThat(detail.path("course_name").asString()).isEqualTo("120 分コース");
-    assertThat(detail.path("course_minutes").asInt()).isEqualTo(120);
+    assertThat(detail.path("course").path("name").asString()).isEqualTo("120 分コース");
+    assertThat(detail.path("course").path("duration_minutes").asInt()).isEqualTo(120);
     assertThat(detail.path("extension_minutes").asInt()).isEqualTo(30);
     assertThat(detail.path("total_fee").asInt()).isEqualTo(20000);
     assertThat(detail.path("auto_grant_points").asInt()).as("門はポイントを動かさないこと").isEqualTo(120);
@@ -99,8 +100,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             managerHeaders(STORE_A),
             orderId,
             """
-            {"reason":"オプションの取り消し","course_name":"120 分コース","course_minutes":120,
-             "fee_lines":[{"kind":"BASE_COURSE","amount":18000}]}
+            {"reason":"オプションの取り消し","fee_lines":[]}
             """);
     assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(second.getBody().path("previous_total_fee").asInt()).isEqualTo(20000);
@@ -120,13 +120,15 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(before1.getActualArrivalTime()).as("訂正前は実績時刻を持たない受注だったこと").isNull();
     assertThat(before1.getFeeLines())
         .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
-        .containsExactly(tuple(OrderFeeLineKind.SURCHARGE, COMPLETED_FEE));
+        .containsExactly(
+            tuple(OrderFeeLineKind.BASE_COURSE, 100),
+            tuple(OrderFeeLineKind.SURCHARGE, COMPLETED_FEE - 100));
 
     OrderCorrection before2 = chain.get(1);
     assertThat(before2.getReason()).isEqualTo("オプションの取り消し");
     assertThat(before2.getTotalFee()).as("一度目の後値が二度目の前値であること").isEqualTo(20000);
     assertThat(before2.getActualEndTime()).isEqualTo(LocalTime.of(22, 40));
-    assertThat(before2.getCourseName()).isEqualTo("120 分コース");
+    assertThat(before2.getCourse().name()).isEqualTo("120 分コース");
     assertThat(before2.getFeeLines())
         .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
         .containsExactly(
@@ -137,7 +139,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(afterSecond.path("actual_arrival_time").isMissingNode()).isTrue();
     assertThat(afterSecond.path("actual_end_time").isMissingNode()).isTrue();
     assertThat(afterSecond.path("extension_minutes").isMissingNode()).isTrue();
-    assertThat(afterSecond.path("course_name").asString()).isEqualTo("120 分コース");
+    assertThat(afterSecond.path("course").path("name").asString()).isEqualTo("120 分コース");
   }
 
   @Test
@@ -187,11 +189,11 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
     JsonNode lines = orderJson(managerHeaders(STORE_A), orderId).path("fee_lines");
-    assertThat(lines).hasSize(2);
-    assertThat(lines.get(0).path("kind").asString()).isEqualTo("POINT_REDEMPTION");
-    assertThat(lines.get(0).path("amount").asInt()).as("減項は正値で返ること").isEqualTo(100);
+    assertThat(lines).hasSize(3);
+    assertThat(lines.get(1).path("kind").asString()).isEqualTo("POINT_REDEMPTION");
+    assertThat(lines.get(1).path("amount").asInt()).as("減項は正値で返ること").isEqualTo(100);
     // 合計はポイント控除後の請求額なので、残った利用の行のぶん下がったまま
-    assertThat(accepted.getBody().path("total_fee").asInt()).isEqualTo(7900);
+    assertThat(accepted.getBody().path("total_fee").asInt()).isEqualTo(8000);
 
     assertThat(pointEntryRepository.count()).as("門は台帳へ一切書かないこと").isEqualTo(pointEntries);
   }
@@ -228,7 +230,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(stale.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(orderJson(managerHeaders(STORE_A), orderId).path("total_fee").asInt())
         .as("撥ねた訂正は先の訂正を巻き戻さないこと")
-        .isEqualTo(9000);
+        .isEqualTo(9100);
     assertThat(orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAscIdAsc(orderId))
         .as("撥ねた訂正は痕を残さないこと")
         .hasSize(1);
@@ -289,12 +291,13 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
   /** 版を明示して訂正する。陳腐化した要求の拒否を見るテストだけが直に使う。 */
   private ResponseEntity<JsonNode> correctAt(
       HttpHeaders headers, String orderId, long version, String body) {
-    return rest.exchange(
+    String input = body.replaceFirst("\\{", "{\"expected_version\":" + version + ",");
+    return submitPreviewed(
         "/store/orders/" + orderId + "/corrections",
         HttpMethod.POST,
-        new HttpEntity<>(
-            body.replaceFirst("\\{", "{\"expected_version\":" + version + ","), headers),
-        JsonNode.class);
+        "/store/orders/" + orderId + "/correction-preview",
+        input,
+        headers);
   }
 
   private long currentVersion(HttpHeaders headers, String orderId) {
@@ -330,19 +333,11 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
   }
 
   private String complete(String orderId, Integer usePoints) {
-    String body =
-        "{\"expected_version\":"
-            + orderVersion(storeHeaders(STORE_A), orderId)
-            + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
-            + COMPLETED_FEE
-            + "}]"
-            + (usePoints == null ? "" : ", \"use_points\": " + usePoints)
-            + "}";
     ResponseEntity<JsonNode> completed =
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
             HttpMethod.POST,
-            new HttpEntity<>(body, storeHeaders(STORE_A)),
+            completionFixtureRequest(orderId, COMPLETED_FEE, usePoints, storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(completed.getStatusCode()).as("前提: 完了が成功すること").isEqualTo(HttpStatus.OK);
     return orderId;
@@ -368,7 +363,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             + "\"}";
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/store/orders", new HttpEntity<>(body, storeHeaders(STORE_A)), JsonNode.class);
+            "/store/orders", orderFixtureRequest(body, storeHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode()).as("前提: 受注作成が成功すること").isEqualTo(HttpStatus.CREATED);
     return created.getBody().path("id").asString();
   }

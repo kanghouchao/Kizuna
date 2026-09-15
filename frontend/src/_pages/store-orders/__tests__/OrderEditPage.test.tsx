@@ -1,3 +1,4 @@
+import { confirmPreview } from '../lib/orderTestSupport';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderEditPage from '../ui/OrderEditPage';
 import { Order, orderApi } from '@/entities/order';
@@ -9,6 +10,7 @@ jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
   ...jest.requireActual('@/entities/order'),
   orderApi: {
+    ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     get: jest.fn(),
     update: jest.fn(),
     listReceptionists: jest.fn(),
@@ -39,7 +41,21 @@ function confirmedOrder(overrides: Partial<Order> = {}): Order {
     cast_name: '花子',
     receptionist_name: '佐藤',
     pax: 2,
-    course_minutes: 60,
+    course: {
+      ...{
+        service_id: 'course-1',
+        revision_id: 'r1',
+        revision_number: 1,
+        name: '基本',
+        duration_minutes: 60,
+        price: 12000,
+        remuneration: 7000,
+        adoption_basis: 'CURRENT_SETTING' as const,
+        adopted_at: '2026-09-15T00:00:00Z',
+      },
+      duration_minutes: 60,
+    },
+    version: 3,
     receptionist_id: 3,
     cast_id: 'cast-1',
     status: 'CONFIRMED',
@@ -67,13 +83,26 @@ describe('受注の編集ページ', () => {
 
     fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
 
     await waitFor(() => expect(mockedOrderApi.update).toHaveBeenCalled());
     // 触った欄と、省略が「外す」と区別できない 2 項目だけ。全項目を毎回運ぶと、この画面を開いている
     // 間に別の操作者が直した受注へ、触ってもいない項目を開いた時点の値で押し戻してしまう
     const [, body] = mockedOrderApi.update.mock.calls[0];
-    expect(Object.keys(body).sort()).toEqual(['cast_id', 'pax', 'receptionist_id']);
-    expect(body).toEqual({ pax: 5, receptionist_id: 3, cast_id: 'cast-1' });
+    expect(Object.keys(body).sort()).toEqual([
+      'cast_id',
+      'confirmation_token',
+      'expected_version',
+      'pax',
+      'receptionist_id',
+    ]);
+    expect(body).toEqual({
+      pax: 5,
+      receptionist_id: 3,
+      cast_id: 'cast-1',
+      expected_version: 3,
+      confirmation_token: 'confirmed',
+    });
     // 保存し終えたこの頁に留まる理由は無い。出口は一覧
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/orders'));
   });
@@ -99,6 +128,7 @@ describe('受注の編集ページ', () => {
 
     fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled());
   });
@@ -112,6 +142,7 @@ describe('受注の編集ページ', () => {
 
     fireEvent.change(screen.getByLabelText('備考'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
 
     // 項目ごと落とすと、消したはずの備考が残る（サーバは送られない項目を「変更しない」と読む）
     await waitFor(() =>
@@ -175,6 +206,7 @@ describe('受注の編集ページ', () => {
 
     fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '正しい名前' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
 
     await waitFor(() =>
       expect(mockedOrderApi.update).toHaveBeenCalledWith(
@@ -197,7 +229,28 @@ test('対象変更直後から旧フォームを隠し、新しい詳細で初�
   mockParams = { storeId: '2', id: 'o2' };
   rerender(<OrderEditPage />);
   expect(screen.queryByLabelText('人数')).not.toBeInTheDocument();
-  await act(async () => resolve(confirmedOrder({ id: 'o2', pax: 8, course_minutes: 90 })));
+  await act(async () =>
+    resolve(
+      confirmedOrder({
+        id: 'o2',
+        pax: 8,
+        course: {
+          ...{
+            service_id: 'course-1',
+            revision_id: 'r1',
+            revision_number: 1,
+            name: '基本',
+            duration_minutes: 60,
+            price: 12000,
+            remuneration: 7000,
+            adoption_basis: 'CURRENT_SETTING' as const,
+            adopted_at: '2026-09-15T00:00:00Z',
+          },
+          duration_minutes: 90,
+        },
+      })
+    )
+  );
   expect(await screen.findByLabelText('人数')).toHaveValue(8);
 });
 
@@ -220,8 +273,11 @@ test('候補資格のない元担当を表示し、別候補から変更しな�
   fireEvent.click(unchanged);
   expect(trigger).toHaveTextContent('佐藤');
   fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
   await waitFor(() =>
     expect(mockedOrderApi.update).toHaveBeenCalledWith('o1', {
+      confirmation_token: 'confirmed',
+      expected_version: 3,
       cast_id: 'cast-1',
       receptionist_id: 3,
     })
@@ -244,8 +300,11 @@ test('元担当が未設定なら別候補から未設定に戻して保存で�
   fireEvent.pointerDown(unset);
   fireEvent.click(unset);
   fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
   await waitFor(() =>
     expect(mockedOrderApi.update).toHaveBeenCalledWith('o1', {
+      confirmation_token: 'confirmed',
+      expected_version: 3,
       cast_id: 'cast-1',
       receptionist_id: undefined,
     })
@@ -260,8 +319,11 @@ test('候補取得に失敗しても名前のない元担当を識別でき、�
   expect(await screen.findByRole('alert')).toHaveTextContent('受付担当者の取得に失敗しました');
   expect(screen.getByRole('combobox', { name: '受付' })).toHaveTextContent('受付担当 ID: 3');
   fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
   await waitFor(() =>
     expect(mockedOrderApi.update).toHaveBeenCalledWith('o1', {
+      confirmation_token: 'confirmed',
+      expected_version: 3,
       cast_id: 'cast-1',
       receptionist_id: 3,
     })

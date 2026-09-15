@@ -57,7 +57,8 @@ class OrderApplicationControllerTest {
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
 
-  private static final String CONFIRMATION_BODY = "{\"business_date\": \"2026-08-20\", \"pax\": 2}";
+  private static final String CONFIRMATION_BODY =
+      "{\"course_id\":\"course-1\",\"business_date\": \"2026-08-20\", \"pax\": 2}";
 
   @Autowired private MockMvc mockMvc;
 
@@ -230,7 +231,7 @@ class OrderApplicationControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     String overlongName =
-        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"new_customer\": {\"name\": \""
+        "{\"course_id\":\"course-1\",\"business_date\": \"2026-08-20\", \"pax\": 2, \"new_customer\": {\"name\": \""
             + "あ".repeat(256)
             + "\"}}";
     mockMvc
@@ -238,7 +239,7 @@ class OrderApplicationControllerTest {
         .andExpect(status().isBadRequest());
 
     String overlongPhone =
-        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"new_customer\": {\"name\": \"ゲスト花子\","
+        "{\"course_id\":\"course-1\",\"business_date\": \"2026-08-20\", \"pax\": 2, \"new_customer\": {\"name\": \"ゲスト花子\","
             + " \"phone_number\": \""
             + "1".repeat(51)
             + "\"}}";

@@ -8,6 +8,7 @@ import java.time.LocalTime;
  * 句は持たない。
  */
 public interface PlatformOrderView {
+  OrderCourse getCourse();
 
   String getId();
 

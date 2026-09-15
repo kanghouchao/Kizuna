@@ -1,5 +1,9 @@
 'use client';
 
+import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
+
+import { OrderCourseField } from './OrderCourseField';
+
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -10,7 +14,7 @@ import {
   OrderFeeLineInput,
   orderApi,
   storeEditableFeeLines,
-  systemOwnedFeeLines,
+  readOnlyFeeLines,
   toFeeLineInputs,
 } from '@/entities/order';
 import { ExternalLinkIcon } from 'lucide-react';
@@ -44,8 +48,7 @@ import {
 interface OrderCorrectionFormValues {
   actual_arrival_time: string;
   actual_end_time: string;
-  course_name: string;
-  course_minutes: string;
+  course_revision_id: string;
   extension_minutes: string;
   fee_lines: OrderFeeLineInput[];
   reason: string;
@@ -54,8 +57,7 @@ interface OrderCorrectionFormValues {
 const EMPTY_VALUES: OrderCorrectionFormValues = {
   actual_arrival_time: '',
   actual_end_time: '',
-  course_name: '',
-  course_minutes: '',
+  course_revision_id: '',
   extension_minutes: '',
   fee_lines: [],
   reason: '',
@@ -111,6 +113,7 @@ function CorrectionOutcome({ outcome }: { outcome: CorrectionOutcomeState }) {
  * <p>門はポイントを動かさない。送信後に名乗るのは会計金額の前後と、付与が動かないことまでである（ADR 0019）。
  */
 export default function OrderCorrectionPage() {
+  const confirmation = useOrderConfirmation();
   const params = useParams();
   const storeId = params.storeId as string;
   const orderId = params.id as string;
@@ -122,7 +125,7 @@ export default function OrderCorrectionPage() {
   const { data: current, isLoading, failure, reload } = resource;
 
   const form = useForm<OrderCorrectionFormValues>({ defaultValues: EMPTY_VALUES });
-  const { handleSubmit, control, reset, watch, formState } = form;
+  const { handleSubmit, control, reset, formState } = form;
   const [outcomeState, setOutcome] = useState<
     (CorrectionOutcomeState & { orderId: string; storeId: string }) | null
   >(null);
@@ -141,8 +144,7 @@ export default function OrderCorrectionPage() {
     reset({
       actual_arrival_time: toTimeInput(current.actual_arrival_time),
       actual_end_time: toTimeInput(current.actual_end_time),
-      course_name: current.course_name ?? '',
-      course_minutes: current.course_minutes != null ? String(current.course_minutes) : '',
+      course_revision_id: '',
       extension_minutes: current.extension_minutes != null ? String(current.extension_minutes) : '',
       fee_lines: storeEditableFeeLines(current.fee_lines),
       reason: '',
@@ -168,23 +170,25 @@ export default function OrderCorrectionPage() {
   };
 
   const submit = async (values: OrderCorrectionFormValues) => {
-    if (current === null) {
+    if (current === null || current.version === undefined) {
       return;
     }
     const operation = resource.capture();
     try {
-      const corrected = await orderApi.correct(orderId, {
+      const request = {
         // 開いた時点の版をそのまま返す。全量を送る口なので、間に別の操作者の訂正が挟まっていれば
         // サーバが 409 で差し戻す（読み直さずに送ると、その訂正を黙って巻き戻す）
         expected_version: current.version,
         reason: values.reason.trim(),
         actual_arrival_time: optionalTime(values.actual_arrival_time),
         actual_end_time: optionalTime(values.actual_end_time),
-        course_name: values.course_name.trim() === '' ? undefined : values.course_name.trim(),
-        course_minutes: optionalNumber(values.course_minutes),
+        course_revision_id: values.course_revision_id || undefined,
         extension_minutes: optionalNumber(values.extension_minutes),
         fee_lines: toFeeLineInputs(values.fee_lines),
-      });
+      };
+      const token = await confirmation.confirm(() => orderApi.previewCorrection(orderId, request));
+      if (!token) return;
+      const corrected = await orderApi.correct(orderId, { ...request, confirmation_token: token });
       if (!operation.isCurrent()) return;
       notify.success('受注を訂正しました');
       setOutcome({ result: corrected, memberCode: '不明', orderId, storeId });
@@ -199,6 +203,12 @@ export default function OrderCorrectionPage() {
       });
     } catch (error) {
       if (!operation.isCurrent()) return;
+      if (orderConflictField(error) === 'confirmation_token') {
+        notify.warning(
+          '採用条件が変更されています。入力を保持しました。再試算して確認してください'
+        );
+        return;
+      }
       if (isConflict(error)) {
         const result = await reload();
         if (result.status === 'success' && result.isCurrent()) {
@@ -211,180 +221,160 @@ export default function OrderCorrectionPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-foreground text-2xl font-bold">完了後の訂正</h1>
-        {current !== null && (
-          <p className="text-muted-foreground mt-1 text-sm">
-            {customerHeadingText(current)}
-            {current.business_date ? ` ・ ${current.business_date}` : ''}
-          </p>
+    <>
+      {confirmation.dialog}
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-foreground text-2xl font-bold">完了後の訂正</h1>
+          {current !== null && (
+            <p className="text-muted-foreground mt-1 text-sm">
+              {customerHeadingText(current)}
+              {current.business_date ? ` ・ ${current.business_date}` : ''}
+            </p>
+          )}
+        </div>
+
+        {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
+        {failure === 'error' && (
+          <RegionError message="受注を取得できませんでした。" onRetry={() => void reload()} />
+        )}
+        {failure === 'notFound' && (
+          <RegionError
+            message="この受注は見つかりませんでした。"
+            fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
+          />
+        )}
+
+        {outcome !== null && <CorrectionOutcome outcome={outcome} />}
+
+        {/* 門は台帳を読みも書きもしない（ADR 0019）。全否定が要る誤完了のためにポイント側の操作面を
+          指すだけで、機構は繋がない — 門はここが実行されたかを知らないまま */}
+        {seeded && completed && canRollback && (
+          <div className="bg-card flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+            <p className="text-muted-foreground text-sm">
+              この訂正でポイントは動きません。来店そのものが誤りで付与・利用を全否定するなら、ポイントの巻き戻しを使います。
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href={storePath(storeId, `/orders/${orderId}/point-rollback`)} />}
+            >
+              <ExternalLinkIcon aria-hidden="true" />
+              ポイントの巻き戻しへ
+            </Button>
+          </div>
+        )}
+
+        {/* 完了していない受注はサーバが撥ねる。欄を出してから 400 を返すより、開いた時点で理由を名乗る */}
+        {seeded && !completed && (
+          <RegionError
+            message="完了した受注だけが訂正できます。確定済みの受注は編集画面から、取消済みの受注は同じ内容で起こし直してください。"
+            fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
+          />
+        )}
+
+        {seeded && completed && (
+          <Form {...form}>
+            <form onSubmit={handleSubmit(submit)} className="space-y-6">
+              <section className="space-y-3">
+                <h2 className="text-muted-foreground text-sm font-medium">実績</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={control}
+                    name="actual_arrival_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>実際の到着</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={control}
+                    name="actual_end_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>実際の終了</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h2 className="text-muted-foreground text-sm font-medium">コース</h2>
+                <div className="space-y-4">
+                  <OrderCourseField historicalOrderId={orderId} current={current.course} />
+                  <FormField
+                    control={control}
+                    name="extension_minutes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>延長（分）</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h2 className="text-muted-foreground text-sm font-medium">会計</h2>
+                {/* ポイント利用の行は門内でも編集不可。読み取りで並べるだけ（誤りはポイント機構で直す） */}
+                <OrderFeeLinesField systemLines={readOnlyFeeLines(current.fee_lines)} />
+              </section>
+
+              <section className="space-y-3">
+                <h2 className="text-muted-foreground text-sm font-medium">訂正の理由</h2>
+                <FormField
+                  control={control}
+                  name="reason"
+                  rules={{
+                    validate: value => value.trim() !== '' || '訂正の理由を入力してください',
+                    maxLength: {
+                      value: 500,
+                      message: '訂正の理由は 500 文字以内で入力してください',
+                    },
+                  }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>理由</FormLabel>
+                      <FormControl>
+                        <Textarea rows={3} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <p className="text-muted-foreground text-xs">
+                  確定した記録を動かす操作なので、理由・実行者・時刻と訂正前の内容が履歴に残ります。
+                </p>
+              </section>
+
+              <div className="flex justify-end gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={formState.isSubmitting}
+                  onClick={() => router.push(storePath(storeId, '/orders'))}
+                >
+                  一覧へ戻る
+                </Button>
+                <Button type="submit" disabled={formState.isSubmitting}>
+                  {formState.isSubmitting ? '訂正中...' : '訂正する'}
+                </Button>
+              </div>
+            </form>
+          </Form>
         )}
       </div>
-
-      {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
-      {failure === 'error' && (
-        <RegionError message="受注を取得できませんでした。" onRetry={() => void reload()} />
-      )}
-      {failure === 'notFound' && (
-        <RegionError
-          message="この受注は見つかりませんでした。"
-          fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
-        />
-      )}
-
-      {outcome !== null && <CorrectionOutcome outcome={outcome} />}
-
-      {/* 門は台帳を読みも書きもしない（ADR 0019）。全否定が要る誤完了のためにポイント側の操作面を
-          指すだけで、機構は繋がない — 門はここが実行されたかを知らないまま */}
-      {seeded && completed && canRollback && (
-        <div className="bg-card flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
-          <p className="text-muted-foreground text-sm">
-            この訂正でポイントは動きません。来店そのものが誤りで付与・利用を全否定するなら、ポイントの巻き戻しを使います。
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            render={<Link href={storePath(storeId, `/orders/${orderId}/point-rollback`)} />}
-          >
-            <ExternalLinkIcon aria-hidden="true" />
-            ポイントの巻き戻しへ
-          </Button>
-        </div>
-      )}
-
-      {/* 完了していない受注はサーバが撥ねる。欄を出してから 400 を返すより、開いた時点で理由を名乗る */}
-      {seeded && !completed && (
-        <RegionError
-          message="完了した受注だけが訂正できます。確定済みの受注は編集画面から、取消済みの受注は同じ内容で起こし直してください。"
-          fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
-        />
-      )}
-
-      {seeded && completed && (
-        <Form {...form}>
-          <form onSubmit={handleSubmit(submit)} className="space-y-6">
-            <section className="space-y-3">
-              <h2 className="text-muted-foreground text-sm font-medium">実績</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={control}
-                  name="actual_arrival_time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>実際の到着</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="actual_end_time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>実際の終了</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="text-muted-foreground text-sm font-medium">コース</h2>
-              <div className="grid grid-cols-3 gap-4">
-                <FormField
-                  control={control}
-                  name="course_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>コース名</FormLabel>
-                      <FormControl>
-                        <Input type="text" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="course_minutes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>コース（分）</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="extension_minutes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>延長（分）</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="text-muted-foreground text-sm font-medium">会計</h2>
-              {/* ポイント利用の行は門内でも編集不可。読み取りで並べるだけ（誤りはポイント機構で直す） */}
-              <OrderFeeLinesField
-                systemLines={systemOwnedFeeLines(current.fee_lines)}
-                courseName={watch('course_name')}
-              />
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="text-muted-foreground text-sm font-medium">訂正の理由</h2>
-              <FormField
-                control={control}
-                name="reason"
-                rules={{
-                  validate: value => value.trim() !== '' || '訂正の理由を入力してください',
-                  maxLength: { value: 500, message: '訂正の理由は 500 文字以内で入力してください' },
-                }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>理由</FormLabel>
-                    <FormControl>
-                      <Textarea rows={3} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <p className="text-muted-foreground text-xs">
-                確定した記録を動かす操作なので、理由・実行者・時刻と訂正前の内容が履歴に残ります。
-              </p>
-            </section>
-
-            <div className="flex justify-end gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={formState.isSubmitting}
-                onClick={() => router.push(storePath(storeId, '/orders'))}
-              >
-                一覧へ戻る
-              </Button>
-              <Button type="submit" disabled={formState.isSubmitting}>
-                {formState.isSubmitting ? '訂正中...' : '訂正する'}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      )}
-    </div>
+    </>
   );
 }

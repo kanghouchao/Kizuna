@@ -18,13 +18,11 @@ class OrderCorrectionTest {
     Order order =
         Order.builder()
             .status(OrderStatus.CONFIRMED)
-            .courseName("60 分コース")
-            .courseMinutes(60)
+            .course(OrderCourses.course("60 分コース", 60, 12000))
             .build();
     order.replaceStoreFeeLines(
-        List.of(
-            new OrderFeeLineDraft(OrderFeeLineKind.BASE_COURSE, null, 12000),
-            new OrderFeeLineDraft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
+        List.of(new OrderFeeLineDraft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
+
     order.completeWith(500, 140);
     return order;
   }
@@ -39,8 +37,8 @@ class OrderCorrectionTest {
     assertThat(correction.getReason()).isEqualTo("金額の誤記");
     assertThat(correction.getCorrectedBy()).isEqualTo(7L);
     assertThat(correction.getCorrectedAt()).isEqualTo(AT);
-    assertThat(correction.getCourseName()).isEqualTo("60 分コース");
-    assertThat(correction.getCourseMinutes()).isEqualTo(60);
+    assertThat(correction.getCourse().name()).isEqualTo("60 分コース");
+    assertThat(correction.getCourse().durationMinutes()).isEqualTo(60);
     assertThat(correction.getTotalFee()).isEqualTo(13500);
     // 門が触れない行（ポイント利用）も載せる。履歴行だけで訂正前の姿が読める形にしておかないと、
     // 現在の行を突き合わせなければ意味が決まらない記録になる。金額は保存されたとおりの帯符号
@@ -61,14 +59,13 @@ class OrderCorrectionTest {
         new OrderCorrectionCommand(
             null,
             LocalTime.of(22, 40),
-            "120 分コース",
-            120,
+            OrderCourses.course("120 分コース", 120, 22000),
             null,
-            List.of(new OrderFeeLineDraft(OrderFeeLineKind.BASE_COURSE, null, 22000))));
+            List.of()));
 
     OrderCorrection tooLate = OrderCorrection.snapshotOf(order, "順序を誤った快照", 7L, AT);
 
-    assertThat(tooLate.getCourseName()).isEqualTo("120 分コース");
+    assertThat(tooLate.getCourse().name()).isEqualTo("120 分コース");
     assertThat(tooLate.getTotalFee()).isEqualTo(21500);
   }
 
@@ -83,12 +80,7 @@ class OrderCorrectionTest {
             () ->
                 order.correct(
                     new OrderCorrectionCommand(
-                        null,
-                        null,
-                        "60 分コース",
-                        60,
-                        null,
-                        List.of(new OrderFeeLineDraft(OrderFeeLineKind.BASE_COURSE, null, 499)))))
+                        null, null, OrderCourses.course("60 分コース", 60, 499), null, List.of())))
         .isInstanceOf(InvalidOrderFeeLineException.class)
         .hasMessage("訂正後の請求額が利用ポイントを下回ります。ポイント利用の訂正はポイント機構で行ってください");
   }

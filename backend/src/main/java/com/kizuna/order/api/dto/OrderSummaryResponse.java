@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.domain.OrderCourse;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,10 +13,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderSummaryResponse {
+  private OrderCourse course;
   private String id;
   private LocalDate businessDate;
   private String castName;
-  private Integer courseMinutes;
   private Integer extensionMinutes;
   private Integer usedPoints;
   private String status;

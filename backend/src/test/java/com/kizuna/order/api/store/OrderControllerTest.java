@@ -17,10 +17,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
-import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
+import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
@@ -75,7 +75,7 @@ class OrderControllerTest {
   private static final String CORRECTION_BODY =
       "{\"expected_version\":3,\"reason\":\"金額の誤記\","
           + "\"actual_arrival_time\":\"20:15:00\",\"actual_end_time\":\"22:40:00\","
-          + "\"course_name\":\"120 分コース\",\"course_minutes\":120,\"extension_minutes\":30,"
+          + "\"course_revision_id\":\"revision\",\"extension_minutes\":30,"
           + "\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"指名料\",\"amount\":15000}]}";
 
   @Autowired private MockMvc mockMvc;
@@ -317,14 +317,14 @@ class OrderControllerTest {
   void completionAndPreviewAreAllowedForOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.complete(any(), any(), any())).thenReturn(new OrderCompletionResponse(null));
-    when(orderService.completionPreview(any(), anyInt()))
-        .thenReturn(OrderCompletionPreviewResponse.builder().build());
+    when(orderService.completionPreview(any(), any()))
+        .thenReturn(new OrderPreviewResponse("token", null, List.of(), 0, null));
 
     mockMvc
         .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))
         .andExpect(status().isOk());
     mockMvc
-        .perform(storeGet("/store/orders/o1/completion-preview?total_fee=12000"))
+        .perform(storePost("/store/orders/o1/completion-preview", COMPLETION_BODY))
         .andExpect(status().isOk());
   }
 
@@ -338,7 +338,7 @@ class OrderControllerTest {
         .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))
         .andExpect(status().isForbidden());
     mockMvc
-        .perform(storeGet("/store/orders/o1/completion-preview?total_fee=12000"))
+        .perform(storePost("/store/orders/o1/completion-preview", COMPLETION_BODY))
         .andExpect(status().isForbidden());
   }
 
@@ -366,9 +366,14 @@ class OrderControllerTest {
     // 省略を契約で撥ねると、指名・受付担当が未設定のまま確定した受注が編集できなくなる。
     // 「既にある指名・受付担当は外せない」判定は受注の状態を見るサービス層が持つ（OrderServiceTest）。
     // 店舗起点の受注に対する 400 が経路として維持されることは MemberOrderIT が通しで固定する。
-    mockMvc.perform(storePut("/store/orders/o1", "{\"pax\": 3}")).andExpect(status().isOk());
     mockMvc
-        .perform(storePut("/store/orders/o1", "{\"cast_id\": \"cast-1\", \"pax\": 3}"))
+        .perform(storePut("/store/orders/o1", "{\"expected_version\":0,\"pax\": 3}"))
+        .andExpect(status().isOk());
+    mockMvc
+        .perform(
+            storePut(
+                "/store/orders/o1",
+                "{\"expected_version\":0,\"expected_version\":0,\"cast_id\": \"cast-1\", \"pax\": 3}"))
         .andExpect(status().isOk());
   }
 
@@ -615,11 +620,11 @@ class OrderControllerTest {
 
   @Test
   @DisplayName("完了後訂正は ORDER_CORRECT を持てば到達でき、新たな痕を生むので 201 で返ること")
-  @WithMockUser(authorities = "PERM_ORDER_CORRECT")
+  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT"})
   void correctionIsReachableWithOrderCorrect() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderCorrectionService.correct(any(), any(), any()))
-        .thenReturn(new OrderCorrectionResponse(12000, 15000));
+        .thenReturn(new OrderCorrectionResponse("correction", 12000, 15000, null, null));
 
     mockMvc
         .perform(storePost("/store/orders/o1/corrections", CORRECTION_BODY))
@@ -643,7 +648,7 @@ class OrderControllerTest {
 
   @Test
   @DisplayName("凍結字段を載せた訂正は契約で撥ねられ、サービスへ届かないこと")
-  @WithMockUser(authorities = "PERM_ORDER_CORRECT")
+  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT"})
   void correctionCarryingAFrozenFieldIsRejected() throws Exception {
     // 凍結は要求の型に項目が無いことで成立する（未知の項目は撥ねられる設定）。指名は給与計算へ波及するため特に動かさない
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
@@ -660,7 +665,7 @@ class OrderControllerTest {
 
     // 正向対照: 凍結字段を外した同じ本文は通る（400 が「内訳が空だから」でない証明）
     when(orderCorrectionService.correct(any(), any(), any()))
-        .thenReturn(new OrderCorrectionResponse(12000, 0));
+        .thenReturn(new OrderCorrectionResponse("correction", 12000, 0, null, null));
     mockMvc
         .perform(
             storePost(
@@ -671,7 +676,7 @@ class OrderControllerTest {
 
   @Test
   @DisplayName("理由の無い訂正と内訳を伴わない訂正は 400 で撥ねられること")
-  @WithMockUser(authorities = "PERM_ORDER_CORRECT")
+  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT"})
   void correctionWithoutAReasonOrFeeLinesIsRejected() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 

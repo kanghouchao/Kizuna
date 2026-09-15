@@ -7,25 +7,18 @@ import { OrderFeeLine, OrderFeeLineInput, OrderFeeLineKind } from './types';
  */
 export function storeEditableFeeLines(lines: OrderFeeLine[] | undefined): OrderFeeLineInput[] {
   return (lines ?? [])
-    .filter(line => !line.system_owned)
+    .filter(line => !line.system_owned && line.kind !== 'BASE_COURSE')
     .map(line => ({ kind: line.kind, name: line.name ?? '', amount: line.amount }));
 }
 
-/** 完了処理が書いた明細（ポイント利用）。編集できないので、読み取り専用で並べるためだけに使う。 */
-export function systemOwnedFeeLines(lines: OrderFeeLine[] | undefined): OrderFeeLine[] {
-  return (lines ?? []).filter(line => line.system_owned);
+/** 採用コースから生成した基本料金と、完了処理が書いたポイント利用を読み取り専用で返す。 */
+export function readOnlyFeeLines(lines: OrderFeeLine[] | undefined): OrderFeeLine[] {
+  return (lines ?? []).filter(line => line.system_owned || line.kind === 'BASE_COURSE');
 }
 
-/**
- * 送信する形へ整える。基本コース料金の名称はサーバが受注のコース名の写しから採るため、行の名称は送らない
- * （送ると同じ受注が二つのコース名を主張しうる）。
- */
+/** 編集した明細だけを要求へ写す。 */
 export function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineInput[] {
-  return lines.map(line => ({
-    kind: line.kind,
-    name: line.kind === 'BASE_COURSE' ? undefined : line.name,
-    amount: line.amount,
-  }));
+  return lines.map(({ kind, name, amount }) => ({ kind, name, amount }));
 }
 
 /** 符号が減算に固定された種別。入力も表示も正値なので、足すときだけ符号を戻す。 */

@@ -26,6 +26,17 @@ const mockedPreview = orderApi.pointRollbackPreview as jest.Mock;
 const mockedRollback = orderApi.pointRollback as jest.Mock;
 
 const completedOrder: Order = {
+  course: {
+    service_id: 'course-1',
+    revision_id: 'r1',
+    revision_number: 1,
+    name: '基本',
+    duration_minutes: 60,
+    price: 12000,
+    remuneration: 7000,
+    adoption_basis: 'CURRENT_SETTING' as const,
+    adopted_at: '2026-09-15T00:00:00Z',
+  },
   fee_lines: [],
   id: 'o1',
   status: 'COMPLETED',

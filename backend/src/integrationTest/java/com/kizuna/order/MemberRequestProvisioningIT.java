@@ -231,11 +231,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
             HttpMethod.POST,
-            new HttpEntity<>(
-                "{\"expected_version\":"
-                    + orderVersion(storeHeaders(STORE_A), orderId)
-                    + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}",
-                storeHeaders(STORE_A)),
+            completionFixtureRequest(orderId, 12000, null, storeHeaders(STORE_A)),
             JsonNode.class);
 
     assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -354,13 +350,14 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
   }
 
   private ResponseEntity<JsonNode> confirm(String applicationId, HttpHeaders headers) {
-    return rest.exchange(
+    String body =
+        "{\"business_date\":\"" + LocalDate.now(ZoneId.of("Asia/Tokyo")) + "\",\"pax\":2}";
+    return submitPreviewed(
         "/store/order-applications/" + applicationId + "/confirmation",
         HttpMethod.POST,
-        new HttpEntity<>(
-            "{\"business_date\": \"" + LocalDate.now(ZoneId.of("Asia/Tokyo")) + "\", \"pax\": 2}",
-            headers),
-        JsonNode.class);
+        "/store/order-applications/" + applicationId + "/confirmation-preview",
+        withCourseFixture(body, headers),
+        headers);
   }
 
   /** 2 つの確定を同時に開始して両方の応答を返す。 */

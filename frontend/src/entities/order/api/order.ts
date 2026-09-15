@@ -1,3 +1,4 @@
+import type { CourseCandidate, OrderPreview } from '../model/types';
 import {
   CursorPageResult,
   CursorParams,
@@ -27,7 +28,6 @@ import {
   OrderArchiveRow,
   OrderCancellationRequest,
   OrderCastCandidate,
-  OrderCompletionPreview,
   OrderCompletionRequest,
   OrderCompletionResult,
   OrderCorrectionRequest,
@@ -62,6 +62,33 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 }
 
 export const orderApi = {
+  courseCandidates: async (search: string, page: number) => {
+    const response = await apiClient.get('/store/orders/course-candidates', {
+      params: { search, page, size: 20 },
+    });
+    return fromSpringPage<CourseCandidate>(response.data);
+  },
+  courseRevisions: async (
+    id: string,
+    search: string,
+    cursor?: string
+  ): Promise<{ content: CourseCandidate[]; next_cursor?: string }> => {
+    return (
+      await apiClient.get(`/store/orders/${requireId(id, '受注')}/course-revisions`, {
+        params: { search, cursor, size: 20 },
+      })
+    ).data;
+  },
+  previewCreate: async (data: OrderCreateRequest): Promise<OrderPreview> =>
+    (await apiClient.post('/store/orders/preview', data)).data,
+  previewUpdate: async (id: string | undefined, data: OrderUpdateRequest): Promise<OrderPreview> =>
+    (await apiClient.post(`/store/orders/${requireId(id, '受注')}/preview`, data)).data,
+  previewCorrection: async (
+    id: string | undefined,
+    data: OrderCorrectionRequest
+  ): Promise<OrderPreview> =>
+    (await apiClient.post(`/store/orders/${requireId(id, '受注')}/correction-preview`, data)).data,
+
   list: async (
     params?: PaginationParams & { customer_id?: string }
   ): Promise<PageResult<OrderSummaryRow>> => {
@@ -178,13 +205,11 @@ export const orderApi = {
    */
   completionPreview: async (
     id: string | undefined,
-    totalFee: number
-  ): Promise<OrderCompletionPreview> => {
-    const response = await apiClient.get(
+    data: OrderCompletionRequest
+  ): Promise<OrderPreview> => {
+    const response = await apiClient.post(
       `/store/orders/${requireId(id, '受注')}/completion-preview`,
-      {
-        params: { total_fee: totalFee },
-      }
+      data
     );
     return response.data;
   },
@@ -273,6 +298,17 @@ export const orderApi = {
 
 /** 店舗の予約受付箱 API。申請（OrderApplication）の一覧・確定・謝絶を受け持つ。 */
 export const orderApplicationApi = {
+  previewConfirmation: async (
+    id: string | undefined,
+    data: OrderApplicationConfirmationRequest
+  ): Promise<OrderPreview> =>
+    (
+      await apiClient.post(
+        `/store/order-applications/${requireId(id, '予約申請')}/confirmation-preview`,
+        data
+      )
+    ).data,
+
   /**
    * 予約申請の一覧。状態の群を指定してカーソルで辿る（受付箱は PENDING）。
    *

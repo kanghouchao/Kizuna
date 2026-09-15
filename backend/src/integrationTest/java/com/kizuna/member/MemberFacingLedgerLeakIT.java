@@ -452,6 +452,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
 
     Order order =
         Order.builder()
+            .course(courseFixture(STORE_A, 100))
             .businessDate(LocalDate.now(ZoneId.of("Asia/Tokyo")))
             .customerId(customerId)
             .castId(castId)
@@ -482,6 +483,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
   private void seedCancelledRequest(long memberId) {
     Order cancelled =
         Order.builder()
+            .course(courseFixture(STORE_A, 100))
             .businessDate(LocalDate.now(ZoneId.of("Asia/Tokyo")))
             .customerId(customerId)
             .pax(2)
@@ -555,7 +557,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/orders",
-            new HttpEntity<>(
+            orderFixtureRequest(
                 "{\"receptionist_id\": 3, \"business_date\": \""
                     + LocalDate.now(ZoneId.of("Asia/Tokyo"))
                     + "\", \"cast_id\": \""
@@ -570,11 +572,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + orderId + "/completion",
             HttpMethod.POST,
-            new HttpEntity<>(
-                "{\"expected_version\":"
-                    + orderVersion(storeHeaders(STORE_A), orderId)
-                    + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":3000}]}",
-                storeHeaders(STORE_A)),
+            completionFixtureRequest(orderId, 3000, null, storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(completed.getStatusCode()).as("前提: 受注を完了できること").isEqualTo(HttpStatus.OK);
     String rawToken = completed.getBody().path("receipt_token").asString();

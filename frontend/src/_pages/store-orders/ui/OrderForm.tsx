@@ -1,5 +1,7 @@
 'use client';
 
+import { OrderCourseField } from './OrderCourseField';
+
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { OrderFeeLineInput, ReceptionRoute, WebApplicationReceptionRoute } from '@/entities/order';
@@ -38,7 +40,6 @@ const HAS_PET_OPTIONS = [
   { value: 'false', label: 'なし' },
   { value: 'true', label: 'あり' },
 ];
-const COURSE_MINUTES_OPTIONS = ['60', '90', '120'].map(v => ({ value: v, label: v }));
 // Web 申請の群は予約申請の確定だけが名乗る値なので選択肢に出さない（後端も拒否する）。
 // 選択肢が 1 つでもセレクトを残すのは、受付経路が記録項目であって、値の追加は行の追加だから。
 const RECEPTION_ROUTE_OPTIONS = [{ value: 'PHONE', label: '電話受付' }];
@@ -61,8 +62,7 @@ export interface OrderFormData {
   /** 受付経路。店舗側の合法値は電話受付だけ（Web 申請の群は予約申請の確定だけが名乗る）。 */
   reception_route: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
   /** この受注に適用するコース名の写し。基本コース料金の明細を置くなら必須になる。 */
-  course_name: string;
-  course_minutes: number;
+  course_id: string;
   extension_minutes: number;
   fee_lines: OrderFeeLineInput[];
   carrier: string;
@@ -87,8 +87,7 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
       classification: 'ーー',
       pax: 1,
       reception_route: 'PHONE',
-      course_name: '',
-      course_minutes: 60,
+      course_id: '',
       extension_minutes: 0,
       fee_lines: [],
       has_pet: false,
@@ -96,7 +95,6 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
     },
   });
   const { register, handleSubmit, control, watch } = form;
-  const course_name = watch('course_name');
 
   return (
     <Form {...form}>
@@ -245,33 +243,6 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={control}
-                name="course_minutes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ｺｰｽ(分)</FormLabel>
-                    <Select
-                      items={COURSE_MINUTES_OPTIONS}
-                      value={String(field.value)}
-                      onValueChange={v => field.onChange(Number(v))}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {COURSE_MINUTES_OPTIONS.map(o => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
               <div className="grid gap-2">
                 <Label htmlFor="pax">人数</Label>
                 <Input id="pax" type="number" min={1} {...register('pax')} />
@@ -307,22 +278,10 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
                 <Label htmlFor="extension_minutes">延長</Label>
                 <Input id="extension_minutes" type="number" {...register('extension_minutes')} />
               </div>
-              <FormField
-                control={control}
-                name="course_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>コース名</FormLabel>
-                    <FormControl>
-                      <Input {...field} maxLength={255} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <OrderCourseField required />{' '}
             </div>
             <div className="mt-6">
-              <OrderFeeLinesField courseName={course_name} />
+              <OrderFeeLinesField />
             </div>
           </CardContent>
         </Card>

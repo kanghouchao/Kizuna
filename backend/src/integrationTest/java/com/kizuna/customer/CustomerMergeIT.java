@@ -1292,7 +1292,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
             + "\"}";
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/store/orders", new HttpEntity<>(body, managerHeaders(STORE_A)), JsonNode.class);
+            "/store/orders", orderFixtureRequest(body, managerHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
     return created.getBody().path("id").asString();
   }
@@ -1318,7 +1318,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
             + "\"}";
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/store/orders", new HttpEntity<>(body, managerHeaders(STORE_A)), JsonNode.class);
+            "/store/orders", orderFixtureRequest(body, managerHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode()).as("前提: 電話番号での受注録入が成立すること").isEqualTo(HttpStatus.CREATED);
     return created;
   }
@@ -1334,13 +1334,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
             rest.exchange(
                     "/store/orders/" + orderId + "/completion",
                     HttpMethod.POST,
-                    new HttpEntity<>(
-                        "{\"expected_version\":"
-                            + orderVersion(managerHeaders(STORE_A), orderId)
-                            + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
-                            + TOTAL_FEE
-                            + "}]}",
-                        managerHeaders(STORE_A)),
+                    completionFixtureRequest(orderId, TOTAL_FEE, null, managerHeaders(STORE_A)),
                     JsonNode.class)
                 .getStatusCode())
         .as("前提: 受注を完了できること")

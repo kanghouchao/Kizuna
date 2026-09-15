@@ -44,8 +44,8 @@ public interface OrderRepository
              o.contactName as contactName, o.contactPhoneNumber as contactPhoneNumber,
              o.castId as castId, k.name as castName,
              o.pax as pax,
-             o.courseName as courseName,
-             o.courseMinutes as courseMinutes, o.extensionMinutes as extensionMinutes,
+             o.course as course,
+             o.extensionMinutes as extensionMinutes,
              o.actualArrivalTime as actualArrivalTime, o.actualEndTime as actualEndTime,
              o.carrier as carrier,
              o.mediaName as mediaName, o.totalFee as totalFee,
@@ -122,7 +122,7 @@ public interface OrderRepository
   // 店舗（store）表示名の join は張らない。
   String PLATFORM_VIEW_SELECT =
       """
-      select o.id as id, o.storeId as storeId,
+      select o.id as id, o.storeId as storeId, o.course as course,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,

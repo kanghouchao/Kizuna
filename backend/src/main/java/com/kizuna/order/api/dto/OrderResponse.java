@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.domain.OrderCourse;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -14,6 +15,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderResponse {
+  private OrderCourse course;
   private String id;
   private Long receptionistId;
   private String receptionistName;
@@ -29,10 +31,6 @@ public class OrderResponse {
   private String castName;
   private Integer pax;
 
-  /** 適用されたコース名の写し。 */
-  private String courseName;
-
-  private Integer courseMinutes;
   private Integer extensionMinutes;
 
   /** 実際の到着・終了時刻。完了後の訂正の門だけがこれを直せる。 */

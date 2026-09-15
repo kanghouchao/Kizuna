@@ -1,3 +1,4 @@
+import { confirmPreview, pointsPreview } from '../lib/orderTestSupport';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { OrderCompletionModal } from '../ui/OrderCompletionModal';
@@ -7,6 +8,7 @@ jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
   ...jest.requireActual('@/entities/order'),
   orderApi: {
+    ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     get: jest.fn(),
     complete: jest.fn(),
     completionPreview: jest.fn(),
@@ -29,7 +31,18 @@ const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
 const confirmedOrder: Order = {
-  fee_lines: [],
+  course: {
+    service_id: 'course-1',
+    revision_id: 'r1',
+    revision_number: 1,
+    name: '基本',
+    duration_minutes: 60,
+    price: 12000,
+    remuneration: 7000,
+    adoption_basis: 'CURRENT_SETTING' as const,
+    adopted_at: '2026-09-15T00:00:00Z',
+  },
+  fee_lines: [{ kind: 'OPTION', name: '会計', amount: 0, system_owned: false }],
   id: 'o1',
   status: 'CONFIRMED',
   business_date: '2026-08-10',
@@ -53,17 +66,21 @@ const completeWith = async (amount: string) => {
   fireEvent.change(await screen.findByLabelText('明細1の名称'), { target: { value: '会計' } });
   fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: amount } });
   fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+  await confirmPreview();
 };
 
 describe('OrderCompletionModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedPreview.mockResolvedValue({
-      member_linked: true,
-      point_balance: 500,
-      usage_unit: 100,
-      grant_points: 50,
-    });
+    mockedPreview.mockResolvedValue(
+      pointsPreview({
+        use_points: 0,
+        member_linked: true,
+        point_balance: 500,
+        usage_unit: 100,
+        grant_points: 50,
+      })
+    );
     mockedComplete.mockResolvedValue(confirmedOrder);
     // 完了モーダルは作業キューの行から開かれる。行は明細もコース名も持たないので、
     // 播種は詳細の読み口から取り直す（既存の内訳を空で上書きしないため）。
@@ -75,7 +92,20 @@ describe('OrderCompletionModal', () => {
     // そのまま完了すると既存の内訳を丸ごと上書きして失う
     mockedGet.mockResolvedValue({
       ...confirmedOrder,
-      course_name: '90 分コース',
+      course: {
+        ...{
+          service_id: 'course-1',
+          revision_id: 'r1',
+          revision_number: 1,
+          name: '基本',
+          duration_minutes: 60,
+          price: 12000,
+          remuneration: 7000,
+          adoption_basis: 'CURRENT_SETTING' as const,
+          adopted_at: '2026-09-15T00:00:00Z',
+        },
+        name: '90 分コース',
+      },
       fee_lines: [
         { kind: 'BASE_COURSE', name: '90 分コース', amount: 18000, system_owned: false },
         { kind: 'OPTION', name: '指名', amount: 2000, system_owned: false },
@@ -85,6 +115,17 @@ describe('OrderCompletionModal', () => {
       ],
     });
     const queueRow: OrderWorkQueueRow = {
+      course: {
+        service_id: 'course-1',
+        revision_id: 'r1',
+        revision_number: 1,
+        name: '基本',
+        duration_minutes: 60,
+        price: 12000,
+        remuneration: 7000,
+        adoption_basis: 'CURRENT_SETTING' as const,
+        adopted_at: '2026-09-15T00:00:00Z',
+      },
       id: 'o1',
       status: 'CONFIRMED',
       customer_name: '山田太郎',
@@ -99,8 +140,9 @@ describe('OrderCompletionModal', () => {
       />
     );
 
-    expect(await screen.findByLabelText('コース名')).toHaveValue('90 分コース');
-    expect(screen.getByLabelText('明細2の名称')).toHaveValue('指名');
+    expect(await screen.findByText(/基本コース.*90 分コース/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('コース名')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('明細1の名称')).toHaveValue('指名');
     expect(screen.getByText('-¥500')).toBeInTheDocument();
     expect(screen.getByText('¥300')).toBeInTheDocument();
     expect(screen.getByText('¥-200')).toBeInTheDocument();
@@ -117,20 +159,31 @@ describe('OrderCompletionModal', () => {
 
     renderModal();
 
-    await waitFor(() => expect(mockedPreview).toHaveBeenCalledWith('o1', 12000));
-    expect(mockedPreview).not.toHaveBeenCalledWith('o1', 0);
+    await waitFor(() =>
+      expect(mockedPreview).toHaveBeenCalledWith(
+        'o1',
+        expect.objectContaining({
+          expected_version: 3,
+          fee_lines: [expect.objectContaining({ amount: 12000 })],
+        })
+      )
+    );
+    expect(mockedPreview).not.toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({
+        expected_version: 3,
+        fee_lines: [expect.objectContaining({ amount: 0 })],
+      })
+    );
   });
 
-  it('コース名を空にしたら、省略ではなく空文字で送って消せる', async () => {
-    // undefined はキーごと落ちてサーバが「変更しない」と読むため、消したい意図が黙って捨てられる
-    mockedGet.mockResolvedValue({ ...confirmedOrder, course_name: '90 分コース' });
+  it('採用済みコースは完了画面で編集できない', async () => {
     renderModal();
-
-    fireEvent.change(await screen.findByLabelText('コース名'), { target: { value: '' } });
+    await screen.findByLabelText('明細1の名称');
+    expect(screen.queryByLabelText('コース名')).not.toBeInTheDocument();
     await completeWith('8000');
-
-    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
-    expect(mockedComplete.mock.calls[0][1].course_name).toBe('');
+    await waitFor(() => expect(mockedComplete).toHaveBeenCalled());
+    expect(mockedComplete.mock.calls[0][1]).not.toHaveProperty('course_id');
   });
 
   it('開き直しは陳腐化した内訳で播かず、取り直した内容で播く', async () => {
@@ -219,10 +272,18 @@ describe('OrderCompletionModal', () => {
     expect(await screen.findByText(/重複照合の来客（顧客未設定）/)).toBeInTheDocument();
   });
 
-  it('開いた時点の事前計算は会計金額 0 で取る', async () => {
+  it('開いた時点の事前計算は保存済みの明細と版で取る', async () => {
     renderModal();
 
-    await waitFor(() => expect(mockedPreview).toHaveBeenCalledWith('o1', 0));
+    await waitFor(() =>
+      expect(mockedPreview).toHaveBeenCalledWith(
+        'o1',
+        expect.objectContaining({
+          expected_version: 3,
+          fee_lines: [expect.objectContaining({ amount: 0 })],
+        })
+      )
+    );
   });
 
   it('会計金額を確定すると、その金額で見込みを取り直す', async () => {
@@ -234,7 +295,15 @@ describe('OrderCompletionModal', () => {
     fireEvent.change(input, { target: { value: '8000' } });
     fireEvent.blur(input);
 
-    await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 8000));
+    await waitFor(() =>
+      expect(mockedPreview).toHaveBeenLastCalledWith(
+        'o1',
+        expect.objectContaining({
+          expected_version: 3,
+          fee_lines: [expect.objectContaining({ amount: 8000 })],
+        })
+      )
+    );
   });
 
   it('別の受注へ切り替えたら、前の受注の見込みで欄の可否を決めない', async () => {
@@ -271,7 +340,15 @@ describe('OrderCompletionModal', () => {
 
     expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
     // 見込みは播種の後に走る。播く前に引くと、内訳の入る前の総和で付与予定が嘘になる
-    await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o2', 0));
+    await waitFor(() =>
+      expect(mockedPreview).toHaveBeenLastCalledWith(
+        'o2',
+        expect.objectContaining({
+          expected_version: 3,
+          fee_lines: [expect.objectContaining({ amount: 0 })],
+        })
+      )
+    );
     expect(screen.queryByLabelText('利用ポイント')).not.toBeInTheDocument();
   });
 
@@ -288,7 +365,15 @@ describe('OrderCompletionModal', () => {
     const input = await screen.findByLabelText('明細1の金額');
     fireEvent.change(input, { target: { value: '8000' } });
     fireEvent.blur(input);
-    await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 8000));
+    await waitFor(() =>
+      expect(mockedPreview).toHaveBeenLastCalledWith(
+        'o1',
+        expect.objectContaining({
+          expected_version: 3,
+          fee_lines: [expect.objectContaining({ amount: 8000 })],
+        })
+      )
+    );
 
     rerender(
       <OrderCompletionModal
@@ -307,12 +392,22 @@ describe('OrderCompletionModal', () => {
       />
     );
 
-    await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('o1', 0));
+    await waitFor(() =>
+      expect(mockedPreview).toHaveBeenLastCalledWith(
+        'o1',
+        expect.objectContaining({
+          expected_version: 3,
+          fee_lines: [expect.objectContaining({ amount: 0 })],
+        })
+      )
+    );
   });
 
   it('未紐づけの受注では利用ポイント欄を出さず、未紐づけと名乗る', async () => {
     // 非会員に台帳は存在しない。欄を出すと、必ず失敗する入力を勧めることになる
-    mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
+    mockedPreview.mockResolvedValue(
+      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
+    );
     renderModal();
 
     expect(await screen.findByText('未紐づけ')).toBeInTheDocument();
@@ -336,7 +431,9 @@ describe('OrderCompletionModal', () => {
     // 空欄は NaN であって null でも空文字でもないため、required だけでは素通りする
     renderModal();
 
-    fireEvent.click(await screen.findByRole('button', { name: '完了する' }));
+    fireEvent.change(await screen.findByLabelText('明細1の金額'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
 
     expect(await screen.findByText('金額を入力してください')).toBeInTheDocument();
     expect(mockedComplete).not.toHaveBeenCalled();
@@ -376,18 +473,23 @@ describe('OrderCompletionModal', () => {
 
   it('利用ポイントが会計金額を超えたら送信せず理由を出す', async () => {
     // 請求より大きい割引に相当する利用を台帳へ積ませない。残高では引っ掛からない額で確かめる
-    mockedPreview.mockResolvedValue({
-      member_linked: true,
-      point_balance: 5000,
-      usage_unit: 100,
-      grant_points: 10,
-    });
+    mockedPreview.mockResolvedValue(
+      pointsPreview({
+        use_points: 0,
+        member_linked: true,
+        point_balance: 50000,
+        usage_unit: 100,
+        grant_points: 10,
+      })
+    );
     renderModal();
 
-    fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '2000' } });
+    fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '14000' } });
     await completeWith('1000');
 
-    expect(await screen.findByText('会計金額を超えています（会計金額: 1000）')).toBeInTheDocument();
+    expect(
+      await screen.findByText('会計金額を超えています（会計金額: 13000）')
+    ).toBeInTheDocument();
     expect(mockedComplete).not.toHaveBeenCalled();
   });
 
@@ -420,30 +522,51 @@ describe('OrderCompletionModal', () => {
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
     expect(mockedComplete.mock.calls[0][1]).toEqual({
       expected_version: 3,
-      course_name: '',
+      confirmation_token: 'confirmed',
       fee_lines: [{ kind: 'OPTION', name: '会計', amount: 8000 }],
       use_points: 200,
     });
   });
 
-  it('会員でなくなった見込みへ、打ち込み済みの利用ポイントを持ち越さない', async () => {
-    // 欄が消えても react-hook-form は値を保つ。入力だけを見て送ると、紐づけが読めなくなった
-    // 受注へ利用が漏れる
+  it('会員資格が変わったら利用入力を再試算し、資格エラーでは保存しない', async () => {
     renderModal();
 
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
-    mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 80 });
+    mockedPreview.mockResolvedValue(
+      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 80 })
+    );
     fireEvent.change(screen.getByLabelText('明細1の名称'), { target: { value: '会計' } });
     const input = screen.getByLabelText('明細1の金額');
     fireEvent.change(input, { target: { value: '8000' } });
     fireEvent.blur(input);
 
     await screen.findByText('未紐づけ');
-    expect(screen.queryByLabelText('利用ポイント')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('利用ポイント')).toHaveValue(200);
+    mockedPreview.mockRejectedValue(new Error('資格変更'));
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
 
-    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
-    expect(mockedComplete.mock.calls[0][1].use_points).toBeUndefined();
+    expect(
+      await screen.findByText('試算できませんでした。入力と権限を確認してください。')
+    ).toBeInTheDocument();
+    expect(mockedPreview).toHaveBeenLastCalledWith(
+      'o1',
+      expect.objectContaining({ use_points: 200 })
+    );
+    expect(mockedComplete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '入力に戻る' }));
+    fireEvent.change(screen.getByLabelText('利用ポイント'), { target: { value: '0' } });
+    mockedPreview.mockResolvedValue(
+      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 0 })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '完了する' }));
+    await confirmPreview();
+    await waitFor(() =>
+      expect(mockedComplete).toHaveBeenCalledWith(
+        'o1',
+        expect.objectContaining({ use_points: undefined })
+      )
+    );
   });
 
   it('内訳を播いた詳細そのものの版を完了と一緒に送る', async () => {
@@ -458,6 +581,7 @@ describe('OrderCompletionModal', () => {
 
     await screen.findByLabelText('明細1の名称');
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
 
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
     expect(mockedComplete.mock.calls[0][1].expected_version).toBe(7);
@@ -491,6 +615,7 @@ describe('OrderCompletionModal', () => {
 
     expect(await screen.findByLabelText('明細1の名称')).toHaveValue('古い明細');
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
 
     await waitFor(() =>
       expect(notify.warning).toHaveBeenCalledWith(
@@ -503,6 +628,7 @@ describe('OrderCompletionModal', () => {
       expect(screen.getByLabelText('明細1の名称')).toHaveValue('他の操作者が直した明細')
     );
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
     expect(mockedComplete.mock.calls[1][1].expected_version).toBe(4);
   });
@@ -531,6 +657,7 @@ describe('OrderCompletionModal', () => {
 
     expect(await screen.findByLabelText('明細1の名称')).toHaveValue('古い明細');
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
 
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith('この受注は別の操作者により完了または取消済みです')
@@ -561,7 +688,7 @@ describe('OrderCompletionModal', () => {
     expect(onCompleted).not.toHaveBeenCalled();
   });
 
-  it('事前計算に失敗したら領域が自分で名乗り、通知には出さず、送信も塞がない', async () => {
+  it('事前計算に失敗したら領域が自分で名乗り、通知には出さず、再試算できるまで保存しない', async () => {
     // 見込みが読めないことは入力の誤りではない。単位も残高もサーバ側が再検証するので、
     // ここで送信を塞ぐと読み込みの失敗が会計そのものを止めてしまう
     mockedPreview.mockRejectedValue(new Error('boom'));
@@ -575,8 +702,10 @@ describe('OrderCompletionModal', () => {
 
     await completeWith('8000');
 
-    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
-    expect(mockedComplete.mock.calls[0][1].use_points).toBeUndefined();
+    expect(
+      await screen.findByText('試算できませんでした。入力と権限を確認してください。')
+    ).toBeInTheDocument();
+    expect(mockedComplete).not.toHaveBeenCalled();
   });
 
   it('見込みの再試行は同じ会計金額のまま取り直す', async () => {
@@ -594,7 +723,9 @@ describe('OrderCompletionModal', () => {
     // 生値は完了応答にしか現れない。ここで閉じると、客が後から来店を取り戻す手段ごと消える
     const onClose = jest.fn();
     const onCompleted = jest.fn();
-    mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
+    mockedPreview.mockResolvedValue(
+      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
+    );
     mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
     renderModal(onCompleted, onClose);
 
@@ -619,7 +750,9 @@ describe('OrderCompletionModal', () => {
     // 生値はこの応答にしか無い。誤って閉じると客が来店を取り戻す手段ごと消えるので、
     // 閉じるのは明示のボタンだけにする
     const onClose = jest.fn();
-    mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
+    mockedPreview.mockResolvedValue(
+      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
+    );
     mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
     renderModal(jest.fn(), onClose);
 
@@ -673,7 +806,9 @@ describe('OrderCompletionModal', () => {
 
   /** 受注 o1 を完了して QR を出し、いったん閉じてから指定の受注で開き直す。 */
   const reopenAfterIssuing = async (reopened: Order) => {
-    mockedPreview.mockResolvedValue({ member_linked: false, usage_unit: 100, grant_points: 50 });
+    mockedPreview.mockResolvedValue(
+      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
+    );
     mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
     const { rerender } = render(
       <OrderCompletionModal

@@ -4,8 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderCourse;
+import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
+import com.kizuna.service.domain.ServiceItem;
+import com.kizuna.service.domain.ServiceItemRepository;
+import com.kizuna.service.domain.ServiceKind;
+import com.kizuna.service.domain.ServiceRevision;
+import com.kizuna.service.domain.ServiceRevisionRepository;
+import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.EmergencyElevation;
@@ -15,6 +25,7 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
@@ -61,6 +72,29 @@ class StoreDeletionCascadeIT {
   @Autowired private PointEntryRepository pointEntryRepository;
   @Autowired private MemberRepository memberRepository;
   @Autowired private EmergencyElevationRepository emergencyElevationRepository;
+
+  @Autowired private ServiceItemRepository services;
+  @Autowired private ServiceRevisionRepository revisions;
+  @Autowired private OrderRepository orders;
+
+  private OrderCourse insertCourse(long storeId) {
+    var item = ServiceItem.create(new ServiceTerms(ServiceKind.COURSE, "削除検証", 60, null, 100, 0));
+    item.setStoreId(storeId);
+    services.saveAndFlush(item);
+    var revision = ServiceRevision.record(item, null, 3L);
+    revision.setStoreId(storeId);
+    revisions.saveAndFlush(revision);
+    return new OrderCourse(
+        item.getId(),
+        revision.getId(),
+        1,
+        "削除検証",
+        60,
+        100,
+        0,
+        "CURRENT_SETTING",
+        OffsetDateTime.now());
+  }
 
   private String platformLogin() {
     HttpHeaders headers = new HttpHeaders();
@@ -217,11 +251,9 @@ class StoreDeletionCascadeIT {
   }
 
   @Test
-  @DisplayName("未完了の受注を抱えた準備中の店舗も削除でき、顧客・キャスト・受注が CASCADE 消去されること")
-  void storeWithPendingOrdersCanStillBeDeleted() {
-    // 受注は顧客とキャストを参照し、その 2 つは店舗を参照する。どちらの参照も削除を止める外部キーなので、
-    // 店舗削除の CASCADE が受注より先に顧客・キャストへ届けば違反で止まりうる。誤って登録した準備中の
-    // 店舗を撤回できることは店舗削除の存在理由なので、その疑いをここで潰す。
+  @DisplayName("コース版本を採用した受注を持つ店舗は削除されず、関連データも残ること")
+  void storeWithAdoptedCourseCannotBeDeleted() {
+    // サービス設定と歴史版本の店舗参照は NO ACTION で、受注が採用した約定を残す。
     Store store = freshStore("受注あり検証店舗", "order-store-delete-it");
     long storeId = store.getId();
     String customerId = "order-cascade-customer-" + UUID.randomUUID();
@@ -234,10 +266,10 @@ class StoreDeletionCascadeIT {
 
     ResponseEntity<JsonNode> res = deleteStore(storeId);
 
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-    assertThat(countOrders(storeId)).as("受注は店舗と共に消えること").isZero();
-    assertThat(countCustomers(storeId)).as("顧客は店舗と共に消えること").isZero();
-    assertThat(countStore(storeId)).isZero();
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(countOrders(storeId)).as("受注が保持されること").isEqualTo(1L);
+    assertThat(countCustomers(storeId)).as("顧客が保持されること").isEqualTo(1L);
+    assertThat(countStore(storeId)).isEqualTo(1L);
   }
 
   @Test
@@ -335,14 +367,16 @@ class StoreDeletionCascadeIT {
   }
 
   private void insertOrder(long storeId, String customerId, String castId) {
-    jdbcTemplate.update(
-        "INSERT INTO t_orders (id, store_id, customer_id, cast_id, business_date, status,"
-            + " created_at, updated_at, version) VALUES (?, ?, ?, ?, CURRENT_DATE, 'CONFIRMED',"
-            + " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
-        "order-cascade-it-" + UUID.randomUUID(),
-        storeId,
-        customerId,
-        castId);
+    var order =
+        Order.builder()
+            .businessDate(LocalDate.now())
+            .customerId(customerId)
+            .castId(castId)
+            .status(OrderStatus.CONFIRMED)
+            .build();
+    order.setStoreId(storeId);
+    order.adoptCourse(insertCourse(storeId), List.of());
+    orders.saveAndFlush(order);
   }
 
   private long countOrders(long storeId) {
@@ -405,11 +439,11 @@ class StoreDeletionCascadeIT {
 
   /** 会員も顧客も伴わない最小の完了済み受注を直挿する（判定に効くのは店舗と状態だけ）。 */
   private void insertCompletedOrder(long storeId) {
-    jdbcTemplate.update(
-        "INSERT INTO t_orders (id, store_id, business_date, status, created_at, updated_at, version)"
-            + " VALUES (?, ?, CURRENT_DATE, 'COMPLETED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
-        "order-delete-it-" + UUID.randomUUID(),
-        storeId);
+    var order = Order.builder().businessDate(LocalDate.now()).status(OrderStatus.CONFIRMED).build();
+    order.setStoreId(storeId);
+    order.adoptCourse(insertCourse(storeId), List.of());
+    order.completeWith(0, 0);
+    orders.saveAndFlush(order);
   }
 
   private Long originatingStoreIdOf(long entryId) {

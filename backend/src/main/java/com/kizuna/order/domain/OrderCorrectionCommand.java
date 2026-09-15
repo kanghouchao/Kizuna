@@ -13,7 +13,6 @@ import java.util.List;
 public record OrderCorrectionCommand(
     LocalTime actualArrivalTime,
     LocalTime actualEndTime,
-    String courseName,
-    Integer courseMinutes,
+    OrderCourse course,
     Integer extensionMinutes,
     List<OrderFeeLineDraft> feeLines) {}

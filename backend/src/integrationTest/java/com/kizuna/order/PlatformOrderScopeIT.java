@@ -3,8 +3,15 @@ package com.kizuna.order;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.service.domain.ServiceItem;
+import com.kizuna.service.domain.ServiceItemRepository;
+import com.kizuna.service.domain.ServiceKind;
+import com.kizuna.service.domain.ServiceRevision;
+import com.kizuna.service.domain.ServiceRevisionRepository;
+import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -14,6 +21,7 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -31,14 +39,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
-/**
- * 集合作用域の実データ非漏洩を本物の PostgreSQL で強断言する統合テスト。
- *
- * <p>断言は「帰属不一致」型の弱断言ではなく、応答生ボディに授権外店舗の実データ（店舗ID・カナリア文字列）が 一切現れないこと（AC2）で行う。読みは storeSetFilter が
- * session 層で機構的に濾過し、書きは明示的単店 storeId の 授権検証（{@code PlatformOrderService.create}）が担う。先例は {@link
- * com.kizuna.menu.MenuCrossStoreIT}（リポジトリ直挿 + 実データ断言）と {@link
- * com.kizuna.auth.PlatformAuthIT}（平台トークン取得 + planted-user）。
- */
+/** 集合作用域の実データ非漏洩を PostgreSQL 上の一覧応答で検証する。 */
 class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
   private static final String PASSWORD = "pass";
@@ -59,12 +60,6 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
   private static final LocalDate CANARY_B_DATE = LocalDate.of(2999, 1, 2);
 
-  /**
-   * demo シード（seed/05-demo.yaml）の山田次郎(platform_users id=3, STORE_STAFF,
-   * SPECIFIC_STORES{1})。受付担当として使用。
-   */
-  private static final long SEED_RECEPTIONIST_ID = 3L;
-
   @Autowired private OrderRepository orderRepository;
   @Autowired private StoreRepository storeRepository;
   @Autowired private PlatformUserRepository platformUserRepository;
@@ -73,6 +68,28 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
 
   /** 保存後に採番された第二店舗の実 id。 */
   private long storeBId;
+
+  @Autowired private ServiceItemRepository services;
+  @Autowired private ServiceRevisionRepository revisions;
+
+  private OrderCourse insertCourse(long storeId) {
+    var item = ServiceItem.create(new ServiceTerms(ServiceKind.COURSE, "削除検証", 60, null, 100, 0));
+    item.setStoreId(storeId);
+    services.saveAndFlush(item);
+    var revision = ServiceRevision.record(item, null, 3L);
+    revision.setStoreId(storeId);
+    revisions.saveAndFlush(revision);
+    return new OrderCourse(
+        item.getId(),
+        revision.getId(),
+        1,
+        "削除検証",
+        60,
+        100,
+        0,
+        "CURRENT_SETTING",
+        OffsetDateTime.now());
+  }
 
   @BeforeEach
   void prepareScopeFixture() {
@@ -108,6 +125,7 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
     }
     Order order =
         Order.builder()
+            .course(insertCourse(storeId))
             .remarks(remarks)
             .businessDate(businessDate)
             .status(OrderStatus.CONFIRMED)
@@ -183,18 +201,6 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
         .count();
   }
 
-  private String createCastAs(long storeId, String name) {
-    ResponseEntity<JsonNode> created =
-        rest.postForEntity(
-            "/store/casts",
-            new HttpEntity<>("{\"name\": \"" + name + "\"}", storeHeaders(storeId)),
-            JsonNode.class);
-    assertThat(created.getStatusCode().is2xxSuccessful())
-        .as("前提: store %d でのキャスト作成が成功すること", storeId)
-        .isTrue();
-    return created.getBody().path("id").asString();
-  }
-
   @Test
   @DisplayName("SPECIFIC{1} の一覧は授権店舗(store_id=1)のみを返し、正向マーカーを含むこと(AC1)")
   void specificScopeListReturnsOnlyAuthorizedStores() {
@@ -268,90 +274,16 @@ class PlatformOrderScopeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("store_id 未指定の書きは 400 で拒否されること(AC3 前半)")
-  void writeWithoutStoreIdIsRejected() {
-    String body =
-        String.format(
-            "{\"receptionist_id\": %d, \"business_date\": \"%s\", \"cast_id\": \"dummy-cast\"}",
-            SEED_RECEPTIONIST_ID, LocalDate.now());
-
-    ResponseEntity<JsonNode> res =
+  @DisplayName("平台の受注作成入口は提供せず、受注を作成しないこと")
+  void platformCreationIsUnavailable() {
+    long before = orderCountForStore(STORE_A);
+    var response =
         rest.postForEntity(
             "/platform/orders",
-            new HttpEntity<>(body, bearerJson(platformToken(SPECIFIC_EMAIL, PASSWORD))),
+            new HttpEntity<>("{}", bearerJson(platformToken(SEED_EMAIL, PASSWORD))),
             JsonNode.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-  }
-
-  @Test
-  @DisplayName("授権集合外 store_id の書きは 403 かつ store B に永続化されないこと(AC3 後半)")
-  void writeToOutOfSetStoreIsRejected() {
-    long before = orderCountForStore(storeBId);
-
-    String body =
-        String.format(
-            "{\"store_id\": %d, \"receptionist_id\": %d, \"business_date\": \"%s\","
-                + " \"cast_id\": \"dummy-cast\"}",
-            storeBId, SEED_RECEPTIONIST_ID, LocalDate.now());
-
-    ResponseEntity<JsonNode> res =
-        rest.postForEntity(
-            "/platform/orders",
-            new HttpEntity<>(body, bearerJson(platformToken(SPECIFIC_EMAIL, PASSWORD))),
-            JsonNode.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-    assertThat(orderCountForStore(storeBId)).as("拒否された書きが store B に永続化されていないこと").isEqualTo(before);
-  }
-
-  @Test
-  @DisplayName("ALL_STORES でも実在しない store_id の書きは 400(500 でない — StoreScopeExecutor の存在性保証)")
-  void writeToNonexistentStoreIsRejectedWith400NotServerError() {
-    long nonexistentStoreId = 999_999_999L;
-    assertThat(storeRepository.existsById(nonexistentStoreId))
-        .as("前提: 対象 storeId が実在しないこと")
-        .isFalse();
-
-    // ALL_STORES(seed HQ admin)は授権集合検査を通過するため、実在性検査が 400 の保証点となる。
-    String body =
-        String.format(
-            "{\"store_id\": %d, \"receptionist_id\": %d, \"business_date\": \"%s\","
-                + " \"cast_id\": \"dummy-cast\"}",
-            nonexistentStoreId, SEED_RECEPTIONIST_ID, LocalDate.now());
-
-    ResponseEntity<JsonNode> res =
-        rest.postForEntity(
-            "/platform/orders",
-            new HttpEntity<>(body, bearerJson(platformToken(SEED_EMAIL, PASSWORD))),
-            JsonNode.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-  }
-
-  @Test
-  @DisplayName("授権店舗への書きはその店舗に受注を作成すること(正向対照: 負向 403 がバリデーション起因でない証明)")
-  void writeToAuthorizedStoreCreatesOrderInThatStore() {
-    String castId = createCastAs(STORE_A, "集合作用域IT用キャスト");
-
-    String body =
-        String.format(
-            "{\"store_id\": %d, \"receptionist_id\": %d, \"business_date\": \"%s\","
-                + " \"cast_id\": \"%s\"}",
-            STORE_A, SEED_RECEPTIONIST_ID, LocalDate.now(), castId);
-
-    ResponseEntity<JsonNode> res =
-        rest.postForEntity(
-            "/platform/orders",
-            new HttpEntity<>(body, bearerJson(platformToken(SPECIFIC_EMAIL, PASSWORD))),
-            JsonNode.class);
-
-    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    String newId = res.getBody().path("id").asString();
-    assertThat(newId).isNotBlank();
-
-    Order created = orderRepository.findById(newId).orElseThrow();
-    assertThat(created.getStoreId()).as("授権店舗(store 1)に永続化されていること").isEqualTo(STORE_A);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+    assertThat(orderCountForStore(STORE_A)).isEqualTo(before);
   }
 
   @Test

@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
-import { cancelOrder, createCast, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
+import { STORE_HEADERS, cancelOrder, createCast, createCourse, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -13,6 +13,10 @@ const todayInTokyo = () =>
 let createdCastId = '';
 let createdCastName = '';
 let createdOrderId = '';
+let courseName = '';
+let courseId = '';
+let courseVersion = 1;
+let adoptedPrice = 12000;
 // このシナリオの受注を共有の店舗の中で一意に指す鍵。お客様名に埋めてカードを名指す。
 let customerName = '';
 let storeId = '';
@@ -28,6 +32,10 @@ Given('店舗コンソールへ入り受注一覧を開く', async ({ page, requ
   createdCastName = `受注ライフサイクル-${Date.now()}`;
   createdCastId = await createCast(request, token, createdCastName);
   customerName = `受注LC客-${Date.now()}`;
+  courseName = `受注コース-${Date.now()}`;
+  courseId = await createCourse(request, token, courseName, storeId);
+  courseVersion = 1;
+  adoptedPrice = 12000;
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
   await expect(page.getByRole('heading', { name: 'オーダー一覧', exact: true })).toBeVisible();
 });
@@ -45,6 +53,10 @@ When('電話受付の受注を登録する', async ({ page }) => {
   await page.getByPlaceholder('名前で検索').fill(createdCastName);
   await page.getByRole('option', { name: createdCastName }).click();
 
+  await page.getByRole('combobox', { name: 'コース', exact: true }).click();
+  await page.getByLabel('コースを検索', { exact: true }).fill(courseName);
+  await page.getByRole('option', { name: new RegExp(courseName) }).click();
+  await page.getByRole('button', { name: '登録する', exact: true }).click();
   // 受付担当は選ばない。既定の「自分」＝項目ごと省略送信で、サーバが実行者本人に解決する
   const [response] = await Promise.all([
     page.waitForResponse(
@@ -52,7 +64,7 @@ When('電話受付の受注を登録する', async ({ page }) => {
         resp.url().endsWith('/api/store/orders') && resp.request().method() === 'POST',
       { timeout: 15000 }
     ),
-    page.getByRole('button', { name: '登録する', exact: true }).click(),
+    page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
   ]);
   expect(response.status()).toBe(201);
   createdOrderId = (await response.json()).id as string;
@@ -72,6 +84,7 @@ When('受注の編集ページを開き人数を {string} に直して保存す�
   // 開くたびに 1 件を読み直すので、播かれるまで待ってから書き換える
   await expect(page.getByLabel('人数', { exact: true })).toHaveValue('2', { timeout: 15000 });
   await page.getByLabel('人数', { exact: true }).fill(pax);
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await Promise.all([
     page.waitForResponse(
       resp =>
@@ -79,7 +92,7 @@ When('受注の編集ページを開き人数を {string} に直して保存す�
         resp.request().method() === 'PUT',
       { timeout: 15000 }
     ),
-    page.getByRole('button', { name: '保存', exact: true }).click(),
+    page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
   ]);
   // 保存の出口は一覧。戻り着くまで待たないと、次の段がまだ編集ページを相手にする
   await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`), { timeout: 15000 });
@@ -123,14 +136,16 @@ When('カードから完了モーダルを開き会計 {string} 円で完了す�
   await ownCard(page).getByRole('button', { name: '完了', exact: true }).click();
   const dialog = page.getByRole('dialog');
   // 会計金額の欄は無く、合計は明細の総和としてサーバが導出する。1 行だけ入れて総額を作る
+  await dialog.getByRole('button', { name: '明細を追加' }).click();
   await dialog.getByLabel('明細1の名称', { exact: true }).fill('会計');
-  await dialog.getByLabel('明細1の金額', { exact: true }).fill(fee);
+  await dialog.getByLabel('明細1の金額', { exact: true }).fill(String(Number(fee) - adoptedPrice));
+  await dialog.getByRole('button', { name: '完了する', exact: true }).click();
   await Promise.all([
     page.waitForResponse(
-      resp => resp.url().includes('/completion') && resp.request().method() === 'POST',
+      resp => resp.url().endsWith('/completion') && resp.request().method() === 'POST',
       { timeout: 15000 }
     ),
-    dialog.getByRole('button', { name: '完了する', exact: true }).click(),
+    page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
   ]);
 });
 
@@ -145,8 +160,61 @@ Then('完了アーカイブに請求 {string} の行が現れる', async ({ page
   await expect(page.getByText(`請求 ${amount}`, { exact: false })).toBeVisible({ timeout: 15000 });
 });
 
+When('設定コースを改定して受注へ適用する', async ({ page, request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const updated = await request.put(`/api/store/services/${courseId}`, {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { name: courseName, duration_minutes: 90, price: 18000, remuneration: 11000, expected_version: courseVersion },
+  });
+  expect(updated.status()).toBe(200);
+  courseVersion = 2;
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await page.getByRole('combobox', { name: 'コース', exact: true }).click();
+  await page.getByLabel('コースを検索').fill(courseName);
+  await page.getByRole('option', { name: new RegExp(courseName) }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText(/固定報酬: ¥11,000/)).toBeVisible();
+  await page.getByRole('button', { name: 'この内容を確認して保存' }).click();
+  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`));
+  adoptedPrice = 18000;
+});
+
+When('設定を削除して過去のコースへ理由付きで訂正する', async ({ page, request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const deleted = await request.delete(`/api/store/services/${courseId}?expected_version=${courseVersion}`, {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+  });
+  expect(deleted.status()).toBe(204);
+  courseId = '';
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/correction`);
+  await page.getByRole('combobox', { name: '訂正する過去の版' }).click();
+  await page.getByLabel('コースを検索').fill(courseName);
+  await page.getByRole('option', { name: new RegExp(`${courseName}.*版1.*削除済み`) }).click();
+  await page.getByLabel('理由', { exact: true }).fill('実際に提供した60分コースへ訂正');
+  await page.getByRole('button', { name: '訂正する' }).click();
+  await expect(page.getByText(/固定報酬: ¥7,000/)).toBeVisible();
+  const [saved] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/corrections') && response.request().method() === 'POST'),
+    page.getByRole('button', { name: 'この内容を確認して保存' }).click(),
+  ]);
+  expect(saved.status()).toBe(201);
+  const result = await saved.json();
+  expect(result.previous_course.price).toBe(18000);
+  expect(result.course.price).toBe(12000);
+  expect(result.course.remuneration).toBe(7000);
+  expect(result.total_fee).toBe(22000);
+  expect(result.correction_id).toBeTruthy();
+});
+
 After(async ({ request }) => {
   const token = await loginAsStoreAdmin(request);
+  if (courseId) {
+    const deleted = await request.delete(`/api/store/services/${courseId}?expected_version=${courseVersion}`, {
+      headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    });
+    expect(deleted.status()).toBe(204);
+    courseId = '';
+  }
   if (createdOrderId) {
     // 受注は消せない（ADR 0013）ので、終端へ送って対応が要る群から外すだけ。
     // シナリオ側で既に取消・完了まで進んでいれば撥ねられるが、それは想定内なので握り潰す。

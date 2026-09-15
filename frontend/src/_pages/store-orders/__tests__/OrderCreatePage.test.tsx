@@ -1,3 +1,4 @@
+import { chooseCourse, confirmPreview } from '../lib/orderTestSupport';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CreateOrderPage from '../ui/OrderCreatePage';
 import { orderApi } from '@/entities/order';
@@ -6,6 +7,7 @@ jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
   ...jest.requireActual('@/entities/order'),
   orderApi: {
+    ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     create: jest.fn(),
     listReceptionists: jest.fn(),
     listCastCandidates: jest.fn(),
@@ -44,7 +46,20 @@ describe('新規オーダー登録の送信ペイロード', () => {
     jest.clearAllMocks();
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
     mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
-    mockedOrderApi.create.mockResolvedValue({ fee_lines: [] });
+    mockedOrderApi.create.mockResolvedValue({
+      course: {
+        service_id: 'course-1',
+        revision_id: 'r1',
+        revision_number: 1,
+        name: '基本',
+        duration_minutes: 60,
+        price: 12000,
+        remuneration: 7000,
+        adoption_basis: 'CURRENT_SETTING',
+        adopted_at: '2026-09-15T00:00:00Z',
+      },
+      fee_lines: [],
+    });
   });
 
   it('受付を省略しても、数値と時刻を変換し snake_case の項目で送信する', async () => {
@@ -59,7 +74,9 @@ describe('新規オーダー登録の送信ペイロード', () => {
       target: { value: '20:00' },
     });
     fireEvent.change(screen.getByLabelText('延長'), { target: { value: '30' } });
+    await chooseCourse();
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await confirmPreview();
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
     const body = mockedOrderApi.create.mock.calls[0][0];
     expect(body).toMatchObject({
@@ -69,7 +86,8 @@ describe('新規オーダー登録の送信ペイロード', () => {
       arrival_scheduled_start_time: '19:30:00',
       arrival_scheduled_end_time: '20:00:00',
       pax: 1,
-      course_minutes: 60,
+      course_id: 'course-1',
+      confirmation_token: 'confirmed',
       extension_minutes: 30,
       reception_route: 'PHONE',
       cast_id: 'cast-1',
@@ -82,7 +100,9 @@ describe('新規オーダー登録の送信ペイロード', () => {
     await fillRequiredAndRender();
 
     fireEvent.change(screen.getByLabelText('人数'), { target: { value: '' } });
+    await chooseCourse();
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await confirmPreview();
 
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
     expect(mockedOrderApi.create.mock.calls[0][0].pax).toBeUndefined();
@@ -92,7 +112,9 @@ describe('新規オーダー登録の送信ペイロード', () => {
     await fillRequiredAndRender();
 
     fireEvent.change(screen.getByLabelText('人数'), { target: { value: '3' } });
+    await chooseCourse();
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await confirmPreview();
 
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
     expect(mockedOrderApi.create.mock.calls[0][0].pax).toBe(3);
@@ -104,7 +126,9 @@ describe('新規オーダー登録の送信ペイロード', () => {
   it('キャスト未選択の文言が引き金と結び付き、焦点がそこへ移ること', async () => {
     render(<CreateOrderPage />);
 
+    await chooseCourse();
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await confirmPreview();
 
     const message = await screen.findByText('キャストを候補から選択してください');
     const trigger = screen.getByRole('combobox', { name: /キャスト/ });

@@ -19,7 +19,6 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -91,7 +90,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/orders",
-            new HttpEntity<>(
+            orderFixtureRequest(
                 "{\"business_date\": \"" + LocalDate.now() + "\", \"cast_id\": \"" + castId + "\"}",
                 manager),
             JsonNode.class);
@@ -100,73 +99,6 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(created.getBody().path("receptionist_id").asLong()).isPositive();
   }
-
-  @Test
-  @DisplayName("受付候補でない実行者が受付担当を省略したら明示的に撥ねられること")
-  void createRejectsAnOmittedReceptionistForAnIneligibleActor() {
-    // HQ 管理者は ORDER_SET_MANAGE で店舗を跨いで受注を起こせるが、受付候補の適格条件
-    // （当店を授権する ORDER_MANAGE 保持の STAFF）は満たさない。黙って未設定にせず撥ねる
-    String hqToken = login("admin@kizuna.test");
-    String castId = createCast(storeHeaders(STORE_A), "HQ 起点");
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.setBearerAuth(hqToken);
-
-    ResponseEntity<JsonNode> rejected =
-        rest.postForEntity(
-            "/platform/orders",
-            new HttpEntity<>(
-                "{\"store_id\": "
-                    + STORE_A
-                    + ", \"business_date\": \""
-                    + LocalDate.now()
-                    + "\", \"cast_id\": \""
-                    + castId
-                    + "\"}",
-                headers),
-            JsonNode.class);
-
-    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(rejected.getBody().path("error").asString()).contains("受付担当を指定してください");
-  }
-
-  @Test
-  @DisplayName("HQ 経由の作成にも同じ規則（出生確定・Web 申請の経路の拒否）が効くこと")
-  void hqOriginatedOrdersFollowTheSameRules() {
-    // 入口によって受注の生まれ方が変わらないこと。HQ は店舗側の作成へ委譲するので規則を共有する
-    String hqToken = login("admin@kizuna.test");
-    String castId = createCast(storeHeaders(STORE_A), "HQ 出生");
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.setBearerAuth(hqToken);
-    String body =
-        "{\"store_id\": "
-            + STORE_A
-            + ", \"business_date\": \""
-            + LocalDate.now()
-            + "\", \"cast_id\": \""
-            + castId
-            + "\", \"receptionist_id\": "
-            + SEED_RECEPTIONIST_ID;
-
-    ResponseEntity<JsonNode> created =
-        rest.postForEntity(
-            "/platform/orders", new HttpEntity<>(body + "}", headers), JsonNode.class);
-    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    assertThat(created.getBody().path("status").asString()).isEqualTo("CONFIRMED");
-
-    for (String route : new String[] {"MEMBER_WEB", "GUEST_WEB"}) {
-      ResponseEntity<JsonNode> web =
-          rest.postForEntity(
-              "/platform/orders",
-              new HttpEntity<>(body + ", \"reception_route\": \"" + route + "\"}", headers),
-              JsonNode.class);
-      assertThat(web.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-      assertThat(web.getBody().path("error").asString()).contains("Web 申請");
-    }
-  }
-
-  // ==================== 編集の契約（#681） ====================
 
   @Test
   @DisplayName("営業日・場所・媒体を編集で直せること")
@@ -262,7 +194,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
 
     // 黙って捨てると送り手は直ったと誤解したまま台帳の誤記が残る
     assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(rejected.getBody().path("error").asString()).contains("顧客詳細");
+    assertThat(rejected.getBody().path("error").asString()).contains("連絡先は変更できません");
   }
 
   @Test
@@ -426,6 +358,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     String declared = "名乗り" + nonce;
     Order request =
         Order.builder()
+            .course(courseFixture(STORE_A, 100))
             .businessDate(LocalDate.now())
             .pax(2)
             .status(OrderStatus.CONFIRMED)
@@ -563,8 +496,12 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
                 "\"receptionist_id\": " + SEED_RECEPTIONIST_ID,
                 "\"business_date\": \"" + LocalDate.now() + "\"",
                 "\"cast_id\": \"" + castId + "\""));
-    return rest.postForEntity(
-        "/store/orders", new HttpEntity<>(shape.apply(base).toJson(), headers), JsonNode.class);
+    return submitPreviewed(
+        "/store/orders",
+        HttpMethod.POST,
+        "/store/orders/preview",
+        withCourseFixture(shape.apply(base).toJson(), headers),
+        headers);
   }
 
   private String orderId(ResponseEntity<JsonNode> created) {
@@ -576,17 +513,20 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
   private ResponseEntity<JsonNode> update(String orderId, String body) {
     JsonNode current = orderJson(orderId);
     String carried =
-        "\"receptionist_id\": "
+        "\"expected_version\":"
+            + current.path("version").asLong()
+            + ",\"receptionist_id\": "
             + current.path("receptionist_id").asLong()
             + ", \"cast_id\": \""
             + current.path("cast_id").asString()
             + "\"";
     String merged = "{" + carried + (body.equals("{}") ? "" : ", " + body.substring(1));
-    return rest.exchange(
+    return submitPreviewed(
         "/store/orders/" + orderId,
         HttpMethod.PUT,
-        new HttpEntity<>(merged, storeHeaders(STORE_A)),
-        JsonNode.class);
+        "/store/orders/" + orderId + "/preview",
+        merged,
+        storeHeaders(STORE_A));
   }
 
   private ResponseEntity<JsonNode> cancel(String orderId, String reason) {
@@ -601,11 +541,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     return rest.exchange(
         "/store/orders/" + orderId + "/completion",
         HttpMethod.POST,
-        new HttpEntity<>(
-            "{\"expected_version\":"
-                + orderVersion(storeHeaders(STORE_A), orderId)
-                + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}",
-            storeHeaders(STORE_A)),
+        completionFixtureRequest(orderId, 12000, null, storeHeaders(STORE_A)),
         JsonNode.class);
   }
 

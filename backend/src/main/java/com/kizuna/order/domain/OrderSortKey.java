@@ -21,7 +21,7 @@ public enum OrderSortKey {
           + " 2147483647)",
       KeyType.NUMBER),
   PAX("coalesce(o.pax, 2147483647)", KeyType.NUMBER),
-  COURSE_MINUTES("coalesce(o.courseMinutes, 2147483647)", KeyType.NUMBER);
+  COURSE_MINUTES("coalesce(o.course.durationMinutes, 2147483647)", KeyType.NUMBER);
 
   /** 鍵の値の型。カーソルの符号化・復号がこの型に従う。 */
   public enum KeyType {

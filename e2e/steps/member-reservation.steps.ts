@@ -14,6 +14,7 @@ import {
   loginAsStoreAdmin,
   loginViaUiAndEnterStore,
   registerMember,
+  createCourse,
   STORE_HEADERS,
 } from './store-api';
 
@@ -160,9 +161,12 @@ Then('予約一覧に {string} の予約が表示される', async ({ page }, st
   await expect(item.getByText(statusLabel, { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
-When('店舗管理者が受付箱で予約を確定する', async ({ page }) => {
+When('店舗管理者が受付箱で予約を確定する', async ({ page, request }) => {
   const storeId = await loginViaUiAndEnterStore(page);
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  const adminToken = await loginAsStoreAdmin(request);
+  const courseName = `申請確定コース-${Date.now()}`;
+  await createCourse(request, adminToken, courseName, storeId);
   // 受付箱は店舗共有なので、先頭を掴むと先に残っている他人の申請を確定してしまう。
   // カードに出る会員コードでこのシナリオの申請だけを名指す。
   const application = page.getByRole('listitem').filter({ hasText: memberCode });
@@ -171,12 +175,16 @@ When('店舗管理者が受付箱で予約を確定する', async ({ page }) => 
   await application.getByRole('button', { name: '確定' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible({ timeout: 15000 });
+  await dialog.getByRole('combobox', { name: 'コース', exact: true }).click();
+  await page.getByLabel('コースを検索').fill(courseName);
+  await page.getByRole('option', { name: new RegExp(courseName) }).click();
+  await dialog.getByRole('button', { name: '確定する' }).click();
   const [response] = await Promise.all([
     page.waitForResponse(
-      resp => resp.url().includes('/confirmation') && resp.request().method() === 'POST',
+      resp => resp.url().endsWith('/confirmation') && resp.request().method() === 'POST',
       { timeout: 15000 }
     ),
-    dialog.getByRole('button', { name: '確定する' }).click(),
+    page.getByRole('button', { name: 'この内容を確認して保存' }).click(),
   ]);
   // 後片付けは受注を理由付き取消で終端へ送るため、生成された受注の id を控える。
   const body = await response.json();

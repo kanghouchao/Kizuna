@@ -7,7 +7,6 @@ import com.kizuna.order.api.dto.OrderAttributionInvalidationRequest;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
-import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCorrectionRequest;
@@ -16,6 +15,7 @@ import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderPointRollbackPreviewResponse;
 import com.kizuna.order.api.dto.OrderPointRollbackRequest;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
+import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
@@ -307,11 +307,11 @@ public class OrderController {
   }
 
   /** 完了処理の事前計算（会計金額に対する付与見込みと、会員なら残高）。 */
-  @GetMapping("/{id}/completion-preview")
+  @PostMapping("/{id}/completion-preview")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderCompletionPreviewResponse> completionPreview(
-      @PathVariable String id, @RequestParam(name = "total_fee") int totalFee) {
-    return ResponseEntity.ok(orderService.completionPreview(id, totalFee));
+  public ResponseEntity<OrderPreviewResponse> completionPreview(
+      @PathVariable String id, @Valid @RequestBody OrderCompletionRequest request) {
+    return ResponseEntity.ok(orderService.completionPreview(id, request));
   }
 
   /**
@@ -340,7 +340,7 @@ public class OrderController {
    * 空文になるためである。門はポイントを一切動かさず、応答が名乗るのは会計金額の前後だけである（ADR 0019）。
    */
   @PostMapping("/{id}/corrections")
-  @PreAuthorize("hasAuthority('PERM_ORDER_CORRECT')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
   public ResponseEntity<OrderCorrectionResponse> correct(
       @PathVariable String id,
       @Valid @RequestBody OrderCorrectionRequest request,
@@ -359,5 +359,26 @@ public class OrderController {
   public ResponseEntity<OrderWorkQueueResponse> update(
       @PathVariable String id, @Valid @RequestBody OrderUpdateRequest request) {
     return ResponseEntity.ok(orderService.update(id, request));
+  }
+
+  @PostMapping("/preview")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public OrderPreviewResponse previewCreate(
+      @Valid @RequestBody OrderCreateRequest request, Principal principal) {
+    return orderService.previewCreate(request, principal.getName());
+  }
+
+  @PostMapping("/{id}/preview")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public OrderPreviewResponse previewUpdate(
+      @PathVariable String id, @Valid @RequestBody OrderUpdateRequest request) {
+    return orderService.previewUpdate(id, request);
+  }
+
+  @PostMapping("/{id}/correction-preview")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
+  public OrderPreviewResponse previewCorrection(
+      @PathVariable String id, @Valid @RequestBody OrderCorrectionRequest request) {
+    return orderCorrectionService.preview(id, request);
   }
 }

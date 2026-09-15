@@ -1,3 +1,4 @@
+import { chooseCourse, confirmPreview } from '../lib/orderTestSupport';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
@@ -18,6 +19,7 @@ jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   // 表示ラベル等の定数は本物を使う（API だけを差し替える）
   orderApi: {
+    ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     create: jest.fn(),
     cancel: jest.fn(),
     listReceptionists: jest.fn(),
@@ -28,6 +30,8 @@ jest.mock('@/entities/order', () => ({
     completionPreview: jest.fn(),
   },
   orderApplicationApi: {
+    previewConfirmation: jest.requireActual('../lib/orderTestSupport').courseApiMocks()
+      .previewCreate,
     list: jest.fn(),
     confirm: jest.fn(),
     decline: jest.fn(),
@@ -63,7 +67,20 @@ function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQu
     cast_name: '花子',
     receptionist_name: '佐藤',
     pax: 2,
-    course_minutes: 60,
+    course: {
+      ...{
+        service_id: 'course-1',
+        revision_id: 'r1',
+        revision_number: 1,
+        name: '基本',
+        duration_minutes: 60,
+        price: 12000,
+        remuneration: 7000,
+        adoption_basis: 'CURRENT_SETTING' as const,
+        adopted_at: '2026-09-15T00:00:00Z',
+      },
+      duration_minutes: 60,
+    },
     receptionist_id: 3,
     cast_id: 'cast-1',
     status: 'CONFIRMED',
@@ -74,6 +91,17 @@ function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQu
 
 function archivedOrder(overrides: Partial<OrderArchiveRow> = {}): OrderArchiveRow {
   return {
+    course: {
+      service_id: 'course-1',
+      revision_id: 'r1',
+      revision_number: 1,
+      name: '基本',
+      duration_minutes: 60,
+      price: 12000,
+      remuneration: 7000,
+      adoption_basis: 'CURRENT_SETTING' as const,
+      adopted_at: '2026-09-15T00:00:00Z',
+    },
     id: 'o1',
     business_date: '2026-07-03',
     customer_name: '山田太郎',
@@ -196,7 +224,9 @@ describe('作業キューの描画', () => {
     // 申請内容が予填される。ここで直した値は受注にだけ現れ、申請原文は動かない
     await waitFor(() => expect(within(dialog).getByLabelText('人数')).toHaveValue(2));
     fireEvent.change(within(dialog).getByLabelText('人数'), { target: { value: '5' } });
+    await chooseCourse();
     fireEvent.click(within(dialog).getByRole('button', { name: '確定する' }));
+    await confirmPreview();
 
     await waitFor(() =>
       expect(mockedApplicationApi.confirm).toHaveBeenCalledWith(

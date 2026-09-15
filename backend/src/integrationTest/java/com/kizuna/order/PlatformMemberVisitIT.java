@@ -319,6 +319,7 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
   private void seedVisitAtStoreB(int pax, int grantedPoints) {
     Order order =
         Order.builder()
+            .course(courseFixture(STORE_B, 100))
             .businessDate(LocalDate.now())
             .pax(pax)
             .status(OrderStatus.COMPLETED)
@@ -361,7 +362,7 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
             + "\"}";
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
-            "/store/orders", new HttpEntity<>(body, storeHeaders(STORE_A)), JsonNode.class);
+            "/store/orders", orderFixtureRequest(body, storeHeaders(STORE_A)), JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful()).as("前提: 受注作成が成功すること").isTrue();
     return created.getBody().path("id").asString();
   }
@@ -370,13 +371,7 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
     return rest.exchange(
         "/store/orders/" + orderId + "/completion",
         HttpMethod.POST,
-        new HttpEntity<>(
-            "{\"expected_version\":"
-                + orderVersion(storeHeaders(STORE_A), orderId)
-                + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
-                + totalFee
-                + "}]}",
-            storeHeaders(STORE_A)),
+        completionFixtureRequest(orderId, totalFee, null, storeHeaders(STORE_A)),
         JsonNode.class);
   }
 

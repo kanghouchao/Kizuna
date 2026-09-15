@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderFeeLineResponse {
+  private Integer remuneration;
   private String kind;
   private String name;
   private Integer amount;

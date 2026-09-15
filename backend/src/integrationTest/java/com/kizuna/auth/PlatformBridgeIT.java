@@ -105,6 +105,7 @@ class PlatformBridgeIT extends CrossStoreTestSupport {
     }
     Order order =
         Order.builder()
+            .course(courseFixture(storeId, 100))
             .remarks(remarks)
             .businessDate(MARKER_DATE)
             .status(OrderStatus.CONFIRMED)

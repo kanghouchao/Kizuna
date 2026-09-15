@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.domain.OrderCourse;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import lombok.AllArgsConstructor;
@@ -13,6 +14,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PlatformOrderResponse {
+  private OrderCourse course;
   private String id;
   private Long storeId;
   private LocalDate businessDate;

@@ -102,8 +102,10 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
   }
 
   /** 更新の要求体。OrderUpdateRequest は営業日を持たないため、作成の体をそのまま流用できない。 */
-  private String orderUpdateBody(String castId, String remarks) {
-    return "{\"receptionist_id\": "
+  private String orderUpdateBody(String orderId, String castId, String remarks) {
+    return "{\"expected_version\":"
+        + orderVersion(storeHeaders(STORE_A), orderId)
+        + ",\"receptionist_id\": "
         + SEED_RECEPTIONIST_ID
         + ", \"cast_id\": \""
         + castId
@@ -116,7 +118,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/orders",
-            new HttpEntity<>(orderBody(castId, "統合テスト受注"), storeHeaders(storeId)),
+            orderFixtureRequest(orderBody(castId, "統合テスト受注"), storeHeaders(storeId)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d での受注作成が成功すること", storeId)
@@ -136,7 +138,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> own =
         rest.postForEntity(
             "/store/orders",
-            new HttpEntity<>(orderBodyForCustomer(castId, ownCustomerId), storeHeaders(STORE_A)),
+            orderFixtureRequest(orderBodyForCustomer(castId, ownCustomerId), storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(own.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(own.getBody().path("customer_id").asString()).isEqualTo(ownCustomerId);
@@ -144,11 +146,13 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
     // 負向: 書き込み先の解決は storeFilter 越しなので、他店舗の顧客は不在と区別のつかない 404 になる
     String foreignCustomerId = insertCustomerForStoreB();
     ResponseEntity<JsonNode> foreign =
-        rest.postForEntity(
+        submitPreviewed(
             "/store/orders",
-            new HttpEntity<>(
+            HttpMethod.POST,
+            "/store/orders/preview",
+            withCourseFixture(
                 orderBodyForCustomer(castId, foreignCustomerId), storeHeaders(STORE_A)),
-            JsonNode.class);
+            storeHeaders(STORE_A));
     assertThat(foreign.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
     // 拒否された要求が受注を残していないこと（storeFilter の掛からない直読みで確かめる）
@@ -201,6 +205,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
   private String insertOrderForStoreB(String contactName, OrderStatus status) {
     Order order =
         Order.builder()
+            .course(courseFixture(STORE_B, 100))
             .businessDate(LocalDate.now())
             .contactName(contactName)
             .pax(2)
@@ -245,7 +250,9 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             "/store/order-applications/" + orderId + "/confirmation",
             HttpMethod.POST,
             new HttpEntity<>(
-                "{\"business_date\": \"" + LocalDate.now() + "\", \"pax\": 2}",
+                "{\"course_id\": \"unreachable-course\", \"business_date\": \""
+                    + LocalDate.now()
+                    + "\", \"pax\": 2}",
                 storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(confirmAttempt.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -318,7 +325,9 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
             "/store/order-applications/" + foreignId + "/confirmation",
             HttpMethod.POST,
             new HttpEntity<>(
-                "{\"business_date\": \"" + LocalDate.now() + "\", \"pax\": 2}",
+                "{\"course_id\": \"unreachable-course\", \"business_date\": \""
+                    + LocalDate.now()
+                    + "\", \"pax\": 2}",
                 storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(foreignConfirm.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -348,7 +357,10 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + controlId,
             HttpMethod.PUT,
-            new HttpEntity<>(orderUpdateBody(castId, "対照・更新後"), storeHeaders(STORE_A)),
+            confirmedRequest(
+                "/store/orders/" + controlId + "/preview",
+                orderUpdateBody(controlId, castId, "対照・更新後"),
+                storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(ownUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -358,7 +370,7 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + orderId,
             HttpMethod.PUT,
-            new HttpEntity<>(orderUpdateBody(castId, "改ざん"), storeHeaders(STORE_B)),
+            new HttpEntity<>(orderUpdateBody(orderId, castId, "改ざん"), storeHeaders(STORE_B)),
             JsonNode.class);
     assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 

@@ -1,3 +1,4 @@
+import { chooseCourse } from '../lib/orderTestSupport';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { OrderForm, OrderFormData } from '../ui/OrderForm';
 import { orderApi } from '@/entities/order';
@@ -6,6 +7,7 @@ jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
   ...jest.requireActual('@/entities/order'),
   orderApi: {
+    ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     listReceptionists: jest.fn(),
     listCastCandidates: jest.fn(),
   },
@@ -26,6 +28,7 @@ function renderForm() {
 
 async function submitAndGetBody(onSubmit: jest.Mock) {
   await pickOption(/キャスト/, /花子/);
+  await chooseCourse();
   fireEvent.click(screen.getByRole('button', { name: '登録する' }));
   await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
   return onSubmit.mock.calls[0][0] as OrderFormData;
@@ -61,8 +64,8 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
 
     expect(body.classification).toBe('ーー');
     expect(body.has_pet).toBe(false);
-    expect(body.course_minutes).toBe(60);
-    expect(body.course_name).toBe('');
+    expect(body.course_id).toBe('course-1');
+    expect(body).not.toHaveProperty('course_name');
     expect(body.fee_lines).toEqual([]);
   });
 
@@ -112,11 +115,11 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     const { onSubmit } = renderForm();
 
     await selectReceptionist();
-    await pickOption('ｺｰｽ(分)', '120');
+    await pickOption('コース', /基本/);
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.course_minutes).toBe(120);
-    expect(typeof body.course_minutes).toBe('number');
+    expect(body.course_id).toBe('course-1');
+    expect(typeof body.course_id).toBe('string');
   });
 
   it('追加した明細が種別・名称・金額の行としてそのまま送られること', async () => {
@@ -168,6 +171,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
   };
 
   const submit = async () => {
+    await chooseCourse();
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
     await act(async () => {
       jest.advanceTimersByTime(0);
