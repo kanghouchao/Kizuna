@@ -42,7 +42,7 @@ public class OrderFeeLine extends BaseEntity {
   @Column(name = "name", nullable = false, length = 255)
   private String name;
 
-  @Column(name = "amount", nullable = false, updatable = false)
+  @Column(name = "amount", nullable = false)
   private Integer amount;
 
   private OrderFeeLine(OrderFeeLineKind kind, String name, int amount) {
@@ -73,16 +73,9 @@ public class OrderFeeLine extends BaseEntity {
     return new OrderFeeLine(kind, name, amount);
   }
 
-  /**
-   * 名称の写し元が直されたときに追随する。受注集約だけが呼ぶ（公開の設定子は持たない）。
-   *
-   * <p>金額と種別は動かないので、合計を取り直す必要は無い。
-   */
-  void renameTo(String newName) {
-    if (newName == null || newName.isBlank()) {
-      throw new InvalidOrderFeeLineException("明細の名称は必須です");
-    }
-    this.name = newName;
+  void applyCourse(OrderCourse course) {
+    this.name = course.name();
+    this.amount = course.price();
   }
 
   @Override

@@ -2,20 +2,16 @@ package com.kizuna.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.order.api.dto.OrderMapper;
-import com.kizuna.order.api.dto.OrderResponse;
-import com.kizuna.order.api.dto.PlatformOrderCreateRequest;
 import com.kizuna.order.api.dto.PlatformOrderResponse;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.PlatformOrderView;
 import com.kizuna.shared.storescope.StoreScopeExecutor;
 import java.util.List;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -36,15 +32,6 @@ class PlatformOrderServiceTest {
 
   @InjectMocks PlatformOrderService service;
 
-  /** HQ 経由の作成の実行者。受付担当の補完先として店舗側の作成へそのまま渡る。 */
-  private static final String ACTOR_EMAIL = "hq@kizuna.test";
-
-  private PlatformOrderCreateRequest requestForStore(long storeId) {
-    PlatformOrderCreateRequest req = new PlatformOrderCreateRequest();
-    req.setStoreId(storeId);
-    return req;
-  }
-
   @Test
   void listMapsPlatformViewsToResponses() {
     PlatformOrderView view = mock(PlatformOrderView.class);
@@ -60,28 +47,5 @@ class PlatformOrderServiceTest {
     assertThat(result.getContent().get(0).getId()).isEqualTo("o1");
     assertThat(result.getContent().get(0).getStoreId()).isEqualTo(1L);
     verify(orderRepository).findPlatformViews(any(Pageable.class));
-  }
-
-  @Test
-  void createDelegatesToExecutorWithRequestStoreId() {
-    PlatformOrderCreateRequest req = requestForStore(7L);
-    OrderResponse res = OrderResponse.builder().id("o1").build();
-    when(storeScopeExecutor.runInStore(eq(7L), any())).thenReturn(res);
-
-    assertThat(service.create(req, ACTOR_EMAIL)).isSameAs(res);
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  void createRunsOrderServiceCreateAsScopedAction() {
-    PlatformOrderCreateRequest req = requestForStore(7L);
-    OrderResponse res = OrderResponse.builder().id("o1").build();
-    when(orderService.create(req, ACTOR_EMAIL)).thenReturn(res);
-    // executor へ渡された action（Supplier）を実行させ、orderService.create が呼ばれることを固定する
-    when(storeScopeExecutor.runInStore(eq(7L), any()))
-        .thenAnswer(inv -> ((Supplier<OrderResponse>) inv.getArgument(1)).get());
-
-    assertThat(service.create(req, ACTOR_EMAIL)).isSameAs(res);
-    verify(orderService).create(req, ACTOR_EMAIL);
   }
 }

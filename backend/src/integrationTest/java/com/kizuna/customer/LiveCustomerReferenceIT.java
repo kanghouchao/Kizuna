@@ -98,7 +98,7 @@ class LiveCustomerReferenceIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/orders",
-            new HttpEntity<>(
+            orderFixtureRequest(
                 "{\"business_date\": \""
                     + LocalDate.now()
                     + "\", \"cast_id\": \""
@@ -131,6 +131,7 @@ class LiveCustomerReferenceIT extends CrossStoreTestSupport {
   private void insertOrder(String customerId) {
     Order order =
         Order.builder()
+            .course(courseFixture(STORE_A, 100))
             .businessDate(LocalDate.now())
             .customerId(customerId)
             .status(OrderStatus.CONFIRMED)

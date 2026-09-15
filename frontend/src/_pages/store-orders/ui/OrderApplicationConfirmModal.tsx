@@ -1,9 +1,13 @@
 'use client';
 
+import { useOrderConfirmation } from './useOrderConfirmation';
+
+import { OrderCourseField } from './OrderCourseField';
+
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { Order, OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
+import { Order, OrderApplicationRow, orderApplicationApi } from '@/entities/order';
 import { customerApi } from '@/entities/customer';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { OrderReceptionistField } from './OrderReceptionistField';
@@ -21,7 +25,6 @@ import {
   FormLabel,
   FormMessage,
   Input,
-  RegionError,
   Select,
   SelectContent,
   SelectItem,
@@ -48,8 +51,7 @@ interface ConfirmFormValues {
   pax: number;
   /** '' はコース未定。 */
   /** 適用するコース名の写し。確定は受注の出生なので、快照はここで写る。 */
-  course_name: string;
-  course_minutes: string;
+  course_id: string;
   remarks: string;
   /** 指名するキャストの id。'' は指名なし。 */
   cast_id: string;
@@ -85,6 +87,7 @@ export function OrderApplicationConfirmModal({
   onClose,
   onConfirmed,
 }: OrderApplicationConfirmModalProps) {
+  const confirmation = useOrderConfirmation(application?.id);
   const form = useForm<ConfirmFormValues>({
     defaultValues: {
       receptionist_id: '',
@@ -92,8 +95,7 @@ export function OrderApplicationConfirmModal({
       arrival_scheduled_start_time: '',
       arrival_scheduled_end_time: '',
       pax: 1,
-      course_name: '',
-      course_minutes: '',
+      course_id: '',
       remarks: '',
       cast_id: '',
       clear_cast: false,
@@ -139,8 +141,7 @@ export function OrderApplicationConfirmModal({
       arrival_scheduled_start_time: application.arrival_scheduled_start_time?.slice(0, 5) ?? '',
       arrival_scheduled_end_time: '',
       pax: application.pax ?? 1,
-      course_name: '',
-      course_minutes: '',
+      course_id: '',
       remarks: application.remarks ?? '',
       cast_id: application.cast_id ?? '',
       clear_cast: false,
@@ -159,15 +160,14 @@ export function OrderApplicationConfirmModal({
     if (!application) return;
     try {
       // 識別子の検証はアダプタが受け持つ（欠けていれば要求を組まずに名乗る失敗を投げる）
-      const created = await orderApplicationApi.confirm(application.id, {
+      const request = {
         receptionist_id: values.receptionist_id ? Number(values.receptionist_id) : undefined,
         business_date: values.business_date,
         arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
         arrival_scheduled_end_time: values.arrival_scheduled_end_time || undefined,
         cast_id: values.clear_cast || !values.cast_id ? undefined : values.cast_id,
         pax: Number(values.pax),
-        course_name: values.course_name.trim() === '' ? undefined : values.course_name.trim(),
-        course_minutes: values.course_minutes ? Number(values.course_minutes) : undefined,
+        course_id: values.course_id,
         remarks: values.remarks ? values.remarks : undefined,
         // 顧客の選択はゲスト申請だけが送る。会員申請へ送るとサーバが撥ねる（顧客は会員の紐づけが決める）
         customer_id:
@@ -181,6 +181,14 @@ export function OrderApplicationConfirmModal({
                 phone_number: values.new_customer_phone || undefined,
               }
             : undefined,
+      };
+      const token = await confirmation.confirm(() =>
+        orderApplicationApi.previewConfirmation(application.id, request)
+      );
+      if (!token) return;
+      const created = await orderApplicationApi.confirm(application.id, {
+        ...request,
+        confirmation_token: token,
       });
       notify.success('予約を確定しました');
       onConfirmed(created);
@@ -209,283 +217,259 @@ export function OrderApplicationConfirmModal({
   };
 
   return (
-    <Dialog
-      open={application !== null}
-      onOpenChange={next => {
-        // 確定中に閉じると、結果が分からないまま古い一覧が残る
-        if (!next && !isSubmitting) onClose();
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        aria-describedby={undefined}
-        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
+    <>
+      {confirmation.dialog}
+      <Dialog
+        open={application !== null}
+        onOpenChange={next => {
+          // 確定中に閉じると、結果が分からないまま古い一覧が残る
+          if (!next && !isSubmitting) onClose();
+        }}
       >
-        <DialogTitle className="border-b px-6 py-4">予約申請を確定</DialogTitle>
-        <Form {...form}>
-          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+        <DialogContent
+          showCloseButton={false}
+          aria-describedby={undefined}
+          className="gap-0 rounded-[10px] p-0 sm:max-w-md"
+        >
+          <DialogTitle className="border-b px-6 py-4">予約申請を確定</DialogTitle>
+          <Form {...form}>
+            {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。人数の min={1} は下の min 規則が引き継ぐ */}
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-            {application !== null && (
-              <OrderReceptionistField key={application.id} scene="confirm" />
-            )}
-            <FormField
-              control={control}
-              name="business_date"
-              rules={{ required: '営業日を選択してください' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>営業日</FormLabel>
-                  <FormControl>
-                    <Input type="date" required {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
+              {application !== null && (
+                <OrderReceptionistField key={application.id} scene="confirm" />
               )}
-            />
-            <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={control}
-                name="arrival_scheduled_start_time"
+                name="business_date"
+                rules={{ required: '営業日を選択してください' }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>開始時刻</FormLabel>
+                    <FormLabel>営業日</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} />
+                      <Input type="date" required {...field} />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={control}
-                name="arrival_scheduled_end_time"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>終了時刻</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
-            {/* 人数はサーバ側が @Min(1)。検証の結果を出さないと、空欄のまま押した確定が無反応に見える */}
-            <FormField
-              control={control}
-              name="pax"
-              rules={{
-                required: '人数を入力してください',
-                min: { value: 1, message: '人数は 1 以上です' },
-                // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
-                // Integer の pax へ届く
-                validate: integerRule('人数'),
-              }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>人数</FormLabel>
-                  <FormControl>
-                    <Input type="number" min={1} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={control}
-              name="course_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>コース名（任意）</FormLabel>
-                  <FormControl>
-                    <Input maxLength={255} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={control}
-              name="course_minutes"
-              // 空欄はコース未定として通る（規則が空を素通しする）
-              rules={{ validate: integerRule('コース分数') }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>コース分数（任意）</FormLabel>
-                  <FormControl>
-                    <Input type="number" min={0} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid gap-2">
-              <CastSearchCombobox
-                id="application-confirm-cast"
-                label="指名"
-                castName={castName}
-                onChange={castId => setValue('cast_id', castId, { shouldDirty: true })}
-                disabled={clearCast}
-              />
-              {/* 解除は明示操作。無効になった指名（在籍停止・シフト取消）を外して確定する導線 */}
-              {selectedCastId && (
+              <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={control}
-                  name="clear_cast"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-2">
-                      <FormControl>
-                        <Checkbox
-                          id="confirm_clear_cast"
-                          checked={field.value}
-                          onCheckedChange={value => field.onChange(value === true)}
-                        />
-                      </FormControl>
-                      <FormLabel htmlFor="confirm_clear_cast" className="font-medium">
-                        指名を外して確定する
-                      </FormLabel>
-                    </FormItem>
-                  )}
-                />
-              )}
-            </div>
-            {isGuest && (
-              <div className="grid gap-3 rounded-md border p-3">
-                <FormField
-                  control={control}
-                  name="customer_mode"
+                  name="arrival_scheduled_start_time"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>顧客（ゲスト申請）</FormLabel>
-                      <Select
-                        items={CUSTOMER_MODE_OPTIONS}
-                        value={field.value}
-                        onValueChange={v => field.onChange(v as CustomerMode)}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {CUSTOMER_MODE_OPTIONS.map(o => (
-                            <SelectItem key={o.value} value={o.value}>
-                              {o.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>開始時刻</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} />
+                      </FormControl>
                     </FormItem>
                   )}
                 />
-                {customerMode === 'existing' && (
-                  <div className="grid gap-2">
-                    <div className="flex items-end gap-2">
+                <FormField
+                  control={control}
+                  name="arrival_scheduled_end_time"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>終了時刻</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              {/* 人数はサーバ側が @Min(1)。検証の結果を出さないと、空欄のまま押した確定が無反応に見える */}
+              <FormField
+                control={control}
+                name="pax"
+                rules={{
+                  required: '人数を入力してください',
+                  min: { value: 1, message: '人数は 1 以上です' },
+                  // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
+                  // Integer の pax へ届く
+                  validate: integerRule('人数'),
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>人数</FormLabel>
+                    <FormControl>
+                      <Input type="number" min={1} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <OrderCourseField required />
+              <div className="grid gap-2">
+                <CastSearchCombobox
+                  id="application-confirm-cast"
+                  label="指名"
+                  castName={castName}
+                  onChange={castId => setValue('cast_id', castId, { shouldDirty: true })}
+                  disabled={clearCast}
+                />
+                {/* 解除は明示操作。無効になった指名（在籍停止・シフト取消）を外して確定する導線 */}
+                {selectedCastId && (
+                  <FormField
+                    control={control}
+                    name="clear_cast"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center gap-2">
+                        <FormControl>
+                          <Checkbox
+                            id="confirm_clear_cast"
+                            checked={field.value}
+                            onCheckedChange={value => field.onChange(value === true)}
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="confirm_clear_cast" className="font-medium">
+                          指名を外して確定する
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+              {isGuest && (
+                <div className="grid gap-3 rounded-md border p-3">
+                  <FormField
+                    control={control}
+                    name="customer_mode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>顧客（ゲスト申請）</FormLabel>
+                        <Select
+                          items={CUSTOMER_MODE_OPTIONS}
+                          value={field.value}
+                          onValueChange={v => field.onChange(v as CustomerMode)}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CUSTOMER_MODE_OPTIONS.map(o => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  {customerMode === 'existing' && (
+                    <div className="grid gap-2">
+                      <div className="flex items-end gap-2">
+                        <FormField
+                          control={control}
+                          name="customer_search"
+                          render={({ field }) => (
+                            <FormItem className="grow">
+                              <FormLabel>台帳を名前で探す</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <Button type="button" variant="outline" onClick={searchCustomers}>
+                          検索
+                        </Button>
+                      </div>
+                      {customersLoading ? (
+                        <p className="text-muted-foreground text-sm">読み込み中...</p>
+                      ) : customersFailure !== null ? (
+                        // 顧客管理の権限が無い実行者ではサーバが拒否する。確定そのものは塞がない
+                        <p className="text-muted-foreground text-sm">
+                          台帳を検索できませんでした（顧客管理の権限が要ります）。新規作成か未設定で確定できます
+                        </p>
+                      ) : (
+                        customerMatches !== null &&
+                        customerMatches.length === 0 && (
+                          <p className="text-muted-foreground text-sm">一致する顧客がいません</p>
+                        )
+                      )}
+                      <ul className="grid gap-1">
+                        {(customerMatches ?? []).map(candidate => (
+                          <li key={candidate.id}>
+                            <button
+                              type="button"
+                              onClick={() => setValue('customer_id', candidate.id ?? '')}
+                              className={
+                                chosenCustomerId === candidate.id
+                                  ? 'w-full rounded-md border border-primary px-3 py-2 text-left text-sm'
+                                  : 'w-full rounded-md border px-3 py-2 text-left text-sm'
+                              }
+                            >
+                              {candidate.name}
+                              {candidate.phone_number ? '（' + candidate.phone_number + '）' : ''}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {customerMode === 'new' && (
+                    <div className="grid gap-3">
                       <FormField
                         control={control}
-                        name="customer_search"
+                        name="new_customer_name"
+                        rules={{ required: 'お客様名を入力してください' }}
                         render={({ field }) => (
-                          <FormItem className="grow">
-                            <FormLabel>台帳を名前で探す</FormLabel>
+                          <FormItem>
+                            <FormLabel>お客様名</FormLabel>
+                            <FormControl>
+                              <Input {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="new_customer_phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>電話番号</FormLabel>
                             <FormControl>
                               <Input {...field} />
                             </FormControl>
                           </FormItem>
                         )}
                       />
-                      <Button type="button" variant="outline" onClick={searchCustomers}>
-                        検索
-                      </Button>
                     </div>
-                    {customersLoading ? (
-                      <p className="text-muted-foreground text-sm">読み込み中...</p>
-                    ) : customersFailure !== null ? (
-                      // 顧客管理の権限が無い実行者ではサーバが拒否する。確定そのものは塞がない
-                      <p className="text-muted-foreground text-sm">
-                        台帳を検索できませんでした（顧客管理の権限が要ります）。新規作成か未設定で確定できます
-                      </p>
-                    ) : (
-                      customerMatches !== null &&
-                      customerMatches.length === 0 && (
-                        <p className="text-muted-foreground text-sm">一致する顧客がいません</p>
-                      )
-                    )}
-                    <ul className="grid gap-1">
-                      {(customerMatches ?? []).map(candidate => (
-                        <li key={candidate.id}>
-                          <button
-                            type="button"
-                            onClick={() => setValue('customer_id', candidate.id ?? '')}
-                            className={
-                              chosenCustomerId === candidate.id
-                                ? 'w-full rounded-md border border-primary px-3 py-2 text-left text-sm'
-                                : 'w-full rounded-md border px-3 py-2 text-left text-sm'
-                            }
-                          >
-                            {candidate.name}
-                            {candidate.phone_number ? '（' + candidate.phone_number + '）' : ''}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {customerMode === 'new' && (
-                  <div className="grid gap-3">
-                    <FormField
-                      control={control}
-                      name="new_customer_name"
-                      rules={{ required: 'お客様名を入力してください' }}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>お客様名</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={control}
-                      name="new_customer_phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>電話番号</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-            <FormField
-              control={control}
-              name="remarks"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>備考</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+                  )}
+                </div>
               )}
-            />
-            <div className="flex justify-end gap-3 border-t pt-4">
-              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-                キャンセル
-              </Button>
-              {/* 検証では塞がない — 灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? '確定中...' : '確定する'}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+              <FormField
+                control={control}
+                name="remarks"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>備考</FormLabel>
+                    <FormControl>
+                      <Textarea rows={3} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-3 border-t pt-4">
+                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                  キャンセル
+                </Button>
+                {/* 検証では塞がない — 灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? '確定中...' : '確定する'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

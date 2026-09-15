@@ -3,6 +3,7 @@ package com.kizuna.order.domain;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.time.LocalTime;
@@ -44,11 +45,7 @@ public class OrderCorrection extends StoreScopedEntity {
   @Column(name = "actual_end_time", updatable = false)
   private LocalTime actualEndTime;
 
-  @Column(name = "course_name", updatable = false, length = 255)
-  private String courseName;
-
-  @Column(name = "course_minutes", updatable = false)
-  private Integer courseMinutes;
+  @Embedded private OrderCourse course;
 
   @Column(name = "extension_minutes", updatable = false)
   private Integer extensionMinutes;
@@ -74,8 +71,7 @@ public class OrderCorrection extends StoreScopedEntity {
     this.reason = reason;
     this.actualArrivalTime = before.getActualArrivalTime();
     this.actualEndTime = before.getActualEndTime();
-    this.courseName = before.getCourseName();
-    this.courseMinutes = before.getCourseMinutes();
+    this.course = before.getCourse();
     this.extensionMinutes = before.getExtensionMinutes();
     this.totalFee = before.getTotalFee();
     this.feeLines = before.getFeeLines().stream().map(OrderFeeLineSnapshot::of).toList();

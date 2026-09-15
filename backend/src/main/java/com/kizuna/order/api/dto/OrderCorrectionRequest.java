@@ -18,6 +18,8 @@ import lombok.Data;
  */
 @Data
 public class OrderCorrectionRequest {
+  private String confirmationToken;
+  private String courseRevisionId;
 
   /**
    * 画面が読み込んだ時点の受注のバージョン（詳細の読み口が返す {@code version}）。
@@ -42,12 +44,6 @@ public class OrderCorrectionRequest {
 
   /** 実際の終了時刻。同上。 */
   private LocalTime actualEndTime;
-
-  /** 適用されたコース名の写し。上限は {@code t_orders.course_name} = VARCHAR(255)。 */
-  @Size(max = 255, message = "コース名は 255 文字以内です")
-  private String courseName;
-
-  private Integer courseMinutes;
 
   private Integer extensionMinutes;
 

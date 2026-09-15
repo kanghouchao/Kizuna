@@ -64,7 +64,10 @@ describe('orderApi', () => {
     expect(await orderApi.get('o1')).toEqual({ ok: true, url: '/store/orders/o1' });
   });
   it('update は受注を PUT する', async () => {
-    expect(await orderApi.update('o1', { pax: 3 })).toEqual({ ok: true, url: '/store/orders/o1' });
+    expect(await orderApi.update('o1', { expected_version: 0, pax: 3 })).toEqual({
+      ok: true,
+      url: '/store/orders/o1',
+    });
   });
   it('cancel は取消の子リソースを POST し、本体を返さない', async () => {
     // 応答は 204。呼出側は行を消すだけで結果を読まない
@@ -167,12 +170,17 @@ describe('orderApplicationApi', () => {
   });
   it('confirm は確定の子リソースへ確定内容を POST し、生成された受注を返す', async () => {
     expect(
-      await orderApplicationApi.confirm('a1', { business_date: '2026-08-20', pax: 2 })
+      await orderApplicationApi.confirm('a1', {
+        course_id: 'course-1',
+        business_date: '2026-08-20',
+        pax: 2,
+      })
     ).toEqual({
       ok: true,
       url: '/store/order-applications/a1/confirmation',
     });
     expect(mockedPost).toHaveBeenLastCalledWith('/store/order-applications/a1/confirmation', {
+      course_id: 'course-1',
       business_date: '2026-08-20',
       pax: 2,
     });
@@ -255,11 +263,15 @@ describe('memberReceiptApi', () => {
 describe('識別子を欠いた orderApi / orderApplicationApi / memberOrderApplicationApi', () => {
   const calls: [string, () => Promise<unknown>, string][] = [
     ['get', () => orderApi.get(undefined), '受注'],
-    ['update', () => orderApi.update(undefined, {}), '受注'],
+    ['update', () => orderApi.update(undefined, { expected_version: 0 }), '受注'],
     ['cancel', () => orderApi.cancel(undefined, { reason: 'r' }), '受注'],
     [
       'orderApplicationApi.confirm',
-      () => orderApplicationApi.confirm(undefined, { business_date: '2026-08-20' }),
+      () =>
+        orderApplicationApi.confirm(undefined, {
+          course_id: 'course-1',
+          business_date: '2026-08-20',
+        }),
       '予約申請',
     ],
     [
@@ -272,7 +284,11 @@ describe('識別子を欠いた orderApi / orderApplicationApi / memberOrderAppl
       () => orderApi.complete(undefined, { expected_version: 1, fee_lines: [] }),
       '受注',
     ],
-    ['completionPreview', () => orderApi.completionPreview(undefined, 0), '受注'],
+    [
+      'completionPreview',
+      () => orderApi.completionPreview(undefined, { expected_version: 0, fee_lines: [] }),
+      '受注',
+    ],
     ['attribution', () => orderApi.attribution(undefined), '受注'],
     [
       'invalidateAttribution',

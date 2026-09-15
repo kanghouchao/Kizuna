@@ -36,6 +36,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -158,13 +160,14 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
     Map<String, Object> body = new HashMap<>(prepared.body());
     body.put("customer_id", customerId);
     var fixture =
-        new NominationOperation(
-            prepared.castId(),
-            prepared.path(),
-            prepared.method(),
-            body,
-            prepared.resourceId(),
-            prepared.originalCastId());
+        confirmFixture(
+            new NominationOperation(
+                prepared.castId(),
+                prepared.path(),
+                prepared.method(),
+                body,
+                prepared.resourceId(),
+                prepared.originalCastId()));
     try (Connection holder = dataSource.getConnection()) {
       holder.setAutoCommit(false);
       int blocker;
@@ -207,12 +210,16 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
   @Test
   void successfulNominationKeepsEnrollmentLockedUntilCommit() throws Exception {
     String castId = createCast();
+    String courseId = courseFixture(STORE_A, 100).serviceId();
     var held = new CompletableFuture<Integer>();
     var release = new CountDownLatch(1);
     var creation =
         CompletableFuture.supplyAsync(
             () -> {
               storeContext.setStoreId(STORE_A);
+              SecurityContextHolder.getContext()
+                  .setAuthentication(
+                      new UsernamePasswordAuthenticationToken("yamada.jiro@kizuna.test", null));
               try {
                 return new TransactionTemplate(transactions)
                     .execute(
@@ -221,6 +228,11 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
                           request.setCastId(castId);
                           request.setBusinessDate(LocalDate.now().plusDays(1));
                           request.setReceptionistId(3L);
+                          request.setCourseId(courseId);
+                          request.setConfirmationToken(
+                              orders
+                                  .previewCreate(request, "yamada.jiro@kizuna.test")
+                                  .confirmationToken());
                           var order = orders.create(request, "yamada.jiro@kizuna.test");
                           held.complete(
                               jdbc.queryForObject("select pg_backend_pid()", Integer.class));
@@ -234,6 +246,7 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
                         });
               } finally {
                 storeContext.clear();
+                SecurityContextHolder.clearContext();
               }
             });
     try {
@@ -282,27 +295,36 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
     String castId = createCast();
     LocalDate date = LocalDate.now().plusDays(1);
     Map<String, Object> body =
-        Map.of(
-            "cast_id", castId, "business_date", date.toString(), "pax", 2, "receptionist_id", 3L);
+        new HashMap<>(
+            Map.of(
+                "cast_id",
+                castId,
+                "business_date",
+                date.toString(),
+                "pax",
+                2,
+                "receptionist_id",
+                3L));
+    body.put("course_id", courseFixture(STORE_A, 100).serviceId());
     if (operation.equals("UPDATE")) {
       String originalCastId = createCast();
       var created =
           rest.postForEntity(
               "/store/orders",
-              new HttpEntity<>(
-                  Map.of(
-                      "cast_id",
-                      originalCastId,
-                      "business_date",
-                      date.toString(),
-                      "receptionist_id",
-                      3L),
+              orderFixtureRequest(
+                  "{\"cast_id\":\""
+                      + originalCastId
+                      + "\",\"business_date\":\""
+                      + date
+                      + "\",\"receptionist_id\":3}",
                   storeHeaders(STORE_A)),
               JsonNode.class);
       assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
       String orderId = created.getBody().path("id").asString();
-      return new NominationOperation(
-          castId, "/store/orders/" + orderId, HttpMethod.PUT, body, orderId, originalCastId);
+      body.put("expected_version", created.getBody().path("version").asLong());
+      return confirmFixture(
+          new NominationOperation(
+              castId, "/store/orders/" + orderId, HttpMethod.PUT, body, orderId, originalCastId));
     }
     if (operation.equals("CONFIRM")) {
       Shift shift =
@@ -326,21 +348,46 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
               .build();
       application.setStoreId(STORE_A);
       String applicationId = applications.save(application).getId();
-      return new NominationOperation(
-          castId,
-          "/store/order-applications/" + applicationId + "/confirmation",
-          HttpMethod.POST,
-          body,
-          applicationId,
-          null);
+      return confirmFixture(
+          new NominationOperation(
+              castId,
+              "/store/order-applications/" + applicationId + "/confirmation",
+              HttpMethod.POST,
+              body,
+              applicationId,
+              null));
     }
-    return new NominationOperation(castId, "/store/orders", HttpMethod.POST, body, null, null);
+    return confirmFixture(
+        new NominationOperation(castId, "/store/orders", HttpMethod.POST, body, null, null));
   }
 
   private String createCast() {
     CastEnrollment enrollment = CastEnrollment.builder().build();
     enrollment.setStoreId(STORE_A);
     return saveEnrollmentFixture(enrollment, "指名競合検証", null).getId();
+  }
+
+  private NominationOperation confirmFixture(NominationOperation fixture) {
+    var body = new HashMap<>(fixture.body());
+    body.remove("confirmation_token");
+    String previewPath =
+        fixture.path().endsWith("/confirmation")
+            ? fixture.path() + "-preview"
+            : fixture.path() + "/preview";
+    var preview =
+        rest.postForEntity(
+            previewPath, new HttpEntity<>(body, storeHeaders(STORE_A)), JsonNode.class);
+    assertThat(preview.getStatusCode())
+        .as("前提: 指名操作を試算できること %s", preview.getBody())
+        .isEqualTo(HttpStatus.OK);
+    body.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    return new NominationOperation(
+        fixture.castId(),
+        fixture.path(),
+        fixture.method(),
+        body,
+        fixture.resourceId(),
+        fixture.originalCastId());
   }
 
   private ResponseEntity<JsonNode> execute(NominationOperation fixture) {

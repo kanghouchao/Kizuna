@@ -22,6 +22,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -36,6 +37,7 @@ class CustomerProvisioningRollbackIT extends CrossStoreTestSupport {
   @Autowired PlatformTransactionManager transactionManager;
 
   @Test
+  @WithMockUser(username = "yamada.jiro@kizuna.test")
   void failureRollsBackCustomerLinkOrderAndApplicationTogether() {
     String nonce = UUID.randomUUID().toString();
     String email = nonce + "@kizuna.test";
@@ -81,8 +83,10 @@ class CustomerProvisioningRollbackIT extends CrossStoreTestSupport {
     OrderApplicationConfirmationRequest input = new OrderApplicationConfirmationRequest();
     input.setBusinessDate(today);
     input.setPax(1);
+    input.setCourseId(courseFixture(STORE_A, 100).serviceId());
     storeContext.setStoreId(STORE_A);
     try {
+      input.setConfirmationToken(orders.previewConfirmation(id, input).confirmationToken());
       assertThatThrownBy(
               () ->
                   new TransactionTemplate(transactionManager)

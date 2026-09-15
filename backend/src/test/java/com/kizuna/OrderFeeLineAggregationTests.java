@@ -29,7 +29,8 @@ class OrderFeeLineAggregationTests {
   private static final Path MAIN_SOURCES = Paths.get("src/main/java");
 
   /** 集約の外から合計・明細を組み立てる形（builder 経由の書き込み）。読み出しは含まない。 */
-  private static final Pattern AGGREGATE_BYPASS = Pattern.compile("\\.totalFee\\(|\\.feeLines\\(");
+  private static final Pattern AGGREGATE_BYPASS =
+      Pattern.compile("\\.(?:totalFee|feeLines)\\(\\s*[^)\\s]");
 
   /**
    * 受注の集約が持つ表・列・実体属性。一括更新から名指されれば迂回である。

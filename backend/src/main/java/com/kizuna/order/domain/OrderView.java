@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 
 /** 注文一覧・詳細の読み側 projection。関連集約の表示名は JPQL join で取得する（読み側は集約を経由しない）。 */
 public interface OrderView {
+  OrderCourse getCourse();
 
   String getId();
 
@@ -35,10 +36,6 @@ public interface OrderView {
   Integer getPax();
 
   /** この受注に実際に適用されたコース名の写し。 */
-  String getCourseName();
-
-  Integer getCourseMinutes();
-
   Integer getExtensionMinutes();
 
   /** 実際の到着時刻。完了後の訂正の門だけがこれを直せる。 */

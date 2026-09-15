@@ -6,6 +6,7 @@ import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
+import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderService;
@@ -124,5 +125,12 @@ public class OrderApplicationController {
       Principal principal) {
     orderService.declineApplication(id, request, principal.getName());
     return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/{id}/confirmation-preview")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public OrderPreviewResponse preview(
+      @PathVariable String id, @Valid @RequestBody OrderApplicationConfirmationRequest request) {
+    return orderService.previewConfirmation(id, request);
   }
 }

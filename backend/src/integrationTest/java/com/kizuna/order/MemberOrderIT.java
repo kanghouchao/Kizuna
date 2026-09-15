@@ -110,11 +110,13 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   private ResponseEntity<JsonNode> confirm(long storeId, String applicationId, String body) {
-    return rest.exchange(
+    var headers = storeHeaders(storeId);
+    return submitPreviewed(
         "/store/order-applications/" + applicationId + "/confirmation",
         HttpMethod.POST,
-        new HttpEntity<>(body, storeHeaders(storeId)),
-        JsonNode.class);
+        "/store/order-applications/" + applicationId + "/confirmation-preview",
+        withCourseFixture(body, headers),
+        headers);
   }
 
   private ResponseEntity<JsonNode> decline(long storeId, String applicationId, String reason) {
@@ -344,7 +346,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/orders",
-            new HttpEntity<>(
+            orderFixtureRequest(
                 "{\"receptionist_id\": 3, \"business_date\": \""
                     + today()
                     + "\", \"cast_id\": \""
@@ -511,7 +513,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + applicationId,
             HttpMethod.PUT,
-            new HttpEntity<>("{\"pax\": 9}", storeHeaders(STORE_A)),
+            new HttpEntity<>("{\"pax\": 9, \"expected_version\": 0}", storeHeaders(STORE_A)),
             JsonNode.class);
     assertThat(tampered.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
@@ -589,11 +591,14 @@ class MemberOrderIT extends CrossStoreTestSupport {
   }
 
   private ResponseEntity<JsonNode> updateOrder(String id, String body) {
-    return rest.exchange(
-        "/store/orders/" + id,
-        HttpMethod.PUT,
-        new HttpEntity<>(body, storeHeaders(STORE_A)),
-        JsonNode.class);
+    HttpHeaders headers = storeHeaders(STORE_A);
+    String input =
+        body.substring(0, body.length() - 1)
+            + ", \"expected_version\": "
+            + orderVersion(headers, id)
+            + "}";
+    return submitPreviewed(
+        "/store/orders/" + id, HttpMethod.PUT, "/store/orders/" + id + "/preview", input, headers);
   }
 
   @Test

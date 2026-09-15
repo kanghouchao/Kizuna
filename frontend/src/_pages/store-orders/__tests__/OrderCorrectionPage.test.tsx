@@ -1,3 +1,4 @@
+import { confirmPreview } from '../lib/orderTestSupport';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import OrderCorrectionPage from '../ui/OrderCorrectionPage';
@@ -11,6 +12,7 @@ jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
   ...jest.requireActual('@/entities/order'),
   orderApi: {
+    ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     get: jest.fn(),
     correct: jest.fn(),
     attribution: jest.fn(),
@@ -37,13 +39,27 @@ function completedOrder(overrides: Partial<Order> = {}): Order {
     customer_name: '山田太郎',
     status: 'COMPLETED',
     version: 7,
-    course_name: '60 分コース',
-    course_minutes: 60,
+    course: {
+      ...{
+        service_id: 'course-1',
+        revision_id: 'r1',
+        revision_number: 1,
+        name: '基本',
+        duration_minutes: 60,
+        price: 12000,
+        remuneration: 7000,
+        adoption_basis: 'CURRENT_SETTING' as const,
+        adopted_at: '2026-09-15T00:00:00Z',
+      },
+      name: '60 分コース',
+      duration_minutes: 60,
+    },
     actual_arrival_time: '19:35:00',
     total_fee: 11900,
     auto_grant_points: 120,
     fee_lines: [
       { kind: 'BASE_COURSE', name: '60 分コース', amount: 12000, system_owned: false },
+      { kind: 'OPTION', name: '追加', amount: 0, system_owned: false },
       { kind: 'POINT_REDEMPTION', name: 'ポイント利用', amount: 100, system_owned: true },
     ],
     ...overrides,
@@ -73,6 +89,7 @@ describe('完了後訂正のページ', () => {
     fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: '18000' } });
     fireEvent.change(screen.getByLabelText('理由'), { target: { value: 'コースの取り違え' } });
     fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+    await confirmPreview();
 
     await waitFor(() => expect(mockedOrderApi.correct).toHaveBeenCalled());
     // 部分更新ではないので全量を毎回運ぶ。延長分数は空欄のまま＝「値なし」として送らない
@@ -82,11 +99,11 @@ describe('完了後訂正のページ', () => {
       reason: 'コースの取り違え',
       actual_arrival_time: '19:35:00',
       actual_end_time: '22:40:00',
-      course_name: '60 分コース',
-      course_minutes: 60,
+      confirmation_token: 'confirmed',
+      course_revision_id: undefined,
       extension_minutes: undefined,
       // ポイント利用の行は送らない（システム専有で、混ぜるとサーバが撥ねる）
-      fee_lines: [{ kind: 'BASE_COURSE', name: undefined, amount: 18000 }],
+      fee_lines: [{ kind: 'OPTION', name: '追加', amount: 18000 }],
     });
     expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
   });
@@ -102,6 +119,7 @@ describe('完了後訂正のページ', () => {
 
     fireEvent.change(screen.getByLabelText('理由'), { target: { value: '金額の誤記' } });
     fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+    await confirmPreview();
 
     // 差額を黙って出すだけだと「反映漏れ」に見える。動かない理由と行き先を同じ面に置く
     // 動いたのは会計金額だけ。差額も手当ての導線も出さない（門と手当てを結ぶ線が無いため）
@@ -126,6 +144,7 @@ describe('完了後訂正のページ', () => {
 
     fireEvent.change(screen.getByLabelText('理由'), { target: { value: '金額の誤記' } });
     fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+    await confirmPreview();
 
     expect(await screen.findByText(/動くポイントはありません/)).toBeInTheDocument();
     // 未申領の伝票は完了時点の会計で凍結した額を後から付与する。「動かない」と言い切らない
@@ -148,6 +167,7 @@ describe('完了後訂正のページ', () => {
 
     fireEvent.change(screen.getByLabelText('理由'), { target: { value: '金額の誤記' } });
     fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+    await confirmPreview();
 
     // 読めなければ帰属している側へ倒す（「動くポイントはありません」と誤って言い切らない）
     expect(await screen.findByText(/この訂正では動きません/)).toBeInTheDocument();
@@ -156,9 +176,25 @@ describe('完了後訂正のページ', () => {
 
   it('版の食い違いでは取り直して最新の内容でフォームを組み直すこと', async () => {
     // 取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（死に筋）
-    mockedOrderApi.get
-      .mockResolvedValueOnce(completedOrder())
-      .mockResolvedValue(completedOrder({ version: 9, course_name: '90 分コース' }));
+    mockedOrderApi.get.mockResolvedValueOnce(completedOrder()).mockResolvedValue(
+      completedOrder({
+        version: 9,
+        course: {
+          ...{
+            service_id: 'course-1',
+            revision_id: 'r1',
+            revision_number: 1,
+            name: '基本',
+            duration_minutes: 60,
+            price: 12000,
+            remuneration: 7000,
+            adoption_basis: 'CURRENT_SETTING' as const,
+            adopted_at: '2026-09-15T00:00:00Z',
+          },
+          name: '90 分コース',
+        },
+      })
+    );
     mockedOrderApi.correct.mockRejectedValue(
       new AxiosError('conflict', undefined, undefined, undefined, {
         status: 409,
@@ -169,14 +205,15 @@ describe('完了後訂正のページ', () => {
       })
     );
     render(<OrderCorrectionPage />);
-    await waitFor(() => expect(screen.getByLabelText('コース名')).toHaveValue('60 分コース'));
+    await waitFor(() => expect(screen.getByText(/採用済み: 60 分コース/)).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText('理由'), { target: { value: '金額の誤記' } });
     fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+    await confirmPreview();
 
     await waitFor(() => expect(notify.warning).toHaveBeenCalled());
     // 取り直した値で播き直る。入力は破棄され、頁は開いたまま
-    await waitFor(() => expect(screen.getByLabelText('コース名')).toHaveValue('90 分コース'));
+    await waitFor(() => expect(screen.getByText(/採用済み: 90 分コース/)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: '訂正する' })).toBeInTheDocument();
     expect(notify.error).not.toHaveBeenCalled();
   });
@@ -189,6 +226,7 @@ describe('完了後訂正のページ', () => {
     // 空白だけの理由も「書いていない」と同じ。確定した記録を動かす根拠がそこにしか残らない
     fireEvent.change(screen.getByLabelText('理由'), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+    await confirmPreview();
 
     await waitFor(() =>
       expect(screen.getByText('訂正の理由を入力してください')).toBeInTheDocument()
@@ -214,12 +252,33 @@ test('対象変更直後から旧フォームを隠し、新しい詳細で初�
     })
   );
   const { rerender } = render(<OrderCorrectionPage />);
-  await screen.findByLabelText('コース（分）');
+  await screen.findByText(/採用済み:/);
   mockParams = { storeId: '2', id: 'o2' };
   rerender(<OrderCorrectionPage />);
-  expect(screen.queryByLabelText('コース（分）')).not.toBeInTheDocument();
-  await act(async () => resolve(completedOrder({ id: 'o2', pax: 8, course_minutes: 90 })));
-  expect(await screen.findByLabelText('コース（分）')).toHaveValue(90);
+  expect(screen.queryByText(/採用済み:/)).not.toBeInTheDocument();
+  await act(async () =>
+    resolve(
+      completedOrder({
+        id: 'o2',
+        pax: 8,
+        course: {
+          ...{
+            service_id: 'course-1',
+            revision_id: 'r1',
+            revision_number: 1,
+            name: '基本',
+            duration_minutes: 60,
+            price: 12000,
+            remuneration: 7000,
+            adoption_basis: 'CURRENT_SETTING' as const,
+            adopted_at: '2026-09-15T00:00:00Z',
+          },
+          duration_minutes: 90,
+        },
+      })
+    )
+  );
+  expect(await screen.findByText(/採用済み:.*90分/)).toBeInTheDocument();
 });
 
 test('競合再取得中は編集停止し、失敗したら入力置換を通知しない', async () => {
@@ -233,6 +292,7 @@ test('競合再取得中は編集停止し、失敗したら入力置換を通�
   render(<OrderCorrectionPage />);
   fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
   fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+  await confirmPreview();
   await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledTimes(2));
   expect(screen.queryByLabelText('理由')).not.toBeInTheDocument();
   expect(notify.warning).not.toHaveBeenCalled();
@@ -253,6 +313,7 @@ test('訂正後の帰属取得中に別対象へ移ると、古い通知と結�
   const { rerender } = render(<OrderCorrectionPage />);
   fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
   fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+  await confirmPreview();
   await waitFor(() => expect(mockedOrderApi.attribution).toHaveBeenCalled());
   expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
   jest.mocked(notify.success).mockClear();
@@ -275,6 +336,7 @@ test('帰属取得が未着でも訂正成功を通知し、詳細を更新し�
   render(<OrderCorrectionPage />);
   fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
   fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+  await confirmPreview();
   await waitFor(() => expect(mockedOrderApi.attribution).toHaveBeenCalled());
   expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
   await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledTimes(2));

@@ -3,7 +3,6 @@ package com.kizuna.order.api.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.Data;
 
@@ -17,6 +16,7 @@ import lombok.Data;
  */
 @Data
 public class OrderCompletionRequest {
+  private String confirmationToken;
 
   /**
    * 画面が読み込んだ時点の受注のバージョン（詳細の読み口が返す {@code version}）。
@@ -26,10 +26,6 @@ public class OrderCompletionRequest {
    */
   @NotNull(message = "完了の対象バージョンは必須です")
   private Long expectedVersion;
-
-  /** 適用されたコース名の写し。会計の場が最後の更新機会になるため、完了と同じ要求で直せる。 */
-  @Size(max = 255, message = "コース名は 255 文字以内です")
-  private String courseName;
 
   @NotNull(message = "会計の内訳は必須です")
   @Valid

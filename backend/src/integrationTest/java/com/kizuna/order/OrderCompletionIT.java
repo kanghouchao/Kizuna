@@ -96,7 +96,7 @@ class OrderCompletionIT extends CrossStoreTestSupport {
     assertThat(spentDetail.path("auto_grant_points").asInt()).isEqualTo(EXPECTED_GRANT);
     // 利用は台帳の減算仕訳と対で明細へも入る。合計はそのぶん下がり、内訳の和と一致し続ける
     assertThat(spentDetail.path("total_fee").asInt()).isEqualTo(TOTAL_FEE - 100);
-    JsonNode redemption = spentDetail.path("fee_lines").get(1);
+    JsonNode redemption = spentDetail.path("fee_lines").get(2);
     assertThat(redemption.path("kind").asString()).isEqualTo("POINT_REDEMPTION");
     assertThat(redemption.path("amount").asInt()).as("減項は正値で返ること").isEqualTo(100);
     assertThat(redemption.path("system_owned").asBoolean()).isTrue();
@@ -179,19 +179,20 @@ class OrderCompletionIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> linked = preview(STORE_A, token, linkedOrder, TOTAL_FEE);
     assertThat(linked.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(linked.getBody().path("member_linked").asBoolean()).isTrue();
-    assertThat(linked.getBody().path("point_balance").asInt()).isZero();
-    assertThat(linked.getBody().path("usage_unit").asInt()).isEqualTo(100);
-    assertThat(linked.getBody().path("grant_points").asInt()).isEqualTo(EXPECTED_GRANT);
+    assertThat(linked.getBody().path("points").path("member_linked").asBoolean()).isTrue();
+    assertThat(linked.getBody().path("points").path("point_balance").asInt()).isZero();
+    assertThat(linked.getBody().path("points").path("usage_unit").asInt()).isEqualTo(100);
+    assertThat(linked.getBody().path("points").path("grant_points").asInt())
+        .isEqualTo(EXPECTED_GRANT);
 
     String unlinkedOrder =
         confirmedOrder(STORE_A, token, SEED_RECEPTIONIST_ID, createCustomer("事前計算・非会員"), "事前計算");
     ResponseEntity<JsonNode> unlinked = preview(STORE_A, token, unlinkedOrder, TOTAL_FEE);
-    assertThat(unlinked.getBody().path("member_linked").asBoolean()).isFalse();
+    assertThat(unlinked.getBody().path("points").path("member_linked").asBoolean()).isFalse();
     // 応答は non_null 包含のため、残高の無い受注では項目ごと落ちる
     assertThat(unlinked.getBody().hasNonNull("point_balance")).isFalse();
     // 確定は非会員へ付与しないので、見込みの付与も 0（食い違うと画面が出した予定が嘘になる）
-    assertThat(unlinked.getBody().path("grant_points").asInt()).isZero();
+    assertThat(unlinked.getBody().path("points").path("grant_points").asInt()).isZero();
   }
 
   // ==================== 受注の用意 ====================
@@ -233,7 +234,7 @@ class OrderCompletionIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/orders",
-            new HttpEntity<>(body, headersFor(storeId, bearerToken)),
+            orderFixtureRequest(body, headersFor(storeId, bearerToken)),
             JsonNode.class);
     assertThat(created.getStatusCode().is2xxSuccessful())
         .as("前提: store %d での受注作成が成功すること", storeId)
@@ -274,13 +275,22 @@ class OrderCompletionIT extends CrossStoreTestSupport {
   private ResponseEntity<JsonNode> complete(
       long storeId, String bearerToken, String orderId, int totalFee, Integer usePoints) {
     String body =
-        "{\"expected_version\":"
-            + orderVersion(headersFor(storeId, bearerToken), orderId)
-            + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
-            + totalFee
-            + "}]"
-            + (usePoints == null ? "" : ", \"use_points\": " + usePoints)
-            + "}";
+        completionFixtureBody(orderId, totalFee, usePoints, headersFor(storeId, bearerToken));
+    var headers = headersFor(storeId, bearerToken);
+    var preview =
+        rest.postForEntity(
+            "/store/orders/" + orderId + "/completion-preview",
+            new HttpEntity<>(body, headers),
+            JsonNode.class);
+    // 不正入力は試算でも拒否される。保存側の拒否と副作用の不在も同じ入力で確認する。
+    if (preview.getStatusCode().is2xxSuccessful()) {
+      body =
+          body.replaceFirst(
+              "\\{",
+              "{\"confirmation_token\":\""
+                  + preview.getBody().path("confirmation_token").asString()
+                  + "\",");
+    }
     return rest.exchange(
         "/store/orders/" + orderId + "/completion",
         HttpMethod.POST,
@@ -290,10 +300,10 @@ class OrderCompletionIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> preview(
       long storeId, String bearerToken, String orderId, int totalFee) {
-    return rest.exchange(
-        "/store/orders/" + orderId + "/completion-preview?total_fee=" + totalFee,
-        HttpMethod.GET,
-        new HttpEntity<>(headersFor(storeId, bearerToken)),
+    String body = completionFixtureBody(orderId, totalFee, null, headersFor(storeId, bearerToken));
+    return rest.postForEntity(
+        "/store/orders/" + orderId + "/completion-preview",
+        new HttpEntity<>(body, headersFor(storeId, bearerToken)),
         JsonNode.class);
   }
 

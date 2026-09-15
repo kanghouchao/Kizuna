@@ -100,6 +100,7 @@ public interface OrderMapper {
   @Mapping(target = "cancelledReason", ignore = true)
   @Mapping(target = "cancelledBy", ignore = true)
   @Mapping(target = "cancelledAt", ignore = true)
+  @Mapping(target = "course", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
   /** 注文更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */

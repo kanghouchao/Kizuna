@@ -3,6 +3,7 @@ package com.kizuna.order.domain;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -68,16 +69,7 @@ public class Order extends StoreScopedEntity {
   @Column(name = "pax")
   private Integer pax;
 
-  /**
-   * この受注に実際に適用されたコースの名称の写し。確定（出生）で写り、終端に入るまでは店舗が更新できる — 確定の瞬間を凍結した帧ではなく「実際に適用された内容」を指す。
-   *
-   * <p>コース分数・延長分数も同じ写しの語義で、時間の側を担う。サービス定義の側からこれらの列へ回写することは無い。
-   */
-  @Column(name = "course_name")
-  private String courseName;
-
-  @Column(name = "course_minutes")
-  private Integer courseMinutes;
+  @Embedded private OrderCourse course;
 
   @Column(name = "extension_minutes")
   private Integer extensionMinutes;
@@ -241,20 +233,9 @@ public class Order extends StoreScopedEntity {
     if (patch.pax() != null) {
       this.pax = patch.pax();
     }
-    if (patch.courseName() != null) {
-      // 基本コース料金の行名称はコース名の写しなので、明細を伴わない更新でも追随させる。
-      // 取り残すと同じ受注が二つのコース名を主張する。
-      renameBaseCourseLines(patch.courseName());
-      this.courseName = patch.courseName();
-    }
-    if (patch.courseMinutes() != null) {
-      this.courseMinutes = patch.courseMinutes();
-    }
     if (patch.extensionMinutes() != null) {
       this.extensionMinutes = patch.extensionMinutes();
     }
-    // 明細はコース名より後に当てる。基本コース料金の行名称はコース名の写しから採るため、
-    // 順序が逆だと同じ要求で送られた新しいコース名が行に載らない。
     if (patch.feeLines() != null) {
       replaceStoreFeeLines(patch.feeLines());
     }
@@ -299,49 +280,49 @@ public class Order extends StoreScopedEntity {
     }
   }
 
-  /**
-   * 差し替えそのもの。総和の検査を伴わないのは訂正の門だけで、門は自分の文言で同じ不変量を守る。
-   *
-   * @return 差し替え後の総和（列へ畳む前の値）
-   */
+  /** コースだけの変更では、他の編集可能明細とポイント利用行を保持する。 */
+  public void adoptCourse(OrderCourse next, List<OrderFeeLineDraft> drafts) {
+    if (status != OrderStatus.CONFIRMED) {
+      throw new InvalidOrderFeeLineException("終端のコースは専用訂正で変更してください");
+    }
+    this.course = next;
+    replaceStoreFeeLines(drafts == null ? editableFeeLines() : drafts);
+  }
+
+  public List<OrderFeeLineDraft> editableFeeLines() {
+    return feeLines.stream()
+        .filter(
+            line ->
+                !line.getKind().isSystemOwned() && line.getKind() != OrderFeeLineKind.BASE_COURSE)
+        .map(line -> new OrderFeeLineDraft(line.getKind(), line.getName(), line.getAmount()))
+        .toList();
+  }
+
   private long swapStoreFeeLines(List<OrderFeeLineDraft> drafts) {
+    if (course == null) throw new InvalidOrderFeeLineException("コースを選択してください");
     List<OrderFeeLine> replaced = new ArrayList<>();
     for (OrderFeeLineDraft draft : drafts) {
-      if (draft.kind() != null && draft.kind().isSystemOwned()) {
-        throw new InvalidOrderFeeLineException("ポイント利用の明細は完了処理だけが書けます");
+      if (draft.kind() == OrderFeeLineKind.BASE_COURSE
+          || (draft.kind() != null && draft.kind().isSystemOwned())) {
+        throw new InvalidOrderFeeLineException("コースとポイントの明細は直接変更できません");
       }
-      replaced.add(OrderFeeLine.of(draft.kind(), lineNameFor(draft), draft.amount()));
+      replaced.add(OrderFeeLine.of(draft.kind(), draft.name(), draft.amount()));
     }
-    feeLines.removeIf(line -> !line.getKind().isSystemOwned());
+    var base =
+        feeLines.stream()
+            .filter(line -> line.getKind() == OrderFeeLineKind.BASE_COURSE)
+            .findFirst()
+            .orElse(null);
+    if (base == null) {
+      base = OrderFeeLine.of(OrderFeeLineKind.BASE_COURSE, course.name(), course.price());
+      feeLines.add(base);
+    } else {
+      base.applyCourse(course);
+    }
+    feeLines.removeIf(
+        line -> !line.getKind().isSystemOwned() && line.getKind() != OrderFeeLineKind.BASE_COURSE);
     feeLines.addAll(replaced);
     return recalculateTotalFee();
-  }
-
-  /**
-   * 基本コース料金の行の名称を新しいコース名へ揃える。
-   *
-   * <p>行が在るのにコース名を空へ直す要求は撥ねる — 名称の必須を破るうえ、その受注が適用したコースが読めなくなる。
-   */
-  private void renameBaseCourseLines(String newCourseName) {
-    List<OrderFeeLine> baseCourseLines =
-        feeLines.stream().filter(line -> line.getKind() == OrderFeeLineKind.BASE_COURSE).toList();
-    if (baseCourseLines.isEmpty()) {
-      return;
-    }
-    if (newCourseName.isBlank()) {
-      throw new InvalidOrderFeeLineException("基本コース料金の明細があるためコース名は空にできません");
-    }
-    baseCourseLines.forEach(line -> line.renameTo(newCourseName));
-  }
-
-  private String lineNameFor(OrderFeeLineDraft draft) {
-    if (draft.kind() != OrderFeeLineKind.BASE_COURSE) {
-      return draft.name();
-    }
-    if (courseName == null || courseName.isBlank()) {
-      throw new InvalidOrderFeeLineException("基本コース料金の明細にはコース名が必要です");
-    }
-    return courseName;
   }
 
   /**
@@ -405,26 +386,14 @@ public class Order extends StoreScopedEntity {
     transitionTo(OrderStatus.COMPLETED);
   }
 
-  /**
-   * 完了した受注の内容を訂正する。状態は動かさない — 完了自体の取り消し（COMPLETED → CONFIRMED の回退）は開けない。
-   *
-   * <p>定義域は COMPLETED のみ。CANCELLED を含めると、取消 ADR 0013 が二度目の取消を撥ねて守った初回理由・実行者の
-   * 保護を訂正口が迂回させる（誤取消の救済は同内容で受注を起こし直すこと）。
-   *
-   * <p>ポイントは一切動かさない。完了時の自動付与は「完了時点の合計に基づく時点事実」であり、訂正で合計が変わっても 追随しない（帰属 ADR 0009
-   * と同族）。差額の手当は台帳側の手動調整が担う。
-   *
-   * <p>コース名は明細より先に当てる。基本コース料金の行名称はコース名の写しから採るため、順序が逆だと同じ要求で 送られた新しいコース名が行に載らない（{@link #apply}
-   * と同じ理由）。
-   */
+  /** 完了済みの内容だけを訂正し、状態・完了時の付与・ポイント利用を保持する。 コースを先に適用し、基本料金の名称・金額を同じ快照から導出する。 */
   public void correct(OrderCorrectionCommand command) {
     if (status != OrderStatus.COMPLETED) {
       throw new InvalidOrderCorrectionException("完了した受注だけが訂正できます");
     }
     this.actualArrivalTime = command.actualArrivalTime();
     this.actualEndTime = command.actualEndTime();
-    this.courseName = command.courseName();
-    this.courseMinutes = command.courseMinutes();
+    if (command.course() != null) this.course = command.course();
     this.extensionMinutes = command.extensionMinutes();
     // 総和が 0 以上という不変量は他の経路と同じだが、門は利用の行を動かせないため、下回った差を
     // 吸収する先が無いことまで伝える固有の文言を持つ（一般の差し替えは割引・調整を直せばよい）。

@@ -17,8 +17,6 @@ public record OrderPatch(
     LocalTime arrivalScheduledStartTime,
     LocalTime arrivalScheduledEndTime,
     Integer pax,
-    String courseName,
-    Integer courseMinutes,
     Integer extensionMinutes,
     List<OrderFeeLineDraft> feeLines,
     String locationAddress,
@@ -28,22 +26,8 @@ public record OrderPatch(
     String remarks,
     String castDriverMessage) {
 
-  /** 会計の場が確定させる部分（コース名の写しと内訳）だけを持つ更新コマンド。位置引数の null 埋めをここ一箇所に閉じ込める。 */
-  public static OrderPatch ofAccounting(String courseName, List<OrderFeeLineDraft> feeLines) {
+  public static OrderPatch ofAccounting(List<OrderFeeLineDraft> feeLines) {
     return new OrderPatch(
-        null,
-        null,
-        null,
-        null,
-        courseName,
-        null,
-        null,
-        feeLines,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null);
+        null, null, null, null, null, feeLines, null, null, null, null, null, null);
   }
 }

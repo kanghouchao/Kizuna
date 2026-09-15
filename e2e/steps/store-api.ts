@@ -476,3 +476,17 @@ export async function reviseSpecialService(
   });
   expect(response.status()).toBe(200);
 }
+
+export async function createCourse(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+  storeId: string = STORE1_ID,
+): Promise<string> {
+  const response = await request.post('/api/store/services', {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { kind: 'COURSE', name, duration_minutes: 60, price: 12000, remuneration: 7000 },
+  });
+  expect(response.status()).toBe(201);
+  return (await response.json()).id;
+}

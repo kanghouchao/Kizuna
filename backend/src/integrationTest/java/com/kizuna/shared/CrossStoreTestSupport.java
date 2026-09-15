@@ -9,6 +9,10 @@ import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.order.domain.OrderCourse;
+import com.kizuna.service.domain.ServiceRevisionRepository;
+import java.time.OffsetDateTime;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
@@ -21,6 +25,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * クロス店舗統合テストの共通土台。
@@ -116,11 +122,117 @@ public abstract class CrossStoreTestSupport {
     return headersFor(storeId, managerToken);
   }
 
-  /**
-   * 受注が現に持つ版。完了・訂正の要求はこれを載せて初めて通る（版が食い違えば 409）。
-   *
-   * <p>作成直後の版を定数で書かず読み直すのは、間に更新を挟むテストでも同じ助手で済ませるため。
-   */
+  /** 他業務の検証用に、実在するコースを選択・確認した要求を作る。 */
+  protected HttpEntity<String> orderFixtureRequest(String body, HttpHeaders headers) {
+    return orderFixtureRequest(body, headers, 100);
+  }
+
+  protected HttpEntity<String> orderFixtureRequest(String body, HttpHeaders headers, int price) {
+    var course = courseFixture(Long.parseLong(headers.getFirst("X-Store-ID")), price);
+    var input = (ObjectNode) fixtureJson.readTree(body);
+    input.put("course_id", course.serviceId());
+    return confirmedRequest("/store/orders/preview", input.toString(), headers);
+  }
+
+  @Autowired private ServiceRevisionRepository fixtureRevisions;
+
+  protected OrderCourse courseFixture(long storeId, int price) {
+    return courseFixture(storeId, "試験用コース", 60, price);
+  }
+
+  protected OrderCourse courseFixture(long storeId, String name, int minutes, int price) {
+    var created =
+        rest.postForEntity(
+            "/store/services",
+            new HttpEntity<>(
+                Map.of(
+                    "kind",
+                    "COURSE",
+                    "name",
+                    name,
+                    "duration_minutes",
+                    minutes,
+                    "price",
+                    price,
+                    "remuneration",
+                    0),
+                managerHeaders(storeId)),
+            JsonNode.class);
+    assertThat(created.getStatusCode())
+        .as("前提: コース作成 %s", created.getBody())
+        .isEqualTo(HttpStatus.CREATED);
+    var terms =
+        fixtureRevisions.findCourse(created.getBody().path("id").asString(), 1).orElseThrow();
+    return new OrderCourse(
+        terms.serviceId(),
+        terms.revisionId(),
+        terms.revisionNumber(),
+        terms.name(),
+        terms.durationMinutes(),
+        terms.price(),
+        terms.remuneration(),
+        "CURRENT_SETTING",
+        OffsetDateTime.now());
+  }
+
+  @Autowired private ObjectMapper fixtureJson;
+
+  protected HttpEntity<String> confirmedRequest(
+      String previewPath, String body, HttpHeaders headers) {
+    var preview = rest.postForEntity(previewPath, new HttpEntity<>(body, headers), JsonNode.class);
+    assertThat(preview.getStatusCode())
+        .as("前提: 入力を試算できること %s", preview.getBody())
+        .isEqualTo(HttpStatus.OK);
+    var input = (ObjectNode) fixtureJson.readTree(body);
+    input.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    return new HttpEntity<>(input.toString(), headers);
+  }
+
+  protected String completionFixtureBody(
+      String orderId, int totalFee, Integer usePoints, HttpHeaders headers) {
+    var detail =
+        rest.exchange(
+                "/store/orders/" + orderId,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                JsonNode.class)
+            .getBody();
+    int extra = totalFee - detail.path("course").path("price").asInt();
+    var body = fixtureJson.createObjectNode();
+    body.put("expected_version", detail.path("version").asLong());
+    var line = body.putArray("fee_lines").addObject();
+    line.put("kind", extra < 0 ? "DISCOUNT" : "SURCHARGE");
+    line.put("name", "会計");
+    line.put("amount", Math.abs(extra));
+    if (usePoints != null) body.put("use_points", usePoints);
+    return body.toString();
+  }
+
+  protected HttpEntity<String> completionFixtureRequest(
+      String orderId, int totalFee, Integer usePoints, HttpHeaders headers) {
+    return confirmedRequest(
+        "/store/orders/" + orderId + "/completion-preview",
+        completionFixtureBody(orderId, totalFee, usePoints, headers),
+        headers);
+  }
+
+  /** 試算で拒否された入力は保存せず、確認できた要求だけを送る利用者の操作。 */
+  protected ResponseEntity<JsonNode> submitPreviewed(
+      String path, HttpMethod method, String previewPath, String body, HttpHeaders headers) {
+    var preview = rest.postForEntity(previewPath, new HttpEntity<>(body, headers), JsonNode.class);
+    if (!preview.getStatusCode().is2xxSuccessful()) return preview;
+    var input = (ObjectNode) fixtureJson.readTree(body);
+    input.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    return rest.exchange(path, method, new HttpEntity<>(input.toString(), headers), JsonNode.class);
+  }
+
+  protected String withCourseFixture(String body, HttpHeaders headers) {
+    var course = courseFixture(Long.parseLong(headers.getFirst("X-Store-ID")), 100);
+    var input = (ObjectNode) fixtureJson.readTree(body);
+    input.put("course_id", course.serviceId());
+    return input.toString();
+  }
+
   protected long orderVersion(HttpHeaders headers, String orderId) {
     return rest.exchange(
             "/store/orders/" + orderId, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class)

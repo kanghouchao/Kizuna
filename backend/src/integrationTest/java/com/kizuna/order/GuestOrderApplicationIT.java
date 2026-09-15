@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -130,13 +131,15 @@ class GuestOrderApplicationIT extends CrossStoreTestSupport {
     assertThat(created.getStatusCode()).as("前提: ゲスト申請が受理されること").isEqualTo(HttpStatus.CREATED);
     String applicationId = created.getBody().path("id").asString();
 
+    var headers = storeHeaders(STORE_A);
+    String body = "{\"business_date\":\"" + LocalDate.now().plusDays(1) + "\",\"pax\":2}";
     ResponseEntity<JsonNode> confirmed =
-        rest.postForEntity(
+        submitPreviewed(
             "/store/order-applications/" + applicationId + "/confirmation",
-            new HttpEntity<>(
-                "{\"business_date\": \"" + LocalDate.now().plusDays(1) + "\", \"pax\": 2}",
-                storeHeaders(STORE_A)),
-            JsonNode.class);
+            HttpMethod.POST,
+            "/store/order-applications/" + applicationId + "/confirmation-preview",
+            withCourseFixture(body, headers),
+            headers);
 
     assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(confirmed.getBody().path("reception_route").asString()).isEqualTo("GUEST_WEB");

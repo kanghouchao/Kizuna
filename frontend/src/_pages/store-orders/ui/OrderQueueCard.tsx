@@ -56,7 +56,7 @@ function CardMeta({ order }: { order: OrderWorkQueueRow }) {
     order.arrival_scheduled_start_time?.slice(0, 5) ?? '時刻未定',
     order.cast_name ? `指名 ${order.cast_name}` : 'フリー',
     order.pax != null ? `${order.pax} 名` : null,
-    order.course_minutes != null ? `${order.course_minutes} 分` : null,
+    order?.course?.duration_minutes != null ? `${order?.course?.duration_minutes} 分` : null,
     order.receptionist_name ? `受付 ${order.receptionist_name}` : null,
   ].filter(Boolean);
   return <p className="text-muted-foreground text-sm">{parts.join(' ・ ')}</p>;

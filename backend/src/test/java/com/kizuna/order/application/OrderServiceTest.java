@@ -34,7 +34,6 @@ import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
-import com.kizuna.order.api.dto.OrderCompletionPreviewResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
@@ -52,6 +51,7 @@ import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderApplicationView;
+import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderFeeLineDraft;
 import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderPatch;
@@ -68,6 +68,8 @@ import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.service.application.CourseTerms;
+import com.kizuna.service.application.OrderCourseCatalog;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
@@ -151,6 +153,26 @@ class OrderServiceTest {
 
   @BeforeEach
   void wireCustomerProvisioning() {
+    Mockito.lenient().when(pointLedgerService.usageUnit()).thenReturn(100);
+    Mockito.lenient().when(pointLedgerService.balance(anyLong())).thenReturn(100000L);
+
+    var catalog = Mockito.mock(OrderCourseCatalog.class);
+    Mockito.lenient()
+        .when(catalog.current(nullable(String.class)))
+        .thenReturn(
+            new CourseTerms("course", "revision", 1, "基本", 60, 0, 0, OffsetDateTime.now(), false));
+    Mockito.lenient().doCallRealMethod().when(orderMapper).toFeeLineDrafts(nullable(List.class));
+    ReflectionTestUtils.setField(
+        service,
+        "courseCalculation",
+        new OrderCourseCalculation(catalog, orderMapper, Mockito.mock(OrderConfirmation.class)));
+    Mockito.lenient()
+        .when(orderRepository.findScopedByIdForUpdate(nullable(String.class)))
+        .thenAnswer(inv -> orderRepository.findById(inv.getArgument(0)));
+    Mockito.lenient()
+        .when(orderApplicationRepository.findForUpdate(nullable(String.class)))
+        .thenAnswer(inv -> orderApplicationRepository.findById(inv.getArgument(0)));
+
     ReflectionTestUtils.setField(
         service,
         "customerProvisioningService",
@@ -177,36 +199,19 @@ class OrderServiceTest {
 
   /** 部分更新コマンドを 1〜2 項目だけ埋めて作る。項目数が多く、位置引数で並べると どの null が何なのか読めなくなるためのテスト用ヘルパー。 */
   private OrderPatch patchWith(UnaryOperator<PatchDraft> draft) {
-    return draft.apply(new PatchDraft(null, null, null)).toPatch();
+    return draft.apply(new PatchDraft(null, null)).toPatch();
   }
 
   /** {@link #patchWith} が埋める項目。テストが実際に使うものだけを持つ。 */
-  private record PatchDraft(LocalDate businessDate, Integer pax, String courseName) {
+  private record PatchDraft(LocalDate businessDate, Integer pax) {
 
     PatchDraft pax(Integer value) {
-      return new PatchDraft(businessDate, value, courseName);
-    }
-
-    PatchDraft courseName(String value) {
-      return new PatchDraft(businessDate, pax, value);
+      return new PatchDraft(businessDate, value);
     }
 
     OrderPatch toPatch() {
       return new OrderPatch(
-          businessDate,
-          null,
-          null,
-          pax,
-          courseName,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null);
+          businessDate, null, null, pax, null, null, null, null, null, null, null, null);
     }
   }
 
@@ -293,7 +298,13 @@ class OrderServiceTest {
     OrderResponse res = OrderResponse.builder().id("o1").build();
 
     // 詳細は読み口（表示名の join）と集約（明細の行）の 2 本から組む
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(Order.builder().build()));
+    when(orderRepository.findById("o1"))
+        .thenReturn(
+            Optional.of(
+                Order.builder()
+                    .status(OrderStatus.CONFIRMED)
+                    .course(OrderCourses.course("基本", 60, 0))
+                    .build()));
     when(orderRepository.findViewById(nullable(String.class))).thenReturn(Optional.of(view));
     when(orderMapper.toResponse(view)).thenReturn(res);
     when(orderRepository.findById("o2")).thenReturn(Optional.empty());
@@ -309,7 +320,11 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
-    Order entity = Order.builder().build();
+    Order entity =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .build();
     OrderResponse res = OrderResponse.builder().status("CONFIRMED").build();
 
     when(storeContext.getStoreId()).thenReturn(1L);
@@ -340,7 +355,12 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(customerReferenceResolver.resolveForWrite("missing"))
         .thenThrow(new NotFoundException("顧客が見つかりません"));
@@ -369,7 +389,12 @@ class OrderServiceTest {
     req.setNgContent("内容");
 
     when(storeContext.getStoreId()).thenReturn(1L);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", 1L))
         .thenReturn(List.of());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
@@ -415,7 +440,12 @@ class OrderServiceTest {
     OrderCreateRequest req = phoneOrderRequest("09012345678", "常連さん");
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", STORE_ID))
         .thenReturn(List.of("c1"));
     // 照合は行を押さえない問い合わせなので、着ける前に共有の解決口を通る
@@ -438,7 +468,12 @@ class OrderServiceTest {
     OrderCreateRequest req = phoneOrderRequest("09012345678", "重複照合の来客");
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", STORE_ID))
         .thenReturn(List.of("c1", "c2"));
     stubCreateHappyPath();
@@ -463,7 +498,12 @@ class OrderServiceTest {
     OrderCreateRequest req = phoneOrderRequest(null, "電話番号なしの来客");
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     stubCreateHappyPath();
 
     service.create(req, ACTOR_EMAIL);
@@ -503,7 +543,12 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(nominatableCast.findForUpdate(STORE_ID, "retired")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
@@ -521,7 +566,12 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
     when(platformUserRepository.findById(1L))
@@ -541,7 +591,12 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
     when(platformUserRepository.findById(1L))
@@ -560,7 +615,12 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 店舗を授権していても、ロールが ORDER_MANAGE を含まない STAFF（HQ 系ロールのみ等）は受付担当者になれない。
     PlatformUser staffWithoutOrderManage =
@@ -589,7 +649,12 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 停止(enabled=false)された STAFF はロール・店舗授権を保持したままだが、受付担当者にはなれない。
     PlatformUser stopped = authorizedReceptionist();
@@ -629,7 +694,12 @@ class OrderServiceTest {
     req.setReceptionRoute(ReceptionRoute.PHONE);
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     stubCreateHappyPath();
 
     service.create(req, ACTOR_EMAIL);
@@ -646,7 +716,12 @@ class OrderServiceTest {
     PlatformUser actor = authorizedReceptionist();
     actor.setId(7L);
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -668,7 +743,12 @@ class OrderServiceTest {
     req.setCastId("g1");
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req)).thenReturn(Order.builder().build());
+    when(orderMapper.toEntity(req))
+        .thenReturn(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findByEmail(ACTOR_EMAIL))
         .thenReturn(
@@ -683,7 +763,12 @@ class OrderServiceTest {
 
   @Test
   void updateModifiesAssociations() {
-    Order existing = Order.builder().status(OrderStatus.CONFIRMED).build();
+    Order existing =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .build();
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
@@ -710,7 +795,13 @@ class OrderServiceTest {
     // 汎用更新は終端状態を全拒する。受注には変更履歴が無いので、ここを開けておくことは
     // 「誰が・いつ・何を」のどれも残さずに確定した記録を動かす裏口になる（ADR 0013）
     for (OrderStatus terminal : List.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
-      Order order = Order.builder().status(terminal).pax(2).build();
+      Order order =
+          Order.builder()
+              .status(OrderStatus.CONFIRMED)
+              .course(OrderCourses.course("基本", 60, 0))
+              .status(terminal)
+              .pax(2)
+              .build();
       when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
 
       OrderUpdateRequest req = new OrderUpdateRequest();
@@ -727,12 +818,17 @@ class OrderServiceTest {
 
   @Test
   void updateAppliesPatchFields() {
-    Order existing = Order.builder().status(OrderStatus.CONFIRMED).build();
+    Order existing =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .build();
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
-        .thenReturn(patchWith(builder -> builder.courseName("90 分コース")));
+        .thenReturn(patchWith(builder -> builder.pax(3)));
     when(nominatableCast.findForUpdate(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
     when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -746,7 +842,7 @@ class OrderServiceTest {
 
     service.update("o1", req);
 
-    assertThat(existing.getCourseName()).isEqualTo("90 分コース");
+    assertThat(existing.getPax()).isEqualTo(3);
   }
 
   private OrderCancellationRequest cancellationRequest(String reason) {
@@ -758,7 +854,12 @@ class OrderServiceTest {
   @Test
   void cancelRecordsTheReasonActorAndTime() {
     // 汎用更新から状態を動かす裏口を閉じた代わりの専用の口。「取消できること」はここへ移設した
-    Order confirmed = Order.builder().status(OrderStatus.CONFIRMED).build();
+    Order confirmed =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .build();
     PlatformUser actor = authorizedReceptionist();
     actor.setId(7L);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
@@ -777,7 +878,12 @@ class OrderServiceTest {
   void cancelRejectsAnOrderThatIsNotConfirmed() {
     // 「不正な遷移が撥ねられること」の移設先。未処理の予約申請は申請側の謝絶が、誤完了の救済は別の経路が受け持つ
     for (OrderStatus status : List.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
-      Order order = Order.builder().status(status).build();
+      Order order =
+          Order.builder()
+              .status(OrderStatus.CONFIRMED)
+              .course(OrderCourses.course("基本", 60, 0))
+              .status(status)
+              .build();
       when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
       PlatformUser actor = authorizedReceptionist();
       actor.setId(7L);
@@ -796,7 +902,12 @@ class OrderServiceTest {
   @Test
   void cancelFailsWhenTheActorIsNoLongerAPlatformUser() {
     // 実行者不明のまま取消を通すと、失効した認証セッションによる操作が記録から区別できなくなる
-    Order confirmed = Order.builder().status(OrderStatus.CONFIRMED).build();
+    Order confirmed =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
     when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
@@ -809,7 +920,13 @@ class OrderServiceTest {
   @Test
   void updateCorrectsTheContactOfAnUnlinkedOrder() {
     // 顧客の着いていない受注は録入された連絡先が唯一の名乗りなので、誤記はここでしか直せない
-    Order existing = Order.builder().status(OrderStatus.CONFIRMED).contactName("誤記の名前").build();
+    Order existing =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .contactName("誤記の名前")
+            .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -830,7 +947,14 @@ class OrderServiceTest {
   @Test
   void updateRejectsContactCorrectionOnALinkedOrder() {
     // 顧客が着いていれば名乗りの正本は台帳の行。黙って捨てると送り手は直ったと誤解したまま誤記が残る
-    Order linked = Order.builder().status(OrderStatus.CONFIRMED).customerId("c1").pax(2).build();
+    Order linked =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .customerId("c1")
+            .pax(2)
+            .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(linked));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -846,7 +970,14 @@ class OrderServiceTest {
   @Test
   void updateLeavesALinkedOrderEditableWhenNoContactIsSent() {
     // 連絡先を送らない編集まで巻き添えで撥ねない（顧客が着いた受注の人数・備考は直せる必要がある）
-    Order linked = Order.builder().status(OrderStatus.CONFIRMED).customerId("c1").pax(2).build();
+    Order linked =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .customerId("c1")
+            .pax(2)
+            .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(linked));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(patchWith(builder -> builder.pax(9)));
@@ -867,7 +998,12 @@ class OrderServiceTest {
   void updateRejectsSwitchingToACastThatIsNotNominatable() {
     // 対象は店舗スタッフなので、列挙を防ぐ 404 ではなく理由と対処の分かる 400 で返す。
     // 成立しない理由（不在・他店舗・在籍停止）の判定は NominatableCastLookupTest が持つ
-    Order existing = Order.builder().status(OrderStatus.CONFIRMED).build();
+    Order existing =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(nominatableCast.findForUpdate(STORE_ID, "none")).thenReturn(Optional.empty());
@@ -892,6 +1028,8 @@ class OrderServiceTest {
     // 指名者が在籍停止になった確定済みの受注が人数・備考の修正も完了への遷移もできなくなる
     Order confirmed =
         Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
             .status(OrderStatus.CONFIRMED)
             .castId("g1")
             .receptionistId(3L)
@@ -920,7 +1058,13 @@ class OrderServiceTest {
     // 据え置きにまで適格を要求すると、担当者が退職・権限剥奪・他店異動になった受注が人数・備考の
     // 修正もできなくなる。据え置かれた受付担当は割り当てた時点で検証済みで、FK も掛かっている
     Order confirmed =
-        Order.builder().status(OrderStatus.CONFIRMED).receptionistId(3L).pax(2).build();
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .receptionistId(3L)
+            .pax(2)
+            .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(paxAndRemarksPatch(5, null));
@@ -941,7 +1085,12 @@ class OrderServiceTest {
 
   @Test
   void updateRejectsReceptionistAuthorizedForDifferentStore() {
-    Order existing = Order.builder().status(OrderStatus.CONFIRMED).build();
+    Order existing =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
@@ -961,7 +1110,12 @@ class OrderServiceTest {
 
   @Test
   void updateRejectsCastRoleReceptionist() {
-    Order existing = Order.builder().status(OrderStatus.CONFIRMED).build();
+    Order existing =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .build();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
@@ -980,8 +1134,7 @@ class OrderServiceTest {
 
   /** 人数と備考だけを差し替える部分更新コマンド（汎用更新の典型的な編集）。 */
   private static OrderPatch paxAndRemarksPatch(Integer pax, String remarks) {
-    return new OrderPatch(
-        null, null, null, pax, null, null, null, null, null, null, null, null, remarks, null);
+    return new OrderPatch(null, null, null, pax, null, null, null, null, null, null, remarks, null);
   }
 
   @Test
@@ -989,6 +1142,8 @@ class OrderServiceTest {
     // 指名を外したまま確定した受注は、キャストを作り出さずに人数・備考を直せなければならない
     Order confirmed =
         Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
             .status(OrderStatus.CONFIRMED)
             .receptionRoute(ReceptionRoute.MEMBER_WEB)
             .requesterMemberCode("123456789012")
@@ -1019,6 +1174,8 @@ class OrderServiceTest {
     Order confirmed =
         Order.builder()
             .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
             .receptionRoute(ReceptionRoute.MEMBER_WEB)
             .requesterMemberCode("123456789012")
             .pax(2)
@@ -1044,14 +1201,20 @@ class OrderServiceTest {
     // 指名・受付担当を添えるのは、既に付いている受注では省略が「外す」と区別できず撥ねられるため
     // （汎用更新の契約）— 内訳だけを送る要求はこの守衛に先に捕まる。
     Order storeOrder =
-        Order.builder().status(OrderStatus.CONFIRMED).castId("g1").receptionistId(1L).build();
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .castId("g1")
+            .receptionistId(1L)
+            .build();
     storeOrder.replaceStoreFeeLines(
         List.of(new OrderFeeLineDraft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
     assertThat(storeOrder.getTotalFee()).as("前提: 内訳と合計が入っていること").isEqualTo(2000);
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
-        .thenReturn(OrderPatch.ofAccounting(null, List.of()));
+        .thenReturn(OrderPatch.ofAccounting(List.of()));
     stubWriteBackResponse();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -1061,14 +1224,21 @@ class OrderServiceTest {
 
     service.update("o1", req);
 
-    assertThat(storeOrder.getFeeLines()).isEmpty();
+    assertThat(storeOrder.editableFeeLines()).isEmpty();
     assertThat(storeOrder.getTotalFee()).as("内訳が空なら合計も 0 であること").isZero();
   }
 
   @Test
   void updateRejectsRemovingAnExistingNomination() {
     // 店舗が起こした受注は必ず指名を持つ。省略で外せると、汎用更新が指名解除の裏口になる
-    Order storeOrder = Order.builder().status(OrderStatus.CONFIRMED).castId("g1").pax(2).build();
+    Order storeOrder =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .castId("g1")
+            .pax(2)
+            .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -1086,7 +1256,13 @@ class OrderServiceTest {
   @Test
   void updateRejectsRemovingAnExistingReceptionist() {
     Order storeOrder =
-        Order.builder().status(OrderStatus.CONFIRMED).castId("g1").receptionistId(3L).build();
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .castId("g1")
+            .receptionistId(3L)
+            .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -1104,7 +1280,13 @@ class OrderServiceTest {
   void updateTreatsABlankCastIdAsAnOmittedNomination() {
     // 編集画面の未選択がそのまま空文字で乗ってくる。存在しないキャストとして 404 を返すより、
     // 指名なしの要求として同じ判定（外せない）に載せる方が呼び手にとって意味が通る
-    Order storeOrder = Order.builder().status(OrderStatus.CONFIRMED).castId("g1").build();
+    Order storeOrder =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .castId("g1")
+            .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -1331,8 +1513,7 @@ class OrderServiceTest {
     OrderApplicationConfirmationRequest request = new OrderApplicationConfirmationRequest();
     request.setBusinessDate(CURRENT_BUSINESS_DATE);
     request.setPax(2);
-    request.setCourseName("90 分コース");
-    request.setCourseMinutes(90);
+
     return request;
   }
 
@@ -1404,8 +1585,8 @@ class OrderServiceTest {
     assertThat(created.getBusinessDate()).as("受注の内容は確定内容から取ること").isEqualTo(CURRENT_BUSINESS_DATE);
     assertThat(created.getPax()).isEqualTo(2);
     // 確定は受注の出生なので、コースの快照はこの経路でも写らなければならない
-    assertThat(created.getCourseName()).isEqualTo("90 分コース");
-    assertThat(created.getCourseMinutes()).isEqualTo(90);
+    assertThat(created.getCourse().name()).isEqualTo("基本");
+    assertThat(created.getCourse().durationMinutes()).isEqualTo(60);
     assertThat(created.getCastId()).as("確定内容が指名を持たなければ受注も指名なしであること").isNull();
 
     assertThat(application.getStatus()).isEqualTo(OrderApplicationStatus.CONFIRMED);
@@ -2015,7 +2196,13 @@ class OrderServiceTest {
   /** 完了の対象になる確定済みの受注（顧客つき）。 */
   private static Order confirmedOrderWithCustomer() {
     Order order =
-        Order.builder().status(OrderStatus.CONFIRMED).customerId("cust-1").castId("cast-1").build();
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
+            .customerId("cust-1")
+            .castId("cast-1")
+            .build();
     order.setStoreId(STORE_ID);
     return atCurrentVersion(order);
   }
@@ -2104,6 +2291,7 @@ class OrderServiceTest {
             eq(ACTOR_ID),
             any()))
         .thenReturn(new AttributionMaterializer.Result(120, 500));
+    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
     stubWriteBackResponse();
 
     service.complete("o1", completion(12000, 300), "staff@kizuna.test");
@@ -2133,6 +2321,7 @@ class OrderServiceTest {
             eq(ACTOR_ID),
             any()))
         .thenReturn(new AttributionMaterializer.Result(120, 500));
+    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
     stubWriteBackResponse();
 
     service.complete("o1", completion(12000, null), "staff@kizuna.test");
@@ -2250,7 +2439,13 @@ class OrderServiceTest {
   @Test
   void completeOfANonMemberOrderGrantsNothing() {
     Order order =
-        atCurrentVersion(Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build());
+        atCurrentVersion(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .status(OrderStatus.CONFIRMED)
+                .castId("cast-1")
+                .build());
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     stubReceiptTokenIssuance();
@@ -2288,6 +2483,8 @@ class OrderServiceTest {
     Order order =
         atCurrentVersion(
             Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
                 .status(OrderStatus.CONFIRMED)
                 .customerId("cust-1")
                 .castId("cast-1")
@@ -2365,6 +2562,8 @@ class OrderServiceTest {
     Order order =
         Order.builder()
             .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .status(OrderStatus.CONFIRMED)
             .castId("cast-1")
             .requesterMemberId(MEMBER_ID)
             .requesterMemberCode("123456789012")
@@ -2438,7 +2637,13 @@ class OrderServiceTest {
   void completeFreezesThePlannedPointsAtTheCompletionTimeRule() {
     // 申領時点の設定を読むと、同じ会計が申領の早い遅いで別のポイントになる
     Order order =
-        atCurrentVersion(Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build());
+        atCurrentVersion(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .status(OrderStatus.CONFIRMED)
+                .castId("cast-1")
+                .build());
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     when(pointLedgerService.previewGrant(12000)).thenReturn(120);
@@ -2454,7 +2659,13 @@ class OrderServiceTest {
   void completeOfAZeroFeeOrderStillIssuesAReceiptToken() {
     // 付与が 0 でも来店の事実は取り戻せなければならない（申領の効果は来店の可視化に閉じる）
     Order order =
-        atCurrentVersion(Order.builder().status(OrderStatus.CONFIRMED).castId("cast-1").build());
+        atCurrentVersion(
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .status(OrderStatus.CONFIRMED)
+                .castId("cast-1")
+                .build());
     order.setStoreId(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     when(pointLedgerService.previewGrant(0)).thenReturn(0);
@@ -2513,7 +2724,7 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
         .isInstanceOf(StaleSessionException.class);
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
-    verifyNoInteractions(pointLedgerService, materializer);
+    verifyNoInteractions(materializer);
     verify(orderRepository, never()).save(any(Order.class));
   }
 
@@ -2523,7 +2734,12 @@ class OrderServiceTest {
     // 版は現物と揃える — ずれていれば競合として先に落ちるので、状態の検査そのものを見られない
     Order cancelled =
         atCurrentVersion(
-            Order.builder().status(OrderStatus.CANCELLED).customerId("cust-1").build());
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .status(OrderStatus.CANCELLED)
+                .customerId("cust-1")
+                .build());
     when(orderRepository.findById("o1")).thenReturn(Optional.of(cancelled));
 
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
@@ -2539,7 +2755,12 @@ class OrderServiceTest {
     // 400 で返すと画面が取り直しの契機を得られず、再送が永久に同じ 400 を踏む（行き止まり）
     Order completed =
         atCurrentVersion(
-            Order.builder().status(OrderStatus.COMPLETED).customerId("cust-1").build());
+            Order.builder()
+                .status(OrderStatus.CONFIRMED)
+                .course(OrderCourses.course("基本", 60, 0))
+                .status(OrderStatus.COMPLETED)
+                .customerId("cust-1")
+                .build());
     when(orderRepository.findById("o1")).thenReturn(Optional.of(completed));
 
     assertThatThrownBy(
@@ -2577,22 +2798,22 @@ class OrderServiceTest {
     inOrder.verify(customerRepository).findByIdForUpdate("cust-1");
     // 紐づけ自体はロック取得後の新しい問い合わせで引く。置換の commit 後ならその新しい行が必ず見える
     inOrder
-        .verify(customerMemberLinkRepository)
+        .verify(customerMemberLinkRepository, Mockito.atLeastOnce())
         .findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE);
   }
 
   @Test
-  void completionPreviewResolvesTheMemberWithoutTheCustomerRowLock() {
+  void completionPreviewResolvesTheMemberUnderTheCustomerRowLock() {
     // 事前計算は台帳へ積まない読み口。行を押さえると、画面を開いただけの照会が並行する紐づけ解除を
     // コミットまで待たせる
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
 
-    service.completionPreview("o1", 12000);
+    service.completionPreview("o1", completion(12000, 0));
 
     verify(customerMemberLinkRepository).findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE);
-    verify(customerRepository, never()).findByIdForUpdate(any());
+    verify(customerRepository).findByIdForUpdate(any());
   }
 
   @Test
@@ -2604,13 +2825,13 @@ class OrderServiceTest {
     when(pointLedgerService.usageUnit()).thenReturn(100);
     when(pointLedgerService.previewGrant(12000)).thenReturn(120);
 
-    OrderCompletionPreviewResponse preview = service.completionPreview("o1", 12000);
+    var preview = service.completionPreview("o1", completion(12000, 0)).points();
 
-    assertThat(preview.isMemberLinked()).isTrue();
-    assertThat(preview.getPointBalance()).isEqualTo(800);
-    assertThat(preview.getUsageUnit()).isEqualTo(100);
+    assertThat(preview.memberLinked()).isTrue();
+    assertThat(preview.pointBalance()).isEqualTo(800);
+    assertThat(preview.usageUnit()).isEqualTo(100);
     // 見込みは確定と同じサービスから引く。独自に計算すると設定変更のたびに結果が食い違う
-    assertThat(preview.getGrantPoints()).isEqualTo(120);
+    assertThat(preview.grantPoints()).isEqualTo(120);
   }
 
   @Test
@@ -2621,12 +2842,12 @@ class OrderServiceTest {
         .thenReturn(Optional.empty());
     when(pointLedgerService.usageUnit()).thenReturn(100);
 
-    OrderCompletionPreviewResponse preview = service.completionPreview("o1", 12000);
+    var preview = service.completionPreview("o1", completion(12000, 0)).points();
 
-    assertThat(preview.isMemberLinked()).isFalse();
-    assertThat(preview.getPointBalance()).as("非会員に残高は存在しない").isNull();
+    assertThat(preview.memberLinked()).isFalse();
+    assertThat(preview.pointBalance()).as("非会員に残高は存在しない").isNull();
     // 確定は非会員へ付与しない。見込みが付与を返すと、画面の予定と確定の結果が食い違う
-    assertThat(preview.getGrantPoints()).isZero();
+    assertThat(preview.grantPoints()).isZero();
     verify(pointLedgerService, never()).previewGrant(anyInt());
     verify(pointLedgerService, never()).balance(anyLong());
   }
@@ -2634,9 +2855,9 @@ class OrderServiceTest {
   @Test
   void completionPreviewRejectsANegativeFee() {
     // 会計金額は要求パラメータのため契約の下限を持てない。素通りすると負の付与が見込みとして返る
-    assertThatThrownBy(() -> service.completionPreview("o1", -1))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("会計金額は 0 以上");
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmedOrderWithCustomer()));
+    assertThatThrownBy(() -> service.completionPreview("o1", completion(-1, 0)))
+        .isInstanceOf(com.kizuna.order.domain.InvalidOrderFeeLineException.class);
     verifyNoInteractions(pointLedgerService, materializer);
   }
 

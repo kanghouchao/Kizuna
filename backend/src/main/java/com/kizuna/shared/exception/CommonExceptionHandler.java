@@ -19,6 +19,7 @@ import org.springframework.security.authentication.InsufficientAuthenticationExc
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -31,6 +32,13 @@ import tools.jackson.databind.util.NamingStrategyImpls;
 @Slf4j
 @ControllerAdvice
 public class CommonExceptionHandler {
+
+  @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+  public ResponseEntity<Map<String, Object>> handle(HttpRequestMethodNotSupportedException ex) {
+    return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+        .headers(ex.getHeaders())
+        .body(Map.of("error", "この操作は提供されていません"));
+  }
 
   /** 例外の内部 message をワイヤ契約へ漏らさないよう、型ごとに固定文言へ写像する。 */
   @ExceptionHandler(AuthenticationException.class)
@@ -184,6 +192,7 @@ public class CommonExceptionHandler {
     log.warn(ex.getMessage());
     Map<String, Object> body = new HashMap<>();
     body.put("error", ex.getMessage());
+    if (!ex.details().isEmpty()) body.put("details", ex.details());
     return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
   }
 

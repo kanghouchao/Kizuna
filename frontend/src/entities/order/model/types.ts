@@ -71,7 +71,6 @@ export const ORDER_FEE_LINE_KIND_LABELS: Record<OrderFeeLineKind, string> = {
 
 /** 店舗が手入力できる種別。基本コース料金の名称はコース名の写しから採るため、行の名称は送らない。 */
 export const ORDER_FEE_LINE_STORE_KINDS: readonly OrderFeeLineKind[] = [
-  'BASE_COURSE',
   'EXTENSION',
   'OPTION',
   'SURCHARGE',
@@ -86,6 +85,7 @@ export const ORDER_FEE_LINE_STORE_KINDS: readonly OrderFeeLineKind[] = [
  * system_owned が真の行は完了処理が台帳仕訳と対で書いた記録で、店舗の編集からは触れない。
  */
 export interface OrderFeeLine {
+  remuneration?: number;
   kind: OrderFeeLineKind;
   name?: string;
   amount: number;
@@ -100,6 +100,7 @@ export interface OrderFeeLineInput {
 }
 
 export interface Order {
+  course: OrderCourse;
   id?: string;
   receptionist_id?: number;
   receptionist_name?: string;
@@ -112,8 +113,6 @@ export interface Order {
   cast_name?: string;
   pax?: number;
   /** この受注に実際に適用されたコース名の写し。 */
-  course_name?: string;
-  course_minutes?: number;
   extension_minutes?: number;
   /** 実際の到着・終了時刻。完了後の訂正の門だけがこれを直せる。 */
   actual_arrival_time?: string;
@@ -166,6 +165,7 @@ export interface Order {
  * そのまま 1 行の差し替えに使える。
  */
 export interface OrderWorkQueueRow {
+  course: OrderCourse;
   id?: string;
   receptionist_id?: number;
   receptionist_name?: string;
@@ -174,7 +174,6 @@ export interface OrderWorkQueueRow {
   cast_id?: string;
   cast_name?: string;
   pax?: number;
-  course_minutes?: number;
   remarks?: string;
   status?: OrderStatus;
   reception_route?: ReceptionRoute;
@@ -193,6 +192,7 @@ export interface OrderWorkQueueRow {
  * 取消の記録を持つ。指名・受付担当・備考は対応中にしか使わないので載らない。
  */
 export interface OrderArchiveRow {
+  course: OrderCourse;
   id?: string;
   status?: OrderStatus;
   business_date?: string;
@@ -213,10 +213,10 @@ export interface OrderArchiveRow {
  * 顧客詳細の注文履歴 1 行（GET /store/orders?customer_id=）。顧客は画面の文脈が持っているので載らない。
  */
 export interface OrderSummaryRow {
+  course: OrderCourse;
   id?: string;
   business_date?: string;
   cast_name?: string;
-  course_minutes?: number;
   extension_minutes?: number;
   used_points?: number;
   status?: OrderStatus;
@@ -281,6 +281,9 @@ export type OrderListCriteria = Omit<OrderQueryParams, 'statuses'>;
  * 店舗が起こした受注は出生時に両方が埋まっているので、編集画面は毎回この 2 つを運ぶ必要がある。
  */
 export interface OrderUpdateRequest {
+  expected_version: number;
+  course_id?: string;
+  confirmation_token?: string;
   receptionist_id?: number;
   cast_id?: string;
   business_date?: string;
@@ -288,8 +291,6 @@ export interface OrderUpdateRequest {
   arrival_scheduled_end_time?: string;
   pax?: number;
   /** 適用されたコース名の写し。基本コース料金の明細を送るなら必須になる。 */
-  course_name?: string;
-  course_minutes?: number;
   extension_minutes?: number;
   /**
    * 受注金額の内訳。**省略は「変更しない」、空配列は「内訳を空にする」**。行に同一性は無く、
@@ -325,6 +326,8 @@ export interface OrderCancellationRequest {
  * ポイント利用の行は含められない（門内でも編集不可）。既にある行はこの経路で消えない。
  */
 export interface OrderCorrectionRequest {
+  course_revision_id?: string;
+  confirmation_token?: string;
   /**
    * 画面が読み込んだ時点の受注のバージョン（詳細の読み口が返す version）。
    *
@@ -335,8 +338,6 @@ export interface OrderCorrectionRequest {
   reason: string;
   actual_arrival_time?: string;
   actual_end_time?: string;
-  course_name?: string;
-  course_minutes?: number;
   extension_minutes?: number;
   fee_lines: OrderFeeLineInput[];
 }
@@ -369,6 +370,8 @@ export interface OrderCastCandidate {
 }
 
 export interface OrderCreateRequest {
+  course_id: string;
+  confirmation_token?: string;
   /**
    * 受付担当。**省略すると実行者本人が受付担当として記録される**（サーバが確定操作と同じ適格述語で
    * 解決し、適格でなければ 400）。画面の既定が「自分」なのはこのため — JWT にも /platform/me にも
@@ -383,8 +386,6 @@ export interface OrderCreateRequest {
   cast_id: string;
   pax?: number;
   /** 適用するコース名の写し。基本コース料金の明細を送るなら必須になる。 */
-  course_name?: string;
-  course_minutes?: number;
   extension_minutes?: number;
   /** 受注金額の内訳。省略は「内訳なし」で、合計は 0 になる。 */
   fee_lines?: OrderFeeLineInput[];
@@ -440,6 +441,8 @@ export interface OrderApplicationRow {
  * ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新で整える。
  */
 export interface OrderApplicationConfirmationRequest {
+  course_id: string;
+  confirmation_token?: string;
   /** 受付担当。省略すると、実行者本人が受付候補の条件を満たす場合にだけ補われる。 */
   receptionist_id?: number;
   business_date: string;
@@ -449,8 +452,6 @@ export interface OrderApplicationConfirmationRequest {
   cast_id?: string;
   pax?: number;
   /** 適用するコース名の写し。確定は受注の出生なので、快照はここで写る。 */
-  course_name?: string;
-  course_minutes?: number;
   remarks?: string;
   /**
    * ゲスト申請の受注を着ける既存の台帳行。new_customer との併用は 400。
@@ -498,6 +499,7 @@ export interface OrderApplicationDeclineRequest {
  * ポイント利用は任意だが、送るなら 1 以上（Java 側が @Min(1)）。利用しない完了では項目ごと省略する — 0 は撥ねられる。
  */
 export interface OrderCompletionRequest {
+  confirmation_token?: string;
   /**
    * 画面が読み込んだ時点の受注のバージョン（詳細の読み口が返す version）。
    *
@@ -506,17 +508,14 @@ export interface OrderCompletionRequest {
    */
   expected_version: number;
   /** 適用されたコース名の写し。会計の場が快照の最後の更新機会になる。 */
-  course_name?: string;
   fee_lines: OrderFeeLineInput[];
   use_points?: number;
 }
 
-/**
- * 完了処理の事前計算（GET /store/orders/{id}/completion-preview）。
- *
- * 残高だけが可空。他の 3 つは Java 側が primitive のため、応答から消えることはない。
- */
-export interface OrderCompletionPreview {
+/** 完了試算で確認する会員資格・利用・付与の結果。 */
+export interface OrderPointsPreview {
+  use_points: number;
+  member_code?: string;
   member_linked: boolean;
   /** 未紐づけではキーごと応答から消える。 */
   point_balance?: number;
@@ -657,4 +656,27 @@ export interface MemberOrderApplicationCreateRequest {
   arrival_scheduled_start_time?: string;
   cast_id?: string;
   remarks?: string;
+}
+
+export interface CourseCandidate {
+  service_id: string;
+  revision_id: string;
+  revision_number: number;
+  name: string;
+  duration_minutes: number;
+  price: number;
+  remuneration: number;
+  occurred_at?: string;
+  service_deleted?: boolean;
+}
+export interface OrderCourse extends CourseCandidate {
+  adoption_basis: 'CURRENT_SETTING' | 'HISTORICAL_CORRECTION';
+  adopted_at: string;
+}
+export interface OrderPreview {
+  confirmation_token: string;
+  course: Omit<OrderCourse, 'adopted_at'>;
+  fee_lines: OrderFeeLine[];
+  total_fee: number;
+  points?: OrderPointsPreview;
 }

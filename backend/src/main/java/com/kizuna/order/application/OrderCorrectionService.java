@@ -3,13 +3,15 @@ package com.kizuna.order.application;
 import com.kizuna.order.api.dto.OrderCorrectionRequest;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderMapper;
+import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCorrection;
 import com.kizuna.order.domain.OrderCorrectionCommand;
 import com.kizuna.order.domain.OrderCorrectionRepository;
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
@@ -35,46 +37,78 @@ public class OrderCorrectionService {
   private final OrderCorrectionRepository orderCorrectionRepository;
   private final ActorIdentityService actorIdentityService;
   private final OrderMapper orderMapper;
+  private final OrderCourseCalculation courseCalculation;
 
-  /**
-   * 完了した受注を理由付きで訂正し、訂正前の姿を痕として残す。
-   *
-   * <p>痕は訂正を当てる<b>前</b>に起こす。管理下の集約はその場で書き換わるため、順序が逆だと訂正後の姿を前値として 記録してしまう（当日実績の訂正と同じ紀律）。撥ねられた要求は
-   * トランザクションごと巻き戻るので、痕だけが残ることは無い。
-   *
-   * <p>同時に届いた 2 つの訂正は双方が COMPLETED を読んで門を通り、受注の {@code @Version} で敗者が 409 に落ちる。 逐次なら 2 回とも成立し、痕が 2
-   * 行並んで鎖になる。
-   */
+  /** 訂正前の快照と更新を同じトランザクションに保存する。受注行をロックしてから要求の版を照合し、 同時訂正による上書きを防ぐ。快照は管理下の集約を書き換える前に作成する。 */
   @StoreScoped
   @Transactional
   public OrderCorrectionResponse correct(
       String id, OrderCorrectionRequest request, String actorEmail) {
     Order order =
-        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+        orderRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
     // 版の照合は何も触る前に行う。全量置換なので、開いたまま別の操作者が訂正を済ませていると、送らなかった
     // 項目まで開いた時点の値で押し戻す — 楽観ロックは要求ごとに現物を読み直すため、この照合が無いと
     // 食い違いを検出できないまま、理由と痕を伴う先の訂正が黙って巻き戻る。
     if (!Objects.equals(order.getVersion(), request.getExpectedVersion())) {
-      throw new ConflictException("この受注は別の操作者が訂正しました。最新の内容を読み直してからやり直してください");
+      throw new OrderConfirmationConflict(
+          "expected_version", "この受注は別の操作者が訂正しました。最新の内容を読み直してからやり直してください");
     }
     int previousTotalFee = order.getTotalFee();
 
-    orderCorrectionRepository.save(
-        OrderCorrection.snapshotOf(
-            order,
-            request.getReason(),
-            actorIdentityService.requireUserId(actorEmail),
-            OffsetDateTime.now()));
+    var previousCourse = order.getCourse();
+    var course =
+        request.getCourseRevisionId() == null
+            ? previousCourse
+            : courseCalculation.historical(request.getCourseRevisionId());
+    var calculated = courseCalculation.calculate(order, course, request.getFeeLines());
+    courseCalculation.verify(
+        request.getConfirmationToken(),
+        courseCalculation.preview("CORRECT", id, request, calculated, null));
+    var correction =
+        orderCorrectionRepository.save(
+            OrderCorrection.snapshotOf(
+                order,
+                request.getReason(),
+                actorIdentityService.requireUserId(actorEmail),
+                OffsetDateTime.now()));
     order.correct(
         new OrderCorrectionCommand(
             request.getActualArrivalTime(),
             request.getActualEndTime(),
-            request.getCourseName(),
-            request.getCourseMinutes(),
+            course,
             request.getExtensionMinutes(),
             orderMapper.toFeeLineDrafts(request.getFeeLines())));
     orderRepository.save(order);
 
-    return new OrderCorrectionResponse(previousTotalFee, order.getTotalFee());
+    return new OrderCorrectionResponse(
+        correction.getId(),
+        previousTotalFee,
+        order.getTotalFee(),
+        previousCourse,
+        order.getCourse());
+  }
+
+  @StoreScoped
+  @Transactional
+  public OrderPreviewResponse preview(String id, OrderCorrectionRequest request) {
+    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    var order =
+        orderRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    courseCalculation.requireVersion(order, request.getExpectedVersion());
+    if (order.getStatus() != OrderStatus.COMPLETED) throw new ServiceException("完了した受注だけが訂正できます");
+    var course =
+        request.getCourseRevisionId() == null
+            ? order.getCourse()
+            : courseCalculation.historical(request.getCourseRevisionId());
+    return courseCalculation.preview(
+        "CORRECT",
+        id,
+        request,
+        courseCalculation.calculate(order, course, request.getFeeLines()),
+        null);
   }
 }

@@ -154,7 +154,25 @@ describe('顧客編集ページの注文履歴', () => {
 
   it('受注ステータスを enum 生値ではなく受注一覧と同じ日本語ラベルで表示すること', async () => {
     mockedOrderApi.list.mockResolvedValue({
-      rows: [{ id: 'ord-1', business_date: '2026-08-01', status: 'CONFIRMED', used_points: 0 }],
+      rows: [
+        {
+          course: {
+            service_id: 'course-1',
+            revision_id: 'r1',
+            revision_number: 1,
+            name: '基本',
+            duration_minutes: 60,
+            price: 12000,
+            remuneration: 7000,
+            adoption_basis: 'CURRENT_SETTING' as const,
+            adopted_at: '2026-09-15T00:00:00Z',
+          },
+          id: 'ord-1',
+          business_date: '2026-08-01',
+          status: 'CONFIRMED',
+          used_points: 0,
+        },
+      ],
       page: 0,
       pageCount: 1,
       total: 1,

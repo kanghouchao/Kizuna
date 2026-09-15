@@ -13,6 +13,10 @@ import lombok.Data;
 
 @Data
 public class OrderCreateRequest {
+  private String confirmationToken;
+
+  @NotBlank(message = "コースは必須です")
+  private String courseId;
 
   /**
    * 受付担当。省略すると実行者本人が受付担当として書き込まれる（確定操作と同じ適格述語で判定し、適格でなければ 400）。
@@ -74,11 +78,6 @@ public class OrderCreateRequest {
   @Min(value = 1, message = "人数は 1 以上です")
   private Integer pax;
 
-  /** この受注に適用するコース名の写し。基本コース料金の明細を送るなら必須になる。t_orders.course_name = VARCHAR(255)。 */
-  @Size(max = 255, message = "コース名は 255 文字以内です")
-  private String courseName;
-
-  private Integer courseMinutes;
   private Integer extensionMinutes;
 
   /** 受注金額の内訳。省略は「内訳なし」で、合計は 0 になる。 */

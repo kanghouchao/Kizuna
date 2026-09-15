@@ -26,6 +26,10 @@ import lombok.Data;
  */
 @Data
 public class OrderUpdateRequest {
+  private String confirmationToken;
+  private String courseId;
+  @NotNull private Long expectedVersion;
+
   private Long receptionistId;
 
   /** 営業日。改期はこの項目の変更で行う — 取消して再登録すると取消の記録が雑音で汚れる。 */
@@ -39,11 +43,6 @@ public class OrderUpdateRequest {
   @Min(value = 1, message = "人数は 1 以上です")
   private Integer pax;
 
-  /** 適用されたコース名の写し。上限は {@code t_orders.course_name} = VARCHAR(255)。 */
-  @Size(max = 255, message = "コース名は 255 文字以内です")
-  private String courseName;
-
-  private Integer courseMinutes;
   private Integer extensionMinutes;
 
   /**
