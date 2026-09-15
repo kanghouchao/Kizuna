@@ -12,6 +12,7 @@ jest.mock('@/entities/order', () => ({
   orderApi: {
     ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     get: jest.fn(),
+    start: jest.fn(),
     update: jest.fn(),
     listReceptionists: jest.fn(),
     listCastCandidates: jest.fn(),
@@ -334,5 +335,44 @@ test('候補取得に失敗しても名前のない元担当を識別でき、�
       cast_id: 'cast-1',
       receptionist_id: 3,
     })
+  );
+});
+
+test('開始の応答で未保存の入力を失わず、新しい版で編集内容を保存できる', async () => {
+  const initial = confirmedOrder({ remarks: '保存済み' });
+  mockedOrderApi.get.mockResolvedValue(initial);
+  let finish!: (order: Order) => void;
+  mockedOrderApi.start.mockReturnValue(
+    new Promise<Order>(resolve => {
+      finish = resolve;
+    })
+  );
+  mockedOrderApi.update.mockResolvedValue({ ...initial, status: 'IN_SERVICE' });
+  render(<OrderEditPage />);
+  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+  fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+  fireEvent.click(screen.getByRole('button', { name: 'クレジット加算を追加' }));
+  fireEvent.change(screen.getByLabelText('明細1の名称'), { target: { value: 'クレジット' } });
+  fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: '300' } });
+  fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
+  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+  fireEvent.change(screen.getByLabelText('備考'), { target: { value: '送信中の追記' } });
+  await act(async () => finish({ ...initial, status: 'IN_SERVICE', version: 4 }));
+  expect(screen.getByLabelText('人数')).toHaveValue(5);
+  expect(screen.getByLabelText('明細1の金額')).toHaveValue(300);
+  expect(screen.getByLabelText('備考')).toHaveValue('送信中の追記');
+  expect(screen.queryByRole('button', { name: 'サービスを開始' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
+  await waitFor(() =>
+    expect(mockedOrderApi.update).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({
+        pax: 5,
+        remarks: '送信中の追記',
+        expected_version: 4,
+        fee_lines: [{ kind: 'CREDIT_SURCHARGE', name: 'クレジット', amount: 300 }],
+      })
+    )
   );
 });

@@ -6,6 +6,7 @@ import { OrderServiceProgress } from './OrderServiceProgress';
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
+import { useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -136,6 +137,7 @@ export default function OrderEditPage() {
   );
   const { data: current, isLoading, failure, reload } = resource;
 
+  const startedOrder = useRef<Order | null>(null);
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, formState } = form;
   // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
@@ -147,28 +149,33 @@ export default function OrderEditPage() {
   // 取得できたら播く。取得の到着はレンダーより後なので、values ではなく効果で入れる
   // （初期値として渡すと、開いた最初のフレームが空欄のまま描かれる）。
   const initialized = useResourceInitialization(resource.success, current => {
-    reset({
-      receptionist_id: current.receptionist_id != null ? String(current.receptionist_id) : '',
-      cast_id: current.cast_id ?? '',
-      business_date: current.business_date ?? '',
-      arrival_scheduled_start_time: toTimeInput(current.arrival_scheduled_start_time),
-      arrival_scheduled_end_time: toTimeInput(current.arrival_scheduled_end_time),
-      pax: current.pax != null ? String(current.pax) : '',
-      special_service_ids: (current.special_services ?? []).map(item => item.service_id),
-      course_id: '',
-      fee_lines: storeEditableFeeLines(current.fee_lines),
-      location_address: current.location_address ?? '',
-      location_building: current.location_building ?? '',
-      carrier: current.carrier ?? '',
-      media_name: current.media_name ?? '',
-      remarks: current.remarks ?? '',
-      cast_driver_message: current.cast_driver_message ?? '',
-      contact_name: current.contact_name ?? '',
-      contact_phone_number: current.contact_phone_number ?? '',
-    });
+    reset(
+      {
+        receptionist_id: current.receptionist_id != null ? String(current.receptionist_id) : '',
+        cast_id: current.cast_id ?? '',
+        business_date: current.business_date ?? '',
+        arrival_scheduled_start_time: toTimeInput(current.arrival_scheduled_start_time),
+        arrival_scheduled_end_time: toTimeInput(current.arrival_scheduled_end_time),
+        pax: current.pax != null ? String(current.pax) : '',
+        special_service_ids: (current.special_services ?? []).map(item => item.service_id),
+        course_id: '',
+        fee_lines: storeEditableFeeLines(current.fee_lines),
+        location_address: current.location_address ?? '',
+        location_building: current.location_building ?? '',
+        carrier: current.carrier ?? '',
+        media_name: current.media_name ?? '',
+        remarks: current.remarks ?? '',
+        cast_driver_message: current.cast_driver_message ?? '',
+        contact_name: current.contact_name ?? '',
+        contact_phone_number: current.contact_phone_number ?? '',
+      },
+      { keepDirtyValues: startedOrder.current === current }
+    );
+    startedOrder.current = null;
   });
   const seeded = current !== null && initialized && !isLoading;
   const linked = current?.customer_id != null;
+  const startScope = resource.capture();
 
   const submit = async (values: OrderEditFormValues) => {
     if (current === null || current.version === undefined) {
@@ -268,7 +275,12 @@ export default function OrderEditPage() {
           <OrderServiceProgress
             key={`${storeId}:${orderId}`}
             order={current}
-            onStarted={resource.capture().replace}
+            onStarted={updated => {
+              if (!startScope.isCurrent()) return;
+              // 開始は編集内容を保存しないため、この応答での再初期化だけ未保存の値を保持する。
+              startedOrder.current = updated;
+              startScope.replace(updated);
+            }}
           />
         )}
         {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
