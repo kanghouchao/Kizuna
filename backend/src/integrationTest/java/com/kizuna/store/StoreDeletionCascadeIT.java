@@ -283,6 +283,28 @@ class StoreDeletionCascadeIT {
     assertThat(countEmergencyElevation(elevationId)).as("発動記録は残存すること").isEqualTo(1L);
   }
 
+  @Test
+  @DisplayName("サービス設定を持つ準備中の店舗は業務エラーで削除を拒否し設定を残すこと")
+  void storeWithServiceCannotBeDeleted() {
+    Store store = freshStore("サービス設定検証店舗", "service-store-delete-it");
+    String serviceId = UUID.randomUUID().toString();
+    jdbcTemplate.update(
+        "INSERT INTO t_services (id, store_id, kind, name, price, remuneration, revision_number)"
+            + " VALUES (?, ?, 'SURCHARGE', '加算', 1000, 0, 1)",
+        serviceId,
+        store.getId());
+
+    ResponseEntity<JsonNode> res = deleteStore(store.getId());
+
+    assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(res.getBody().path("error").asString()).isEqualTo("サービス設定が存在する店舗は削除できません");
+    assertThat(countStore(store.getId())).isEqualTo(1L);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM t_services WHERE id = ?", Long.class, serviceId))
+        .isEqualTo(1L);
+  }
+
   private long countEmergencyElevation(long elevationId) {
     return jdbcTemplate.queryForObject(
         "SELECT count(*) FROM t_emergency_elevations WHERE id = ?", Long.class, elevationId);

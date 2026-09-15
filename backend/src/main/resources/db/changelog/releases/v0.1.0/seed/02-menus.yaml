@@ -221,3 +221,20 @@ databaseChangeLog:
               - column: { name: icon, value: StoreIcon }
               - column: { name: permission, value: STORE_PROFILE_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-service-settings }
+              - column: { name: label, value: サービス }
+              - column: { name: permission, value: SERVICE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 145 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-services }
+              - column: { name: parent_id, value: store-service-settings }
+              - column: { name: label, value: サービス設定 }
+              - column: { name: path, value: /store/services }
+              - column: { name: icon, value: SettingsIcon }
+              - column: { name: permission, value: SERVICE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 1 }

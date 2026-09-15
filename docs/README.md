@@ -36,6 +36,7 @@
 | 0024 | [緊急昇格は独立した実体と短命な昇格トークンで表し、時限のロール授与では表さない](adr/0024-emergency-elevation-is-an-entity-plus-short-lived-token.md) | 採用 |
 | 0025 | [サービスID は資格情報を持たない PlatformUser として `t_users` に同居させる](adr/0025-service-identity-lives-in-t-users-without-credentials.md) | 採用 |
 | 0026 | [キャストの正本を本人・店舗在籍・公開プロフィールに分離する](adr/0026-cast-person-enrollment-and-public-profile.md) | 採用 |
+| 0027 | [店舗サービスの条件と歴史版本をサービスモジュールに保存する](adr/0027-store-service-settings-and-revisions.md) | 採用。本人受諾・受注接続は後続票 |
 
 ## 旧システム調査資料
 

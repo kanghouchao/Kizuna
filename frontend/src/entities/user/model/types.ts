@@ -31,6 +31,7 @@ export type PlatformPermission =
   | 'STORE_VIEW'
   | 'ORDER_SET_MANAGE'
   | 'ORDER_MANAGE'
+  | 'SERVICE_MANAGE'
   | 'ORDER_CORRECT'
   | 'CUSTOMER_MANAGE'
   | 'CUSTOMER_MERGE'

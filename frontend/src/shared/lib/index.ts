@@ -1,6 +1,14 @@
 export * from './config';
 export { default as redirectToLogin, loginPath } from './navigation';
-export { ClientDataError, getApiErrorMessage, isConflict, isNotFound, requireId } from './apiError';
+export {
+  ClientDataError,
+  getApiErrorMessage,
+  isConflict,
+  isBadRequest,
+  isForbidden,
+  isNotFound,
+  requireId,
+} from './apiError';
 export { useManagedList } from './hooks/useManagedList';
 export { useListPage } from './hooks/useListPage';
 export { useCursorList } from './hooks/useCursorList';

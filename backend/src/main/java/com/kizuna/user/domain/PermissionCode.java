@@ -100,6 +100,9 @@ public enum PermissionCode {
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
+  /** 店舗サービス設定の閲覧・登録・更新・削除と変更履歴の照会。 */
+  SERVICE_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
+
   /** 顧客の閲覧・登録・更新・削除（CustomerController）。 */
   CUSTOMER_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 

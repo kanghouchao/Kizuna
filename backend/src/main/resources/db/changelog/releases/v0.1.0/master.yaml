@@ -38,6 +38,9 @@ databaseChangeLog:
       file: store/03-customer.yaml
       relativeToChangelogFile: true
   - include:
+      file: store/09-service.yaml
+      relativeToChangelogFile: true
+  - include:
       file: store/04-order.yaml
       relativeToChangelogFile: true
   - include:
