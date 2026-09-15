@@ -28,6 +28,8 @@ import java.util.Optional;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -267,6 +269,25 @@ class StoreRegistryServiceTest {
     assertThatThrownBy(() -> storeRegistryService.delete("1"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("緊急昇格の記録が存在する店舗は削除できません");
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "fk_t_services_store, サービス設定が存在する店舗は削除できません",
+    "fk_t_service_revisions_store, サービス変更履歴が存在する店舗は削除できません"
+  })
+  void delete_storeWithServices_translatesConstraint(String constraint, String message) {
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    doThrow(
+            new DataIntegrityViolationException(
+                "削除拒否",
+                new ConstraintViolationException("違反", new SQLException("外部キー違反"), constraint)))
+        .when(storeRepository)
+        .flush();
+
+    assertThatThrownBy(() -> storeRegistryService.delete("1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage(message);
   }
 
   @Test

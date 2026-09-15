@@ -6,6 +6,8 @@ import {
   getApiErrorMessage,
   hasPermission,
   isConflict,
+  isBadRequest,
+  isNotFound,
   isForbidden,
   readTokenClaims,
   useListPage,
@@ -83,7 +85,10 @@ function Services() {
         notify.warning('設定が変更されています。最新の内容を確認してから削除してください');
         await list.reload();
       } else if (isForbidden(error)) setDenied(true);
-      else notify.error(getApiErrorMessage(error, 'サービスの削除に失敗しました'));
+      else {
+        notify.error(getApiErrorMessage(error, 'サービスの削除に失敗しました'));
+        if (isBadRequest(error) || isNotFound(error)) await list.reload();
+      }
     } finally {
       if (active.current) setRemoving(false);
     }

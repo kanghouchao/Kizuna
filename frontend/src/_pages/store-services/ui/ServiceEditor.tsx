@@ -1,7 +1,14 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import { serviceApi, ServiceCreateRequest } from '@/entities/service';
-import { getApiErrorMessage, isConflict, isForbidden, isNotFound, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  isBadRequest,
+  isConflict,
+  isForbidden,
+  isNotFound,
+  useResource,
+} from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -67,7 +74,10 @@ export function ServiceEditor({
       if (isConflict(error)) setConflict(true);
       else if (isNotFound(error)) setMissing(true);
       else if (isForbidden(error)) onForbidden();
-      else notify.error(getApiErrorMessage(error, 'サービスの保存に失敗しました'));
+      else {
+        notify.error(getApiErrorMessage(error, 'サービスの保存に失敗しました'));
+        if (id && isBadRequest(error)) await resource.reload();
+      }
     } finally {
       if (active.current) setSaving(false);
     }

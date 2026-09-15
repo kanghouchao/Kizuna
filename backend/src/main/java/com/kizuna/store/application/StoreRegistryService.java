@@ -44,11 +44,15 @@ public class StoreRegistryService {
   private final PointLedgerService pointLedgerService;
   private final AttendanceRecordCheck attendanceRecordCheck;
 
-  /** 削除を止める側の外部キーの写像。緊急昇格の発動記録は監査の正本で、誤登録の撤回にも従わせない。 */
+  /** 削除を止める側の外部キーの写像。監査記録とサービス設定は誤登録の撤回にも従わせない。 */
   private static final Map<DbConstraint, Supplier<RuntimeException>> DELETION_VIOLATIONS =
       Map.of(
           DbConstraint.FK_T_EMERGENCY_ELEVATIONS_STORE,
-          () -> new ServiceException("緊急昇格の記録が存在する店舗は削除できません"));
+          () -> new ServiceException("緊急昇格の記録が存在する店舗は削除できません"),
+          DbConstraint.FK_T_SERVICES_STORE,
+          () -> new ServiceException("サービス設定が存在する店舗は削除できません"),
+          DbConstraint.FK_T_SERVICE_REVISIONS_STORE,
+          () -> new ServiceException("サービス変更履歴が存在する店舗は削除できません"));
 
   @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional(readOnly = true)
@@ -135,7 +139,7 @@ public class StoreRegistryService {
     if (attendanceRecordCheck.existsForStore(storeId)) {
       throw new ServiceException("当日実績が記録されている店舗は削除できません");
     }
-    // 緊急昇格の発動記録は外部キー自体が削除を止めるため、ここでは数えない。違反は flush で
+    // 外部キーによる削除拒否は flush で
     // この場に顕在化させて業務例外へ写す（commit まで遅らせると catch を擦り抜けて 500 になる）。
     try {
       storeRepository.deleteById(storeId);

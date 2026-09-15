@@ -51,6 +51,10 @@ export function isNotFound(error: unknown): boolean {
   return statusOf(error) === 404;
 }
 
+export function isBadRequest(error: unknown): boolean {
+  return statusOf(error) === 400;
+}
+
 export function isForbidden(error: unknown): boolean {
   return statusOf(error) === 403;
 }

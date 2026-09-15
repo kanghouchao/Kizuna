@@ -6,6 +6,7 @@
 |_Services_
 
 * `c.k.u.application.ActorIdentityService`
+* `c.k.u.application.CredentialOperations`
 * `c.k.u.application.ReceptionistEligibilityService`
 
 _Repositories_

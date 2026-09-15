@@ -9,7 +9,7 @@ databaseChangeLog:
             sql: |
               CREATE TABLE t_services (
                 id VARCHAR(64) CONSTRAINT pk_t_services PRIMARY KEY,
-                store_id BIGINT NOT NULL CONSTRAINT fk_t_services_store REFERENCES t_stores(id) ON DELETE NO ACTION,
+                store_id BIGINT NOT NULL,
                 kind VARCHAR(32), name VARCHAR(255), duration_minutes INTEGER,
                 charge_type VARCHAR(16), price INTEGER, remuneration INTEGER,
                 revision_number BIGINT NOT NULL CONSTRAINT ck_t_services_revision_number CHECK (revision_number >= 1),
@@ -30,7 +30,7 @@ databaseChangeLog:
               CREATE INDEX idx_t_services_kind_list ON t_services(store_id, deleted, kind, id);
               CREATE TABLE t_service_revisions (
                 id VARCHAR(64) CONSTRAINT pk_t_service_revisions PRIMARY KEY,
-                store_id BIGINT NOT NULL CONSTRAINT fk_t_service_revisions_store REFERENCES t_stores(id) ON DELETE NO ACTION,
+                store_id BIGINT NOT NULL,
                 service_id VARCHAR(64) NOT NULL,
                 revision_number BIGINT NOT NULL CONSTRAINT ck_t_service_revisions_revision_number CHECK (revision_number >= 1),
                 operation VARCHAR(16) NOT NULL CONSTRAINT ck_t_service_revisions_operation CHECK (operation IN ('CREATED','UPDATED','DELETED')),
@@ -64,3 +64,17 @@ databaseChangeLog:
                 AND ((before_charge_type = 'PAID' AND before_price > 0) OR (before_charge_type = 'FREE' AND before_price = 0)))))
                 AND before_kind = after_kind))
               );
+        - addForeignKeyConstraint:
+            baseTableName: t_services
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_services_store
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_service_revisions
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_service_revisions_store
+            onDelete: NO ACTION

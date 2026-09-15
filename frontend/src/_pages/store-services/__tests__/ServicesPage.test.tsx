@@ -178,3 +178,38 @@ it('存在しない詳細を Escape で閉じても一覧を再取得する', as
   await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
   expect(await screen.findByText('該当するサービスはありません')).toBeInTheDocument();
 });
+
+it.each([400, 404])(
+  '編集中に削除された項目は %s 応答後に入力を閉じて一覧を更新する',
+  async status => {
+    seedItem();
+    api.update.mockRejectedValueOnce({ response: { status } });
+    render(<ServicesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '編集' }));
+    await screen.findByLabelText('名称');
+    api.get.mockResolvedValue({ ...item, deleted: true, version: 2 });
+    api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'サービスが存在しないか削除されています'
+    );
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(await screen.findByText('該当するサービスはありません')).toBeInTheDocument();
+    expect(api.update).toHaveBeenCalledTimes(1);
+  }
+);
+
+it.each([400, 404, 409])('削除の %s 応答後は一覧を更新し古い項目を除く', async status => {
+  seedItem();
+  api.remove.mockRejectedValueOnce({ response: { status } });
+  render(<ServicesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '削除' }));
+  api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  fireEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', { name: '削除する' })
+  );
+  expect(await screen.findByText('該当するサービスはありません')).toBeInTheDocument();
+  expect(api.remove).toHaveBeenCalledTimes(1);
+  expect(api.list).toHaveBeenCalledTimes(2);
+});

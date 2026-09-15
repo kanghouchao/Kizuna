@@ -29,6 +29,10 @@ include::module-menu.adoc[]
 plantuml::module-notification.puml[,,format=svg]
 include::module-notification.adoc[]
 
+== Service
+plantuml::module-service.puml[,,format=svg]
+include::module-service.adoc[]
+
 == Storage
 plantuml::module-storage.puml[,,format=svg]
 include::module-storage.adoc[]

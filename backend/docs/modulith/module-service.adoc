@@ -1,0 +1,7 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Base package
+|`com.kizuna.service`
+|Bean references
+|* `c.k.u.application.ActorIdentityService` (in User)
+|===

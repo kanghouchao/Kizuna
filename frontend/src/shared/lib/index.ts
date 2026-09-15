@@ -4,6 +4,7 @@ export {
   ClientDataError,
   getApiErrorMessage,
   isConflict,
+  isBadRequest,
   isForbidden,
   isNotFound,
   requireId,
