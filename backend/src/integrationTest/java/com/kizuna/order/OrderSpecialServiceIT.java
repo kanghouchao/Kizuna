@@ -2,13 +2,16 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mockingDetails;
 
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.application.OwnServiceConditionService;
 import com.kizuna.service.application.SpecialServiceRejectionHandler;
 import com.kizuna.service.domain.ConsentDecision;
+import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -44,6 +48,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 class OrderSpecialServiceIT extends CrossStoreTestSupport {
   @MockitoSpyBean SpecialServiceRejectionHandler rejectionHandler;
+  @MockitoSpyBean ServiceRevisionRepository serviceRevisions;
   @Autowired ObjectMapper json;
   @Autowired JdbcTemplate jdbc;
   @Autowired PlatformTransactionManager transactions;
@@ -51,6 +56,83 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
   @Autowired StoreContext storeContext;
   @Autowired PlatformUserRepository users;
   @Autowired PasswordEncoder passwords;
+
+  @Test
+  void candidateEvidenceRemainsAcceptedWhenRejectionCommitsAfterSelection() {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String service = special(manager);
+    assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    String acceptedEvent =
+        jdbc.queryForObject(
+            "select e.id from t_service_consent_events e join t_service_consents c on c.id = e.consent_id where c.enrollment_id = ? and c.service_id = ? and e.decision = 'ACCEPTED'",
+            String.class,
+            owner.cast(),
+            service);
+    doAnswer(
+            invocation -> {
+              var result =
+                  mockingDetails(serviceRevisions)
+                      .getMockCreationSettings()
+                      .getDefaultAnswer()
+                      .answer(invocation);
+              assertThat(decide(owner, service, 1, 1, "REJECTED").getStatusCode())
+                  .isEqualTo(HttpStatus.OK);
+              return result;
+            })
+        .when(serviceRevisions)
+        .findAcceptedSpecials(eq(owner.cast()), any(), any(Pageable.class));
+    var candidate = candidates(owner.cast(), manager).path("content").get(0);
+    assertThat(candidate.path("consent_event_id").asString()).isEqualTo(acceptedEvent);
+    assertThat(candidate.path("consent_version").asLong()).isEqualTo(1);
+  }
+
+  @Test
+  void invalidInitialSelectionKeepsInputErrorsEvenWithUnrelatedPreviewToken() {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String course = courseFixture(STORE_A, "入力検証", 60, 12000).serviceId();
+    String accepted = special(manager);
+    String unaccepted = special(manager);
+    assertThat(decide(owner, accepted, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var valid = createInput(owner.cast(), course, accepted);
+    var preview = call(HttpMethod.POST, "/store/orders/preview", valid, manager);
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    for (String token :
+        List.of("", "invalid", preview.getBody().path("confirmation_token").asString())) {
+      for (String id : List.of("missing-special", unaccepted)) {
+        var input = createInput(owner.cast(), course, id);
+        if (!token.isEmpty()) input.put("confirmation_token", token);
+        var result = call(HttpMethod.POST, "/store/orders", input, manager);
+        assertThat(result.getStatusCode())
+            .isEqualTo(id.equals(unaccepted) ? HttpStatus.BAD_REQUEST : HttpStatus.NOT_FOUND);
+        assertThat(result.getBody().path("details").has("confirmation_token")).isFalse();
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"SUSPENDED", "WITHDRAWN"})
+  void inactiveEnrollmentInvalidatesCurrentConsentButKeepsAdoptedTerms(String status) {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String course = courseFixture(STORE_A, "在籍失効", 60, 12000).serviceId();
+    String service = special(manager);
+    assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var input = createInput(owner.cast(), course, service);
+    var preview = call(HttpMethod.POST, "/store/orders/preview", input, manager);
+    input.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    var created = call(HttpMethod.POST, "/store/orders", input, manager);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var adopted = created.getBody().path("special_services").get(0);
+    jdbc.update("update t_cast_enrollments set status = ? where id = ?", status, owner.cast());
+    var detail =
+        get(created.getBody().path("id").asString(), manager).path("special_services").get(0);
+    assertThat(detail.path("current_consent_status").asString()).isEqualTo("NOT_ACCEPTED");
+    assertThat(detail.path("consent_event_id")).isEqualTo(adopted.path("consent_event_id"));
+    assertThat(detail.path("price")).isEqualTo(adopted.path("price"));
+    assertThat(detail.path("revision_id")).isEqualTo(adopted.path("revision_id"));
+  }
 
   @Test
   void acceptedSnapshotSurvivesPriceRevisionAndRejectionRequiresExplicitRepair() {

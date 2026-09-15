@@ -137,7 +137,7 @@ export default function OrderEditPage() {
   );
   const { data: current, isLoading, failure, reload } = resource;
 
-  const startedOrder = useRef<Order | null>(null);
+  const progressOrder = useRef<Order | null>(null);
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, formState } = form;
   // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
@@ -169,9 +169,9 @@ export default function OrderEditPage() {
         contact_name: current.contact_name ?? '',
         contact_phone_number: current.contact_phone_number ?? '',
       },
-      { keepDirtyValues: startedOrder.current === current }
+      { keepDirtyValues: progressOrder.current === current }
     );
-    startedOrder.current = null;
+    progressOrder.current = null;
   });
   const seeded = current !== null && initialized && !isLoading;
   const linked = current?.customer_id != null;
@@ -271,14 +271,14 @@ export default function OrderEditPage() {
           )}
         </div>
 
-        {seeded && current && (
+        {current && (
           <OrderServiceProgress
             key={`${storeId}:${orderId}`}
             order={current}
-            onStarted={updated => {
+            onOrderUpdated={updated => {
               if (!startScope.isCurrent()) return;
-              // 開始は編集内容を保存しないため、この応答での再初期化だけ未保存の値を保持する。
-              startedOrder.current = updated;
+              // 進行操作と競合時の再取得では、未保存の編集内容を保持する。
+              progressOrder.current = updated;
               startScope.replace(updated);
             }}
           />

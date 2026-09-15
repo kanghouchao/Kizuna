@@ -87,8 +87,8 @@ public class OrderService {
   private final CustomerProvisioningService customerProvisioningService;
   private final NominatableCastLookup nominatableCast;
 
-  private RuntimeException eligibilityFailure(String token, String message) {
-    return token == null
+  private RuntimeException eligibilityFailure(boolean confirmedInput, String message) {
+    return !confirmedInput
         ? new ServiceException(message)
         : new OrderConfirmationConflict("confirmation_token");
   }
@@ -232,14 +232,21 @@ public class OrderService {
     nominatableCast
         .findForUpdate(storeContext.getStoreId(), request.getCastId())
         .orElseThrow(
-            () -> eligibilityFailure(request.getConfirmationToken(), NOT_NOMINATABLE_MESSAGE));
+            () ->
+                eligibilityFailure(
+                    calculation.wasPreviewed("CREATE", "", request, request.getConfirmationToken()),
+                    NOT_NOMINATABLE_MESSAGE));
     var course = calculation.current(request.getCourseId(), true);
     var calculated =
         calculation.calculate(
             null,
             course,
             request.getFeeLines(),
-            specialServices.select(null, request.getCastId(), request.getSpecialServiceIds(), true),
+            specialServices.select(
+                null,
+                request.getCastId(),
+                request.getSpecialServiceIds(),
+                calculation.wasPreviewed("CREATE", "", request, request.getConfirmationToken())),
             true);
     calculation.verify(
         request.getConfirmationToken(),
@@ -297,7 +304,11 @@ public class OrderService {
         (request.getCastId() == null || request.getCastId().isBlank()) ? null : request.getCastId();
     Long receptionistId = request.getReceptionistId();
 
-    validateUpdateAssignments(order, castId, receptionistId, request.getConfirmationToken());
+    validateUpdateAssignments(
+        order,
+        castId,
+        receptionistId,
+        calculation.wasPreviewed("UPDATE", id, request, request.getConfirmationToken()));
 
     // 連絡先の訂正も書き換えより先に判定させる。顧客が着いた受注では集約が撥ねる（黙って捨てない）。
     // 送られなかった要求で呼ばないのは、顧客が着いた受注の他項目の編集まで巻き添えで撥ねないため。
@@ -315,7 +326,11 @@ public class OrderService {
             order,
             course,
             request.getFeeLines(),
-            specialServices.select(order, castId, request.getSpecialServiceIds(), true),
+            specialServices.select(
+                order,
+                castId,
+                request.getSpecialServiceIds(),
+                calculation.wasPreviewed("UPDATE", id, request, request.getConfirmationToken())),
             true);
     calculation.verify(
         request.getConfirmationToken(),
@@ -430,11 +445,14 @@ public class OrderService {
           .orElseThrow(
               () ->
                   eligibilityFailure(
-                      request.getConfirmationToken(), "指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
+                      calculation.wasPreviewed(
+                          "CONFIRM", id, request, request.getConfirmationToken()),
+                      "指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
       if (!confirmedShiftLookupService.hasConfirmedShift(
           storeContext.getStoreId(), request.getCastId(), request.getBusinessDate())) {
         throw eligibilityFailure(
-            request.getConfirmationToken(), "指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
+            calculation.wasPreviewed("CONFIRM", id, request, request.getConfirmationToken()),
+            "指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
       }
     }
     if (request.getReceptionistId() != null) {
@@ -449,7 +467,11 @@ public class OrderService {
             null,
             course,
             request.getFeeLines(),
-            specialServices.select(null, request.getCastId(), request.getSpecialServiceIds(), true),
+            specialServices.select(
+                null,
+                request.getCastId(),
+                request.getSpecialServiceIds(),
+                calculation.wasPreviewed("CONFIRM", id, request, request.getConfirmationToken())),
             true);
     calculation.verify(
         request.getConfirmationToken(),
@@ -714,7 +736,7 @@ public class OrderService {
   }
 
   private void validateUpdateAssignments(
-      Order order, String castId, Long receptionistId, String token) {
+      Order order, String castId, Long receptionistId, boolean confirmedInput) {
     // 指名・受付担当の検証は書き換えより先に済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
     // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
     //
@@ -739,7 +761,7 @@ public class OrderService {
       if (!castId.equals(order.getCastId())) {
         nominatableCast
             .findForUpdate(storeContext.getStoreId(), castId)
-            .orElseThrow(() -> eligibilityFailure(token, NOT_NOMINATABLE_MESSAGE));
+            .orElseThrow(() -> eligibilityFailure(confirmedInput, NOT_NOMINATABLE_MESSAGE));
       }
     } else if (order.getCastId() != null) {
       throw new ServiceException("指名を外すことはできません。キャストを指定してください");
@@ -759,7 +781,7 @@ public class OrderService {
     if (order.getStatus().isTerminal()) throw new ServiceException("完了・取消済みの受注は編集できません");
     String castId =
         request.getCastId() == null || request.getCastId().isBlank() ? null : request.getCastId();
-    validateUpdateAssignments(order, castId, request.getReceptionistId(), null);
+    validateUpdateAssignments(order, castId, request.getReceptionistId(), false);
     if (request.getContactName() != null || request.getContactPhoneNumber() != null) {
       if (order.getCustomerId() != null) throw new ServiceException("顧客が設定された受注の連絡先は変更できません");
     }

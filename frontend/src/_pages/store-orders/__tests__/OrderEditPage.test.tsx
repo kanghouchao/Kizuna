@@ -376,3 +376,28 @@ test('開始の応答で未保存の入力を失わず、新しい版で編集�
     )
   );
 });
+
+test('開始の版競合から再取得しても未保存の編集と理由を保持する', async () => {
+  const initial = confirmedOrder({ remarks: '保存済み' });
+  mockedOrderApi.get.mockResolvedValueOnce(initial).mockResolvedValue({ ...initial, version: 4 });
+  mockedOrderApi.start
+    .mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 409, data: { details: { expected_version: '競合' } } },
+    })
+    .mockResolvedValue({ ...initial, version: 5, status: 'IN_SERVICE' });
+  render(<OrderEditPage />);
+  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+  fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+  fireEvent.change(screen.getByLabelText('備考'), { target: { value: '未保存' } });
+  fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
+  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+  await screen.findByText(
+    '最新の受注を読み込みました。内容を確認してから開始を再試行してください。'
+  );
+  expect(screen.getByLabelText('人数')).toHaveValue(5);
+  expect(screen.getByLabelText('備考')).toHaveValue('未保存');
+  expect(screen.getByLabelText('開始の理由')).toHaveValue('提供開始');
+  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+  await waitFor(() => expect(mockedOrderApi.start).toHaveBeenLastCalledWith('o1', 4, '提供開始'));
+});

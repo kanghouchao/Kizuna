@@ -82,7 +82,7 @@ SpecialServiceCandidate の字段はすべて必須:
 
 `{service_id: string, revision_id: string, revision_number: integer, terms_version: integer, name: string, charge_type: "PAID"|"FREE", price: integer, remuneration: integer, consent_event_id: string, consent_version: integer}`。
 
-現在の有効在籍が現在条件を ACCEPTED とした項目のみ返す。未受諾・拒否・再受諾待ち・設定削除は新規候補に含めない。公開状態は参照しない。search は名称部分一致、順序は name ASC, service_id ASC。別店舗・存在しない在籍は 404、有効資格のない在籍は 400。
+現在の有効在籍が現在条件を ACCEPTED とした項目のみ返す。候補条件と返却する意思イベント・意思版は一つの問い合わせで取得し、同じ断面を参照する。未受諾・拒否・再受諾待ち・設定削除は新規候補に含めない。公開状態は参照しない。search は名称部分一致、順序は name ASC, service_id ASC。別店舗・存在しない在籍は 404、有効資格のない在籍は 400。
 
 SpecialServiceRevision は候補から consent_event_id / consent_version を除き、`occurred_at: datetime`、`service_deleted: boolean` を加えた型。対象受注と同店舗の特殊サービス版本を返す。順序と cursor は occurred_at DESC, revision_id DESC。DELETED 版本は除外し、削除された設定の過去の条件は返す。
 
@@ -95,7 +95,7 @@ SpecialServiceSnapshot は候補の設定字段に以下を追加する:
 - `enrollment_id: string`
 - `consent_event_id?: string`、`consent_version?: integer`。ACCEPTED_TERMS では必須、受諾根拠を伴わない歴史訂正では省略。
 - `requires_attention: boolean`
-- `current_consent_status?: "NOT_ACCEPTED"|"ACCEPTED"|"REJECTED"|"RECONFIRMATION_REQUIRED"`。未完了の内部詳細のみ。終端では省略し、過去の約定から現在の提供資格を誤認させない。
+- `current_consent_status?: "NOT_ACCEPTED"|"ACCEPTED"|"REJECTED"|"RECONFIRMATION_REQUIRED"`。未完了の内部詳細のみ。在籍が ENROLLED でなければ NOT_ACCEPTED とし、採用時の約定と受諾根拠は保持する。終端では省略し、過去の約定から現在の提供資格を誤認させない。
 
 OrderResponse に `special_services: SpecialServiceSnapshot[]`（常に配列）、`requires_attention: boolean`、`unresolved_special_service_count: integer >= 0`、`started_at?: datetime` を追加する。一覧用 OrderSummaryResponse / OrderWorkQueueResponse / OrderArchiveResponse / PlatformOrderResponse には同じ要対応 boolean と件数、started_at を追加する。全受注 status の型は IN_SERVICE を含む。明細を既に返す応答では SPECIAL_SERVICE 行に `service_id: string`、`remuneration: integer` を追加する。
 
@@ -119,6 +119,10 @@ resolution / rejection_event_id は RESOLVED のとき必須、REJECTED では�
 - サービス改定・削除・本人拒否・在籍変更で既に使う店舗行ロックを最初に取得する。保存・開始・完了・修復・取消も同じ順序で取り、対象受注をロックして版を照合する。新規作成・申請確定も含めて一貫した順序にする。
 - 本人拒否の意思イベントと未完了受注の拒否記録を同期・同一トランザクションで保存する。非同期イベントの遅延で開始・完了が通る隙間を作らない。拒否を先に確定した場合は進行拒否、完了が先なら完了受注を変更しない。
 - 負の合計・版競合・途中失敗では受注・明細・拒否/処置履歴・本人意思履歴・顧客・申請・ポイントの部分成功を残さない。
+
+初回の不正な特殊サービス選択は 400、存在しない ID は 404 を維持する。保存時の提供資格エラーを確認競合にするのは、同じ操作・受注・店舗・操作者・入力の成功した試算を署名で確認できる場合に限る。保存の確定には、入力証明に加えて試算結果を含む確認値全体の一致を必要とする。
+
+開始の expected_version 競合では詳細を再取得し、未保存のフォーム入力と開始理由を保持して新しい版へ更新する。利用者へ再確認を案内し、開始を自動再送しない。
 
 ## baseline の保存設計
 
@@ -146,3 +150,11 @@ ADR 0013 / 0017 / 0018 / 0019 / 0027 と CONTEXT は実装に合わせて更新�
 - Standards / Spec の二軸レビューを実施し、非同期 UI・入力検証・更新応答反映、資格競合・拒否履歴・受諾差異表示の指摘を修正した。再レビューで残存指摘なし。
 
 レビュー修正後は拒否反映を公開同期契約へ移し、反映失敗の共同ロールバックを追加検証した。バックエンドの Taskfile lint・test・build は exit code 0、統合 706 件が成功した。
+
+## 追加検証（2026-09-16）
+
+初回の不正選択と試算後競合、候補取得直後の拒否コミット、停止・退店後の現在資格、開始版競合からの再取得と未保存入力保持を回帰テストで検証した。
+
+- Taskfile lint / build、前端 test、バックエンド test はすべて exit code 0。前端 1425 件、バックエンド統合 715 件が成功し、単体カバレッジゲートも通過した。
+- Taskfile e2e は exit code 0、45 シナリオ成功（8.9 分）。
+- Standards / Spec の再レビューは両軸とも残存指摘なし。

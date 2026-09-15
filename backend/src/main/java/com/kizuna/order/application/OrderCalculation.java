@@ -153,6 +153,10 @@ public class OrderCalculation {
     if (token != null) throw new ServiceException("試算要求に確認値は指定できません");
   }
 
+  public boolean wasPreviewed(String operation, String id, Object input, String token) {
+    return confirmation.wasPreviewed(operation, id, input, token);
+  }
+
   public void verify(String token, OrderPreviewResponse preview) {
     confirmation.verify(token, preview.confirmationToken());
   }

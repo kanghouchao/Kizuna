@@ -5,13 +5,14 @@ import { useParams } from 'next/navigation';
 import { Order, orderApi, ORDER_STATUS_LABELS } from '@/entities/order';
 import { getApiErrorMessage, useKeyedResource } from '@/shared/lib';
 import { Button, Input, Label, RegionError } from '@/shared/ui';
+import { orderConflictField } from './useOrderConfirmation';
 
 export function OrderServiceProgress({
   order,
-  onStarted,
+  onOrderUpdated,
 }: {
   order: Order;
-  onStarted: (order: Order) => void;
+  onOrderUpdated: (order: Order) => void;
 }) {
   const store = useParams()?.storeId as string;
   const [reason, setReason] = useState('');
@@ -76,9 +77,27 @@ export function OrderServiceProgress({
               setError(undefined);
               try {
                 const updated = await orderApi.start(order.id!, order.version!, reason.trim());
-                if (mounted.current) onStarted(updated);
+                if (mounted.current) onOrderUpdated(updated);
               } catch (e) {
-                if (mounted.current)
+                if (!mounted.current) return;
+                if (orderConflictField(e) === 'expected_version') {
+                  try {
+                    const latest = await orderApi.get(order.id!);
+                    if (!mounted.current) return;
+                    onOrderUpdated(latest);
+                    setError(
+                      '最新の受注を読み込みました。内容を確認してから開始を再試行してください。'
+                    );
+                  } catch (refreshError) {
+                    if (mounted.current)
+                      setError(
+                        getApiErrorMessage(
+                          refreshError,
+                          '最新の受注を取得できませんでした。開始を再試行して再取得してください。'
+                        )
+                      );
+                  }
+                } else
                   setError(
                     getApiErrorMessage(e, '開始できませんでした。最新の受注を確認してください。')
                   );

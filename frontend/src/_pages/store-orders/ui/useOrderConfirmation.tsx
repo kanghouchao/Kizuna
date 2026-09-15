@@ -151,7 +151,9 @@ export function useOrderConfirmation(target?: string) {
                     ? '本人拒否・要対応'
                     : item.current_consent_status === 'RECONFIRMATION_REQUIRED'
                       ? '再受諾待ち（旧約定を保持）'
-                      : '採用可能'}
+                      : item.current_consent_status === 'NOT_ACCEPTED'
+                        ? '現在の提供資格なし（旧約定を保持）'
+                        : '採用可能'}
                 </p>
               ))}
               <p>請求額: ¥{preview.total_fee.toLocaleString()}</p>

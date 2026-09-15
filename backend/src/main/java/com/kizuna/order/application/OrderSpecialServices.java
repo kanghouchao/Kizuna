@@ -49,7 +49,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public List<SpecialServiceSnapshot> select(
-      Order original, String cast, List<String> ids, boolean saving) {
+      Order original, String cast, List<String> ids, boolean confirmedInput) {
     if (original != null && !Objects.equals(original.getCastId(), cast)) {
       if (ids != null && !ids.isEmpty()) throw new ServiceException("担当変更を保存してから特殊サービスを選び直してください");
       return List.of();
@@ -70,7 +70,8 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                           try {
                             return snapshot(catalog.current(cast, id), cast, "ACCEPTED_TERMS");
                           } catch (NotFoundException | ServiceException ex) {
-                            if (saving) throw new OrderConfirmationConflict("confirmation_token");
+                            if (confirmedInput)
+                              throw new OrderConfirmationConflict("confirmation_token");
                             throw ex;
                           }
                         }))

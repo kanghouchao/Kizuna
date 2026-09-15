@@ -61,15 +61,8 @@ public class OrderSpecialServiceCatalog {
       String enrollment, String search, int page, int size) {
     requirePage(page, size);
     requireEnrollment(enrollment);
-    return revisions
-        .findAcceptedSpecials(enrollment, search == null ? "" : search, PageRequest.of(page, size))
-        .map(
-            r ->
-                terms(
-                    r,
-                    consents
-                        .findByEnrollmentIdAndServiceId(enrollment, r.getServiceId())
-                        .orElseThrow()));
+    return revisions.findAcceptedSpecials(
+        enrollment, search == null ? "" : search, PageRequest.of(page, size));
   }
 
   @StoreScoped
@@ -110,6 +103,11 @@ public class OrderSpecialServiceCatalog {
   @StoreScoped
   @Transactional(readOnly = true)
   public String status(String enrollment, String serviceId) {
+    if (enrollment == null
+        || enrollments
+            .findById(enrollment)
+            .filter(e -> e.getStatus() == CastEnrollmentStatus.ENROLLED)
+            .isEmpty()) return ConsentStatus.NOT_ACCEPTED.name();
     var item = items.findById(serviceId).orElseThrow(() -> new NotFoundException("特殊サービスが見つかりません"));
     return consents
         .findByEnrollmentIdAndServiceId(enrollment, serviceId)
