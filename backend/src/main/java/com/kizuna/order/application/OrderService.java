@@ -31,7 +31,6 @@ import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderApplicationView;
-import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
@@ -95,7 +94,7 @@ public class OrderService {
   private final StoreContext storeContext;
   private final BusinessDateService businessDateService;
   private final OrderMapper orderMapper;
-  private final OrderCourseCalculation courseCalculation;
+  private final OrderCalculation calculation;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -224,11 +223,11 @@ public class OrderService {
     nominatableCast
         .findForUpdate(storeContext.getStoreId(), request.getCastId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
-    var course = courseCalculation.current(request.getCourseId(), true);
-    var calculated = courseCalculation.calculate(null, course, request.getFeeLines());
-    courseCalculation.verify(
+    var course = calculation.current(request.getCourseId(), true);
+    var calculated = calculation.calculate(null, course, request.getFeeLines(), true);
+    calculation.verify(
         request.getConfirmationToken(),
-        courseCalculation.preview("CREATE", "", request, calculated, null));
+        calculation.preview("CREATE", "", request, calculated, null));
     order.adoptCourse(course, calculated.editableFeeLines());
 
     handleCustomerLinking(request, order);
@@ -267,7 +266,7 @@ public class OrderService {
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
-    courseCalculation.requireVersion(order, request.getExpectedVersion());
+    calculation.requireVersion(order, request.getExpectedVersion());
 
     // 判定は「終端か」の単一述語で行い、状態ごとに書き分けない。書き分けは同じ規則を二箇所に持たせ、
     // 片方だけが更新される入口になる（ADR 0013）。完了後の内容訂正は権限付き・記録付きの別経路が担う。
@@ -293,11 +292,11 @@ public class OrderService {
     var course =
         request.getCourseId() == null
             ? order.getCourse()
-            : courseCalculation.current(request.getCourseId(), true);
-    var calculated = courseCalculation.calculate(order, course, request.getFeeLines());
-    courseCalculation.verify(
+            : calculation.current(request.getCourseId(), true);
+    var calculated = calculation.calculate(order, course, request.getFeeLines(), true);
+    calculation.verify(
         request.getConfirmationToken(),
-        courseCalculation.preview("UPDATE", id, request, calculated, null));
+        calculation.preview("UPDATE", id, request, calculated, null));
     order.adoptCourse(course, calculated.editableFeeLines());
     order.apply(orderMapper.toPatch(request));
 
@@ -411,11 +410,11 @@ public class OrderService {
     validateCustomerChoice(application, request);
     Long actorId = actorIdentityService.requireUserId(actorEmail);
 
-    var course = courseCalculation.current(request.getCourseId(), true);
-    var calculated = courseCalculation.calculate(null, course, request.getFeeLines());
-    courseCalculation.verify(
+    var course = calculation.current(request.getCourseId(), true);
+    var calculated = calculation.calculate(null, course, request.getFeeLines(), true);
+    calculation.verify(
         request.getConfirmationToken(),
-        courseCalculation.preview("CONFIRM", id, request, calculated, null));
+        calculation.preview("CONFIRM", id, request, calculated, null));
     Order order =
         Order.builder()
             .businessDate(request.getBusinessDate())
@@ -529,9 +528,8 @@ public class OrderService {
       throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
     }
 
-    // 会計の場で確定した内訳を先に当てる。合計は行の総和として集約が導出するので、以降の判定はすべて
-    // その総和を基準にする。撥ねる要求はトランザクションごと巻き戻る（台帳へはまだ何も積んでいない）。
-    order.apply(OrderPatch.ofAccounting(orderMapper.toFeeLineDrafts(request.getFeeLines())));
+    var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), true);
+    order.replaceStoreFeeLines(calculated.editableFeeLines());
     // 付与の基準と利用の上限は、ポイント利用の行を除いた総和で決める。利用の行を入れた後の合計は
     // ポイント控除後の請求額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
     int chargeAmount = order.grantBasisAmount();
@@ -554,11 +552,10 @@ public class OrderService {
     }
 
     var pointsPreview = completionPoints(order, usePoints);
-    var calculated = courseCalculation.calculate(order, order.getCourse(), request.getFeeLines());
     calculated.completeWith(usePoints, pointsPreview.grantPoints());
-    courseCalculation.verify(
+    calculation.verify(
         request.getConfirmationToken(),
-        courseCalculation.preview("COMPLETE", id, request, calculated, pointsPreview));
+        calculation.preview("COMPLETE", id, request, calculated, pointsPreview));
     int granted = 0;
     String receiptToken = null;
     if (memberId != null) {
@@ -612,7 +609,7 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public OrderPreviewResponse previewCreate(OrderCreateRequest request, String actor) {
-    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    calculation.requirePreviewInput(request.getConfirmationToken());
     if (request.getReceptionRoute() != null && !request.getReceptionRoute().isStoreSelectable())
       throw new ServiceException("受付経路に Web 申請は指定できません");
     nominatableCast
@@ -621,12 +618,12 @@ public class OrderService {
     resolveReceptionist(request.getReceptionistId(), actor);
     if (request.getCustomerId() != null)
       customerReferenceResolver.resolveForWrite(request.getCustomerId());
-    var course = courseCalculation.current(request.getCourseId(), false);
-    return courseCalculation.preview(
+    var course = calculation.current(request.getCourseId(), false);
+    return calculation.preview(
         "CREATE",
         "",
         request,
-        courseCalculation.calculate(null, course, request.getFeeLines()),
+        calculation.calculate(null, course, request.getFeeLines(), false),
         null);
   }
 
@@ -634,7 +631,7 @@ public class OrderService {
   @Transactional
   public OrderPreviewResponse previewConfirmation(
       String id, OrderApplicationConfirmationRequest request) {
-    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    calculation.requirePreviewInput(request.getConfirmationToken());
     var application =
         orderApplicationRepository
             .findForUpdate(id)
@@ -652,12 +649,12 @@ public class OrderService {
     if (request.getReceptionistId() != null) validateReceptionist(request.getReceptionistId());
     if (request.getCustomerId() != null)
       customerReferenceResolver.resolveForWrite(request.getCustomerId());
-    var course = courseCalculation.current(request.getCourseId(), false);
-    return courseCalculation.preview(
+    var course = calculation.current(request.getCourseId(), false);
+    return calculation.preview(
         "CONFIRM",
         id,
         request,
-        courseCalculation.calculate(null, course, request.getFeeLines()),
+        calculation.calculate(null, course, request.getFeeLines(), false),
         null);
   }
 
@@ -696,12 +693,12 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public OrderPreviewResponse previewUpdate(String id, OrderUpdateRequest request) {
-    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
         orderRepository
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    courseCalculation.requireVersion(order, request.getExpectedVersion());
+    calculation.requireVersion(order, request.getExpectedVersion());
     if (order.getStatus().isTerminal()) throw new ServiceException("完了・取消済みの受注は編集できません");
     String castId =
         request.getCastId() == null || request.getCastId().isBlank() ? null : request.getCastId();
@@ -712,32 +709,32 @@ public class OrderService {
     var course =
         request.getCourseId() == null
             ? order.getCourse()
-            : courseCalculation.current(request.getCourseId(), false);
-    return courseCalculation.preview(
+            : calculation.current(request.getCourseId(), false);
+    return calculation.preview(
         "UPDATE",
         id,
         request,
-        courseCalculation.calculate(order, course, request.getFeeLines()),
+        calculation.calculate(order, course, request.getFeeLines(), false),
         null);
   }
 
   @StoreScoped
   @Transactional
   public OrderPreviewResponse completionPreview(String id, OrderCompletionRequest request) {
-    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
         orderRepository
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    courseCalculation.requireVersion(order, request.getExpectedVersion());
+    calculation.requireVersion(order, request.getExpectedVersion());
     if (order.getStatus() != OrderStatus.CONFIRMED) throw new ServiceException("確定した受注だけを完了できます");
     if (order.getCustomerId() != null) customerRepository.findByIdForUpdate(order.getCustomerId());
-    var calculated = courseCalculation.calculate(order, order.getCourse(), request.getFeeLines());
+    var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), false);
     calculated.linkCustomer(order.getCustomerId());
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
     var points = completionPoints(calculated, usePoints);
     calculated.completeWith(usePoints, points.grantPoints());
-    return courseCalculation.preview("COMPLETE", id, request, calculated, points);
+    return calculation.preview("COMPLETE", id, request, calculated, points);
   }
 
   private OrderPreviewResponse.Points completionPoints(Order order, int usePoints) {
@@ -844,9 +841,8 @@ public class OrderService {
             .map(orderMapper::toResponse)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + order.getId()));
     response.setFeeLines(orderMapper.toFeeLineResponses(order.getFeeLines()));
-    response.getFeeLines().stream()
-        .filter(line -> "BASE_COURSE".equals(line.getKind()))
-        .forEach(line -> line.setRemuneration(order.getCourse().remuneration()));
+    response.setTotalRemuneration(order.getTotalRemuneration());
+    response.setTotalDurationMinutes(order.getTotalDurationMinutes());
     return response;
   }
 

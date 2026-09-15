@@ -2,12 +2,19 @@
 
 import { useOrderConfirmation } from './useOrderConfirmation';
 
+import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { OrderCourseField } from './OrderCourseField';
 
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { Order, OrderApplicationRow, orderApplicationApi } from '@/entities/order';
+import {
+  Order,
+  OrderApplicationRow,
+  orderApplicationApi,
+  OrderFeeLineInput,
+  toFeeLineInputs,
+} from '@/entities/order';
 import { customerApi } from '@/entities/customer';
 import { getApiErrorMessage, integerRule, useResource } from '@/shared/lib';
 import { OrderReceptionistField } from './OrderReceptionistField';
@@ -43,6 +50,7 @@ const CUSTOMER_MODE_OPTIONS = [
 type CustomerMode = 'none' | 'existing' | 'new';
 
 interface ConfirmFormValues {
+  fee_lines: OrderFeeLineInput[];
   /** '' は受付担当なし（実行者本人が候補の条件を満たせばサーバが補う）。 */
   receptionist_id: string;
   business_date: string;
@@ -96,6 +104,7 @@ export function OrderApplicationConfirmModal({
       arrival_scheduled_end_time: '',
       pax: 1,
       course_id: '',
+      fee_lines: [],
       remarks: '',
       cast_id: '',
       clear_cast: false,
@@ -142,6 +151,7 @@ export function OrderApplicationConfirmModal({
       arrival_scheduled_end_time: '',
       pax: application.pax ?? 1,
       course_id: '',
+      fee_lines: [],
       remarks: application.remarks ?? '',
       cast_id: application.cast_id ?? '',
       clear_cast: false,
@@ -168,6 +178,7 @@ export function OrderApplicationConfirmModal({
         cast_id: values.clear_cast || !values.cast_id ? undefined : values.cast_id,
         pax: Number(values.pax),
         course_id: values.course_id,
+        fee_lines: toFeeLineInputs(values.fee_lines),
         remarks: values.remarks ? values.remarks : undefined,
         // 顧客の選択はゲスト申請だけが送る。会員申請へ送るとサーバが撥ねる（顧客は会員の紐づけが決める）
         customer_id:
@@ -229,7 +240,7 @@ export function OrderApplicationConfirmModal({
         <DialogContent
           showCloseButton={false}
           aria-describedby={undefined}
-          className="gap-0 rounded-[10px] p-0 sm:max-w-md"
+          className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-md"
         >
           <DialogTitle className="border-b px-6 py-4">予約申請を確定</DialogTitle>
           <Form {...form}>
@@ -301,6 +312,7 @@ export function OrderApplicationConfirmModal({
                 )}
               />
               <OrderCourseField required />
+              <OrderFeeLinesField />
               <div className="grid gap-2">
                 <CastSearchCombobox
                   id="application-confirm-cast"

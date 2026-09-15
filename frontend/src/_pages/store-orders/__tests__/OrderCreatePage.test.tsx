@@ -47,6 +47,8 @@ describe('新規オーダー登録の送信ペイロード', () => {
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
     mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
     mockedOrderApi.create.mockResolvedValue({
+      total_duration_minutes: 60,
+      total_remuneration: 7000,
       course: {
         service_id: 'course-1',
         revision_id: 'r1',
@@ -73,7 +75,6 @@ describe('新規オーダー登録の送信ペイロード', () => {
     fireEvent.change(document.querySelector('input[name="arrival_scheduled_end_time"]')!, {
       target: { value: '20:00' },
     });
-    fireEvent.change(screen.getByLabelText('延長'), { target: { value: '30' } });
     await chooseCourse();
     fireEvent.click(screen.getByRole('button', { name: '登録する' }));
     await confirmPreview();
@@ -88,7 +89,6 @@ describe('新規オーダー登録の送信ペイロード', () => {
       pax: 1,
       course_id: 'course-1',
       confirmation_token: 'confirmed',
-      extension_minutes: 30,
       reception_route: 'PHONE',
       cast_id: 'cast-1',
     });

@@ -101,13 +101,13 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
             orderId, "\"fee_lines\": [{\"kind\": \"DISCOUNT\", \"name\": \"割引\", \"amount\": -1}]");
     assertThat(negativeDiscount.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     // 減算の種別へ負値を送ると翻した先が正の割引になる。理由まで縛って別の守衛の 400 と取り違えない
-    assertThat(negativeDiscount.getBody().path("error").asString()).contains("減算の明細の金額");
+    assertThat(negativeDiscount.getBody().path("error").asString()).contains("0以上の整数円");
 
     ResponseEntity<JsonNode> negativeOption =
         update(
             orderId, "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"追加\", \"amount\": -1}]");
     assertThat(negativeOption.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(negativeOption.getBody().path("error").asString()).contains("符号約定");
+    assertThat(negativeOption.getBody().path("error").asString()).contains("0以上の整数円");
     assertThat(storedLineCount(orderId)).isEqualTo(1);
   }
 
@@ -128,9 +128,9 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
     assertThatThrownBy(() -> insertLine(orderId, "HOTEL_FEE", "ホテル代", 1))
         .isInstanceOf(DataIntegrityViolationException.class);
 
-    // 手動調整だけが符号を縛られない
-    insertLine(orderId, "MANUAL_ADJUST", "迂回", -1);
-    assertThat(storedLineCount(orderId)).isEqualTo(2);
+    assertThatThrownBy(() -> insertLine(orderId, "MANUAL_ADJUST", "迂回", -1))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThat(storedLineCount(orderId)).isEqualTo(1);
   }
 
   @Test
@@ -141,7 +141,7 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> negativeTotal =
         update(
             orderId,
-            "\"fee_lines\": [{\"kind\": \"SURCHARGE\", \"name\": \"指名料\", \"amount\": 1000},"
+            "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"指名料\", \"amount\": 1000},"
                 + " {\"kind\": \"DISCOUNT\", \"name\": \"割引\", \"amount\": 2000}]");
     assertThat(negativeTotal.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(negativeTotal.getBody().path("error").asString()).contains("内訳の総和が負になっています");
@@ -250,8 +250,8 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
 
   private void insertLine(String orderId, String kind, String name, int amount) {
     jdbcTemplate.update(
-        "insert into t_order_fee_lines (order_id, kind, name, amount, created_at, updated_at,"
-            + " version) values (?, ?, ?, ?, now(), now(), 0)",
+        "insert into t_order_fee_lines (id, order_id, kind, name, amount, store_id, remuneration, created_at, updated_at,"
+            + " version) values (gen_random_uuid()::text, ?, ?, ?, ?, 1, 0, now(), now(), 0)",
         orderId,
         kind,
         name,

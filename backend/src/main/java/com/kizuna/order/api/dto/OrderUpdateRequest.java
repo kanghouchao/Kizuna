@@ -43,12 +43,10 @@ public class OrderUpdateRequest {
   @Min(value = 1, message = "人数は 1 以上です")
   private Integer pax;
 
-  private Integer extensionMinutes;
-
   /**
    * 受注金額の内訳。省略は他の項目と同じく「変更しない」で、<b>空配列は「内訳を空にする」</b>を意味する。
    *
-   * <p>行に同一性は無く、送られた内容がそのまま新しい内訳になる。ポイント利用の行は含められない（完了処理だけが書く）。
+   * <p>未変更行はIDで維持し、追加・置換する行だけを採用する。ポイント利用の行は含められない（完了処理だけが書く）。
    */
   @Valid private List<@NotNull(message = "明細の要素は必須です") OrderFeeLineRequest> feeLines;
 

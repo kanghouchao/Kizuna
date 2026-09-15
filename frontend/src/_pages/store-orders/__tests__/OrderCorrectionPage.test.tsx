@@ -39,6 +39,8 @@ function completedOrder(overrides: Partial<Order> = {}): Order {
     customer_name: '山田太郎',
     status: 'COMPLETED',
     version: 7,
+    total_duration_minutes: 60,
+    total_remuneration: 7000,
     course: {
       ...{
         service_id: 'course-1',
@@ -58,9 +60,21 @@ function completedOrder(overrides: Partial<Order> = {}): Order {
     total_fee: 11900,
     auto_grant_points: 120,
     fee_lines: [
-      { kind: 'BASE_COURSE', name: '60 分コース', amount: 12000, system_owned: false },
-      { kind: 'OPTION', name: '追加', amount: 0, system_owned: false },
-      { kind: 'POINT_REDEMPTION', name: 'ポイント利用', amount: 100, system_owned: true },
+      {
+        kind: 'BASE_COURSE',
+        name: '60 分コース',
+        amount: 12000,
+        remuneration: 0,
+        system_owned: false,
+      },
+      { kind: 'OPTION', name: '追加', amount: 0, remuneration: 0, system_owned: false },
+      {
+        kind: 'POINT_REDEMPTION',
+        name: 'ポイント利用',
+        amount: 100,
+        remuneration: 0,
+        system_owned: true,
+      },
     ],
     ...overrides,
   };
@@ -79,6 +93,12 @@ describe('完了後訂正のページ', () => {
   it('三組の全量を送り、送らなかった欄は空として運ぶこと', async () => {
     mockedOrderApi.get.mockResolvedValue(completedOrder());
     mockedOrderApi.correct.mockResolvedValue({
+      previous_total_remuneration: 0,
+      total_remuneration: 0,
+      previous_total_duration_minutes: 60,
+      total_duration_minutes: 60,
+      previous_fee_lines: [],
+      fee_lines: [],
       previous_total_fee: 11900,
       total_fee: 17900,
     });
@@ -111,6 +131,12 @@ describe('完了後訂正のページ', () => {
   it('会計金額の前後と、付与が動かないこと・どの会員の台帳を見るかを名乗ること', async () => {
     mockedOrderApi.get.mockResolvedValue(completedOrder());
     mockedOrderApi.correct.mockResolvedValue({
+      previous_total_remuneration: 0,
+      total_remuneration: 0,
+      previous_total_duration_minutes: 60,
+      total_duration_minutes: 60,
+      previous_fee_lines: [],
+      fee_lines: [],
       previous_total_fee: 11900,
       total_fee: 17900,
     });
@@ -136,6 +162,12 @@ describe('完了後訂正のページ', () => {
     mockedOrderApi.get.mockResolvedValue(completedOrder({ auto_grant_points: 0 }));
     mockedOrderApi.attribution.mockResolvedValue({ attributed: false });
     mockedOrderApi.correct.mockResolvedValue({
+      previous_total_remuneration: 0,
+      total_remuneration: 0,
+      previous_total_duration_minutes: 60,
+      total_duration_minutes: 60,
+      previous_fee_lines: [],
+      fee_lines: [],
       previous_total_fee: 11900,
       total_fee: 17900,
     });
@@ -159,6 +191,12 @@ describe('完了後訂正のページ', () => {
     mockedOrderApi.get.mockResolvedValue(completedOrder());
     mockedOrderApi.attribution.mockRejectedValue(new Error('boom'));
     mockedOrderApi.correct.mockResolvedValue({
+      previous_total_remuneration: 0,
+      total_remuneration: 0,
+      previous_total_duration_minutes: 60,
+      total_duration_minutes: 60,
+      previous_fee_lines: [],
+      fee_lines: [],
       previous_total_fee: 11900,
       total_fee: 17900,
     });
@@ -179,6 +217,8 @@ describe('完了後訂正のページ', () => {
     mockedOrderApi.get.mockResolvedValueOnce(completedOrder()).mockResolvedValue(
       completedOrder({
         version: 9,
+        total_duration_minutes: 60,
+        total_remuneration: 7000,
         course: {
           ...{
             service_id: 'course-1',
@@ -261,6 +301,8 @@ test('対象変更直後から旧フォームを隠し、新しい詳細で初�
       completedOrder({
         id: 'o2',
         pax: 8,
+        total_duration_minutes: 60,
+        total_remuneration: 7000,
         course: {
           ...{
             service_id: 'course-1',
@@ -304,7 +346,16 @@ test('競合再取得中は編集停止し、失敗したら入力置換を通�
 test('訂正後の帰属取得中に別対象へ移ると、古い通知と結果を出さない', async () => {
   let resolve!: (value: typeof ATTRIBUTED) => void;
   mockedOrderApi.get.mockResolvedValue(completedOrder());
-  mockedOrderApi.correct.mockResolvedValueOnce({ previous_total_fee: 100, total_fee: 200 });
+  mockedOrderApi.correct.mockResolvedValueOnce({
+    previous_total_remuneration: 0,
+    total_remuneration: 0,
+    previous_total_duration_minutes: 60,
+    total_duration_minutes: 60,
+    previous_fee_lines: [],
+    fee_lines: [],
+    previous_total_fee: 100,
+    total_fee: 200,
+  });
   mockedOrderApi.attribution.mockReturnValueOnce(
     new Promise(done => {
       resolve = done;
@@ -327,7 +378,16 @@ test('訂正後の帰属取得中に別対象へ移ると、古い通知と結�
 test('帰属取得が未着でも訂正成功を通知し、詳細を更新して編集を再開する', async () => {
   let resolve!: (value: typeof ATTRIBUTED) => void;
   mockedOrderApi.get.mockResolvedValue(completedOrder({ version: 8 }));
-  mockedOrderApi.correct.mockResolvedValueOnce({ previous_total_fee: 100, total_fee: 200 });
+  mockedOrderApi.correct.mockResolvedValueOnce({
+    previous_total_remuneration: 0,
+    total_remuneration: 0,
+    previous_total_duration_minutes: 60,
+    total_duration_minutes: 60,
+    previous_fee_lines: [],
+    fee_lines: [],
+    previous_total_fee: 100,
+    total_fee: 200,
+  });
   mockedOrderApi.attribution.mockReturnValueOnce(
     new Promise(done => {
       resolve = done;

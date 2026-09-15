@@ -32,7 +32,6 @@ export default function CreateOrderPage() {
           : undefined,
         // 空欄は「未入力」として送らない — Number('') は 0 になり、サーバ側の @Min(1) に撥ねられる
         pax: `${data.pax ?? ''}` === '' ? undefined : Number(data.pax),
-        extension_minutes: Number(data.extension_minutes),
         fee_lines: toFeeLineInputs(data.fee_lines),
       };
 

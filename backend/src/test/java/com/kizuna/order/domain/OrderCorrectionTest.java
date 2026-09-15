@@ -57,11 +57,7 @@ class OrderCorrectionTest {
     Order order = completedOrder();
     order.correct(
         new OrderCorrectionCommand(
-            null,
-            LocalTime.of(22, 40),
-            OrderCourses.course("120 分コース", 120, 22000),
-            null,
-            List.of()));
+            null, LocalTime.of(22, 40), OrderCourses.course("120 分コース", 120, 22000), List.of()));
 
     OrderCorrection tooLate = OrderCorrection.snapshotOf(order, "順序を誤った快照", 7L, AT);
 
@@ -80,7 +76,7 @@ class OrderCorrectionTest {
             () ->
                 order.correct(
                     new OrderCorrectionCommand(
-                        null, null, OrderCourses.course("60 分コース", 60, 499), null, List.of())))
+                        null, null, OrderCourses.course("60 分コース", 60, 499), List.of())))
         .isInstanceOf(InvalidOrderFeeLineException.class)
         .hasMessage("訂正後の請求額が利用ポイントを下回ります。ポイント利用の訂正はポイント機構で行ってください");
   }

@@ -68,8 +68,8 @@ import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
-import com.kizuna.service.application.CourseTerms;
-import com.kizuna.service.application.OrderCourseCatalog;
+import com.kizuna.service.application.OrderServiceCatalog;
+import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
@@ -156,16 +156,21 @@ class OrderServiceTest {
     Mockito.lenient().when(pointLedgerService.usageUnit()).thenReturn(100);
     Mockito.lenient().when(pointLedgerService.balance(anyLong())).thenReturn(100000L);
 
-    var catalog = Mockito.mock(OrderCourseCatalog.class);
+    var catalog = Mockito.mock(OrderServiceCatalog.class);
     Mockito.lenient()
-        .when(catalog.current(nullable(String.class)))
+        .when(catalog.current(nullable(String.class), any()))
         .thenReturn(
-            new CourseTerms("course", "revision", 1, "基本", 60, 0, 0, OffsetDateTime.now(), false));
+            new OrderServiceTerms(
+                "course", "revision", 1, "基本", 60, 0, 0, OffsetDateTime.now(), false));
     Mockito.lenient().doCallRealMethod().when(orderMapper).toFeeLineDrafts(nullable(List.class));
     ReflectionTestUtils.setField(
         service,
-        "courseCalculation",
-        new OrderCourseCalculation(catalog, orderMapper, Mockito.mock(OrderConfirmation.class)));
+        "calculation",
+        new OrderCalculation(
+            catalog,
+            orderMapper,
+            Mockito.mock(OrderConfirmation.class),
+            new com.kizuna.order.application.OrderFeeLineSelection(catalog, orderMapper)));
     Mockito.lenient()
         .when(orderRepository.findScopedByIdForUpdate(nullable(String.class)))
         .thenAnswer(inv -> orderRepository.findById(inv.getArgument(0)));
@@ -211,7 +216,7 @@ class OrderServiceTest {
 
     OrderPatch toPatch() {
       return new OrderPatch(
-          businessDate, null, null, pax, null, null, null, null, null, null, null, null);
+          businessDate, null, null, pax, null, null, null, null, null, null, null);
     }
   }
 
@@ -1134,7 +1139,7 @@ class OrderServiceTest {
 
   /** 人数と備考だけを差し替える部分更新コマンド（汎用更新の典型的な編集）。 */
   private static OrderPatch paxAndRemarksPatch(Integer pax, String remarks) {
-    return new OrderPatch(null, null, null, pax, null, null, null, null, null, null, remarks, null);
+    return new OrderPatch(null, null, null, pax, null, null, null, null, null, remarks, null);
   }
 
   @Test
@@ -2257,7 +2262,7 @@ class OrderServiceTest {
   private static OrderCompletionRequest completionAt(
       Long expectedVersion, Integer totalFee, Integer usePoints) {
     OrderFeeLineRequest line = new OrderFeeLineRequest();
-    line.setKind(OrderFeeLineKind.SURCHARGE);
+    line.setKind(OrderFeeLineKind.OPTION);
     line.setName("会計");
     line.setAmount(totalFee);
     OrderCompletionRequest request = new OrderCompletionRequest();

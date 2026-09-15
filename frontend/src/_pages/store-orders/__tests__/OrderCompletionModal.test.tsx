@@ -31,6 +31,8 @@ const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
 const confirmedOrder: Order = {
+  total_duration_minutes: 60,
+  total_remuneration: 7000,
   course: {
     service_id: 'course-1',
     revision_id: 'r1',
@@ -42,7 +44,7 @@ const confirmedOrder: Order = {
     adoption_basis: 'CURRENT_SETTING' as const,
     adopted_at: '2026-09-15T00:00:00Z',
   },
-  fee_lines: [{ kind: 'OPTION', name: '会計', amount: 0, system_owned: false }],
+  fee_lines: [{ kind: 'OPTION', name: '会計', amount: 0, remuneration: 0, system_owned: false }],
   id: 'o1',
   status: 'CONFIRMED',
   business_date: '2026-08-10',
@@ -92,6 +94,8 @@ describe('OrderCompletionModal', () => {
     // そのまま完了すると既存の内訳を丸ごと上書きして失う
     mockedGet.mockResolvedValue({
       ...confirmedOrder,
+      total_duration_minutes: 60,
+      total_remuneration: 7000,
       course: {
         ...{
           service_id: 'course-1',
@@ -107,11 +111,21 @@ describe('OrderCompletionModal', () => {
         name: '90 分コース',
       },
       fee_lines: [
-        { kind: 'BASE_COURSE', name: '90 分コース', amount: 18000, system_owned: false },
-        { kind: 'OPTION', name: '指名', amount: 2000, system_owned: false },
-        { kind: 'POINT_REDEMPTION', name: 'ポイント利用', amount: 500, system_owned: true },
-        { kind: 'MANUAL_ADJUST', name: '調整加算', amount: 300, system_owned: true },
-        { kind: 'MANUAL_ADJUST', name: '調整減算', amount: -200, system_owned: true },
+        {
+          kind: 'BASE_COURSE',
+          name: '90 分コース',
+          amount: 18000,
+          remuneration: 0,
+          system_owned: false,
+        },
+        { kind: 'OPTION', name: '指名', amount: 2000, remuneration: 0, system_owned: false },
+        {
+          kind: 'POINT_REDEMPTION',
+          name: 'ポイント利用',
+          amount: 500,
+          remuneration: 0,
+          system_owned: true,
+        },
       ],
     });
     const queueRow: OrderWorkQueueRow = {
@@ -143,9 +157,7 @@ describe('OrderCompletionModal', () => {
     expect(await screen.findByText(/基本コース.*90 分コース/)).toBeInTheDocument();
     expect(screen.queryByLabelText('コース名')).not.toBeInTheDocument();
     expect(screen.getByLabelText('明細1の名称')).toHaveValue('指名');
-    expect(screen.getByText('-¥500')).toBeInTheDocument();
-    expect(screen.getByText('¥300')).toBeInTheDocument();
-    expect(screen.getByText('¥-200')).toBeInTheDocument();
+    expect(screen.getByText(/ポイント利用.*-¥500/)).toBeInTheDocument();
     expect(screen.queryByLabelText('明細3の名称')).not.toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledWith('o1');
   });
@@ -154,7 +166,9 @@ describe('OrderCompletionModal', () => {
     // committed の初期値を 0 のままにすると、明細のある受注の付与予定が最初の 1 画面だけ 0 で出る
     mockedGet.mockResolvedValue({
       ...confirmedOrder,
-      fee_lines: [{ kind: 'OPTION', name: '指名', amount: 12000, system_owned: false }],
+      fee_lines: [
+        { kind: 'OPTION', name: '指名', amount: 12000, remuneration: 0, system_owned: false },
+      ],
     });
 
     renderModal();
@@ -192,11 +206,21 @@ describe('OrderCompletionModal', () => {
     mockedGet
       .mockResolvedValueOnce({
         ...confirmedOrder,
-        fee_lines: [{ kind: 'OPTION', name: '古い明細', amount: 1000, system_owned: false }],
+        fee_lines: [
+          { kind: 'OPTION', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
+        ],
       })
       .mockResolvedValueOnce({
         ...confirmedOrder,
-        fee_lines: [{ kind: 'OPTION', name: '新しい明細', amount: 5000, system_owned: false }],
+        fee_lines: [
+          {
+            kind: 'OPTION',
+            name: '新しい明細',
+            amount: 5000,
+            remuneration: 0,
+            system_owned: false,
+          },
+        ],
       });
     const { rerender } = renderModal();
     expect(await screen.findByDisplayValue('古い明細')).toBeInTheDocument();
@@ -232,7 +256,15 @@ describe('OrderCompletionModal', () => {
 
     mockedGet.mockResolvedValueOnce({
       ...confirmedOrder,
-      fee_lines: [{ kind: 'OPTION', name: '再取得できた明細', amount: 3000, system_owned: false }],
+      fee_lines: [
+        {
+          kind: 'OPTION',
+          name: '再取得できた明細',
+          amount: 3000,
+          remuneration: 0,
+          system_owned: false,
+        },
+      ],
     });
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
@@ -575,7 +607,9 @@ describe('OrderCompletionModal', () => {
     mockedGet.mockResolvedValue({
       ...confirmedOrder,
       version: 7,
-      fee_lines: [{ kind: 'OPTION', name: '指名', amount: 12000, system_owned: false }],
+      fee_lines: [
+        { kind: 'OPTION', name: '指名', amount: 12000, remuneration: 0, system_owned: false },
+      ],
     });
     renderModal();
 
@@ -593,13 +627,21 @@ describe('OrderCompletionModal', () => {
       .mockResolvedValueOnce({
         ...confirmedOrder,
         version: 3,
-        fee_lines: [{ kind: 'OPTION', name: '古い明細', amount: 1000, system_owned: false }],
+        fee_lines: [
+          { kind: 'OPTION', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
+        ],
       })
       .mockResolvedValueOnce({
         ...confirmedOrder,
         version: 4,
         fee_lines: [
-          { kind: 'OPTION', name: '他の操作者が直した明細', amount: 5000, system_owned: false },
+          {
+            kind: 'OPTION',
+            name: '他の操作者が直した明細',
+            amount: 5000,
+            remuneration: 0,
+            system_owned: false,
+          },
         ],
       });
     mockedComplete.mockRejectedValueOnce({
@@ -639,7 +681,9 @@ describe('OrderCompletionModal', () => {
     mockedGet
       .mockResolvedValueOnce({
         ...confirmedOrder,
-        fee_lines: [{ kind: 'OPTION', name: '古い明細', amount: 1000, system_owned: false }],
+        fee_lines: [
+          { kind: 'OPTION', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
+        ],
       })
       .mockResolvedValueOnce({ ...confirmedOrder, status: 'COMPLETED', version: 4 });
     mockedComplete.mockRejectedValueOnce({

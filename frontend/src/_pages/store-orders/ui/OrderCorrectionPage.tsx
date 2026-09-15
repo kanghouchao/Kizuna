@@ -49,7 +49,6 @@ interface OrderCorrectionFormValues {
   actual_arrival_time: string;
   actual_end_time: string;
   course_revision_id: string;
-  extension_minutes: string;
   fee_lines: OrderFeeLineInput[];
   reason: string;
 }
@@ -58,7 +57,6 @@ const EMPTY_VALUES: OrderCorrectionFormValues = {
   actual_arrival_time: '',
   actual_end_time: '',
   course_revision_id: '',
-  extension_minutes: '',
   fee_lines: [],
   reason: '',
 };
@@ -108,7 +106,7 @@ function CorrectionOutcome({ outcome }: { outcome: CorrectionOutcomeState }) {
  * 受付担当・備考・伝言）は終端状態の凍結のままで、この画面には欄そのものが無い。
  *
  * <p>送るのは<b>三組の全量</b>で、部分更新ではない。空にした欄はそのまま空になる — 実終了時刻や
- * 延長分数を空へ戻す訂正が要るため、「送らない＝変更しない」の形では表せない。
+ * 実績時刻を空へ戻す訂正が要るため、「送らない＝変更しない」の形では表せない。
  *
  * <p>門はポイントを動かさない。送信後に名乗るのは会計金額の前後と、付与が動かないことまでである（ADR 0019）。
  */
@@ -145,7 +143,6 @@ export default function OrderCorrectionPage() {
       actual_arrival_time: toTimeInput(current.actual_arrival_time),
       actual_end_time: toTimeInput(current.actual_end_time),
       course_revision_id: '',
-      extension_minutes: current.extension_minutes != null ? String(current.extension_minutes) : '',
       fee_lines: storeEditableFeeLines(current.fee_lines),
       reason: '',
     });
@@ -183,7 +180,6 @@ export default function OrderCorrectionPage() {
         actual_arrival_time: optionalTime(values.actual_arrival_time),
         actual_end_time: optionalTime(values.actual_end_time),
         course_revision_id: values.course_revision_id || undefined,
-        extension_minutes: optionalNumber(values.extension_minutes),
         fee_lines: toFeeLineInputs(values.fee_lines),
       };
       const token = await confirmation.confirm(() => orderApi.previewCorrection(orderId, request));
@@ -310,25 +306,16 @@ export default function OrderCorrectionPage() {
                 <h2 className="text-muted-foreground text-sm font-medium">コース</h2>
                 <div className="space-y-4">
                   <OrderCourseField historicalOrderId={orderId} current={current.course} />
-                  <FormField
-                    control={control}
-                    name="extension_minutes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>延長（分）</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
                 </div>
               </section>
 
               <section className="space-y-3">
                 <h2 className="text-muted-foreground text-sm font-medium">会計</h2>
                 {/* ポイント利用の行は門内でも編集不可。読み取りで並べるだけ（誤りはポイント機構で直す） */}
-                <OrderFeeLinesField systemLines={readOnlyFeeLines(current.fee_lines)} />
+                <OrderFeeLinesField
+                  historicalOrderId={current.id}
+                  systemLines={readOnlyFeeLines(current.fee_lines)}
+                />
               </section>
 
               <section className="space-y-3">

@@ -59,7 +59,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             orderId,
             """
             {"reason":"コースの取り違え","actual_arrival_time":"20:15:00","actual_end_time":"22:40:00",
-             "course_revision_id":"%s","extension_minutes":30,
+             "course_revision_id":"%s",
              "fee_lines":[{"kind":"OPTION","name":"指名","amount":2000}]}
             """
                 .formatted(revisedCourse.revisionId()));
@@ -77,7 +77,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(detail.path("actual_end_time").asString()).isEqualTo("22:40:00");
     assertThat(detail.path("course").path("name").asString()).isEqualTo("120 分コース");
     assertThat(detail.path("course").path("duration_minutes").asInt()).isEqualTo(120);
-    assertThat(detail.path("extension_minutes").asInt()).isEqualTo(30);
+    assertThat(detail.path("extension_minutes").asInt()).isZero();
     assertThat(detail.path("total_fee").asInt()).isEqualTo(20000);
     assertThat(detail.path("auto_grant_points").asInt()).as("門はポイントを動かさないこと").isEqualTo(120);
     // 基本コース料金の行名称はコース名の写しから採る（金額だけ直る半修状態を作らない）
@@ -122,7 +122,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
         .containsExactly(
             tuple(OrderFeeLineKind.BASE_COURSE, 100),
-            tuple(OrderFeeLineKind.SURCHARGE, COMPLETED_FEE - 100));
+            tuple(OrderFeeLineKind.OPTION, COMPLETED_FEE - 100));
 
     OrderCorrection before2 = chain.get(1);
     assertThat(before2.getReason()).isEqualTo("オプションの取り消し");
@@ -138,7 +138,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     JsonNode afterSecond = orderJson(managerHeaders(STORE_A), orderId);
     assertThat(afterSecond.path("actual_arrival_time").isMissingNode()).isTrue();
     assertThat(afterSecond.path("actual_end_time").isMissingNode()).isTrue();
-    assertThat(afterSecond.path("extension_minutes").isMissingNode()).isTrue();
+    assertThat(afterSecond.path("extension_minutes").asInt()).isZero();
     assertThat(afterSecond.path("course").path("name").asString()).isEqualTo("120 分コース");
   }
 
@@ -184,7 +184,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             managerHeaders(STORE_A),
             orderId,
             """
-            {"reason":"金額の誤記","fee_lines":[{"kind":"SURCHARGE","name":"指名料","amount":8000}]}
+            {"reason":"金額の誤記","fee_lines":[{"kind":"OPTION","name":"指名料","amount":8000}]}
             """);
     assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
@@ -212,7 +212,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
                     orderId,
                     """
                     {"reason":"先に済んだ訂正",
-                     "fee_lines":[{"kind":"SURCHARGE","name":"指名料","amount":9000}]}
+                     "fee_lines":[{"kind":"OPTION","name":"指名料","amount":9000}]}
                     """)
                 .getStatusCode())
         .as("前提: 先の訂正が成立すること")

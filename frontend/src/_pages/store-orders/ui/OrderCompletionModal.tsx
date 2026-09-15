@@ -238,7 +238,7 @@ export function OrderCompletionModal({
         <DialogContent
           showCloseButton={false}
           aria-describedby={undefined}
-          className="gap-0 rounded-[10px] p-0 sm:max-w-md"
+          className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-md"
         >
           <div className="border-b px-6 py-4">
             <DialogTitle>{receiptToken !== null ? '伝票QRコード' : '完了処理'}</DialogTitle>

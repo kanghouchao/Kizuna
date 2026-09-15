@@ -1,6 +1,6 @@
 package com.kizuna.service.domain;
 
-import com.kizuna.service.application.CourseTerms;
+import com.kizuna.service.application.OrderServiceTerms;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -18,35 +18,35 @@ public interface ServiceRevisionRepository extends JpaRepository<ServiceRevision
   List<ServiceRevision> findByServiceIdAndRevisionNumberLessThanOrderByRevisionNumberDesc(
       String serviceId, long revisionNumber, Limit limit);
 
-  String COURSE_SELECT =
+  String SELECTION_SELECT =
       """
-      select new com.kizuna.service.application.CourseTerms(
+      select new com.kizuna.service.application.OrderServiceTerms(
         r.serviceId, r.id, r.revisionNumber, r.afterTerms.name,
         r.afterTerms.durationMinutes, r.afterTerms.price, r.afterTerms.remuneration,
         r.occurredAt, s.deleted)
       from ServiceRevision r join ServiceItem s on s.id = r.serviceId
-      where r.afterTerms.kind = com.kizuna.service.domain.ServiceKind.COURSE
+      where r.afterTerms.kind = :kind
         and r.operation <> com.kizuna.service.domain.ServiceRevision.Operation.DELETED
       """;
 
-  @Query(COURSE_SELECT + " and r.serviceId = :serviceId and r.revisionNumber = :number")
-  Optional<CourseTerms> findCourse(String serviceId, long number);
+  @Query(SELECTION_SELECT + " and r.serviceId = :serviceId and r.revisionNumber = :number")
+  Optional<OrderServiceTerms> findSelection(ServiceKind kind, String serviceId, long number);
 
-  @Query(COURSE_SELECT + " and r.id = :id")
-  Optional<CourseTerms> findHistoricalCourse(String id);
+  @Query(SELECTION_SELECT + " and r.id = :id")
+  Optional<OrderServiceTerms> findHistoricalSelection(ServiceKind kind, String id);
 
   @Query(
-      COURSE_SELECT
+      SELECTION_SELECT
           + " and s.deleted = false and r.revisionNumber = s.revisionNumber"
           + " and locate(lower(:search), lower(r.afterTerms.name)) > 0"
           + " order by r.afterTerms.name, r.serviceId")
-  Page<CourseTerms> findCurrentCourses(String search, Pageable pageable);
+  Page<OrderServiceTerms> findCurrentSelections(ServiceKind kind, String search, Pageable pageable);
 
   @Query(
-      COURSE_SELECT
+      SELECTION_SELECT
           + " and locate(lower(:search), lower(r.afterTerms.name)) > 0"
           + " and (r.occurredAt < :at or (r.occurredAt = :at and r.id < :id))"
           + " order by r.occurredAt desc, r.id desc")
-  List<CourseTerms> findHistoricalCourses(
-      String search, OffsetDateTime at, String id, Pageable pageable);
+  List<OrderServiceTerms> findHistoricalSelections(
+      ServiceKind kind, String search, OffsetDateTime at, String id, Pageable pageable);
 }

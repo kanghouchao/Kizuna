@@ -45,7 +45,7 @@ export const ORDER_APPLICATION_STATUS_LABELS: Record<OrderApplicationStatus, str
 /**
  * 受注明細の種別（閉集合）。ホテル代・交通費・釣銭は受注金額外の回収・精算項目なので含まない。
  *
- * 符号は種別が決める — 割引とポイント利用は減算、手動調整だけが両方を取り、残りは加算。
+ * 符号は種別が決める — 割引とポイント利用は減算、残りは加算。
  */
 export type OrderFeeLineKind =
   | 'BASE_COURSE'
@@ -53,7 +53,6 @@ export type OrderFeeLineKind =
   | 'OPTION'
   | 'SURCHARGE'
   | 'DISCOUNT'
-  | 'MANUAL_ADJUST'
   | 'POINT_REDEMPTION'
   | 'CREDIT_SURCHARGE';
 
@@ -64,7 +63,6 @@ export const ORDER_FEE_LINE_KIND_LABELS: Record<OrderFeeLineKind, string> = {
   OPTION: 'オプション',
   SURCHARGE: '加算',
   DISCOUNT: '割引',
-  MANUAL_ADJUST: '手動調整',
   POINT_REDEMPTION: 'ポイント利用',
   CREDIT_SURCHARGE: 'クレジット加算',
 };
@@ -75,7 +73,6 @@ export const ORDER_FEE_LINE_STORE_KINDS: readonly OrderFeeLineKind[] = [
   'OPTION',
   'SURCHARGE',
   'DISCOUNT',
-  'MANUAL_ADJUST',
   'CREDIT_SURCHARGE',
 ];
 
@@ -85,7 +82,14 @@ export const ORDER_FEE_LINE_STORE_KINDS: readonly OrderFeeLineKind[] = [
  * system_owned が真の行は完了処理が台帳仕訳と対で書いた記録で、店舗の編集からは触れない。
  */
 export interface OrderFeeLine {
-  remuneration?: number;
+  line_id?: string;
+  duration_minutes?: number;
+  service_id?: string;
+  revision_id?: string;
+  revision_number?: number;
+  adoption_basis?: 'CURRENT_SETTING' | 'HISTORICAL_CORRECTION';
+  adopted_at?: string;
+  remuneration: number;
   kind: OrderFeeLineKind;
   name?: string;
   amount: number;
@@ -94,12 +98,44 @@ export interface OrderFeeLine {
 
 /** 明細の入力 1 行。応答と同じく金額は表示上の値。 */
 export interface OrderFeeLineInput {
+  line_id?: string;
+  duration_minutes?: number;
+  remuneration?: number;
+  service_id?: string;
+  revision_id?: string;
+  revision_number?: number;
   kind: OrderFeeLineKind;
   name?: string;
   amount: number;
 }
 
+export type OrderFeeLineRequest =
+  | { line_id: string }
+  | { kind: 'SURCHARGE'; service_id: string }
+  | { kind: 'SURCHARGE'; revision_id: string }
+  | {
+      kind: 'EXTENSION';
+      name: string;
+      amount: number;
+      duration_minutes: number;
+      remuneration: number;
+    }
+  | { kind: 'DISCOUNT' | 'OPTION' | 'CREDIT_SURCHARGE'; name: string; amount: number };
+
+export interface SurchargeCandidate {
+  service_id: string;
+  revision_id: string;
+  revision_number: number;
+  name: string;
+  price: number;
+  remuneration: number;
+  occurred_at?: string;
+  service_deleted?: boolean;
+}
+
 export interface Order {
+  total_duration_minutes: number;
+  total_remuneration: number;
   course: OrderCourse;
   id?: string;
   receptionist_id?: number;
@@ -291,12 +327,11 @@ export interface OrderUpdateRequest {
   arrival_scheduled_end_time?: string;
   pax?: number;
   /** 適用されたコース名の写し。基本コース料金の明細を送るなら必須になる。 */
-  extension_minutes?: number;
   /**
    * 受注金額の内訳。**省略は「変更しない」、空配列は「内訳を空にする」**。行に同一性は無く、
    * 送った内容がそのまま新しい内訳になる。ポイント利用は含められない（完了処理だけが書く）。
    */
-  fee_lines?: OrderFeeLineInput[];
+  fee_lines?: OrderFeeLineRequest[];
   location_address?: string;
   location_building?: string;
   carrier?: string;
@@ -338,8 +373,7 @@ export interface OrderCorrectionRequest {
   reason: string;
   actual_arrival_time?: string;
   actual_end_time?: string;
-  extension_minutes?: number;
-  fee_lines: OrderFeeLineInput[];
+  fee_lines: OrderFeeLineRequest[];
 }
 
 /**
@@ -349,6 +383,12 @@ export interface OrderCorrectionRequest {
  * 門は「前回の助言が実行されたか」を知れない。要否と額の判断は台帳側の画面に委ねる。
  */
 export interface OrderCorrectionResult {
+  previous_total_remuneration: number;
+  total_remuneration: number;
+  previous_total_duration_minutes: number;
+  total_duration_minutes: number;
+  previous_fee_lines: OrderFeeLine[];
+  fee_lines: OrderFeeLine[];
   previous_total_fee?: number;
   total_fee?: number;
 }
@@ -386,9 +426,8 @@ export interface OrderCreateRequest {
   cast_id: string;
   pax?: number;
   /** 適用するコース名の写し。基本コース料金の明細を送るなら必須になる。 */
-  extension_minutes?: number;
   /** 受注金額の内訳。省略は「内訳なし」で、合計は 0 になる。 */
-  fee_lines?: OrderFeeLineInput[];
+  fee_lines?: OrderFeeLineRequest[];
   /** 受付経路。Web 申請の群は予約申請の確定だけが名乗るため、この契約では拒否される（400）。 */
   reception_route?: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
   carrier?: string;
@@ -441,6 +480,7 @@ export interface OrderApplicationRow {
  * ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新で整える。
  */
 export interface OrderApplicationConfirmationRequest {
+  fee_lines?: OrderFeeLineRequest[];
   course_id: string;
   confirmation_token?: string;
   /** 受付担当。省略すると、実行者本人が受付候補の条件を満たす場合にだけ補われる。 */
@@ -508,7 +548,7 @@ export interface OrderCompletionRequest {
    */
   expected_version: number;
   /** 適用されたコース名の写し。会計の場が快照の最後の更新機会になる。 */
-  fee_lines: OrderFeeLineInput[];
+  fee_lines: OrderFeeLineRequest[];
   use_points?: number;
 }
 
@@ -674,6 +714,8 @@ export interface OrderCourse extends CourseCandidate {
   adopted_at: string;
 }
 export interface OrderPreview {
+  total_duration_minutes: number;
+  total_remuneration: number;
   confirmation_token: string;
   course: Omit<OrderCourse, 'adopted_at'>;
   fee_lines: OrderFeeLine[];
