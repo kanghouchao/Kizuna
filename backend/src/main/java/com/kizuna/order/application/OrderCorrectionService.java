@@ -37,7 +37,7 @@ public class OrderCorrectionService {
   private final OrderCorrectionRepository orderCorrectionRepository;
   private final ActorIdentityService actorIdentityService;
   private final OrderMapper orderMapper;
-  private final OrderCourseCalculation courseCalculation;
+  private final OrderCalculation calculation;
 
   /** 訂正前の快照と更新を同じトランザクションに保存する。受注行をロックしてから要求の版を照合し、 同時訂正による上書きを防ぐ。快照は管理下の集約を書き換える前に作成する。 */
   @StoreScoped
@@ -56,16 +56,19 @@ public class OrderCorrectionService {
           "expected_version", "この受注は別の操作者が訂正しました。最新の内容を読み直してからやり直してください");
     }
     int previousTotalFee = order.getTotalFee();
+    int previousRemuneration = order.getTotalRemuneration();
+    int previousDuration = order.getTotalDurationMinutes();
+    var previousLines = orderMapper.toFeeLineResponses(order.getFeeLines());
 
     var previousCourse = order.getCourse();
     var course =
         request.getCourseRevisionId() == null
             ? previousCourse
-            : courseCalculation.historical(request.getCourseRevisionId());
-    var calculated = courseCalculation.calculate(order, course, request.getFeeLines());
-    courseCalculation.verify(
+            : calculation.historical(request.getCourseRevisionId());
+    var calculated = calculation.calculate(order, course, request.getFeeLines(), true);
+    calculation.verify(
         request.getConfirmationToken(),
-        courseCalculation.preview("CORRECT", id, request, calculated, null));
+        calculation.preview("CORRECT", id, request, calculated, null));
     var correction =
         orderCorrectionRepository.save(
             OrderCorrection.snapshotOf(
@@ -78,37 +81,42 @@ public class OrderCorrectionService {
             request.getActualArrivalTime(),
             request.getActualEndTime(),
             course,
-            request.getExtensionMinutes(),
-            orderMapper.toFeeLineDrafts(request.getFeeLines())));
-    orderRepository.save(order);
+            calculated.editableFeeLines()));
+    orderRepository.saveAndFlush(order);
 
     return new OrderCorrectionResponse(
         correction.getId(),
         previousTotalFee,
         order.getTotalFee(),
         previousCourse,
-        order.getCourse());
+        order.getCourse(),
+        previousRemuneration,
+        order.getTotalRemuneration(),
+        previousDuration,
+        order.getTotalDurationMinutes(),
+        previousLines,
+        orderMapper.toFeeLineResponses(order.getFeeLines()));
   }
 
   @StoreScoped
   @Transactional
   public OrderPreviewResponse preview(String id, OrderCorrectionRequest request) {
-    courseCalculation.requirePreviewInput(request.getConfirmationToken());
+    calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
         orderRepository
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    courseCalculation.requireVersion(order, request.getExpectedVersion());
+    calculation.requireVersion(order, request.getExpectedVersion());
     if (order.getStatus() != OrderStatus.COMPLETED) throw new ServiceException("完了した受注だけが訂正できます");
     var course =
         request.getCourseRevisionId() == null
             ? order.getCourse()
-            : courseCalculation.historical(request.getCourseRevisionId());
-    return courseCalculation.preview(
+            : calculation.historical(request.getCourseRevisionId());
+    return calculation.preview(
         "CORRECT",
         id,
         request,
-        courseCalculation.calculate(order, course, request.getFeeLines()),
+        calculation.calculate(order, course, request.getFeeLines(), false),
         null);
   }
 }

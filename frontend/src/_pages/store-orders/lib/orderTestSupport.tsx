@@ -17,6 +17,8 @@ export const preview: OrderPreview = {
   course,
   fee_lines: [],
   total_fee: 12000,
+  total_duration_minutes: 60,
+  total_remuneration: 7000,
 };
 export function courseApiMocks() {
   return {

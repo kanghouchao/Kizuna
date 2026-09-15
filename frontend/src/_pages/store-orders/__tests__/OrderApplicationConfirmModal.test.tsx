@@ -6,7 +6,7 @@ import { OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/o
 import { customerApi } from '@/entities/customer';
 
 jest.mock('@/entities/order', () => ({
-  ...jest.requireActual('@/entities/order/model/types'),
+  ...jest.requireActual('@/entities/order'),
   orderApi: {
     ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     listReceptionists: jest.fn(),

@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +16,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderFeeLineResponse {
+  private String lineId;
+  private Integer durationMinutes;
+  private String serviceId;
+  private String revisionId;
+  private Long revisionNumber;
+  private String adoptionBasis;
+  private OffsetDateTime adoptedAt;
   private Integer remuneration;
   private String kind;
   private String name;

@@ -1,7 +1,7 @@
 package com.kizuna.order.domain;
 
 /**
- * 受注明細の種別。閉じた八枚で、ホテル代・交通費・釣銭のような受注金額外の回収・精算項目は型として持てない。
+ * 受注明細の種別。閉じた七種で、ホテル代・交通費・釣銭のような受注金額外の回収・精算項目は型として持てない。
  *
  * <p>加算の細分（指名・受付区分・場所エリア等）は {@link #SURCHARGE} に集約し、区別は行の名称の写しが担う。
  *
@@ -12,7 +12,7 @@ public enum OrderFeeLineKind {
   /** 基本コース料金。行の名称は受注のコース名の写しから採る。 */
   BASE_COURSE(Sign.ADDITION),
 
-  /** 延長料金。延長分数の写しは受注が持ち、この行は金額だけを担う。 */
+  /** 延長料金。各回の分数・顧客費用・固定報酬を保持する。 */
   EXTENSION(Sign.ADDITION),
 
   /** オプション料金。1 件 1 行で、名称は手入力。 */
@@ -24,9 +24,6 @@ public enum OrderFeeLineKind {
   /** 割引。 */
   DISCOUNT(Sign.DEDUCTION),
 
-  /** 手動調整。合計を機械和から外したい場面をこの行で表すため、符号を縛らない。 */
-  MANUAL_ADJUST(Sign.EITHER),
-
   /** ポイント利用。完了処理が台帳の減算仕訳と対で書く唯一の行で、店舗の通常編集からは作れない。 */
   POINT_REDEMPTION(Sign.DEDUCTION),
 
@@ -35,8 +32,7 @@ public enum OrderFeeLineKind {
 
   private enum Sign {
     ADDITION,
-    DEDUCTION,
-    EITHER
+    DEDUCTION
   }
 
   private final Sign sign;
@@ -50,7 +46,6 @@ public enum OrderFeeLineKind {
     return switch (sign) {
       case ADDITION -> amount >= 0;
       case DEDUCTION -> amount <= 0;
-      case EITHER -> true;
     };
   }
 

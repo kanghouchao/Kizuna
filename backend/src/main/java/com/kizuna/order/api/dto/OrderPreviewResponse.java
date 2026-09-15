@@ -7,6 +7,8 @@ public record OrderPreviewResponse(
     CourseCondition course,
     List<OrderFeeLineResponse> feeLines,
     int totalFee,
+    int totalDurationMinutes,
+    int totalRemuneration,
     Points points) {
   public record CourseCondition(
       String serviceId,

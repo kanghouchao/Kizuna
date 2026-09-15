@@ -10,11 +10,13 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -233,9 +235,6 @@ public class Order extends StoreScopedEntity {
     if (patch.pax() != null) {
       this.pax = patch.pax();
     }
-    if (patch.extensionMinutes() != null) {
-      this.extensionMinutes = patch.extensionMinutes();
-    }
     if (patch.feeLines() != null) {
       replaceStoreFeeLines(patch.feeLines());
     }
@@ -267,7 +266,7 @@ public class Order extends StoreScopedEntity {
   }
 
   /**
-   * 店舗が手入力する明細を丸ごと差し替える。行に同一性は持たせず、送られた内容がそのまま新しい内訳になる。
+   * 編集可能明細を置き換える。維持指定の行は同一性と採用条件を保持する。
    *
    * <p>システム専有の行（ポイント利用）は要求に含められず、既にある行はこの経路で消えない。台帳の減算仕訳と対で書かれた記録が 通常の編集で外れると、内訳と台帳が黙って食い違う。
    *
@@ -294,19 +293,56 @@ public class Order extends StoreScopedEntity {
         .filter(
             line ->
                 !line.getKind().isSystemOwned() && line.getKind() != OrderFeeLineKind.BASE_COURSE)
-        .map(line -> new OrderFeeLineDraft(line.getKind(), line.getName(), line.getAmount()))
+        .map(OrderFeeLineDraft::of)
         .toList();
   }
 
   private long swapStoreFeeLines(List<OrderFeeLineDraft> drafts) {
     if (course == null) throw new InvalidOrderFeeLineException("コースを選択してください");
     List<OrderFeeLine> replaced = new ArrayList<>();
+    var ids = new HashSet<String>();
+    var services = new HashSet<String>();
     for (OrderFeeLineDraft draft : drafts) {
       if (draft.kind() == OrderFeeLineKind.BASE_COURSE
           || (draft.kind() != null && draft.kind().isSystemOwned())) {
         throw new InvalidOrderFeeLineException("コースとポイントの明細は直接変更できません");
       }
-      replaced.add(OrderFeeLine.of(draft.kind(), draft.name(), draft.amount()));
+      OrderFeeLine line;
+      if (draft.lineId() == null) {
+        line = OrderFeeLine.from(draft);
+        if (draft.kind() == OrderFeeLineKind.SURCHARGE) {
+          var existing =
+              feeLines.stream()
+                  .filter(
+                      item ->
+                          item.getKind() == OrderFeeLineKind.SURCHARGE
+                              && item.getAdoption()
+                                  .serviceId()
+                                  .equals(draft.adoption().serviceId()))
+                  .findFirst()
+                  .orElse(null);
+          if (existing != null) {
+            existing.reselectSurcharge(draft);
+            line = existing;
+          }
+        }
+      } else {
+        if (!ids.add(draft.lineId())) throw new InvalidOrderFeeLineException("明細が重複しています");
+        line =
+            feeLines.stream()
+                .filter(item -> draft.lineId().equals(item.getId()))
+                .findFirst()
+                .orElse(null);
+        if (line == null) {
+          line = OrderFeeLine.from(draft);
+          line.setId(draft.lineId());
+        }
+      }
+      if (line.getKind() == OrderFeeLineKind.SURCHARGE
+          && !services.add(line.getAdoption().serviceId()))
+        throw new InvalidOrderFeeLineException("同じ加算は一度だけ選択できます");
+      line.attachStore(getStoreId());
+      replaced.add(line);
     }
     var base =
         feeLines.stream()
@@ -314,15 +350,40 @@ public class Order extends StoreScopedEntity {
             .findFirst()
             .orElse(null);
     if (base == null) {
-      base = OrderFeeLine.of(OrderFeeLineKind.BASE_COURSE, course.name(), course.price());
+      base = OrderFeeLine.course(course);
+      base.attachStore(getStoreId());
       feeLines.add(base);
     } else {
       base.applyCourse(course);
     }
     feeLines.removeIf(
-        line -> !line.getKind().isSystemOwned() && line.getKind() != OrderFeeLineKind.BASE_COURSE);
-    feeLines.addAll(replaced);
+        line ->
+            !line.getKind().isSystemOwned()
+                && line.getKind() != OrderFeeLineKind.BASE_COURSE
+                && !replaced.contains(line));
+    for (var line : replaced) if (!feeLines.contains(line)) feeLines.add(line);
     return recalculateTotalFee();
+  }
+
+  @PrePersist
+  void attachLineStores() {
+    feeLines.forEach(line -> line.attachStore(getStoreId()));
+  }
+
+  public int getTotalRemuneration() {
+    return checkedTotal(feeLines.stream().mapToLong(OrderFeeLine::getRemuneration).sum());
+  }
+
+  public int getTotalDurationMinutes() {
+    return checkedTotal(
+        (course == null ? 0L : course.durationMinutes())
+            + (extensionMinutes == null ? 0L : extensionMinutes));
+  }
+
+  private static int checkedTotal(long value) {
+    if (value < 0 || value > Integer.MAX_VALUE)
+      throw new InvalidOrderFeeLineException("合計が扱える上限を超えています");
+    return (int) value;
   }
 
   /**
@@ -348,6 +409,19 @@ public class Order extends StoreScopedEntity {
    * @return 取り直した総和（列へ畳む前の値）
    */
   private long recalculateTotalFee() {
+    this.extensionMinutes =
+        checkedTotal(
+            feeLines.stream()
+                .filter(line -> line.getKind() == OrderFeeLineKind.EXTENSION)
+                .mapToLong(OrderFeeLine::getDurationMinutes)
+                .sum());
+    getTotalDurationMinutes();
+    getTotalRemuneration();
+    checkedTotal(
+        feeLines.stream()
+            .filter(line -> !line.getKind().isDeduction())
+            .mapToLong(OrderFeeLine::getAmount)
+            .sum());
     long sum = feeLines.stream().mapToLong(OrderFeeLine::getAmount).sum();
     if (sum > Integer.MAX_VALUE) {
       throw new InvalidOrderFeeLineException("内訳の総和が扱える上限を超えています。金額を見直してください");
@@ -375,9 +449,11 @@ public class Order extends StoreScopedEntity {
       throw new InvalidOrderFeeLineException("利用ポイントは 0 以上です");
     }
     if (usedPoints > 0) {
-      feeLines.add(
+      var redemption =
           OrderFeeLine.of(
-              OrderFeeLineKind.POINT_REDEMPTION, POINT_REDEMPTION_LINE_NAME, -usedPoints));
+              OrderFeeLineKind.POINT_REDEMPTION, POINT_REDEMPTION_LINE_NAME, -usedPoints);
+      redemption.attachStore(getStoreId());
+      feeLines.add(redemption);
       if (recalculateTotalFee() < 0) {
         throw new InvalidOrderFeeLineException("内訳の総和が負になっています。割引・調整の金額を見直してください");
       }
@@ -394,7 +470,6 @@ public class Order extends StoreScopedEntity {
     this.actualArrivalTime = command.actualArrivalTime();
     this.actualEndTime = command.actualEndTime();
     if (command.course() != null) this.course = command.course();
-    this.extensionMinutes = command.extensionMinutes();
     // 総和が 0 以上という不変量は他の経路と同じだが、門は利用の行を動かせないため、下回った差を
     // 吸収する先が無いことまで伝える固有の文言を持つ（一般の差し替えは割引・調整を直せばよい）。
     // 撥ねた訂正の巻き戻しはトランザクションが担う（この時点で明細は既に差し替わっている）。

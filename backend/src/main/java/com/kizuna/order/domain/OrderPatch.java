@@ -10,14 +10,13 @@ import java.util.List;
  * <p>合計金額・自動付与ポイントは含まない —
  * 合計は明細の総和として導出され、付与は完了処理だけが確定させる。連絡先の写しも含まない（顧客が着いた受注では撥ねる必要があり、「変更しない」と区別できる 訂正の経路が別に要る）。
  *
- * <p>明細は空リストを「内訳を空にする」として受ける（null だけが「変更しない」）。行に同一性は無く、送られた内容がそのまま新しい内訳になる。
+ * <p>明細は空リストを「内訳を空にする」として受ける（null だけが「変更しない」）。未変更行はIDで維持し、追加・置換する行だけを採用する。
  */
 public record OrderPatch(
     LocalDate businessDate,
     LocalTime arrivalScheduledStartTime,
     LocalTime arrivalScheduledEndTime,
     Integer pax,
-    Integer extensionMinutes,
     List<OrderFeeLineDraft> feeLines,
     String locationAddress,
     String locationBuilding,
@@ -27,7 +26,6 @@ public record OrderPatch(
     String castDriverMessage) {
 
   public static OrderPatch ofAccounting(List<OrderFeeLineDraft> feeLines) {
-    return new OrderPatch(
-        null, null, null, null, null, feeLines, null, null, null, null, null, null);
+    return new OrderPatch(null, null, null, null, feeLines, null, null, null, null, null, null);
   }
 }

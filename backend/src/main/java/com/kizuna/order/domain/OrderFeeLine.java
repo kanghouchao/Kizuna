@@ -1,85 +1,115 @@
 package com.kizuna.order.domain;
 
-import com.kizuna.shared.persistence.BaseEntity;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Filter;
 
-/**
- * 受注金額の内訳 1 行。種別・名称の写し・帯符号金額を持ち、受注集約の構成要素として単体では作られない。
- *
- * <p>名称は行が成立した時点の写しで、後から充填元（サービス定義）が変わっても書き換わらない。
- *
- * <p>不変条件（構築時に検証、違反は 400 系ドメイン例外）: 名称が非空白で、金額の符号が種別の約定に合うこと（{@link InvalidOrderFeeLineException}）。
- */
+/** 受注が採用した費用・時間・固定報酬の一行。 */
 @Entity
+@Filter(name = "storeFilter", condition = "store_id = :storeId")
+@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Table(name = "t_order_fee_lines")
 @Getter
 @NoArgsConstructor
-public class OrderFeeLine extends BaseEntity {
-
-  /**
-   * 親受注。書き込みは受注集約の関連（{@code @JoinColumn}）が受け持つため読み取り専用で写像する。
-   *
-   * <p>読み口が受注 1 件ぶんの明細をまとめて引くときの結合鍵になる。
-   */
+public class OrderFeeLine extends StoreScopedEntity {
   @Column(name = "order_id", insertable = false, updatable = false)
   private String orderId;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "kind", nullable = false, updatable = false, length = 30)
+  @Column(nullable = false, updatable = false, length = 30)
   private OrderFeeLineKind kind;
 
-  /**
-   * 行が成立した時点の名称の写し。
-   *
-   * <p>基本コース料金の行だけは写し元（受注のコース名）が終端前に動きうるため、{@link #renameTo} で追随できる。 それ以外の行の名称は差し替え以外で動かない。
-   */
-  @Column(name = "name", nullable = false, length = 255)
+  @Column(nullable = false, length = 255)
   private String name;
 
-  @Column(name = "amount", nullable = false)
+  @Column(nullable = false)
   private Integer amount;
 
-  private OrderFeeLine(OrderFeeLineKind kind, String name, int amount) {
-    this.kind = kind;
-    this.name = name;
-    this.amount = amount;
+  private Integer durationMinutes;
+
+  @Column(nullable = false)
+  private int remuneration;
+
+  @Embedded private OrderServiceAdoption adoption;
+
+  public static OrderFeeLine of(OrderFeeLineKind kind, String name, int amount) {
+    return from(new OrderFeeLineDraft(kind, name, amount));
   }
 
-  /**
-   * 明細行を起こす。
-   *
-   * @param amount 帯符号の金額。減項は負値で保存する
-   */
-  public static OrderFeeLine of(OrderFeeLineKind kind, String name, int amount) {
-    if (kind == null) {
-      throw new InvalidOrderFeeLineException("明細の種別は必須です");
-    }
-    if (name == null || name.isBlank()) {
-      throw new InvalidOrderFeeLineException("明細の名称は必須です");
-    }
-    if (name.length() > 255) {
-      throw new InvalidOrderFeeLineException("明細の名称は 255 文字以内です");
-    }
-    if (!kind.allows(amount)) {
-      throw new InvalidOrderFeeLineException(
-          "明細の金額が種別の符号約定に合いません: %s（加算の種別は 0 以上、減算の種別は 0 以下）".formatted(kind));
-    }
-    return new OrderFeeLine(kind, name, amount);
+  static OrderFeeLine from(OrderFeeLineDraft draft) {
+    var kind = draft.kind();
+    if (kind == null
+        || draft.name() == null
+        || draft.name().isBlank()
+        || draft.name().length() > 255)
+      throw new InvalidOrderFeeLineException("明細の種別と255文字以内の名称は必須です");
+    if (!kind.allows(draft.amount())) throw new InvalidOrderFeeLineException("明細の金額の符号が正しくありません");
+    boolean timed = kind == OrderFeeLineKind.EXTENSION || kind == OrderFeeLineKind.BASE_COURSE;
+    boolean configured = kind == OrderFeeLineKind.SURCHARGE || kind == OrderFeeLineKind.BASE_COURSE;
+    if (timed
+        ? draft.durationMinutes() == null || draft.durationMinutes() <= 0
+        : draft.durationMinutes() != null)
+      throw new InvalidOrderFeeLineException("コースと延長は正の整数分で指定してください");
+    if (configured != (draft.adoption() != null))
+      throw new InvalidOrderFeeLineException("コースと加算は設定から選択してください");
+    if (draft.remuneration() < 0
+        || ((timed || configured)
+            ? draft.remuneration() > draft.amount()
+            : draft.remuneration() != 0))
+      throw new InvalidOrderFeeLineException("固定報酬は0以上かつ顧客費用以下です");
+    if (kind == OrderFeeLineKind.DISCOUNT && draft.amount() >= 0)
+      throw new InvalidOrderFeeLineException("割引は正の整数円で指定してください");
+    var line = new OrderFeeLine();
+    line.kind = kind;
+    line.name = draft.name();
+    line.amount = draft.amount();
+    line.durationMinutes = draft.durationMinutes();
+    line.remuneration = draft.remuneration();
+    line.adoption = draft.adoption();
+    return line;
+  }
+
+  static OrderFeeLine course(OrderCourse course) {
+    return from(
+        new OrderFeeLineDraft(
+            null,
+            OrderFeeLineKind.BASE_COURSE,
+            course.name(),
+            course.price(),
+            course.durationMinutes(),
+            course.remuneration(),
+            OrderServiceAdoption.of(course)));
   }
 
   void applyCourse(OrderCourse course) {
-    this.name = course.name();
-    this.amount = course.price();
+    var next = course(course);
+    this.name = next.name;
+    this.amount = next.amount;
+    this.durationMinutes = next.durationMinutes;
+    this.remuneration = next.remuneration;
+    this.adoption = next.adoption;
   }
 
-  @Override
-  public String toString() {
-    return "OrderFeeLine(id=" + getId() + ", kind=" + kind + ", amount=" + amount + ")";
+  void reselectSurcharge(OrderFeeLineDraft draft) {
+    var next = from(draft);
+    if (kind != OrderFeeLineKind.SURCHARGE
+        || next.kind != OrderFeeLineKind.SURCHARGE
+        || !adoption.serviceId().equals(next.adoption.serviceId()))
+      throw new InvalidOrderFeeLineException("同じ加算の採用条件だけを更新できます");
+    this.name = next.name;
+    this.amount = next.amount;
+    this.remuneration = next.remuneration;
+    this.adoption = next.adoption;
+  }
+
+  void attachStore(Long storeId) {
+    setStoreId(storeId);
   }
 }

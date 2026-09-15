@@ -1,4 +1,4 @@
-import { OrderFeeLine, OrderFeeLineInput, OrderFeeLineKind } from './types';
+import { OrderFeeLine, OrderFeeLineInput, OrderFeeLineKind, OrderFeeLineRequest } from './types';
 
 /**
  * 店舗が差し替えられる明細だけを入力の形で取り出す。
@@ -8,7 +8,7 @@ import { OrderFeeLine, OrderFeeLineInput, OrderFeeLineKind } from './types';
 export function storeEditableFeeLines(lines: OrderFeeLine[] | undefined): OrderFeeLineInput[] {
   return (lines ?? [])
     .filter(line => !line.system_owned && line.kind !== 'BASE_COURSE')
-    .map(line => ({ kind: line.kind, name: line.name ?? '', amount: line.amount }));
+    .map(line => ({ ...line, name: line.name ?? '' }));
 }
 
 /** 採用コースから生成した基本料金と、完了処理が書いたポイント利用を読み取り専用で返す。 */
@@ -17,8 +17,25 @@ export function readOnlyFeeLines(lines: OrderFeeLine[] | undefined): OrderFeeLin
 }
 
 /** 編集した明細だけを要求へ写す。 */
-export function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineInput[] {
-  return lines.map(({ kind, name, amount }) => ({ kind, name, amount }));
+export function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineRequest[] {
+  return lines.map(line => {
+    if (line.line_id) return { line_id: line.line_id };
+    if (line.kind === 'SURCHARGE')
+      return line.service_id
+        ? { kind: 'SURCHARGE', service_id: line.service_id }
+        : { kind: 'SURCHARGE', revision_id: line.revision_id! };
+    if (line.kind === 'EXTENSION')
+      return {
+        kind: 'EXTENSION',
+        name: line.name ?? '',
+        amount: line.amount,
+        duration_minutes: line.duration_minutes!,
+        remuneration: line.remuneration!,
+      };
+    if (line.kind === 'BASE_COURSE' || line.kind === 'POINT_REDEMPTION')
+      throw new Error('システム明細は編集できません');
+    return { kind: line.kind, name: line.name ?? '', amount: line.amount };
+  });
 }
 
 /** 符号が減算に固定された種別。入力も表示も正値なので、足すときだけ符号を戻す。 */

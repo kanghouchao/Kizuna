@@ -349,8 +349,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: BIGINT
-                  autoIncrement: true
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
                     primaryKey: true
@@ -368,7 +367,7 @@ databaseChangeLog:
                   type: VARCHAR(30)
                   constraints:
                     nullable: false
-                  remarks: 明細種別（BASE_COURSE/EXTENSION/OPTION/SURCHARGE/DISCOUNT/MANUAL_ADJUST/POINT_REDEMPTION/CREDIT_SURCHARGE）
+                  remarks: 明細種別（BASE_COURSE/EXTENSION/OPTION/SURCHARGE/DISCOUNT/POINT_REDEMPTION/CREDIT_SURCHARGE）
               - column:
                   name: name
                   type: VARCHAR(255)
@@ -381,6 +380,34 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                   remarks: 帯符号の金額。減項は負値
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: duration_minutes
+                  type: INTEGER
+              - column:
+                  name: remuneration
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_id
+                  type: VARCHAR(64)
+              - column:
+                  name: revision_id
+                  type: VARCHAR(64)
+              - column:
+                  name: revision_number
+                  type: BIGINT
+              - column:
+                  name: adoption_basis
+                  type: VARCHAR(30)
+              - column:
+                  name: adopted_at
+                  type: TIMESTAMP WITH TIME ZONE
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -420,9 +447,8 @@ databaseChangeLog:
                   WHEN 'OPTION' THEN amount >= 0
                   WHEN 'SURCHARGE' THEN amount >= 0
                   WHEN 'CREDIT_SURCHARGE' THEN amount >= 0
-                  WHEN 'DISCOUNT' THEN amount <= 0
+                  WHEN 'DISCOUNT' THEN amount < 0
                   WHEN 'POINT_REDEMPTION' THEN amount <= 0
-                  WHEN 'MANUAL_ADJUST' THEN true
                   ELSE false
                 END
               )
@@ -825,3 +851,21 @@ databaseChangeLog:
         - sql:
             sql: |
               CREATE UNIQUE INDEX uq_t_order_fee_lines_course ON t_order_fee_lines(order_id) WHERE kind = 'BASE_COURSE';
+        - sql:
+            sql: |
+              ALTER TABLE t_orders ADD CONSTRAINT uq_t_orders_id_store UNIQUE (id, store_id);
+              ALTER TABLE t_order_fee_lines ADD CONSTRAINT fk_t_order_fee_lines_order_store
+                FOREIGN KEY (order_id, store_id) REFERENCES t_orders(id, store_id) ON DELETE CASCADE;
+              ALTER TABLE t_order_fee_lines ADD CONSTRAINT fk_t_order_fee_lines_revision
+                FOREIGN KEY (revision_id, service_id, store_id) REFERENCES t_service_revisions(id, service_id, store_id) ON DELETE NO ACTION;
+              CREATE INDEX idx_t_order_fee_lines_revision ON t_order_fee_lines(revision_id, service_id, store_id);
+              CREATE UNIQUE INDEX uq_t_order_fee_lines_surcharge ON t_order_fee_lines(order_id, service_id) WHERE kind = 'SURCHARGE';
+              ALTER TABLE t_order_fee_lines ADD CONSTRAINT ck_t_order_fee_lines_terms CHECK (
+                remuneration >= 0
+                AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION') THEN duration_minutes IS NOT NULL AND duration_minutes > 0 ELSE duration_minutes IS NULL END
+                AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION', 'SURCHARGE') THEN remuneration <= amount ELSE remuneration = 0 END
+                AND CASE WHEN kind IN ('BASE_COURSE', 'SURCHARGE') THEN
+                  service_id IS NOT NULL AND revision_id IS NOT NULL AND revision_number IS NOT NULL AND revision_number > 0
+                  AND adoption_basis IS NOT NULL AND adoption_basis IN ('CURRENT_SETTING', 'HISTORICAL_CORRECTION') AND adopted_at IS NOT NULL
+                ELSE service_id IS NULL AND revision_id IS NULL AND revision_number IS NULL AND adoption_basis IS NULL AND adopted_at IS NULL END
+              );

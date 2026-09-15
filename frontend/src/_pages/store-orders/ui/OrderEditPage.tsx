@@ -53,7 +53,6 @@ interface OrderEditFormValues {
   pax: string;
   /** 適用されたコース名の写し。基本コース料金の明細を置くなら必須になる。 */
   course_id: string;
-  extension_minutes: string;
   /** 会計内訳。行に同一性は無く、送った内容がそのまま新しい内訳になる。 */
   fee_lines: OrderFeeLineInput[];
   location_address: string;
@@ -74,7 +73,6 @@ const EMPTY_VALUES: OrderEditFormValues = {
   arrival_scheduled_end_time: '',
   pax: '',
   course_id: '',
-  extension_minutes: '',
   fee_lines: [],
   location_address: '',
   location_building: '',
@@ -153,7 +151,6 @@ export default function OrderEditPage() {
       arrival_scheduled_end_time: toTimeInput(current.arrival_scheduled_end_time),
       pax: current.pax != null ? String(current.pax) : '',
       course_id: '',
-      extension_minutes: current.extension_minutes != null ? String(current.extension_minutes) : '',
       fee_lines: storeEditableFeeLines(current.fee_lines),
       location_address: current.location_address ?? '',
       location_building: current.location_building ?? '',
@@ -180,7 +177,6 @@ export default function OrderEditPage() {
       arrival_scheduled_end_time: optionalTime(values.arrival_scheduled_end_time),
       pax: optionalNumber(values.pax),
       course_id: values.course_id || undefined,
-      extension_minutes: optionalNumber(values.extension_minutes),
       location_address: values.location_address.trim(),
       location_building: values.location_building.trim(),
       carrier: values.carrier.trim(),
@@ -356,18 +352,6 @@ export default function OrderEditPage() {
                         <FormLabel>人数</FormLabel>
                         <FormControl>
                           <Input type="number" min={1} {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="extension_minutes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>延長（分）</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
                         </FormControl>
                       </FormItem>
                     )}

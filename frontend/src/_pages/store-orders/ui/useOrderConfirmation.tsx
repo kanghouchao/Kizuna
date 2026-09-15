@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { OrderPreview } from '@/entities/order';
+import { isDeduction, OrderPreview } from '@/entities/order';
 import { getApiErrorMessage, isConflict, useKeyedResource } from '@/shared/lib';
 import { Button, Dialog, DialogContent, DialogTitle, RegionError } from '@/shared/ui';
 
@@ -111,12 +111,18 @@ export function useOrderConfirmation(target?: string) {
               </p>
               {preview.fee_lines.map((line, i) => (
                 <p key={i}>
-                  {line.name}: ¥{line.amount.toLocaleString()}
+                  {line.name}: {isDeduction(line.kind) ? '-' : ''}¥{line.amount.toLocaleString()}
+                  {line.duration_minutes !== undefined ? ` / ${line.duration_minutes}分` : ''}
+                  {line.revision_number !== undefined ? ` / 版${line.revision_number}` : ''}
                   {line.remuneration !== undefined
                     ? ` / 固定報酬 ¥${line.remuneration.toLocaleString()}`
                     : ''}
                 </p>
               ))}
+              <p>
+                総時間: {preview.total_duration_minutes}分 / 固定報酬合計: ¥
+                {preview.total_remuneration.toLocaleString()}
+              </p>
               <p>請求額: ¥{preview.total_fee.toLocaleString()}</p>
               {preview.points && (
                 <p>
@@ -138,6 +144,32 @@ export function useOrderConfirmation(target?: string) {
                       料金: ¥{previousPreview.course.price} → ¥{preview.course.price} / 報酬: ¥
                       {previousPreview.course.remuneration} → ¥{preview.course.remuneration}
                     </p>
+                    <p>
+                      総時間: {previousPreview.total_duration_minutes} →{' '}
+                      {preview.total_duration_minutes}分 / 固定報酬合計: ¥
+                      {previousPreview.total_remuneration} → ¥{preview.total_remuneration}
+                    </p>
+                    {previousPreview.fee_lines.map((before, index) => {
+                      const after = preview.fee_lines[index];
+                      return (
+                        <p key={index}>
+                          明細{index + 1}: {before.name} / 版{before.revision_number ?? '—'} / 料金
+                          ¥{before.amount} / 報酬 ¥{before.remuneration}
+                          {' → '}
+                          {after
+                            ? `${after.name} / 版${after.revision_number ?? '—'} / 料金 ¥${after.amount} / 報酬 ¥${after.remuneration}`
+                            : '除去'}
+                        </p>
+                      );
+                    })}
+                    {preview.fee_lines
+                      .slice(previousPreview.fee_lines.length)
+                      .map((line, index) => (
+                        <p key={index}>
+                          追加: {line.name} / 版{line.revision_number ?? '—'} / 料金 ¥{line.amount}{' '}
+                          / 報酬 ¥{line.remuneration}
+                        </p>
+                      ))}
                     <p>
                       請求: ¥{previousPreview.total_fee} → ¥{preview.total_fee}
                     </p>

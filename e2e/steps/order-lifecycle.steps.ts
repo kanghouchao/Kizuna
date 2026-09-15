@@ -229,3 +229,42 @@ After(async ({ request }) => {
   customerName = '';
   storeId = '';
 });
+
+When('有料と無料の延長・設定加算・固定割引を追加する', async ({ page, request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const surchargeName = `受注加算-${Date.now()}`;
+  const response = await request.post(`${PLATFORM_URL}/api/store/services`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { kind: 'SURCHARGE', name: surchargeName, price: 1000, remuneration: 500 },
+  });
+  expect(response.status()).toBe(201);
+  await ownCard(page).getByRole('button', { name: '編集', exact: true }).click();
+  await page.getByRole('button', { name: '延長を追加', exact: true }).click();
+  await page.getByLabel('明細1の分数', { exact: true }).fill('30');
+  await page.getByLabel('明細1の金額', { exact: true }).fill('3000');
+  await page.getByLabel('明細1の固定報酬', { exact: true }).fill('2000');
+  await page.getByRole('button', { name: '延長を追加', exact: true }).click();
+  await page.getByLabel('明細2の名称', { exact: true }).fill('無料延長');
+  await page.getByLabel('明細2の分数', { exact: true }).fill('15');
+  await page.getByRole('button', { name: '加算を選択', exact: true }).click();
+  await page.getByLabel('加算を検索', { exact: true }).fill(surchargeName);
+  await page.getByRole('option', { name: new RegExp(surchargeName) }).click();
+  await page.getByRole('button', { name: '割引を追加', exact: true }).click();
+  await page.getByLabel('明細4の名称', { exact: true }).fill('優待');
+  await page.getByLabel('明細4の金額', { exact: true }).fill('15000');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(/総時間: 105分/)).toBeVisible();
+  await expect(dialog.getByText('請求額: ¥1,000', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`));
+});
+
+Then('再表示した受注に各回の延長と加算の採用条件が残る', async ({ page }) => {
+  await ownCard(page).getByRole('button', { name: '編集', exact: true }).click();
+  await expect(page.getByLabel('明細1の分数', { exact: true })).toHaveValue('30');
+  await expect(page.getByLabel('明細2の分数', { exact: true })).toHaveValue('15');
+  await expect(page.getByLabel('明細2の固定報酬', { exact: true })).toHaveValue('0');
+  await expect(page.getByText(/受注加算-.*料金 ¥1,000.*固定報酬 ¥500.*版1/)).toBeVisible();
+  await expect(page.getByLabel('明細4の金額', { exact: true })).toHaveValue('15000');
+});

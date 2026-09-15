@@ -1,4 +1,4 @@
-import type { CourseCandidate, OrderPreview } from '../model/types';
+import type { CourseCandidate, SurchargeCandidate, OrderPreview } from '../model/types';
 import {
   CursorPageResult,
   CursorParams,
@@ -62,6 +62,23 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 }
 
 export const orderApi = {
+  surchargeCandidates: async (search: string, page: number) => {
+    const response = await apiClient.get('/store/orders/surcharge-candidates', {
+      params: { search, page, size: 20 },
+    });
+    return fromSpringPage<SurchargeCandidate>(response.data);
+  },
+  surchargeRevisions: async (
+    id: string,
+    search: string,
+    cursor?: string
+  ): Promise<{ content: SurchargeCandidate[]; next_cursor?: string }> =>
+    (
+      await apiClient.get(`/store/orders/${requireId(id, '受注')}/surcharge-revisions`, {
+        params: { search, cursor, size: 20 },
+      })
+    ).data,
+
   courseCandidates: async (search: string, page: number) => {
     const response = await apiClient.get('/store/orders/course-candidates', {
       params: { search, page, size: 20 },

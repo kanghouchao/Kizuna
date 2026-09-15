@@ -1,13 +1,13 @@
 'use client';
 
-import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { useParams } from 'next/navigation';
+import { Trash2Icon } from 'lucide-react';
 import { useFieldArray, useFormContext } from 'react-hook-form';
 import {
   ORDER_FEE_LINE_KIND_LABELS,
-  ORDER_FEE_LINE_STORE_KINDS,
   OrderFeeLine,
   OrderFeeLineInput,
-  OrderFeeLineKind,
   feeLinesTotal,
   isDeduction,
 } from '@/entities/order';
@@ -21,117 +21,127 @@ import {
   FormMessage,
   Input,
   Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from '@/shared/ui';
+import { OrderSurchargePicker } from './OrderSurchargePicker';
 
-/** 明細を持つフォームの値。呼出側の useForm はこの形を含む。 */
 export interface OrderFeeLinesFormValues {
   fee_lines: OrderFeeLineInput[];
 }
 
-const AMOUNT_REQUIRED = '金額を入力してください';
-
-const KIND_ITEMS = ORDER_FEE_LINE_STORE_KINDS.map(kind => ({
-  value: kind,
-  label: ORDER_FEE_LINE_KIND_LABELS[kind],
-}));
-
-interface OrderFeeLinesFieldProps {
-  /**
-   * 完了処理が書いた行（ポイント利用）。店舗は差し替えられないので、金額だけ読めるように並べる。
-   * 送信の対象にも入らない。
-   */
+export function OrderFeeLinesField({
+  systemLines = [],
+  historicalOrderId,
+}: {
   systemLines?: OrderFeeLine[];
-}
-
-/**
- * 受注金額の内訳を行単位で編集する欄。
- *
- * 金額は種別ごとに符号が決まるので、入力は常に正値で受ける（割引に「-」を打たせない）。
- * 合計はここでは持たず、送られた行からサーバが導出する — 画面で合計を打てるようにすると、
- * 内訳と合計が食い違う受注を作れてしまう。
- *
- * ポイント利用の行は台帳の減算仕訳と対で書かれた記録なので、この欄からは触れない。
- */
-export function OrderFeeLinesField({ systemLines = [] }: OrderFeeLinesFieldProps) {
-  const { control, watch } = useFormContext<OrderFeeLinesFormValues>();
-  const { fields, append, remove } = useFieldArray<OrderFeeLinesFormValues, 'fee_lines'>({
-    control,
-    name: 'fee_lines',
-  });
+  historicalOrderId?: string;
+}) {
+  const storeId = useParams()?.storeId as string;
+  const { control, watch, setValue } = useFormContext<OrderFeeLinesFormValues>();
+  const { fields, append, remove, update } = useFieldArray({ control, name: 'fee_lines' });
+  const [selection, setSelection] = useState<{ storeId: string; index: number | null }>();
   const lines = watch('fee_lines') ?? [];
-
+  const changed = (index: number) => setValue(`fee_lines.${index}.line_id`, undefined);
+  const add = (kind: 'EXTENSION' | 'DISCOUNT' | 'OPTION' | 'CREDIT_SURCHARGE') =>
+    append({
+      kind,
+      name: kind === 'EXTENSION' ? '延長' : '',
+      amount: 0,
+      ...(kind === 'EXTENSION' ? { duration_minutes: 30, remuneration: 0 } : {}),
+    });
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Label>会計内訳</Label>
+      <Label>会計内訳</Label>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" onClick={() => add('EXTENSION')}>
+          延長を追加
+        </Button>
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          onClick={() => append({ kind: 'OPTION', name: '', amount: 0 })}
+          onClick={() => setSelection({ storeId, index: null })}
         >
+          加算を選択
+        </Button>
+        <Button type="button" variant="outline" onClick={() => add('DISCOUNT')}>
+          割引を追加
+        </Button>
+        <Button type="button" variant="outline" onClick={() => add('OPTION')}>
           明細を追加
         </Button>
+        <Button type="button" variant="outline" onClick={() => add('CREDIT_SURCHARGE')}>
+          クレジット加算を追加
+        </Button>
       </div>
-
-      {fields.length === 0 && systemLines.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-          明細がありません。「明細を追加」で会計の内訳を入力してください。
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {fields.map((field, index) => {
-            const kind = lines[index]?.kind ?? 'OPTION';
-            return (
-              <div key={field.id} className="flex items-start gap-3 rounded-lg border p-3">
-                <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-3">
-                  <FormField
-                    control={control}
-                    name={`fee_lines.${index}.kind`}
-                    render={({ field: kindField }) => (
-                      <FormItem>
-                        <FormLabel>種別</FormLabel>
-                        <Select
-                          items={KIND_ITEMS}
-                          value={kindField.value}
-                          onValueChange={value => kindField.onChange(value as OrderFeeLineKind)}
-                        >
-                          <FormControl>
-                            <SelectTrigger aria-label={`明細${index + 1}の種別`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {KIND_ITEMS.map(item => (
-                              <SelectItem key={item.value} value={item.value}>
-                                {item.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+      {selection && selection.storeId === storeId && (
+        <>
+          <OrderSurchargePicker
+            key={`${storeId}:${historicalOrderId ?? ''}`}
+            historicalOrderId={historicalOrderId}
+            onSelect={candidate => {
+              const line: OrderFeeLineInput = {
+                kind: 'SURCHARGE',
+                name: candidate.name,
+                amount: candidate.price,
+                remuneration: candidate.remuneration,
+                revision_number: candidate.revision_number,
+                ...(historicalOrderId
+                  ? { revision_id: candidate.revision_id }
+                  : { service_id: candidate.service_id }),
+              };
+              if (selection.index === null) append(line);
+              else update(selection.index, line);
+              setSelection(undefined);
+            }}
+          />
+          <Button type="button" variant="outline" onClick={() => setSelection(undefined)}>
+            選択を閉じる
+          </Button>
+        </>
+      )}
+      {fields.map((row, index) => {
+        const line = lines[index];
+        const surcharge = line.kind === 'SURCHARGE';
+        return (
+          <div key={row.id} className="flex items-start gap-3 rounded-lg border p-3">
+            <div className="flex-1 space-y-3">
+              <p>
+                {ORDER_FEE_LINE_KIND_LABELS[line.kind]}
+                {line.line_id ? '（採用済み）' : ''}
+              </p>
+              {surcharge ? (
+                <>
+                  <p>
+                    {line.name} / 料金 ¥{line.amount.toLocaleString()} / 固定報酬 ¥
+                    {line.remuneration?.toLocaleString()} / 版{line.revision_number}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSelection({ storeId, index })}
+                  >
+                    加算を選び直す
+                  </Button>
+                </>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
                   <FormField
                     control={control}
                     name={`fee_lines.${index}.name`}
                     rules={{
-                      validate: value =>
-                        (value ?? '').trim() !== '' || '明細の名称を入力してください',
+                      validate: value => !!value?.trim() || '明細の名称を入力してください',
+                      maxLength: { value: 255, message: '名称は255文字以内で入力してください' },
                     }}
-                    render={({ field: nameField }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>名称</FormLabel>
                         <FormControl>
                           <Input
-                            {...nameField}
-                            value={nameField.value ?? ''}
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={event => {
+                              changed(index);
+                              field.onChange(event);
+                            }}
                             aria-label={`明細${index + 1}の名称`}
                           />
                         </FormControl>
@@ -143,27 +153,33 @@ export function OrderFeeLinesField({ systemLines = [] }: OrderFeeLinesFieldProps
                     control={control}
                     name={`fee_lines.${index}.amount`}
                     rules={{
-                      required: AMOUNT_REQUIRED,
+                      required: '金額を入力してください',
                       validate: {
-                        notEmpty: value => !Number.isNaN(value) || AMOUNT_REQUIRED,
                         integer: integerRule('金額'),
-                        // 手動調整だけが負値を取れる。他は符号を種別が表すので正値で受ける
-                        sign: (value, values) =>
-                          values.fee_lines[index]?.kind === 'MANUAL_ADJUST' ||
-                          Number.isNaN(value) ||
-                          value >= 0 ||
-                          '金額は 0 以上で入力してください',
+                        notEmpty: value => !Number.isNaN(value) || '金額を入力してください',
+                        range: value =>
+                          (Number.isFinite(value) &&
+                            value >= (line.kind === 'DISCOUNT' ? 1 : 0) &&
+                            value <= 2147483647) ||
+                          (line.kind === 'DISCOUNT'
+                            ? '割引は正の整数円で入力してください'
+                            : '金額は0以上の整数円で入力してください'),
                       },
                     }}
-                    render={({ field: amountField }) => (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>金額</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            {...amountField}
-                            value={Number.isNaN(amountField.value) ? '' : amountField.value}
-                            onChange={event => amountField.onChange(event.target.valueAsNumber)}
+                            min={line.kind === 'DISCOUNT' ? 1 : 0}
+                            step={1}
+                            {...field}
+                            value={Number.isNaN(field.value) ? '' : field.value}
+                            onChange={event => {
+                              changed(index);
+                              field.onChange(event.target.valueAsNumber);
+                            }}
                             aria-label={`明細${index + 1}の金額`}
                           />
                         </FormControl>
@@ -171,36 +187,99 @@ export function OrderFeeLinesField({ systemLines = [] }: OrderFeeLinesFieldProps
                       </FormItem>
                     )}
                   />
+                  {line.kind === 'EXTENSION' && (
+                    <>
+                      <FormField
+                        control={control}
+                        name={`fee_lines.${index}.duration_minutes`}
+                        rules={{
+                          required: '分数を入力してください',
+                          validate: value =>
+                            (Number.isInteger(value) && value! > 0 && value! <= 2147483647) ||
+                            '分数は正の整数で入力してください',
+                        }}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>分数</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                {...field}
+                                value={Number.isNaN(field.value) ? '' : (field.value ?? '')}
+                                onChange={event => {
+                                  changed(index);
+                                  field.onChange(event.target.valueAsNumber);
+                                }}
+                                aria-label={`明細${index + 1}の分数`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name={`fee_lines.${index}.remuneration`}
+                        rules={{
+                          required: '固定報酬を入力してください',
+                          validate: {
+                            integer: value =>
+                              (Number.isInteger(value) && value! >= 0) ||
+                              '固定報酬は0以上の整数円で入力してください',
+                            limit: value =>
+                              value! <= lines[index].amount ||
+                              '固定報酬は顧客費用以下で入力してください',
+                          },
+                        }}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>固定報酬</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={1}
+                                {...field}
+                                value={Number.isNaN(field.value) ? '' : (field.value ?? '')}
+                                onChange={event => {
+                                  changed(index);
+                                  field.onChange(event.target.valueAsNumber);
+                                }}
+                                aria-label={`明細${index + 1}の固定報酬`}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="mt-6"
-                  onClick={() => remove(index)}
-                  aria-label={`明細${index + 1}を削除`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            );
-          })}
-          {systemLines.map((line, index) => (
-            <div
-              key={`system-${index}`}
-              className="flex items-center justify-between rounded-lg border border-dashed p-3 text-sm text-muted-foreground"
-            >
-              <span>
-                {ORDER_FEE_LINE_KIND_LABELS[line.kind]} / {line.name}
-              </span>
-              <span>
-                {isDeduction(line.kind) ? '-' : ''}¥{line.amount.toLocaleString()}
-              </span>
+              )}
             </div>
-          ))}
-        </div>
-      )}
-
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                setSelection(undefined);
+                remove(index);
+              }}
+              aria-label={`明細${index + 1}を削除`}
+            >
+              <Trash2Icon className="size-4" />
+            </Button>
+          </div>
+        );
+      })}
+      {systemLines.map((line, index) => (
+        <p key={index} className="rounded-lg border p-3 text-sm">
+          {ORDER_FEE_LINE_KIND_LABELS[line.kind]} / {line.name}: {isDeduction(line.kind) ? '-' : ''}
+          ¥{line.amount.toLocaleString()} / 固定報酬 ¥{line.remuneration.toLocaleString()}
+        </p>
+      ))}
       <p className="text-right text-sm font-medium">
         小計 ¥{feeLinesTotal(lines).toLocaleString()}
       </p>

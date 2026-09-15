@@ -78,8 +78,6 @@ public class OrderCreateRequest {
   @Min(value = 1, message = "人数は 1 以上です")
   private Integer pax;
 
-  private Integer extensionMinutes;
-
   /** 受注金額の内訳。省略は「内訳なし」で、合計は 0 になる。 */
   @Valid private List<@NotNull(message = "明細の要素は必須です") OrderFeeLineRequest> feeLines;
 

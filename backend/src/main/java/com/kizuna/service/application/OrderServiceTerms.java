@@ -2,12 +2,12 @@ package com.kizuna.service.application;
 
 import java.time.OffsetDateTime;
 
-public record CourseTerms(
+public record OrderServiceTerms(
     String serviceId,
     String revisionId,
     long revisionNumber,
     String name,
-    int durationMinutes,
+    Integer durationMinutes,
     int price,
     int remuneration,
     OffsetDateTime occurredAt,

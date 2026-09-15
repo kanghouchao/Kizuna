@@ -63,7 +63,6 @@ export interface OrderFormData {
   reception_route: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
   /** この受注に適用するコース名の写し。基本コース料金の明細を置くなら必須になる。 */
   course_id: string;
-  extension_minutes: number;
   fee_lines: OrderFeeLineInput[];
   carrier: string;
   media_name: string;
@@ -88,7 +87,6 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
       pax: 1,
       reception_route: 'PHONE',
       course_id: '',
-      extension_minutes: 0,
       fee_lines: [],
       has_pet: false,
       ng_type: 'NG無し',
@@ -274,10 +272,6 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
                   </FormItem>
                 )}
               />
-              <div className="grid gap-2">
-                <Label htmlFor="extension_minutes">延長</Label>
-                <Input id="extension_minutes" type="number" {...register('extension_minutes')} />
-              </div>
               <OrderCourseField required />{' '}
             </div>
             <div className="mt-6">

@@ -214,6 +214,8 @@ describe('作業キューの描画', () => {
     stubInbox(pendingApplication());
     mockedApplicationApi.confirm.mockResolvedValue({
       ...confirmedOrder({ id: 'order-9' }),
+      total_duration_minutes: 60,
+      total_remuneration: 7000,
       fee_lines: [],
     });
     render(<OrderListPage />);
@@ -554,7 +556,12 @@ describe('新規オーダー登録', () => {
   });
 
   it('受付担当を選ばなければ項目ごと送らないこと（サーバが実行者本人に解決する）', async () => {
-    mockedOrderApi.create.mockResolvedValue({ ...confirmedOrder(), fee_lines: [] });
+    mockedOrderApi.create.mockResolvedValue({
+      ...confirmedOrder(),
+      total_duration_minutes: 60,
+      total_remuneration: 7000,
+      fee_lines: [],
+    });
     render(<CreateOrderPage />);
 
     fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '新規客' } });

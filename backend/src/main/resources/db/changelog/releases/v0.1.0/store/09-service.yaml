@@ -46,6 +46,7 @@ databaseChangeLog:
                 version BIGINT NOT NULL DEFAULT 0,
                 CONSTRAINT fk_t_service_revisions_service_store FOREIGN KEY (service_id, store_id) REFERENCES t_services(id, store_id) ON DELETE NO ACTION,
                 CONSTRAINT uq_t_service_revisions_id_store UNIQUE (id, store_id),
+                CONSTRAINT uq_t_service_revisions_id_service_store UNIQUE (id, service_id, store_id),
                 CONSTRAINT uq_t_service_revisions_number UNIQUE (service_id, revision_number),
                 CONSTRAINT ck_t_service_revisions_after CHECK (after_kind IS NOT NULL AND after_name IS NOT NULL AND length(trim(after_name)) BETWEEN 1 AND 255
                 AND after_price IS NOT NULL AND after_remuneration IS NOT NULL

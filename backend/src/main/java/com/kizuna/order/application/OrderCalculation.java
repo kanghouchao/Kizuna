@@ -6,8 +6,8 @@ import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.service.application.CourseTerms;
-import com.kizuna.service.application.OrderCourseCatalog;
+import com.kizuna.service.application.OrderServiceCatalog;
+import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.OffsetDateTime;
@@ -18,14 +18,16 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class OrderCourseCalculation {
-  private final OrderCourseCatalog catalog;
+public class OrderCalculation {
+  private final OrderServiceCatalog catalog;
   private final OrderMapper mapper;
   private final OrderConfirmation confirmation;
+  private final OrderFeeLineSelection selection;
 
   public OrderCourse current(String courseId, boolean saving) {
     try {
-      return snapshot(catalog.current(courseId), "CURRENT_SETTING");
+      return snapshot(
+          catalog.current(courseId, OrderServiceCatalog.SelectionKind.COURSE), "CURRENT_SETTING");
     } catch (NotFoundException ex) {
       if (saving) throw new OrderConfirmationConflict("confirmation_token");
       throw ex;
@@ -33,10 +35,12 @@ public class OrderCourseCalculation {
   }
 
   public OrderCourse historical(String revisionId) {
-    return snapshot(catalog.historical(revisionId), "HISTORICAL_CORRECTION");
+    return snapshot(
+        catalog.historical(revisionId, OrderServiceCatalog.SelectionKind.COURSE),
+        "HISTORICAL_CORRECTION");
   }
 
-  private OrderCourse snapshot(CourseTerms terms, String basis) {
+  private OrderCourse snapshot(OrderServiceTerms terms, String basis) {
     return new OrderCourse(
         terms.serviceId(),
         terms.revisionId(),
@@ -54,13 +58,16 @@ public class OrderCourseCalculation {
       throw new OrderConfirmationConflict("expected_version");
   }
 
-  public Order calculate(Order original, OrderCourse course, List<OrderFeeLineRequest> lines) {
+  public Order calculate(
+      Order original, OrderCourse course, List<OrderFeeLineRequest> lines, boolean saving) {
     Order copy = Order.builder().status(OrderStatus.CONFIRMED).build();
     copy.adoptCourse(
         course,
-        lines == null
-            ? original == null ? List.of() : original.editableFeeLines()
-            : mapper.toFeeLineDrafts(lines));
+        selection.resolve(
+            original,
+            lines,
+            original != null && original.getStatus() == OrderStatus.COMPLETED,
+            saving));
     if (original != null && original.getStatus() == OrderStatus.COMPLETED) {
       int points =
           original.getFeeLines().stream()
@@ -82,8 +89,8 @@ public class OrderCourseCalculation {
     var c = calculated.getCourse();
     var lines = mapper.toFeeLineResponses(calculated.getFeeLines());
     lines.stream()
-        .filter(line -> "BASE_COURSE".equals(line.getKind()))
-        .forEach(line -> line.setRemuneration(c.remuneration()));
+        .filter(line -> line.getLineId() == null)
+        .forEach(line -> line.setAdoptedAt(null));
     var result =
         new OrderPreviewResponse(
             null,
@@ -98,12 +105,16 @@ public class OrderCourseCalculation {
                 c.adoptionBasis()),
             lines,
             calculated.getTotalFee(),
+            calculated.getTotalDurationMinutes(),
+            calculated.getTotalRemuneration(),
             points);
     return new OrderPreviewResponse(
         confirmation.sign(operation, id, input, result),
         result.course(),
         result.feeLines(),
         result.totalFee(),
+        result.totalDurationMinutes(),
+        result.totalRemuneration(),
         points);
   }
 

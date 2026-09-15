@@ -416,7 +416,7 @@ class MemberRankIT extends CrossStoreTestSupport {
   private String completionBody(String orderId, int totalFee) {
     return "{\"expected_version\":"
         + orderVersion(storeHeaders(STORE_A), orderId)
-        + ",\"fee_lines\":[{\"kind\":\"SURCHARGE\",\"name\":\"会計\",\"amount\":"
+        + ",\"fee_lines\":[{\"kind\":\"OPTION\",\"name\":\"会計\",\"amount\":"
         + totalFee
         + "}]}";
   }

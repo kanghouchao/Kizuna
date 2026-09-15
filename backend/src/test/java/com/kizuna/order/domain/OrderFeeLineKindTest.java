@@ -12,8 +12,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 class OrderFeeLineKindTest {
 
   @Test
-  @DisplayName("種別は八枚の閉集合であること")
-  void kinds_areTheClosedSetOfEight() {
+  @DisplayName("種別は七種の閉集合であること")
+  void kinds_areTheClosedSetOfSeven() {
     // ホテル代・交通費・釣銭は受注金額外の回収・精算項目であり、種別を持たないことで型から排除される
     assertThat(OrderFeeLineKind.values())
         .containsExactly(
@@ -22,16 +22,15 @@ class OrderFeeLineKindTest {
             OrderFeeLineKind.OPTION,
             OrderFeeLineKind.SURCHARGE,
             OrderFeeLineKind.DISCOUNT,
-            OrderFeeLineKind.MANUAL_ADJUST,
             OrderFeeLineKind.POINT_REDEMPTION,
             OrderFeeLineKind.CREDIT_SURCHARGE);
   }
 
   @Test
-  @DisplayName("加算の種別は負値を、減算の種別は正値を許さず、手動調整だけが両方を許すこと")
+  @DisplayName("加算の種別は負値を、減算の種別は正値を許さずこと")
   void allows_followsTheSignConventionOfEachKind() {
     Arrays.stream(OrderFeeLineKind.values())
-        .filter(kind -> !kind.isDeduction() && kind != OrderFeeLineKind.MANUAL_ADJUST)
+        .filter(kind -> !kind.isDeduction())
         .forEach(
             kind -> {
               assertThat(kind.allows(1)).as("%s は加算を許すこと", kind).isTrue();
@@ -44,8 +43,6 @@ class OrderFeeLineKindTest {
               assertThat(kind.allows(-1)).as("%s は減算を許すこと", kind).isTrue();
               assertThat(kind.allows(1)).as("%s は正値を許さないこと", kind).isFalse();
             });
-    assertThat(OrderFeeLineKind.MANUAL_ADJUST.allows(1)).isTrue();
-    assertThat(OrderFeeLineKind.MANUAL_ADJUST.allows(-1)).isTrue();
   }
 
   @Test

@@ -41,6 +41,8 @@ function confirmedOrder(overrides: Partial<Order> = {}): Order {
     cast_name: '花子',
     receptionist_name: '佐藤',
     pax: 2,
+    total_duration_minutes: 60,
+    total_remuneration: 7000,
     course: {
       ...{
         service_id: 'course-1',
@@ -234,6 +236,8 @@ test('対象変更直後から旧フォームを隠し、新しい詳細で初�
       confirmedOrder({
         id: 'o2',
         pax: 8,
+        total_duration_minutes: 60,
+        total_remuneration: 7000,
         course: {
           ...{
             service_id: 'course-1',

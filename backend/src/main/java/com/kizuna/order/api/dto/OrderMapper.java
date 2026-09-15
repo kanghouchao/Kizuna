@@ -4,6 +4,7 @@ import com.kizuna.order.domain.InvalidOrderFeeLineException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderFeeLine;
 import com.kizuna.order.domain.OrderFeeLineDraft;
+import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.domain.PlatformOrderView;
@@ -17,31 +18,38 @@ public interface OrderMapper {
 
   /** 読み側 projection をレスポンスDTOに変換します。明細は集約から別に載せます。 */
   @Mapping(target = "feeLines", ignore = true)
+  @Mapping(target = "totalDurationMinutes", ignore = true)
+  @Mapping(target = "totalRemuneration", ignore = true)
   OrderResponse toResponse(OrderView view);
 
-  /**
-   * 明細の入力をドメインの下書きへ変換します。金額は表示上の値で届くため、種別の符号約定に合わせて帯符号へ翻します。
-   *
-   * <p>符号が減算に固定された種別へ負値が届いたら撥ねる。翻すと正の割引になり、集約の符号検査を素通りして 加算として記録される。
-   */
   default List<OrderFeeLineDraft> toFeeLineDrafts(List<OrderFeeLineRequest> requests) {
-    if (requests == null) {
-      return null;
-    }
+    if (requests == null) return null;
     return requests.stream()
         .map(
             request -> {
-              if (request.getKind() != null
-                  && request.getKind().isDeduction()
-                  && request.getAmount() != null
-                  && request.getAmount() < 0) {
-                throw new InvalidOrderFeeLineException("減算の明細の金額は 0 以上で指定してください（引くことは種別が表します）");
+              if (request.getLineId() != null
+                  || request.getServiceId() != null
+                  || request.getRevisionId() != null)
+                throw new InvalidOrderFeeLineException("設定と既存明細は採用処理で解決してください");
+              if (request.getKind() == null
+                  || request.getAmount() == null
+                  || request.getAmount() < 0)
+                throw new InvalidOrderFeeLineException("明細の種別と0以上の整数円を指定してください");
+              if (request.getKind() == OrderFeeLineKind.EXTENSION) {
+                if (request.getRemuneration() == null || request.getDurationMinutes() == null)
+                  throw new InvalidOrderFeeLineException("延長の分数と固定報酬は必須です");
+              } else if (request.getRemuneration() != null
+                  || request.getDurationMinutes() != null) {
+                throw new InvalidOrderFeeLineException("この種別では分数・固定報酬を入力できません");
               }
-              int amount = request.getAmount() == null ? 0 : request.getAmount();
               return new OrderFeeLineDraft(
+                  null,
                   request.getKind(),
                   request.getName(),
-                  request.getKind() == null ? amount : request.getKind().signedAmountOf(amount));
+                  request.getKind().signedAmountOf(request.getAmount()),
+                  request.getDurationMinutes(),
+                  request.getRemuneration() == null ? 0 : request.getRemuneration(),
+                  null);
             })
         .toList();
   }
@@ -52,6 +60,16 @@ public interface OrderMapper {
         .map(
             line ->
                 OrderFeeLineResponse.builder()
+                    .lineId(line.getId() == null ? null : line.getId().toString())
+                    .durationMinutes(line.getDurationMinutes())
+                    .remuneration(line.getRemuneration())
+                    .serviceId(line.getAdoption() == null ? null : line.getAdoption().serviceId())
+                    .revisionId(line.getAdoption() == null ? null : line.getAdoption().revisionId())
+                    .revisionNumber(
+                        line.getAdoption() == null ? null : line.getAdoption().revisionNumber())
+                    .adoptionBasis(
+                        line.getAdoption() == null ? null : line.getAdoption().adoptionBasis())
+                    .adoptedAt(line.getAdoption() == null ? null : line.getAdoption().adoptedAt())
                     .kind(line.getKind().name())
                     .name(line.getName())
                     .amount(line.getKind().displayedAmountOf(line.getAmount()))
@@ -101,8 +119,10 @@ public interface OrderMapper {
   @Mapping(target = "cancelledBy", ignore = true)
   @Mapping(target = "cancelledAt", ignore = true)
   @Mapping(target = "course", ignore = true)
+  @Mapping(target = "extensionMinutes", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
   /** 注文更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */
+  @Mapping(target = "feeLines", ignore = true)
   OrderPatch toPatch(OrderUpdateRequest request);
 }

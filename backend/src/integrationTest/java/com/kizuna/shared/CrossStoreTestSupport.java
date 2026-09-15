@@ -10,6 +10,7 @@ import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.domain.OrderCourse;
+import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.service.domain.ServiceRevisionRepository;
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -162,7 +163,9 @@ public abstract class CrossStoreTestSupport {
         .as("前提: コース作成 %s", created.getBody())
         .isEqualTo(HttpStatus.CREATED);
     var terms =
-        fixtureRevisions.findCourse(created.getBody().path("id").asString(), 1).orElseThrow();
+        fixtureRevisions
+            .findSelection(ServiceKind.COURSE, created.getBody().path("id").asString(), 1)
+            .orElseThrow();
     return new OrderCourse(
         terms.serviceId(),
         terms.revisionId(),
@@ -201,7 +204,7 @@ public abstract class CrossStoreTestSupport {
     var body = fixtureJson.createObjectNode();
     body.put("expected_version", detail.path("version").asLong());
     var line = body.putArray("fee_lines").addObject();
-    line.put("kind", extra < 0 ? "DISCOUNT" : "SURCHARGE");
+    line.put("kind", extra < 0 ? "DISCOUNT" : "OPTION");
     line.put("name", "会計");
     line.put("amount", Math.abs(extra));
     if (usePoints != null) body.put("use_points", usePoints);

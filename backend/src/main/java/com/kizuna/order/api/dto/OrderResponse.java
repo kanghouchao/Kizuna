@@ -47,6 +47,9 @@ public class OrderResponse {
   /** 明細の総和。ポイント利用の減算も含むため、ポイント控除後の請求額にあたる。 */
   private Integer totalFee;
 
+  private int totalDurationMinutes;
+  private int totalRemuneration;
+
   private Integer usedPoints;
   private Integer autoGrantPoints;
   private String remarks;
