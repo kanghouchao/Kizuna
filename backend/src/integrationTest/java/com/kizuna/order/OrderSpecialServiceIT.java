@@ -1,12 +1,16 @@
 package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.application.OwnServiceConditionService;
+import com.kizuna.service.application.SpecialServiceRejectionHandler;
 import com.kizuna.service.domain.ConsentDecision;
 import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
@@ -30,6 +34,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -37,6 +43,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class OrderSpecialServiceIT extends CrossStoreTestSupport {
+  @MockitoSpyBean SpecialServiceRejectionHandler rejectionHandler;
   @Autowired ObjectMapper json;
   @Autowired JdbcTemplate jdbc;
   @Autowired PlatformTransactionManager transactions;
@@ -446,6 +453,46 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
     assertThat(resolved.path("after").size()).isEqualTo(1);
     assertThat(resolved.path("after").get(0).path("requires_attention").asBoolean()).isTrue();
     assertThat(get(id, manager).path("unresolved_special_service_count").asInt()).isEqualTo(1);
+  }
+
+  @Test
+  void failedOrderRejectionRollsBackConsentAndBothHistories() {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String service = special(manager);
+    String course = courseFixture(STORE_A, "拒否の原子性", 60, 12000).serviceId();
+    assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var input = createInput(owner.cast(), course, service);
+    var preview = call(HttpMethod.POST, "/store/orders/preview", input, manager);
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    input.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    var created = call(HttpMethod.POST, "/store/orders", input, manager);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String id = created.getBody().path("id").asString();
+    doAnswer(
+            invocation -> {
+              invocation.callRealMethod();
+              throw new ServiceException("受注反映失敗の検証");
+            })
+        .when(
+            AopTestUtils.<SpecialServiceRejectionHandler>getUltimateTargetObject(rejectionHandler))
+        .applyRejection(any());
+    assertThat(decide(owner, service, 1, 1, "REJECTED").getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(candidates(owner.cast(), manager).toString()).contains(service);
+    assertThat(get(id, manager).path("requires_attention").asBoolean()).isFalse();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_service_consent_events e join t_service_consents c on c.id = e.consent_id where c.enrollment_id = ?",
+                Integer.class,
+                owner.cast()))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_order_special_service_events where order_id = ?",
+                Integer.class,
+                id))
+        .isZero();
   }
 
   private String special(HttpHeaders manager) {

@@ -9,7 +9,8 @@ import com.kizuna.order.domain.OrderSpecialServiceEventRepository;
 import com.kizuna.order.domain.SpecialServiceHistorySnapshot;
 import com.kizuna.order.domain.SpecialServiceSnapshot;
 import com.kizuna.service.application.OrderSpecialServiceCatalog;
-import com.kizuna.service.application.ServiceRejected;
+import com.kizuna.service.application.SpecialServiceRejection;
+import com.kizuna.service.application.SpecialServiceRejectionHandler;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -23,7 +24,6 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -32,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class OrderSpecialServices {
+public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   private final OrderSpecialServiceCatalog catalog;
   private final OrderSpecialServiceEventRepository events;
   private final OrderRepository orders;
@@ -207,10 +207,10 @@ public class OrderSpecialServices {
         .toList();
   }
 
-  @EventListener
+  @Override
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
-  public void rejected(ServiceRejected event) {
+  public void applyRejection(SpecialServiceRejection event) {
     for (var order : orders.findUnfinishedSpecialOrders(event.enrollmentId(), event.serviceId())) {
       events.save(
           OrderSpecialServiceEvent.rejected(

@@ -23,6 +23,4 @@
 * `c.k.c.application.CustomerReferenceResolver` (in Customer)
 * `c.k.c.application.CustomerProvisioningService` (in Customer)
 * `c.k.u.application.ReceptionistEligibilityService` (in User)
-|Events listened to
-|* `c.k.s.application.ServiceRejected`
 |===

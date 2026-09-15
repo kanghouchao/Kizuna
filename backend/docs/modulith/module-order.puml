@@ -71,7 +71,6 @@ Rel(Application.Application.Service, Application.Application.Shared, "uses", $te
 Rel(Application.Application.Service, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Service, Application.Application.User, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Service, Application.Application.Store, "uses", $techn="", $tags="", $link="")
-Rel(Application.Application.Order, Application.Application.Service, "listens to", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

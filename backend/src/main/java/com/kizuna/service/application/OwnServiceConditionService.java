@@ -24,7 +24,6 @@ import com.kizuna.user.application.ActorIdentityService;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -43,7 +42,7 @@ public class OwnServiceConditionService {
   private final ActorIdentityService actors;
   private final StoreRepository stores;
   private final StoreContext context;
-  private final ApplicationEventPublisher publisher;
+  private final SpecialServiceRejectionHandler rejectionHandler;
 
   @Transactional(readOnly = true)
   @StoreScoped
@@ -90,8 +89,9 @@ public class OwnServiceConditionService {
       consents.saveAndFlush(consent);
       var event = events.saveAndFlush(ServiceConsentEvent.record(consent, actorId));
       if (request.decision() == ConsentDecision.REJECTED)
-        publisher.publishEvent(
-            new ServiceRejected(enrollment, id, event.getId(), actorId, event.getOccurredAt()));
+        rejectionHandler.applyRejection(
+            new SpecialServiceRejection(
+                enrollment, id, event.getId(), actorId, event.getOccurredAt()));
     }
     return summary(item, consent);
   }

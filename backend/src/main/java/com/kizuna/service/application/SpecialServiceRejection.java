@@ -2,7 +2,7 @@ package com.kizuna.service.application;
 
 import java.time.OffsetDateTime;
 
-public record ServiceRejected(
+public record SpecialServiceRejection(
     String enrollmentId,
     String serviceId,
     String consentEventId,
