@@ -34,3 +34,18 @@ export const serviceKindLabels: Record<ServiceKind, string> = {
   SPECIAL_SERVICE: '特殊サービス',
   SURCHARGE: '加算',
 };
+
+export type ConsentStatus = 'NOT_ACCEPTED' | 'ACCEPTED' | 'REJECTED' | 'RECONFIRMATION_REQUIRED';
+export type ConsentDecision = 'ACCEPTED' | 'REJECTED';
+export interface OwnServiceConditionSummary extends ServiceCreateRequest {
+  id: string;
+  store_id: string;
+  terms_version: number;
+  consent_status?: ConsentStatus;
+  consent_version?: number;
+}
+export interface OwnConsentRequest {
+  terms_version: number;
+  consent_version: number;
+  decision: ConsentDecision;
+}

@@ -13,6 +13,7 @@ databaseChangeLog:
                 kind VARCHAR(32), name VARCHAR(255), duration_minutes INTEGER,
                 charge_type VARCHAR(16), price INTEGER, remuneration INTEGER,
                 revision_number BIGINT NOT NULL CONSTRAINT ck_t_services_revision_number CHECK (revision_number >= 1),
+                terms_version BIGINT NOT NULL DEFAULT 1 CONSTRAINT ck_t_services_terms_version CHECK (terms_version > 0),
                 deleted BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -44,6 +45,7 @@ databaseChangeLog:
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 version BIGINT NOT NULL DEFAULT 0,
                 CONSTRAINT fk_t_service_revisions_service_store FOREIGN KEY (service_id, store_id) REFERENCES t_services(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT uq_t_service_revisions_id_store UNIQUE (id, store_id),
                 CONSTRAINT uq_t_service_revisions_number UNIQUE (service_id, revision_number),
                 CONSTRAINT ck_t_service_revisions_after CHECK (after_kind IS NOT NULL AND after_name IS NOT NULL AND length(trim(after_name)) BETWEEN 1 AND 255
                 AND after_price IS NOT NULL AND after_remuneration IS NOT NULL
@@ -78,3 +80,51 @@ databaseChangeLog:
             referencedColumnNames: id
             constraintName: fk_t_service_revisions_store
             onDelete: NO ACTION
+
+  - changeSet:
+      id: store-v0100-009-service-consents
+      author: kanghouchao
+      changes:
+        - sql:
+            sql: |
+              CREATE TABLE t_service_consents (
+                id VARCHAR(64) CONSTRAINT pk_t_service_consents PRIMARY KEY,
+                store_id BIGINT NOT NULL CONSTRAINT fk_t_service_consents_store REFERENCES t_stores(id) ON DELETE NO ACTION,
+                enrollment_id VARCHAR(64) NOT NULL,
+                service_id VARCHAR(64) NOT NULL,
+                decision VARCHAR(16) NOT NULL CONSTRAINT ck_t_service_consents_decision CHECK (decision IN ('ACCEPTED', 'REJECTED')),
+                terms_version BIGINT NOT NULL CONSTRAINT ck_t_service_consents_terms_version CHECK (terms_version > 0),
+                service_revision_id VARCHAR(64) NOT NULL,
+                revision_number BIGINT NOT NULL CONSTRAINT ck_t_service_consents_revision_number CHECK (revision_number > 0),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                version BIGINT NOT NULL DEFAULT 0,
+                CONSTRAINT uq_t_service_consents_pair UNIQUE (enrollment_id, service_id),
+                CONSTRAINT uq_t_service_consents_id_store UNIQUE (id, store_id),
+                CONSTRAINT fk_t_service_consents_enrollment FOREIGN KEY (enrollment_id, store_id) REFERENCES t_cast_enrollments(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_service_consents_service FOREIGN KEY (service_id, store_id) REFERENCES t_services(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_service_consents_revision FOREIGN KEY (service_revision_id, store_id) REFERENCES t_service_revisions(id, store_id) ON DELETE NO ACTION
+              );
+              CREATE INDEX idx_t_service_consents_store ON t_service_consents(store_id);
+              CREATE INDEX idx_t_service_consents_service ON t_service_consents(service_id, store_id);
+              CREATE INDEX idx_t_service_consents_revision ON t_service_consents(service_revision_id, store_id);
+              CREATE TABLE t_service_consent_events (
+                id VARCHAR(64) CONSTRAINT pk_t_service_consent_events PRIMARY KEY,
+                store_id BIGINT NOT NULL CONSTRAINT fk_t_service_consent_events_store REFERENCES t_stores(id) ON DELETE NO ACTION,
+                consent_id VARCHAR(64) NOT NULL,
+                revision_number BIGINT NOT NULL CONSTRAINT ck_t_service_consent_events_revision_number CHECK (revision_number > 0),
+                decision VARCHAR(16) NOT NULL CONSTRAINT ck_t_service_consent_events_decision CHECK (decision IN ('ACCEPTED', 'REJECTED')),
+                terms_version BIGINT NOT NULL CONSTRAINT ck_t_service_consent_events_terms_version CHECK (terms_version > 0),
+                service_revision_id VARCHAR(64) NOT NULL,
+                actor_id BIGINT NOT NULL CONSTRAINT fk_t_service_consent_events_actor REFERENCES t_users(id) ON DELETE NO ACTION,
+                occurred_at TIMESTAMPTZ NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                version BIGINT NOT NULL DEFAULT 0,
+                CONSTRAINT uq_t_service_consent_events_number UNIQUE (consent_id, revision_number),
+                CONSTRAINT fk_t_service_consent_events_consent FOREIGN KEY (consent_id, store_id) REFERENCES t_service_consents(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_service_consent_events_revision FOREIGN KEY (service_revision_id, store_id) REFERENCES t_service_revisions(id, store_id) ON DELETE NO ACTION
+              );
+              CREATE INDEX idx_t_service_consent_events_store ON t_service_consent_events(store_id);
+              CREATE INDEX idx_t_service_consent_events_revision ON t_service_consent_events(service_revision_id, store_id);
+              CREATE INDEX idx_t_service_consent_events_actor ON t_service_consent_events(actor_id);

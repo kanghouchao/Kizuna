@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDaysIcon, CircleUserRoundIcon, ClipboardListIcon } from 'lucide-react';
+import {
+  CalendarDaysIcon,
+  CircleUserRoundIcon,
+  ClipboardListIcon,
+  ListChecksIcon,
+} from 'lucide-react';
 import { readTokenClaims, redirectToLogin } from '@/shared/lib';
 
 interface CastPortalShellProps {
@@ -13,6 +18,7 @@ interface CastPortalShellProps {
 const TABS = [
   { href: '/cast/schedule', label: 'スケジュール', icon: CalendarDaysIcon },
   { href: '/cast/requests', label: '希望提出', icon: ClipboardListIcon },
+  { href: '/cast/service-conditions', label: 'サービス条件', icon: ListChecksIcon },
   { href: '/cast/account', label: 'アカウント', icon: CircleUserRoundIcon },
 ] as const;
 

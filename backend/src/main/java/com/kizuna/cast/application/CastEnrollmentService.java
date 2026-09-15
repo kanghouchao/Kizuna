@@ -162,7 +162,7 @@ public class CastEnrollmentService {
   }
 
   private CastEnrollment requireLocked(String id) {
-    stores.lockAgainstDeletion(storeContext.getStoreId());
+    stores.lockCastFields(storeContext.getStoreId());
     return enrollments
         .findScopedByIdForUpdate(id)
         .orElseThrow(() -> new NotFoundException("在籍が見つかりません"));

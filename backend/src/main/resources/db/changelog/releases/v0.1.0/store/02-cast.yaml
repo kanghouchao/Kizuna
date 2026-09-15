@@ -73,6 +73,10 @@ databaseChangeLog:
             onDelete: NO ACTION
         - sql:
             sql: ALTER TABLE t_cast_enrollments ADD CONSTRAINT ck_t_cast_enrollments_status CHECK (status IN ('ENROLLED', 'SUSPENDED', 'WITHDRAWN'))
+        - addUniqueConstraint:
+            tableName: t_cast_enrollments
+            columnNames: id, store_id
+            constraintName: uq_t_cast_enrollments_id_store
         - sql:
             sql: CREATE UNIQUE INDEX uq_t_cast_enrollments_current ON t_cast_enrollments (cast_id, store_id) WHERE status <> 'WITHDRAWN'
         - createIndex:

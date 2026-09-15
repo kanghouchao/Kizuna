@@ -9,6 +9,8 @@ interface ListPageResult<T, C> extends PageResult<T> {
   isLoading: boolean;
   /** 取得に失敗した状態。行が無いだけの空表示（＝0 件）と区別するために分ける。 */
   failed: boolean;
+  /** 最新要求の失敗原因。分類と表示は呼び出し側が決める。 */
+  error: unknown;
   /** 検索条件を適用して 1 ページ目から取り直す（関数形は適用済み条件からの差分更新） */
   search: (criteria: C | ((prev: C) => C)) => Promise<void>;
   onPageChange: (page: number) => Promise<void>;
@@ -16,13 +18,9 @@ interface ListPageResult<T, C> extends PageResult<T> {
 }
 
 /**
- * ListPage 向けの取得ライフサイクル（page・適用済み検索条件・失敗・順不同レスポンス守衛）。
- * 検索条件は fetcher の引数として渡す。呼び出し側の state を fetcher のクロージャから読ませると、
- * 条件を更新した同一ハンドラ内で再取得したとき再レンダー前の古い値で取得してしまうため、
- * 「どの条件で取得するか」は hook が持つ。検索条件を持たない一覧は C を省略してよい。
- *
- * <p>失敗は failed で伝えるだけで、提示は行わない。取得に失敗した領域が自分で名乗るのか
- * 通知に出すのかは呼び出し側の場面が決めることで、フックの内側に隠れてはならない。
+ * ListPage のページ・適用済み検索条件・失敗を管理し、最新要求の結果だけを反映する。
+ * 検索条件は引数で fetcher に渡し、条件更新直後の古いクロージャによる取得を防ぐ。
+ * 失敗は failed と error で返し、分類と提示は呼び出し側に委ねる。
  */
 export function useListPage<T>(
   fetcher: (page: number) => Promise<PageResult<T>>
@@ -46,22 +44,22 @@ export function useListPage<T, C>(
   const criteriaRef = useRef(initialCriteria as C);
   const [pageResult, setPageResult] = useState<PageResult<T>>(EMPTY_PAGE);
   const [isLoading, setIsLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<{ error: unknown } | null>(null);
 
   const load = useCallback(async (page: number) => {
     const requestId = ++requestIdRef.current;
     setIsLoading(true);
     // 再取得中は失敗表示を畳む。残したままだと、押した再試行が効いているのか分からない。
-    setFailed(false);
+    setFailure(null);
     try {
       const result = await fetcherRef.current(page, criteriaRef.current);
       if (requestId === requestIdRef.current) setPageResult(result);
-    } catch {
+    } catch (error) {
       // 行も現在ページも起点へ戻す。位置を残すと再試行が 21〜40 行目だけの欠番一覧を返す。
       // 適用済みの検索条件は利用者の指定なので保つ（戻すのは位置だけ）。
       if (requestId === requestIdRef.current) {
         setPageResult(EMPTY_PAGE);
-        setFailed(true);
+        setFailure({ error });
       }
     } finally {
       if (requestId === requestIdRef.current) setIsLoading(false);
@@ -95,5 +93,13 @@ export function useListPage<T, C>(
   // 失敗時は現在ページが 0 に戻っているので、同じ関数がそのまま失敗の再試行にもなる。
   const reload = useCallback(() => load(pageResult.page), [load, pageResult.page]);
 
-  return { ...pageResult, isLoading, failed, search, onPageChange, reload };
+  return {
+    ...pageResult,
+    isLoading,
+    failed: failure !== null,
+    error: failure?.error,
+    search,
+    onPageChange,
+    reload,
+  };
 }
