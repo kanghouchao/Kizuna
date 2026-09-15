@@ -97,26 +97,16 @@ export function CastServiceConditionsPage() {
 }
 
 function Conditions({ storeId }: { storeId: string }) {
-  const [denied, setDenied] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
+  const [saveDenied, setSaveDenied] = useState(false);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [target, setTarget] = useState<{
     item: OwnServiceConditionSummary;
     decision: ConsentDecision;
   } | null>(null);
-  const list = useListPage(async page => {
-    try {
-      const result = await ownServiceApi.list(storeId, page);
-      setDenied(false);
-      setUnavailable(false);
-      return result;
-    } catch (error) {
-      setDenied(isForbidden(error));
-      setUnavailable(isNotFound(error));
-      throw error;
-    }
-  });
+  const list = useListPage(page => ownServiceApi.list(storeId, page));
+  const denied = saveDenied || isForbidden(list.error);
+  const unavailable = isNotFound(list.error);
   const save = async () => {
     if (!target || saving || target.item.consent_version === undefined) return;
     const { item, decision } = target;
@@ -133,7 +123,7 @@ function Conditions({ storeId }: { storeId: string }) {
       await list.reload();
     } catch (error) {
       if (isForbidden(error)) {
-        setDenied(true);
+        setSaveDenied(true);
         notify.warning('権限がないため保存されませんでした');
       } else if (isNotFound(error)) {
         notify.warning('対象が変更されたため保存されませんでした');

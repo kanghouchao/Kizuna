@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CastServiceConditionsPage } from '../CastServiceConditionsPage';
 import { shiftApi } from '@/entities/shift';
 import { ownServiceApi } from '@/entities/service';
@@ -123,4 +123,41 @@ it('switches stores without exposing the previous response', async () => {
   await screen.findByText('二店の条件');
   finish(page());
   await waitFor(() => expect(screen.queryByText('追加')).not.toBeInTheDocument());
+});
+
+it.each([403, 404])('keeps the latest page when an older request fails with %s', async status => {
+  let rejectOlder!: (error: unknown) => void;
+  let resolveLatest!: (value: ReturnType<typeof page>) => void;
+  jest
+    .mocked(ownServiceApi.list)
+    .mockResolvedValueOnce({ ...page(), pageCount: 3, total: 3 })
+    .mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectOlder = reject;
+        })
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveLatest = resolve;
+        })
+    );
+  render(<CastServiceConditionsPage />);
+  await screen.findByText('追加');
+  const next = screen.getAllByRole('button', { name: '次へ' })[0];
+  act(() => {
+    fireEvent.click(next);
+    fireEvent.click(next);
+  });
+  expect(ownServiceApi.list).toHaveBeenCalledTimes(3);
+  await act(async () => {
+    resolveLatest({ ...page({ ...item, name: '最新の条件' }), page: 1 });
+  });
+  expect(screen.getByText('最新の条件')).toBeInTheDocument();
+  await act(async () => {
+    rejectOlder({ response: { status } });
+  });
+  expect(screen.getByText('最新の条件')).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
