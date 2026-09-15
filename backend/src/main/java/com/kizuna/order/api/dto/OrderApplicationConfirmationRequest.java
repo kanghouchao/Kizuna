@@ -17,6 +17,7 @@ import lombok.Data;
  */
 @Data
 public class OrderApplicationConfirmationRequest {
+  private List<String> specialServiceIds;
   private String confirmationToken;
 
   @NotBlank(message = "コースは必須です")

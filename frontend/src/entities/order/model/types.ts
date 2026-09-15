@@ -3,7 +3,7 @@
 // default-property-inclusion: non_null によりキーごと応答から消えるため optional にする。
 
 // 受注ステータス。すべての受注は CONFIRMED で出生する（ADR 0017）。未処理の申請は別記録（OrderApplication）。
-export type OrderStatus = 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+export type OrderStatus = 'CONFIRMED' | 'IN_SERVICE' | 'COMPLETED' | 'CANCELLED';
 
 // 受付経路。MEMBER_WEB=会員ポータルの申請確定由来/GUEST_WEB=公開店面のゲスト申請確定由来/PHONE=電話受付。
 export type ReceptionRoute = 'MEMBER_WEB' | 'GUEST_WEB' | 'PHONE';
@@ -27,6 +27,7 @@ export function isWebApplicationRoute(
 /** 受注ステータスの日本語表示。 */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   CONFIRMED: '確定',
+  IN_SERVICE: 'サービス中',
   COMPLETED: '完了',
   CANCELLED: 'キャンセル',
 };
@@ -50,7 +51,7 @@ export const ORDER_APPLICATION_STATUS_LABELS: Record<OrderApplicationStatus, str
 export type OrderFeeLineKind =
   | 'BASE_COURSE'
   | 'EXTENSION'
-  | 'OPTION'
+  | 'SPECIAL_SERVICE'
   | 'SURCHARGE'
   | 'DISCOUNT'
   | 'POINT_REDEMPTION'
@@ -60,7 +61,7 @@ export type OrderFeeLineKind =
 export const ORDER_FEE_LINE_KIND_LABELS: Record<OrderFeeLineKind, string> = {
   BASE_COURSE: '基本コース料金',
   EXTENSION: '延長料金',
-  OPTION: 'オプション',
+  SPECIAL_SERVICE: '特殊サービス',
   SURCHARGE: '加算',
   DISCOUNT: '割引',
   POINT_REDEMPTION: 'ポイント利用',
@@ -70,7 +71,6 @@ export const ORDER_FEE_LINE_KIND_LABELS: Record<OrderFeeLineKind, string> = {
 /** 店舗が手入力できる種別。基本コース料金の名称はコース名の写しから採るため、行の名称は送らない。 */
 export const ORDER_FEE_LINE_STORE_KINDS: readonly OrderFeeLineKind[] = [
   'EXTENSION',
-  'OPTION',
   'SURCHARGE',
   'DISCOUNT',
   'CREDIT_SURCHARGE',
@@ -120,7 +120,7 @@ export type OrderFeeLineRequest =
       duration_minutes: number;
       remuneration: number;
     }
-  | { kind: 'DISCOUNT' | 'OPTION' | 'CREDIT_SURCHARGE'; name: string; amount: number };
+  | { kind: 'DISCOUNT' | 'CREDIT_SURCHARGE'; name: string; amount: number };
 
 export interface SurchargeCandidate {
   service_id: string;
@@ -136,6 +136,10 @@ export interface SurchargeCandidate {
 export interface Order {
   total_duration_minutes: number;
   total_remuneration: number;
+  special_services: OrderSpecialService[];
+  requires_attention: boolean;
+  unresolved_special_service_count: number;
+  started_at?: string;
   course: OrderCourse;
   id?: string;
   receptionist_id?: number;
@@ -201,6 +205,9 @@ export interface Order {
  * そのまま 1 行の差し替えに使える。
  */
 export interface OrderWorkQueueRow {
+  requires_attention: boolean;
+  unresolved_special_service_count: number;
+  started_at?: string;
   course: OrderCourse;
   id?: string;
   receptionist_id?: number;
@@ -228,6 +235,9 @@ export interface OrderWorkQueueRow {
  * 取消の記録を持つ。指名・受付担当・備考は対応中にしか使わないので載らない。
  */
 export interface OrderArchiveRow {
+  requires_attention: boolean;
+  unresolved_special_service_count: number;
+  started_at?: string;
   course: OrderCourse;
   id?: string;
   status?: OrderStatus;
@@ -249,6 +259,9 @@ export interface OrderArchiveRow {
  * 顧客詳細の注文履歴 1 行（GET /store/orders?customer_id=）。顧客は画面の文脈が持っているので載らない。
  */
 export interface OrderSummaryRow {
+  requires_attention: boolean;
+  unresolved_special_service_count: number;
+  started_at?: string;
   course: OrderCourse;
   id?: string;
   business_date?: string;
@@ -317,6 +330,7 @@ export type OrderListCriteria = Omit<OrderQueryParams, 'statuses'>;
  * 店舗が起こした受注は出生時に両方が埋まっているので、編集画面は毎回この 2 つを運ぶ必要がある。
  */
 export interface OrderUpdateRequest {
+  special_service_ids?: string[];
   expected_version: number;
   course_id?: string;
   confirmation_token?: string;
@@ -361,6 +375,7 @@ export interface OrderCancellationRequest {
  * ポイント利用の行は含められない（門内でも編集不可）。既にある行はこの経路で消えない。
  */
 export interface OrderCorrectionRequest {
+  special_service_revision_ids?: string[];
   course_revision_id?: string;
   confirmation_token?: string;
   /**
@@ -389,6 +404,8 @@ export interface OrderCorrectionResult {
   total_duration_minutes: number;
   previous_fee_lines: OrderFeeLine[];
   fee_lines: OrderFeeLine[];
+  previous_special_services: OrderSpecialService[];
+  special_services: OrderSpecialService[];
   previous_total_fee?: number;
   total_fee?: number;
 }
@@ -410,6 +427,7 @@ export interface OrderCastCandidate {
 }
 
 export interface OrderCreateRequest {
+  special_service_ids?: string[];
   course_id: string;
   confirmation_token?: string;
   /**
@@ -481,6 +499,7 @@ export interface OrderApplicationRow {
  */
 export interface OrderApplicationConfirmationRequest {
   fee_lines?: OrderFeeLineRequest[];
+  special_service_ids?: string[];
   course_id: string;
   confirmation_token?: string;
   /** 受付担当。省略すると、実行者本人が受付候補の条件を満たす場合にだけ補われる。 */
@@ -716,9 +735,60 @@ export interface OrderCourse extends CourseCandidate {
 export interface OrderPreview {
   total_duration_minutes: number;
   total_remuneration: number;
+  special_services: OrderSpecialService[];
+  requires_attention: boolean;
+  unresolved_special_service_count: number;
   confirmation_token: string;
   course: Omit<OrderCourse, 'adopted_at'>;
   fee_lines: OrderFeeLine[];
   total_fee: number;
   points?: OrderPointsPreview;
+}
+
+export interface SpecialServiceCandidate {
+  service_id: string;
+  revision_id: string;
+  revision_number: number;
+  terms_version: number;
+  name: string;
+  charge_type: 'PAID' | 'FREE';
+  price: number;
+  remuneration: number;
+  consent_event_id: string;
+  consent_version: number;
+}
+
+export interface SpecialServiceRevision extends Omit<
+  SpecialServiceCandidate,
+  'consent_event_id' | 'consent_version'
+> {
+  occurred_at: string;
+  service_deleted: boolean;
+}
+
+export interface OrderSpecialService extends Omit<
+  SpecialServiceCandidate,
+  'consent_event_id' | 'consent_version'
+> {
+  consent_event_id?: string;
+  consent_version?: number;
+  adoption_basis: 'ACCEPTED_TERMS' | 'HISTORICAL_CORRECTION';
+  adopted_at?: string;
+  enrollment_id: string;
+  requires_attention: boolean;
+  current_consent_status?: 'NOT_ACCEPTED' | 'ACCEPTED' | 'REJECTED' | 'RECONFIRMATION_REQUIRED';
+}
+
+export interface OrderSpecialServiceEvent {
+  id: string;
+  occurred_at: string;
+  actor_id: string;
+  kind: 'REJECTED' | 'RESOLVED';
+  consent_event_id: string;
+  before: OrderSpecialService[];
+  after: OrderSpecialService[];
+  previous_total_fee: number;
+  total_fee: number;
+  resolution?: 'REMOVED' | 'RESELECTED' | 'CAST_CHANGED';
+  rejection_event_id?: string;
 }

@@ -18,6 +18,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderArchiveResponse {
+  private boolean requiresAttention;
+  private int unresolvedSpecialServiceCount;
+  private OffsetDateTime startedAt;
   private OrderCourse course;
   private String id;
   private String status;

@@ -12,6 +12,15 @@ databaseChangeLog:
             remarks: 注文テーブル
             columns:
               - column:
+                  name: started_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: started_by
+                  type: BIGINT
+              - column:
+                  name: start_reason
+                  type: VARCHAR(500)
+              - column:
                   name: id
                   type: VARCHAR(64)
                   constraints:
@@ -367,7 +376,7 @@ databaseChangeLog:
                   type: VARCHAR(30)
                   constraints:
                     nullable: false
-                  remarks: 明細種別（BASE_COURSE/EXTENSION/OPTION/SURCHARGE/DISCOUNT/POINT_REDEMPTION/CREDIT_SURCHARGE）
+                  remarks: 明細種別（BASE_COURSE/EXTENSION/SPECIAL_SERVICE/SURCHARGE/DISCOUNT/POINT_REDEMPTION/CREDIT_SURCHARGE）
               - column:
                   name: name
                   type: VARCHAR(255)
@@ -444,7 +453,7 @@ databaseChangeLog:
                 CASE kind
                   WHEN 'BASE_COURSE' THEN amount >= 0
                   WHEN 'EXTENSION' THEN amount >= 0
-                  WHEN 'OPTION' THEN amount >= 0
+                  WHEN 'SPECIAL_SERVICE' THEN amount >= 0
                   WHEN 'SURCHARGE' THEN amount >= 0
                   WHEN 'CREDIT_SURCHARGE' THEN amount >= 0
                   WHEN 'DISCOUNT' THEN amount < 0
@@ -471,6 +480,12 @@ databaseChangeLog:
             tableName: t_order_corrections
             remarks: 完了後訂正の履歴（訂正前の姿・訂正者・時刻・理由）
             columns:
+              - column:
+                  name: special_services
+                  type: JSONB
+                  defaultValueComputed: "'[]'::jsonb"
+                  constraints:
+                    nullable: false
               - column:
                   name: id
                   type: VARCHAR(64)
@@ -863,9 +878,90 @@ databaseChangeLog:
               ALTER TABLE t_order_fee_lines ADD CONSTRAINT ck_t_order_fee_lines_terms CHECK (
                 remuneration >= 0
                 AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION') THEN duration_minutes IS NOT NULL AND duration_minutes > 0 ELSE duration_minutes IS NULL END
-                AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION', 'SURCHARGE') THEN remuneration <= amount ELSE remuneration = 0 END
-                AND CASE WHEN kind IN ('BASE_COURSE', 'SURCHARGE') THEN
+                AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION', 'SURCHARGE', 'SPECIAL_SERVICE') THEN remuneration <= amount ELSE remuneration = 0 END
+                AND CASE WHEN kind IN ('BASE_COURSE', 'SURCHARGE', 'SPECIAL_SERVICE') THEN
                   service_id IS NOT NULL AND revision_id IS NOT NULL AND revision_number IS NOT NULL AND revision_number > 0
-                  AND adoption_basis IS NOT NULL AND adoption_basis IN ('CURRENT_SETTING', 'HISTORICAL_CORRECTION') AND adopted_at IS NOT NULL
+                  AND adoption_basis IS NOT NULL AND adoption_basis IN ('CURRENT_SETTING', 'ACCEPTED_TERMS', 'HISTORICAL_CORRECTION') AND adopted_at IS NOT NULL
                 ELSE service_id IS NULL AND revision_id IS NULL AND revision_number IS NULL AND adoption_basis IS NULL AND adopted_at IS NULL END
               );
+
+  - changeSet:
+      id: store-v0100-004-special-services
+      author: kanghouchao
+      changes:
+        # 拒否と処置の証跡は参照元を含めて残し、削除の連鎖で失わない。
+        - sql:
+            sql: |
+              ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_start CHECK (
+                (started_at IS NULL AND started_by IS NULL AND start_reason IS NULL)
+                OR (started_at IS NOT NULL AND started_by IS NOT NULL AND start_reason IS NOT NULL AND length(trim(start_reason)) > 0));
+              ALTER TABLE t_orders ADD CONSTRAINT fk_t_orders_started_by FOREIGN KEY (started_by) REFERENCES t_users(id) ON DELETE NO ACTION;
+              CREATE TABLE t_order_special_services (
+                id VARCHAR(64) CONSTRAINT pk_t_order_special_services PRIMARY KEY,
+                store_id BIGINT NOT NULL,
+                order_id VARCHAR(64) NOT NULL,
+                enrollment_id VARCHAR(64) NOT NULL,
+                service_id VARCHAR(64) NOT NULL,
+                revision_id VARCHAR(64) NOT NULL,
+                revision_number BIGINT NOT NULL CHECK (revision_number > 0),
+                terms_version BIGINT NOT NULL CHECK (terms_version > 0),
+                name VARCHAR(255) NOT NULL,
+                charge_type VARCHAR(16) NOT NULL CHECK (charge_type IN ('FREE','PAID')),
+                price INTEGER NOT NULL CHECK (price >= 0),
+                remuneration INTEGER NOT NULL CHECK (remuneration >= 0 AND remuneration <= price),
+                adoption_basis VARCHAR(32) NOT NULL CHECK (adoption_basis IN ('ACCEPTED_TERMS','HISTORICAL_CORRECTION')),
+                adopted_at TIMESTAMPTZ NOT NULL,
+                consent_event_id VARCHAR(64),
+                consent_version BIGINT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                version BIGINT NOT NULL DEFAULT 0,
+                CONSTRAINT uq_t_order_special_services_pair UNIQUE (order_id, service_id),
+                CONSTRAINT ck_t_order_special_services_free CHECK (charge_type <> 'FREE' OR (price = 0 AND remuneration = 0)),
+                CONSTRAINT ck_t_order_special_services_consent CHECK (adoption_basis <> 'ACCEPTED_TERMS' OR (consent_event_id IS NOT NULL AND consent_version IS NOT NULL)),
+                CONSTRAINT fk_t_order_special_services_order FOREIGN KEY (order_id, store_id) REFERENCES t_orders(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_order_special_services_enrollment FOREIGN KEY (enrollment_id, store_id) REFERENCES t_cast_enrollments(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_order_special_services_service FOREIGN KEY (service_id, store_id) REFERENCES t_services(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_order_special_services_revision FOREIGN KEY (revision_id, store_id) REFERENCES t_service_revisions(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_order_special_services_consent FOREIGN KEY (consent_event_id, store_id) REFERENCES t_service_consent_events(id, store_id) ON DELETE NO ACTION
+              );
+              CREATE INDEX idx_t_order_special_services_enrollment ON t_order_special_services(store_id, enrollment_id, service_id);
+              CREATE INDEX idx_t_order_special_services_revision ON t_order_special_services(revision_id, store_id);
+              CREATE INDEX idx_t_order_special_services_consent ON t_order_special_services(consent_event_id, store_id);
+              ALTER TABLE t_order_fee_lines ADD CONSTRAINT ck_t_order_fee_lines_special CHECK (
+                (kind = 'SPECIAL_SERVICE' AND service_id IS NOT NULL AND remuneration IS NOT NULL AND remuneration BETWEEN 0 AND amount)
+                OR kind <> 'SPECIAL_SERVICE');
+              CREATE UNIQUE INDEX uq_t_order_fee_lines_special ON t_order_fee_lines(order_id, service_id) WHERE kind = 'SPECIAL_SERVICE';
+              CREATE TABLE t_order_special_service_events (
+                id VARCHAR(64) CONSTRAINT pk_t_order_special_service_events PRIMARY KEY,
+                store_id BIGINT NOT NULL,
+                order_id VARCHAR(64) NOT NULL,
+                enrollment_id VARCHAR(64) NOT NULL,
+                service_id VARCHAR(64) NOT NULL,
+                consent_event_id VARCHAR(64) NOT NULL,
+                actor_id BIGINT NOT NULL CONSTRAINT fk_t_order_special_service_events_actor REFERENCES t_users(id) ON DELETE NO ACTION,
+                occurred_at TIMESTAMPTZ NOT NULL,
+                kind VARCHAR(16) NOT NULL CHECK (kind IN ('REJECTED','RESOLVED')),
+                before_snapshot JSONB NOT NULL,
+                after_snapshot JSONB NOT NULL,
+                previous_total_fee INTEGER NOT NULL,
+                total_fee INTEGER NOT NULL,
+                resolution VARCHAR(16),
+                rejection_event_id VARCHAR(64),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                version BIGINT NOT NULL DEFAULT 0,
+                CONSTRAINT uq_t_order_special_service_events_id_store UNIQUE (id, store_id),
+                CONSTRAINT uq_t_order_special_service_events_resolution UNIQUE (rejection_event_id),
+                CONSTRAINT ck_t_order_special_service_events_resolution CHECK (
+                  (kind = 'REJECTED' AND rejection_event_id IS NULL AND resolution IS NULL)
+                  OR (kind = 'RESOLVED' AND rejection_event_id IS NOT NULL AND resolution IN ('REMOVED','RESELECTED','CAST_CHANGED'))),
+                CONSTRAINT fk_t_order_special_service_events_order FOREIGN KEY (order_id, store_id) REFERENCES t_orders(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_order_special_service_events_enrollment FOREIGN KEY (enrollment_id, store_id) REFERENCES t_cast_enrollments(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_order_special_service_events_service FOREIGN KEY (service_id, store_id) REFERENCES t_services(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_order_special_service_events_consent FOREIGN KEY (consent_event_id, store_id) REFERENCES t_service_consent_events(id, store_id) ON DELETE NO ACTION,
+                CONSTRAINT fk_t_order_special_service_events_rejection FOREIGN KEY (rejection_event_id, store_id) REFERENCES t_order_special_service_events(id, store_id) ON DELETE NO ACTION
+              );
+              CREATE UNIQUE INDEX uq_t_order_special_service_events_rejection ON t_order_special_service_events(order_id, consent_event_id) WHERE kind = 'REJECTED';
+              CREATE INDEX idx_t_order_special_service_events_history ON t_order_special_service_events(store_id, order_id, occurred_at DESC, id DESC);
+              CREATE INDEX idx_t_order_special_service_events_consent ON t_order_special_service_events(consent_event_id, store_id);

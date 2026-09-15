@@ -30,6 +30,14 @@ public class OrderConfirmation {
     ObjectNode result = json.valueToTree(preview);
     result.remove("confirmation_token");
     if (result.get("points") instanceof ObjectNode points) points.remove("point_balance");
+    if (result.get("special_services") != null) {
+      for (var value : result.get("special_services")) {
+        if (value instanceof ObjectNode special) {
+          special.remove("adopted_at");
+          special.remove("current_consent_status");
+        }
+      }
+    }
     var payload =
         List.of(
             "order-confirmation-v1",

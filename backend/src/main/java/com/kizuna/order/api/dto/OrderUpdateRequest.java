@@ -26,6 +26,7 @@ import lombok.Data;
  */
 @Data
 public class OrderUpdateRequest {
+  private List<String> specialServiceIds;
   private String confirmationToken;
   private String courseId;
   @NotNull private Long expectedVersion;

@@ -33,6 +33,9 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 /** 完了した受注 1 件。ポイント利用の行は完了処理が書いた記録で、門内でも編集できない。 */
 function completedOrder(overrides: Partial<Order> = {}): Order {
   return {
+    requires_attention: false,
+    unresolved_special_service_count: 0,
+    special_services: [],
     id: 'o1',
     business_date: '2026-08-20',
     customer_id: 'c1',
@@ -67,7 +70,7 @@ function completedOrder(overrides: Partial<Order> = {}): Order {
         remuneration: 0,
         system_owned: false,
       },
-      { kind: 'OPTION', name: '追加', amount: 0, remuneration: 0, system_owned: false },
+      { kind: 'CREDIT_SURCHARGE', name: '追加', amount: 0, remuneration: 0, system_owned: false },
       {
         kind: 'POINT_REDEMPTION',
         name: 'ポイント利用',
@@ -99,6 +102,8 @@ describe('完了後訂正のページ', () => {
       total_duration_minutes: 60,
       previous_fee_lines: [],
       fee_lines: [],
+      previous_special_services: [],
+      special_services: [],
       previous_total_fee: 11900,
       total_fee: 17900,
     });
@@ -121,9 +126,10 @@ describe('完了後訂正のページ', () => {
       actual_end_time: '22:40:00',
       confirmation_token: 'confirmed',
       course_revision_id: undefined,
+      special_service_revision_ids: [],
       extension_minutes: undefined,
       // ポイント利用の行は送らない（システム専有で、混ぜるとサーバが撥ねる）
-      fee_lines: [{ kind: 'OPTION', name: '追加', amount: 18000 }],
+      fee_lines: [{ kind: 'SURCHARGE', name: '追加', amount: 18000 }],
     });
     expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
   });
@@ -137,6 +143,8 @@ describe('完了後訂正のページ', () => {
       total_duration_minutes: 60,
       previous_fee_lines: [],
       fee_lines: [],
+      previous_special_services: [],
+      special_services: [],
       previous_total_fee: 11900,
       total_fee: 17900,
     });
@@ -168,6 +176,8 @@ describe('完了後訂正のページ', () => {
       total_duration_minutes: 60,
       previous_fee_lines: [],
       fee_lines: [],
+      previous_special_services: [],
+      special_services: [],
       previous_total_fee: 11900,
       total_fee: 17900,
     });
@@ -197,6 +207,8 @@ describe('完了後訂正のページ', () => {
       total_duration_minutes: 60,
       previous_fee_lines: [],
       fee_lines: [],
+      previous_special_services: [],
+      special_services: [],
       previous_total_fee: 11900,
       total_fee: 17900,
     });
@@ -353,6 +365,8 @@ test('訂正後の帰属取得中に別対象へ移ると、古い通知と結�
     total_duration_minutes: 60,
     previous_fee_lines: [],
     fee_lines: [],
+    previous_special_services: [],
+    special_services: [],
     previous_total_fee: 100,
     total_fee: 200,
   });
@@ -385,6 +399,8 @@ test('帰属取得が未着でも訂正成功を通知し、詳細を更新し�
     total_duration_minutes: 60,
     previous_fee_lines: [],
     fee_lines: [],
+    previous_special_services: [],
+    special_services: [],
     previous_total_fee: 100,
     total_fee: 200,
   });

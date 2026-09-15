@@ -18,6 +18,7 @@ import lombok.Data;
  */
 @Data
 public class OrderCorrectionRequest {
+  private List<String> specialServiceRevisionIds;
   private String confirmationToken;
   private String courseRevisionId;
 

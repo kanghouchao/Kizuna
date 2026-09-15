@@ -156,6 +156,8 @@ describe('顧客編集ページの注文履歴', () => {
     mockedOrderApi.list.mockResolvedValue({
       rows: [
         {
+          requires_attention: false,
+          unresolved_special_service_count: 0,
           course: {
             service_id: 'course-1',
             revision_id: 'r1',

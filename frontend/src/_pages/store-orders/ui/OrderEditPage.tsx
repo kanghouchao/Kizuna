@@ -2,7 +2,9 @@
 
 import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
 
+import { OrderServiceProgress } from './OrderServiceProgress';
 import { OrderCourseField } from './OrderCourseField';
+import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -52,6 +54,7 @@ interface OrderEditFormValues {
   arrival_scheduled_end_time: string;
   pax: string;
   /** 適用されたコース名の写し。基本コース料金の明細を置くなら必須になる。 */
+  special_service_ids: string[];
   course_id: string;
   /** 会計内訳。行に同一性は無く、送った内容がそのまま新しい内訳になる。 */
   fee_lines: OrderFeeLineInput[];
@@ -72,6 +75,7 @@ const EMPTY_VALUES: OrderEditFormValues = {
   arrival_scheduled_start_time: '',
   arrival_scheduled_end_time: '',
   pax: '',
+  special_service_ids: [],
   course_id: '',
   fee_lines: [],
   location_address: '',
@@ -150,6 +154,7 @@ export default function OrderEditPage() {
       arrival_scheduled_start_time: toTimeInput(current.arrival_scheduled_start_time),
       arrival_scheduled_end_time: toTimeInput(current.arrival_scheduled_end_time),
       pax: current.pax != null ? String(current.pax) : '',
+      special_service_ids: (current.special_services ?? []).map(item => item.service_id),
       course_id: '',
       fee_lines: storeEditableFeeLines(current.fee_lines),
       location_address: current.location_address ?? '',
@@ -192,6 +197,12 @@ export default function OrderEditPage() {
           }),
     };
     const request: OrderUpdateRequest = {
+      ...((values.cast_id || current.cast_id) !== current.cast_id
+        ? { special_service_ids: [] }
+        : JSON.stringify(values.special_service_ids) !==
+            JSON.stringify((current.special_services ?? []).map(item => item.service_id))
+          ? { special_service_ids: values.special_service_ids }
+          : {}),
       expected_version: current.version,
       // 指名と受付担当は触っていなくても毎回運ぶ。省略は「変更しない」ではなく「外す」と区別できないため、
       // 設定済みの受注では要求そのものが撥ねられる（サーバ側の契約）。欄が空のまま
@@ -253,6 +264,13 @@ export default function OrderEditPage() {
           )}
         </div>
 
+        {seeded && current && (
+          <OrderServiceProgress
+            key={`${storeId}:${orderId}`}
+            order={current}
+            onStarted={resource.capture().replace}
+          />
+        )}
         {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
         {/* 取得に失敗した領域を空のフォームに見せない（空欄を保存すると内容を消してしまう） */}
         {failure === 'error' && (
@@ -356,7 +374,11 @@ export default function OrderEditPage() {
                       </FormItem>
                     )}
                   />
-                  <OrderCourseField current={current.course} />{' '}
+                  <OrderCourseField current={current.course} />
+                  <OrderSpecialServicesField
+                    current={current.special_services}
+                    originalCast={current.cast_id}
+                  />{' '}
                 </div>
                 <OrderFeeLinesField systemLines={readOnlyFeeLines(current?.fee_lines)} />
               </section>

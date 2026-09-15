@@ -58,6 +58,10 @@ public class OrderCorrection extends StoreScopedEntity {
   @Column(name = "fee_lines", columnDefinition = "jsonb", updatable = false)
   private List<OrderFeeLineSnapshot> feeLines;
 
+  @Type(JsonBinaryType.class)
+  @Column(columnDefinition = "jsonb", updatable = false)
+  private List<SpecialServiceSnapshot> specialServices;
+
   @Column(name = "corrected_by", updatable = false)
   private Long correctedBy;
 
@@ -66,6 +70,7 @@ public class OrderCorrection extends StoreScopedEntity {
 
   private OrderCorrection(
       Order before, String reason, Long correctedBy, OffsetDateTime correctedAt) {
+    this.specialServices = before.getSpecialServices();
     this.orderId = before.getId();
     this.reason = reason;
     this.actualArrivalTime = before.getActualArrivalTime();

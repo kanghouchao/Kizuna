@@ -7,13 +7,17 @@ import { OrderFeeLine, OrderFeeLineInput, OrderFeeLineKind, OrderFeeLineRequest 
  */
 export function storeEditableFeeLines(lines: OrderFeeLine[] | undefined): OrderFeeLineInput[] {
   return (lines ?? [])
-    .filter(line => !line.system_owned && line.kind !== 'BASE_COURSE')
+    .filter(
+      line => !line.system_owned && line.kind !== 'BASE_COURSE' && line.kind !== 'SPECIAL_SERVICE'
+    )
     .map(line => ({ ...line, name: line.name ?? '' }));
 }
 
 /** 採用コースから生成した基本料金と、完了処理が書いたポイント利用を読み取り専用で返す。 */
 export function readOnlyFeeLines(lines: OrderFeeLine[] | undefined): OrderFeeLine[] {
-  return (lines ?? []).filter(line => line.system_owned || line.kind === 'BASE_COURSE');
+  return (lines ?? []).filter(
+    line => line.system_owned || line.kind === 'BASE_COURSE' || line.kind === 'SPECIAL_SERVICE'
+  );
 }
 
 /** 編集した明細だけを要求へ写す。 */
@@ -32,7 +36,7 @@ export function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineRequest
         duration_minutes: line.duration_minutes!,
         remuneration: line.remuneration!,
       };
-    if (line.kind === 'BASE_COURSE' || line.kind === 'POINT_REDEMPTION')
+    if (line.kind === 'BASE_COURSE' || line.kind === 'SPECIAL_SERVICE' || line.kind === 'POINT_REDEMPTION')
       throw new Error('システム明細は編集できません');
     return { kind: line.kind, name: line.name ?? '', amount: line.amount };
   });

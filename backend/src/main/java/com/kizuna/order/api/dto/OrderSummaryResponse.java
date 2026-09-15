@@ -2,6 +2,7 @@ package com.kizuna.order.api.dto;
 
 import com.kizuna.order.domain.OrderCourse;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +14,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderSummaryResponse {
+  private boolean requiresAttention;
+  private int unresolvedSpecialServiceCount;
+  private OffsetDateTime startedAt;
   private OrderCourse course;
   private String id;
   private LocalDate businessDate;

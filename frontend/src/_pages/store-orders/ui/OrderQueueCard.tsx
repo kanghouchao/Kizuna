@@ -128,6 +128,12 @@ export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCar
             )}
             <span className="text-muted-foreground text-sm">{order.business_date}</span>
           </div>
+          {order.requires_attention && (
+            <p role="alert" className="text-destructive-strong">
+              特殊サービスの本人拒否・要対応（{order.unresolved_special_service_count}
+              件）。編集から修復してください。
+            </p>
+          )}
           <CardMeta order={order} />
           {order.remarks && <p className="text-muted-foreground text-xs">{order.remarks}</p>}
         </div>
@@ -138,7 +144,7 @@ export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCar
               type="button"
               variant="outline"
               size="sm"
-              disabled={processing}
+              disabled={processing || order.requires_attention}
               onClick={() => onComplete(order)}
             >
               <CircleCheckIcon aria-hidden="true" />

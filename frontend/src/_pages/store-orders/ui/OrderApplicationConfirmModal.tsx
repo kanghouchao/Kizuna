@@ -4,6 +4,7 @@ import { useOrderConfirmation } from './useOrderConfirmation';
 
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { OrderCourseField } from './OrderCourseField';
+import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -59,6 +60,7 @@ interface ConfirmFormValues {
   pax: number;
   /** '' はコース未定。 */
   /** 適用するコース名の写し。確定は受注の出生なので、快照はここで写る。 */
+  special_service_ids: string[];
   course_id: string;
   remarks: string;
   /** 指名するキャストの id。'' は指名なし。 */
@@ -103,6 +105,7 @@ export function OrderApplicationConfirmModal({
       arrival_scheduled_start_time: '',
       arrival_scheduled_end_time: '',
       pax: 1,
+      special_service_ids: [],
       course_id: '',
       fee_lines: [],
       remarks: '',
@@ -150,6 +153,7 @@ export function OrderApplicationConfirmModal({
       arrival_scheduled_start_time: application.arrival_scheduled_start_time?.slice(0, 5) ?? '',
       arrival_scheduled_end_time: '',
       pax: application.pax ?? 1,
+      special_service_ids: [],
       course_id: '',
       fee_lines: [],
       remarks: application.remarks ?? '',
@@ -177,6 +181,7 @@ export function OrderApplicationConfirmModal({
         arrival_scheduled_end_time: values.arrival_scheduled_end_time || undefined,
         cast_id: values.clear_cast || !values.cast_id ? undefined : values.cast_id,
         pax: Number(values.pax),
+        special_service_ids: values.clear_cast ? [] : values.special_service_ids,
         course_id: values.course_id,
         fee_lines: toFeeLineInputs(values.fee_lines),
         remarks: values.remarks ? values.remarks : undefined,
@@ -240,7 +245,7 @@ export function OrderApplicationConfirmModal({
         <DialogContent
           showCloseButton={false}
           aria-describedby={undefined}
-          className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-md"
+          className="max-h-[90dvh] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-md"
         >
           <DialogTitle className="border-b px-6 py-4">予約申請を確定</DialogTitle>
           <Form {...form}>
@@ -313,6 +318,7 @@ export function OrderApplicationConfirmModal({
               />
               <OrderCourseField required />
               <OrderFeeLinesField />
+              <OrderSpecialServicesField />
               <div className="grid gap-2">
                 <CastSearchCombobox
                   id="application-confirm-cast"

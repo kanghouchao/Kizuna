@@ -3,6 +3,7 @@ package com.kizuna.service.application;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.api.dto.OwnServiceConditionSummary;
+import com.kizuna.service.domain.ConsentDecision;
 import com.kizuna.service.domain.ConsentStatus;
 import com.kizuna.service.domain.ServiceConsent;
 import com.kizuna.service.domain.ServiceConsentEvent;
@@ -23,6 +24,7 @@ import com.kizuna.user.application.ActorIdentityService;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -41,6 +43,7 @@ public class OwnServiceConditionService {
   private final ActorIdentityService actors;
   private final StoreRepository stores;
   private final StoreContext context;
+  private final ApplicationEventPublisher publisher;
 
   @Transactional(readOnly = true)
   @StoreScoped
@@ -85,7 +88,10 @@ public class OwnServiceConditionService {
     if (consent.decide(
         request.decision(), item.getTermsVersion(), revision.getId(), request.consentVersion())) {
       consents.saveAndFlush(consent);
-      events.save(ServiceConsentEvent.record(consent, actorId));
+      var event = events.saveAndFlush(ServiceConsentEvent.record(consent, actorId));
+      if (request.decision() == ConsentDecision.REJECTED)
+        publisher.publishEvent(
+            new ServiceRejected(enrollment, id, event.getId(), actorId, event.getOccurredAt()));
     }
     return summary(item, consent);
   }

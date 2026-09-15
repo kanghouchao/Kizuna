@@ -33,6 +33,9 @@ const mockedPreview = orderApi.completionPreview as jest.Mock;
 const confirmedOrder: Order = {
   total_duration_minutes: 60,
   total_remuneration: 7000,
+  requires_attention: false,
+  unresolved_special_service_count: 0,
+  special_services: [],
   course: {
     service_id: 'course-1',
     revision_id: 'r1',
@@ -44,7 +47,7 @@ const confirmedOrder: Order = {
     adoption_basis: 'CURRENT_SETTING' as const,
     adopted_at: '2026-09-15T00:00:00Z',
   },
-  fee_lines: [{ kind: 'OPTION', name: '会計', amount: 0, remuneration: 0, system_owned: false }],
+  fee_lines: [{ kind: 'CREDIT_SURCHARGE', name: '会計', amount: 0, remuneration: 0, system_owned: false }],
   id: 'o1',
   status: 'CONFIRMED',
   business_date: '2026-08-10',
@@ -118,7 +121,7 @@ describe('OrderCompletionModal', () => {
           remuneration: 0,
           system_owned: false,
         },
-        { kind: 'OPTION', name: '指名', amount: 2000, remuneration: 0, system_owned: false },
+        { kind: 'CREDIT_SURCHARGE', name: '指名', amount: 2000, remuneration: 0, system_owned: false },
         {
           kind: 'POINT_REDEMPTION',
           name: 'ポイント利用',
@@ -129,6 +132,8 @@ describe('OrderCompletionModal', () => {
       ],
     });
     const queueRow: OrderWorkQueueRow = {
+      requires_attention: false,
+      unresolved_special_service_count: 0,
       course: {
         service_id: 'course-1',
         revision_id: 'r1',
@@ -167,7 +172,7 @@ describe('OrderCompletionModal', () => {
     mockedGet.mockResolvedValue({
       ...confirmedOrder,
       fee_lines: [
-        { kind: 'OPTION', name: '指名', amount: 12000, remuneration: 0, system_owned: false },
+        { kind: 'CREDIT_SURCHARGE', name: '指名', amount: 12000, remuneration: 0, system_owned: false },
       ],
     });
 
@@ -207,14 +212,14 @@ describe('OrderCompletionModal', () => {
       .mockResolvedValueOnce({
         ...confirmedOrder,
         fee_lines: [
-          { kind: 'OPTION', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
+          { kind: 'CREDIT_SURCHARGE', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
         ],
       })
       .mockResolvedValueOnce({
         ...confirmedOrder,
         fee_lines: [
           {
-            kind: 'OPTION',
+            kind: 'CREDIT_SURCHARGE',
             name: '新しい明細',
             amount: 5000,
             remuneration: 0,
@@ -258,7 +263,7 @@ describe('OrderCompletionModal', () => {
       ...confirmedOrder,
       fee_lines: [
         {
-          kind: 'OPTION',
+          kind: 'CREDIT_SURCHARGE',
           name: '再取得できた明細',
           amount: 3000,
           remuneration: 0,
@@ -537,7 +542,7 @@ describe('OrderCompletionModal', () => {
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
     expect(mockedComplete.mock.calls[0][0]).toBe('o1');
     expect(mockedComplete.mock.calls[0][1].fee_lines).toEqual([
-      { kind: 'OPTION', name: '会計', amount: 8000 },
+      { kind: 'SURCHARGE', name: '会計', amount: 8000 },
     ]);
     expect(mockedComplete.mock.calls[0][1].use_points).toBeUndefined();
     expect(notify.success).toHaveBeenCalledWith('オーダーを完了しました');
@@ -555,7 +560,7 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete.mock.calls[0][1]).toEqual({
       expected_version: 3,
       confirmation_token: 'confirmed',
-      fee_lines: [{ kind: 'OPTION', name: '会計', amount: 8000 }],
+      fee_lines: [{ kind: 'SURCHARGE', name: '会計', amount: 8000 }],
       use_points: 200,
     });
   });
@@ -608,7 +613,7 @@ describe('OrderCompletionModal', () => {
       ...confirmedOrder,
       version: 7,
       fee_lines: [
-        { kind: 'OPTION', name: '指名', amount: 12000, remuneration: 0, system_owned: false },
+        { kind: 'CREDIT_SURCHARGE', name: '指名', amount: 12000, remuneration: 0, system_owned: false },
       ],
     });
     renderModal();
@@ -628,7 +633,7 @@ describe('OrderCompletionModal', () => {
         ...confirmedOrder,
         version: 3,
         fee_lines: [
-          { kind: 'OPTION', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
+          { kind: 'CREDIT_SURCHARGE', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
         ],
       })
       .mockResolvedValueOnce({
@@ -636,7 +641,7 @@ describe('OrderCompletionModal', () => {
         version: 4,
         fee_lines: [
           {
-            kind: 'OPTION',
+            kind: 'CREDIT_SURCHARGE',
             name: '他の操作者が直した明細',
             amount: 5000,
             remuneration: 0,
@@ -682,7 +687,7 @@ describe('OrderCompletionModal', () => {
       .mockResolvedValueOnce({
         ...confirmedOrder,
         fee_lines: [
-          { kind: 'OPTION', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
+          { kind: 'CREDIT_SURCHARGE', name: '古い明細', amount: 1000, remuneration: 0, system_owned: false },
         ],
       })
       .mockResolvedValueOnce({ ...confirmedOrder, status: 'COMPLETED', version: 4 });

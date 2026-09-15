@@ -50,7 +50,8 @@ public class OrderFeeLineSelection {
                                     && item.getId().toString().equals(request.getLineId()))
                         .findFirst()
                         .orElseThrow(() -> new NotFoundException("維持する明細が見つかりません"));
-                if (line.getKind() == OrderFeeLineKind.BASE_COURSE
+                if (line.getKind() == OrderFeeLineKind.SPECIAL_SERVICE
+                    || line.getKind() == OrderFeeLineKind.BASE_COURSE
                     || line.getKind().isSystemOwned())
                   throw new InvalidOrderFeeLineException("コースとポイントの明細は直接変更できません");
                 return OrderFeeLineDraft.of(line);

@@ -49,6 +49,8 @@ function claimsWith(permissions: string[]): TokenClaims {
 }
 
 const completedOrder: OrderArchiveRow = {
+  requires_attention: false,
+  unresolved_special_service_count: 0,
   course: {
     service_id: 'course-1',
     revision_id: 'r1',

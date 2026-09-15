@@ -19,7 +19,7 @@ class OrderFeeLineKindTest {
         .containsExactly(
             OrderFeeLineKind.BASE_COURSE,
             OrderFeeLineKind.EXTENSION,
-            OrderFeeLineKind.OPTION,
+            OrderFeeLineKind.SPECIAL_SERVICE,
             OrderFeeLineKind.SURCHARGE,
             OrderFeeLineKind.DISCOUNT,
             OrderFeeLineKind.POINT_REDEMPTION,
@@ -70,11 +70,11 @@ class OrderFeeLineKindTest {
   @Test
   @DisplayName("名称が空白の明細は撥ねられること")
   void of_requiresName() {
-    assertThatThrownBy(() -> OrderFeeLine.of(OrderFeeLineKind.OPTION, "  ", 100))
+    assertThatThrownBy(() -> OrderFeeLine.of(OrderFeeLineKind.SURCHARGE, "  ", 100))
         .isInstanceOf(InvalidOrderFeeLineException.class);
     assertThatThrownBy(() -> OrderFeeLine.of(null, "オプション", 100))
         .isInstanceOf(InvalidOrderFeeLineException.class);
-    assertThatThrownBy(() -> OrderFeeLine.of(OrderFeeLineKind.OPTION, "あ".repeat(256), 100))
+    assertThatThrownBy(() -> OrderFeeLine.of(OrderFeeLineKind.SURCHARGE, "あ".repeat(256), 100))
         .isInstanceOf(InvalidOrderFeeLineException.class);
   }
 }

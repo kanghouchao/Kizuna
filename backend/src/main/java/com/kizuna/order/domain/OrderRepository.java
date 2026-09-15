@@ -33,9 +33,21 @@ public interface OrderRepository
 
   // 関連集約の表示名は ID 参照のため JPQL join で取得する。
   // Order は HQL の予約語と衝突しうるため FQCN でエンティティを参照する。
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select o from com.kizuna.order.domain.Order o where o.castId = :enrollment"
+          + " and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)"
+          + " and exists (select s.id from OrderSpecialService s where s.orderId = o.id and s.serviceId = :serviceId) order by o.id")
+  List<Order> findUnfinishedSpecialOrders(String enrollment, String serviceId);
+
   String VIEW_SELECT =
       """
-      select o.id as id,
+      select o.startedAt as startedAt,
+             (select cast(count(e.id) as Integer) from OrderSpecialServiceEvent e
+              where e.orderId = o.id and e.kind = 'REJECTED'
+              and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
+              and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id)) as unresolvedSpecialServiceCount,
+             o.id as id,
              o.receptionistId as receptionistId, u.displayName as receptionistName,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
@@ -122,7 +134,12 @@ public interface OrderRepository
   // 店舗（store）表示名の join は張らない。
   String PLATFORM_VIEW_SELECT =
       """
-      select o.id as id, o.storeId as storeId, o.course as course,
+      select o.startedAt as startedAt,
+             (select cast(count(e.id) as Integer) from OrderSpecialServiceEvent e
+              where e.orderId = o.id and e.kind = 'REJECTED'
+              and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
+              and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id)) as unresolvedSpecialServiceCount,
+             o.id as id, o.storeId as storeId, o.course as course,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,

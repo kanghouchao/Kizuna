@@ -15,8 +15,8 @@ public enum OrderFeeLineKind {
   /** 延長料金。各回の分数・顧客費用・固定報酬を保持する。 */
   EXTENSION(Sign.ADDITION),
 
-  /** オプション料金。1 件 1 行で、名称は手入力。 */
-  OPTION(Sign.ADDITION),
+  /** 特殊サービス。採用版本から名称・費用・報酬を生成する。 */
+  SPECIAL_SERVICE(Sign.ADDITION),
 
   /** 指名・受付区分・場所エリア等の加算の総称。 */
   SURCHARGE(Sign.ADDITION),

@@ -134,7 +134,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     const body = await submitAndGetBody(onSubmit);
 
     // 金額は表示上の値。符号は種別が表すので、画面は正値しか受けない
-    expect(body.fee_lines).toEqual([{ kind: 'OPTION', name: '指名オプション', amount: 3000 }]);
+    expect(body.fee_lines).toEqual([{ kind: 'SURCHARGE', name: '指名オプション', amount: 3000 }]);
   });
 
   it('削除した明細が送信から消えること', async () => {

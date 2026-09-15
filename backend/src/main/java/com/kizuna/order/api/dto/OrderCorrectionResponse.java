@@ -14,4 +14,6 @@ public record OrderCorrectionResponse(
     int previousTotalDurationMinutes,
     int totalDurationMinutes,
     List<OrderFeeLineResponse> previousFeeLines,
-    List<OrderFeeLineResponse> feeLines) {}
+    List<OrderFeeLineResponse> feeLines,
+    List<OrderSpecialServiceResponse> previousSpecialServices,
+    List<OrderSpecialServiceResponse> specialServices) {}

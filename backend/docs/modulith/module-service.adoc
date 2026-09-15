@@ -2,6 +2,16 @@
 |===
 |Base package
 |`com.kizuna.service`
+|Spring components
+|_Services_
+
+* `c.k.s.application.OrderCourseCatalog`
+* `c.k.s.application.OrderSpecialServiceCatalog`
+* `c.k.s.application.OwnServiceConditionService`
+* `c.k.s.application.ServiceSettingsService`
 |Bean references
-|* `c.k.u.application.ActorIdentityService` (in User)
+|* `c.k.s.storescope.StoreContext` (in Shared)
+* `c.k.c.domain.CastEnrollmentRepository` (in Cast)
+* `c.k.u.application.ActorIdentityService` (in User)
+* `c.k.s.domain.StoreRepository` (in Store)
 |===

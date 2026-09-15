@@ -1,4 +1,11 @@
-import type { CourseCandidate, SurchargeCandidate, OrderPreview } from '../model/types';
+import type {
+  CourseCandidate,
+  SurchargeCandidate,
+  OrderPreview,
+  SpecialServiceCandidate,
+  SpecialServiceRevision,
+  OrderSpecialServiceEvent,
+} from '../model/types';
 import {
   CursorPageResult,
   CursorParams,
@@ -79,6 +86,33 @@ export const orderApi = {
       })
     ).data,
 
+  specialServiceCandidates: async (castId: string, search: string, page: number) => {
+    const response = await apiClient.get('/store/orders/special-service-candidates', {
+      params: { cast_id: castId, search, page, size: 20 },
+    });
+    return fromSpringPage<SpecialServiceCandidate>(response.data);
+  },
+  specialServiceRevisions: async (id: string, search: string, cursor?: string) => {
+    const response = await apiClient.get(
+      `/store/orders/${requireId(id, '受注')}/special-service-revisions`,
+      { params: { search, cursor, size: 20 } }
+    );
+    return fromCursorPage<SpecialServiceRevision>(response.data);
+  },
+  specialServiceEvents: async (id: string, cursor?: string) => {
+    const response = await apiClient.get(
+      `/store/orders/${requireId(id, '受注')}/special-service-events`,
+      { params: { cursor, size: 20 } }
+    );
+    return fromCursorPage<OrderSpecialServiceEvent>(response.data);
+  },
+  start: async (id: string, expectedVersion: number, reason: string): Promise<Order> => {
+    const response = await apiClient.post(`/store/orders/${requireId(id, '受注')}/start`, {
+      expected_version: expectedVersion,
+      reason,
+    });
+    return response.data;
+  },
   courseCandidates: async (search: string, page: number) => {
     const response = await apiClient.get('/store/orders/course-candidates', {
       params: { search, page, size: 20 },

@@ -20,6 +20,7 @@ public record OrderServiceAdoption(
         || revisionNumber < 1
         || adoptedAt == null
         || !("CURRENT_SETTING".equals(adoptionBasis)
+            || "ACCEPTED_TERMS".equals(adoptionBasis)
             || "HISTORICAL_CORRECTION".equals(adoptionBasis)))
       throw new InvalidOrderFeeLineException("採用条件の出所が正しくありません");
   }

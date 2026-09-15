@@ -4,6 +4,7 @@ import com.kizuna.order.api.dto.OrderCorrectionRequest;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
+import com.kizuna.order.api.dto.OrderSpecialServiceResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCorrection;
 import com.kizuna.order.domain.OrderCorrectionCommand;
@@ -38,12 +39,14 @@ public class OrderCorrectionService {
   private final ActorIdentityService actorIdentityService;
   private final OrderMapper orderMapper;
   private final OrderCalculation calculation;
+  private final OrderSpecialServices specialServices;
 
   /** 訂正前の快照と更新を同じトランザクションに保存する。受注行をロックしてから要求の版を照合し、 同時訂正による上書きを防ぐ。快照は管理下の集約を書き換える前に作成する。 */
   @StoreScoped
   @Transactional
   public OrderCorrectionResponse correct(
       String id, OrderCorrectionRequest request, String actorEmail) {
+    specialServices.lock();
     Order order =
         orderRepository
             .findScopedByIdForUpdate(id)
@@ -65,7 +68,12 @@ public class OrderCorrectionService {
         request.getCourseRevisionId() == null
             ? previousCourse
             : calculation.historical(request.getCourseRevisionId());
-    var calculated = calculation.calculate(order, course, request.getFeeLines(), true);
+    var calculated =
+        calculation.calculate(
+            order,
+            course,
+            request.getFeeLines(),
+            specialServices.historical(order, request.getSpecialServiceRevisionIds()), true);
     calculation.verify(
         request.getConfirmationToken(),
         calculation.preview("CORRECT", id, request, calculated, null));
@@ -76,7 +84,9 @@ public class OrderCorrectionService {
                 request.getReason(),
                 actorIdentityService.requireUserId(actorEmail),
                 OffsetDateTime.now()));
-    order.correct(
+    var previousSpecials = order.getSpecialServices();
+    order.correctServices(
+        calculated.getSpecialServices(),
         new OrderCorrectionCommand(
             request.getActualArrivalTime(),
             request.getActualEndTime(),
@@ -95,12 +105,17 @@ public class OrderCorrectionService {
         previousDuration,
         order.getTotalDurationMinutes(),
         previousLines,
-        orderMapper.toFeeLineResponses(order.getFeeLines()));
+        orderMapper.toFeeLineResponses(order.getFeeLines()),
+        previousSpecials.stream()
+            .map(s -> new OrderSpecialServiceResponse(s, false, null))
+            .toList(),
+        specialServices.describe(order));
   }
 
   @StoreScoped
   @Transactional
   public OrderPreviewResponse preview(String id, OrderCorrectionRequest request) {
+    specialServices.lock();
     calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
         orderRepository
@@ -116,7 +131,11 @@ public class OrderCorrectionService {
         "CORRECT",
         id,
         request,
-        calculation.calculate(order, course, request.getFeeLines(), false),
+        calculation.calculate(
+            order,
+            course,
+            request.getFeeLines(),
+            specialServices.historical(order, request.getSpecialServiceRevisionIds()), false),
         null);
   }
 }

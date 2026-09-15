@@ -60,7 +60,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             """
             {"reason":"コースの取り違え","actual_arrival_time":"20:15:00","actual_end_time":"22:40:00",
              "course_revision_id":"%s",
-             "fee_lines":[{"kind":"OPTION","name":"指名","amount":2000}]}
+             "fee_lines":[{"kind":"CREDIT_SURCHARGE","name":"指名","amount":2000}]}
             """
                 .formatted(revisedCourse.revisionId()));
 
@@ -122,7 +122,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
         .containsExactly(
             tuple(OrderFeeLineKind.BASE_COURSE, 100),
-            tuple(OrderFeeLineKind.OPTION, COMPLETED_FEE - 100));
+            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, COMPLETED_FEE - 100));
 
     OrderCorrection before2 = chain.get(1);
     assertThat(before2.getReason()).isEqualTo("オプションの取り消し");
@@ -132,7 +132,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(before2.getFeeLines())
         .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
         .containsExactly(
-            tuple(OrderFeeLineKind.BASE_COURSE, 18000), tuple(OrderFeeLineKind.OPTION, 2000));
+            tuple(OrderFeeLineKind.BASE_COURSE, 18000), tuple(OrderFeeLineKind.SURCHARGE, 2000));
 
     // 二度目の要求は実績時刻と延長分数を載せていない。全量送信なので「変更しない」ではなく「値なし」が当たる
     JsonNode afterSecond = orderJson(managerHeaders(STORE_A), orderId);
@@ -184,7 +184,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
             managerHeaders(STORE_A),
             orderId,
             """
-            {"reason":"金額の誤記","fee_lines":[{"kind":"OPTION","name":"指名料","amount":8000}]}
+            {"reason":"金額の誤記","fee_lines":[{"kind":"CREDIT_SURCHARGE","name":"指名料","amount":8000}]}
             """);
     assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
@@ -212,7 +212,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
                     orderId,
                     """
                     {"reason":"先に済んだ訂正",
-                     "fee_lines":[{"kind":"OPTION","name":"指名料","amount":9000}]}
+                     "fee_lines":[{"kind":"CREDIT_SURCHARGE","name":"指名料","amount":9000}]}
                     """)
                 .getStatusCode())
         .as("前提: 先の訂正が成立すること")

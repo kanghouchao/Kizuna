@@ -41,7 +41,7 @@ import {
 const QUEUE_PAGE_SIZE = 20;
 
 /** 対応が要る受注の群。すべての受注は確定で出生するため、確定済みだけが対象（未処理の申請は受付箱が持つ）。 */
-const ACTIVE_STATUSES: OrderStatus[] = ['CONFIRMED'];
+const ACTIVE_STATUSES: OrderStatus[] = ['CONFIRMED', 'IN_SERVICE'];
 
 /** 作業キューを離れた受注の行き先。終端状態はこの 2 つしかない（ADR 0013）。 */
 type ArchiveStatus = Extract<OrderStatus, 'COMPLETED' | 'CANCELLED'>;
