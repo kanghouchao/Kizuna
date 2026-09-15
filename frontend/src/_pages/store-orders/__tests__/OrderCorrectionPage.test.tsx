@@ -117,7 +117,7 @@ describe('完了後訂正のページ', () => {
     await confirmPreview();
 
     await waitFor(() => expect(mockedOrderApi.correct).toHaveBeenCalled());
-    // 部分更新ではないので全量を毎回運ぶ。延長分数は空欄のまま＝「値なし」として送らない
+    // 訂正は選択した条件と編集可能明細の全量を運ぶ。
     expect(mockedOrderApi.correct).toHaveBeenCalledWith('o1', {
       // 開いた時点の版をそのまま返す。読み直さずに送ると、間に挟まった別の訂正を黙って巻き戻す
       expected_version: 7,
@@ -127,9 +127,8 @@ describe('完了後訂正のページ', () => {
       confirmation_token: 'confirmed',
       course_revision_id: undefined,
       special_service_revision_ids: [],
-      extension_minutes: undefined,
       // ポイント利用の行は送らない（システム専有で、混ぜるとサーバが撥ねる）
-      fee_lines: [{ kind: 'SURCHARGE', name: '追加', amount: 18000 }],
+      fee_lines: [{ kind: 'CREDIT_SURCHARGE', name: '追加', amount: 18000 }],
     });
     expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
   });

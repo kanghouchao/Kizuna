@@ -39,7 +39,8 @@ class OrderTest {
                 .toList())
         .extracting(OrderFeeLine::getKind, OrderFeeLine::getAmount)
         .containsExactly(
-            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 12000), tuple(OrderFeeLineKind.POINT_REDEMPTION, -500));
+            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 12000),
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, -500));
   }
 
   @Test
@@ -73,7 +74,8 @@ class OrderTest {
                 .toList())
         .extracting(OrderFeeLine::getKind, OrderFeeLine::getAmount)
         .containsExactly(
-            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 1000), tuple(OrderFeeLineKind.POINT_REDEMPTION, -1000));
+            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 1000),
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, -1000));
   }
 
   @Test
@@ -124,7 +126,7 @@ class OrderTest {
     order.replaceStoreFeeLines(
         List.of(
             draft(OrderFeeLineKind.EXTENSION, "30 分延長", 6000),
-            draft(OrderFeeLineKind.SURCHARGE, "オプション A", 2000),
+            draft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション A", 2000),
             draft(OrderFeeLineKind.DISCOUNT, "初回割", -3000),
             draft(OrderFeeLineKind.DISCOUNT, "端数調整", -500)));
 
@@ -135,9 +137,9 @@ class OrderTest {
   @DisplayName("明細の差し替えは前の内容を残さず、合計を取り直すこと")
   void replaceStoreFeeLines_replacesWholeBreakdown() {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
-    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "オプション A", 2000)));
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション A", 2000)));
 
-    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "オプション B", 3000)));
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション B", 3000)));
 
     assertThat(
             order.getFeeLines().stream()
@@ -180,7 +182,8 @@ class OrderTest {
                 .toList())
         .extracting(OrderFeeLine::getKind, OrderFeeLine::getAmount)
         .containsExactlyInAnyOrder(
-            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 8000), tuple(OrderFeeLineKind.POINT_REDEMPTION, -500));
+            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 8000),
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, -500));
     assertThat(order.getTotalFee()).isEqualTo(7500);
   }
 
@@ -191,7 +194,8 @@ class OrderTest {
 
     assertThatThrownBy(
             () ->
-                order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "オプション", -1))))
+                order.replaceStoreFeeLines(
+                    List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション", -1))))
         .isInstanceOf(InvalidOrderFeeLineException.class);
     assertThatThrownBy(
             () -> order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.DISCOUNT, "割引", 1))))
@@ -263,7 +267,8 @@ class OrderTest {
         .hasMessage("合計が扱える上限を超えています");
 
     // 境界: 列に収まる最大値は通る（「大きい額は何でも撥ねている」ではない証明）
-    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "指名料", Integer.MAX_VALUE)));
+    order.replaceStoreFeeLines(
+        List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "指名料", Integer.MAX_VALUE)));
     assertThat(order.getTotalFee()).isEqualTo(Integer.MAX_VALUE);
   }
 
@@ -271,10 +276,11 @@ class OrderTest {
   @DisplayName("明細は読み手が直接書き換えられないこと")
   void getFeeLines_isNotWritable() {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
-    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "オプション", 2000)));
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション", 2000)));
 
     List<OrderFeeLine> lines = order.getFeeLines();
-    assertThatThrownBy(() -> lines.add(OrderFeeLine.of(OrderFeeLineKind.SURCHARGE, "横入り", 9999)))
+    assertThatThrownBy(
+            () -> lines.add(OrderFeeLine.of(OrderFeeLineKind.CREDIT_SURCHARGE, "横入り", 9999)))
         .isInstanceOf(UnsupportedOperationException.class);
     assertThat(order.getTotalFee()).isEqualTo(2000);
   }
@@ -469,7 +475,7 @@ class OrderTest {
             .status(OrderStatus.CONFIRMED)
             .course(OrderCourses.course("60 分コース", 60, 14000))
             .build();
-    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "オプション A", 2000)));
+    order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション A", 2000)));
     order.completeWith(500, 120);
 
     order.correct(
@@ -495,7 +501,7 @@ class OrderTest {
         .containsExactly(
             tuple(OrderFeeLineKind.BASE_COURSE, "120 分コース", 22000),
             tuple(OrderFeeLineKind.POINT_REDEMPTION, "ポイント利用", -500),
-            tuple(OrderFeeLineKind.SURCHARGE, "オプション B", 3000));
+            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション B", 3000));
     assertThat(order.getTotalFee()).isEqualTo(24500);
     assertThat(order.getAutoGrantPoints()).as("門はポイントを一切動かさないこと").isEqualTo(120);
   }
@@ -521,7 +527,8 @@ class OrderTest {
                 .toList())
         .extracting(OrderFeeLine::getKind, OrderFeeLine::getAmount)
         .containsExactly(
-            tuple(OrderFeeLineKind.POINT_REDEMPTION, -500), tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 8000));
+            tuple(OrderFeeLineKind.POINT_REDEMPTION, -500),
+            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 8000));
     assertThat(order.getTotalFee()).isEqualTo(7500);
   }
 
@@ -529,7 +536,8 @@ class OrderTest {
   @DisplayName("完了していない受注は訂正できないこと")
   void correct_rejectsNonCompletedOrders() {
     Order confirmed = orderWithStatus(OrderStatus.CONFIRMED);
-    confirmed.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.SURCHARGE, "オプション", 2000)));
+    confirmed.replaceStoreFeeLines(
+        List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション", 2000)));
 
     assertThatThrownBy(() -> confirmed.correct(command(List.of())))
         .isInstanceOf(InvalidOrderCorrectionException.class);
@@ -555,7 +563,9 @@ class OrderTest {
     assertThat(order.getTotalFee()).as("前提: 控除後の請求額が 200 であること").isEqualTo(200);
 
     assertThatThrownBy(
-            () -> order.correct(command(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "会計", 500)))))
+            () ->
+                order.correct(
+                    command(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "会計", 500)))))
         .isInstanceOf(InvalidOrderFeeLineException.class);
 
     // 同額までは通る（全額のポイント払いは完了でも通る形）

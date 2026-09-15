@@ -5,7 +5,7 @@
 |Spring components
 |_Services_
 
-* `c.k.s.application.OrderCourseCatalog`
+* `c.k.s.application.OrderServiceCatalog`
 * `c.k.s.application.OrderSpecialServiceCatalog`
 * `c.k.s.application.OwnServiceConditionService`
 * `c.k.s.application.ServiceSettingsService`

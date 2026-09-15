@@ -7,9 +7,9 @@ import com.kizuna.order.api.dto.OrderSpecialServiceResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.SpecialServiceSnapshot;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
-import com.kizuna.order.domain.SpecialServiceSnapshot;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.OffsetDateTime;
@@ -63,10 +63,20 @@ public class OrderCalculation {
 
   public Order calculate(
       Order original, OrderCourse course, List<OrderFeeLineRequest> lines, boolean saving) {
-    return calculate(original, course, lines, original == null ? List.of() : original.getSpecialServices(), saving);
+    return calculate(
+        original,
+        course,
+        lines,
+        original == null ? List.of() : original.getSpecialServices(),
+        saving);
   }
 
-  public Order calculate(Order original, OrderCourse course, List<OrderFeeLineRequest> lines, List<SpecialServiceSnapshot> specials, boolean saving) {
+  public Order calculate(
+      Order original,
+      OrderCourse course,
+      List<OrderFeeLineRequest> lines,
+      List<SpecialServiceSnapshot> specials,
+      boolean saving) {
     Order copy = Order.builder().status(OrderStatus.CONFIRMED).build();
     if (original != null) {
       copy.setId(original.getId());

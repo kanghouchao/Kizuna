@@ -126,7 +126,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     const { onSubmit } = renderForm();
 
     await selectReceptionist();
-    fireEvent.click(screen.getByRole('button', { name: '明細を追加' }));
+    fireEvent.click(screen.getByRole('button', { name: 'クレジット加算を追加' }));
     fireEvent.change(await screen.findByLabelText('明細1の名称'), {
       target: { value: '指名オプション' },
     });
@@ -134,14 +134,16 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     const body = await submitAndGetBody(onSubmit);
 
     // 金額は表示上の値。符号は種別が表すので、画面は正値しか受けない
-    expect(body.fee_lines).toEqual([{ kind: 'SURCHARGE', name: '指名オプション', amount: 3000 }]);
+    expect(body.fee_lines).toEqual([
+      { kind: 'CREDIT_SURCHARGE', name: '指名オプション', amount: 3000 },
+    ]);
   });
 
   it('削除した明細が送信から消えること', async () => {
     const { onSubmit } = renderForm();
 
     await selectReceptionist();
-    fireEvent.click(screen.getByRole('button', { name: '明細を追加' }));
+    fireEvent.click(screen.getByRole('button', { name: 'クレジット加算を追加' }));
     fireEvent.change(await screen.findByLabelText('明細1の金額'), { target: { value: '3000' } });
     fireEvent.click(screen.getByRole('button', { name: '明細1を削除' }));
     const body = await submitAndGetBody(onSubmit);

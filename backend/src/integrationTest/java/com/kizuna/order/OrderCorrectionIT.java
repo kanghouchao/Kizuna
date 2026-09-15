@@ -132,7 +132,8 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(before2.getFeeLines())
         .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
         .containsExactly(
-            tuple(OrderFeeLineKind.BASE_COURSE, 18000), tuple(OrderFeeLineKind.SURCHARGE, 2000));
+            tuple(OrderFeeLineKind.BASE_COURSE, 18000),
+            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 2000));
 
     // 二度目の要求は実績時刻と延長分数を載せていない。全量送信なので「変更しない」ではなく「値なし」が当たる
     JsonNode afterSecond = orderJson(managerHeaders(STORE_A), orderId);

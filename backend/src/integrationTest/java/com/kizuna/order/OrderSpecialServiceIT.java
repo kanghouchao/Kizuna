@@ -495,6 +495,70 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
         .isZero();
   }
 
+  @Test
+  void refusalRepairPreservesExtensionSurchargeAndDiscountTerms() {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    var course = courseFixture(STORE_A, "複合明細", 60, 12000);
+    String service = special(manager);
+    assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var surcharge =
+        call(
+            HttpMethod.POST,
+            "/store/services",
+            Map.of("kind", "SURCHARGE", "name", "指名加算", "price", 1000, "remuneration", 500),
+            manager);
+    assertThat(surcharge.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var input = createInput(owner.cast(), course.serviceId(), service);
+    var lines = input.putArray("fee_lines");
+    lines
+        .addObject()
+        .put("kind", "EXTENSION")
+        .put("name", "延長")
+        .put("duration_minutes", 30)
+        .put("amount", 3000)
+        .put("remuneration", 2000);
+    lines
+        .addObject()
+        .put("kind", "SURCHARGE")
+        .put("service_id", surcharge.getBody().path("id").asString());
+    lines.addObject().put("kind", "DISCOUNT").put("name", "割引").put("amount", 500);
+    var preview = call(HttpMethod.POST, "/store/orders/preview", input, manager);
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(preview.getBody().path("total_fee").asInt()).isEqualTo(17500);
+    assertThat(preview.getBody().path("total_duration_minutes").asInt()).isEqualTo(90);
+    assertThat(preview.getBody().path("total_remuneration").asInt())
+        .isEqualTo(course.remuneration() + 4000);
+    input.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    var created = call(HttpMethod.POST, "/store/orders", input, manager);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String id = created.getBody().path("id").asString();
+    assertThat(decide(owner, service, 1, 1, "REJECTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var before = get(id, manager);
+    var edit =
+        json.createObjectNode()
+            .put("expected_version", before.path("version").asLong())
+            .put("cast_id", owner.cast())
+            .put("receptionist_id", before.path("receptionist_id").asLong());
+    edit.putArray("special_service_ids");
+    var repair = call(HttpMethod.POST, "/store/orders/" + id + "/preview", edit, manager);
+    assertThat(repair.getStatusCode()).isEqualTo(HttpStatus.OK);
+    edit.put("confirmation_token", repair.getBody().path("confirmation_token").asString());
+    assertThat(call(HttpMethod.PUT, "/store/orders/" + id, edit, manager).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    var after = get(id, manager);
+    assertThat(after.path("requires_attention").asBoolean()).isFalse();
+    assertThat(after.path("total_fee").asInt()).isEqualTo(15500);
+    assertThat(after.path("total_duration_minutes").asInt()).isEqualTo(90);
+    assertThat(after.path("total_remuneration").asInt()).isEqualTo(course.remuneration() + 2500);
+    for (var line : before.path("fee_lines")) {
+      if (Set.of("EXTENSION", "SURCHARGE", "DISCOUNT").contains(line.path("kind").asString())) {
+        assertThat(after.path("fee_lines"))
+            .anySatisfy(retained -> assertThat(retained).isEqualTo(line));
+      }
+    }
+  }
+
   private String special(HttpHeaders manager) {
     var response =
         call(

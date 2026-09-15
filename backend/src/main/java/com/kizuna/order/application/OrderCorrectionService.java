@@ -73,7 +73,8 @@ public class OrderCorrectionService {
             order,
             course,
             request.getFeeLines(),
-            specialServices.historical(order, request.getSpecialServiceRevisionIds()), true);
+            specialServices.historical(order, request.getSpecialServiceRevisionIds()),
+            true);
     calculation.verify(
         request.getConfirmationToken(),
         calculation.preview("CORRECT", id, request, calculated, null));
@@ -135,7 +136,8 @@ public class OrderCorrectionService {
             order,
             course,
             request.getFeeLines(),
-            specialServices.historical(order, request.getSpecialServiceRevisionIds()), false),
+            specialServices.historical(order, request.getSpecialServiceRevisionIds()),
+            false),
         null);
   }
 }

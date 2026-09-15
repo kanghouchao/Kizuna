@@ -172,7 +172,8 @@ class OrderServiceTest {
             catalog,
             orderMapper,
             Mockito.mock(OrderConfirmation.class),
-            new OrderFeeLineSelection(catalog, orderMapper), specialServices));
+            new OrderFeeLineSelection(catalog, orderMapper),
+            specialServices));
     Mockito.lenient()
         .when(orderRepository.findScopedByIdForUpdate(nullable(String.class)))
         .thenAnswer(inv -> orderRepository.findById(inv.getArgument(0)));
@@ -1216,7 +1217,7 @@ class OrderServiceTest {
             .receptionistId(1L)
             .build();
     storeOrder.replaceStoreFeeLines(
-        List.of(new OrderFeeLineDraft(OrderFeeLineKind.SURCHARGE, "オプション A", 2000)));
+        List.of(new OrderFeeLineDraft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション A", 2000)));
     assertThat(storeOrder.getTotalFee()).as("前提: 内訳と合計が入っていること").isEqualTo(2000);
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));

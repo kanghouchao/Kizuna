@@ -87,7 +87,7 @@ export interface OrderFeeLine {
   service_id?: string;
   revision_id?: string;
   revision_number?: number;
-  adoption_basis?: 'CURRENT_SETTING' | 'HISTORICAL_CORRECTION';
+  adoption_basis?: 'CURRENT_SETTING' | 'ACCEPTED_TERMS' | 'HISTORICAL_CORRECTION';
   adopted_at?: string;
   remuneration: number;
   kind: OrderFeeLineKind;

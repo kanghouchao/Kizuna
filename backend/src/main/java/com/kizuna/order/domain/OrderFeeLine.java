@@ -50,7 +50,13 @@ public class OrderFeeLine extends StoreScopedEntity {
   }
 
   void applySpecialService(SpecialServiceSnapshot snapshot) {
-    adoption = new OrderServiceAdoption(snapshot.serviceId(), snapshot.revisionId(), snapshot.revisionNumber(), snapshot.adoptionBasis(), snapshot.adoptedAt());
+    adoption =
+        new OrderServiceAdoption(
+            snapshot.serviceId(),
+            snapshot.revisionId(),
+            snapshot.revisionNumber(),
+            snapshot.adoptionBasis(),
+            snapshot.adoptedAt());
     name = snapshot.name();
     amount = snapshot.price();
     remuneration = snapshot.remuneration();

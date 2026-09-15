@@ -72,7 +72,7 @@ CorrectionInput に `special_service_revision_ids?: string[]` を追加する。
 
 特殊サービスは既存 OPTION を置き換える SPECIAL_SERVICE 種別で生成する。OPTION を enum・フォーム・baseline から撤去し、直送は 400。SPECIAL_SERVICE の name/amount/remuneration 直送も 400。通常明細入力の置換対象から特殊サービスを除外し、専用 ID 選択からのみ生成する。BASE_COURSE・ポイント専有行の保護を維持する。
 
-EXTENSION / SURCHARGE / DISCOUNT / MANUAL_ADJUST / CREDIT_SURCHARGE の一般的な整理は本票に広げない。これらを特殊サービス選択の代用として UI に案内しない。
+EXTENSION / SURCHARGE / DISCOUNT / CREDIT_SURCHARGE は [#932 の契約](0932-order-extension-surcharge-discount.md) に従う。MANUAL_ADJUST は撤去済みであり、加算は設定版本から選択する。これらを特殊サービス選択の代用として UI に案内しない。
 
 ## 応答型
 
@@ -126,7 +126,7 @@ resolution / rejection_event_id は RESOLVED のとき必須、REJECTED では�
 - t_order_special_services を追加する。id（VARCHAR PK）、store_id（BIGINT）、order_id / enrollment_id / service_id / revision_id（VARCHAR）、revision_number / terms_version（BIGINT）、name（VARCHAR(255)）、charge_type（VARCHAR）、price / remuneration（INTEGER）、adoption_basis（VARCHAR）、adopted_at（TIMESTAMPTZ）、consent_event_id（VARCHAR nullable）、consent_version（BIGINT nullable）。nullable とした列以外 NOT NULL。
 - 一受注・一項目の UNIQUE(order_id, service_id)。同店舗 FK として (order_id, store_id)、(enrollment_id, store_id)、(service_id, store_id)、(revision_id, store_id)、(consent_event_id, store_id) を使用する。必要な参照先複合一意制約を baseline に定義する。すべて ON DELETE NO ACTION とし、参照先を削除して証跡を失わせない。
 - price >= 0、0 <= remuneration <= price、FREE なら双方 0、受諾採用では意思根拠必須を CHECK で固定する。数量・時間列は持たない。担当と enrollment_id、版本と service_id、採用条件と生成明細の一致は集約とトランザクションで保証し、認証済み HTTP テストで固定する。
-- t_order_fee_lines に service_id（VARCHAR nullable）と remuneration（INTEGER nullable）を追加する。SPECIAL_SERVICE にのみ service_id を必須とし、当該種別の一受注・一項目部分 UNIQUE を設ける。既存 BASE_COURSE とポイント専有の制約を維持し、OPTION を CHECK から除く。
+- t_order_fee_lines の service_id・revision_id・revision_number・adoption_basis・adopted_at と非 null remuneration はコース・加算と共有する。SPECIAL_SERVICE の採用根拠は ACCEPTED_TERMS または HISTORICAL_CORRECTION とし、一受注・一項目部分 UNIQUE を設ける。対応する応答の adoption_basis にも ACCEPTED_TERMS を含める。受諾証跡の正本は特殊サービス快照に置く。既存 BASE_COURSE とポイント専有の制約を維持し、OPTION を CHECK から除く。
 - t_order_special_service_events に id、store_id、order_id、enrollment_id、service_id、consent_event_id、actor_id、occurred_at、kind、before_snapshot / after_snapshot（JSONB）、previous_total_fee / total_fee を NOT NULL で保存する。resolution と rejection_event_id は nullable で、RESOLVED との対応を CHECK。JSONB は各項目の採用快照と当時の要対応状態を保存する。
 - 履歴の受注・在籍・設定・意思イベントには店舗付き NO ACTION FK、actor_id は t_users への NO ACTION FK、rejection_event_id は同店舗の拒否履歴への NO ACTION FK。一拒否の処置は UNIQUE(rejection_event_id)。同一受注・同一意思拒否の重複を部分 UNIQUE で防ぐ。
 - 履歴読取用 INDEX(store_id, order_id, occurred_at DESC, id DESC)、拒否伝播用 INDEX(store_id, enrollment_id, service_id)、版本・意思イベント参照用索引を設ける。未処理拒否は REJECTED のうち RESOLVED の参照がないものから導出する。

@@ -36,7 +36,11 @@ export function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineRequest
         duration_minutes: line.duration_minutes!,
         remuneration: line.remuneration!,
       };
-    if (line.kind === 'BASE_COURSE' || line.kind === 'SPECIAL_SERVICE' || line.kind === 'POINT_REDEMPTION')
+    if (
+      line.kind === 'BASE_COURSE' ||
+      line.kind === 'SPECIAL_SERVICE' ||
+      line.kind === 'POINT_REDEMPTION'
+    )
       throw new Error('システム明細は編集できません');
     return { kind: line.kind, name: line.name ?? '', amount: line.amount };
   });

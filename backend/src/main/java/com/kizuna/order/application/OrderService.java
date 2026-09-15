@@ -239,8 +239,8 @@ public class OrderService {
             null,
             course,
             request.getFeeLines(),
-            specialServices.select(
-                null, request.getCastId(), request.getSpecialServiceIds(), true), true);
+            specialServices.select(null, request.getCastId(), request.getSpecialServiceIds(), true),
+            true);
     calculation.verify(
         request.getConfirmationToken(),
         calculation.preview("CREATE", "", request, calculated, null));
@@ -315,7 +315,8 @@ public class OrderService {
             order,
             course,
             request.getFeeLines(),
-            specialServices.select(order, castId, request.getSpecialServiceIds(), true), true);
+            specialServices.select(order, castId, request.getSpecialServiceIds(), true),
+            true);
     calculation.verify(
         request.getConfirmationToken(),
         calculation.preview("UPDATE", id, request, calculated, null));
@@ -448,8 +449,8 @@ public class OrderService {
             null,
             course,
             request.getFeeLines(),
-            specialServices.select(
-                null, request.getCastId(), request.getSpecialServiceIds(), true), true);
+            specialServices.select(null, request.getCastId(), request.getSpecialServiceIds(), true),
+            true);
     calculation.verify(
         request.getConfirmationToken(),
         calculation.preview("CONFIRM", id, request, calculated, null));
@@ -669,7 +670,8 @@ public class OrderService {
             course,
             request.getFeeLines(),
             specialServices.select(
-                null, request.getCastId(), request.getSpecialServiceIds(), false), false),
+                null, request.getCastId(), request.getSpecialServiceIds(), false),
+            false),
         null);
   }
 
@@ -706,7 +708,8 @@ public class OrderService {
             course,
             request.getFeeLines(),
             specialServices.select(
-                null, request.getCastId(), request.getSpecialServiceIds(), false), false),
+                null, request.getCastId(), request.getSpecialServiceIds(), false),
+            false),
         null);
   }
 
@@ -772,7 +775,8 @@ public class OrderService {
             order,
             course,
             request.getFeeLines(),
-            specialServices.select(order, castId, request.getSpecialServiceIds(), false), false),
+            specialServices.select(order, castId, request.getSpecialServiceIds(), false),
+            false),
         null);
   }
 
