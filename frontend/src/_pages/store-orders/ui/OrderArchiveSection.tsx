@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { OrderArchiveRow, OrderListCriteria, OrderStatus, orderApi } from '@/entities/order';
 import { storePath, useListPage } from '@/shared/lib';
+import { formatDateTime } from '../lib/formatDateTime';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import { Button, RegionError } from '@/shared/ui';
 
@@ -34,11 +35,6 @@ interface OrderArchiveSectionProps {
   onCorrectAttribution: (order: OrderArchiveRow) => void;
   /** 完了後訂正の導線を出すか。ORDER_CORRECT の保持で決まる（強制はサーバ側）。 */
   canCorrect: boolean;
-}
-
-/** 時刻は応答のオフセット付き文字列をそのまま切らず、閲覧者の時間帯へ直して出す（切ると +09:00 が落ちる）。 */
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('ja-JP');
 }
 
 function OutcomeLine({ order }: { order: OrderArchiveRow }) {
@@ -95,7 +91,7 @@ function ArchiveRow({
         </div>
         <OutcomeLine order={order} />
         <p>発生済み報酬: ¥{order.accrued_remuneration.toLocaleString()}</p>
-        {order.completed_at && <p>完了日時: {order.completed_at}</p>}
+        {order.completed_at && <p>完了日時: {formatDateTime(order.completed_at)}</p>}
       </div>
       {/* どちらの操作も完了した受注にしか起こらない — 帰属が生まれるのは完了と事後申領の瞬間だけで、
           完了後訂正の門も取消済みを受け付けない（誤取消の救済は同内容で起こし直すこと）。

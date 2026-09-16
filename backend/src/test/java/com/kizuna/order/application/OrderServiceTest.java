@@ -2466,7 +2466,7 @@ class OrderServiceTest {
     // 台帳へは何も積まない（付与予定額の算定で規則は読むが、書き込みは起きない）
     verifyNoInteractions(materializer);
     // 顧客が未設定なら押さえる行も引く紐づけも無い
-    verify(customerRepository, never()).findByIdForUpdate(any());
+    verify(customerRepository, never()).findByIdForUpdateNoWait(any());
     verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatus(any(), any());
   }
 
@@ -2803,7 +2803,7 @@ class OrderServiceTest {
     service.complete("o1", completion(12000, 300), "staff@kizuna.test");
 
     InOrder inOrder = inOrder(customerRepository, customerMemberLinkRepository);
-    inOrder.verify(customerRepository).findByIdForUpdate("cust-1");
+    inOrder.verify(customerRepository).findByIdForUpdateNoWait("cust-1");
     // 紐づけ自体はロック取得後の新しい問い合わせで引く。置換の commit 後ならその新しい行が必ず見える
     inOrder
         .verify(customerMemberLinkRepository, Mockito.atLeastOnce())
@@ -2821,7 +2821,7 @@ class OrderServiceTest {
     service.completionPreview("o1", completion(12000, 0));
 
     verify(customerMemberLinkRepository).findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE);
-    verify(customerRepository).findByIdForUpdate(any());
+    verify(customerRepository).findByIdForUpdateNoWait(any());
   }
 
   @Test
@@ -2858,6 +2858,24 @@ class OrderServiceTest {
     assertThat(preview.grantPoints()).isZero();
     verify(pointLedgerService, never()).previewGrant(anyInt());
     verify(pointLedgerService, never()).balance(anyLong());
+  }
+
+  @Test
+  void completionPreviewOmitsHistoricalMemberCodeWhenMemberWasDeleted() {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    CustomerMemberLink detached = mock(CustomerMemberLink.class);
+    when(detached.getMemberId()).thenReturn(null);
+    when(detached.getMemberCode()).thenReturn("123456789012");
+    stubLink(detached);
+
+    var preview = service.completionPreview("o1", completion(12000, 0)).points();
+
+    assertThat(preview.memberLinked()).isFalse();
+    assertThat(preview.redemptionEligible()).isFalse();
+    assertThat(preview.memberCode()).isNull();
+    assertThat(preview.pointBalance()).isNull();
+    assertThat(preview.grantPoints()).isZero();
   }
 
   @Test

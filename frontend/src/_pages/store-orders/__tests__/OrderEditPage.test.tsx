@@ -79,6 +79,24 @@ beforeEach(() => {
 });
 
 describe('受注の編集ページ', () => {
+  it('完了日時を閲覧者の時間帯で表示すること', async () => {
+    const completedAt = '2026-09-16T00:30:00Z';
+    mockedOrderApi.get.mockResolvedValue(
+      confirmedOrder({
+        status: 'COMPLETED',
+        completed_at: completedAt,
+        accrued_remuneration: 7000,
+      })
+    );
+    render(<OrderEditPage />);
+    expect(
+      await screen.findByText(text =>
+        text.includes(`完了日時: ${new Date(completedAt).toLocaleString('ja-JP')}`)
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(text => text.includes(completedAt))).not.toBeInTheDocument();
+  });
+
   it('確定済みの編集は 1 件を読み直し、指名と受付担当を毎回運んで保存すること', async () => {
     mockedOrderApi.get.mockResolvedValue(confirmedOrder());
     mockedOrderApi.update.mockResolvedValue(confirmedOrder({ pax: 5 }));

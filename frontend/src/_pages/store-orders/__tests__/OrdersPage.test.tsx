@@ -485,6 +485,24 @@ describe('アーカイブ', () => {
     expect(lastCall[0].statuses).toEqual(['CANCELLED']);
   });
 
+  it('完了アーカイブの日時を閲覧者の時間帯で表示すること', async () => {
+    const completedAt = '2026-09-16T00:30:00Z';
+    stubArchive(
+      'COMPLETED',
+      archivedOrder({
+        id: 'completed-local',
+        status: 'COMPLETED',
+        completed_at: completedAt,
+      })
+    );
+    render(<OrderListPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
+    expect(
+      await screen.findByText(`完了日時: ${new Date(completedAt).toLocaleString('ja-JP')}`)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(text => text.includes(completedAt))).not.toBeInTheDocument();
+  });
+
   it('完了後訂正の導線は ORDER_CORRECT を持つ人にだけ出ること', async () => {
     // 押せない導線を描くと、訂正の内容を入力し終えてから 403 を受け取ることになる
     stubArchive('COMPLETED', archivedOrder({ id: 'x3', status: 'COMPLETED', total_fee: 28000 }));

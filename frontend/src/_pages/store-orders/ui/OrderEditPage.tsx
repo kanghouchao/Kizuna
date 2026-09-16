@@ -27,6 +27,7 @@ import {
   useResourceInitialization,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
+import { formatDateTime } from '../lib/formatDateTime';
 import { UNLINKED_NOTE, customerHeadingText, customerLabel } from '../lib/customerLabel';
 // 日付・時刻・数値の空欄は「送らない」。この契約は null を「変更しない」と読むため空への書き換えを
 // 表現する形が無く、空にしたつもりの欄は元の値が残る（空文字を送ると型の変換に失敗して 400）。
@@ -278,7 +279,7 @@ export default function OrderEditPage() {
               ? current.accrued_remuneration
               : current.total_remuneration
             ).toLocaleString()}
-            {current.completed_at && ` / 完了日時: ${current.completed_at}`}
+            {current.completed_at && ` / 完了日時: ${formatDateTime(current.completed_at)}`}
           </p>
         )}
         {current && (

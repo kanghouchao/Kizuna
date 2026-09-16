@@ -43,6 +43,7 @@ import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
@@ -61,6 +62,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -335,7 +337,7 @@ public class OrderService {
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed("UPDATE", id, request, request.getConfirmationToken())),
             true);
-    if (order.getCustomerId() != null) customerRepository.findByIdForUpdate(order.getCustomerId());
+    lockCustomerWithoutWaiting(order);
     calculation.verify(
         request.getConfirmationToken(),
         calculation.preview("UPDATE", id, request, calculated, completionPoints(calculated, 0)));
@@ -603,11 +605,7 @@ public class OrderService {
     int chargeAmount = order.grantBasisAmount();
 
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
-    if (order.getCustomerId() != null) {
-      // 積み先を決める前に顧客行を押さえ、紐づけの解除・変更と直列化する。引けない顧客はそのまま
-      // 非会員として進む。契約は CustomerRepository#findByIdForUpdate に記す。
-      customerRepository.findByIdForUpdate(order.getCustomerId());
-    }
+    lockCustomerWithoutWaiting(order);
     CustomerMemberLink link = activeLink(order).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
     if (memberId == null && usePoints > 0) {
@@ -842,7 +840,7 @@ public class OrderService {
     calculation.requireVersion(order, request.getExpectedVersion());
     if (order.getStatus().isTerminal()) throw new ServiceException("未完了の受注だけを完了できます");
     specialServices.requireProgress(order);
-    if (order.getCustomerId() != null) customerRepository.findByIdForUpdate(order.getCustomerId());
+    lockCustomerWithoutWaiting(order);
     var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), false);
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
     var points = completionPoints(calculated, usePoints);
@@ -858,6 +856,16 @@ public class OrderService {
         customerRepository.findAliveIdsByPhoneNumberAndStoreId(
             request.getPhoneNumber(), storeContext.getStoreId());
     return matches.size() == 1 ? matches.getFirst() : null;
+  }
+
+  /** 受注行を保持したまま顧客行を待つと、顧客から受注へ進む統合と循環するため、競合時は巻き戻す。 */
+  private void lockCustomerWithoutWaiting(Order order) {
+    if (order.getCustomerId() == null) return;
+    try {
+      customerRepository.findByIdForUpdateNoWait(order.getCustomerId());
+    } catch (CannotAcquireLockException ex) {
+      throw new ConflictException("顧客情報が変更中です。しばらく待ってから再試算してください");
+    }
   }
 
   private OrderPreviewResponse.Points completionPoints(Order order, int usePoints) {
@@ -881,7 +889,7 @@ public class OrderService {
         memberId != null,
         memberId != null,
         balance,
-        memberCode,
+        memberId == null ? null : memberCode,
         unit,
         usePoints,
         memberId == null ? 0 : pointLedgerService.previewGrant(basis));
