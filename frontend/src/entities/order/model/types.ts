@@ -360,19 +360,15 @@ export interface OrderUpdateRequest {
   contact_phone_number?: string;
 }
 
-/** 確定済みの受注の取消（POST /store/orders/{id}/cancellation）。理由は必須（500 文字以内）。 */
+/** 未完了（CONFIRMED / IN_SERVICE）の受注の取消（POST /store/orders/{id}/cancellation）。理由は必須（500 文字以内）。 */
 export interface OrderCancellationRequest {
   reason: string;
 }
 
 /**
- * 完了した受注の訂正（POST /store/orders/{id}/corrections）。ORDER_CORRECT 保持者だけが通れる。
- *
- * 門が直せる三組（実績時刻・コーススナップショット・明細行）の**全量**を毎回送る — 省略は
- * 「変更しない」ではなく「値なし」で、送らなかった項目は空になる。凍結字段（予定時刻・人数・指名・
- * 受付担当・備考・伝言）はこの型に存在せず、混ぜて送ると 400 になる。
- *
- * ポイント利用の行は含められない（門内でも編集不可）。既にある行はこの経路で消えない。
+ * 完了受注の訂正。ORDER_MANAGE と ORDER_CORRECT を要する。
+ * 通常明細は全量必須、実績時刻の省略は値なし。コース・特殊サービスの歴史版本指定の省略は既存約定を保持する。
+ * 予定・人数・担当・受付・備考・伝言は変更できず、ポイント利用明細はサーバ側で保持する。
  */
 export interface OrderCorrectionRequest {
   special_service_revision_ids?: string[];

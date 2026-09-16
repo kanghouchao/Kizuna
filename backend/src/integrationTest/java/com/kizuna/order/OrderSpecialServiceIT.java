@@ -7,6 +7,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mockingDetails;
 
 import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.application.OwnServiceConditionService;
 import com.kizuna.service.application.SpecialServiceRejectionHandler;
@@ -25,6 +27,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -49,6 +52,8 @@ import tools.jackson.databind.node.ObjectNode;
 class OrderSpecialServiceIT extends CrossStoreTestSupport {
   @MockitoSpyBean SpecialServiceRejectionHandler rejectionHandler;
   @MockitoSpyBean ServiceRevisionRepository serviceRevisions;
+  @MockitoSpyBean OrderRepository orders;
+  @MockitoSpyBean CastEnrollmentRepository enrollments;
   @Autowired ObjectMapper json;
   @Autowired JdbcTemplate jdbc;
   @Autowired PlatformTransactionManager transactions;
@@ -56,6 +61,204 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
   @Autowired StoreContext storeContext;
   @Autowired PlatformUserRepository users;
   @Autowired PasswordEncoder passwords;
+
+  @Test
+  void candidatePageKeepsEligibilityContentAndCountInOneSnapshot() {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String first = special(manager);
+    String second = special(manager);
+    assertThat(decide(owner, first, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(decide(owner, second, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    String path = "/store/orders/special-service-candidates?cast_id=" + owner.cast() + "&size=1";
+    var before = call(HttpMethod.GET, path, null, manager);
+    assertThat(before.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(before.getBody().required("total_elements").asInt()).isEqualTo(2);
+    var committed = new AtomicBoolean();
+    doAnswer(
+            invocation -> {
+              var result =
+                  mockingDetails(enrollments)
+                      .getMockCreationSettings()
+                      .getDefaultAnswer()
+                      .answer(invocation);
+              if (committed.compareAndSet(false, true)) {
+                assertThat(decide(owner, first, 1, 1, "REJECTED").getStatusCode())
+                    .isEqualTo(HttpStatus.OK);
+              }
+              return result;
+            })
+        .when(enrollments)
+        .findById(owner.cast());
+    assertThat(call(HttpMethod.GET, path, null, manager).getBody()).isEqualTo(before.getBody());
+    assertThat(committed).isTrue();
+    assertThat(
+            call(HttpMethod.GET, path, null, manager).getBody().required("total_elements").asInt())
+        .isEqualTo(1);
+  }
+
+  @Test
+  void historicalCandidatesKeepRevisionAndDeletionStateInOneSnapshot() {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String course = courseFixture(STORE_A, "歴史候補の同時更新", 60, 12000).serviceId();
+    String service = special(manager);
+    assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var input = createInput(owner.cast(), course, service);
+    var preview = call(HttpMethod.POST, "/store/orders/preview", input, manager);
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    input.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    var created = call(HttpMethod.POST, "/store/orders", input, manager);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String path =
+        "/store/orders/" + created.getBody().path("id").asString() + "/special-service-revisions";
+    var before = call(HttpMethod.GET, path, null, manager);
+    assertThat(before.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var committed = new AtomicBoolean();
+    doAnswer(
+            invocation -> {
+              var result =
+                  mockingDetails(serviceRevisions)
+                      .getMockCreationSettings()
+                      .getDefaultAnswer()
+                      .answer(invocation);
+              if (committed.compareAndSet(false, true)) {
+                assertThat(
+                        call(
+                                HttpMethod.DELETE,
+                                "/store/services/" + service + "?expected_version=1",
+                                null,
+                                manager)
+                            .getStatusCode())
+                    .isEqualTo(HttpStatus.NO_CONTENT);
+              }
+              return result;
+            })
+        .when(serviceRevisions)
+        .findHistoricalSpecials(any(), any(), any(), any(Pageable.class));
+    assertThat(call(HttpMethod.GET, path, null, manager).getBody()).isEqualTo(before.getBody());
+    assertThat(committed).isTrue();
+    assertThat(call(HttpMethod.GET, path, null, manager).getBody().toString())
+        .contains("\"service_deleted\":true");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"CONFIRMED", "IN_SERVICE", "CANCELLED"})
+  void startWithUnresolvedRejectionPreservesStateErrorsAndRollsBack(String state) {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String course = courseFixture(STORE_A, "開始状態の検証", 60, 12000).serviceId();
+    String service = special(manager);
+    assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var input = createInput(owner.cast(), course, service);
+    var preview = call(HttpMethod.POST, "/store/orders/preview", input, manager);
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    input.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    var created = call(HttpMethod.POST, "/store/orders", input, manager);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String id = created.getBody().path("id").asString();
+    if (state.equals("IN_SERVICE")) {
+      assertThat(
+              call(
+                      HttpMethod.POST,
+                      "/store/orders/" + id + "/start",
+                      Map.of(
+                          "expected_version",
+                          created.getBody().path("version").asLong(),
+                          "reason",
+                          "提供開始"),
+                      manager)
+                  .getStatusCode())
+          .isEqualTo(HttpStatus.OK);
+    }
+    assertThat(decide(owner, service, 1, 1, "REJECTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    if (state.equals("CANCELLED")) {
+      assertThat(
+              call(
+                      HttpMethod.POST,
+                      "/store/orders/" + id + "/cancellation",
+                      Map.of("reason", "取消"),
+                      manager)
+                  .getStatusCode())
+          .isEqualTo(HttpStatus.NO_CONTENT);
+    }
+    var before = get(id, manager);
+    var result =
+        call(
+            HttpMethod.POST,
+            "/store/orders/" + id + "/start",
+            Map.of("expected_version", before.path("version").asLong(), "reason", "開始の再試行"),
+            manager);
+    assertThat(result.getStatusCode())
+        .isEqualTo(state.equals("CONFIRMED") ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST);
+    assertThat(result.getBody().path("details").has("special_services"))
+        .isEqualTo(state.equals("CONFIRMED"));
+    assertThat(get(id, manager)).isEqualTo(before);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void detailKeepsOneSnapshotWhenRejectionOrRepairCommitsDuringAssembly(boolean repairing) {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String course = courseFixture(STORE_A, "詳細の同時更新", 60, 12000).serviceId();
+    String service = special(manager);
+    assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var input = createInput(owner.cast(), course, service);
+    var preview = call(HttpMethod.POST, "/store/orders/preview", input, manager);
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    input.put("confirmation_token", preview.getBody().path("confirmation_token").asString());
+    var created = call(HttpMethod.POST, "/store/orders", input, manager);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String id = created.getBody().path("id").asString();
+    if (repairing) {
+      assertThat(decide(owner, service, 1, 1, "REJECTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+    var before = get(id, manager);
+    var committed = new AtomicBoolean();
+    doAnswer(
+            invocation -> {
+              var result =
+                  mockingDetails(orders)
+                      .getMockCreationSettings()
+                      .getDefaultAnswer()
+                      .answer(invocation);
+              if (committed.compareAndSet(false, true)) {
+                if (repairing) {
+                  var edit =
+                      json.createObjectNode()
+                          .put("expected_version", before.path("version").asLong())
+                          .put("cast_id", owner.cast())
+                          .put("receptionist_id", before.path("receptionist_id").asLong());
+                  edit.putArray("special_service_ids");
+                  var repair =
+                      call(HttpMethod.POST, "/store/orders/" + id + "/preview", edit, manager);
+                  assertThat(repair.getStatusCode()).isEqualTo(HttpStatus.OK);
+                  edit.put(
+                      "confirmation_token", repair.getBody().path("confirmation_token").asString());
+                  assertThat(
+                          call(HttpMethod.PUT, "/store/orders/" + id, edit, manager)
+                              .getStatusCode())
+                      .isEqualTo(HttpStatus.OK);
+                } else {
+                  assertThat(decide(owner, service, 1, 1, "REJECTED").getStatusCode())
+                      .isEqualTo(HttpStatus.OK);
+                }
+              }
+              return result;
+            })
+        .when(orders)
+        .findViewById(id);
+
+    assertThat(get(id, manager)).isEqualTo(before);
+    assertThat(committed).isTrue();
+    var after = get(id, manager);
+    assertThat(after.path("requires_attention").asBoolean()).isEqualTo(!repairing);
+    assertThat(after.path("unresolved_special_service_count").asInt()).isEqualTo(repairing ? 0 : 1);
+    assertThat(after.path("special_services").size()).isEqualTo(repairing ? 0 : 1);
+    assertThat(after.path("total_fee").asInt()).isEqualTo(repairing ? 12000 : 14000);
+    assertThat(after.path("version").asLong()).isGreaterThan(before.path("version").asLong());
+  }
 
   @Test
   void candidateEvidenceRemainsAcceptedWhenRejectionCommitsAfterSelection() {
@@ -158,7 +361,7 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
             .getBody()
             .path("id")
             .asString();
-    assertThat(candidates(owner.cast(), manager).path("totalElements").asInt()).isZero();
+    assertThat(candidates(owner.cast(), manager).required("total_elements").asInt()).isZero();
     assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(candidates(owner.cast(), manager).toString()).contains(service);
     var input =

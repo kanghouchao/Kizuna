@@ -145,7 +145,7 @@ export default function OrderPointRollbackPage() {
 
       {order !== null && !completed && (
         <RegionError
-          message="完了した受注だけがポイントを巻き戻せます。付与も利用も完了と伝票の申領でしか記帳されないため、確定済み・取消済みの受注に打ち消すものはありません。"
+          message="完了した受注だけがポイントを巻き戻せます。付与も利用も完了と伝票の申領でしか記帳されないため、未完了・取消済みの受注に打ち消すものはありません。"
           fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
         />
       )}

@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -55,8 +56,9 @@ public class OrderSpecialServiceCatalog {
         consent);
   }
 
+  /** 在籍資格・候補・総数を同じ断面で判定する。 */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<SpecialServiceTerms> candidates(
       String enrollment, String search, int page, int size) {
     requirePage(page, size);
@@ -75,8 +77,9 @@ public class OrderSpecialServiceCatalog {
         null);
   }
 
+  /** 歴史版本と各項目の現在の削除状態を同じ断面から返す。 */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<SpecialServiceTerms> history(String search, String cursor, int size) {
     requirePage(0, size);
     var key = cursor == null ? null : PageCursor.decode(cursor);

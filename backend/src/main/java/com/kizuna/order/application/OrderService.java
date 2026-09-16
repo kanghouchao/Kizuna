@@ -203,8 +203,9 @@ public class OrderService {
     return new PageCursor(cursorsById.get(view.getId()), view.getId()).encode();
   }
 
+  /** 集約・表示用 projection・現在の受諾と要対応を同じ断面から返す。 */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public OrderResponse get(String id) {
     return toResponse(
         orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id)));
@@ -755,7 +756,7 @@ public class OrderService {
     }
     if (castId != null) {
       // 縛るのは新しく立てる指名と差し替えだけで、据え置き（同じ指名の再送）は素通しする。この経路は指名済みの
-      // 受注に cast_id の再送を必須にしているため、無条件に在籍中を要求すると、指名者が在籍停止になった確定済みの
+      // 受注に cast_id の再送を必須にしているため、無条件に在籍中を要求すると、指名者が在籍停止になった未完了の
       // 受注が備考・人数の修正も完了への遷移もできなくなる。据え置かれた指名は成立した時点で検証済みで、
       // cast_id には FK も掛かっているので、素通しが存在しないキャストを通すことにはならない。
       if (!castId.equals(order.getCastId())) {
@@ -812,7 +813,7 @@ public class OrderService {
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     calculation.requireVersion(order, request.getExpectedVersion());
-    if (order.getStatus().isTerminal()) throw new ServiceException("確定した受注だけを完了できます");
+    if (order.getStatus().isTerminal()) throw new ServiceException("未完了の受注だけを完了できます");
     specialServices.requireProgress(order);
     if (order.getCustomerId() != null) customerRepository.findByIdForUpdate(order.getCustomerId());
     var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), false);
@@ -857,13 +858,8 @@ public class OrderService {
   }
 
   /**
-   * 確定済みの受注を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみで、理由・実行者・時刻を記録に残す（ADR 0013）。
-   *
-   * <p>汎用更新から状態を動かす裏口を閉じた代わりに立てた専用の口。未確定申請の謝絶（{@link #decline}）とは別物で、
-   * あちらが理由を持たないのは店舗がまだ受諾していない段階だから。
-   *
-   * <p>二度目の取消は集約が撥ねる（逐次なら 400）。同時に届いた 2 つは双方が CONFIRMED を読んで守衛を通り、 {@code @Version} の楽観ロックで敗者が 409
-   * に落ちる — 記録される理由と実行者は先に commit した側のもので、 敗者を黙って成功させる方が「自分の理由が残った」と誤って伝える。
+   * 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消し、実行者・時刻を記録する。
+   * 店舗・受注のロックで並行操作を直列化し、二度目の取消は状態違反として拒否する（400）。
    */
   @StoreScoped
   @Transactional
@@ -924,8 +920,8 @@ public class OrderService {
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     calculation.requireVersion(order, expectedVersion);
-    specialServices.requireProgress(order);
     order.start(reason, actorIdentityService.requireUserId(actor), OffsetDateTime.now());
+    specialServices.requireProgress(order);
     orderRepository.saveAndFlush(order);
     return toResponse(order);
   }

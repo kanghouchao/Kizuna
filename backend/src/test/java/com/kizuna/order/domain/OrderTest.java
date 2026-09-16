@@ -10,6 +10,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class OrderTest {
   private OrderFeeLineDraft draft(OrderFeeLineKind kind, String name, int amount) {
@@ -21,10 +23,13 @@ class OrderTest {
     return Order.builder().course(OrderCourses.course("基本", 60, 0)).status(status).build();
   }
 
-  @Test
-  @DisplayName("確認済みの注文を完了すると利用ポイントが減算の明細になり、合計がそのぶん下がること")
-  void completeWith_fromConfirmed() {
-    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+  @ParameterizedTest
+  @EnumSource(
+      value = OrderStatus.class,
+      names = {"CONFIRMED", "IN_SERVICE"})
+  @DisplayName("未完了の受注を完了すると利用ポイントが減算の明細になり、合計がそのぶん下がること")
+  void completeWith_fromUnfinished(OrderStatus status) {
+    Order order = orderWithStatus(status);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "指名料", 12000)));
 
     order.completeWith(500, 120);
@@ -285,10 +290,13 @@ class OrderTest {
     assertThat(order.getTotalFee()).isEqualTo(2000);
   }
 
-  @Test
-  @DisplayName("確定済みの注文を理由付きで取消でき、理由・実行者・時刻が残ること")
-  void cancelWith_fromConfirmed_recordsReasonActorAndTime() {
-    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+  @ParameterizedTest
+  @EnumSource(
+      value = OrderStatus.class,
+      names = {"CONFIRMED", "IN_SERVICE"})
+  @DisplayName("未完了の受注を理由付きで取消でき、理由・実行者・時刻が残ること")
+  void cancelWith_fromUnfinished_recordsReasonActorAndTime(OrderStatus status) {
+    Order order = orderWithStatus(status);
     OffsetDateTime at = OffsetDateTime.parse("2026-08-14T17:42:00+09:00");
 
     order.cancelWith("客都合。当日夕方に体調不良の連絡あり", 7L, at);
@@ -315,9 +323,7 @@ class OrderTest {
 
   @Test
   @DisplayName("完了済みの注文は専用取消の経路では取り消せないこと")
-  void cancelWith_outsideConfirmed_isRejected() {
-    // 定義域は CONFIRMED → CANCELLED のみ。未処理の予約申請は申請側の謝絶が受け持ち、
-    // 誤完了の救済経路はまだ存在しない（ADR 0013）
+  void cancelWith_fromCompleted_isRejected() {
     Order order = orderWithStatus(OrderStatus.COMPLETED);
     assertThatThrownBy(() -> order.cancelWith("理由", 7L, OffsetDateTime.now()))
         .isInstanceOf(IllegalOrderStateTransitionException.class);

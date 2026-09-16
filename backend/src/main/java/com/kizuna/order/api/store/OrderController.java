@@ -314,12 +314,7 @@ public class OrderController {
     return ResponseEntity.ok(orderService.completionPreview(id, request));
   }
 
-  /**
-   * 確定済みの受注を理由付きで取消す。理由・実行者・時刻が記録に残り、以後この受注は終端状態として凍結される（ADR 0013）。
-   *
-   * <p>対象は確定済みの受注のみ。未処理の予約申請は申請側の謝絶が、完了した受注の内容訂正は完了後訂正の門（ADR 0019）が受け持つ — 状態を戻す経路はどこにも無い。
-   * 二度目の取消は撥ねられる（逐次なら集約の守衛で 400、同時なら楽観ロックで 409）。
-   */
+  /** 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消す。二度目の取消は状態違反（400）として拒否する。 */
   @PostMapping("/{id}/cancellation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Void> cancel(
@@ -330,15 +325,7 @@ public class OrderController {
     return ResponseEntity.noContent().build();
   }
 
-  /**
-   * 完了した受注の内容を理由付きで訂正する（ADR 0019）。状態は動かさない — COMPLETED → CONFIRMED の回退は開けない。
-   *
-   * <p>直せるのは明細行・実績時刻・コーススナップショットの三組だけで、それ以外は ADR 0013 の凍結のまま。凍結字段は 要求の型に存在せず、送れば未知の項目として撥ねられる。対象は
-   * COMPLETED のみで、CANCELLED は門の外（誤取消の 救済は同内容で受注を起こし直すこと）。
-   *
-   * <p>権限が {@code ORDER_CORRECT} なのは、日常権限の {@code ORDER_MANAGE} で守ると「権限のある利用者のみが訂正できる」が
-   * 空文になるためである。門はポイントを一切動かさず、応答が名乗るのは会計金額の前後だけである（ADR 0019）。
-   */
+  /** 完了受注の明細・実績時刻・コース・特殊サービスを理由付きで訂正する。 状態・ポイントを変えず、訂正前後の採用条件・金額・分数・報酬を返す。 */
   @PostMapping("/{id}/corrections")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
   public ResponseEntity<OrderCorrectionResponse> correct(

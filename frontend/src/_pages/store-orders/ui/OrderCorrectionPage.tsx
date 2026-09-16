@@ -269,7 +269,7 @@ export default function OrderCorrectionPage() {
         {/* 完了していない受注はサーバが撥ねる。欄を出してから 400 を返すより、開いた時点で理由を名乗る */}
         {seeded && !completed && (
           <RegionError
-            message="完了した受注だけが訂正できます。確定済みの受注は編集画面から、取消済みの受注は同じ内容で起こし直してください。"
+            message="完了した受注だけが訂正できます。未完了の受注は編集画面から、取消済みの受注は同じ内容で起こし直してください。"
             fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
           />
         )}
