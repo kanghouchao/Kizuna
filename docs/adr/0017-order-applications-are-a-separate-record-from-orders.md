@@ -20,8 +20,8 @@ Status: Accepted
 - **謝絶は理由必須**で、実行者と時刻を記録に残す（取消 ADR 0013 の先例）。理由は分類軸ではないため
   enum 化しない。
 - **`OrderStatus.CREATED` は退場する**。これにより**すべての Order が出生即 CONFIRMED** となり、店舗直接
-  受注（#679 既決）と出生が揃う。受注の状態機械は `CONFIRMED → COMPLETED / CANCELLED` だけになり、
-  ADR 0013 の終端語義に申請ライフサイクルが絡まなくなる。
+  受注（#679 既決）と出生が揃う。受注の状態機械は `CONFIRMED → IN_SERVICE → COMPLETED / CANCELLED` とし、
+  `CONFIRMED` からの直接完了・取消も許す。ADR 0013 の終端語義に申請ライフサイクルは絡まない。
 - **受付経路 `MEMBER_WEB` / `GUEST_WEB` は申請確定由来の受注だけが名乗る**。入口ごとに値が分かれ、
   会員ポータル由来が `MEMBER_WEB`、公開店面のゲスト申請由来が `GUEST_WEB` になる。店舗の直接作成経路が
   Web 申請の経路を拒否する既決（CONTEXT.md）は変えない。
