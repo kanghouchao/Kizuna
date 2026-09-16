@@ -10,6 +10,8 @@ export function orderConflictField(error: unknown): string | undefined {
   if (!isConflict(error)) return undefined;
   const details = (error as { response?: { data?: { details?: Record<string, unknown> } } })
     .response?.data?.details;
+  if (details?.customer_lock) return 'customer_lock';
+  if (details?.use_points) return 'use_points';
   if (details?.confirmation_token) return 'confirmation_token';
   if (details?.special_services) return 'special_services';
   if (details?.expected_version) return 'expected_version';
@@ -157,6 +159,14 @@ export function useOrderConfirmation(target?: string) {
                 </p>
               ))}
               <p>請求額: ¥{preview.total_fee.toLocaleString()}</p>
+              <p>利用上限・通常付与基準: ¥{preview.point_basis_amount.toLocaleString()}</p>
+              {preview.points && (
+                <p>
+                  利用資格: {preview.points.redemption_eligible ? '利用可能' : '利用不可'} /
+                  現在残高: {preview.points.point_balance?.toLocaleString() ?? '—'} / 利用単位:{' '}
+                  {preview.points.usage_unit}
+                </p>
+              )}
               {preview.points && (
                 <p>
                   {preview.points.member_linked
@@ -220,9 +230,12 @@ export function useOrderConfirmation(target?: string) {
                       請求: ¥{previousPreview.total_fee} → ¥{preview.total_fee}
                     </p>
                     <p>
-                      利用: {previousPreview.points?.use_points ?? 0} →{' '}
-                      {preview.points?.use_points ?? 0} / 付与:{' '}
-                      {previousPreview.points?.grant_points ?? 0} →{' '}
+                      会員: {previousPreview.points?.member_code ?? '非会員'} →{' '}
+                      {preview.points?.member_code ?? '非会員'} / 利用資格:{' '}
+                      {previousPreview.points?.redemption_eligible ? '利用可能' : '利用不可'} →{' '}
+                      {preview.points?.redemption_eligible ? '利用可能' : '利用不可'} / 利用:{' '}
+                      {previousPreview.points?.use_points ?? 0} → {preview.points?.use_points ?? 0}{' '}
+                      / 付与: {previousPreview.points?.grant_points ?? 0} →{' '}
                       {preview.points?.grant_points ?? 0}
                     </p>
                   </div>

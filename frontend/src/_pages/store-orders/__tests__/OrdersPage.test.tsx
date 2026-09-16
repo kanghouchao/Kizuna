@@ -60,6 +60,8 @@ const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readToken
 /** 確定済みの受注 1 件。fixture は手書きで、OrderWorkQueueRow 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQueueRow {
   return {
+    accrued_remuneration: 0,
+    total_remuneration: 7000,
     requires_attention: false,
     unresolved_special_service_count: 0,
     id: 'o1',
@@ -93,6 +95,8 @@ function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQu
 
 function archivedOrder(overrides: Partial<OrderArchiveRow> = {}): OrderArchiveRow {
   return {
+    accrued_remuneration: 0,
+    total_remuneration: 7000,
     requires_attention: false,
     unresolved_special_service_count: 0,
     course: {
@@ -479,6 +483,24 @@ describe('アーカイブ', () => {
     await waitFor(() => expect(mockedOrderApi.listArchive).toHaveBeenCalledTimes(3));
     const [lastCall] = mockedOrderApi.listArchive.mock.calls.slice(-1);
     expect(lastCall[0].statuses).toEqual(['CANCELLED']);
+  });
+
+  it('完了アーカイブの日時を閲覧者の時間帯で表示すること', async () => {
+    const completedAt = '2026-09-16T00:30:00Z';
+    stubArchive(
+      'COMPLETED',
+      archivedOrder({
+        id: 'completed-local',
+        status: 'COMPLETED',
+        completed_at: completedAt,
+      })
+    );
+    render(<OrderListPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
+    expect(
+      await screen.findByText(`完了日時: ${new Date(completedAt).toLocaleString('ja-JP')}`)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(text => text.includes(completedAt))).not.toBeInTheDocument();
   });
 
   it('完了後訂正の導線は ORDER_CORRECT を持つ人にだけ出ること', async () => {

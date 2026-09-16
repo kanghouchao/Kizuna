@@ -2,24 +2,156 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.customer.application.CustomerMergeService;
+import com.kizuna.order.result.OrderCompletionResults;
 import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.shared.storescope.StoreContext;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 class OrderExtrasIT extends CrossStoreTestSupport {
+  @Autowired OrderCompletionResults results;
+  @Autowired StoreContext storeContext;
+  @Autowired JdbcTemplate jdbc;
+  @Autowired PlatformTransactionManager transactions;
+  @Autowired CustomerMergeService customerMergeService;
+
+  @ParameterizedTest
+  @ValueSource(strings = {"update", "completion", "completion-preview"})
+  void customerMergeContentionReturnsConflictAndReleasesTheOrder(String operation)
+      throws Exception {
+    var headers = managerHeaders(STORE_A);
+    String customer = linkedCustomer(headers);
+    String survivor =
+        post("/store/customers", Map.of("name", "統合先"), headers).getBody().path("id").asString();
+    var input = input(headers);
+    input.put("customer_id", customer);
+    var saved =
+        save(
+                "/store/orders",
+                input,
+                post("/store/orders/preview", input, headers).getBody(),
+                headers)
+            .getBody();
+    String path = "/store/orders/" + saved.path("id").asString();
+    var change = new HashMap<String, Object>();
+    change.put("expected_version", saved.path("version").asLong());
+    change.put("fee_lines", List.of());
+    if (operation.equals("update")) {
+      change.put("cast_id", input.get("cast_id"));
+      change.put("receptionist_id", saved.path("receptionist_id").asLong());
+    }
+    var quote =
+        post(
+            path + (operation.equals("update") ? "/preview" : "/completion-preview"),
+            change,
+            headers);
+    assertThat(quote.getStatusCode()).as("%s", quote.getBody()).isEqualTo(HttpStatus.OK);
+    if (!operation.equals("completion-preview"))
+      change.put("confirmation_token", quote.getBody().path("confirmation_token").asString());
+
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      storeContext.setStoreId(STORE_A);
+      try {
+        new TransactionTemplate(transactions)
+            .executeWithoutResult(
+                tx -> {
+                  jdbc.queryForObject(
+                      "select id from t_customers where id = ? for update", String.class, customer);
+                  var request =
+                      executor.submit(
+                          () ->
+                              rest.exchange(
+                                  operation.equals("update") ? path : path + "/" + operation,
+                                  operation.equals("update") ? HttpMethod.PUT : HttpMethod.POST,
+                                  new HttpEntity<>(change, headers),
+                                  JsonNode.class));
+                  try {
+                    var response = request.get(10, TimeUnit.SECONDS);
+                    assertThat(response.getStatusCode())
+                        .as("%s", response.getBody())
+                        .isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(response.getBody().path("error").asString()).contains("顧客情報が変更中");
+                    assertThat(response.getBody().path("details").has("customer_lock")).isTrue();
+                  } catch (Exception ex) {
+                    throw new AssertionError("顧客ロックを待たずに競合を返すこと", ex);
+                  }
+                  customerMergeService.merge(survivor, customer, "tanaka.hanako@kizuna.test");
+                });
+      } finally {
+        storeContext.clear();
+      }
+    }
+    var unchanged = get(path, headers).getBody();
+    assertThat(unchanged.path("customer_id").asString()).isEqualTo(survivor);
+    assertThat(unchanged.path("status").asString()).isEqualTo("CONFIRMED");
+    assertThat(unchanged.has("completed_at")).isFalse();
+    assertThat(unchanged.path("accrued_remuneration").asInt()).isZero();
+  }
+
+  @Test
+  void deletedMemberHasNoMemberCodeInAnyOrderPreview() {
+    var headers = managerHeaders(STORE_A);
+    String customer = linkedCustomer(headers);
+    jdbc.update(
+        "delete from t_members where id = (select member_id from t_customer_member_links where customer_id = ?)",
+        customer);
+    var input = input(headers);
+    input.put("customer_id", customer);
+    var preview = post("/store/orders/preview", input, headers);
+    assertNoMember(preview);
+    var saved = save("/store/orders", input, preview.getBody(), headers).getBody();
+    String path = "/store/orders/" + saved.path("id").asString();
+    var change =
+        Map.of(
+            "expected_version",
+            saved.path("version").asLong(),
+            "cast_id",
+            input.get("cast_id"),
+            "receptionist_id",
+            saved.path("receptionist_id").asLong());
+    assertNoMember(post(path + "/preview", change, headers));
+    assertNoMember(
+        post(
+            path + "/completion-preview",
+            Map.of("expected_version", saved.path("version").asLong(), "fee_lines", List.of()),
+            headers));
+  }
+
+  private void assertNoMember(ResponseEntity<JsonNode> response) {
+    assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+    var points = response.getBody().path("points");
+    assertThat(points.path("member_linked").asBoolean()).isFalse();
+    assertThat(points.path("redemption_eligible").asBoolean()).isFalse();
+    assertThat(points.has("member_code")).isFalse();
+    assertThat(points.has("point_balance")).isFalse();
+  }
+
   @Test
   void extensionsSurchargeAndDiscountAreSavedWithIndependentTimeAndRemuneration() {
     var headers = managerHeaders(STORE_A);
     var input = input(headers);
+    input.put("business_date", "2026-09-14");
     var surcharge = service(headers, "SURCHARGE", 1000, 500);
     input.put(
         "fee_lines",
@@ -72,8 +204,26 @@ class OrderExtrasIT extends CrossStoreTestSupport {
             save("/store/orders/" + id + "/completion", completion, quote.getBody(), headers)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
-    assertThat(get("/store/orders/" + id, headers).getBody().path("total_remuneration").asInt())
-        .isEqualTo(9500);
+    var completed = get("/store/orders/" + id, headers).getBody();
+    assertThat(completed.path("total_remuneration").asInt()).isEqualTo(9500);
+    assertThat(completed.path("accrued_remuneration").asInt()).isEqualTo(9500);
+    try {
+      storeContext.setStoreId(STORE_A);
+      var result = results.find(id).orElseThrow();
+      assertThat(result.accruedRemuneration()).isEqualTo(9500);
+      assertThat(result.businessDate().toString()).isEqualTo("2026-09-14");
+      assertThat(result.completedAt()).isNotNull();
+      assertThat(result.items()).hasSize(5);
+      assertThat(result.items().getFirst().revisionId()).isNotBlank();
+      storeContext.setStoreId(STORE_B);
+      assertThat(results.find(id)).isEmpty();
+    } finally {
+      storeContext.clear();
+    }
+    assertThat(completed.path("completed_at").asString()).isNotBlank();
+    assertThat(completed.path("business_date").asString()).isEqualTo("2026-09-14");
+    assertThat(get("/store/orders/" + id, managerHeaders(STORE_B)).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   @Test
@@ -246,6 +396,211 @@ class OrderExtrasIT extends CrossStoreTestSupport {
             post("/store/orders/" + id + "/correction-preview", correction, headers)
                 .getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  void completionKeepsPointBasisAndAcceptsSufficientBalanceChanges() {
+    var headers = managerHeaders(STORE_A);
+    String customer = linkedCustomer(headers);
+    adjustPoints(customer, 5000, headers);
+    var input = input(headers);
+    input.put("customer_id", customer);
+    input.put("business_date", "2026-09-14");
+    var surcharge = service(headers, "SURCHARGE", 3000, 0);
+    input.put(
+        "fee_lines",
+        List.of(
+            Map.of(
+                "kind",
+                "EXTENSION",
+                "name",
+                "延長",
+                "duration_minutes",
+                30,
+                "amount",
+                3000,
+                "remuneration",
+                2000),
+            Map.of("kind", "SURCHARGE", "service_id", surcharge.path("id").asString()),
+            Map.of("kind", "DISCOUNT", "name", "割引", "amount", 2000)));
+    var preview = post("/store/orders/preview", input, headers).getBody();
+    assertThat(preview.path("points").path("member_linked").asBoolean()).isTrue();
+    assertThat(preview.path("point_basis_amount").asInt()).isEqualTo(16000);
+    var saved = save("/store/orders", input, preview, headers).getBody();
+    String path = "/store/orders/" + saved.path("id").asString();
+    var completion = new HashMap<String, Object>();
+    completion.put("expected_version", saved.path("version").asLong());
+    completion.put("fee_lines", retained(saved));
+    completion.put("use_points", 3000);
+    var quote = post(path + "/completion-preview", completion, headers);
+    assertThat(quote.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(quote.getBody().path("point_basis_amount").asInt()).isEqualTo(16000);
+    assertThat(quote.getBody().path("total_fee").asInt()).isEqualTo(13000);
+    assertThat(quote.getBody().path("points").path("grant_points").asInt()).isEqualTo(160);
+    adjustPoints(customer, 100, headers);
+    assertThat(save(path + "/completion", completion, quote.getBody(), headers).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    var completed = get(path, headers).getBody();
+    assertThat(completed.path("accrued_remuneration").asInt()).isEqualTo(9000);
+    assertThat(completed.path("total_fee").asInt()).isEqualTo(13000);
+    assertThat(completed.path("business_date").asString()).isEqualTo("2026-09-14");
+    assertThat(completed.path("completed_at").asString()).isNotBlank();
+    var archive = get("/store/orders/archive?statuses=COMPLETED&business_date=2026-09-14", headers);
+    assertThat(archive.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(archive.getBody().path("content").toString()).contains(saved.path("id").asString());
+  }
+
+  @Test
+  void changedMembershipRejectsOrdinarySaveAndCompletionWithoutPartialResults() {
+    var headers = managerHeaders(STORE_A);
+    String customer = linkedCustomer(headers);
+    var input = input(headers);
+    input.put("customer_id", customer);
+    var first = post("/store/orders/preview", input, headers).getBody();
+    assertThat(
+            rest.exchange(
+                    "/store/customers/" + customer + "/member-link",
+                    HttpMethod.DELETE,
+                    new HttpEntity<>(headers),
+                    Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(save("/store/orders", input, first, headers).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+    var saved =
+        save(
+                "/store/orders",
+                input,
+                post("/store/orders/preview", input, headers).getBody(),
+                headers)
+            .getBody();
+    String path = "/store/orders/" + saved.path("id").asString();
+    var completion = new HashMap<String, Object>();
+    completion.put("expected_version", saved.path("version").asLong());
+    completion.put("fee_lines", retained(saved));
+    var quote = post(path + "/completion-preview", completion, headers).getBody();
+    assertThat(
+            post(
+                    "/store/customers/" + customer + "/member-link",
+                    Map.of("member_code", first.path("points").path("member_code").asString()),
+                    headers)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(save(path + "/completion", completion, quote, headers).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+    var unchanged = get(path, headers).getBody();
+    assertThat(unchanged.path("status").asString()).isEqualTo("CONFIRMED");
+    assertThat(unchanged.has("completed_at")).isFalse();
+    assertThat(unchanged.path("accrued_remuneration").asInt()).isZero();
+    assertThat(unchanged.path("version").asLong()).isEqualTo(saved.path("version").asLong());
+  }
+
+  @Test
+  void insufficientBalanceAfterConfirmationDoesNotReduceRequestedPoints() {
+    var headers = managerHeaders(STORE_A);
+    String customer = linkedCustomer(headers);
+    adjustPoints(customer, 3000, headers);
+    var input = input(headers);
+    input.put("customer_id", customer);
+    var saved =
+        save(
+                "/store/orders",
+                input,
+                post("/store/orders/preview", input, headers).getBody(),
+                headers)
+            .getBody();
+    String path = "/store/orders/" + saved.path("id").asString();
+    var completion = new HashMap<String, Object>();
+    completion.put("expected_version", saved.path("version").asLong());
+    completion.put("fee_lines", retained(saved));
+    completion.put("use_points", 3000);
+    var quote = post(path + "/completion-preview", completion, headers).getBody();
+    adjustPoints(customer, -100, headers);
+    var rejected = save(path + "/completion", completion, quote, headers);
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(rejected.getBody().path("details").has("use_points")).isTrue();
+    var unchanged = get(path, headers).getBody();
+    assertThat(unchanged.path("status").asString()).isEqualTo("CONFIRMED");
+    assertThat(unchanged.path("fee_lines").toString()).doesNotContain("POINT_REDEMPTION");
+    assertThat(unchanged.path("accrued_remuneration").asInt()).isZero();
+  }
+
+  @Test
+  void competingCompletionsCommitExactlyOneResult() throws Exception {
+    var headers = managerHeaders(STORE_A);
+    String customer = linkedCustomer(headers);
+    adjustPoints(customer, 5000, headers);
+    var input = input(headers);
+    input.put("customer_id", customer);
+    var saved =
+        save(
+                "/store/orders",
+                input,
+                post("/store/orders/preview", input, headers).getBody(),
+                headers)
+            .getBody();
+    String path = "/store/orders/" + saved.path("id").asString();
+    var completion = new HashMap<String, Object>();
+    completion.put("expected_version", saved.path("version").asLong());
+    completion.put("fee_lines", retained(saved));
+    completion.put("use_points", 3000);
+    var quote = post(path + "/completion-preview", completion, headers).getBody();
+    var ready = new CountDownLatch(2);
+    var start = new CountDownLatch(1);
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      Callable<HttpStatus> action =
+          () -> {
+            ready.countDown();
+            assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
+            return HttpStatus.valueOf(
+                save(path + "/completion", completion, quote, headers).getStatusCode().value());
+          };
+      var first = executor.submit(action);
+      var second = executor.submit(action);
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+      assertThat(List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS)))
+          .containsExactlyInAnyOrder(HttpStatus.OK, HttpStatus.CONFLICT);
+    }
+    var completed = get(path, headers).getBody();
+    assertThat(completed.path("used_points").asInt()).isEqualTo(3000);
+    assertThat(completed.path("accrued_remuneration").asInt()).isEqualTo(7000);
+    assertThat(completed.path("version").asLong()).isEqualTo(saved.path("version").asLong() + 1);
+  }
+
+  private String linkedCustomer(HttpHeaders headers) {
+    var member =
+        post(
+            "/platform/members",
+            Map.of(
+                "email",
+                "completion-" + System.nanoTime() + "@kizuna.test",
+                "password",
+                "password1234",
+                "display_name",
+                "報酬検証"),
+            headers);
+    assertThat(member.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String customer =
+        post("/store/customers", Map.of("name", "報酬検証"), headers).getBody().path("id").asString();
+    assertThat(
+            post(
+                    "/store/customers/" + customer + "/member-link",
+                    Map.of("member_code", member.getBody().path("member_code").asString()),
+                    headers)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    return customer;
+  }
+
+  private void adjustPoints(String customer, int delta, HttpHeaders headers) {
+    var body = new HashMap<String, Object>();
+    body.put("delta", delta);
+    body.put("reason", "完了再確認の検証");
+    body.put("idempotency_key", UUID.randomUUID().toString());
+    if (delta > 0) body.put("expires_on", "2028-12-31");
+    var response = post("/store/customers/" + customer + "/point-adjustments", body, headers);
+    assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
   }
 
   private HashMap<String, Object> input(HttpHeaders headers) {

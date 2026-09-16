@@ -8,6 +8,12 @@ import java.time.OffsetDateTime;
 public interface OrderView {
   OffsetDateTime getStartedAt();
 
+  OffsetDateTime getCompletedAt();
+
+  int getAccruedRemuneration();
+
+  int getTotalRemuneration();
+
   Integer getUnresolvedSpecialServiceCount();
 
   default boolean getRequiresAttention() {

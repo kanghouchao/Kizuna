@@ -8,6 +8,7 @@ beforeEach(() => {
   mockStore = '1';
 });
 const first: OrderPreview = {
+  point_basis_amount: 12000,
   total_duration_minutes: 60,
   total_remuneration: 7000,
   requires_attention: false,
@@ -163,4 +164,28 @@ test('トークンが同じでも受諾状態の差を表示し、歴史の受�
   expect(comparison).toHaveTextContent('再受諾待ち');
   expect(comparison).toHaveTextContent('担当在籍 cast1');
   expect(comparison).not.toHaveTextContent('未受諾');
+});
+
+test('ポイント利用上限と通常付与基準を確認してから保存する', async () => {
+  const save = jest.fn();
+  const preview = jest.fn().mockResolvedValue({
+    ...first,
+    point_basis_amount: 16000,
+    total_fee: 13000,
+    points: {
+      member_linked: true,
+      redemption_eligible: true,
+      member_code: 'M001',
+      point_balance: 5000,
+      usage_unit: 100,
+      use_points: 3000,
+      grant_points: 160,
+    },
+  });
+  render(<Screen preview={preview} save={save} />);
+  fireEvent.click(screen.getByText('試算する'));
+  expect(await screen.findByText(/利用上限・通常付与基準: ¥16,000/)).toBeInTheDocument();
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('この内容を確認して保存'));
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
 });

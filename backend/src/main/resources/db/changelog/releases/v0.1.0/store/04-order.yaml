@@ -12,6 +12,15 @@ databaseChangeLog:
             remarks: 注文テーブル
             columns:
               - column:
+                  name: completed_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: accrued_remuneration
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
                   name: started_at
                   type: TIMESTAMP WITH TIME ZONE
               - column:
@@ -242,6 +251,12 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                   remarks: 楽観ロック用バージョン
+        - sql:
+            sql: >-
+              ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_completion
+              CHECK (accrued_remuneration >= 0 AND
+                ((status = 'COMPLETED' AND completed_at IS NOT NULL) OR
+                 (status <> 'COMPLETED' AND completed_at IS NULL AND accrued_remuneration = 0)))
         - addForeignKeyConstraint:
             constraintName: fk_t_orders_store
             baseTableName: t_orders

@@ -31,6 +31,7 @@ const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
 const confirmedOrder: Order = {
+  accrued_remuneration: 0,
   total_duration_minutes: 60,
   total_remuneration: 7000,
   requires_attention: false,
@@ -140,6 +141,8 @@ describe('OrderCompletionModal', () => {
       ],
     });
     const queueRow: OrderWorkQueueRow = {
+      accrued_remuneration: 0,
+      total_remuneration: 7000,
       requires_attention: false,
       unresolved_special_service_count: 0,
       course: {
@@ -568,6 +571,88 @@ describe('OrderCompletionModal', () => {
     expect(notify.success).toHaveBeenCalledWith('オーダーを完了しました');
     expect(onCompleted).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('顧客ロックの競合は入力とサーバの案内を保持し、再送できる', async () => {
+    const message = '顧客情報が変更中です。しばらく待ってから再試算してください';
+    mockedComplete.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          error: message,
+          details: { customer_lock: '入力を保持して再試算してください' },
+        },
+      },
+    });
+    renderModal();
+    fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
+    await completeWith('8000');
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith(message));
+    expect(screen.getByLabelText('利用ポイント')).toHaveValue(200);
+    expect(screen.getByLabelText('明細1の金額')).toHaveValue(8000);
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+    expect(notify.warning).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
+    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
+    expect(mockedComplete.mock.calls[1][1]).toEqual(mockedComplete.mock.calls[0][1]);
+  });
+
+  it('試算中の顧客ロック競合は受注を読み直さず同じ入力で再試行できる', async () => {
+    renderModal();
+    fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
+    fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: '8000' } });
+    const message = '顧客情報が変更中です。しばらく待ってから再試算してください';
+    mockedPreview.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          error: message,
+          details: { customer_lock: '入力を保持して再試算してください' },
+        },
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+    expect(mockedComplete).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '最新の受注を読み直す' })).not.toBeInTheDocument();
+    mockedPreview.mockResolvedValue(
+      pointsPreview({ member_linked: true, use_points: 200, usage_unit: 100, grant_points: 50 })
+    );
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    await confirmPreview();
+    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
+    expect(mockedComplete.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        use_points: 200,
+        fee_lines: [{ kind: 'CREDIT_SURCHARGE', name: '会計', amount: 8000 }],
+      })
+    );
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('保存時の残高不足は理由と利用点数の見直しを示し入力を保持する', async () => {
+    mockedComplete.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          error: 'ポイント残高が不足しています（残高: 100）',
+          details: { use_points: '利用点数を見直してください' },
+        },
+      },
+    });
+    renderModal();
+    fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
+    await completeWith('8000');
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        expect.stringMatching(/残高: 100.*利用点数を見直してください/)
+      )
+    );
+    expect(screen.getByLabelText('利用ポイント')).toHaveValue(200);
+    expect(mockedComplete).toHaveBeenCalledTimes(1);
+    expect(mockedGet).toHaveBeenCalledTimes(1);
   });
 
   it('利用ポイントを入れたら、その値を添えて送る', async () => {

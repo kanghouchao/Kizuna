@@ -323,6 +323,7 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
             .businessDate(LocalDate.now())
             .pax(pax)
             .status(OrderStatus.COMPLETED)
+            .completedAt(OffsetDateTime.now())
             .receptionRoute(ReceptionRoute.PHONE)
             .totalFee(grantedPoints * 100)
             .autoGrantPoints(grantedPoints)

@@ -7,6 +7,7 @@ import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,11 @@ class AttributionMaterializer implements MemberRankMetrics {
     // 特典の一人一回判定もこのロック内で行い、受益歴の照合と記帳の間への割り込みを防ぐ。
     ranks.lockForPromotion(memberId);
     if (trigger instanceof Completion completion && completion.usePoints() > 0) {
-      ledger.useForOrder(memberId, orderId, storeId, completion.usePoints(), actorId);
+      try {
+        ledger.useForOrder(memberId, orderId, storeId, completion.usePoints(), actorId);
+      } catch (ServiceException ex) {
+        throw new OrderConfirmationConflict("use_points", ex.getMessage());
+      }
     }
     OrderAttribution attribution =
         attributions.save(

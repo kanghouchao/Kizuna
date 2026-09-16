@@ -134,6 +134,8 @@ export interface SurchargeCandidate {
 }
 
 export interface Order {
+  accrued_remuneration: number;
+  completed_at?: string;
   total_duration_minutes: number;
   total_remuneration: number;
   special_services: OrderSpecialService[];
@@ -205,6 +207,9 @@ export interface Order {
  * そのまま 1 行の差し替えに使える。
  */
 export interface OrderWorkQueueRow {
+  accrued_remuneration: number;
+  completed_at?: string;
+  total_remuneration: number;
   requires_attention: boolean;
   unresolved_special_service_count: number;
   started_at?: string;
@@ -235,6 +240,9 @@ export interface OrderWorkQueueRow {
  * 取消の記録を持つ。指名・受付担当・備考は対応中にしか使わないので載らない。
  */
 export interface OrderArchiveRow {
+  accrued_remuneration: number;
+  completed_at?: string;
+  total_remuneration: number;
   requires_attention: boolean;
   unresolved_special_service_count: number;
   started_at?: string;
@@ -569,6 +577,7 @@ export interface OrderCompletionRequest {
 
 /** 完了試算で確認する会員資格・利用・付与の結果。 */
 export interface OrderPointsPreview {
+  redemption_eligible: boolean;
   use_points: number;
   member_code?: string;
   member_linked: boolean;
@@ -729,6 +738,7 @@ export interface OrderCourse extends CourseCandidate {
   adopted_at: string;
 }
 export interface OrderPreview {
+  point_basis_amount: number;
   total_duration_minutes: number;
   total_remuneration: number;
   special_services: OrderSpecialService[];

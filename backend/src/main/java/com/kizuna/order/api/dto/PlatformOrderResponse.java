@@ -18,6 +18,9 @@ public class PlatformOrderResponse {
   private boolean requiresAttention;
   private int unresolvedSpecialServiceCount;
   private OffsetDateTime startedAt;
+  private OffsetDateTime completedAt;
+  private int accruedRemuneration;
+  private int totalRemuneration;
   private OrderCourse course;
   private String id;
   private Long storeId;

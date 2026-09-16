@@ -43,6 +43,7 @@ import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
@@ -61,6 +62,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -249,12 +251,14 @@ public class OrderService {
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed("CREATE", "", request, request.getConfirmationToken())),
             true);
-    calculation.verify(
-        request.getConfirmationToken(),
-        calculation.preview("CREATE", "", request, calculated, null));
     order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
 
     handleCustomerLinking(request, order);
+    calculated.linkCustomer(order.getCustomerId());
+    calculation.verify(
+        request.getConfirmationToken(),
+        calculation.preview("CREATE", "", request, calculated, completionPoints(calculated, 0)));
+
     order.assignCast(request.getCastId());
     order.assignReceptionist(resolveReceptionist(request.getReceptionistId(), actorEmail));
 
@@ -333,9 +337,10 @@ public class OrderService {
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed("UPDATE", id, request, request.getConfirmationToken())),
             true);
+    lockCustomerWithoutWaiting(order);
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview("UPDATE", id, request, calculated, null));
+        calculation.preview("UPDATE", id, request, calculated, completionPoints(calculated, 0)));
     var previousSpecials = order.getSpecialServices();
     int previousTotal = order.getTotalFee();
     String previousCast = order.getCastId();
@@ -474,9 +479,6 @@ public class OrderService {
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed("CONFIRM", id, request, request.getConfirmationToken())),
             true);
-    calculation.verify(
-        request.getConfirmationToken(),
-        calculation.preview("CONFIRM", id, request, calculated, null));
     Order order =
         Order.builder()
             .businessDate(request.getBusinessDate())
@@ -516,6 +518,10 @@ public class OrderService {
                   application.getRequesterDeclaredName(),
                   actorId)));
     }
+    calculated.linkCustomer(order.getCustomerId());
+    calculation.verify(
+        request.getConfirmationToken(),
+        calculation.preview("CONFIRM", id, request, calculated, completionPoints(calculated, 0)));
     Order saved = orderRepository.save(order);
     application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
     orderApplicationRepository.save(application);
@@ -599,14 +605,12 @@ public class OrderService {
     int chargeAmount = order.grantBasisAmount();
 
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
-    if (order.getCustomerId() != null) {
-      // 積み先を決める前に顧客行を押さえ、紐づけの解除・変更と直列化する。引けない顧客はそのまま
-      // 非会員として進む。契約は CustomerRepository#findByIdForUpdate に記す。
-      customerRepository.findByIdForUpdate(order.getCustomerId());
-    }
+    lockCustomerWithoutWaiting(order);
     CustomerMemberLink link = activeLink(order).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
     if (memberId == null && usePoints > 0) {
+      if (calculation.wasPreviewed("COMPLETE", id, request, request.getConfirmationToken()))
+        throw new OrderConfirmationConflict("confirmation_token");
       throw new ServiceException("非会員の受注ではポイントを利用できません");
     }
     // 会計金額を超える利用は、請求より大きい割引に相当する仕訳を台帳へ残す。意図してポイントを減らすなら
@@ -615,7 +619,13 @@ public class OrderService {
       throw new ServiceException("利用ポイントは会計金額を超えられません");
     }
 
-    var pointsPreview = completionPoints(order, usePoints);
+    var pointsPreview =
+        pointPreview(
+            memberId,
+            link == null ? null : link.getMemberCode(),
+            chargeAmount,
+            usePoints,
+            calculation.wasPreviewed("COMPLETE", id, request, request.getConfirmationToken()));
     calculated.completeWith(usePoints, pointsPreview.grantPoints());
     calculation.verify(
         request.getConfirmationToken(),
@@ -684,18 +694,17 @@ public class OrderService {
     if (request.getCustomerId() != null)
       customerReferenceResolver.resolveForWrite(request.getCustomerId());
     var course = calculation.current(request.getCourseId(), false);
-    return calculation.preview(
-        "CREATE",
-        "",
-        request,
+    var calculated =
         calculation.calculate(
             null,
             course,
             request.getFeeLines(),
             specialServices.select(
                 null, request.getCastId(), request.getSpecialServiceIds(), false),
-            false),
-        null);
+            false);
+    String customerId = previewCustomer(request);
+    calculated.linkCustomer(customerId);
+    return calculation.preview("CREATE", "", request, calculated, completionPoints(calculated, 0));
   }
 
   @StoreScoped
@@ -722,18 +731,31 @@ public class OrderService {
     if (request.getCustomerId() != null)
       customerReferenceResolver.resolveForWrite(request.getCustomerId());
     var course = calculation.current(request.getCourseId(), false);
-    return calculation.preview(
-        "CONFIRM",
-        id,
-        request,
+    var calculated =
         calculation.calculate(
             null,
             course,
             request.getFeeLines(),
             specialServices.select(
                 null, request.getCastId(), request.getSpecialServiceIds(), false),
-            false),
-        null);
+            false);
+    OrderPreviewResponse.Points points;
+    if (!application.isGuest() && application.getRequesterMemberId() != null) {
+      points =
+          pointPreview(
+              application.getRequesterMemberId(),
+              application.getRequesterMemberCode(),
+              calculated.grantBasisAmount(),
+              0,
+              false);
+    } else {
+      calculated.linkCustomer(
+          request.getCustomerId() == null
+              ? null
+              : customerReferenceResolver.resolveForWrite(request.getCustomerId()));
+      points = completionPoints(calculated, 0);
+    }
+    return calculation.preview("CONFIRM", id, request, calculated, points);
   }
 
   private void validateUpdateAssignments(
@@ -790,17 +812,14 @@ public class OrderService {
         request.getCourseId() == null
             ? order.getCourse()
             : calculation.current(request.getCourseId(), false);
-    return calculation.preview(
-        "UPDATE",
-        id,
-        request,
+    var calculated =
         calculation.calculate(
             order,
             course,
             request.getFeeLines(),
             specialServices.select(order, castId, request.getSpecialServiceIds(), false),
-            false),
-        null);
+            false);
+    return calculation.preview("UPDATE", id, request, calculated, completionPoints(calculated, 0));
   }
 
   @StoreScoped
@@ -815,39 +834,70 @@ public class OrderService {
     calculation.requireVersion(order, request.getExpectedVersion());
     if (order.getStatus().isTerminal()) throw new ServiceException("未完了の受注だけを完了できます");
     specialServices.requireProgress(order);
-    if (order.getCustomerId() != null) customerRepository.findByIdForUpdate(order.getCustomerId());
+    lockCustomerWithoutWaiting(order);
     var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), false);
-    calculated.linkCustomer(order.getCustomerId());
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
     var points = completionPoints(calculated, usePoints);
     calculated.completeWith(usePoints, points.grantPoints());
     return calculation.preview("COMPLETE", id, request, calculated, points);
   }
 
+  private String previewCustomer(OrderCreateRequest request) {
+    if (request.getCustomerId() != null && !request.getCustomerId().isEmpty())
+      return customerReferenceResolver.resolveForWrite(request.getCustomerId());
+    if (request.getPhoneNumber() == null || request.getPhoneNumber().isEmpty()) return null;
+    var matches =
+        customerRepository.findAliveIdsByPhoneNumberAndStoreId(
+            request.getPhoneNumber(), storeContext.getStoreId());
+    return matches.size() == 1 ? matches.getFirst() : null;
+  }
+
+  /** 受注行を保持したまま顧客行を待つと、顧客から受注へ進む統合と循環するため、競合時は巻き戻す。 */
+  private void lockCustomerWithoutWaiting(Order order) {
+    if (order.getCustomerId() == null) return;
+    try {
+      customerRepository.findByIdForUpdateNoWait(order.getCustomerId());
+    } catch (CannotAcquireLockException ex) {
+      throw new ConflictException(
+          "顧客情報が変更中です。しばらく待ってから再試算してください", Map.of("customer_lock", "入力を保持したまま、しばらく待ってから再試算してください"));
+    }
+  }
+
   private OrderPreviewResponse.Points completionPoints(Order order, int usePoints) {
     var link = activeLink(order).orElse(null);
-    int unit = pointLedgerService.usageUnit();
-    Long balance = link == null ? null : pointLedgerService.balance(link.getMemberId());
-    if (usePoints < 0
-        || usePoints > order.grantBasisAmount()
-        || (usePoints > 0 && (balance == null || balance < usePoints || usePoints % unit != 0)))
-      throw new ServiceException("ポイントの利用資格・残高・利用単位・会計金額を確認してください");
-    return new OrderPreviewResponse.Points(
-        link != null,
-        balance,
+    return pointPreview(
+        link == null ? null : link.getMemberId(),
         link == null ? null : link.getMemberCode(),
+        order.grantBasisAmount(),
+        usePoints,
+        false);
+  }
+
+  private OrderPreviewResponse.Points pointPreview(
+      Long memberId, String memberCode, int basis, int usePoints, boolean confirmed) {
+    int unit = pointLedgerService.usageUnit();
+    Long balance = memberId == null ? null : pointLedgerService.balance(memberId);
+    if (usePoints < 0
+        || usePoints > basis
+        || (usePoints > 0 && (balance == null || balance < usePoints || usePoints % unit != 0))) {
+      String message = "ポイントの利用資格・残高・利用単位・会計金額を確認してください";
+      if (confirmed) throw new OrderConfirmationConflict("use_points", message);
+      throw new ServiceException(message);
+    }
+    return new OrderPreviewResponse.Points(
+        memberId != null,
+        memberId != null,
+        balance,
+        memberId == null ? null : memberCode,
         unit,
         usePoints,
-        link == null ? 0 : pointLedgerService.previewGrant(order.grantBasisAmount()));
+        memberId == null ? 0 : pointLedgerService.previewGrant(basis));
   }
 
   /**
-   * 受注の顧客に有効な会員紐づけ。顧客が未設定か紐づけが無ければ空を返す。会員解決はこの一本道（顧客 → 有効な関連 → 会員）だけを通り、 申請者の記録（requester）へは
-   * fallback しない — 申請の出所は帰属ではない。
-   *
-   * <p>会員行が消えて紐づけの会員 ID が欠落した行は返るが、呼出側は会員 ID の欠落を紐づけの不在と同じに扱う（残高の所在が会員 ID でしか辿れないため）。
-   *
-   * <p>この問い合わせ自体はロックを取らない。完了は取り消せない一方で紐づけの解除・変更はいつでも起こりうるため、 完了は呼ぶ前に顧客行を押さえる。事前計算は台帳へ積まないので押さえない。
+   * 会員は顧客の ACTIVE 関連だけから解決し、申請者の記録へは代替しない。削除済み会員の ID 欠落は未紐づけとして扱う。
+   * この問い合わせ自体はロックを取らない。通常更新・完了・完了試算は呼出前に顧客行を NOWAIT で押さえ、 取得競合は customer_lock の 409
+   * で返す。他の試算は顧客行のロックをこの問い合わせの前提としない。
    */
   private Optional<CustomerMemberLink> activeLink(Order order) {
     if (order.getCustomerId() == null) {

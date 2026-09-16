@@ -11,6 +11,12 @@ import java.time.OffsetDateTime;
 public interface PlatformOrderView {
   OffsetDateTime getStartedAt();
 
+  OffsetDateTime getCompletedAt();
+
+  int getAccruedRemuneration();
+
+  int getTotalRemuneration();
+
   Integer getUnresolvedSpecialServiceCount();
 
   default boolean getRequiresAttention() {

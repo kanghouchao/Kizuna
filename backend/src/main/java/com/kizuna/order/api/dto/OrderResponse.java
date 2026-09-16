@@ -18,6 +18,8 @@ public class OrderResponse {
   private boolean requiresAttention;
   private int unresolvedSpecialServiceCount;
   private OffsetDateTime startedAt;
+  private OffsetDateTime completedAt;
+  private int accruedRemuneration;
   private List<OrderSpecialServiceResponse> specialServices;
   private OrderCourse course;
   private String id;

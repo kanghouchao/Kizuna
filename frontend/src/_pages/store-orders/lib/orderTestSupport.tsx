@@ -13,6 +13,7 @@ export const course = {
   adopted_at: '2026-09-15T00:00:00Z',
 };
 export const preview: OrderPreview = {
+  point_basis_amount: 12000,
   requires_attention: false,
   unresolved_special_service_count: 0,
   special_services: [],
@@ -57,6 +58,10 @@ export async function confirmPreview() {
     .catch(() => null);
   if (button) fireEvent.click(button);
 }
-export function pointsPreview(points: OrderPreview['points']): OrderPreview {
-  return { ...preview, points };
+export function pointsPreview(
+  points: Omit<NonNullable<OrderPreview['points']>, 'redemption_eligible'> & {
+    redemption_eligible?: boolean;
+  }
+): OrderPreview {
+  return { ...preview, points: { redemption_eligible: points.member_linked, ...points } };
 }
