@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { isDeduction, OrderPreview } from '@/entities/order';
+import { isDeduction, OrderPreview, OrderSpecialService } from '@/entities/order';
 import { getApiErrorMessage, isConflict, useKeyedResource } from '@/shared/lib';
 import { Button, Dialog, DialogContent, DialogTitle, RegionError } from '@/shared/ui';
 
@@ -11,8 +11,26 @@ export function orderConflictField(error: unknown): string | undefined {
   const details = (error as { response?: { data?: { details?: Record<string, unknown> } } })
     .response?.data?.details;
   if (details?.confirmation_token) return 'confirmation_token';
+  if (details?.special_services) return 'special_services';
   if (details?.expected_version) return 'expected_version';
   return undefined;
+}
+
+function specialServiceComparison(item: OrderSpecialService) {
+  const status = item.requires_attention
+    ? '本人拒否・要対応'
+    : item.current_consent_status === 'ACCEPTED'
+      ? '受諾済み'
+      : item.current_consent_status === 'REJECTED'
+        ? '拒否'
+        : item.current_consent_status === 'RECONFIRMATION_REQUIRED'
+          ? '再受諾待ち'
+          : item.adoption_basis === 'HISTORICAL_CORRECTION'
+            ? '履歴訂正'
+            : item.current_consent_status == null && item.adoption_basis === 'ACCEPTED_TERMS'
+              ? '受諾時の約定'
+              : '未受諾';
+  return `${item.name} 版${item.revision_number} 料金¥${item.price} 報酬¥${item.remuneration} 担当在籍 ${item.enrollment_id} / 受諾状態 ${status} / 受諾版 ${item.consent_version ?? 'なし'}`;
 }
 
 export function useOrderConfirmation(target?: string) {
@@ -123,6 +141,21 @@ export function useOrderConfirmation(target?: string) {
                 総時間: {preview.total_duration_minutes}分 / 固定報酬合計: ¥
                 {preview.total_remuneration.toLocaleString()}
               </p>
+              {preview.requires_attention && (
+                <p role="alert">拒否項目が残っています。保存後も開始・完了には修復が必要です。</p>
+              )}
+              {(preview.special_services ?? []).map(item => (
+                <p key={item.service_id}>
+                  {item.name} / 版{item.revision_number} /{' '}
+                  {item.requires_attention
+                    ? '本人拒否・要対応'
+                    : item.current_consent_status === 'RECONFIRMATION_REQUIRED'
+                      ? '再受諾待ち（旧約定を保持）'
+                      : item.current_consent_status === 'NOT_ACCEPTED'
+                        ? '現在の提供資格なし（旧約定を保持）'
+                        : '採用可能'}
+                </p>
+              ))}
               <p>請求額: ¥{preview.total_fee.toLocaleString()}</p>
               {preview.points && (
                 <p>
@@ -132,7 +165,9 @@ export function useOrderConfirmation(target?: string) {
                 </p>
               )}
               {previousPreview &&
-                previousPreview.confirmation_token !== preview.confirmation_token && (
+                (previousPreview.confirmation_token !== preview.confirmation_token ||
+                  JSON.stringify(previousPreview.special_services.map(specialServiceComparison)) !==
+                    JSON.stringify(preview.special_services.map(specialServiceComparison))) && (
                   <div role="status" className="rounded-lg border p-3">
                     <p>前回の確認内容から変更があります。以下を確認してください。</p>
                     <p>
@@ -170,6 +205,17 @@ export function useOrderConfirmation(target?: string) {
                           / 報酬 ¥{line.remuneration}
                         </p>
                       ))}
+                    <p>
+                      特殊サービス（前回）:{' '}
+                      {(previousPreview.special_services ?? [])
+                        .map(specialServiceComparison)
+                        .join('、') || 'なし'}
+                    </p>
+                    <p>
+                      特殊サービス（今回）:{' '}
+                      {(preview.special_services ?? []).map(specialServiceComparison).join('、') ||
+                        'なし'}
+                    </p>
                     <p>
                       請求: ¥{previousPreview.total_fee} → ¥{preview.total_fee}
                     </p>

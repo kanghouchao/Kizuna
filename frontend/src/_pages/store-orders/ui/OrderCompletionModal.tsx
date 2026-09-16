@@ -113,7 +113,10 @@ export function OrderCompletionModal({
     order === null ? null : () => orderApi.get(order.id)
   );
   const { data: detail, failure: detailFailure, reload: reloadDetail } = resource;
-  const chargeAmount = feeLinesTotal(watch('fee_lines') ?? []) + (detail?.course.price ?? 0);
+  const chargeAmount =
+    feeLinesTotal(watch('fee_lines') ?? []) +
+    (detail?.course.price ?? 0) +
+    (detail?.special_services ?? []).reduce((sum, item) => sum + item.price, 0);
   const onClose = () => {
     if (resource.failure === 'notFound') closeModal(true);
     else closeModal();

@@ -60,6 +60,8 @@ const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readToken
 /** 確定済みの受注 1 件。fixture は手書きで、OrderWorkQueueRow 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQueueRow {
   return {
+    requires_attention: false,
+    unresolved_special_service_count: 0,
     id: 'o1',
     business_date: '2026-07-03',
     arrival_scheduled_start_time: '19:30:00',
@@ -91,6 +93,8 @@ function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQu
 
 function archivedOrder(overrides: Partial<OrderArchiveRow> = {}): OrderArchiveRow {
   return {
+    requires_attention: false,
+    unresolved_special_service_count: 0,
     course: {
       service_id: 'course-1',
       revision_id: 'r1',
@@ -172,14 +176,14 @@ describe('作業キューの描画', () => {
     expect(screen.getByText(/2 名/)).toBeInTheDocument();
   });
 
-  it('作業キューの群は確定済みだけで、未処理の申請は受付箱の読み口へ要求すること', async () => {
+  it('作業キューは確定済みとサービス中を含み、未処理の申請は受付箱の読み口へ要求すること', async () => {
     render(<OrderListPage />);
 
     await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
     // すべての受注は確定で出生する（ADR 0017）。終端を混ぜると、完了が積み上がった店舗で
     // 対応が要る受注が取得窓から落ちる
     expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledWith(
-      expect.objectContaining({ statuses: ['CONFIRMED'] })
+      expect.objectContaining({ statuses: ['CONFIRMED', 'IN_SERVICE'] })
     );
     expect(mockedApplicationApi.list).toHaveBeenCalledWith(
       expect.objectContaining({ statuses: ['PENDING'] })
@@ -213,6 +217,7 @@ describe('作業キューの描画', () => {
   it('確定は申請内容を予填したモーダルで行い、申請が受付箱から外れて作業キューを取り直すこと', async () => {
     stubInbox(pendingApplication());
     mockedApplicationApi.confirm.mockResolvedValue({
+      special_services: [],
       ...confirmedOrder({ id: 'order-9' }),
       total_duration_minutes: 60,
       total_remuneration: 7000,
@@ -560,6 +565,7 @@ describe('新規オーダー登録', () => {
       ...confirmedOrder(),
       total_duration_minutes: 60,
       total_remuneration: 7000,
+      special_services: [],
       fee_lines: [],
     });
     render(<CreateOrderPage />);

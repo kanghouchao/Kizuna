@@ -43,6 +43,29 @@ public class OrderFeeLine extends StoreScopedEntity {
     return from(new OrderFeeLineDraft(kind, name, amount));
   }
 
+  static OrderFeeLine specialService(SpecialServiceSnapshot snapshot) {
+    var line = of(OrderFeeLineKind.SPECIAL_SERVICE, snapshot.name(), snapshot.price());
+    line.applySpecialService(snapshot);
+    return line;
+  }
+
+  void applySpecialService(SpecialServiceSnapshot snapshot) {
+    adoption =
+        new OrderServiceAdoption(
+            snapshot.serviceId(),
+            snapshot.revisionId(),
+            snapshot.revisionNumber(),
+            snapshot.adoptionBasis(),
+            snapshot.adoptedAt());
+    name = snapshot.name();
+    amount = snapshot.price();
+    remuneration = snapshot.remuneration();
+  }
+
+  public String getServiceId() {
+    return adoption == null ? null : adoption.serviceId();
+  }
+
   static OrderFeeLine from(OrderFeeLineDraft draft) {
     var kind = draft.kind();
     if (kind == null

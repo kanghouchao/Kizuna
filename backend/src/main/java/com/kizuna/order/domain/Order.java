@@ -106,6 +106,65 @@ public class Order extends StoreScopedEntity {
   @Builder.Default
   private List<OrderFeeLine> feeLines = new ArrayList<>();
 
+  @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+  @JoinColumn(name = "order_id", nullable = false)
+  @OrderBy("id")
+  @Getter(AccessLevel.NONE)
+  @Builder.Default
+  private List<OrderSpecialService> specialServiceLines = new ArrayList<>();
+
+  private OffsetDateTime startedAt;
+  private Long startedBy;
+  private String startReason;
+
+  public List<SpecialServiceSnapshot> getSpecialServices() {
+    return specialServiceLines.stream().map(OrderSpecialService::getSnapshot).toList();
+  }
+
+  public void adoptServices(
+      OrderCourse course, List<SpecialServiceSnapshot> services, List<OrderFeeLineDraft> drafts) {
+    if (status.isTerminal()) throw new InvalidOrderFeeLineException("終端の内容は専用訂正で変更してください");
+    replaceSpecialServices(services);
+    adoptCourse(course, drafts);
+  }
+
+  private void replaceSpecialServices(List<SpecialServiceSnapshot> services) {
+    if (services.stream().map(SpecialServiceSnapshot::serviceId).distinct().count()
+        != services.size()) throw new InvalidOrderFeeLineException("同じ特殊サービスは一度だけ選択できます");
+    var ids = services.stream().map(SpecialServiceSnapshot::serviceId).toList();
+    specialServiceLines.removeIf(line -> !ids.contains(line.getSnapshot().serviceId()));
+    for (var snapshot : services) {
+      var existing =
+          specialServiceLines.stream()
+              .filter(line -> line.getSnapshot().serviceId().equals(snapshot.serviceId()))
+              .findFirst();
+      if (existing.isPresent()) existing.get().adopt(snapshot);
+      else specialServiceLines.add(OrderSpecialService.of(snapshot));
+    }
+  }
+
+  public void correctServices(
+      List<SpecialServiceSnapshot> services, OrderCorrectionCommand command) {
+    if (status != OrderStatus.COMPLETED)
+      throw new InvalidOrderCorrectionException("完了した受注だけが訂正できます");
+    replaceSpecialServices(services);
+    correct(command);
+  }
+
+  public void start(String reason, Long actorId, OffsetDateTime at) {
+    if (status != OrderStatus.CONFIRMED)
+      throw new IllegalOrderStateTransitionException(status, OrderStatus.IN_SERVICE);
+    if (reason == null
+        || reason.isBlank()
+        || reason.length() > 500
+        || actorId == null
+        || at == null) throw new InvalidOrderFeeLineException("開始の理由・実行者・日時は必須です");
+    startedAt = at;
+    startedBy = actorId;
+    startReason = reason;
+    transitionTo(OrderStatus.IN_SERVICE);
+  }
+
   /** 会計に伴い自動付与したポイント。完了処理でのみ確定する（台帳の加算仕訳と対になる記録）。 */
   @Column(name = "auto_grant_points")
   private Integer autoGrantPoints;
@@ -281,7 +340,7 @@ public class Order extends StoreScopedEntity {
 
   /** コースだけの変更では、他の編集可能明細とポイント利用行を保持する。 */
   public void adoptCourse(OrderCourse next, List<OrderFeeLineDraft> drafts) {
-    if (status != OrderStatus.CONFIRMED) {
+    if (status == null || status.isTerminal()) {
       throw new InvalidOrderFeeLineException("終端のコースは専用訂正で変更してください");
     }
     this.course = next;
@@ -292,7 +351,9 @@ public class Order extends StoreScopedEntity {
     return feeLines.stream()
         .filter(
             line ->
-                !line.getKind().isSystemOwned() && line.getKind() != OrderFeeLineKind.BASE_COURSE)
+                !line.getKind().isSystemOwned()
+                    && line.getKind() != OrderFeeLineKind.BASE_COURSE
+                    && line.getKind() != OrderFeeLineKind.SPECIAL_SERVICE)
         .map(OrderFeeLineDraft::of)
         .toList();
   }
@@ -303,7 +364,8 @@ public class Order extends StoreScopedEntity {
     var ids = new HashSet<String>();
     var services = new HashSet<String>();
     for (OrderFeeLineDraft draft : drafts) {
-      if (draft.kind() == OrderFeeLineKind.BASE_COURSE
+      if (draft.kind() == OrderFeeLineKind.SPECIAL_SERVICE
+          || draft.kind() == OrderFeeLineKind.BASE_COURSE
           || (draft.kind() != null && draft.kind().isSystemOwned())) {
         throw new InvalidOrderFeeLineException("コースとポイントの明細は直接変更できません");
       }
@@ -360,7 +422,22 @@ public class Order extends StoreScopedEntity {
         line ->
             !line.getKind().isSystemOwned()
                 && line.getKind() != OrderFeeLineKind.BASE_COURSE
+                && line.getKind() != OrderFeeLineKind.SPECIAL_SERVICE
                 && !replaced.contains(line));
+    var selected = getSpecialServices();
+    feeLines.removeIf(
+        line ->
+            line.getKind() == OrderFeeLineKind.SPECIAL_SERVICE
+                && selected.stream()
+                    .noneMatch(item -> item.serviceId().equals(line.getServiceId())));
+    for (var item : selected) {
+      var existing =
+          feeLines.stream()
+              .filter(line -> item.serviceId().equals(line.getServiceId()))
+              .findFirst();
+      if (existing.isPresent()) existing.get().applySpecialService(item);
+      else feeLines.add(OrderFeeLine.specialService(item));
+    }
     for (var line : replaced) if (!feeLines.contains(line)) feeLines.add(line);
     return recalculateTotalFee();
   }
@@ -433,7 +510,7 @@ public class Order extends StoreScopedEntity {
   }
 
   /**
-   * 会計を確定して注文を完了する。確認済みの注文のみ完了でき、ポイント利用の明細と自動付与ポイントはこの経路でのみ確定する。
+   * 会計を確定して未完了（CONFIRMED / IN_SERVICE）の受注を完了する。ポイント利用の明細と自動付与ポイントはこの経路でのみ確定する。
    *
    * <p>会計金額は引数で受けない — 合計は明細の総和として既に決まっている。利用ポイントは減算の明細行として内訳へ入り、
    * 合計はそのぶん下がる（ポイント控除後の請求額が合計になる）。付与の基準と利用の上限は、この行が入る前の総和を呼出側が読んで決める。
@@ -442,7 +519,7 @@ public class Order extends StoreScopedEntity {
    * 二度目の呼出を黙って通すと同じ受注で付与・利用が二重に記帳される。
    */
   public void completeWith(int usedPoints, int autoGrantPoints) {
-    if (status != OrderStatus.CONFIRMED) {
+    if (status == null || status.isTerminal()) {
       throw new IllegalOrderStateTransitionException(status, OrderStatus.COMPLETED);
     }
     if (usedPoints < 0) {
@@ -479,13 +556,13 @@ public class Order extends StoreScopedEntity {
   }
 
   /**
-   * 確定済みの注文を理由付きで取消す。定義域は CONFIRMED → CANCELLED のみ — 未処理の予約申請は申請側の謝絶が受け持ち、
-   * 完了した受注は状態を戻さず内容だけを訂正する（{@link #correct}。ADR 0019）。
+   * 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消す。未処理の予約申請は申請側の謝絶が受け持ち、 完了した受注は状態を戻さず内容だけを訂正する（{@link
+   * #correct}。ADR 0019）。
    *
    * <p>二度目の取消は同一状態への静默冪等（{@link #transitionTo}）に委ねず明示的に撥ねる。通せば初回の理由と実行者が黙って上書きされ、理由を必須にした意味が消える。
    */
   public void cancelWith(String reason, Long actorId, OffsetDateTime at) {
-    if (status != OrderStatus.CONFIRMED) {
+    if (status == null || status.isTerminal()) {
       throw new IllegalOrderStateTransitionException(status, OrderStatus.CANCELLED);
     }
     if (reason == null || reason.isBlank()) {

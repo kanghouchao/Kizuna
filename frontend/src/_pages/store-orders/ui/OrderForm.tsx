@@ -1,6 +1,7 @@
 'use client';
 
 import { OrderCourseField } from './OrderCourseField';
+import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
@@ -62,6 +63,7 @@ export interface OrderFormData {
   /** 受付経路。店舗側の合法値は電話受付だけ（Web 申請の群は予約申請の確定だけが名乗る）。 */
   reception_route: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
   /** この受注に適用するコース名の写し。基本コース料金の明細を置くなら必須になる。 */
+  special_service_ids: string[];
   course_id: string;
   fee_lines: OrderFeeLineInput[];
   carrier: string;
@@ -86,6 +88,7 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
       classification: 'ーー',
       pax: 1,
       reception_route: 'PHONE',
+      special_service_ids: [],
       course_id: '',
       fee_lines: [],
       has_pet: false,
@@ -272,7 +275,8 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
                   </FormItem>
                 )}
               />
-              <OrderCourseField required />{' '}
+              <OrderCourseField required />
+              <OrderSpecialServicesField />{' '}
             </div>
             <div className="mt-6">
               <OrderFeeLinesField />

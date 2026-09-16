@@ -21,6 +21,7 @@ System_Boundary("Application_boundary", "Application", $tags="") {
     Component(Application.Application.Customer, "Customer", $techn="Module", $descr="", $tags="", $link="")
     Component(Application.Application.Store, "Store", $techn="Module", $descr="", $tags="", $link="")
     Component(Application.Application.Cast, "Cast", $techn="Module", $descr="", $tags="", $link="")
+    Component(Application.Application.Service, "Service", $techn="Module", $descr="", $tags="", $link="")
     Component(Application.Application.Shift, "Shift", $techn="Module", $descr="", $tags="", $link="")
     Component(Application.Application.Order, "Order", $techn="Module", $descr="", $tags="", $link="")
     Component(Application.Application.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
@@ -65,6 +66,11 @@ Rel(Application.Application.User, Application.Application.Shared, "uses", $techn
 Rel(Application.Application.Member, Application.Application.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Application.Application.Member, Application.Application.Settings, "uses", $techn="", $tags="", $link="")
 Rel(Application.Application.Member, Application.Application.User, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Order, Application.Application.Service, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Service, Application.Application.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Service, Application.Application.Cast, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Service, Application.Application.User, "uses", $techn="", $tags="", $link="")
+Rel(Application.Application.Service, Application.Application.Store, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

@@ -9,7 +9,10 @@ public record OrderPreviewResponse(
     int totalFee,
     int totalDurationMinutes,
     int totalRemuneration,
-    Points points) {
+    Points points,
+    List<OrderSpecialServiceResponse> specialServices,
+    boolean requiresAttention,
+    int unresolvedSpecialServiceCount) {
   public record CourseCondition(
       String serviceId,
       String revisionId,

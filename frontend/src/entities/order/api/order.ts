@@ -1,4 +1,11 @@
-import type { CourseCandidate, SurchargeCandidate, OrderPreview } from '../model/types';
+import type {
+  CourseCandidate,
+  SurchargeCandidate,
+  OrderPreview,
+  SpecialServiceCandidate,
+  SpecialServiceRevision,
+  OrderSpecialServiceEvent,
+} from '../model/types';
 import {
   CursorPageResult,
   CursorParams,
@@ -79,6 +86,33 @@ export const orderApi = {
       })
     ).data,
 
+  specialServiceCandidates: async (castId: string, search: string, page: number) => {
+    const response = await apiClient.get('/store/orders/special-service-candidates', {
+      params: { cast_id: castId, search, page, size: 20 },
+    });
+    return fromSpringPage<SpecialServiceCandidate>(response.data);
+  },
+  specialServiceRevisions: async (id: string, search: string, cursor?: string) => {
+    const response = await apiClient.get(
+      `/store/orders/${requireId(id, '受注')}/special-service-revisions`,
+      { params: { search, cursor, size: 20 } }
+    );
+    return fromCursorPage<SpecialServiceRevision>(response.data);
+  },
+  specialServiceEvents: async (id: string, cursor?: string) => {
+    const response = await apiClient.get(
+      `/store/orders/${requireId(id, '受注')}/special-service-events`,
+      { params: { cursor, size: 20 } }
+    );
+    return fromCursorPage<OrderSpecialServiceEvent>(response.data);
+  },
+  start: async (id: string, expectedVersion: number, reason: string): Promise<Order> => {
+    const response = await apiClient.post(`/store/orders/${requireId(id, '受注')}/start`, {
+      expected_version: expectedVersion,
+      reason,
+    });
+    return response.data;
+  },
   courseCandidates: async (search: string, page: number) => {
     const response = await apiClient.get('/store/orders/course-candidates', {
       params: { search, page, size: 20 },
@@ -135,21 +169,18 @@ export const orderApi = {
     return response.data;
   },
   /**
-   * 確定済みの受注を理由付きで取消す。理由・実行者・時刻が記録に残り、以後この受注は凍結される。
+   * 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消す。理由・実行者・時刻が記録に残り、以後この受注は凍結される。
    *
-   * 二度目は撥ねられる（逐次なら 400、同時なら楽観ロックで 409）。応答は 204（本体なし）で、
+   * 二度目は逐次・並行とも状態違反（400）で撥ねられる。応答は 204（本体なし）で、
    * 呼出側は行を消すか一覧を取り直す。
    */
   cancel: async (id: string | undefined, data: OrderCancellationRequest): Promise<void> => {
     await apiClient.post(`/store/orders/${requireId(id, '受注')}/cancellation`, data);
   },
   /**
-   * 完了した受注の内容を理由付きで訂正する（ORDER_CORRECT 限定）。状態は動かない。
-   *
-   * 直せるのは明細行・実績時刻・コーススナップショットの三組だけで、全量を毎回送る
-   * （送らなかった項目は空になる）。対象は完了済みのみ — 確定済み・取消済みは 400 で撥ねられる。
-   *
-   * 門はポイントを動かさない。応答が返すのは会計金額の前後だけで、付与の差額は載らない（ADR 0019）。
+   * 完了受注の明細・実績時刻・コース・特殊サービスを理由付きで訂正する。
+   * 項目ごとの省略規則は OrderCorrectionRequest に従い、成功時は訂正前後の採用条件・金額・分数・報酬を返す。
+   * ポイント台帳と完了時の付与額は変更しない。
    */
   correct: async (
     id: string | undefined,
@@ -204,7 +235,7 @@ export const orderApi = {
   /**
    * 受注を完了する（会計の確定）。ポイントの利用と自動付与が台帳へ入るのはこの経路だけ。
    *
-   * 対象は確定済みの受注に限られ、それ以外の状態はサーバ側が撥ねる。
+   * 対象は未完了（CONFIRMED / IN_SERVICE）の受注に限られ、それ以外の状態はサーバ側が撥ねる。
    */
   complete: async (
     id: string | undefined,

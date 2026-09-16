@@ -30,6 +30,7 @@ databaseChangeLog:
               CREATE INDEX idx_t_services_list ON t_services(store_id, deleted, id);
               CREATE INDEX idx_t_services_kind_list ON t_services(store_id, deleted, kind, id);
               CREATE TABLE t_service_revisions (
+                terms_version BIGINT NOT NULL DEFAULT 1 CHECK (terms_version > 0),
                 id VARCHAR(64) CONSTRAINT pk_t_service_revisions PRIMARY KEY,
                 store_id BIGINT NOT NULL,
                 service_id VARCHAR(64) NOT NULL,
@@ -122,6 +123,7 @@ databaseChangeLog:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 version BIGINT NOT NULL DEFAULT 0,
+                CONSTRAINT uq_t_service_consent_events_id_store UNIQUE (id, store_id),
                 CONSTRAINT uq_t_service_consent_events_number UNIQUE (consent_id, revision_number),
                 CONSTRAINT fk_t_service_consent_events_consent FOREIGN KEY (consent_id, store_id) REFERENCES t_service_consents(id, store_id) ON DELETE NO ACTION,
                 CONSTRAINT fk_t_service_consent_events_revision FOREIGN KEY (service_revision_id, store_id) REFERENCES t_service_revisions(id, store_id) ON DELETE NO ACTION

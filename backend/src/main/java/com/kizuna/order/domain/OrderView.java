@@ -6,6 +6,14 @@ import java.time.OffsetDateTime;
 
 /** 注文一覧・詳細の読み側 projection。関連集約の表示名は JPQL join で取得する（読み側は集約を経由しない）。 */
 public interface OrderView {
+  OffsetDateTime getStartedAt();
+
+  Integer getUnresolvedSpecialServiceCount();
+
+  default boolean getRequiresAttention() {
+    return getUnresolvedSpecialServiceCount() != null && getUnresolvedSpecialServiceCount() > 0;
+  }
+
   OrderCourse getCourse();
 
   String getId();

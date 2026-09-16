@@ -3,21 +3,21 @@ package com.kizuna.order.api.dto;
 import com.kizuna.order.domain.OrderCourse;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * 作業キューの 1 行。対応の要否を判断し、その場で確定・謝絶するのに要る項目だけを持つ。
- *
- * <p>会計・ポイント・取消の記録は終端状態にしか値が入らないので載せない。行を書き戻す操作（確定・更新）の応答も この型で返し、応答の形と行の形を一致させる。
- */
+/** 作業キューの未完了受注と通常更新の応答。会計・ポイント・取消の終端記録は含めない。 */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderWorkQueueResponse {
+  private boolean requiresAttention;
+  private int unresolvedSpecialServiceCount;
+  private OffsetDateTime startedAt;
   private OrderCourse course;
   private String id;
   private Long receptionistId;

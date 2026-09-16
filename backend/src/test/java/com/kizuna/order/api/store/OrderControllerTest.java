@@ -69,14 +69,14 @@ class OrderControllerTest {
 
   /** 完了の要求本文。会計金額は受け取らず、会計の場で確定した内訳を送る。 */
   private static final String COMPLETION_BODY =
-      "{\"expected_version\":3,\"fee_lines\":[{\"kind\":\"OPTION\",\"name\":\"会計\",\"amount\":12000}]}";
+      "{\"expected_version\":3,\"fee_lines\":[{\"kind\":\"CREDIT_SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}";
 
   /** 完了後訂正の要求本文。門が直せる三組の全量を毎回送る（省略は「値なし」）。 */
   private static final String CORRECTION_BODY =
       "{\"expected_version\":3,\"reason\":\"金額の誤記\","
           + "\"actual_arrival_time\":\"20:15:00\",\"actual_end_time\":\"22:40:00\","
           + "\"course_revision_id\":\"revision\","
-          + "\"fee_lines\":[{\"kind\":\"OPTION\",\"name\":\"指名料\",\"amount\":15000}]}";
+          + "\"fee_lines\":[{\"kind\":\"CREDIT_SURCHARGE\",\"name\":\"指名料\",\"amount\":15000}]}";
 
   @Autowired private MockMvc mockMvc;
 
@@ -224,7 +224,7 @@ class OrderControllerTest {
         .perform(
             storePost(
                 "/store/orders/o1/completion",
-                "{\"fee_lines\":[{\"kind\":\"OPTION\",\"name\":\"会計\",\"amount\":12000}]}"))
+                "{\"fee_lines\":[{\"kind\":\"CREDIT_SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}"))
         .andExpect(status().isBadRequest());
 
     verify(orderService, never()).complete(any(), any(), any());
@@ -318,7 +318,8 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.complete(any(), any(), any())).thenReturn(new OrderCompletionResponse(null));
     when(orderService.completionPreview(any(), any()))
-        .thenReturn(new OrderPreviewResponse("token", null, List.of(), 0, 0, 0, null));
+        .thenReturn(
+            new OrderPreviewResponse("token", null, List.of(), 0, 0, 0, null, List.of(), false, 0));
 
     mockMvc
         .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))
@@ -626,7 +627,19 @@ class OrderControllerTest {
     when(orderCorrectionService.correct(any(), any(), any()))
         .thenReturn(
             new OrderCorrectionResponse(
-                "correction", 12000, 15000, null, null, 0, 0, 0, 0, List.of(), List.of()));
+                "correction",
+                12000,
+                15000,
+                null,
+                null,
+                0,
+                0,
+                0,
+                0,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()));
 
     mockMvc
         .perform(storePost("/store/orders/o1/corrections", CORRECTION_BODY))
@@ -669,7 +682,19 @@ class OrderControllerTest {
     when(orderCorrectionService.correct(any(), any(), any()))
         .thenReturn(
             new OrderCorrectionResponse(
-                "correction", 12000, 0, null, null, 0, 0, 0, 0, List.of(), List.of()));
+                "correction",
+                12000,
+                0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                0,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()));
     mockMvc
         .perform(
             storePost(

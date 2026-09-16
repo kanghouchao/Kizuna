@@ -21,7 +21,7 @@ class OrderCorrectionTest {
             .course(OrderCourses.course("60 分コース", 60, 12000))
             .build();
     order.replaceStoreFeeLines(
-        List.of(new OrderFeeLineDraft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
+        List.of(new OrderFeeLineDraft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション A", 2000)));
 
     order.completeWith(500, 140);
     return order;
@@ -46,7 +46,7 @@ class OrderCorrectionTest {
         .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
         .containsExactly(
             tuple(OrderFeeLineKind.BASE_COURSE, 12000),
-            tuple(OrderFeeLineKind.OPTION, 2000),
+            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 2000),
             tuple(OrderFeeLineKind.POINT_REDEMPTION, -500));
   }
 

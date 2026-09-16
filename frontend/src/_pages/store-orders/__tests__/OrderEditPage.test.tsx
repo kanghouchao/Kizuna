@@ -12,6 +12,7 @@ jest.mock('@/entities/order', () => ({
   orderApi: {
     ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     get: jest.fn(),
+    start: jest.fn(),
     update: jest.fn(),
     listReceptionists: jest.fn(),
     listCastCandidates: jest.fn(),
@@ -32,6 +33,9 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 /** 確定済みの受注 1 件。fixture は手書きで、Order 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<Order> = {}): Order {
   return {
+    requires_attention: false,
+    unresolved_special_service_count: 0,
+    special_services: [],
     fee_lines: [],
     id: 'o1',
     business_date: '2026-07-03',
@@ -332,4 +336,68 @@ test('候補取得に失敗しても名前のない元担当を識別でき、�
       receptionist_id: 3,
     })
   );
+});
+
+test('開始の応答で未保存の入力を失わず、新しい版で編集内容を保存できる', async () => {
+  const initial = confirmedOrder({ remarks: '保存済み' });
+  mockedOrderApi.get.mockResolvedValue(initial);
+  let finish!: (order: Order) => void;
+  mockedOrderApi.start.mockReturnValue(
+    new Promise<Order>(resolve => {
+      finish = resolve;
+    })
+  );
+  mockedOrderApi.update.mockResolvedValue({ ...initial, status: 'IN_SERVICE' });
+  render(<OrderEditPage />);
+  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+  fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+  fireEvent.click(screen.getByRole('button', { name: 'クレジット加算を追加' }));
+  fireEvent.change(screen.getByLabelText('明細1の名称'), { target: { value: 'クレジット' } });
+  fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: '300' } });
+  fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
+  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+  fireEvent.change(screen.getByLabelText('備考'), { target: { value: '送信中の追記' } });
+  await act(async () => finish({ ...initial, status: 'IN_SERVICE', version: 4 }));
+  expect(screen.getByLabelText('人数')).toHaveValue(5);
+  expect(screen.getByLabelText('明細1の金額')).toHaveValue(300);
+  expect(screen.getByLabelText('備考')).toHaveValue('送信中の追記');
+  expect(screen.queryByRole('button', { name: 'サービスを開始' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
+  await waitFor(() =>
+    expect(mockedOrderApi.update).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({
+        pax: 5,
+        remarks: '送信中の追記',
+        expected_version: 4,
+        fee_lines: [{ kind: 'CREDIT_SURCHARGE', name: 'クレジット', amount: 300 }],
+      })
+    )
+  );
+});
+
+test('開始の版競合から再取得しても未保存の編集と理由を保持する', async () => {
+  const initial = confirmedOrder({ remarks: '保存済み' });
+  mockedOrderApi.get.mockResolvedValueOnce(initial).mockResolvedValue({ ...initial, version: 4 });
+  mockedOrderApi.start
+    .mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 409, data: { details: { expected_version: '競合' } } },
+    })
+    .mockResolvedValue({ ...initial, version: 5, status: 'IN_SERVICE' });
+  render(<OrderEditPage />);
+  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+  fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+  fireEvent.change(screen.getByLabelText('備考'), { target: { value: '未保存' } });
+  fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
+  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+  await screen.findByText(
+    '最新の受注を読み込みました。内容を確認してから開始を再試行してください。'
+  );
+  expect(screen.getByLabelText('人数')).toHaveValue(5);
+  expect(screen.getByLabelText('備考')).toHaveValue('未保存');
+  expect(screen.getByLabelText('開始の理由')).toHaveValue('提供開始');
+  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+  await waitFor(() => expect(mockedOrderApi.start).toHaveBeenLastCalledWith('o1', 4, '提供開始'));
 });

@@ -1,8 +1,9 @@
 package com.kizuna.order.domain;
 
-/** 注文ステータス。すべての受注は CONFIRMED で出生し（ADR 0017）、遷移は CONFIRMED → COMPLETED / CANCELLED のみ。 */
+/** 受注は確定で出生し、開始・完了・取消は専用の操作が担う。 */
 public enum OrderStatus {
   CONFIRMED,
+  IN_SERVICE,
   COMPLETED,
   CANCELLED;
 
@@ -17,7 +18,8 @@ public enum OrderStatus {
 
   boolean canTransitionTo(OrderStatus target) {
     return switch (this) {
-      case CONFIRMED -> target == COMPLETED || target == CANCELLED;
+      case CONFIRMED -> target == IN_SERVICE || target == COMPLETED || target == CANCELLED;
+      case IN_SERVICE -> target == COMPLETED || target == CANCELLED;
       case COMPLETED, CANCELLED -> false;
     };
   }

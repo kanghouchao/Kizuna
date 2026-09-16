@@ -3,9 +3,11 @@ package com.kizuna.order.application;
 import com.kizuna.order.api.dto.OrderFeeLineRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
+import com.kizuna.order.api.dto.OrderSpecialServiceResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.SpecialServiceSnapshot;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
@@ -23,6 +25,7 @@ public class OrderCalculation {
   private final OrderMapper mapper;
   private final OrderConfirmation confirmation;
   private final OrderFeeLineSelection selection;
+  private final OrderSpecialServices specialServices;
 
   public OrderCourse current(String courseId, boolean saving) {
     try {
@@ -60,9 +63,28 @@ public class OrderCalculation {
 
   public Order calculate(
       Order original, OrderCourse course, List<OrderFeeLineRequest> lines, boolean saving) {
-    Order copy = Order.builder().status(OrderStatus.CONFIRMED).build();
-    copy.adoptCourse(
+    return calculate(
+        original,
         course,
+        lines,
+        original == null ? List.of() : original.getSpecialServices(),
+        saving);
+  }
+
+  public Order calculate(
+      Order original,
+      OrderCourse course,
+      List<OrderFeeLineRequest> lines,
+      List<SpecialServiceSnapshot> specials,
+      boolean saving) {
+    Order copy = Order.builder().status(OrderStatus.CONFIRMED).build();
+    if (original != null) {
+      copy.setId(original.getId());
+      copy.assignCast(original.getCastId());
+    }
+    copy.adoptServices(
+        course,
+        specials,
         selection.resolve(
             original,
             lines,
@@ -91,6 +113,9 @@ public class OrderCalculation {
     lines.stream()
         .filter(line -> line.getLineId() == null)
         .forEach(line -> line.setAdoptedAt(null));
+    var specials = specialServices.describe(calculated);
+    int unresolved =
+        (int) specials.stream().filter(OrderSpecialServiceResponse::requiresAttention).count();
     var result =
         new OrderPreviewResponse(
             null,
@@ -107,7 +132,10 @@ public class OrderCalculation {
             calculated.getTotalFee(),
             calculated.getTotalDurationMinutes(),
             calculated.getTotalRemuneration(),
-            points);
+            points,
+            specials,
+            unresolved > 0,
+            unresolved);
     return new OrderPreviewResponse(
         confirmation.sign(operation, id, input, result),
         result.course(),
@@ -115,11 +143,18 @@ public class OrderCalculation {
         result.totalFee(),
         result.totalDurationMinutes(),
         result.totalRemuneration(),
-        points);
+        points,
+        specials,
+        unresolved > 0,
+        unresolved);
   }
 
   public void requirePreviewInput(String token) {
     if (token != null) throw new ServiceException("試算要求に確認値は指定できません");
+  }
+
+  public boolean wasPreviewed(String operation, String id, Object input, String token) {
+    return confirmation.wasPreviewed(operation, id, input, token);
   }
 
   public void verify(String token, OrderPreviewResponse preview) {

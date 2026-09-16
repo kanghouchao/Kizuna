@@ -464,7 +464,8 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     // 会計は明細から導出されるため、狙った値は行として置く。合計はこの 2 つの差になるが、カナリアの
     // 字面はどちらも DB に残るので、漏出の検査は変わらず効く。
     order.replaceStoreFeeLines(
-        List.of(new OrderFeeLineDraft(OrderFeeLineKind.OPTION, "カナリア会計", CANARY_TOTAL_FEE)));
+        List.of(
+            new OrderFeeLineDraft(OrderFeeLineKind.CREDIT_SURCHARGE, "カナリア会計", CANARY_TOTAL_FEE)));
     order.completeWith(CANARY_USED_POINTS, CANARY_GRANTED_POINTS);
     String orderId = orderRepository.save(order).getId();
 

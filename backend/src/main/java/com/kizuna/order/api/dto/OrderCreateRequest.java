@@ -13,6 +13,7 @@ import lombok.Data;
 
 @Data
 public class OrderCreateRequest {
+  private List<String> specialServiceIds;
   private String confirmationToken;
 
   @NotBlank(message = "コースは必須です")

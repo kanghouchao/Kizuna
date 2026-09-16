@@ -8,25 +8,14 @@ import java.time.LocalTime;
 import java.util.List;
 import lombok.Data;
 
-/**
- * 完了した受注の訂正。門が直せる三組（明細行・実績時刻・コーススナップショット）の<b>全量</b>を毎回送る — 省略は「変更しない」ではなく「値なし」である。
- *
- * <p>部分更新の形を採らないのは、実終了時刻を空へ戻す訂正が要るためで、当日実績の訂正（{@code AttendanceCorrectionRequest}）と同じ作法である。
- *
- * <p>凍結字段（予定時刻・人数・指名・受付担当・備考・キャストへの伝言）はこの型に<b>存在しない</b>。未知の項目は撥ねられる設定なので、 型に無いことがそのまま 400 になる（ADR
- * 0013 の凍結は不変）。
- */
+/** 完了受注の訂正。通常明細は全量必須、実績時刻の省略は値なし。 コース・特殊サービスの歴史版本指定の省略は既存約定を保持する。予定・人数・担当・受付・備考・伝言は変更できない。 */
 @Data
 public class OrderCorrectionRequest {
+  private List<String> specialServiceRevisionIds;
   private String confirmationToken;
   private String courseRevisionId;
 
-  /**
-   * 画面が読み込んだ時点の受注のバージョン（詳細の読み口が返す {@code version}）。
-   *
-   * <p>この契約は全量置換なので、開いたまま別の操作者が訂正を済ませていると、送らなかった項目まで開いた時点の値で 押し戻す。要求が載せた版と現物の版を突き合わせ、ずれていれば書かずに 409
-   * で差し戻す — 楽観ロックは要求ごとに 現物を読み直すため、この形でしか「画面が見ていた版」との食い違いを検出できない。
-   */
+  /** 表示後の変更を古い内容で上書きしないため、画面が読んだ版と現物の版を照合する。 */
   @NotNull(message = "訂正の対象バージョンは必須です")
   private Long expectedVersion;
 

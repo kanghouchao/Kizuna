@@ -204,7 +204,7 @@ public abstract class CrossStoreTestSupport {
     var body = fixtureJson.createObjectNode();
     body.put("expected_version", detail.path("version").asLong());
     var line = body.putArray("fee_lines").addObject();
-    line.put("kind", extra < 0 ? "DISCOUNT" : "OPTION");
+    line.put("kind", extra < 0 ? "DISCOUNT" : "CREDIT_SURCHARGE");
     line.put("name", "会計");
     line.put("amount", Math.abs(extra));
     if (usePoints != null) body.put("use_points", usePoints);

@@ -49,6 +49,9 @@ describe('新規オーダー登録の送信ペイロード', () => {
     mockedOrderApi.create.mockResolvedValue({
       total_duration_minutes: 60,
       total_remuneration: 7000,
+      special_services: [],
+      requires_attention: false,
+      unresolved_special_service_count: 0,
       course: {
         service_id: 'course-1',
         revision_id: 'r1',

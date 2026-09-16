@@ -3,6 +3,7 @@
 import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
 
 import { OrderCourseField } from './OrderCourseField';
+import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -48,6 +49,7 @@ import {
 interface OrderCorrectionFormValues {
   actual_arrival_time: string;
   actual_end_time: string;
+  special_service_revision_ids: string[];
   course_revision_id: string;
   fee_lines: OrderFeeLineInput[];
   reason: string;
@@ -56,6 +58,7 @@ interface OrderCorrectionFormValues {
 const EMPTY_VALUES: OrderCorrectionFormValues = {
   actual_arrival_time: '',
   actual_end_time: '',
+  special_service_revision_ids: [],
   course_revision_id: '',
   fee_lines: [],
   reason: '',
@@ -142,6 +145,7 @@ export default function OrderCorrectionPage() {
     reset({
       actual_arrival_time: toTimeInput(current.actual_arrival_time),
       actual_end_time: toTimeInput(current.actual_end_time),
+      special_service_revision_ids: (current.special_services ?? []).map(item => item.revision_id),
       course_revision_id: '',
       fee_lines: storeEditableFeeLines(current.fee_lines),
       reason: '',
@@ -179,6 +183,7 @@ export default function OrderCorrectionPage() {
         reason: values.reason.trim(),
         actual_arrival_time: optionalTime(values.actual_arrival_time),
         actual_end_time: optionalTime(values.actual_end_time),
+        special_service_revision_ids: values.special_service_revision_ids,
         course_revision_id: values.course_revision_id || undefined,
         fee_lines: toFeeLineInputs(values.fee_lines),
       };
@@ -264,7 +269,7 @@ export default function OrderCorrectionPage() {
         {/* 完了していない受注はサーバが撥ねる。欄を出してから 400 を返すより、開いた時点で理由を名乗る */}
         {seeded && !completed && (
           <RegionError
-            message="完了した受注だけが訂正できます。確定済みの受注は編集画面から、取消済みの受注は同じ内容で起こし直してください。"
+            message="完了した受注だけが訂正できます。未完了の受注は編集画面から、取消済みの受注は同じ内容で起こし直してください。"
             fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
           />
         )}
@@ -306,6 +311,10 @@ export default function OrderCorrectionPage() {
                 <h2 className="text-muted-foreground text-sm font-medium">コース</h2>
                 <div className="space-y-4">
                   <OrderCourseField historicalOrderId={orderId} current={current.course} />
+                  <OrderSpecialServicesField
+                    historicalOrderId={orderId}
+                    current={current.special_services}
+                  />
                 </div>
               </section>
 

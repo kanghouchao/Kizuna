@@ -3,6 +3,7 @@ package com.kizuna.service.application;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.api.dto.OwnServiceConditionSummary;
+import com.kizuna.service.domain.ConsentDecision;
 import com.kizuna.service.domain.ConsentStatus;
 import com.kizuna.service.domain.ServiceConsent;
 import com.kizuna.service.domain.ServiceConsentEvent;
@@ -41,6 +42,7 @@ public class OwnServiceConditionService {
   private final ActorIdentityService actors;
   private final StoreRepository stores;
   private final StoreContext context;
+  private final SpecialServiceRejectionHandler rejectionHandler;
 
   @Transactional(readOnly = true)
   @StoreScoped
@@ -85,7 +87,11 @@ public class OwnServiceConditionService {
     if (consent.decide(
         request.decision(), item.getTermsVersion(), revision.getId(), request.consentVersion())) {
       consents.saveAndFlush(consent);
-      events.save(ServiceConsentEvent.record(consent, actorId));
+      var event = events.saveAndFlush(ServiceConsentEvent.record(consent, actorId));
+      if (request.decision() == ConsentDecision.REJECTED)
+        rejectionHandler.applyRejection(
+            new SpecialServiceRejection(
+                enrollment, id, event.getId(), actorId, event.getOccurredAt()));
     }
     return summary(item, consent);
   }

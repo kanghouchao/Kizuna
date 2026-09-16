@@ -34,6 +34,9 @@ public class ServiceRevision extends StoreScopedEntity {
   @Column(nullable = false, updatable = false)
   private long revisionNumber;
 
+  @Column(nullable = false, updatable = false)
+  private long termsVersion;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, updatable = false)
   private Operation operation;
@@ -80,6 +83,7 @@ public class ServiceRevision extends StoreScopedEntity {
 
   public static ServiceRevision record(ServiceItem item, ServiceTerms before, Long actorId) {
     var revision = new ServiceRevision();
+    revision.termsVersion = item.getTermsVersion();
     revision.serviceId = item.getId();
     revision.revisionNumber = item.getRevisionNumber();
     revision.operation =

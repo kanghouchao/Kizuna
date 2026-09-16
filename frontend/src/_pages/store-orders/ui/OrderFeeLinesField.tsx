@@ -41,7 +41,7 @@ export function OrderFeeLinesField({
   const [selection, setSelection] = useState<{ storeId: string; index: number | null }>();
   const lines = watch('fee_lines') ?? [];
   const changed = (index: number) => setValue(`fee_lines.${index}.line_id`, undefined);
-  const add = (kind: 'EXTENSION' | 'DISCOUNT' | 'OPTION' | 'CREDIT_SURCHARGE') =>
+  const add = (kind: 'EXTENSION' | 'DISCOUNT' | 'CREDIT_SURCHARGE') =>
     append({
       kind,
       name: kind === 'EXTENSION' ? '延長' : '',
@@ -64,9 +64,6 @@ export function OrderFeeLinesField({
         </Button>
         <Button type="button" variant="outline" onClick={() => add('DISCOUNT')}>
           割引を追加
-        </Button>
-        <Button type="button" variant="outline" onClick={() => add('OPTION')}>
-          明細を追加
         </Button>
         <Button type="button" variant="outline" onClick={() => add('CREDIT_SURCHARGE')}>
           クレジット加算を追加

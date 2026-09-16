@@ -10,6 +10,9 @@ beforeEach(() => {
 const first: OrderPreview = {
   total_duration_minutes: 60,
   total_remuneration: 7000,
+  requires_attention: false,
+  unresolved_special_service_count: 0,
+  special_services: [],
   confirmation_token: 'first',
   course: {
     service_id: '1',
@@ -125,4 +128,39 @@ test('加算の改定差異は費用・報酬・版本を示し、再確認す�
   expect(save).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByText('この内容を確認して保存'));
   await waitFor(() => expect(save).toHaveBeenLastCalledWith('revised'));
+});
+
+test('トークンが同じでも受諾状態の差を表示し、歴史の受諾を未受諾にしない', async () => {
+  const item = {
+    service_id: 's1',
+    revision_id: 'sr1',
+    revision_number: 1,
+    terms_version: 1,
+    name: '特殊',
+    charge_type: 'PAID' as const,
+    price: 2000,
+    remuneration: 1500,
+    adoption_basis: 'ACCEPTED_TERMS' as const,
+    enrollment_id: 'cast1',
+    consent_version: 1,
+    requires_attention: false,
+  };
+  const preview = jest
+    .fn()
+    .mockResolvedValueOnce({ ...first, special_services: [item] })
+    .mockResolvedValueOnce({
+      ...first,
+      special_services: [{ ...item, current_consent_status: 'RECONFIRMATION_REQUIRED' }],
+    });
+  const save = jest.fn();
+  render(<Screen preview={preview} save={save} />);
+  fireEvent.click(screen.getByText('試算する'));
+  fireEvent.click(await screen.findByText('この内容を確認して保存'));
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByText('試算する'));
+  const comparison = await screen.findByRole('status');
+  expect(comparison).toHaveTextContent('受諾時の約定');
+  expect(comparison).toHaveTextContent('再受諾待ち');
+  expect(comparison).toHaveTextContent('担当在籍 cast1');
+  expect(comparison).not.toHaveTextContent('未受諾');
 });

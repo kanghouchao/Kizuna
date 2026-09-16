@@ -13,6 +13,9 @@ export const course = {
   adopted_at: '2026-09-15T00:00:00Z',
 };
 export const preview: OrderPreview = {
+  requires_attention: false,
+  unresolved_special_service_count: 0,
+  special_services: [],
   confirmation_token: 'confirmed',
   course,
   fee_lines: [],
@@ -22,6 +25,12 @@ export const preview: OrderPreview = {
 };
 export function courseApiMocks() {
   return {
+    specialServiceCandidates: jest
+      .fn()
+      .mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 }),
+    specialServiceRevisions: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
+    specialServiceEvents: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
+    start: jest.fn(),
     courseCandidates: jest
       .fn()
       .mockResolvedValue({ rows: [course], page: 0, pageCount: 1, total: 1 }),

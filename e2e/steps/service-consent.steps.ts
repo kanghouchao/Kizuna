@@ -1,8 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { PLATFORM_URL } from "../base-url";
 import {
   acceptCastInvitation,
+  createCourse,
+  loginViaUiAndEnterStore,
   createCast,
   createSpecialService,
   issueCastInvitation,
@@ -10,7 +12,10 @@ import {
   reviseSpecialService,
 } from "./store-api";
 
-const { Given, When, Then } = createBdd();
+const { Given, When, Then, After } = createBdd();
+let managerPage: Page | undefined;
+let specialOrderId = "";
+let orderStore = "";
 let email = "";
 let serviceId = "";
 let serviceName = "";
@@ -107,4 +112,93 @@ When("本人が特殊サービスを拒否する", async ({ page }) => {
   await page
     .getByRole("button", { name: "確認して拒否する", exact: true })
     .click();
+});
+
+When(
+  "店長が受諾済み特殊サービスを選び受注を保存する",
+  async ({ browser, request }) => {
+    const context = await browser.newContext();
+    managerPage = await context.newPage();
+    orderStore = await loginViaUiAndEnterStore(managerPage);
+    const token = await loginAsStoreAdmin(request);
+    const courseName = `特殊サービス用コース-${Date.now()}`;
+    await createCourse(request, token, courseName, orderStore);
+    await managerPage.goto(`${PLATFORM_URL}/store/${orderStore}/orders/create`);
+    await managerPage.getByLabel("お客様名", { exact: true }).fill(serviceName);
+    await managerPage.getByLabel("キャスト *", { exact: true }).click();
+    await managerPage.getByPlaceholder("名前で検索").fill(serviceName);
+    await managerPage.getByRole("option", { name: serviceName }).click();
+    await managerPage
+      .getByRole("combobox", { name: "コース", exact: true })
+      .click();
+    await managerPage
+      .getByLabel("コースを検索", { exact: true })
+      .fill(courseName);
+    await managerPage
+      .getByRole("option", { name: new RegExp(courseName) })
+      .click();
+    await managerPage
+      .getByRole("checkbox", { name: new RegExp(serviceName) })
+      .check();
+    await managerPage
+      .getByRole("button", { name: "登録する", exact: true })
+      .click();
+    await expect(managerPage.getByRole("dialog")).toContainText(
+      "請求額: ¥14,000",
+    );
+    const [response] = await Promise.all([
+      managerPage.waitForResponse(
+        (resp) =>
+          resp.url().endsWith("/api/store/orders") &&
+          resp.request().method() === "POST",
+      ),
+      managerPage
+        .getByRole("button", { name: "この内容を確認して保存", exact: true })
+        .click(),
+    ]);
+    expect(response.status()).toBe(201);
+    specialOrderId = (await response.json()).id;
+  },
+);
+
+Then("店長が一覧の要対応から特殊サービスを修復し開始する", async () => {
+  const page = managerPage!;
+  await page.goto(`${PLATFORM_URL}/store/${orderStore}/orders`);
+  const card = page.getByRole("listitem").filter({ hasText: serviceName });
+  await expect(card).toContainText("本人拒否・要対応");
+  await card.getByRole("button", { name: "編集", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "サービスを開始", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("checkbox", { name: new RegExp(serviceName) }).uncheck();
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("請求額: ¥12,000");
+  const [updated] = await Promise.all([
+    page.waitForResponse(
+      (resp) =>
+        resp.url().endsWith(`/api/store/orders/${specialOrderId}`) &&
+        resp.request().method() === "PUT",
+    ),
+    page
+      .getByRole("button", { name: "この内容を確認して保存", exact: true })
+      .click(),
+  ]);
+  expect(updated.status()).toBe(200);
+  await expect(page).toHaveURL(new RegExp(`/store/${orderStore}/orders/?$`));
+  await page.goto(
+    `${PLATFORM_URL}/store/${orderStore}/orders/${specialOrderId}/edit`,
+  );
+  await expect(page.getByLabel("サービスの進行")).toContainText("処置済み");
+  await page
+    .getByLabel("開始の理由", { exact: true })
+    .fill("修復内容を確認して提供開始");
+  await page
+    .getByRole("button", { name: "サービスを開始", exact: true })
+    .click();
+  await expect(page.getByLabel("サービスの進行")).toContainText("サービス中");
+});
+
+After(async () => {
+  if (managerPage) await managerPage.context().close();
+  managerPage = undefined;
 });

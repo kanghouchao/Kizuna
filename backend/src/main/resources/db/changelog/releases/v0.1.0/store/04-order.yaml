@@ -12,6 +12,15 @@ databaseChangeLog:
             remarks: 注文テーブル
             columns:
               - column:
+                  name: started_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: started_by
+                  type: BIGINT
+              - column:
+                  name: start_reason
+                  type: VARCHAR(500)
+              - column:
                   name: id
                   type: VARCHAR(64)
                   constraints:
@@ -334,6 +343,407 @@ databaseChangeLog:
                   name: business_date
               - column:
                   name: id
+        - addForeignKeyConstraint:
+            baseTableName: t_orders
+            baseColumnNames: course_revision_id, store_id
+            referencedTableName: t_service_revisions
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_orders_course_revision
+            onDelete: NO ACTION
+        - createIndex:
+            tableName: t_orders
+            indexName: idx_t_orders_course_revision
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: course_revision_id
+        - sql:
+            sql: |
+              ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_course CHECK (
+                course_minutes > 0 AND course_price >= 0 AND course_remuneration BETWEEN 0 AND course_price
+                AND course_adoption_basis IN ('CURRENT_SETTING', 'HISTORICAL_CORRECTION'));
+        - addUniqueConstraint:
+            tableName: t_orders
+            constraintName: uq_t_orders_id_store
+            columnNames: id, store_id
+        - sql:
+            sql: |
+              ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_start CHECK (
+                (started_at IS NULL AND started_by IS NULL AND start_reason IS NULL)
+                OR (started_at IS NOT NULL AND started_by IS NOT NULL AND start_reason IS NOT NULL AND length(trim(start_reason)) > 0));
+        - addForeignKeyConstraint:
+            constraintName: fk_t_orders_started_by
+            baseTableName: t_orders
+            baseColumnNames: started_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - createTable:
+            tableName: t_order_special_services
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_order_special_services
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enrollment_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revision_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revision_number
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: terms_version
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: charge_type
+                  type: VARCHAR(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: price
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: remuneration
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: adoption_basis
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: adopted_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: consent_event_id
+                  type: VARCHAR(64)
+              - column:
+                  name: consent_version
+                  type: BIGINT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: version
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_services ADD CONSTRAINT ck_t_order_special_services_revision_number CHECK (revision_number > 0);
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_services ADD CONSTRAINT ck_t_order_special_services_terms_version CHECK (terms_version > 0);
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_services ADD CONSTRAINT ck_t_order_special_services_charge_type CHECK (charge_type IN ('FREE','PAID'));
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_services ADD CONSTRAINT ck_t_order_special_services_price CHECK (price >= 0);
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_services ADD CONSTRAINT ck_t_order_special_services_remuneration CHECK (remuneration >= 0 AND remuneration <= price);
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_services ADD CONSTRAINT ck_t_order_special_services_adoption_basis CHECK (adoption_basis IN ('ACCEPTED_TERMS','HISTORICAL_CORRECTION'));
+        - addUniqueConstraint:
+            tableName: t_order_special_services
+            constraintName: uq_t_order_special_services_pair
+            columnNames: order_id, service_id
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_services ADD CONSTRAINT ck_t_order_special_services_free CHECK (charge_type <> 'FREE' OR (price = 0 AND remuneration = 0));
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_services ADD CONSTRAINT ck_t_order_special_services_consent CHECK (adoption_basis <> 'ACCEPTED_TERMS' OR (consent_event_id IS NOT NULL AND consent_version IS NOT NULL));
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_services_order
+            baseTableName: t_order_special_services
+            baseColumnNames: order_id, store_id
+            referencedTableName: t_orders
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_services_enrollment
+            baseTableName: t_order_special_services
+            baseColumnNames: enrollment_id, store_id
+            referencedTableName: t_cast_enrollments
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_services_service
+            baseTableName: t_order_special_services
+            baseColumnNames: service_id, store_id
+            referencedTableName: t_services
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_services_revision
+            baseTableName: t_order_special_services
+            baseColumnNames: revision_id, store_id
+            referencedTableName: t_service_revisions
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_services_consent
+            baseTableName: t_order_special_services
+            baseColumnNames: consent_event_id, store_id
+            referencedTableName: t_service_consent_events
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - createIndex:
+            indexName: idx_t_order_special_services_enrollment
+            tableName: t_order_special_services
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: enrollment_id
+              - column:
+                  name: service_id
+        - createIndex:
+            indexName: idx_t_order_special_services_revision
+            tableName: t_order_special_services
+            columns:
+              - column:
+                  name: revision_id
+              - column:
+                  name: store_id
+        - createIndex:
+            indexName: idx_t_order_special_services_consent
+            tableName: t_order_special_services
+            columns:
+              - column:
+                  name: consent_event_id
+              - column:
+                  name: store_id
+        - createTable:
+            tableName: t_order_special_service_events
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_order_special_service_events
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enrollment_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: consent_event_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: occurred_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: kind
+                  type: VARCHAR(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: before_snapshot
+                  type: JSONB
+                  constraints:
+                    nullable: false
+              - column:
+                  name: after_snapshot
+                  type: JSONB
+                  constraints:
+                    nullable: false
+              - column:
+                  name: previous_total_fee
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_fee
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: resolution
+                  type: VARCHAR(16)
+              - column:
+                  name: rejection_event_id
+                  type: VARCHAR(64)
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: version
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_service_events_actor
+            baseTableName: t_order_special_service_events
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_service_events ADD CONSTRAINT ck_t_order_special_service_events_kind CHECK (kind IN ('REJECTED','RESOLVED'));
+        - addUniqueConstraint:
+            tableName: t_order_special_service_events
+            constraintName: uq_t_order_special_service_events_id_store
+            columnNames: id, store_id
+        - addUniqueConstraint:
+            tableName: t_order_special_service_events
+            constraintName: uq_t_order_special_service_events_resolution
+            columnNames: rejection_event_id
+        - sql:
+            sql: |
+              ALTER TABLE t_order_special_service_events ADD CONSTRAINT ck_t_order_special_service_events_resolution CHECK (
+                  (kind = 'REJECTED' AND rejection_event_id IS NULL AND resolution IS NULL)
+                  OR (kind = 'RESOLVED' AND rejection_event_id IS NOT NULL AND resolution IN ('REMOVED','RESELECTED','CAST_CHANGED')));
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_service_events_order
+            baseTableName: t_order_special_service_events
+            baseColumnNames: order_id, store_id
+            referencedTableName: t_orders
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_service_events_enrollment
+            baseTableName: t_order_special_service_events
+            baseColumnNames: enrollment_id, store_id
+            referencedTableName: t_cast_enrollments
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_service_events_service
+            baseTableName: t_order_special_service_events
+            baseColumnNames: service_id, store_id
+            referencedTableName: t_services
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_service_events_consent
+            baseTableName: t_order_special_service_events
+            baseColumnNames: consent_event_id, store_id
+            referencedTableName: t_service_consent_events
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_special_service_events_rejection
+            baseTableName: t_order_special_service_events
+            baseColumnNames: rejection_event_id, store_id
+            referencedTableName: t_order_special_service_events
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_order_special_service_events_rejection ON t_order_special_service_events(order_id, consent_event_id) WHERE kind = 'REJECTED';
+        - createIndex:
+            indexName: idx_t_order_special_service_events_history
+            tableName: t_order_special_service_events
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: order_id
+              - column:
+                  name: occurred_at
+                  descending: true
+              - column:
+                  name: id
+                  descending: true
+        - createIndex:
+            indexName: idx_t_order_special_service_events_consent
+            tableName: t_order_special_service_events
+            columns:
+              - column:
+                  name: consent_event_id
+              - column:
+                  name: store_id
   - changeSet:
       id: store-v0100-004-order-fee-line-schema
       author: kanghouchao
@@ -367,7 +777,7 @@ databaseChangeLog:
                   type: VARCHAR(30)
                   constraints:
                     nullable: false
-                  remarks: 明細種別（BASE_COURSE/EXTENSION/OPTION/SURCHARGE/DISCOUNT/POINT_REDEMPTION/CREDIT_SURCHARGE）
+                  remarks: 明細種別（BASE_COURSE/EXTENSION/SPECIAL_SERVICE/SURCHARGE/DISCOUNT/POINT_REDEMPTION/CREDIT_SURCHARGE）
               - column:
                   name: name
                   type: VARCHAR(255)
@@ -444,7 +854,7 @@ databaseChangeLog:
                 CASE kind
                   WHEN 'BASE_COURSE' THEN amount >= 0
                   WHEN 'EXTENSION' THEN amount >= 0
-                  WHEN 'OPTION' THEN amount >= 0
+                  WHEN 'SPECIAL_SERVICE' THEN amount >= 0
                   WHEN 'SURCHARGE' THEN amount >= 0
                   WHEN 'CREDIT_SURCHARGE' THEN amount >= 0
                   WHEN 'DISCOUNT' THEN amount < 0
@@ -458,6 +868,49 @@ databaseChangeLog:
             columns:
               - column:
                   name: order_id
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_order_fee_lines_course ON t_order_fee_lines(order_id) WHERE kind = 'BASE_COURSE';
+        - sql:
+            sql: |
+              ALTER TABLE t_order_fee_lines ADD CONSTRAINT fk_t_order_fee_lines_order_store
+                FOREIGN KEY (order_id, store_id) REFERENCES t_orders(id, store_id) ON DELETE CASCADE;
+        - sql:
+            sql: |
+              ALTER TABLE t_order_fee_lines ADD CONSTRAINT fk_t_order_fee_lines_revision
+                FOREIGN KEY (revision_id, service_id, store_id) REFERENCES t_service_revisions(id, service_id, store_id) ON DELETE NO ACTION;
+        - createIndex:
+            indexName: idx_t_order_fee_lines_revision
+            tableName: t_order_fee_lines
+            columns:
+              - column:
+                  name: revision_id
+              - column:
+                  name: service_id
+              - column:
+                  name: store_id
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_order_fee_lines_surcharge ON t_order_fee_lines(order_id, service_id) WHERE kind = 'SURCHARGE';
+        - sql:
+            sql: |
+              ALTER TABLE t_order_fee_lines ADD CONSTRAINT ck_t_order_fee_lines_terms CHECK (
+                remuneration >= 0
+                AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION') THEN duration_minutes IS NOT NULL AND duration_minutes > 0 ELSE duration_minutes IS NULL END
+                AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION', 'SURCHARGE', 'SPECIAL_SERVICE') THEN remuneration <= amount ELSE remuneration = 0 END
+                AND CASE WHEN kind IN ('BASE_COURSE', 'SURCHARGE', 'SPECIAL_SERVICE') THEN
+                  service_id IS NOT NULL AND revision_id IS NOT NULL AND revision_number IS NOT NULL AND revision_number > 0
+                  AND adoption_basis IS NOT NULL AND adoption_basis IN ('CURRENT_SETTING', 'ACCEPTED_TERMS', 'HISTORICAL_CORRECTION') AND adopted_at IS NOT NULL
+                ELSE service_id IS NULL AND revision_id IS NULL AND revision_number IS NULL AND adoption_basis IS NULL AND adopted_at IS NULL END
+              );
+        - sql:
+            sql: |
+              ALTER TABLE t_order_fee_lines ADD CONSTRAINT ck_t_order_fee_lines_special CHECK (
+                (kind = 'SPECIAL_SERVICE' AND service_id IS NOT NULL AND remuneration IS NOT NULL AND remuneration BETWEEN 0 AND amount)
+                OR kind <> 'SPECIAL_SERVICE');
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_order_fee_lines_special ON t_order_fee_lines(order_id, service_id) WHERE kind = 'SPECIAL_SERVICE';
   - changeSet:
       id: store-v0100-004-order-correction-schema
       author: kanghouchao
@@ -471,6 +924,12 @@ databaseChangeLog:
             tableName: t_order_corrections
             remarks: 完了後訂正の履歴（訂正前の姿・訂正者・時刻・理由）
             columns:
+              - column:
+                  name: special_services
+                  type: JSONB
+                  defaultValueComputed: "'[]'::jsonb"
+                  constraints:
+                    nullable: false
               - column:
                   name: id
                   type: VARCHAR(64)
@@ -626,6 +1085,26 @@ databaseChangeLog:
             columns:
               - column:
                   name: order_id
+        - addForeignKeyConstraint:
+            baseTableName: t_order_corrections
+            baseColumnNames: course_revision_id, store_id
+            referencedTableName: t_service_revisions
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_order_corrections_course_revision
+            onDelete: NO ACTION
+        - createIndex:
+            tableName: t_order_corrections
+            indexName: idx_t_order_corrections_course_revision
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: course_revision_id
+        - sql:
+            sql: |
+              ALTER TABLE t_order_corrections ADD CONSTRAINT ck_t_order_corrections_course CHECK (
+                course_minutes > 0 AND course_price >= 0 AND course_remuneration BETWEEN 0 AND course_price
+                AND course_adoption_basis IN ('CURRENT_SETTING', 'HISTORICAL_CORRECTION'));
   - changeSet:
       id: store-v0100-004-order-application-schema
       author: kanghouchao
@@ -808,64 +1287,3 @@ databaseChangeLog:
             columns:
               - column:
                   name: order_id
-        - addForeignKeyConstraint:
-            baseTableName: t_orders
-            baseColumnNames: course_revision_id, store_id
-            referencedTableName: t_service_revisions
-            referencedColumnNames: id, store_id
-            constraintName: fk_t_orders_course_revision
-            onDelete: NO ACTION
-        - createIndex:
-            tableName: t_orders
-            indexName: idx_t_orders_course_revision
-            columns:
-              - column:
-                  name: store_id
-              - column:
-                  name: course_revision_id
-        - sql:
-            sql: |
-              ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_course CHECK (
-                course_minutes > 0 AND course_price >= 0 AND course_remuneration BETWEEN 0 AND course_price
-                AND course_adoption_basis IN ('CURRENT_SETTING', 'HISTORICAL_CORRECTION'));
-        - addForeignKeyConstraint:
-            baseTableName: t_order_corrections
-            baseColumnNames: course_revision_id, store_id
-            referencedTableName: t_service_revisions
-            referencedColumnNames: id, store_id
-            constraintName: fk_t_order_corrections_course_revision
-            onDelete: NO ACTION
-        - createIndex:
-            tableName: t_order_corrections
-            indexName: idx_t_order_corrections_course_revision
-            columns:
-              - column:
-                  name: store_id
-              - column:
-                  name: course_revision_id
-        - sql:
-            sql: |
-              ALTER TABLE t_order_corrections ADD CONSTRAINT ck_t_order_corrections_course CHECK (
-                course_minutes > 0 AND course_price >= 0 AND course_remuneration BETWEEN 0 AND course_price
-                AND course_adoption_basis IN ('CURRENT_SETTING', 'HISTORICAL_CORRECTION'));
-        - sql:
-            sql: |
-              CREATE UNIQUE INDEX uq_t_order_fee_lines_course ON t_order_fee_lines(order_id) WHERE kind = 'BASE_COURSE';
-        - sql:
-            sql: |
-              ALTER TABLE t_orders ADD CONSTRAINT uq_t_orders_id_store UNIQUE (id, store_id);
-              ALTER TABLE t_order_fee_lines ADD CONSTRAINT fk_t_order_fee_lines_order_store
-                FOREIGN KEY (order_id, store_id) REFERENCES t_orders(id, store_id) ON DELETE CASCADE;
-              ALTER TABLE t_order_fee_lines ADD CONSTRAINT fk_t_order_fee_lines_revision
-                FOREIGN KEY (revision_id, service_id, store_id) REFERENCES t_service_revisions(id, service_id, store_id) ON DELETE NO ACTION;
-              CREATE INDEX idx_t_order_fee_lines_revision ON t_order_fee_lines(revision_id, service_id, store_id);
-              CREATE UNIQUE INDEX uq_t_order_fee_lines_surcharge ON t_order_fee_lines(order_id, service_id) WHERE kind = 'SURCHARGE';
-              ALTER TABLE t_order_fee_lines ADD CONSTRAINT ck_t_order_fee_lines_terms CHECK (
-                remuneration >= 0
-                AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION') THEN duration_minutes IS NOT NULL AND duration_minutes > 0 ELSE duration_minutes IS NULL END
-                AND CASE WHEN kind IN ('BASE_COURSE', 'EXTENSION', 'SURCHARGE') THEN remuneration <= amount ELSE remuneration = 0 END
-                AND CASE WHEN kind IN ('BASE_COURSE', 'SURCHARGE') THEN
-                  service_id IS NOT NULL AND revision_id IS NOT NULL AND revision_number IS NOT NULL AND revision_number > 0
-                  AND adoption_basis IS NOT NULL AND adoption_basis IN ('CURRENT_SETTING', 'HISTORICAL_CORRECTION') AND adopted_at IS NOT NULL
-                ELSE service_id IS NULL AND revision_id IS NULL AND revision_number IS NULL AND adoption_basis IS NULL AND adopted_at IS NULL END
-              );

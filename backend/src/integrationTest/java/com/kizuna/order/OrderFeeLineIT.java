@@ -37,7 +37,7 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
         createOrder(
             """
             "fee_lines": [
-              {"kind": "OPTION", "name": "指名オプション", "amount": 3000},
+              {"kind": "CREDIT_SURCHARGE", "name": "指名オプション", "amount": 3000},
               {"kind": "DISCOUNT", "name": "初回割", "amount": 5000}
             ]
             """,
@@ -61,11 +61,13 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
   @DisplayName("明細を差し替えると合計が取り直され、空配列で内訳を空にできること")
   void updateReplacesTheBreakdownAndRederivesTheTotal() {
     String orderId =
-        createOrder("\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"A\", \"amount\": 2000}]");
+        createOrder(
+            "\"fee_lines\": [{\"kind\": \"CREDIT_SURCHARGE\", \"name\": \"A\", \"amount\": 2000}]");
 
     ResponseEntity<JsonNode> replaced =
         update(
-            orderId, "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"B\", \"amount\": 7000}]");
+            orderId,
+            "\"fee_lines\": [{\"kind\": \"CREDIT_SURCHARGE\", \"name\": \"B\", \"amount\": 7000}]");
     assertThat(replaced.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(storedTotalFee(orderId)).isEqualTo(7100);
     assertThat(storedLineCount(orderId)).as("基本コースを保持し、他の行を差し替えること").isEqualTo(2);
@@ -105,7 +107,8 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
 
     ResponseEntity<JsonNode> negativeOption =
         update(
-            orderId, "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"追加\", \"amount\": -1}]");
+            orderId,
+            "\"fee_lines\": [{\"kind\": \"CREDIT_SURCHARGE\", \"name\": \"追加\", \"amount\": -1}]");
     assertThat(negativeOption.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(negativeOption.getBody().path("error").asString()).contains("0以上の整数円");
     assertThat(storedLineCount(orderId)).isEqualTo(1);
@@ -117,7 +120,7 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
     String orderId = createOrder("\"fee_lines\": []");
 
     // 加算の種別に負値
-    assertThatThrownBy(() -> insertLine(orderId, "OPTION", "迂回", -1))
+    assertThatThrownBy(() -> insertLine(orderId, "CREDIT_SURCHARGE", "迂回", -1))
         .isInstanceOf(DataIntegrityViolationException.class);
     // 減算の種別に正値
     assertThatThrownBy(() -> insertLine(orderId, "DISCOUNT", "迂回", 1))
@@ -141,7 +144,7 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> negativeTotal =
         update(
             orderId,
-            "\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"指名料\", \"amount\": 1000},"
+            "\"fee_lines\": [{\"kind\": \"CREDIT_SURCHARGE\", \"name\": \"指名料\", \"amount\": 1000},"
                 + " {\"kind\": \"DISCOUNT\", \"name\": \"割引\", \"amount\": 2000}]");
     assertThat(negativeTotal.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(negativeTotal.getBody().path("error").asString()).contains("内訳の総和が負になっています");
@@ -159,7 +162,8 @@ class OrderFeeLineIT extends CrossStoreTestSupport {
   void completionAppliesTheBreakdownSentAtCheckout() {
     // ポイント利用の行が台帳の減算仕訳と対で書かれることは OrderCompletionIT が固定する（残高が要る）
     String orderId =
-        createOrder("\"fee_lines\": [{\"kind\": \"OPTION\", \"name\": \"仮\", \"amount\": 1}]");
+        createOrder(
+            "\"fee_lines\": [{\"kind\": \"CREDIT_SURCHARGE\", \"name\": \"仮\", \"amount\": 1}]");
 
     assertThat(complete(orderId, null).getStatusCode()).isEqualTo(HttpStatus.OK);
 

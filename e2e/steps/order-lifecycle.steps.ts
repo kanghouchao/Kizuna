@@ -136,7 +136,7 @@ When('カードから完了モーダルを開き会計 {string} 円で完了す�
   await ownCard(page).getByRole('button', { name: '完了', exact: true }).click();
   const dialog = page.getByRole('dialog');
   // 会計金額の欄は無く、合計は明細の総和としてサーバが導出する。1 行だけ入れて総額を作る
-  await dialog.getByRole('button', { name: '明細を追加' }).click();
+  await dialog.getByRole('button', { name: 'クレジット加算を追加' }).click();
   await dialog.getByLabel('明細1の名称', { exact: true }).fill('会計');
   await dialog.getByLabel('明細1の金額', { exact: true }).fill(String(Number(fee) - adoptedPrice));
   await dialog.getByRole('button', { name: '完了する', exact: true }).click();

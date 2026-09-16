@@ -2,8 +2,11 @@
 
 import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
 
+import { OrderServiceProgress } from './OrderServiceProgress';
 import { OrderCourseField } from './OrderCourseField';
+import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
+import { useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -52,6 +55,7 @@ interface OrderEditFormValues {
   arrival_scheduled_end_time: string;
   pax: string;
   /** 適用されたコース名の写し。基本コース料金の明細を置くなら必須になる。 */
+  special_service_ids: string[];
   course_id: string;
   /** 会計内訳。行に同一性は無く、送った内容がそのまま新しい内訳になる。 */
   fee_lines: OrderFeeLineInput[];
@@ -72,6 +76,7 @@ const EMPTY_VALUES: OrderEditFormValues = {
   arrival_scheduled_start_time: '',
   arrival_scheduled_end_time: '',
   pax: '',
+  special_service_ids: [],
   course_id: '',
   fee_lines: [],
   location_address: '',
@@ -132,6 +137,7 @@ export default function OrderEditPage() {
   );
   const { data: current, isLoading, failure, reload } = resource;
 
+  const progressOrder = useRef<Order | null>(null);
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, formState } = form;
   // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
@@ -143,27 +149,33 @@ export default function OrderEditPage() {
   // 取得できたら播く。取得の到着はレンダーより後なので、values ではなく効果で入れる
   // （初期値として渡すと、開いた最初のフレームが空欄のまま描かれる）。
   const initialized = useResourceInitialization(resource.success, current => {
-    reset({
-      receptionist_id: current.receptionist_id != null ? String(current.receptionist_id) : '',
-      cast_id: current.cast_id ?? '',
-      business_date: current.business_date ?? '',
-      arrival_scheduled_start_time: toTimeInput(current.arrival_scheduled_start_time),
-      arrival_scheduled_end_time: toTimeInput(current.arrival_scheduled_end_time),
-      pax: current.pax != null ? String(current.pax) : '',
-      course_id: '',
-      fee_lines: storeEditableFeeLines(current.fee_lines),
-      location_address: current.location_address ?? '',
-      location_building: current.location_building ?? '',
-      carrier: current.carrier ?? '',
-      media_name: current.media_name ?? '',
-      remarks: current.remarks ?? '',
-      cast_driver_message: current.cast_driver_message ?? '',
-      contact_name: current.contact_name ?? '',
-      contact_phone_number: current.contact_phone_number ?? '',
-    });
+    reset(
+      {
+        receptionist_id: current.receptionist_id != null ? String(current.receptionist_id) : '',
+        cast_id: current.cast_id ?? '',
+        business_date: current.business_date ?? '',
+        arrival_scheduled_start_time: toTimeInput(current.arrival_scheduled_start_time),
+        arrival_scheduled_end_time: toTimeInput(current.arrival_scheduled_end_time),
+        pax: current.pax != null ? String(current.pax) : '',
+        special_service_ids: (current.special_services ?? []).map(item => item.service_id),
+        course_id: '',
+        fee_lines: storeEditableFeeLines(current.fee_lines),
+        location_address: current.location_address ?? '',
+        location_building: current.location_building ?? '',
+        carrier: current.carrier ?? '',
+        media_name: current.media_name ?? '',
+        remarks: current.remarks ?? '',
+        cast_driver_message: current.cast_driver_message ?? '',
+        contact_name: current.contact_name ?? '',
+        contact_phone_number: current.contact_phone_number ?? '',
+      },
+      { keepDirtyValues: progressOrder.current === current }
+    );
+    progressOrder.current = null;
   });
   const seeded = current !== null && initialized && !isLoading;
   const linked = current?.customer_id != null;
+  const startScope = resource.capture();
 
   const submit = async (values: OrderEditFormValues) => {
     if (current === null || current.version === undefined) {
@@ -192,6 +204,12 @@ export default function OrderEditPage() {
           }),
     };
     const request: OrderUpdateRequest = {
+      ...((values.cast_id || current.cast_id) !== current.cast_id
+        ? { special_service_ids: [] }
+        : JSON.stringify(values.special_service_ids) !==
+            JSON.stringify((current.special_services ?? []).map(item => item.service_id))
+          ? { special_service_ids: values.special_service_ids }
+          : {}),
       expected_version: current.version,
       // 指名と受付担当は触っていなくても毎回運ぶ。省略は「変更しない」ではなく「外す」と区別できないため、
       // 設定済みの受注では要求そのものが撥ねられる（サーバ側の契約）。欄が空のまま
@@ -253,6 +271,18 @@ export default function OrderEditPage() {
           )}
         </div>
 
+        {current && (
+          <OrderServiceProgress
+            key={`${storeId}:${orderId}`}
+            order={current}
+            onOrderUpdated={updated => {
+              if (!startScope.isCurrent()) return;
+              // 進行操作と競合時の再取得では、未保存の編集内容を保持する。
+              progressOrder.current = updated;
+              startScope.replace(updated);
+            }}
+          />
+        )}
         {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
         {/* 取得に失敗した領域を空のフォームに見せない（空欄を保存すると内容を消してしまう） */}
         {failure === 'error' && (
@@ -356,7 +386,11 @@ export default function OrderEditPage() {
                       </FormItem>
                     )}
                   />
-                  <OrderCourseField current={current.course} />{' '}
+                  <OrderCourseField current={current.course} />
+                  <OrderSpecialServicesField
+                    current={current.special_services}
+                    originalCast={current.cast_id}
+                  />{' '}
                 </div>
                 <OrderFeeLinesField systemLines={readOnlyFeeLines(current?.fee_lines)} />
               </section>

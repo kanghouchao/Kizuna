@@ -20,8 +20,8 @@ Status: Accepted
 - **謝絶は理由必須**で、実行者と時刻を記録に残す（取消 ADR 0013 の先例）。理由は分類軸ではないため
   enum 化しない。
 - **`OrderStatus.CREATED` は退場する**。これにより**すべての Order が出生即 CONFIRMED** となり、店舗直接
-  受注（#679 既決）と出生が揃う。受注の状態機械は `CONFIRMED → COMPLETED / CANCELLED` だけになり、
-  ADR 0013 の終端語義に申請ライフサイクルが絡まなくなる。
+  受注（#679 既決）と出生が揃う。受注の状態機械は `CONFIRMED → IN_SERVICE → COMPLETED / CANCELLED` とし、
+  `CONFIRMED` からの直接完了・取消も許す。ADR 0013 の終端語義に申請ライフサイクルは絡まない。
 - **受付経路 `MEMBER_WEB` / `GUEST_WEB` は申請確定由来の受注だけが名乗る**。入口ごとに値が分かれ、
   会員ポータル由来が `MEMBER_WEB`、公開店面のゲスト申請由来が `GUEST_WEB` になる。店舗の直接作成経路が
   Web 申請の経路を拒否する既決（CONTEXT.md）は変えない。
@@ -39,3 +39,5 @@ Status: Accepted
 - 失効した `PENDING` は行として残り続ける（本人の取り下げは可能）。件数が問題になったら掃除を検討するが、
   状態を持たない以上、導出の判定が変わることはない。
 - ゲスト申請は `GuestOrderApplicationService` が同じ受け皿へ記録する。公開入口の追加は `t_orders` の契約を変えない。
+
+特殊サービスは申請原文へ追加せず、店舗による申請確定の試算・保存時に担当在籍の受諾候補から採用する。出生後の受注は専用開始操作で IN_SERVICE へ進める（ADR 0013）。

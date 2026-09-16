@@ -20,6 +20,7 @@ public interface OrderMapper {
   @Mapping(target = "feeLines", ignore = true)
   @Mapping(target = "totalDurationMinutes", ignore = true)
   @Mapping(target = "totalRemuneration", ignore = true)
+  @Mapping(target = "specialServices", ignore = true)
   OrderResponse toResponse(OrderView view);
 
   default List<OrderFeeLineDraft> toFeeLineDrafts(List<OrderFeeLineRequest> requests) {
@@ -63,7 +64,7 @@ public interface OrderMapper {
                     .lineId(line.getId() == null ? null : line.getId().toString())
                     .durationMinutes(line.getDurationMinutes())
                     .remuneration(line.getRemuneration())
-                    .serviceId(line.getAdoption() == null ? null : line.getAdoption().serviceId())
+                    .serviceId(line.getServiceId())
                     .revisionId(line.getAdoption() == null ? null : line.getAdoption().revisionId())
                     .revisionNumber(
                         line.getAdoption() == null ? null : line.getAdoption().revisionNumber())
@@ -120,6 +121,10 @@ public interface OrderMapper {
   @Mapping(target = "cancelledAt", ignore = true)
   @Mapping(target = "course", ignore = true)
   @Mapping(target = "extensionMinutes", ignore = true)
+  @Mapping(target = "specialServiceLines", ignore = true)
+  @Mapping(target = "startedAt", ignore = true)
+  @Mapping(target = "startedBy", ignore = true)
+  @Mapping(target = "startReason", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
   /** 注文更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */

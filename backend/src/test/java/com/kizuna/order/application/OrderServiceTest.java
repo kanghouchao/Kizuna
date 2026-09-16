@@ -149,6 +149,8 @@ class OrderServiceTest {
   @Mock BusinessDateService businessDateService;
   @Mock OrderMapper orderMapper;
 
+  @Mock private OrderSpecialServices specialServices;
+
   @InjectMocks OrderService service;
 
   @BeforeEach
@@ -170,7 +172,8 @@ class OrderServiceTest {
             catalog,
             orderMapper,
             Mockito.mock(OrderConfirmation.class),
-            new com.kizuna.order.application.OrderFeeLineSelection(catalog, orderMapper)));
+            new OrderFeeLineSelection(catalog, orderMapper),
+            specialServices));
     Mockito.lenient()
         .when(orderRepository.findScopedByIdForUpdate(nullable(String.class)))
         .thenAnswer(inv -> orderRepository.findById(inv.getArgument(0)));
@@ -1214,7 +1217,7 @@ class OrderServiceTest {
             .receptionistId(1L)
             .build();
     storeOrder.replaceStoreFeeLines(
-        List.of(new OrderFeeLineDraft(OrderFeeLineKind.OPTION, "オプション A", 2000)));
+        List.of(new OrderFeeLineDraft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション A", 2000)));
     assertThat(storeOrder.getTotalFee()).as("前提: 内訳と合計が入っていること").isEqualTo(2000);
 
     when(orderRepository.findById("o1")).thenReturn(Optional.of(storeOrder));
@@ -2262,7 +2265,7 @@ class OrderServiceTest {
   private static OrderCompletionRequest completionAt(
       Long expectedVersion, Integer totalFee, Integer usePoints) {
     OrderFeeLineRequest line = new OrderFeeLineRequest();
-    line.setKind(OrderFeeLineKind.OPTION);
+    line.setKind(OrderFeeLineKind.CREDIT_SURCHARGE);
     line.setName("会計");
     line.setAmount(totalFee);
     OrderCompletionRequest request = new OrderCompletionRequest();

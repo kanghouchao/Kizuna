@@ -84,12 +84,12 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
     try {
       int blocker = held.get(10, TimeUnit.SECONDS);
       var competing = CompletableFuture.supplyAsync(() -> execute(fixture));
-      assertWaitingOn(competing, blocker, "t_cast_enrollments");
+      assertWaitingOn(competing, blocker, "t_stores");
       release.countDown();
       withdrawal.get(10, TimeUnit.SECONDS);
       var response = competing.get(10, TimeUnit.SECONDS);
-      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-      assertThat(response.getBody().path("error").asString()).contains("指名");
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+      assertThat(response.getBody().path("details").has("confirmation_token")).isTrue();
       assertThat(
               jdbc.queryForObject(
                   "select count(*) from t_orders where cast_id = ?",
@@ -251,6 +251,20 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
             });
     try {
       int blocker = held.get(10, TimeUnit.SECONDS);
+      assertThatThrownBy(
+              () -> {
+                try (Connection probe = dataSource.getConnection();
+                    var statement =
+                        probe.prepareStatement(
+                            "select id from t_cast_enrollments where id = ? for update nowait")) {
+                  statement.setString(1, castId);
+                  statement.executeQuery();
+                }
+              })
+          .as("受注保存後も在籍行をコミットまで保持すること")
+          .isInstanceOf(SQLException.class)
+          .extracting("SQLState")
+          .isEqualTo("55P03");
       var withdrawal =
           CompletableFuture.supplyAsync(
               () ->
@@ -258,7 +272,7 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
                       "/store/casts/" + castId + "/withdrawal",
                       new HttpEntity<>(storeHeaders(STORE_A)),
                       JsonNode.class));
-      assertWaitingOn(withdrawal, blocker, "t_cast_enrollments");
+      assertWaitingOn(withdrawal, blocker, "t_stores");
       release.countDown();
       String orderId = creation.get(10, TimeUnit.SECONDS);
       assertThat(withdrawal.get(10, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
