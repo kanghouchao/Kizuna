@@ -97,7 +97,7 @@ SpecialServiceSnapshot は候補の設定字段に以下を追加する:
 - `requires_attention: boolean`
 - `current_consent_status?: "NOT_ACCEPTED"|"ACCEPTED"|"REJECTED"|"RECONFIRMATION_REQUIRED"`。未完了の内部詳細のみ。在籍が ENROLLED でなければ NOT_ACCEPTED とし、採用時の約定と受諾根拠は保持する。終端では省略し、過去の約定から現在の提供資格を誤認させない。
 
-OrderResponse に `special_services: SpecialServiceSnapshot[]`（常に配列）、`requires_attention: boolean`、`unresolved_special_service_count: integer >= 0`、`started_at?: datetime` を追加する。一覧用 OrderSummaryResponse / OrderWorkQueueResponse / OrderArchiveResponse / PlatformOrderResponse には同じ要対応 boolean と件数、started_at を追加する。全受注 status の型は IN_SERVICE を含む。明細を既に返す応答では SPECIAL_SERVICE 行に `service_id: string`、`remuneration: integer` を追加する。
+OrderResponse に `special_services: SpecialServiceSnapshot[]`（常に配列）、`requires_attention: boolean`、`unresolved_special_service_count: integer >= 0`、`started_at?: datetime` を追加する。一覧用 OrderSummaryResponse / OrderWorkQueueResponse / OrderArchiveResponse / PlatformOrderResponse には同じ要対応 boolean と件数、started_at を追加する。要対応件数は未処理の拒否イベント数ではなく、対象の特殊サービス ID の重複を除いた項目数とする。同一項目への再受諾・再拒否で増やさず、拒否と処置の履歴自体は各イベントを保持する。全受注 status の型は IN_SERVICE を含む。明細を既に返す応答では SPECIAL_SERVICE 行に `service_id: string`、`remuneration: integer` を追加する。
 
 Preview に `special_services: SpecialServiceSnapshot[]`（保存前なので adopted_at のみ省略可能）、requires_attention と unresolved_special_service_count を追加する。fee_lines は特殊サービス価格・報酬を含む。時間・数量の字段は増やさない。無料は price = remuneration = 0。
 
@@ -123,6 +123,8 @@ resolution / rejection_event_id は RESOLVED のとき必須、REJECTED では�
 - 負の合計・版競合・途中失敗では受注・明細・拒否/処置履歴・本人意思履歴・顧客・申請・ポイントの部分成功を残さない。
 
 初回の不正な特殊サービス選択は 400、存在しない ID は 404 を維持する。保存時の提供資格エラーを確認競合にするのは、同じ操作・受注・店舗・操作者・入力の成功した試算を署名で確認できる場合に限る。保存の確定には、入力証明に加えて試算結果を含む確認値全体の一致を必要とする。
+
+申請確定で指名を解除するときは特殊サービスの選択を即時に空にし、候補を操作できない表示にする。解除を戻しても旧選択を復元せず、表示中の選択値を試算・保存へそのまま送る。
 
 開始の expected_version 競合では詳細を再取得し、未保存のフォーム入力と開始理由を保持して新しい版へ更新する。利用者へ再確認を案内し、開始を自動再送しない。
 
@@ -170,3 +172,5 @@ ADR 0013 / 0017 / 0018 / 0019 / 0027 と CONTEXT は実装に合わせて更新�
 - 集約・アプリケーション・HTTP 契約・前端 API・画面文言・CONTEXT・関連 ADR の状態説明を照合した。取消の直列化と二度目の 400、訂正における歴史版本の省略規則と前後快照も現行実装に揃えた。
 
 横断修正後の最終検証は Taskfile lint / build、前端 test、バックエンド test、e2e がすべて exit code 0。前端 1425 件、バックエンド統合 722 件（特殊サービス 20 件）、E2E 45 シナリオ（9.0 分）が成功し、バックエンド単体・カバレッジゲートも通過した。Standards / Spec の再レビューは両軸とも残存指摘なし。
+
+再受諾後の再拒否による件数と、申請確定時の指名解除を追加検証した。店舗詳細・一覧・作業キュー・平台一覧・試算の件数を照合し、解除および解除撤回後の表示・試算・保存値を UI テストで固定した。Taskfile lint / test / build / e2e はすべて exit code 0（前端 1427 件、バックエンド統合 722 件、E2E 45 シナリオ）。Standards / Spec の再レビューは両軸とも残存指摘なし。

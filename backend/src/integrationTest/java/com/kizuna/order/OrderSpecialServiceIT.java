@@ -716,7 +716,28 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
           .isEqualTo(item.path("service_id").asString().equals(first));
     for (var item : latest.path("after"))
       assertThat(item.path("requires_attention").asBoolean()).isTrue();
+    assertThat(decide(owner, first, 1, 2, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(decide(owner, first, 1, 3, "REJECTED").getStatusCode()).isEqualTo(HttpStatus.OK);
     var current = get(id, manager);
+    assertThat(current.required("unresolved_special_service_count").asInt()).isEqualTo(2);
+    var platform = new HttpHeaders();
+    platform.setBearerAuth(login("admin@kizuna.test"));
+    for (var entry :
+        Map.of(
+                "/store/orders?size=100&sort=createdAt,desc", manager,
+                "/store/orders/work-queue?statuses=CONFIRMED&business_date=2027-01-20&size=100",
+                    manager,
+                "/platform/orders?size=100&sort=createdAt,desc", platform)
+            .entrySet()) {
+      var list = call(HttpMethod.GET, entry.getKey(), null, entry.getValue());
+      assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(list.getBody().required("content"))
+          .anySatisfy(
+              row -> {
+                assertThat(row.required("id").asString()).isEqualTo(id);
+                assertThat(row.required("unresolved_special_service_count").asInt()).isEqualTo(2);
+              });
+    }
     var edit =
         json.createObjectNode()
             .put("expected_version", current.path("version").asLong())
@@ -725,6 +746,7 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
     edit.putArray("special_service_ids").add(first);
     var repair = call(HttpMethod.POST, "/store/orders/" + id + "/preview", edit, manager);
     assertThat(repair.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(repair.getBody().required("unresolved_special_service_count").asInt()).isEqualTo(1);
     edit.put("confirmation_token", repair.getBody().path("confirmation_token").asString());
     assertThat(call(HttpMethod.PUT, "/store/orders/" + id, edit, manager).getStatusCode())
         .isEqualTo(HttpStatus.OK);

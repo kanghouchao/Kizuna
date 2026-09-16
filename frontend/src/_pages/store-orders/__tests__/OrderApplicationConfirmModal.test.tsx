@@ -79,7 +79,64 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
     jest.clearAllMocks();
     (orderApi.listReceptionists as jest.Mock).mockResolvedValue([]);
     mockedConfirm.mockResolvedValue({ id: 'o1' });
+    jest
+      .mocked(orderApi.specialServiceCandidates)
+      .mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
   });
+
+  it.each([false, true])(
+    '指名解除で特殊サービスを消し、解除を戻しても旧選択を送らない（戻す: %s）',
+    async restore => {
+      jest.mocked(orderApi.specialServiceCandidates).mockResolvedValue({
+        rows: [
+          {
+            service_id: 'special-1',
+            revision_id: 'sr1',
+            revision_number: 1,
+            terms_version: 1,
+            name: '受諾済み追加',
+            charge_type: 'PAID',
+            price: 2000,
+            remuneration: 1000,
+            consent_event_id: 'consent-1',
+            consent_version: 1,
+          },
+        ],
+        page: 0,
+        pageCount: 1,
+        total: 1,
+      });
+      renderModal(guestApplication({ cast_id: 'cast-1', cast_name: '担当花子' }));
+      await chooseCourse();
+      const option = await screen.findByRole('checkbox', { name: /受諾済み追加/ });
+      fireEvent.click(option);
+      expect(option).toBeChecked();
+      fireEvent.click(screen.getByRole('checkbox', { name: '指名を外して確定する' }));
+      expect(screen.queryByRole('checkbox', { name: /受諾済み追加/ })).not.toBeInTheDocument();
+      expect(
+        screen.getByText('指名を外すため、特殊サービスは選択できません。')
+      ).toBeInTheDocument();
+      if (restore) {
+        fireEvent.click(screen.getByRole('checkbox', { name: '指名を外して確定する' }));
+        expect(await screen.findByRole('checkbox', { name: /受諾済み追加/ })).not.toBeChecked();
+      }
+      fireEvent.click(confirmButton());
+      await confirmPreview();
+      await waitFor(() => expect(mockedConfirm).toHaveBeenCalled());
+      expect(jest.mocked(orderApplicationApi.previewConfirmation).mock.calls.at(-1)?.[1]).toEqual(
+        expect.objectContaining({
+          special_service_ids: [],
+          cast_id: restore ? 'cast-1' : undefined,
+        })
+      );
+      expect(mockedConfirm.mock.calls[0][1]).toEqual(
+        expect.objectContaining({
+          special_service_ids: [],
+          cast_id: restore ? 'cast-1' : undefined,
+        })
+      );
+    }
+  );
 
   it('受付の明示選択は数値 ID で確定する', async () => {
     jest

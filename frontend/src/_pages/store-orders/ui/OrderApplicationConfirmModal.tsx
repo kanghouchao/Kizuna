@@ -181,7 +181,7 @@ export function OrderApplicationConfirmModal({
         arrival_scheduled_end_time: values.arrival_scheduled_end_time || undefined,
         cast_id: values.clear_cast || !values.cast_id ? undefined : values.cast_id,
         pax: Number(values.pax),
-        special_service_ids: values.clear_cast ? [] : values.special_service_ids,
+        special_service_ids: values.special_service_ids,
         course_id: values.course_id,
         fee_lines: toFeeLineInputs(values.fee_lines),
         remarks: values.remarks ? values.remarks : undefined,
@@ -318,7 +318,11 @@ export function OrderApplicationConfirmModal({
               />
               <OrderCourseField required />
               <OrderFeeLinesField />
-              <OrderSpecialServicesField />
+              {clearCast ? (
+                <p role="status">指名を外すため、特殊サービスは選択できません。</p>
+              ) : (
+                <OrderSpecialServicesField />
+              )}
               <div className="grid gap-2">
                 <CastSearchCombobox
                   id="application-confirm-cast"
@@ -338,7 +342,12 @@ export function OrderApplicationConfirmModal({
                           <Checkbox
                             id="confirm_clear_cast"
                             checked={field.value}
-                            onCheckedChange={value => field.onChange(value === true)}
+                            onCheckedChange={value => {
+                              field.onChange(value === true);
+                              if (value === true) {
+                                setValue('special_service_ids', [], { shouldDirty: true });
+                              }
+                            }}
                           />
                         </FormControl>
                         <FormLabel htmlFor="confirm_clear_cast" className="font-medium">

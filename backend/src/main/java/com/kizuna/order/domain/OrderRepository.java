@@ -43,7 +43,7 @@ public interface OrderRepository
   String VIEW_SELECT =
       """
       select o.startedAt as startedAt,
-             (select cast(count(e.id) as Integer) from OrderSpecialServiceEvent e
+             (select cast(count(distinct e.serviceId) as Integer) from OrderSpecialServiceEvent e
               where e.orderId = o.id and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
               and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id)) as unresolvedSpecialServiceCount,
@@ -135,7 +135,7 @@ public interface OrderRepository
   String PLATFORM_VIEW_SELECT =
       """
       select o.startedAt as startedAt,
-             (select cast(count(e.id) as Integer) from OrderSpecialServiceEvent e
+             (select cast(count(distinct e.serviceId) as Integer) from OrderSpecialServiceEvent e
               where e.orderId = o.id and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
               and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id)) as unresolvedSpecialServiceCount,
