@@ -6,6 +6,7 @@ import com.kizuna.shared.storescope.StoreScoped;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -14,7 +15,7 @@ public class OrderCompletionResults {
   private final OrderRepository orders;
 
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Optional<OrderCompletionResult> find(String orderId) {
     return orders
         .findById(orderId)

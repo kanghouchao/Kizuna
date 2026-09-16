@@ -66,7 +66,7 @@ OrderResponse、OrderWorkQueueResponse、OrderArchiveResponse、PlatformOrderRes
 | accrued_remuneration | int32、必須 | 完了で発生した支払対象。未完了・取消は 0 |
 | completed_at | ISO 8601 string、未完了・取消で省略 | 受注自身の完了操作日時。会員帰属日時と独立 |
 
-既存 business_date を原営業日として表示する。完了操作で引き直さない。予定報酬・発生済み報酬を状態に応じて区別し、「支払済み」と表示しない。店舗詳細・平台一覧の既存個人情報境界は維持する。
+既存 business_date を原営業日として表示する。完了操作で引き直さない。予定報酬・発生済み報酬を状態に応じて区別し、取消済みは「報酬発生なし」と表示する。「支払済み」と表示しない。店舗詳細・平台一覧の既存個人情報境界は維持する。
 
 ## 永続化・公開モジュール境界
 
@@ -74,6 +74,7 @@ OrderResponse、OrderWorkQueueResponse、OrderArchiveResponse、PlatformOrderRes
 - 完了時に項目別報酬合計を accrued_remuneration へ保持する。割引・ポイント・回収・返金で減らさない。既存の提供内容訂正は項目合計と発生済み報酬を同時更新し、completed_at と business_date を保持する。
 - 新規テーブル・FK・一覧検索用索引は不要。既存受注・店舗・担当在籍・快照の FK と削除方針を保持する。給与のための二重台帳は作らない。
 - order の NamedInterface から単件結果を読み取れる窓口を公開する。結果は orderId、storeId、castEnrollmentId（未指名は空）、businessDate、completedAt、項目別快照、accruedRemuneration、version。未完了・取消は結果なし。個人情報を含めず、JPA entity は外へ渡さない。
+- 単件結果は `REPEATABLE_READ` の一つの断面で親行・明細・特殊サービスを読み、並行する完了後訂正の前後を混在させない。
 - 結果は現在の単件参照であり、給与仕訳・実支払や訂正イベントの配信を意味しない。独立した訂正識別子・誤完了無効化は後続票の領分。
 
 ## 原子性と検証
@@ -88,5 +89,5 @@ OrderResponse、OrderWorkQueueResponse、OrderArchiveResponse、PlatformOrderRes
 ## 検証結果
 
 - `task lint`、`task test`、`task build`、`task e2e` はすべて終了コード 0。
-- PostgreSQL 統合テスト 730 件、E2E 45 件が成功。電話照合と顧客統合の並行実行、会員関連変更、残高不足、残高だけの変化、同時完了、公開単件結果の店舗分離を含む。
+- PostgreSQL 統合テスト 731 件、E2E 45 件が成功。電話照合と顧客統合の並行実行、会員関連変更、残高不足、残高だけの変化、同時完了、公開単件結果の店舗分離を含む。
 - Standards / Spec の二軸レビューを実施し、指摘を修正後に再レビュー。残存指摘なし。

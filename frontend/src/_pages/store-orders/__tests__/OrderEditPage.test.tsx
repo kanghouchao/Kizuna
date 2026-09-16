@@ -79,6 +79,19 @@ beforeEach(() => {
 });
 
 describe('受注の編集ページ', () => {
+  it('取消済みの受注は予定報酬ではなく報酬発生なしと表示すること', async () => {
+    mockedOrderApi.get.mockResolvedValue(
+      confirmedOrder({
+        status: 'CANCELLED',
+        total_remuneration: 7000,
+        accrued_remuneration: 0,
+      })
+    );
+    render(<OrderEditPage />);
+    expect(await screen.findByText('報酬発生なし')).toBeInTheDocument();
+    expect(screen.queryByText(/予定報酬/)).not.toBeInTheDocument();
+  });
+
   it('完了日時を閲覧者の時間帯で表示すること', async () => {
     const completedAt = '2026-09-16T00:30:00Z';
     mockedOrderApi.get.mockResolvedValue(

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mockingDetails;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.result.OrderCompletionResults;
 import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.application.OwnServiceConditionService;
 import com.kizuna.service.application.SpecialServiceRejectionHandler;
@@ -61,6 +62,87 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
   @Autowired StoreContext storeContext;
   @Autowired PlatformUserRepository users;
   @Autowired PasswordEncoder passwords;
+  @Autowired OrderCompletionResults completionResults;
+
+  @Test
+  void completionResultKeepsParentAndLazyItemsInOneSnapshotDuringCorrection() {
+    var owner = owner();
+    var manager = managerHeaders(STORE_A);
+    String service = special(manager);
+    assertThat(decide(owner, service, 1, 0, "ACCEPTED").getStatusCode()).isEqualTo(HttpStatus.OK);
+    String course = courseFixture(STORE_A, 12000).serviceId();
+    var input = createInput(owner.cast(), course, service);
+    var quote = call(HttpMethod.POST, "/store/orders/preview", input, manager);
+    assertThat(quote.getStatusCode()).isEqualTo(HttpStatus.OK);
+    input.put("confirmation_token", quote.getBody().path("confirmation_token").asString());
+    var created = call(HttpMethod.POST, "/store/orders", input, manager);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String id = created.getBody().path("id").asString();
+    String path = "/store/orders/" + id;
+    var completion =
+        json.createObjectNode().put("expected_version", created.getBody().path("version").asLong());
+    completion.putArray("fee_lines");
+    var completionQuote = call(HttpMethod.POST, path + "/completion-preview", completion, manager);
+    assertThat(completionQuote.getStatusCode()).isEqualTo(HttpStatus.OK);
+    completion.put(
+        "confirmation_token", completionQuote.getBody().path("confirmation_token").asString());
+    assertThat(call(HttpMethod.POST, path + "/completion", completion, manager).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    var completed = get(id, manager);
+    var correction =
+        json.createObjectNode()
+            .put("expected_version", completed.path("version").asLong())
+            .put("reason", "提供内容の訂正");
+    correction.putArray("special_service_revision_ids");
+    correction
+        .putArray("fee_lines")
+        .addObject()
+        .put("kind", "EXTENSION")
+        .put("name", "延長")
+        .put("duration_minutes", 15)
+        .put("amount", 1000)
+        .put("remuneration", 500);
+    var correctionQuote = call(HttpMethod.POST, path + "/correction-preview", correction, manager);
+    assertThat(correctionQuote.getStatusCode())
+        .as("%s", correctionQuote.getBody())
+        .isEqualTo(HttpStatus.OK);
+    correction.put(
+        "confirmation_token", correctionQuote.getBody().path("confirmation_token").asString());
+    var committed = new AtomicBoolean();
+    storeContext.setStoreId(STORE_A);
+    try {
+      var before = completionResults.find(id).orElseThrow();
+      assertThat(before.accruedRemuneration()).isEqualTo(1500);
+      assertThat(before.items()).anySatisfy(item -> assertThat(item.consentEventId()).isNotNull());
+      doAnswer(
+              invocation -> {
+                var parent =
+                    mockingDetails(orders)
+                        .getMockCreationSettings()
+                        .getDefaultAnswer()
+                        .answer(invocation);
+                if (committed.compareAndSet(false, true)) {
+                  assertThat(
+                          call(HttpMethod.POST, path + "/corrections", correction, manager)
+                              .getStatusCode())
+                      .isEqualTo(HttpStatus.CREATED);
+                }
+                return parent;
+              })
+          .when(orders)
+          .findById(id);
+
+      assertThat(completionResults.find(id).orElseThrow()).isEqualTo(before);
+      assertThat(committed).isTrue();
+      var after = completionResults.find(id).orElseThrow();
+      assertThat(after.version()).isGreaterThan(before.version());
+      assertThat(after.accruedRemuneration()).isEqualTo(500);
+      assertThat(after.items()).noneMatch(item -> item.kind().equals("SPECIAL_SERVICE"));
+      assertThat(after.items().stream().mapToInt(item -> item.remuneration()).sum()).isEqualTo(500);
+    } finally {
+      storeContext.clear();
+    }
+  }
 
   @Test
   void candidatePageKeepsEligibilityContentAndCountInOneSnapshot() {
