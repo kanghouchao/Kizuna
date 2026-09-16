@@ -10,6 +10,7 @@ export function orderConflictField(error: unknown): string | undefined {
   if (!isConflict(error)) return undefined;
   const details = (error as { response?: { data?: { details?: Record<string, unknown> } } })
     .response?.data?.details;
+  if (details?.customer_lock) return 'customer_lock';
   if (details?.use_points) return 'use_points';
   if (details?.confirmation_token) return 'confirmation_token';
   if (details?.special_services) return 'special_services';

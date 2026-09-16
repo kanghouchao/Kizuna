@@ -1,9 +1,11 @@
 package com.kizuna.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,6 +18,7 @@ import com.kizuna.order.domain.OrderAttributionSource;
 import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +41,30 @@ class AttributionMaterializerTest {
   @Mock private BenefitGrantService benefits;
   @Mock private MemberRankService ranks;
   @InjectMocks private AttributionMaterializer materializer;
+
+  @Test
+  void redemptionFailureIsTaggedBeforeAnyGrantOrAttribution() {
+    doThrow(new ServiceException("ポイント残高が不足しています"))
+        .when(ledger)
+        .useForOrder(7L, "o1", 3L, 300, 10L);
+
+    assertThatThrownBy(
+            () ->
+                materializer.materialize(
+                    7L,
+                    "123456789012",
+                    "o1",
+                    3L,
+                    BUSINESS_DATE,
+                    OCCURRED_AT,
+                    10L,
+                    new AttributionMaterializer.Completion(12000, 300)))
+        .isInstanceOfSatisfying(
+            OrderConfirmationConflict.class,
+            ex -> assertThat(ex.details()).containsKey("use_points"));
+    verify(attributions, never()).save(any());
+    verify(ledger, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());
+  }
 
   @Test
   @DisplayName("完了は会員ロック・利用・帰属・付与・特典・昇格の順で成立すること")

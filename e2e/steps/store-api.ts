@@ -367,6 +367,19 @@ export async function declineApplication(
   }
 }
 
+export async function getOrder(
+  request: APIRequestContext,
+  token: string,
+  storeId: string,
+  id: string
+): Promise<{ id: string; completed_at?: string }> {
+  const response = await request.get(`${PLATFORM_URL}/api/store/orders/${id}`, {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+  });
+  expect(response.ok()).toBeTruthy();
+  return response.json();
+}
+
 /**
  * 確定済みの受注を理由付きで取消す（POST /api/store/orders/{id}/cancellation,
  * hasAuthority('ORDER_MANAGE')）。

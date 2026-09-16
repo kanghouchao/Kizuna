@@ -99,6 +99,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -150,6 +151,7 @@ class OrderServiceTest {
   @Mock OrderMapper orderMapper;
 
   @Mock private OrderSpecialServices specialServices;
+  @Mock private OrderConfirmation confirmation;
 
   @InjectMocks OrderService service;
 
@@ -171,7 +173,7 @@ class OrderServiceTest {
         new OrderCalculation(
             catalog,
             orderMapper,
-            Mockito.mock(OrderConfirmation.class),
+            confirmation,
             new OrderFeeLineSelection(catalog, orderMapper),
             specialServices));
     Mockito.lenient()
@@ -2858,6 +2860,31 @@ class OrderServiceTest {
     assertThat(preview.grantPoints()).isZero();
     verify(pointLedgerService, never()).previewGrant(anyInt());
     verify(pointLedgerService, never()).balance(anyLong());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void completionDoesNotMislabelGrantFailuresAsRedemptionConflicts(boolean duringMaterialization) {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    var request = completion(12000, null);
+    request.setConfirmationToken("confirmed");
+    when(confirmation.wasPreviewed("COMPLETE", "o1", request, "confirmed")).thenReturn(true);
+    var failure = new ServiceException("付与ポイントが扱える上限を超えています。付与設定か会計金額を確認してください");
+    if (duringMaterialization) {
+      stubActor();
+      when(materializer.materialize(
+              anyLong(), anyString(), anyString(), any(), any(), any(), any(), any()))
+          .thenThrow(failure);
+    } else {
+      when(pointLedgerService.previewGrant(12000)).thenThrow(failure);
+    }
+
+    assertThatThrownBy(() -> service.complete("o1", request, "staff@kizuna.test"))
+        .isSameAs(failure);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verify(orderRepository, never()).save(any(Order.class));
   }
 
   @Test

@@ -92,6 +92,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
                         .as("%s", response.getBody())
                         .isEqualTo(HttpStatus.CONFLICT);
                     assertThat(response.getBody().path("error").asString()).contains("顧客情報が変更中");
+                    assertThat(response.getBody().path("details").has("customer_lock")).isTrue();
                   } catch (Exception ex) {
                     throw new AssertionError("顧客ロックを待たずに競合を返すこと", ex);
                   }

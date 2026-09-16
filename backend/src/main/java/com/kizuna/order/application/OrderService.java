@@ -619,16 +619,13 @@ public class OrderService {
       throw new ServiceException("利用ポイントは会計金額を超えられません");
     }
 
-    OrderPreviewResponse.Points pointsPreview;
-    try {
-      pointsPreview =
-          pointPreview(
-              memberId, link == null ? null : link.getMemberCode(), chargeAmount, usePoints);
-    } catch (ServiceException ex) {
-      if (calculation.wasPreviewed("COMPLETE", id, request, request.getConfirmationToken()))
-        throw new OrderConfirmationConflict("use_points", ex.getMessage());
-      throw ex;
-    }
+    var pointsPreview =
+        pointPreview(
+            memberId,
+            link == null ? null : link.getMemberCode(),
+            chargeAmount,
+            usePoints,
+            calculation.wasPreviewed("COMPLETE", id, request, request.getConfirmationToken()));
     calculated.completeWith(usePoints, pointsPreview.grantPoints());
     calculation.verify(
         request.getConfirmationToken(),
@@ -637,22 +634,18 @@ public class OrderService {
     String receiptToken = null;
     if (memberId != null) {
       Long actorId = actorIdentityService.requireUserId(actorEmail);
-      try {
-        granted =
-            materializer
-                .materialize(
-                    memberId,
-                    link.getMemberCode(),
-                    id,
-                    order.getStoreId(),
-                    order.getBusinessDate(),
-                    OffsetDateTime.now(),
-                    actorId,
-                    new AttributionMaterializer.Completion(chargeAmount, usePoints))
-                .grantedPoints();
-      } catch (ServiceException ex) {
-        throw new OrderConfirmationConflict("use_points", ex.getMessage());
-      }
+      granted =
+          materializer
+              .materialize(
+                  memberId,
+                  link.getMemberCode(),
+                  id,
+                  order.getStoreId(),
+                  order.getBusinessDate(),
+                  OffsetDateTime.now(),
+                  actorId,
+                  new AttributionMaterializer.Completion(chargeAmount, usePoints))
+              .grantedPoints();
     } else {
       receiptToken = issueReceiptToken(id, chargeAmount);
     }
@@ -753,7 +746,8 @@ public class OrderService {
               application.getRequesterMemberId(),
               application.getRequesterMemberCode(),
               calculated.grantBasisAmount(),
-              0);
+              0,
+              false);
     } else {
       calculated.linkCustomer(
           request.getCustomerId() == null
@@ -864,7 +858,8 @@ public class OrderService {
     try {
       customerRepository.findByIdForUpdateNoWait(order.getCustomerId());
     } catch (CannotAcquireLockException ex) {
-      throw new ConflictException("顧客情報が変更中です。しばらく待ってから再試算してください");
+      throw new ConflictException(
+          "顧客情報が変更中です。しばらく待ってから再試算してください", Map.of("customer_lock", "入力を保持したまま、しばらく待ってから再試算してください"));
     }
   }
 
@@ -874,17 +869,21 @@ public class OrderService {
         link == null ? null : link.getMemberId(),
         link == null ? null : link.getMemberCode(),
         order.grantBasisAmount(),
-        usePoints);
+        usePoints,
+        false);
   }
 
   private OrderPreviewResponse.Points pointPreview(
-      Long memberId, String memberCode, int basis, int usePoints) {
+      Long memberId, String memberCode, int basis, int usePoints, boolean confirmed) {
     int unit = pointLedgerService.usageUnit();
     Long balance = memberId == null ? null : pointLedgerService.balance(memberId);
     if (usePoints < 0
         || usePoints > basis
-        || (usePoints > 0 && (balance == null || balance < usePoints || usePoints % unit != 0)))
-      throw new ServiceException("ポイントの利用資格・残高・利用単位・会計金額を確認してください");
+        || (usePoints > 0 && (balance == null || balance < usePoints || usePoints % unit != 0))) {
+      String message = "ポイントの利用資格・残高・利用単位・会計金額を確認してください";
+      if (confirmed) throw new OrderConfirmationConflict("use_points", message);
+      throw new ServiceException(message);
+    }
     return new OrderPreviewResponse.Points(
         memberId != null,
         memberId != null,

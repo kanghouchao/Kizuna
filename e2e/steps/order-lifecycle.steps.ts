@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
-import { STORE_HEADERS, cancelOrder, createCast, createCourse, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
+import { STORE_HEADERS, cancelOrder, createCast, createCourse, getOrder, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -271,7 +271,7 @@ Then('再表示した受注に各回の延長と加算の採用条件が残る',
 
 Then(
   "完了アーカイブに発生済み報酬と独立した完了日時が現れる",
-  async ({ page }) => {
+  async ({ page, request }) => {
     const row = page
       .locator("div.min-w-0")
       .filter({ hasText: customerName })
@@ -279,7 +279,11 @@ Then(
     await expect(
       row.getByText("発生済み報酬: ¥7,000", { exact: true }),
     ).toBeVisible();
-    await expect(row.getByText(/完了日時: \d{4}-\d{2}-\d{2}T/)).toBeVisible();
+    const token = await loginAsStoreAdmin(request);
+    const completedAt = (await getOrder(request, token, storeId, createdOrderId)).completed_at;
+    expect(completedAt).toBeTruthy();
+    const localTime = await page.evaluate(value => new Date(value).toLocaleString('ja-JP'), completedAt!);
+    await expect(row.getByText(`完了日時: ${localTime}`, { exact: true })).toBeVisible();
     await expect(row.getByText("支払済み", { exact: false })).toHaveCount(0);
   },
 );

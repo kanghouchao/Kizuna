@@ -51,6 +51,11 @@
 - `points.redemption_eligible: boolean` を必須追加。既存の会員・台帳規則で利用可能かを示す。残高と金額上限は別途検証する。非会員では false、grant_points は 0。
 - 署名は入力・作用域・実行者・会員帰属先・利用資格・今回の付与結果を照合する。point_balance 自体は照合対象外とし、十分な残高への変化だけでは拒否しない。
 
+### 競合の分類
+
+- `409 details.use_points` は確認後の利用資格・残高・利用単位など、ポイント利用の是正を要する失敗に限る。付与計算の上限超過は説明付きの 400 を維持し、再計算可能な付与結果の変化は `confirmation_token` で再確認する。
+- 顧客行の NOWAIT 取得競合は `409 details.customer_lock` で返す。画面はサーバの案内を示し、受注を再取得せずに会計内訳・利用ポイントを保持して再試算できる。
+
 ### 受注の参照型
 
 OrderResponse、OrderWorkQueueResponse、OrderArchiveResponse、PlatformOrderResponse に以下を返す。
@@ -83,5 +88,5 @@ OrderResponse、OrderWorkQueueResponse、OrderArchiveResponse、PlatformOrderRes
 ## 検証結果
 
 - `task lint`、`task test`、`task build`、`task e2e` はすべて終了コード 0。
-- PostgreSQL 統合テスト 726 件、E2E 45 件が成功。電話照合と顧客統合の並行実行、会員関連変更、残高不足、残高だけの変化、同時完了、公開単件結果の店舗分離を含む。
+- PostgreSQL 統合テスト 730 件、E2E 45 件が成功。電話照合と顧客統合の並行実行、会員関連変更、残高不足、残高だけの変化、同時完了、公開単件結果の店舗分離を含む。
 - Standards / Spec の二軸レビューを実施し、指摘を修正後に再レビュー。残存指摘なし。
