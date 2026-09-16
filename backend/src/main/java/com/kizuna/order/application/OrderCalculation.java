@@ -81,6 +81,7 @@ public class OrderCalculation {
     if (original != null) {
       copy.setId(original.getId());
       copy.assignCast(original.getCastId());
+      copy.linkCustomer(original.getCustomerId());
     }
     copy.adoptServices(
         course,
@@ -130,6 +131,7 @@ public class OrderCalculation {
                 c.adoptionBasis()),
             lines,
             calculated.getTotalFee(),
+            calculated.grantBasisAmount(),
             calculated.getTotalDurationMinutes(),
             calculated.getTotalRemuneration(),
             points,
@@ -141,6 +143,7 @@ public class OrderCalculation {
         result.course(),
         result.feeLines(),
         result.totalFee(),
+        result.pointBasisAmount(),
         result.totalDurationMinutes(),
         result.totalRemuneration(),
         points,

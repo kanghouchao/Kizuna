@@ -49,6 +49,8 @@ function claimsWith(permissions: string[]): TokenClaims {
 }
 
 const completedOrder: OrderArchiveRow = {
+  accrued_remuneration: 0,
+  total_remuneration: 7000,
   requires_attention: false,
   unresolved_special_service_count: 0,
   course: {

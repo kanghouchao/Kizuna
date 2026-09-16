@@ -31,6 +31,7 @@ const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
 const confirmedOrder: Order = {
+  accrued_remuneration: 0,
   total_duration_minutes: 60,
   total_remuneration: 7000,
   requires_attention: false,
@@ -140,6 +141,8 @@ describe('OrderCompletionModal', () => {
       ],
     });
     const queueRow: OrderWorkQueueRow = {
+      accrued_remuneration: 0,
+      total_remuneration: 7000,
       requires_attention: false,
       unresolved_special_service_count: 0,
       course: {
@@ -568,6 +571,29 @@ describe('OrderCompletionModal', () => {
     expect(notify.success).toHaveBeenCalledWith('オーダーを完了しました');
     expect(onCompleted).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('保存時の残高不足は理由と利用点数の見直しを示し入力を保持する', async () => {
+    mockedComplete.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          error: 'ポイント残高が不足しています（残高: 100）',
+          details: { use_points: '利用点数を見直してください' },
+        },
+      },
+    });
+    renderModal();
+    fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
+    await completeWith('8000');
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        expect.stringMatching(/残高: 100.*利用点数を見直してください/)
+      )
+    );
+    expect(screen.getByLabelText('利用ポイント')).toHaveValue(200);
+    expect(mockedComplete).toHaveBeenCalledTimes(1);
+    expect(mockedGet).toHaveBeenCalledTimes(1);
   });
 
   it('利用ポイントを入れたら、その値を添えて送る', async () => {

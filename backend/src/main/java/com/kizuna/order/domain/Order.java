@@ -114,6 +114,12 @@ public class Order extends StoreScopedEntity {
   private List<OrderSpecialService> specialServiceLines = new ArrayList<>();
 
   private OffsetDateTime startedAt;
+
+  private OffsetDateTime completedAt;
+
+  @Column(nullable = false)
+  private int accruedRemuneration;
+
   private Long startedBy;
   private String startReason;
 
@@ -493,7 +499,8 @@ public class Order extends StoreScopedEntity {
                 .mapToLong(OrderFeeLine::getDurationMinutes)
                 .sum());
     getTotalDurationMinutes();
-    getTotalRemuneration();
+    if (status == OrderStatus.COMPLETED) accruedRemuneration = getTotalRemuneration();
+    else getTotalRemuneration();
     checkedTotal(
         feeLines.stream()
             .filter(line -> !line.getKind().isDeduction())
@@ -537,6 +544,8 @@ public class Order extends StoreScopedEntity {
     }
     this.autoGrantPoints = autoGrantPoints;
     transitionTo(OrderStatus.COMPLETED);
+    completedAt = OffsetDateTime.now();
+    accruedRemuneration = getTotalRemuneration();
   }
 
   /** 完了済みの内容だけを訂正し、状態・完了時の付与・ポイント利用を保持する。 コースを先に適用し、基本料金の名称・金額を同じ快照から導出する。 */

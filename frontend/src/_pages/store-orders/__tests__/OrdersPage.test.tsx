@@ -60,6 +60,8 @@ const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readToken
 /** 確定済みの受注 1 件。fixture は手書きで、OrderWorkQueueRow 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQueueRow {
   return {
+    accrued_remuneration: 0,
+    total_remuneration: 7000,
     requires_attention: false,
     unresolved_special_service_count: 0,
     id: 'o1',
@@ -93,6 +95,8 @@ function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQu
 
 function archivedOrder(overrides: Partial<OrderArchiveRow> = {}): OrderArchiveRow {
   return {
+    accrued_remuneration: 0,
+    total_remuneration: 7000,
     requires_attention: false,
     unresolved_special_service_count: 0,
     course: {

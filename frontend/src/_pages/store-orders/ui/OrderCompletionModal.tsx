@@ -203,6 +203,12 @@ export function OrderCompletionModal({
       }
     } catch (error) {
       if (!operation.isCurrent()) return;
+      if (orderConflictField(error) === 'use_points') {
+        notify.error(
+          `${getApiErrorMessage(error, 'ポイントの利用条件が変更されています')}。利用点数を見直してください`
+        );
+        return;
+      }
       if (orderConflictField(error) === 'confirmation_token') {
         notify.warning(
           '採用条件が変更されています。入力を保持しました。再試算して確認してください'

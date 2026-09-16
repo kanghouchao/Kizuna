@@ -268,3 +268,18 @@ Then('再表示した受注に各回の延長と加算の採用条件が残る',
   await expect(page.getByText(/受注加算-.*料金 ¥1,000.*固定報酬 ¥500.*版1/)).toBeVisible();
   await expect(page.getByLabel('明細4の金額', { exact: true })).toHaveValue('15000');
 });
+
+Then(
+  "完了アーカイブに発生済み報酬と独立した完了日時が現れる",
+  async ({ page }) => {
+    const row = page
+      .locator("div.min-w-0")
+      .filter({ hasText: customerName })
+      .filter({ hasText: "発生済み報酬" });
+    await expect(
+      row.getByText("発生済み報酬: ¥7,000", { exact: true }),
+    ).toBeVisible();
+    await expect(row.getByText(/完了日時: \d{4}-\d{2}-\d{2}T/)).toBeVisible();
+    await expect(row.getByText("支払済み", { exact: false })).toHaveCount(0);
+  },
+);

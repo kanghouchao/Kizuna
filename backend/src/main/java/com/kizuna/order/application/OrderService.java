@@ -249,12 +249,14 @@ public class OrderService {
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed("CREATE", "", request, request.getConfirmationToken())),
             true);
-    calculation.verify(
-        request.getConfirmationToken(),
-        calculation.preview("CREATE", "", request, calculated, null));
     order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
 
     handleCustomerLinking(request, order);
+    calculated.linkCustomer(order.getCustomerId());
+    calculation.verify(
+        request.getConfirmationToken(),
+        calculation.preview("CREATE", "", request, calculated, completionPoints(calculated, 0)));
+
     order.assignCast(request.getCastId());
     order.assignReceptionist(resolveReceptionist(request.getReceptionistId(), actorEmail));
 
@@ -333,9 +335,10 @@ public class OrderService {
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed("UPDATE", id, request, request.getConfirmationToken())),
             true);
+    if (order.getCustomerId() != null) customerRepository.findByIdForUpdate(order.getCustomerId());
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview("UPDATE", id, request, calculated, null));
+        calculation.preview("UPDATE", id, request, calculated, completionPoints(calculated, 0)));
     var previousSpecials = order.getSpecialServices();
     int previousTotal = order.getTotalFee();
     String previousCast = order.getCastId();
@@ -474,9 +477,6 @@ public class OrderService {
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed("CONFIRM", id, request, request.getConfirmationToken())),
             true);
-    calculation.verify(
-        request.getConfirmationToken(),
-        calculation.preview("CONFIRM", id, request, calculated, null));
     Order order =
         Order.builder()
             .businessDate(request.getBusinessDate())
@@ -516,6 +516,10 @@ public class OrderService {
                   application.getRequesterDeclaredName(),
                   actorId)));
     }
+    calculated.linkCustomer(order.getCustomerId());
+    calculation.verify(
+        request.getConfirmationToken(),
+        calculation.preview("CONFIRM", id, request, calculated, completionPoints(calculated, 0)));
     Order saved = orderRepository.save(order);
     application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
     orderApplicationRepository.save(application);
@@ -607,6 +611,8 @@ public class OrderService {
     CustomerMemberLink link = activeLink(order).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
     if (memberId == null && usePoints > 0) {
+      if (calculation.wasPreviewed("COMPLETE", id, request, request.getConfirmationToken()))
+        throw new OrderConfirmationConflict("confirmation_token");
       throw new ServiceException("非会員の受注ではポイントを利用できません");
     }
     // 会計金額を超える利用は、請求より大きい割引に相当する仕訳を台帳へ残す。意図してポイントを減らすなら
@@ -615,7 +621,16 @@ public class OrderService {
       throw new ServiceException("利用ポイントは会計金額を超えられません");
     }
 
-    var pointsPreview = completionPoints(order, usePoints);
+    OrderPreviewResponse.Points pointsPreview;
+    try {
+      pointsPreview =
+          pointPreview(
+              memberId, link == null ? null : link.getMemberCode(), chargeAmount, usePoints);
+    } catch (ServiceException ex) {
+      if (calculation.wasPreviewed("COMPLETE", id, request, request.getConfirmationToken()))
+        throw new OrderConfirmationConflict("use_points", ex.getMessage());
+      throw ex;
+    }
     calculated.completeWith(usePoints, pointsPreview.grantPoints());
     calculation.verify(
         request.getConfirmationToken(),
@@ -624,18 +639,22 @@ public class OrderService {
     String receiptToken = null;
     if (memberId != null) {
       Long actorId = actorIdentityService.requireUserId(actorEmail);
-      granted =
-          materializer
-              .materialize(
-                  memberId,
-                  link.getMemberCode(),
-                  id,
-                  order.getStoreId(),
-                  order.getBusinessDate(),
-                  OffsetDateTime.now(),
-                  actorId,
-                  new AttributionMaterializer.Completion(chargeAmount, usePoints))
-              .grantedPoints();
+      try {
+        granted =
+            materializer
+                .materialize(
+                    memberId,
+                    link.getMemberCode(),
+                    id,
+                    order.getStoreId(),
+                    order.getBusinessDate(),
+                    OffsetDateTime.now(),
+                    actorId,
+                    new AttributionMaterializer.Completion(chargeAmount, usePoints))
+                .grantedPoints();
+      } catch (ServiceException ex) {
+        throw new OrderConfirmationConflict("use_points", ex.getMessage());
+      }
     } else {
       receiptToken = issueReceiptToken(id, chargeAmount);
     }
@@ -684,18 +703,17 @@ public class OrderService {
     if (request.getCustomerId() != null)
       customerReferenceResolver.resolveForWrite(request.getCustomerId());
     var course = calculation.current(request.getCourseId(), false);
-    return calculation.preview(
-        "CREATE",
-        "",
-        request,
+    var calculated =
         calculation.calculate(
             null,
             course,
             request.getFeeLines(),
             specialServices.select(
                 null, request.getCastId(), request.getSpecialServiceIds(), false),
-            false),
-        null);
+            false);
+    String customerId = previewCustomer(request);
+    calculated.linkCustomer(customerId);
+    return calculation.preview("CREATE", "", request, calculated, completionPoints(calculated, 0));
   }
 
   @StoreScoped
@@ -722,18 +740,30 @@ public class OrderService {
     if (request.getCustomerId() != null)
       customerReferenceResolver.resolveForWrite(request.getCustomerId());
     var course = calculation.current(request.getCourseId(), false);
-    return calculation.preview(
-        "CONFIRM",
-        id,
-        request,
+    var calculated =
         calculation.calculate(
             null,
             course,
             request.getFeeLines(),
             specialServices.select(
                 null, request.getCastId(), request.getSpecialServiceIds(), false),
-            false),
-        null);
+            false);
+    OrderPreviewResponse.Points points;
+    if (!application.isGuest() && application.getRequesterMemberId() != null) {
+      points =
+          pointPreview(
+              application.getRequesterMemberId(),
+              application.getRequesterMemberCode(),
+              calculated.grantBasisAmount(),
+              0);
+    } else {
+      calculated.linkCustomer(
+          request.getCustomerId() == null
+              ? null
+              : customerReferenceResolver.resolveForWrite(request.getCustomerId()));
+      points = completionPoints(calculated, 0);
+    }
+    return calculation.preview("CONFIRM", id, request, calculated, points);
   }
 
   private void validateUpdateAssignments(
@@ -790,17 +820,14 @@ public class OrderService {
         request.getCourseId() == null
             ? order.getCourse()
             : calculation.current(request.getCourseId(), false);
-    return calculation.preview(
-        "UPDATE",
-        id,
-        request,
+    var calculated =
         calculation.calculate(
             order,
             course,
             request.getFeeLines(),
             specialServices.select(order, castId, request.getSpecialServiceIds(), false),
-            false),
-        null);
+            false);
+    return calculation.preview("UPDATE", id, request, calculated, completionPoints(calculated, 0));
   }
 
   @StoreScoped
@@ -817,28 +844,47 @@ public class OrderService {
     specialServices.requireProgress(order);
     if (order.getCustomerId() != null) customerRepository.findByIdForUpdate(order.getCustomerId());
     var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), false);
-    calculated.linkCustomer(order.getCustomerId());
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
     var points = completionPoints(calculated, usePoints);
     calculated.completeWith(usePoints, points.grantPoints());
     return calculation.preview("COMPLETE", id, request, calculated, points);
   }
 
+  private String previewCustomer(OrderCreateRequest request) {
+    if (request.getCustomerId() != null && !request.getCustomerId().isEmpty())
+      return customerReferenceResolver.resolveForWrite(request.getCustomerId());
+    if (request.getPhoneNumber() == null || request.getPhoneNumber().isEmpty()) return null;
+    var matches =
+        customerRepository.findAliveIdsByPhoneNumberAndStoreId(
+            request.getPhoneNumber(), storeContext.getStoreId());
+    return matches.size() == 1 ? matches.getFirst() : null;
+  }
+
   private OrderPreviewResponse.Points completionPoints(Order order, int usePoints) {
     var link = activeLink(order).orElse(null);
+    return pointPreview(
+        link == null ? null : link.getMemberId(),
+        link == null ? null : link.getMemberCode(),
+        order.grantBasisAmount(),
+        usePoints);
+  }
+
+  private OrderPreviewResponse.Points pointPreview(
+      Long memberId, String memberCode, int basis, int usePoints) {
     int unit = pointLedgerService.usageUnit();
-    Long balance = link == null ? null : pointLedgerService.balance(link.getMemberId());
+    Long balance = memberId == null ? null : pointLedgerService.balance(memberId);
     if (usePoints < 0
-        || usePoints > order.grantBasisAmount()
+        || usePoints > basis
         || (usePoints > 0 && (balance == null || balance < usePoints || usePoints % unit != 0)))
       throw new ServiceException("ポイントの利用資格・残高・利用単位・会計金額を確認してください");
     return new OrderPreviewResponse.Points(
-        link != null,
+        memberId != null,
+        memberId != null,
         balance,
-        link == null ? null : link.getMemberCode(),
+        memberCode,
         unit,
         usePoints,
-        link == null ? 0 : pointLedgerService.previewGrant(order.grantBasisAmount()));
+        memberId == null ? 0 : pointLedgerService.previewGrant(basis));
   }
 
   /**

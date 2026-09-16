@@ -94,6 +94,8 @@ function ArchiveRow({
           <span className="text-muted-foreground text-sm">{order.business_date}</span>
         </div>
         <OutcomeLine order={order} />
+        <p>発生済み報酬: ¥{order.accrued_remuneration.toLocaleString()}</p>
+        {order.completed_at && <p>完了日時: {order.completed_at}</p>}
       </div>
       {/* どちらの操作も完了した受注にしか起こらない — 帰属が生まれるのは完了と事後申領の瞬間だけで、
           完了後訂正の門も取消済みを受け付けない（誤取消の救済は同内容で起こし直すこと）。

@@ -33,6 +33,7 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 /** 完了した受注 1 件。ポイント利用の行は完了処理が書いた記録で、門内でも編集できない。 */
 function completedOrder(overrides: Partial<Order> = {}): Order {
   return {
+    accrued_remuneration: 0,
     requires_attention: false,
     unresolved_special_service_count: 0,
     special_services: [],

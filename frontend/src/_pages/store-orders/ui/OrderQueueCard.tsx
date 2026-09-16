@@ -135,6 +135,7 @@ export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCar
             </p>
           )}
           <CardMeta order={order} />
+          <p>予定報酬: ¥{order.total_remuneration.toLocaleString()}</p>
           {order.remarks && <p className="text-muted-foreground text-xs">{order.remarks}</p>}
         </div>
 

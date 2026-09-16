@@ -43,6 +43,8 @@ public interface OrderRepository
   String VIEW_SELECT =
       """
       select o.startedAt as startedAt,
+             o.completedAt as completedAt, o.accruedRemuneration as accruedRemuneration,
+             (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id) as totalRemuneration,
              (select cast(count(distinct e.serviceId) as Integer) from OrderSpecialServiceEvent e
               where e.orderId = o.id and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
@@ -135,6 +137,8 @@ public interface OrderRepository
   String PLATFORM_VIEW_SELECT =
       """
       select o.startedAt as startedAt,
+             o.completedAt as completedAt, o.accruedRemuneration as accruedRemuneration,
+             (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id) as totalRemuneration,
              (select cast(count(distinct e.serviceId) as Integer) from OrderSpecialServiceEvent e
               where e.orderId = o.id and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)

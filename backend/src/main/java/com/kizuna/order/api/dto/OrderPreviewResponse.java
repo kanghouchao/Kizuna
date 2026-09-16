@@ -7,6 +7,7 @@ public record OrderPreviewResponse(
     CourseCondition course,
     List<OrderFeeLineResponse> feeLines,
     int totalFee,
+    int pointBasisAmount,
     int totalDurationMinutes,
     int totalRemuneration,
     Points points,
@@ -25,6 +26,7 @@ public record OrderPreviewResponse(
 
   public record Points(
       boolean memberLinked,
+      boolean redemptionEligible,
       Long pointBalance,
       String memberCode,
       int usageUnit,

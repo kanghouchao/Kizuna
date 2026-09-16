@@ -272,6 +272,16 @@ export default function OrderEditPage() {
         </div>
 
         {current && (
+          <p>
+            {current.status === 'COMPLETED' ? '発生済み報酬' : '予定報酬'}: ¥
+            {(current.status === 'COMPLETED'
+              ? current.accrued_remuneration
+              : current.total_remuneration
+            ).toLocaleString()}
+            {current.completed_at && ` / 完了日時: ${current.completed_at}`}
+          </p>
+        )}
+        {current && (
           <OrderServiceProgress
             key={`${storeId}:${orderId}`}
             order={current}
