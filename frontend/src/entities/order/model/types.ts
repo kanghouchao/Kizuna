@@ -395,13 +395,20 @@ export interface OrderCorrectionRequest {
   fee_lines: OrderFeeLineRequest[];
 }
 
-/**
- * 完了後訂正の結果。門はポイントを動かさないので、動いたのは会計金額だけであることを前後の額で示す。
- *
- * 付与の差額は返らない。手当ては別機構（手動調整）が担い、その調整は受注にも帰属記録にも結び付かないため、
- * 門は「前回の助言が実行されたか」を知れない。要否と額の判断は台帳側の画面に委ねる。
- */
+/** 費用・報酬の変更と原日時を示す。ポイント付与は独立した事実として維持する。 */
 export interface OrderCorrectionResult {
+  correction_id: string;
+  order_id: string;
+  store_id: number;
+  business_date: string;
+  completed_at: string;
+  corrected_at: string;
+  corrected_by: number;
+  reason: string;
+  before_version: number;
+  after_version: number;
+  previous_accrued_remuneration: number;
+  accrued_remuneration: number;
   previous_total_remuneration: number;
   total_remuneration: number;
   previous_total_duration_minutes: number;
@@ -797,4 +804,40 @@ export interface OrderSpecialServiceEvent {
   total_fee: number;
   resolution?: 'REMOVED' | 'RESELECTED' | 'CAST_CHANGED';
   rejection_event_id?: string;
+}
+
+export interface OrderCorrectionSnapshot {
+  actual_arrival_time?: string;
+  actual_end_time?: string;
+  course: OrderCourse;
+  fee_lines: OrderFeeLine[];
+  special_services: Omit<OrderSpecialService, 'requires_attention' | 'current_consent_status'>[];
+  total_fee: number;
+  total_duration_minutes: number;
+  total_remuneration: number;
+  accrued_remuneration: number;
+}
+export interface OrderCorrectionHistoryEntry {
+  correction_id: string;
+  order_id: string;
+  store_id: number;
+  business_date: string;
+  completed_at: string;
+  corrected_at: string;
+  corrected_by?: number;
+  reason: string;
+  before_version: number;
+  after_version: number;
+  before: OrderCorrectionSnapshot;
+  after: OrderCorrectionSnapshot;
+}
+export interface PlatformOrder {
+  id: string;
+  store_id: number;
+  business_date?: string;
+  status: OrderStatus;
+  course: OrderCourse;
+  total_remuneration: number;
+  accrued_remuneration: number;
+  completed_at?: string;
 }

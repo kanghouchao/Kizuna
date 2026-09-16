@@ -206,6 +206,42 @@ When('設定を削除して過去のコースへ理由付きで訂正する', as
   expect(result.correction_id).toBeTruthy();
 });
 
+Then('店舗から同じ訂正の費用と報酬を照会できる', async ({ page }) => {
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await page.getByRole('button', { name: '訂正履歴', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '訂正履歴', exact: true });
+  await expect(dialog.getByText('実際に提供した60分コースへ訂正')).toBeVisible();
+  await expect(dialog.getByText('請求 ¥28,000 → ¥22,000', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('発生済み報酬 ¥11,000 → ¥7,000', { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/原営業日/)).toBeVisible();
+  await expect(dialog.getByText(/訂正日時/)).toBeVisible();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.screenshot({ path: 'test-results/935-store-history-light.png', animations: 'disabled' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: 'test-results/935-store-history-dark.png', animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(dialog).toBeVisible();
+  await page.screenshot({ path: 'test-results/935-store-history-narrow.png', animations: 'disabled' });
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole('button', { name: '訂正履歴', exact: true })).toBeFocused();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.context().clearCookies();
+});
+
+Then('平台から同じ訂正の費用と報酬を照会できる', async ({ page }) => {
+  await expect(page).toHaveURL(/\/platform\/dashboard/);
+  await page.goto(`${PLATFORM_URL}/platform/orders`);
+  const row = page.getByRole('listitem').filter({ hasText: `受注 ${createdOrderId}` });
+  await row.getByRole('button', { name: '訂正履歴', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '訂正履歴', exact: true });
+  await expect(dialog.getByText('請求 ¥28,000 → ¥22,000', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('発生済み報酬 ¥11,000 → ¥7,000', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '訂正する', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/935-platform-history.png', animations: 'disabled' });
+});
+
 After(async ({ request }) => {
   const token = await loginAsStoreAdmin(request);
   if (courseId) {

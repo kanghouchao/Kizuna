@@ -2,6 +2,7 @@ package com.kizuna.order.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+import java.io.Serializable;
 import java.time.OffsetDateTime;
 
 @Embeddable
@@ -14,7 +15,8 @@ public record OrderCourse(
     @Column(name = "course_price", nullable = false) int price,
     @Column(name = "course_remuneration", nullable = false) int remuneration,
     @Column(name = "course_adoption_basis", nullable = false) String adoptionBasis,
-    @Column(name = "course_adopted_at", nullable = false) OffsetDateTime adoptedAt) {
+    @Column(name = "course_adopted_at", nullable = false) OffsetDateTime adoptedAt)
+    implements Serializable {
   public OrderCourse {
     if (serviceId == null
         || revisionId == null

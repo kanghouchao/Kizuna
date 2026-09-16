@@ -24,12 +24,14 @@ import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
+import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.application.OrderCorrectionService;
 import com.kizuna.order.application.OrderPointRollbackService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
@@ -62,6 +64,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/store/orders")
 @RequiredArgsConstructor
 public class OrderController {
+
+  private final OrderCorrectionHistory correctionHistory;
 
   private final OrderService orderService;
   private final OrderAttributionService orderAttributionService;
@@ -367,5 +371,14 @@ public class OrderController {
   public OrderPreviewResponse previewCorrection(
       @PathVariable String id, @Valid @RequestBody OrderCorrectionRequest request) {
     return orderCorrectionService.preview(id, request);
+  }
+
+  @GetMapping("/{id}/corrections")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public CursorPage<OrderCorrectionResult> corrections(
+      @PathVariable String id,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return correctionHistory.store(id, cursor, size);
   }
 }

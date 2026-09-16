@@ -3,11 +3,12 @@ package com.kizuna.order.domain;
 import java.io.Serial;
 import java.io.Serializable;
 
-/** 訂正前の採用条件。帯符号の金額と明細の同一性を保持する。 */
+/** 訂正前後の採用条件。帯符号の金額と明細の同一性を保持する。 */
 public record OrderFeeLineSnapshot(
     String lineId,
     OrderFeeLineKind kind,
     String name,
+    String serviceId,
     Integer amount,
     Integer durationMinutes,
     int remuneration,
@@ -21,6 +22,7 @@ public record OrderFeeLineSnapshot(
         line.getId(),
         line.getKind(),
         line.getName(),
+        line.getServiceId(),
         line.getAmount(),
         line.getDurationMinutes(),
         line.getRemuneration(),

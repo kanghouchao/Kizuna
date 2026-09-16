@@ -12,7 +12,9 @@ public record OrderCompletionResult(
     OffsetDateTime completedAt,
     List<Item> items,
     int accruedRemuneration,
-    Long version) {
+    Long version,
+    String latestCorrectionId,
+    OrderCorrectionResult latestCorrection) {
   public OrderCompletionResult {
     items = List.copyOf(items);
   }

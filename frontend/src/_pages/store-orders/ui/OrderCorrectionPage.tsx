@@ -71,12 +71,8 @@ interface CorrectionOutcomeState {
 }
 
 /**
- * 訂正の結果。動いたのは会計金額だけであることを示し、付与が動かないことを名乗る。
- *
- * 付与の差額も手当ての導線も出さない。手当ては別機構（手動調整）が担い、その調整は受注にも帰属記録にも
- * 結び付かないため、門は「前回の助言が実行されたか」を知れない — 可執行の額として出すと、二度目の訂正が
- * 一度目の手当てを勘定に入れないまま次の額を勧める。名乗るのは「どの会員の台帳を見ればよいか」までとし、
- * 要否と額の判断は台帳側の画面に委ねる。
+ * 費用・報酬と原日時を示し、ポイントが動かないことを伝える。
+ * 既往の手動調整との対応を追えないため、調整額を提案せず対象会員の台帳へ案内する。
  */
 function CorrectionOutcome({ outcome }: { outcome: CorrectionOutcomeState }) {
   const { result, memberCode } = outcome;
@@ -86,6 +82,18 @@ function CorrectionOutcome({ outcome }: { outcome: CorrectionOutcomeState }) {
       <p className="text-muted-foreground text-sm">
         請求 ¥{(result.previous_total_fee ?? 0).toLocaleString()} → ¥
         {(result.total_fee ?? 0).toLocaleString()}
+      </p>
+      <p>
+        発生済み報酬 ¥{result.previous_accrued_remuneration.toLocaleString()} → ¥
+        {result.accrued_remuneration.toLocaleString()}
+      </p>
+      <p>
+        原営業日 {result.business_date} / 原完了日時{' '}
+        {new Date(result.completed_at).toLocaleString('ja-JP')}
+      </p>
+      <p>
+        訂正日時 {new Date(result.corrected_at).toLocaleString('ja-JP')} / 訂正 ID{' '}
+        {result.correction_id}
       </p>
       {memberCode === null ? (
         <p className="text-muted-foreground text-sm">
@@ -103,17 +111,21 @@ function CorrectionOutcome({ outcome }: { outcome: CorrectionOutcomeState }) {
 }
 
 /**
- * 完了した受注の訂正ページ（ADR 0019）。入口はアーカイブの完了行で、ORDER_CORRECT 保持者にだけ見える。
- *
- * <p>直せるのは実績時刻・コーススナップショット・明細行の三組だけ。それ以外（予定時刻・人数・指名・
- * 受付担当・備考・伝言）は終端状態の凍結のままで、この画面には欄そのものが無い。
- *
- * <p>送るのは<b>三組の全量</b>で、部分更新ではない。空にした欄はそのまま空になる — 実終了時刻や
- * 実績時刻を空へ戻す訂正が要るため、「送らない＝変更しない」の形では表せない。
- *
- * <p>門はポイントを動かさない。送信後に名乗るのは会計金額の前後と、付与が動かないことまでである（ADR 0019）。
+ * 完了した受注の提供事実を理由付きで訂正する専用門。
+ * 実績時刻の省略は値なし、編集可能明細は全量で保存する。凍結項目の欄は持たない。
  */
 export default function OrderCorrectionPage() {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  useEffect(() => {
+    const claims = readTokenClaims();
+    setAllowed(hasPermission(claims, 'ORDER_MANAGE') && hasPermission(claims, 'ORDER_CORRECT'));
+  }, []);
+  if (allowed === null) return <p role="status">権限を確認中...</p>;
+  if (!allowed) return <p role="alert">完了後訂正を行う権限がありません。</p>;
+  return <CorrectionEditor />;
+}
+
+function CorrectionEditor() {
   const confirmation = useOrderConfirmation();
   const params = useParams();
   const storeId = params.storeId as string;

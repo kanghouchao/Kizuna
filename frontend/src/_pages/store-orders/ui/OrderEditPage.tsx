@@ -1,5 +1,7 @@
 'use client';
 
+import { OrderCorrectionHistoryDialog } from '@/widgets/order-correction-history';
+
 import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
 
 import { OrderServiceProgress } from './OrderServiceProgress';
@@ -262,6 +264,13 @@ export default function OrderEditPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-foreground text-2xl font-bold">受注の編集</h1>
+          {current && !failure && !isLoading && (
+            <OrderCorrectionHistoryDialog
+              key={`${storeId}:${orderId}`}
+              orderId={orderId}
+              scope="store"
+            />
+          )}
           {/* 取れていない間は名乗らせない。「お客様名なし」は顧客の着いていない受注を指す文言で、
             まだ読めていない受注や存在しない受注に出すと、失敗の姿と区別が付かなくなる */}
           {current !== null && (

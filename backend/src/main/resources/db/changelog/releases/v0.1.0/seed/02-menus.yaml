@@ -116,6 +116,16 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
+              - column: { name: id, value: platform-orders }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: 受注照会 }
+              - column: { name: path, value: /platform/orders }
+              - column: { name: icon, value: ClipboardListIcon }
+              - column: { name: permission, value: ORDER_SET_MANAGE }
+              - column: { name: sort_order, valueNumeric: 9 }
+        - insert:
+            tableName: t_menus
+            columns:
               - column: { name: id, value: platform-settings }
               - column: { name: label, value: 設定 }
               - column: { name: permission, value: PLATFORM_MENU_VIEW }
