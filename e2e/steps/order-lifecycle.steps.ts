@@ -399,6 +399,11 @@ Then('原記録と零の請求報酬が残り新受注へ再提供を記録で�
   expect(original.total_fee).toBe(0);
   expect(original.accrued_remuneration).toBe(0);
   await expect(page.getByText(/原報酬/).first()).toBeVisible();
+  await expect(page.getByText('有効な請求 10,000 円 → 0 円', { exact: true })).toBeVisible();
+  await expect(page.getByText('発生済み報酬 7,000 円 → 0 円', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('有効な請求 10,000 円 → 0 円', { exact: true })).toBeVisible();
+  await expect(page.getByText('発生済み報酬 7,000 円 → 0 円', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/937-invalidation-light.png', fullPage: true });
   await page.evaluate(() => document.documentElement.classList.add('dark'));
   await page.screenshot({ path: 'test-results/937-invalidation-dark.png', fullPage: true });

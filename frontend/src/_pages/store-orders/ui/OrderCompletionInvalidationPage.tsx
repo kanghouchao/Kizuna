@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { orderApi } from '@/entities/order';
+import { orderApi, type OrderCorrectionHistoryEntry } from '@/entities/order';
 import {
   getApiErrorMessage,
   hasPermission,
@@ -53,16 +53,19 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
       active.current = false;
     };
   }, []);
-  const {
-    data: order,
-    failure,
-    isLoading,
-    reload,
-  } = useResource(
+  const { data, failure, isLoading, reload } = useResource(
     allowed
       ? async () => {
           try {
-            return await orderApi.get(id);
+            const order = await orderApi.get(id);
+            let change: OrderCorrectionHistoryEntry | undefined;
+            if (order.completion_invalidated) {
+              // 無効化後は訂正できないため、無効化は版降順の履歴の先頭ページにある。
+              const history = await orderApi.correctionHistory('store', id);
+              change = history.rows.find(entry => entry.change_type === 'COMPLETION_INVALIDATION');
+              if (!change) throw new Error('無効化履歴が見つかりません');
+            }
+            return { order, change };
           } catch (error) {
             if (isForbidden(error)) {
               setAllowed(false);
@@ -77,7 +80,10 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [changeId, setChangeId] = useState<string | null>(null);
+  const [result, setResult] = useState<OrderCorrectionHistoryEntry | null>(null);
+  const order = data?.order;
+  const change = result ?? data?.change;
+  const changeId = change?.correction_id;
   const [error, setError] = useState<string | null>(null);
   const remaining =
     order?.fee_lines.reduce(
@@ -103,9 +109,8 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
         reason: confirmation,
       });
       if (!active.current) return;
-      setChangeId(result.correction_id);
+      setResult(result);
       notify.success('誤完了を無効化しました');
-      await reload();
     } catch (e) {
       if (!active.current) return;
       if (isForbidden(e)) setAllowed(false);
@@ -155,9 +160,14 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
                 </li>
               ))}
             </ul>
-            <p>有効な請求 {invalidated ? 0 : (order.total_fee ?? 0).toLocaleString()} 円 → 0 円</p>
             <p>
-              発生済み報酬 {invalidated ? 0 : order.accrued_remuneration.toLocaleString()} 円 → 0 円
+              有効な請求 {(change?.before.total_fee ?? order.total_fee ?? 0).toLocaleString()} 円 →
+              0 円
+            </p>
+            <p>
+              発生済み報酬{' '}
+              {(change?.before.accrued_remuneration ?? order.accrued_remuneration).toLocaleString()}{' '}
+              円 → 0 円
             </p>
             <p>
               会員帰属・ポイント付与・実返金・支払は変更しません。それぞれの担当者が専用の操作で処置してください。

@@ -181,7 +181,7 @@ export function OrderAttributionModal({ order, onClose: closeModal }: OrderAttri
   };
 
   const reissue = async () => {
-    if (!order) return;
+    if (!order || order.completion_invalidated) return;
     const operation = resource.capture();
     try {
       setIsReissuing(true);
@@ -374,7 +374,11 @@ export function OrderAttributionModal({ order, onClose: closeModal }: OrderAttri
                 </Form>
               ) : (
                 <>
-                  {attribution.member_code ? (
+                  {order?.completion_invalidated ? (
+                    <p className="text-sm text-muted-foreground">
+                      無効化した受注に伝票は発行できません。
+                    </p>
+                  ) : attribution.member_code ? (
                     <p className="text-sm text-muted-foreground">
                       伝票QRを再発行すると、正しいお客様が読み取ってこの来店を取り戻せます。
                       {/* 2 度目の再発行は前の QR を殺す。押した後に気づいても渡した QR は戻せないので、
@@ -390,7 +394,7 @@ export function OrderAttributionModal({ order, onClose: closeModal }: OrderAttri
                     <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
                       閉じる
                     </Button>
-                    {attribution.member_code && (
+                    {attribution.member_code && !order?.completion_invalidated && (
                       <Button type="button" onClick={() => void reissue()} disabled={isBusy}>
                         {isReissuing ? '発行中...' : '伝票QRを再発行'}
                       </Button>
