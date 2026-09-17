@@ -8,3 +8,5 @@ export {
   orderApi,
   orderApplicationApi,
 } from './api/order';
+export * from './model/selfRemuneration';
+export { selfRemunerationApi } from './api/self-remuneration';

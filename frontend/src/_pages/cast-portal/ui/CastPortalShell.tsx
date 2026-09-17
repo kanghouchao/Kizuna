@@ -8,6 +8,7 @@ import {
   CircleUserRoundIcon,
   ClipboardListIcon,
   ListChecksIcon,
+  ReceiptTextIcon,
 } from 'lucide-react';
 import { readTokenClaims, redirectToLogin } from '@/shared/lib';
 
@@ -19,6 +20,7 @@ const TABS = [
   { href: '/cast/schedule', label: 'スケジュール', icon: CalendarDaysIcon },
   { href: '/cast/requests', label: '希望提出', icon: ClipboardListIcon },
   { href: '/cast/service-conditions', label: 'サービス条件', icon: ListChecksIcon },
+  { href: '/cast/remunerations', label: '報酬明細', icon: ReceiptTextIcon },
   { href: '/cast/account', label: 'アカウント', icon: CircleUserRoundIcon },
 ] as const;
 

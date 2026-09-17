@@ -503,3 +503,33 @@ export async function createCourse(
   expect(response.status()).toBe(201);
   return (await response.json()).id;
 }
+
+export async function createAgreedOrder(
+  request: APIRequestContext, token: string, castId: string, courseId: string, customerName: string,
+): Promise<string> {
+  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
+  const data = { cast_id: castId, course_id: courseId, customer_name: customerName,
+    business_date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date()) };
+  const preview = await request.post('/api/store/orders/preview', { headers, data });
+  expect(preview.ok()).toBeTruthy();
+  const result = await request.post('/api/store/orders', { headers, data: { ...data, confirmation_token: (await preview.json()).confirmation_token } });
+  expect(result.status()).toBe(201);
+  return (await result.json()).id;
+}
+
+export async function completeAgreedOrder(request: APIRequestContext, token: string, id: string): Promise<void> {
+  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
+  const order = await getOrder(request, token, STORE1_ID, id);
+  const data = { expected_version: order.version, fee_lines: [] };
+  const preview = await request.post(`/api/store/orders/${id}/completion-preview`, { headers, data });
+  expect(preview.ok()).toBeTruthy();
+  const result = await request.post(`/api/store/orders/${id}/completion`, { headers, data: { ...data, confirmation_token: (await preview.json()).confirmation_token } });
+  expect(result.ok()).toBeTruthy();
+}
+
+export async function invalidateOrder(request: APIRequestContext, token: string, id: string, reason: string): Promise<void> {
+  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
+  const order = await getOrder(request, token, STORE1_ID, id);
+  const result = await request.post(`/api/store/orders/${id}/completion-invalidation`, { headers, data: { expected_version: order.version, reason } });
+  expect(result.status()).toBe(201);
+}

@@ -1,5 +1,6 @@
 package com.kizuna.order.application;
 
+import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCorrection;
 import com.kizuna.order.domain.OrderCorrectionRepository;
 import com.kizuna.order.domain.OrderCorrectionSnapshot;
@@ -7,6 +8,7 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import com.kizuna.shared.web.CursorPage;
@@ -38,6 +40,22 @@ public class OrderCorrectionHistory {
   private CursorPage<OrderCorrectionResult> read(
       String orderId, String cursor, int size, String surface) {
     var order = orders.findById(orderId).orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    return readChanges(order, cursor, size, surface).map(OrderCorrectionHistory::result);
+  }
+
+  @StoreScopeExempt(reason = "認証主体と担当在籍の本人一致で受注を検証し、その受注の変更記録のみを返す")
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public CursorPage<OrderCorrection> self(Long userId, String orderId, String cursor, int size) {
+    var order =
+        orders
+            .findSelfOrder(userId, orderId)
+            .orElseThrow(() -> new NotFoundException("報酬明細が見つかりません"));
+    return readChanges(order, cursor, size, "self:" + userId);
+  }
+
+  private CursorPage<OrderCorrection> readChanges(
+      Order order, String cursor, int size, String surface) {
+    String orderId = order.getId();
     int limit = CursorPage.clampSize(size);
     long version = Long.MAX_VALUE;
     String id = "";
@@ -55,10 +73,9 @@ public class OrderCorrectionHistory {
       id = anchor.getId();
     }
     return CursorPage.of(
-            corrections.history(orderId, version, id, PageRequest.of(0, limit + 1)),
-            limit,
-            c -> new PageCursor(cursorKey(surface, c), c.getId()).encode())
-        .map(OrderCorrectionHistory::result);
+        corrections.history(orderId, version, id, PageRequest.of(0, limit + 1)),
+        limit,
+        c -> new PageCursor(cursorKey(surface, c), c.getId()).encode());
   }
 
   private String cursorKey(String surface, OrderCorrection c) {
