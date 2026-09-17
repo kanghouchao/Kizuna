@@ -26,6 +26,7 @@ it('参照権限だけで一覧と履歴を開き、訂正操作は表示しな�
         completed_at: '2026-09-15T01:00:00Z',
         accrued_remuneration: 7000,
         total_remuneration: 7000,
+        total_fee: 11900,
         course: {
           service_id: 's1',
           revision_id: 'r1',
@@ -46,6 +47,7 @@ it('参照権限だけで一覧と履歴を開き、訂正操作は表示しな�
   jest.mocked(orderApi.correctionHistory).mockResolvedValue({ rows: [], nextCursor: null });
   render(<PlatformOrdersPage />);
   expect(await screen.findByText('発生済み報酬 ¥7,000')).toBeInTheDocument();
+  expect(screen.getByText('請求総額 ¥11,900')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '訂正履歴' }));
   expect(await screen.findByText('訂正履歴はありません')).toBeInTheDocument();
   expect(orderApi.correctionHistory).toHaveBeenCalledWith('platform', 'o1', undefined);

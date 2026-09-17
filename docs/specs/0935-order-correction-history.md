@@ -1,6 +1,6 @@
 # 歴史版本による完了後訂正・変更履歴 — API 契約案
 
-状態: **本文は承認済み（2026-09-16）・実装検証済み。末尾の追加契約は承認待ち。**
+状態: **本文は承認済み（2026-09-16）。追加契約も承認済み（2026-09-17）。**
 
 対象: [#935](https://github.com/kanghouchao/Kizuna/issues/935)。業務仕様は #384、先行契約は 0931〜0934、設計判断は ADR 0019。調査基点は `206aeaca8f17043bd3a240d6dbd7f97e0d91bed5`。
 
@@ -83,7 +83,7 @@
 
 承認後に実装・ADR 0019/CONTEXT の更新を行い、task lint・task test・task build・task e2e と Standards/Spec レビューを実施してコミットする。作業ブランチは `codex/issue-935-order-correction-history`。
 
-## 追加承認待ちの補足
+## 追加承認済みの補足（2026-09-17）
 
 既存の平台一覧応答には請求総額がなく、未訂正の受注は履歴も空のため、受け入れ基準の跨店費用照会を満たせない。`GET /platform/orders`（ORDER_SET_MANAGE、既存 Page・授権店舗集合、200）の PlatformOrderResponse に `total_fee: int32`（必須・非負、ポイント控除後の現在請求額）だけを追加する。要求・ページング・成功／失敗コード・他字段は不変。現在額を表示し、変更根拠は承認済みの履歴 API で示す。
 
@@ -91,4 +91,10 @@
 
 - `task lint`、`task test`、`task build`、`task e2e` はすべて退出コード 0。前端 1,440 テスト、実 PostgreSQL の統合 734 テスト、E2E 45 シナリオを通過。
 - 店舗履歴のライト・ダーク・390px と平台履歴を画像で確認し、Escape 後のフォーカス復帰も E2E で確認。
-- Standards レビューの指摘は修正済み。Spec レビューで残る未対応項目は、上記の平台請求総額の追加契約のみ。
+- Standards レビューの指摘は修正済み。Spec レビューで挙がった平台請求総額の追加契約は、2026-09-17 に承認を受けた。
+
+## 追加契約反映後の検証（2026-09-17）
+
+- `total_fee` を必須・非負の現在請求額として実装し、未訂正時と訂正後のポイント控除額を実 HTTP で検証。前端はコース料金と請求総額を分けて表示する。
+- `task lint`、`task test`、`task build`、`task e2e` はすべて退出コード 0。前端 1,440 テスト・統合 734 テスト・E2E 45 シナリオ成功。
+- Standards / Spec の追加レビューは残存指摘なし。[平台一覧](assets/0935/platform-list.png)、[訂正結果](assets/0935/correction-result.png)、[店舗履歴](assets/0935/store-history-light.png)、[ダーク表示](assets/0935/store-history-dark.png)、[390px 表示](assets/0935/store-history-narrow.png)、[平台履歴](assets/0935/platform-history.png)を確認。

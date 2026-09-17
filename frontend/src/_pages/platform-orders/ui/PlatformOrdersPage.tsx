@@ -40,6 +40,7 @@ function OrderList() {
               <p>
                 {order.course.name} / コース費用 ¥{order.course.price.toLocaleString()}
               </p>
+              <p>請求総額 ¥{order.total_fee.toLocaleString()}</p>
               <p>
                 {order.status === 'CANCELLED'
                   ? '報酬発生なし'

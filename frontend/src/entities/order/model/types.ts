@@ -832,6 +832,7 @@ export interface OrderCorrectionHistoryEntry {
   after: OrderCorrectionSnapshot;
 }
 export interface PlatformOrder {
+  total_fee: number;
   id: string;
   store_id: number;
   business_date?: string;

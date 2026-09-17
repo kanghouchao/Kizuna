@@ -177,6 +177,8 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
   @DisplayName("ポイント利用の行は門内でも編集できず、訂正を跨いで残ること")
   void pointRedemptionLinesSurviveTheGate() {
     String orderId = completedOrderUsingPoints("ポイント", 100);
+    assertThat(history(storeHeaders(STORE_A), orderId, "").getBody().path("content")).isEmpty();
+    assertPlatformTotalFee(orderId, COMPLETED_FEE - 100);
     long pointEntries = pointEntryRepository.count();
 
     // ポイント利用の誤りはポイント機構経由で直す。門の要求に混ぜることはできない
@@ -205,6 +207,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(lines.get(1).path("amount").asInt()).as("減項は正値で返ること").isEqualTo(100);
     // 合計はポイント控除後の請求額なので、残った利用の行のぶん下がったまま
     assertThat(accepted.getBody().path("total_fee").asInt()).isEqualTo(8000);
+    assertPlatformTotalFee(orderId, 8000);
 
     assertThat(pointEntryRepository.count()).as("門は台帳へ一切書かないこと").isEqualTo(pointEntries);
   }
@@ -511,6 +514,26 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
 
   private long currentVersion(HttpHeaders headers, String orderId) {
     return orderJson(headers, orderId).path("version").asLong();
+  }
+
+  private void assertPlatformTotalFee(String orderId, int expected) {
+    var headers = new HttpHeaders();
+    headers.setBearerAuth(login("admin@kizuna.test"));
+    var response =
+        rest.exchange(
+            "/platform/orders?size=2000&sort=createdAt,desc",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    for (var row : response.getBody().path("content")) {
+      if (row.path("id").asString().equals(orderId)) {
+        assertThat(row.path("total_fee").isIntegralNumber()).isTrue();
+        assertThat(row.path("total_fee").asInt()).isEqualTo(expected);
+        return;
+      }
+    }
+    throw new AssertionError("平台一覧に対象受注がありません: " + orderId);
   }
 
   private JsonNode orderJson(HttpHeaders headers, String orderId) {

@@ -204,6 +204,8 @@ When('設定を削除して過去のコースへ理由付きで訂正する', as
   expect(result.course.remuneration).toBe(7000);
   expect(result.total_fee).toBe(22000);
   expect(result.correction_id).toBeTruthy();
+  await expect(page.getByRole('heading', { name: '訂正しました', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/935-correction-result.png', animations: 'disabled', fullPage: true });
 });
 
 Then('店舗から同じ訂正の費用と報酬を照会できる', async ({ page }) => {
@@ -234,6 +236,8 @@ Then('平台から同じ訂正の費用と報酬を照会できる', async ({ pa
   await expect(page).toHaveURL(/\/platform\/dashboard/);
   await page.goto(`${PLATFORM_URL}/platform/orders`);
   const row = page.getByRole('listitem').filter({ hasText: `受注 ${createdOrderId}` });
+  await expect(row.getByText('請求総額 ¥22,000', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/935-platform-list.png', animations: 'disabled' });
   await row.getByRole('button', { name: '訂正履歴', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '訂正履歴', exact: true });
   await expect(dialog.getByText('請求 ¥28,000 → ¥22,000', { exact: true })).toBeVisible();
