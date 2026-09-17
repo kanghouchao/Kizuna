@@ -45,6 +45,7 @@ jest.mock('@/shared/lib', () => ({
 }));
 
 jest.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useParams: () => ({ storeId: '1' }),
 }));
@@ -60,6 +61,7 @@ const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readToken
 /** 確定済みの受注 1 件。fixture は手書きで、OrderWorkQueueRow 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQueueRow {
   return {
+    completion_invalidated: false,
     accrued_remuneration: 0,
     total_remuneration: 7000,
     requires_attention: false,
@@ -95,6 +97,7 @@ function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQu
 
 function archivedOrder(overrides: Partial<OrderArchiveRow> = {}): OrderArchiveRow {
   return {
+    completion_invalidated: false,
     accrued_remuneration: 0,
     total_remuneration: 7000,
     requires_attention: false,

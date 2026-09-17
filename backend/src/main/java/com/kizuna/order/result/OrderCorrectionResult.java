@@ -18,7 +18,8 @@ public record OrderCorrectionResult(
     long beforeVersion,
     long afterVersion,
     Snapshot before,
-    Snapshot after) {
+    Snapshot after,
+    String changeType) {
   public record Snapshot(
       LocalTime actualArrivalTime,
       LocalTime actualEndTime,
@@ -28,7 +29,8 @@ public record OrderCorrectionResult(
       int totalFee,
       int totalDurationMinutes,
       int totalRemuneration,
-      int accruedRemuneration) {
+      int accruedRemuneration,
+      boolean completionInvalidated) {
     public Snapshot {
       feeLines = List.copyOf(feeLines);
       specialServices = List.copyOf(specialServices);

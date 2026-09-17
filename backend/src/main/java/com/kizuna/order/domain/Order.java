@@ -18,6 +18,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -83,7 +84,7 @@ public class Order extends StoreScopedEntity {
   private String mediaName;
 
   /**
-   * 会計金額。明細行の帯符号金額の単純総和であり、手入力の口は無い — 行を動かす行為メソッドが毎回書き直す。
+   * 会計金額は有効な明細の帯符号総和。無効化後は原明細を保持し、システム専有行だけを有効額に含める。
    *
    * <p>列として持つのは一覧・集計が行を畳まずに読めるようにするためで、正本は行の側にある。
    */
@@ -116,6 +117,12 @@ public class Order extends StoreScopedEntity {
   private OffsetDateTime startedAt;
 
   private OffsetDateTime completedAt;
+
+  @Column(nullable = false)
+  private boolean completionInvalidated;
+
+  @Column(length = 64, updatable = false)
+  private String replacementForOrderId;
 
   @Column(nullable = false)
   private int accruedRemuneration;
@@ -173,7 +180,7 @@ public class Order extends StoreScopedEntity {
 
   public void correctServices(
       List<SpecialServiceSnapshot> services, OrderCorrectionCommand command) {
-    if (status != OrderStatus.COMPLETED)
+    if (status != OrderStatus.COMPLETED || completionInvalidated)
       throw new InvalidOrderCorrectionException("完了した受注だけが訂正できます");
     replaceSpecialServices(services);
     correct(command);
@@ -476,6 +483,7 @@ public class Order extends StoreScopedEntity {
   }
 
   public int getTotalRemuneration() {
+    if (completionInvalidated) return 0;
     return checkedTotal(feeLines.stream().mapToLong(OrderFeeLine::getRemuneration).sum());
   }
 
@@ -498,6 +506,7 @@ public class Order extends StoreScopedEntity {
    * 0018）。
    */
   public int grantBasisAmount() {
+    if (completionInvalidated) return 0;
     return feeLines.stream()
         .filter(line -> !line.getKind().isSystemOwned())
         .mapToInt(OrderFeeLine::getAmount)
@@ -514,6 +523,11 @@ public class Order extends StoreScopedEntity {
    * @return 取り直した総和（列へ畳む前の値）
    */
   private long recalculateTotalFee() {
+    if (completionInvalidated) {
+      accruedRemuneration = 0;
+      totalFee = checkedTotal(systemLineTotal());
+      return totalFee;
+    }
     this.extensionMinutes =
         checkedTotal(
             feeLines.stream()
@@ -598,9 +612,26 @@ public class Order extends StoreScopedEntity {
     accruedRemuneration = getTotalRemuneration();
   }
 
+  public void invalidateCompletion() {
+    if (status != OrderStatus.COMPLETED || completionInvalidated)
+      throw new InvalidOrderCorrectionException("未無効化の完了した受注だけが無効化できます");
+    if (systemLineTotal() < 0)
+      throw new InvalidOrderCorrectionException(
+          "ポイント救済担当者が利用取消を完了してから、無効化を再実行してください", Map.of("point_redemption", "ポイント利用取消後に再実行してください"));
+    completionInvalidated = true;
+    recalculateTotalFee();
+  }
+
+  private long systemLineTotal() {
+    return feeLines.stream()
+        .filter(line -> line.getKind().isSystemOwned())
+        .mapToLong(OrderFeeLine::getAmount)
+        .sum();
+  }
+
   /** 完了済みの内容だけを訂正し、状態・完了時の付与・ポイント利用を保持する。 コースを先に適用し、基本料金の名称・金額を同じ快照から導出する。 */
   public void correct(OrderCorrectionCommand command) {
-    if (status != OrderStatus.COMPLETED) {
+    if (status != OrderStatus.COMPLETED || completionInvalidated) {
       throw new InvalidOrderCorrectionException("完了した受注だけが訂正できます");
     }
     this.actualArrivalTime = command.actualArrivalTime();

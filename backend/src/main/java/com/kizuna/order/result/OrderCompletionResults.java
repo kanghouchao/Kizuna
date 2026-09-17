@@ -71,7 +71,9 @@ public class OrderCompletionResults {
                   order.getAccruedRemuneration(),
                   order.getVersion(),
                   latest == null ? null : latest.correctionId(),
-                  latest);
+                  latest,
+                  order.isCompletionInvalidated(),
+                  order.getReplacementForOrderId());
             });
   }
 }

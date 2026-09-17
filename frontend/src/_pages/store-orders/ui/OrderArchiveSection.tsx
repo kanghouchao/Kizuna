@@ -96,6 +96,12 @@ function ArchiveRow({
           )}
           <span className="text-muted-foreground text-sm">{order.business_date}</span>
         </div>
+        {order.completion_invalidated && <p className="font-medium">誤完了・無効化済み</p>}
+        {order.replacement_for_order_id && (
+          <Link href={storePath(storeId, `/orders/${order.replacement_for_order_id}/edit`)}>
+            再提供の元受注
+          </Link>
+        )}
         <OutcomeLine order={order} />
         <p>発生済み報酬: ¥{order.accrued_remuneration.toLocaleString()}</p>
         {order.completed_at && <p>完了日時: {formatDateTime(order.completed_at)}</p>}
@@ -104,7 +110,16 @@ function ArchiveRow({
           完了後訂正の門も取消済みを受け付けない（誤取消の救済は同内容で起こし直すこと）。
           現に帰属しているかは一覧の読み口が持たないので、開いた先で名乗る */}
       {order.status === 'COMPLETED' && (
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 flex-wrap items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            render={
+              <Link href={storePath(storeId, `/orders/${order.id}/completion-invalidation`)} />
+            }
+          >
+            {order.completion_invalidated ? '無効化詳細・再提供' : '誤完了の無効化'}
+          </Button>
           {/* 訂正は ORDER_CORRECT（店長）限定。押せない導線を描くと、内容を入力し終えてから 403 を受け取る */}
           <Button
             variant="ghost"
@@ -113,7 +128,7 @@ function ArchiveRow({
           >
             ポイント救済
           </Button>
-          {canCorrect && (
+          {canCorrect && !order.completion_invalidated && (
             <Button
               variant="ghost"
               size="sm"

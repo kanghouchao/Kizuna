@@ -17,6 +17,7 @@ jest.mock('@/entities/order', () => ({
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
   useParams: () => ({ storeId: '1' }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
@@ -47,6 +48,7 @@ describe('新規オーダー登録の送信ペイロード', () => {
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
     mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
     mockedOrderApi.create.mockResolvedValue({
+      completion_invalidated: false,
       accrued_remuneration: 0,
       total_duration_minutes: 60,
       total_remuneration: 7000,

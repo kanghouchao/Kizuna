@@ -9,6 +9,10 @@ import java.time.OffsetDateTime;
  * 句は持たない。
  */
 public interface PlatformOrderView {
+  boolean getCompletionInvalidated();
+
+  String getReplacementForOrderId();
+
   OffsetDateTime getStartedAt();
 
   OffsetDateTime getCompletedAt();

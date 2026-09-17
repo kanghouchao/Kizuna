@@ -1,6 +1,7 @@
 package com.kizuna.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
@@ -36,6 +37,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -364,6 +366,41 @@ class StoreDeletionCascadeIT {
         castId,
         storeId,
         "ENROLLED");
+  }
+
+  @Test
+  void replacementReferencePreservesBothOrdersWhenDeletionIsRejected() {
+    var store = freshStore("再提供の原記録保護", "replacement-delete");
+    var course = insertCourse(store.getId());
+    var original =
+        Order.builder().businessDate(LocalDate.now()).status(OrderStatus.CONFIRMED).build();
+    original.setStoreId(store.getId());
+    original.adoptCourse(course, List.of());
+    original.completeWith(0, 0);
+    original.invalidateCompletion();
+    orders.saveAndFlush(original);
+    var replacement =
+        Order.builder()
+            .businessDate(LocalDate.now())
+            .status(OrderStatus.CONFIRMED)
+            .replacementForOrderId(original.getId())
+            .build();
+    replacement.setStoreId(store.getId());
+    replacement.adoptCourse(course, List.of());
+    orders.saveAndFlush(replacement);
+    assertThat(deleteStore(store.getId()).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(countStore(store.getId())).isEqualTo(1);
+    assertThat(countOrders(store.getId())).isEqualTo(2);
+    assertThatThrownBy(
+            () -> jdbcTemplate.update("DELETE FROM t_orders WHERE id = ?", original.getId()))
+        .isInstanceOf(DataIntegrityViolationException.class);
+    assertThat(countOrders(store.getId())).isEqualTo(2);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT replacement_for_order_id FROM t_orders WHERE id = ?",
+                String.class,
+                replacement.getId()))
+        .isEqualTo(original.getId());
   }
 
   private void insertOrder(long storeId, String customerId, String castId) {

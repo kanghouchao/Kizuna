@@ -136,6 +136,8 @@ export interface SurchargeCandidate {
 }
 
 export interface Order {
+  completion_invalidated: boolean;
+  replacement_for_order_id?: string;
   accrued_remuneration: number;
   completed_at?: string;
   total_duration_minutes: number;
@@ -209,6 +211,8 @@ export interface Order {
  * そのまま 1 行の差し替えに使える。
  */
 export interface OrderWorkQueueRow {
+  completion_invalidated: boolean;
+  replacement_for_order_id?: string;
   accrued_remuneration: number;
   completed_at?: string;
   total_remuneration: number;
@@ -242,6 +246,8 @@ export interface OrderWorkQueueRow {
  * 取消の記録を持つ。指名・受付担当・備考は対応中にしか使わないので載らない。
  */
 export interface OrderArchiveRow {
+  completion_invalidated: boolean;
+  replacement_for_order_id?: string;
   accrued_remuneration: number;
   completed_at?: string;
   total_remuneration: number;
@@ -269,6 +275,8 @@ export interface OrderArchiveRow {
  * 顧客詳細の注文履歴 1 行（GET /store/orders?customer_id=）。顧客は画面の文脈が持っているので載らない。
  */
 export interface OrderSummaryRow {
+  completion_invalidated: boolean;
+  replacement_for_order_id?: string;
   requires_attention: boolean;
   unresolved_special_service_count: number;
   started_at?: string;
@@ -440,6 +448,7 @@ export interface OrderCastCandidate {
 }
 
 export interface OrderCreateRequest {
+  replacement_for_order_id?: string;
   special_service_ids?: string[];
   course_id: string;
   confirmation_token?: string;
@@ -822,6 +831,7 @@ export interface OrderSpecialServiceEvent {
 }
 
 export interface OrderCorrectionSnapshot {
+  completion_invalidated: boolean;
   actual_arrival_time?: string;
   actual_end_time?: string;
   course: OrderCourse;
@@ -833,6 +843,7 @@ export interface OrderCorrectionSnapshot {
   accrued_remuneration: number;
 }
 export interface OrderCorrectionHistoryEntry {
+  change_type: 'CORRECTION' | 'COMPLETION_INVALIDATION';
   correction_id: string;
   order_id: string;
   store_id: number;
@@ -847,6 +858,8 @@ export interface OrderCorrectionHistoryEntry {
   after: OrderCorrectionSnapshot;
 }
 export interface PlatformOrder {
+  completion_invalidated: boolean;
+  replacement_for_order_id?: string;
   total_fee: number;
   id: string;
   store_id: number;

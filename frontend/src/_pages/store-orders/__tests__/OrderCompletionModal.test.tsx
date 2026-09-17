@@ -31,6 +31,7 @@ const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
 const confirmedOrder: Order = {
+  completion_invalidated: false,
   accrued_remuneration: 0,
   total_duration_minutes: 60,
   total_remuneration: 7000,
@@ -141,6 +142,7 @@ describe('OrderCompletionModal', () => {
       ],
     });
     const queueRow: OrderWorkQueueRow = {
+      completion_invalidated: false,
       accrued_remuneration: 0,
       total_remuneration: 7000,
       requires_attention: false,

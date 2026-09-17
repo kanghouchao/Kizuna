@@ -190,7 +190,16 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
       {preview && order?.status === 'COMPLETED' && !isLoading && !failure && (
         <>
           {preview.already_rolled_back || result ? (
-            <p>この受注は既に巻き戻し済みです。二度目は受け付けません。</p>
+            <div className="space-y-3">
+              <p>この受注は既に巻き戻し済みです。二度目は受け付けません。</p>
+              <Button
+                render={
+                  <Link href={storePath(storeId, `/orders/${orderId}/completion-invalidation`)} />
+                }
+              >
+                誤完了の無効化へ
+              </Button>
+            </div>
           ) : (
             <>
               <section className="bg-card space-y-4 rounded-xl border p-6 shadow-sm">

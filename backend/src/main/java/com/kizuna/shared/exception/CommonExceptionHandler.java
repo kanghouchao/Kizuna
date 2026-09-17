@@ -184,6 +184,7 @@ public class CommonExceptionHandler {
     log.warn(ex.getMessage());
     Map<String, Object> body = new HashMap<>();
     body.put("error", ex.getMessage());
+    if (!ex.details().isEmpty()) body.put("details", ex.details());
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
   }
 

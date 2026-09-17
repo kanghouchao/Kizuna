@@ -14,7 +14,9 @@ public record OrderCompletionResult(
     int accruedRemuneration,
     Long version,
     String latestCorrectionId,
-    OrderCorrectionResult latestCorrection) {
+    OrderCorrectionResult latestCorrection,
+    boolean completionInvalidated,
+    String replacementForOrderId) {
   public OrderCompletionResult {
     items = List.copyOf(items);
   }

@@ -13,6 +13,9 @@ import lombok.Data;
 
 @Data
 public class OrderCreateRequest {
+  @Size(min = 1, max = 64)
+  private String replacementForOrderId;
+
   private List<String> specialServiceIds;
   private String confirmationToken;
 

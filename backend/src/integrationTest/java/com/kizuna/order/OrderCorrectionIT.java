@@ -536,6 +536,188 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     throw new AssertionError("平台一覧に対象受注がありません: " + orderId);
   }
 
+  @Test
+  void invalidationRetainsFactsAndRejectsFurtherCorrections() {
+    String id = completedMemberOrder("無効化");
+    var headers = managerHeaders(STORE_A);
+    var before = orderJson(headers, id);
+    long entries = pointEntryRepository.count();
+    var response =
+        rest.postForEntity(
+            "/store/orders/" + id + "/completion-invalidation",
+            new HttpEntity<>(
+                "{\"expected_version\":"
+                    + before.path("version").asLong()
+                    + ",\"reason\":\"提供前の誤完了\"}",
+                headers),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var change = response.getBody();
+    assertThat(change.path("change_type").asString()).isEqualTo("COMPLETION_INVALIDATION");
+    assertThat(change.path("before").path("total_fee").asInt()).isEqualTo(COMPLETED_FEE);
+    assertThat(change.path("after").path("total_fee").asInt()).isZero();
+    assertThat(change.path("after").path("completion_invalidated").asBoolean()).isTrue();
+    var after = orderJson(headers, id);
+    assertThat(after.path("completion_invalidated").asBoolean()).isTrue();
+    assertThat(after.path("status").asString()).isEqualTo("COMPLETED");
+    assertThat(after.path("completed_at")).isEqualTo(before.path("completed_at"));
+    assertThat(after.path("business_date")).isEqualTo(before.path("business_date"));
+    assertThat(after.path("fee_lines")).isEqualTo(before.path("fee_lines"));
+    assertThat(after.path("total_remuneration").asInt()).isZero();
+    assertThat(pointEntryRepository.count()).isEqualTo(entries);
+    assertThat(history(headers, id, "").getBody().path("content").get(0)).isEqualTo(change);
+    assertThat(
+            rest.postForEntity(
+                    "/store/orders/" + id + "/completion-invalidation",
+                    new HttpEntity<>(
+                        "{\"expected_version\":"
+                            + after.path("version").asLong()
+                            + ",\"reason\":\"再実行\"}",
+                        headers),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(correct(headers, id, "{\"reason\":\"訂正\",\"fee_lines\":[]}").getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  void invalidationAuthorizationVersionAndReplacementFollowCurrentCreationRules() {
+    String id = completedOrder("再提供");
+    var headers = managerHeaders(STORE_A);
+    long version = currentVersion(headers, id);
+    assertThat(invalidate(storeHeaders(STORE_A), id, version).getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(invalidate(managerHeaders(STORE_B), id, version).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(invalidate(headers, id, version + 1).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(history(headers, id, "").getBody().path("content")).isEmpty();
+    var source = orderJson(headers, id);
+    String body =
+        "{\"business_date\":\""
+            + LocalDate.now()
+            + "\",\"cast_id\":\""
+            + source.path("cast_id").asString()
+            + "\",\"course_id\":\""
+            + source.path("course").path("service_id").asString()
+            + "\",\"replacement_for_order_id\":\""
+            + id
+            + "\"}";
+    assertThat(
+            rest.postForEntity(
+                    "/store/orders/preview", new HttpEntity<>(body, headers), JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(invalidate(headers, id, version).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var request = confirmedRequest("/store/orders/preview", body, headers);
+    var replacement = rest.postForEntity("/store/orders", request, JsonNode.class);
+    assertThat(replacement.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(replacement.getBody().path("replacement_for_order_id").asString()).isEqualTo(id);
+    assertThat(replacement.getBody().path("id").asString()).isNotEqualTo(id);
+    assertThat(replacement.getBody().path("status").asString()).isEqualTo("CONFIRMED");
+    assertThat(replacement.getBody().path("completion_invalidated").asBoolean()).isFalse();
+    assertThat(replacement.getBody().path("total_fee").asInt()).isEqualTo(100);
+    storeContext.setStoreId(STORE_A);
+    try {
+      var result = results.find(id).orElseThrow();
+      assertThat(result.completionInvalidated()).isTrue();
+      assertThat(result.accruedRemuneration()).isZero();
+      assertThat(result.latestCorrection().changeType()).isEqualTo("COMPLETION_INVALIDATION");
+    } finally {
+      storeContext.clear();
+    }
+  }
+
+  @Test
+  void concurrentCorrectionAndInvalidationLeaveOnlyOneChange() throws Exception {
+    String id = completedOrder("訂正と無効化の競合");
+    var headers = managerHeaders(STORE_A);
+    long version = currentVersion(headers, id);
+    var correction =
+        confirmedRequest(
+            "/store/orders/" + id + "/correction-preview",
+            "{\"expected_version\":" + version + ",\"reason\":\"競合訂正\",\"fee_lines\":[]}",
+            headers);
+    var start = new CountDownLatch(1);
+    var first =
+        CompletableFuture.supplyAsync(
+            () -> {
+              awaitStart(start);
+              return rest.postForEntity(
+                  "/store/orders/" + id + "/corrections", correction, JsonNode.class);
+            });
+    var second =
+        CompletableFuture.supplyAsync(
+            () -> {
+              awaitStart(start);
+              return invalidate(headers, id, version);
+            });
+    start.countDown();
+    assertThat(List.of(first.get().getStatusCode(), second.get().getStatusCode()))
+        .containsExactlyInAnyOrder(HttpStatus.CREATED, HttpStatus.CONFLICT);
+    var changes = history(headers, id, "").getBody().path("content");
+    assertThat(changes).hasSize(1);
+    assertThat(changes.get(0).path("after").path("total_fee"))
+        .isEqualTo(orderJson(headers, id).path("total_fee"));
+    assertThat(changes.get(0).path("after").path("accrued_remuneration"))
+        .isEqualTo(orderJson(headers, id).path("accrued_remuneration"));
+  }
+
+  private void awaitStart(CountDownLatch start) {
+    try {
+      start.await();
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(ex);
+    }
+  }
+
+  @Test
+  void failedInvalidationHistoryInsertRollsBackTheOrder() {
+    String id = completedOrder("無効化の保存失敗");
+    var headers = managerHeaders(STORE_A);
+    var before = orderJson(headers, id);
+    jdbc.execute(
+        "CREATE FUNCTION fail_invalidation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.change_type = 'COMPLETION_INVALIDATION' THEN RAISE EXCEPTION 'test failure'; END IF; RETURN NEW; END $$");
+    jdbc.execute(
+        "CREATE TRIGGER fail_invalidation BEFORE INSERT ON t_order_corrections FOR EACH ROW EXECUTE FUNCTION fail_invalidation()");
+    try {
+      assertThat(invalidate(headers, id, before.path("version").asLong()).getStatusCode())
+          .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+      assertThat(orderJson(headers, id)).isEqualTo(before);
+      assertThat(history(headers, id, "").getBody().path("content")).isEmpty();
+    } finally {
+      jdbc.execute("DROP TRIGGER fail_invalidation ON t_order_corrections");
+      jdbc.execute("DROP FUNCTION fail_invalidation()");
+    }
+    assertThat(invalidate(headers, id, before.path("version").asLong()).getStatusCode())
+        .isEqualTo(HttpStatus.CREATED);
+  }
+
+  @Test
+  void invalidationReasonIsValidatedAfterTrimming() {
+    String id = completedOrder("理由の境界");
+    var headers = managerHeaders(STORE_A);
+    long version = currentVersion(headers, id);
+    String reason = "理".repeat(500);
+    var response =
+        rest.postForEntity(
+            "/store/orders/" + id + "/completion-invalidation",
+            new HttpEntity<>(
+                "{\"expected_version\":" + version + ",\"reason\":\"  " + reason + "  \"}",
+                headers),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(response.getBody().path("reason").asString()).isEqualTo(reason);
+  }
+
+  private ResponseEntity<JsonNode> invalidate(HttpHeaders headers, String id, long version) {
+    return rest.postForEntity(
+        "/store/orders/" + id + "/completion-invalidation",
+        new HttpEntity<>("{\"expected_version\":" + version + ",\"reason\":\"未提供の誤完了\"}", headers),
+        JsonNode.class);
+  }
+
   private JsonNode orderJson(HttpHeaders headers, String orderId) {
     return rest.exchange(
             "/store/orders/" + orderId, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class)

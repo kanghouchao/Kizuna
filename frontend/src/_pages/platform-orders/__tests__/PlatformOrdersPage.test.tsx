@@ -19,6 +19,7 @@ it('参照権限だけで一覧と履歴を開き、訂正操作は表示しな�
   jest.mocked(orderApi.platformList).mockResolvedValue({
     rows: [
       {
+        completion_invalidated: false,
         id: 'o1',
         store_id: 2,
         status: 'COMPLETED',
