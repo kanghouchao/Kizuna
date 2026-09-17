@@ -25,7 +25,7 @@ public class PlatformOrderService {
   @StoreSetScoped
   @Transactional(readOnly = true)
   public Page<PlatformOrderResponse> list(Pageable pageable) {
-    var sort = pageable.getSort().and(Sort.sort(Order.class).by(Order::getId).descending());
+    var sort = pageable.getSort().and(Sort.by(Order::getId).descending());
     return orderRepository
         .findPlatformViews(PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort))
         .map(orderMapper::toPlatformResponse);
