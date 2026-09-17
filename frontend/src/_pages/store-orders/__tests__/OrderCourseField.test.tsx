@@ -9,15 +9,29 @@ jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   orderApi: { courseCandidates: jest.fn(), courseRevisions: jest.fn() },
 }));
-function Screen() {
+function Screen({ onSubmit = jest.fn() }: { onSubmit?: () => void }) {
   const form = useForm({ defaultValues: { course_id: '' } });
   return (
     <Form {...form}>
-      <OrderCourseField required />
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <OrderCourseField required />
+        <button type="submit">保存</button>
+      </form>
     </Form>
   );
 }
 beforeEach(() => jest.clearAllMocks());
+test('必須コースが未選択なら保存せず選択欄へフォーカスする', async () => {
+  (orderApi.courseCandidates as jest.Mock).mockResolvedValue({ rows: [course], total: 1 });
+  const onSubmit = jest.fn();
+  render(<Screen onSubmit={onSubmit} />);
+  const submit = screen.getByRole('button', { name: '保存' });
+  submit.focus();
+  fireEvent.click(submit);
+  await screen.findByText('コースを選択してください');
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'コース' })).toHaveFocus());
+  expect(onSubmit).not.toHaveBeenCalled();
+});
 test('取得失敗は再試行でき、権限不足は操作理由を表示する', async () => {
   const load = orderApi.courseCandidates as jest.Mock;
   load
