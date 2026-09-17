@@ -592,9 +592,9 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.NOT_FOUND);
     var conflict = invalidate(headers, id, version + 1);
     assertThat(conflict.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-    assertThat(conflict.getBody().path("error").asText())
+    assertThat(conflict.getBody().path("error").asString())
         .isEqualTo("受注が変更されています。最新の内容を再取得して確認してください");
-    assertThat(conflict.getBody().path("details").path("expected_version").asText())
+    assertThat(conflict.getBody().path("details").path("expected_version").asString())
         .isEqualTo("最新の内容を再取得して確認してください");
     assertThat(history(headers, id, "").getBody().path("content")).isEmpty();
     var source = orderJson(headers, id);

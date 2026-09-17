@@ -78,7 +78,7 @@ public class CastService {
   public Page<CastSummaryResponse> list(String search, Pageable pageable) {
     Sort requestedSort = pageable.getSort();
     if (requestedSort.getOrderFor("id") == null)
-      requestedSort = requestedSort.and(Sort.sort(CastEnrollment.class).by(CastEnrollment::getId));
+      requestedSort = requestedSort.and(Sort.by(CastEnrollment::getId));
     Sort sort =
         Sort.by(
             requestedSort.stream()

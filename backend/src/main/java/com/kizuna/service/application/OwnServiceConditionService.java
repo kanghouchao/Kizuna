@@ -53,10 +53,7 @@ public class OwnServiceConditionService {
     Specification<ServiceItem> filter = (root, query, cb) -> cb.isFalse(root.get("deleted"));
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
-    var found =
-        items.findAll(
-            filter,
-            PageRequest.of(page, size, Sort.sort(ServiceItem.class).by(ServiceItem::getId)));
+    var found = items.findAll(filter, PageRequest.of(page, size, Sort.by(ServiceItem::getId)));
     var decisions =
         consents
             .findByEnrollmentIdAndServiceIdIn(

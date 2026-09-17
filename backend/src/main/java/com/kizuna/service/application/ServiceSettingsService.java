@@ -48,8 +48,7 @@ public class ServiceSettingsService {
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
     return items
-        .findAll(
-            filter, PageRequest.of(page, size, Sort.sort(ServiceItem.class).by(ServiceItem::getId)))
+        .findAll(filter, PageRequest.of(page, size, Sort.by(ServiceItem::getId)))
         .map(mapper::summary);
   }
 
