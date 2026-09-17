@@ -69,6 +69,7 @@ replacement_for_order_id は同店舗の無効化済み COMPLETED の受注だ�
 - 関連先 FK は `(replacement_for_order_id, store_id)` から t_orders の `(id, store_id)` への複合 FK、onDelete NO ACTION。同店舗の原記録を保持し、関連を黙って切らない。索引は `(store_id, replacement_for_order_id)`。店舗削除の既存 CASCADE との整合も実 PostgreSQL で検証する。
 - t_order_corrections に `change_type VARCHAR(32) NOT NULL` を追加し、許容値 CHECK と、order_id に対する COMPLETION_INVALIDATION の部分 UNIQUE 索引を設ける。前後 JSONB に無効化状態を保持する。既存の版 UNIQUE・履歴索引・店舗/受注 CASCADE・操作者 SET NULL は維持する。
 - `order::result` の単件結果に `completionInvalidated: boolean`、`replacementForOrderId?: string` を追加する。既存 latestCorrection と履歴に無効化の同じ変更 ID・種別・前後快照を含め、項目の採用額を原記録、有効 accruedRemuneration を零として区別できるようにする。HTTP の追加端点は設けない。
+- 無効化済み受注の伝票申領は既存の申領不能応答（404）で拒否し、帰属・ポイント・来店・昇格を生成しない。無効化は受注行 → 伝票行の順にロックし、申領と直列化する。
 - 無効化はポイント台帳・付与・会員帰属・実返金・支払を読み書きしない。原利用 -3,000 と相殺 +3,000 を保持し、有効な提供費用零と合算して請求零を導出する。全額割引や任意調整は使わない。
 
 ## 画面・検証・完了条件

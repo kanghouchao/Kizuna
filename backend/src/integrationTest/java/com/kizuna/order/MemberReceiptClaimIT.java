@@ -13,6 +13,7 @@ import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -21,6 +22,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -122,6 +125,84 @@ class MemberReceiptClaimIT extends CrossStoreTestSupport {
     assertThat(ledgerRowsFor(issued.orderId())).as("台帳に仕訳を書かないこと").isZero();
     // 帰属は付与の有無と独立している。来店としては見えなければならない
     assertThat(visits().path("content").path(0).path("cast_name").asString()).isEqualTo(castName);
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, TOTAL_FEE})
+  @DisplayName("無効化した未帰属受注の伝票は帰属・ポイント・来店・昇格を生成しないこと")
+  void invalidatedReceiptCannotMaterializeMembershipEffects(int totalFee) {
+    Issued issued = completedOrderWithToken(null, "無効化申領担当-" + nonce, totalFee);
+    assertThat(invalidate(issued).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertUnclaimableWithoutEffects(issued);
+  }
+
+  @Test
+  @DisplayName("無効化は伝票ロックを待ち、後続申領は確定した無効化を観測すること")
+  void invalidationSerializesWithReceiptClaims() throws Exception {
+    Issued issued = completedOrderWithToken(null, "並行無効化担当-" + nonce, TOTAL_FEE);
+    CompletableFuture<ResponseEntity<JsonNode>> invalidation;
+    try (var connection = jdbcTemplate.getDataSource().getConnection()) {
+      connection.setAutoCommit(false);
+      int blocker;
+      try (var statement = connection.createStatement();
+          var rows = statement.executeQuery("select pg_backend_pid()")) {
+        rows.next();
+        blocker = rows.getInt(1);
+      }
+      try (var statement =
+          connection.prepareStatement(
+              "select id from t_order_receipt_tokens where order_id = ? for update")) {
+        statement.setString(1, issued.orderId());
+        try (var rows = statement.executeQuery()) {
+          assertThat(rows.next()).isTrue();
+        }
+      }
+      invalidation = CompletableFuture.supplyAsync(() -> invalidate(issued));
+      boolean waiting = false;
+      for (int attempt = 0; attempt < 100; attempt++) {
+        if (jdbcTemplate.queryForObject(
+                "select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and ? = any(pg_blocking_pids(pid)) and query like '%t_order_receipt_tokens%'",
+                Integer.class, blocker)
+            > 0) {
+          waiting = true;
+          break;
+        }
+        if (invalidation.isDone()) break;
+        TimeUnit.MILLISECONDS.sleep(50);
+      }
+      assertThat(waiting).as("無効化が伝票の状態確認と物化の完了を待つこと").isTrue();
+      connection.commit();
+    }
+    assertThat(invalidation.get(10, TimeUnit.SECONDS).getStatusCode())
+        .isEqualTo(HttpStatus.CREATED);
+    assertUnclaimableWithoutEffects(issued);
+  }
+
+  private ResponseEntity<JsonNode> invalidate(Issued issued) {
+    var headers = managerHeaders(STORE_A);
+    long version = orderVersion(headers, issued.orderId());
+    return rest.postForEntity(
+        "/store/orders/" + issued.orderId() + "/completion-invalidation",
+        new HttpEntity<>("{\"expected_version\":" + version + ",\"reason\":\"未提供の誤完了\"}", headers),
+        JsonNode.class);
+  }
+
+  private void assertUnclaimableWithoutEffects(Issued issued) {
+    var rejected = claimRaw(member, issued.token());
+    var unknown = claimRaw(member, "存在しない伝票-" + nonce);
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(rejected.getBody()).isEqualTo(unknown.getBody());
+    assertThat(tokenStatusOf(issued.orderId())).isEqualTo(OrderReceiptTokenStatus.ISSUED.name());
+    assertThat(attributionsOf(issued.orderId())).isEmpty();
+    assertThat(ledgerRowsFor(issued.orderId())).isZero();
+    assertThat(balance()).isZero();
+    assertThat(visits().path("content")).isEmpty();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from t_member_rank_histories where member_id = ?",
+                Integer.class,
+                member.id()))
+        .isZero();
   }
 
   @Test
