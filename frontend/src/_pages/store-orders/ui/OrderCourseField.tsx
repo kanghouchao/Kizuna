@@ -115,6 +115,7 @@ export function OrderCourseField({
             >
               <FormControl>
                 <ComboboxTrigger
+                  ref={field.ref}
                   render={
                     <Button
                       type="button"
