@@ -14,6 +14,7 @@ import com.kizuna.order.domain.OrderCorrectionSnapshot;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.result.OrderCorrectionResult;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
@@ -22,6 +23,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -143,7 +145,10 @@ public class OrderCorrectionService {
         orderRepository
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    calculation.requireVersion(order, request.expectedVersion());
+    if (!Objects.equals(order.getVersion(), request.expectedVersion())) {
+      throw new ConflictException(
+          "受注が変更されています。最新の内容を再取得して確認してください", Map.of("expected_version", "最新の内容を再取得して確認してください"));
+    }
     long beforeVersion = order.getVersion();
     var before = OrderCorrectionSnapshot.of(order);
     order.invalidateCompletion();
