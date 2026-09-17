@@ -16,6 +16,40 @@ import org.springframework.data.repository.query.Param;
 public interface OrderRepository
     extends JpaRepository<Order, String>, JpaSpecificationExecutor<Order> {
 
+  String SELF_FROM =
+      """
+      from com.kizuna.order.domain.Order o
+      join com.kizuna.cast.domain.CastEnrollment e on e.id = o.castId
+      join com.kizuna.cast.domain.Cast c on c.id = e.castId
+      join com.kizuna.store.domain.Store st on st.id = o.storeId
+      where c.platformUserId = :userId
+      """;
+  String SELF_SELECT =
+      """
+      select o.id as orderId, o.castId as enrollmentId, o.storeId as storeId,
+             st.name as storeName, o.businessDate as businessDate, o.completedAt as completedAt,
+             o.status as status, o.completionInvalidated as completionInvalidated,
+             o.accruedRemuneration as accruedRemuneration,
+             (select cast(coalesce(sum(l.remuneration), 0) as Integer)
+              from com.kizuna.order.domain.OrderFeeLine l where l.orderId = o.id) as agreedRemuneration
+      """;
+  String SELF_SORT = " order by o.businessDate desc, o.id desc";
+
+  @Query(value = SELF_SELECT + SELF_FROM + SELF_SORT, countQuery = "select count(o) " + SELF_FROM)
+  Page<SelfRemunerationView> findSelfRemunerations(Long userId, Pageable pageable);
+
+  @Query(
+      value = SELF_SELECT + SELF_FROM + " and e.id = :enrollmentId" + SELF_SORT,
+      countQuery = "select count(o) " + SELF_FROM + " and e.id = :enrollmentId")
+  Page<SelfRemunerationView> findSelfRemunerationsByEnrollment(
+      Long userId, String enrollmentId, Pageable pageable);
+
+  @Query(SELF_SELECT + SELF_FROM + " and o.id = :id")
+  Optional<SelfRemunerationView> findSelfRemuneration(Long userId, String id);
+
+  @Query("select o " + SELF_FROM + " and o.id = :id")
+  Optional<Order> findSelfOrder(Long userId, String id);
+
   @Query(
       """
       select o.castId from com.kizuna.order.domain.Order o where o.castId in :castIds

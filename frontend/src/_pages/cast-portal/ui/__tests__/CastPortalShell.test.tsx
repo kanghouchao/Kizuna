@@ -24,7 +24,7 @@ describe('CastPortalShell', () => {
     mockPathname = '/cast/schedule';
   });
 
-  it('userType=CAST なら children と3タブを表示する', async () => {
+  it('userType=CAST なら children と本人ポータルのタブを表示する', async () => {
     mockedReadClaims.mockReturnValue(castClaims);
 
     render(
@@ -45,6 +45,10 @@ describe('CastPortalShell', () => {
     expect(screen.getByRole('link', { name: /アカウント/ })).toHaveAttribute(
       'href',
       '/cast/account'
+    );
+    expect(screen.getByRole('link', { name: '報酬明細' })).toHaveAttribute(
+      'href',
+      '/cast/remunerations'
     );
     expect(mockedRedirect).not.toHaveBeenCalled();
   });
