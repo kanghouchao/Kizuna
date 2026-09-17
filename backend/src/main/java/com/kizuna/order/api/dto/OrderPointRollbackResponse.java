@@ -1,11 +1,29 @@
 package com.kizuna.order.api.dto;
 
-/**
- * 巻き戻しで実際に動いた量。仕訳ゼロの受注では両方 0 になるが、操作記録は書かれている。
- *
- * <p>合計は long。1 件の仕訳は int でも、1 受注に複数の付与が積まれた合計は int を超えうる。
- *
- * @param cancelledPoints 取消で無効化した付与の未消費残の合計
- * @param restoredPoints 利用の逆転で元のロットへ返した合計
- */
-public record OrderPointRollbackResponse(long cancelledPoints, long restoredPoints) {}
+import com.kizuna.point.application.PointLedgerService.PointRollbackHistory;
+import java.time.OffsetDateTime;
+
+/** 当該受注で一度だけ成立した巻き戻しの結果。請求額は実行時の快照。 */
+public record OrderPointRollbackResponse(
+    String id,
+    String reason,
+    Long actorUserId,
+    OffsetDateTime createdAt,
+    long cancelledPoints,
+    long restoredPoints,
+    int beforeTotalFee,
+    int offsetAmount,
+    int afterTotalFee) {
+  public static OrderPointRollbackResponse from(PointRollbackHistory history) {
+    return new OrderPointRollbackResponse(
+        history.id(),
+        history.reason(),
+        history.actorUserId(),
+        history.createdAt(),
+        history.cancelledPoints(),
+        history.restoredPoints(),
+        history.beforeTotalFee(),
+        Math.toIntExact(history.restoredPoints()),
+        history.afterTotalFee());
+  }
+}

@@ -12,8 +12,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 class OrderFeeLineKindTest {
 
   @Test
-  @DisplayName("種別は七種の閉集合であること")
-  void kinds_areTheClosedSetOfSeven() {
+  @DisplayName("種別は八種の閉集合であること")
+  void kinds_areTheClosedSetOfEight() {
     // ホテル代・交通費・釣銭は受注金額外の回収・精算項目であり、種別を持たないことで型から排除される
     assertThat(OrderFeeLineKind.values())
         .containsExactly(
@@ -23,6 +23,7 @@ class OrderFeeLineKindTest {
             OrderFeeLineKind.SURCHARGE,
             OrderFeeLineKind.DISCOUNT,
             OrderFeeLineKind.POINT_REDEMPTION,
+            OrderFeeLineKind.POINT_REDEMPTION_OFFSET,
             OrderFeeLineKind.CREDIT_SURCHARGE);
   }
 
@@ -53,10 +54,11 @@ class OrderFeeLineKindTest {
   }
 
   @Test
-  @DisplayName("システム専有はポイント利用だけであること")
-  void isSystemOwned_isOnlyPointRedemption() {
+  @DisplayName("システム専有はポイント利用とその相殺であること")
+  void isSystemOwned_coversRedemptionAndOffset() {
     assertThat(Arrays.stream(OrderFeeLineKind.values()).filter(OrderFeeLineKind::isSystemOwned))
-        .containsExactly(OrderFeeLineKind.POINT_REDEMPTION);
+        .containsExactly(
+            OrderFeeLineKind.POINT_REDEMPTION, OrderFeeLineKind.POINT_REDEMPTION_OFFSET);
   }
 
   @ParameterizedTest

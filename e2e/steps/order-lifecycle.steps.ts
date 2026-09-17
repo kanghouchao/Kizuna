@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
-import { STORE_HEADERS, cancelOrder, createCast, createCourse, getOrder, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
+import { STORE_HEADERS, createCustomer, registerMember, linkMemberToCustomer, cancelOrder, createCast, createCourse, getOrder, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -327,3 +327,54 @@ Then(
     await expect(row.getByText("支払済み", { exact: false })).toHaveCount(0);
   },
 );
+
+Given('3000ポイントを利用した請求7000円の完了受注がある', async ({ request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const headers = { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` };
+  const memberCode = await registerMember(request, `rollback-${Date.now()}@example.test`, crypto.randomUUID(), customerName);
+  const customerId = await createCustomer(request, token, customerName, `09${Date.now().toString().slice(-9)}`);
+  await linkMemberToCustomer(request, token, customerId, memberCode);
+  const adjustment = await request.post(`/api/store/customers/${customerId}/point-adjustments`, {
+    headers, data: { delta: 3000, reason: '利用取消の原資', idempotency_key: crypto.randomUUID() },
+  });
+  expect(adjustment.status()).toBe(200);
+  const input = { customer_id: customerId, cast_id: createdCastId, course_id: courseId,
+    business_date: todayInTokyo(), pax: 1, fee_lines: [{ kind: 'DISCOUNT', name: '割引', amount: 2000 }] };
+  const preview = await request.post('/api/store/orders/preview', { headers, data: input });
+  expect(preview.status()).toBe(200);
+  const created = await request.post('/api/store/orders', { headers, data: { ...input, confirmation_token: (await preview.json()).confirmation_token } });
+  expect(created.status()).toBe(201);
+  createdOrderId = (await created.json()).id;
+  const order = await getOrder(request, token, storeId, createdOrderId);
+  const completion = { expected_version: order.version, fee_lines: [{ kind: 'DISCOUNT', name: '割引', amount: 2000 }], use_points: 3000 };
+  const completionPreview = await request.post(`/api/store/orders/${createdOrderId}/completion-preview`, { headers, data: completion });
+  expect(completionPreview.status()).toBe(200);
+  const completed = await request.post(`/api/store/orders/${createdOrderId}/completion`, { headers, data: { ...completion, confirmation_token: (await completionPreview.json()).confirmation_token } });
+  expect(completed.status()).toBe(200);
+});
+
+When('専用入口で理由 {string} を確認して巻き戻す', async ({ page }, reason: string) => {
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.getByRole('button', { name: /^完了 \d+ 件$/ }).click();
+  await page.locator(`a[href$="/${createdOrderId}/point-rollback"]`).click();
+  await expect(page.getByText('7,000 円', { exact: true })).toBeVisible();
+  await expect(page.getByText('10,000 円', { exact: true })).toBeVisible();
+  await page.getByLabel('理由', { exact: true }).fill(reason);
+  await page.getByRole('button', { name: '巻き戻す', exact: true }).click();
+  await page.getByRole('button', { name: '実行する', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '巻き戻しました' })).toBeVisible();
+});
+
+Then('請求10000円と元利用と相殺が残り再訪しても処置履歴が見える', async ({ page, request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const order = await getOrder(request, token, storeId, createdOrderId);
+  expect(order.total_fee).toBe(10000);
+  expect(order.fee_lines).toEqual(expect.arrayContaining([
+    expect.objectContaining({ kind: 'POINT_REDEMPTION', amount: 3000, system_owned: true }),
+    expect.objectContaining({ kind: 'POINT_REDEMPTION_OFFSET', amount: 3000, system_owned: true }),
+  ]));
+  await page.reload();
+  await expect(page.getByText('理由：利用取消の救済')).toBeVisible();
+  await expect(page.getByText('10,000 円', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '巻き戻す', exact: true })).toHaveCount(0);
+});

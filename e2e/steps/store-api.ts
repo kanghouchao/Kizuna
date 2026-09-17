@@ -372,7 +372,7 @@ export async function getOrder(
   token: string,
   storeId: string,
   id: string
-): Promise<{ id: string; completed_at?: string }> {
+): Promise<{ id: string; completed_at?: string; version: number; total_fee: number; fee_lines: { kind: string; amount: number; system_owned: boolean }[] }> {
   const response = await request.get(`${PLATFORM_URL}/api/store/orders/${id}`, {
     headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
   });

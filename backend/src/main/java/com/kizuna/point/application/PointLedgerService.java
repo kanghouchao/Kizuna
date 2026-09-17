@@ -18,6 +18,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -389,11 +391,11 @@ public class PointLedgerService {
    *
    * <p>順序は<b>利用の逆転 → 付与の取消</b>。本受注の利用が本受注の付与を消費していた場合、逆順だと付与の未消費分が 小さいまま数えられ、取り戻せる量が減る。
    */
-  public PointRollbackResult rollbackForOrder(String orderId, String reason, Long actorUserId) {
+  public PointRollbackResult rollbackForOrder(
+      String orderId, String reason, Long actorUserId, int beforeTotalFee) {
     if (pointRollbackRepository.existsByOrderId(orderId)) {
       throw new ConflictException("この受注のポイントは既に巻き戻されています");
     }
-    pointRollbackRepository.save(PointRollback.of(orderId, reason, actorUserId));
 
     List<PointEntry> uses = pendingUsesOf(orderId);
     Map<Long, Integer> returning = returnedAmountsByLot(uses);
@@ -421,8 +423,38 @@ public class PointLedgerService {
       pointEntryRepository.save(PointEntry.cancel(credit, available, reason, actorUserId));
       cancelled += available;
     }
+    PointRollback rollback =
+        PointRollback.of(orderId, reason, actorUserId, cancelled, restored, beforeTotalFee);
+    pointRollbackRepository.saveAndFlush(rollback);
     return new PointRollbackResult(cancelled, restored);
   }
+
+  @Transactional(readOnly = true)
+  public Optional<PointRollbackHistory> rollbackHistory(String orderId) {
+    return pointRollbackRepository
+        .findByOrderId(orderId)
+        .map(
+            row ->
+                new PointRollbackHistory(
+                    row.getId().toString(),
+                    row.getReason(),
+                    row.getActorUserId(),
+                    row.getCreatedAt(),
+                    row.getCancelledPoints(),
+                    row.getRestoredPoints(),
+                    row.getBeforeTotalFee(),
+                    row.getAfterTotalFee()));
+  }
+
+  public record PointRollbackHistory(
+      String id,
+      String reason,
+      Long actorUserId,
+      OffsetDateTime createdAt,
+      long cancelledPoints,
+      long restoredPoints,
+      int beforeTotalFee,
+      int afterTotalFee) {}
 
   /** 巻き戻しで動いた量。1 受注に複数の付与が積まれた合計は int を超えうるため long で持つ。 */
   public record PointRollbackResult(long cancelledPoints, long restoredPoints) {}

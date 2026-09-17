@@ -345,6 +345,26 @@ databaseChangeLog:
                     uniqueConstraintName: uq_t_point_rollbacks_order
                   remarks: 巻き戻した受注（1 件につき高々 1 行）
               - column:
+                  name: cancelled_points
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: restored_points
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: before_total_fee
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: after_total_fee
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
                   name: reason
                   type: VARCHAR(500)
                   constraints:
@@ -353,6 +373,8 @@ databaseChangeLog:
               - column:
                   name: actor_user_id
                   type: BIGINT
+                  constraints:
+                    nullable: false
                   remarks: 巻き戻しを起こした操作者
               - column:
                   name: created_at
@@ -388,4 +410,10 @@ databaseChangeLog:
             baseColumnNames: actor_user_id
             referencedTableName: t_users
             referencedColumnNames: id
-            onDelete: SET NULL
+            onDelete: NO ACTION
+        - sql:
+            sql: >-
+              ALTER TABLE t_point_rollbacks ADD CONSTRAINT ck_t_point_rollbacks_outcome CHECK (
+                cancelled_points >= 0 AND restored_points >= 0 AND before_total_fee >= 0
+                AND after_total_fee::bigint = before_total_fee::bigint + restored_points
+              );

@@ -13,6 +13,7 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
@@ -63,16 +64,29 @@ public class OrderPointRollbackService {
 
   /** 実行前の下見。画面はこれで「何がいくら動くか」を示し、済んでいる受注では実行の導線を出さない。 */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional
   public OrderPointRollbackPreviewResponse preview(String orderId) {
-    requireScopedOrder(orderId);
+    Order order =
+        orderRepository
+            .findScopedByIdForUpdate(orderId)
+            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     PointLedgerService.PointRollbackPreview preview =
         pointLedgerService.previewRollbackForOrder(orderId);
+    if (preview.reversibleUsedPoints() + order.getTotalFee() > Integer.MAX_VALUE) {
+      throw new ServiceException("相殺後の請求が扱える上限を超えます。受注の内容を確認してください");
+    }
     return new OrderPointRollbackPreviewResponse(
         preview.alreadyRolledBack(),
         activeMemberCode(orderId),
         preview.cancellablePoints(),
-        preview.reversibleUsedPoints());
+        preview.reversibleUsedPoints(),
+        order.getTotalFee(),
+        Math.toIntExact(preview.reversibleUsedPoints()),
+        Math.toIntExact(order.getTotalFee() + preview.reversibleUsedPoints()),
+        pointLedgerService
+            .rollbackHistory(orderId)
+            .map(OrderPointRollbackResponse::from)
+            .orElse(null));
   }
 
   /**
@@ -96,21 +110,22 @@ public class OrderPointRollbackService {
       throw new ServiceException("完了した受注だけがポイントを巻き戻せます");
     }
     orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
+    Long actorUserId = actorIdentityService.requireUserId(actorEmail);
+    if (pointLedgerService.isRolledBack(orderId)) {
+      throw new ConflictException("この受注のポイントは既に巻き戻されています");
+    }
+    long offset = pointLedgerService.previewRollbackForOrder(orderId).reversibleUsedPoints();
+    if (!order.getTotalFee().equals(request.getExpectedTotalFee())
+        || offset != request.getExpectedOffsetAmount().longValue()) {
+      throw new ConflictException("請求または相殺額が変わりました。内容を再確認してください");
+    }
     PointRollbackResult result =
         pointLedgerService.rollbackForOrder(
-            orderId, request.getReason(), actorIdentityService.requireUserId(actorEmail));
-    return new OrderPointRollbackResponse(result.cancelledPoints(), result.restoredPoints());
-  }
-
-  /**
-   * 現店舗の受注。台帳も操作記録も受注 ID からしか辿れないため、店舗の所有はここでだけ決まる。
-   *
-   * <p>引けない受注は他店舗のものか存在しないかを区別せず 404 にする（区別すると受注 ID の存在が漏れる）。
-   */
-  private void requireScopedOrder(String orderId) {
-    if (orderRepository.findScopedById(orderId).isEmpty()) {
-      throw new NotFoundException("注文が見つかりません: " + orderId);
-    }
+            orderId, request.getReason().trim(), actorUserId, order.getTotalFee());
+    order.offsetPointRedemption(result.restoredPoints());
+    orderRepository.flush();
+    return OrderPointRollbackResponse.from(
+        pointLedgerService.rollbackHistory(orderId).orElseThrow());
   }
 
   /** この受注が現に帰属している会員のコード。帰属していなければ null。 */

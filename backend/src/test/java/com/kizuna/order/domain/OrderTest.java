@@ -23,6 +23,60 @@ class OrderTest {
     return Order.builder().course(OrderCourses.course("基本", 60, 0)).status(status).build();
   }
 
+  @Test
+  @DisplayName("利用取消は元明細を残して同額だけ請求へ戻し、二重相殺を拒否すること")
+  void offsetRedemptionPreservesOriginalAndRestoresBillOnce() {
+    Order order =
+        Order.builder()
+            .course(OrderCourses.course("基本", 60, 10000))
+            .status(OrderStatus.CONFIRMED)
+            .build();
+    order.replaceStoreFeeLines(List.of());
+    order.completeWith(3000, 100);
+    assertThat(order.getTotalFee()).isEqualTo(7000);
+
+    order.offsetPointRedemption(3000);
+
+    assertThat(order.getTotalFee()).isEqualTo(10000);
+    assertThat(order.getFeeLines())
+        .extracting(OrderFeeLine::getAmount)
+        .containsExactly(10000, -3000, 3000);
+    assertThatThrownBy(() -> order.offsetPointRedemption(3000))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+  }
+
+  @Test
+  @DisplayName("相殺は利用額の不一致と零明細を拒否し、利用なしでは明細を増やさないこと")
+  void offsetRequiresExactRedemption() {
+    Order order =
+        Order.builder()
+            .course(OrderCourses.course("基本", 60, 10000))
+            .status(OrderStatus.CONFIRMED)
+            .build();
+    order.replaceStoreFeeLines(List.of());
+    order.completeWith(0, 100);
+    assertThatThrownBy(() -> order.offsetPointRedemption(3000))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+    order.offsetPointRedemption(0);
+    assertThat(order.getFeeLines()).hasSize(1);
+    assertThatThrownBy(() -> OrderFeeLine.of(OrderFeeLineKind.POINT_REDEMPTION_OFFSET, "相殺", 0))
+        .isInstanceOf(InvalidOrderFeeLineException.class);
+  }
+
+  @Test
+  @DisplayName("整数上限の受注でも同額の相殺は二重加算せず請求を復元すること")
+  void offsetAtIntegerBoundary() {
+    Order order =
+        Order.builder()
+            .course(OrderCourses.course("基本", 60, Integer.MAX_VALUE))
+            .status(OrderStatus.CONFIRMED)
+            .build();
+    order.replaceStoreFeeLines(List.of());
+    order.completeWith(3000, 100);
+    order.offsetPointRedemption(3000);
+    assertThat(order.getTotalFee()).isEqualTo(Integer.MAX_VALUE);
+  }
+
   @ParameterizedTest
   @EnumSource(
       value = OrderStatus.class,

@@ -279,7 +279,7 @@ public class OrderController {
 
   /** ポイント巻き戻しの下見（実行前に動く量を示す）。既に巻き戻し済みなら、その旨だけが真で量は 0 になる。 */
   @GetMapping("/{id}/point-rollback-preview")
-  @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderPointRollbackPreviewResponse> pointRollbackPreview(
       @PathVariable String id) {
     return ResponseEntity.ok(orderPointRollbackService.preview(id));
@@ -294,7 +294,7 @@ public class OrderController {
    * に化けさせない）。初回の理由・実行者は書き換わらない。
    */
   @PostMapping("/{id}/point-rollback")
-  @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderPointRollbackResponse> pointRollback(
       @PathVariable String id,
       @Valid @RequestBody OrderPointRollbackRequest request,

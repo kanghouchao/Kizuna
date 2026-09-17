@@ -588,7 +588,10 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/store/orders/o1/point-rollback", "{\"reason\": \"誤完了\"}"))
+        .perform(
+            storePost(
+                "/store/orders/o1/point-rollback",
+                "{\"reason\": \"誤完了\",\"expected_total_fee\":11700,\"expected_offset_amount\":300}"))
         .andExpect(status().isForbidden());
     mockMvc
         .perform(storeGet("/store/orders/o1/point-rollback-preview"))
@@ -597,28 +600,57 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("理由の無い巻き戻しと列長を超える理由は 400 で撥ねられること")
   @WithMockUser(authorities = "PERM_POINT_ADJUST")
+  @DisplayName("受注管理を持たない救済担当者は下見にも実行にも届かないこと")
+  void rollbackRequiresOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    mockMvc
+        .perform(storeGet("/store/orders/o1/point-rollback-preview"))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(
+            storePost(
+                "/store/orders/o1/point-rollback",
+                "{\"reason\":\"返還\",\"expected_total_fee\":0,\"expected_offset_amount\":0}"))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(orderPointRollbackService);
+  }
+
+  @Test
+  @DisplayName("理由の無い巻き戻しと列長を超える理由は 400 で撥ねられること")
+  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_POINT_ADJUST"})
   void pointRollbackWithoutAValidReasonIsRejected() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/store/orders/o1/point-rollback", "{\"reason\": \"   \"}"))
+        .perform(
+            storePost(
+                "/store/orders/o1/point-rollback",
+                "{\"reason\": \"   \",\"expected_total_fee\":0,\"expected_offset_amount\":0}"))
         .andExpect(status().isBadRequest());
     mockMvc
         .perform(
             storePost(
-                "/store/orders/o1/point-rollback", "{\"reason\": \"" + "あ".repeat(501) + "\"}"))
+                "/store/orders/o1/point-rollback",
+                "{\"reason\": \""
+                    + "あ".repeat(501)
+                    + "\",\"expected_total_fee\":0,\"expected_offset_amount\":0}"))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderPointRollbackService);
 
     // 正向対照: 上限ちょうどは通る（400 が端点の不在でない証明）。新たな操作記録を生むので 201
     when(orderPointRollbackService.rollback(any(), any(), any()))
-        .thenReturn(new OrderPointRollbackResponse(120, 300));
+        .thenReturn(
+            new OrderPointRollbackResponse("1", "理由", 1L, null, 120, 300, 11700, 300, 12000));
     mockMvc
         .perform(
             storePost(
-                "/store/orders/o1/point-rollback", "{\"reason\": \"" + "あ".repeat(500) + "\"}"))
+                "/store/orders/o1/point-rollback",
+                "{\"reason\": \""
+                    + " ".repeat(2)
+                    + "あ".repeat(500)
+                    + " ".repeat(2)
+                    + "\",\"expected_total_fee\":11700,\"expected_offset_amount\":300}"))
         .andExpect(status().isCreated());
   }
 

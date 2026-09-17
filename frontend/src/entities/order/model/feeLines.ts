@@ -39,7 +39,8 @@ export function toFeeLineInputs(lines: OrderFeeLineInput[]): OrderFeeLineRequest
     if (
       line.kind === 'BASE_COURSE' ||
       line.kind === 'SPECIAL_SERVICE' ||
-      line.kind === 'POINT_REDEMPTION'
+      line.kind === 'POINT_REDEMPTION' ||
+      line.kind === 'POINT_REDEMPTION_OFFSET'
     )
       throw new Error('システム明細は編集できません');
     return { kind: line.kind, name: line.name ?? '', amount: line.amount };

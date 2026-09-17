@@ -6,7 +6,7 @@ Status: Accepted
 
 手入力の総額と内訳を別々に保存すると、何に対する請求・報酬かを説明できない。受注明細を正本とし、設定の変更を既存受注へ遡及させず、変更する項目だけを明示的に採用する（#380・#384・#931・#932）。
 
-- 種別は BASE_COURSE / EXTENSION / SPECIAL_SERVICE / SURCHARGE / DISCOUNT / POINT_REDEMPTION / CREDIT_SURCHARGE。受注の MANUAL_ADJUST は通常操作・訂正・API・DB から撤去する。ポイント台帳の手動調整は別の専用機構として維持する。
+- 種別は BASE_COURSE / EXTENSION / SPECIAL_SERVICE / SURCHARGE / DISCOUNT / POINT_REDEMPTION / POINT_REDEMPTION_OFFSET / CREDIT_SURCHARGE。受注の MANUAL_ADJUST は通常操作・訂正・API・DB から撤去する。ポイント台帳の手動調整は別の専用機構として維持する。
 - 基本コース料金は採用コースから一行だけ生成する。名称・価格・分数・固定報酬を直接入力しない。
 - 延長は各回を独立した行として、名称・正の整数分・零以上の整数円・零以上かつ費用以下の固定報酬を保存する。無料延長は費用と報酬がともに零で、コースから比例計算しない。
 - 加算は店舗設定から手動選択し、一受注に同一設定は一回まで。名称・費用・報酬と設定 ID・版本 ID・版本番号・採用根拠・採用日時を保持する。現在条件の直接上書きや数量入力を認めない。
@@ -47,3 +47,5 @@ pre-launch baseline を直接編集する。明細には store_id、duration_min
 通常割引後・ポイント控除前の金額を利用上限と通常付与基準に用いる。作成・申請確定・更新・完了の試算は会員帰属先・利用資格・今回の付与結果を照合する。現在残高は利用時に再検証するが、十分な残高だけの変化で再確認を要求しない。完了の料金・報酬・台帳・帰属は同一トランザクションで確定する。
 
 公開境界 `order::result` は原営業日・完了日時・担当在籍・項目別快照・発生済み報酬・受注版を含む単件結果を返す。給与集計・実支払・訂正イベント配信は含まない。HTTP 契約は [0934](../specs/0934-order-completion-remuneration-points.md) を参照する。
+
+ポイント巻き戻しは元利用を残して同額の正の POINT_REDEMPTION_OFFSET を台帳返還と同一トランザクションで一度だけ生成する。通常編集・訂正では双方を保護し、請求のみを復元して固定報酬を変えない。詳細は [利用取消契約](../specs/0936-point-redemption-offset.md)。

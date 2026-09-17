@@ -55,6 +55,7 @@ export type OrderFeeLineKind =
   | 'SURCHARGE'
   | 'DISCOUNT'
   | 'POINT_REDEMPTION'
+  | 'POINT_REDEMPTION_OFFSET'
   | 'CREDIT_SURCHARGE';
 
 /** 明細種別の日本語表示。 */
@@ -65,6 +66,7 @@ export const ORDER_FEE_LINE_KIND_LABELS: Record<OrderFeeLineKind, string> = {
   SURCHARGE: '加算',
   DISCOUNT: '割引',
   POINT_REDEMPTION: 'ポイント利用',
+  POINT_REDEMPTION_OFFSET: 'ポイント利用取消',
   CREDIT_SURCHARGE: 'クレジット加算',
 };
 
@@ -658,15 +660,28 @@ export interface OrderPointRollbackPreview {
   cancellable_points: number;
   /** 逆転で元のロットへ返る利用の合計。 */
   reversible_used_points: number;
+  current_total_fee: number;
+  offset_amount: number;
+  resulting_total_fee: number;
+  rollback?: OrderPointRollbackResult;
 }
 
 /** ポイント巻き戻しの要求。冪等キーは取らない — 操作記録の一意性が収束を担う（ADR 0023）。 */
 export interface OrderPointRollbackRequest {
   reason: string;
+  expected_total_fee: number;
+  expected_offset_amount: number;
 }
 
 /** ポイント巻き戻しで実際に動いた量。仕訳ゼロの受注では両方 0 になるが、操作記録は書かれている。 */
 export interface OrderPointRollbackResult {
+  id: string;
+  reason: string;
+  actor_user_id: number;
+  created_at: string;
+  before_total_fee: number;
+  offset_amount: number;
+  after_total_fee: number;
   cancelled_points: number;
   restored_points: number;
 }
