@@ -77,13 +77,9 @@ public class OrderCalculation {
       List<OrderFeeLineRequest> lines,
       List<SpecialServiceSnapshot> specials,
       boolean saving) {
-    Order copy = Order.builder().status(OrderStatus.CONFIRMED).build();
-    if (original != null) {
-      copy.setId(original.getId());
-      copy.assignCast(original.getCastId());
-      copy.linkCustomer(original.getCustomerId());
-    }
-    copy.adoptServices(
+    Order source =
+        original == null ? Order.builder().status(OrderStatus.CONFIRMED).build() : original;
+    return source.calculateWith(
         course,
         specials,
         selection.resolve(
@@ -91,16 +87,6 @@ public class OrderCalculation {
             lines,
             original != null && original.getStatus() == OrderStatus.COMPLETED,
             saving));
-    if (original != null && original.getStatus() == OrderStatus.COMPLETED) {
-      int points =
-          original.getFeeLines().stream()
-              .filter(line -> line.getKind().isSystemOwned())
-              .mapToInt(line -> -line.getAmount())
-              .sum();
-      copy.completeWith(
-          points, original.getAutoGrantPoints() == null ? 0 : original.getAutoGrantPoints());
-    }
-    return copy;
   }
 
   public OrderPreviewResponse preview(

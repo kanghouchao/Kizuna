@@ -127,6 +127,28 @@ public class Order extends StoreScopedEntity {
     return specialServiceLines.stream().map(OrderSpecialService::getSnapshot).toList();
   }
 
+  /** 採用候補の試算を別の受注で行い、利用と相殺を含む最終的な請求額を検証する。 */
+  public Order calculateWith(
+      OrderCourse nextCourse,
+      List<SpecialServiceSnapshot> services,
+      List<OrderFeeLineDraft> drafts) {
+    Order copy = Order.builder().status(OrderStatus.CONFIRMED).build();
+    copy.setId(getId());
+    copy.assignCast(castId);
+    copy.linkCustomer(customerId);
+    if (status == OrderStatus.COMPLETED) {
+      feeLines.stream()
+          .filter(line -> line.getKind().isSystemOwned())
+          .map(line -> OrderFeeLine.of(line.getKind(), line.getName(), line.getAmount()))
+          .forEach(copy.feeLines::add);
+    }
+    copy.adoptServices(nextCourse, services, drafts);
+    if (status == OrderStatus.COMPLETED) {
+      copy.completeWith(0, autoGrantPoints == null ? 0 : autoGrantPoints);
+    }
+    return copy;
+  }
+
   public void adoptServices(
       OrderCourse course, List<SpecialServiceSnapshot> services, List<OrderFeeLineDraft> drafts) {
     if (status.isTerminal()) throw new InvalidOrderFeeLineException("終端の内容は専用訂正で変更してください");

@@ -228,11 +228,11 @@ describe('ポイント巻き戻しのページ', () => {
   });
 
   it('完了していない受注では欄そのものを出さず、理由を名乗ること', async () => {
-    // 開いてから 400 を返すより、開いた時点で「打ち消すものが無い」を名乗る
     mockedGet.mockResolvedValue({ ...completedOrder, status: 'CONFIRMED' });
     render(<OrderPointRollbackPage />);
 
     expect(await screen.findByText(/完了した受注だけが/)).toBeInTheDocument();
+    expect(mockedPreview).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: '巻き戻す' })).not.toBeInTheDocument();
   });
 

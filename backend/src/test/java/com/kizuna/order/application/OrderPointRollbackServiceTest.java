@@ -34,6 +34,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -129,11 +131,18 @@ class OrderPointRollbackServiceTest {
     inOrder.verify(pointLedgerService).rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0);
   }
 
-  @Test
-  @DisplayName("完了していない受注は巻き戻せず、台帳へ届かないこと")
-  void refusesAnOrderThatIsNotCompleted() {
+  @ParameterizedTest
+  @EnumSource(
+      value = OrderStatus.class,
+      names = {"CONFIRMED", "IN_SERVICE", "CANCELLED"})
+  @DisplayName("未完了受注の下見と巻き戻しは台帳へ届かないこと")
+  void refusesAnOrderThatIsNotCompleted(OrderStatus status) {
     // 確定済みを許すと、記録だけが先に書かれたあとの完了が付与を積み、その付与を打ち消す手立てが残らない。
-    givenOrder(OrderStatus.CONFIRMED);
+    givenOrder(status);
+
+    assertThatThrownBy(() -> service.preview(ORDER_ID))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("完了した受注だけが");
 
     assertThatThrownBy(() -> service.rollback(ORDER_ID, request(), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)

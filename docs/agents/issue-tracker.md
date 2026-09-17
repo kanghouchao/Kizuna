@@ -1,45 +1,45 @@
-# Issue tracker: GitHub
+# 課題管理: GitHub
 
-Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+このリポジトリの課題と PRD は GitHub issue で管理する。操作には `gh` CLI を使う。
 
-## Conventions
+## 操作の規約
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
-- **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
-- **Comment on an issue**: `gh issue comment <number> --body "..."`
-- **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+- **課題の作成**: `gh issue create --title "..." --body "..."`。複数行の本文にはヒアドキュメントを使う。
+- **課題の参照**: `gh issue view <number> --comments`。必要なコメントを `jq` で絞り込み、ラベルも取得する。
+- **課題の一覧**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`。適切な `--label` と `--state` で絞り込む。
+- **コメントの追加**: `gh issue comment <number> --body "..."`
+- **ラベルの追加・削除**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
+- **課題の終了**: `gh issue close <number> --comment "..."`
 
-Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
+対象リポジトリは `git remote -v` から判断する。クローン内で実行すれば `gh` が自動で判断する。
 
-## Pull requests as a triage surface
+## PR を要望の受付窓口として扱うか
 
-**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
+**PRs as a request surface: no.** この設定キーを `/triage` が参照する。外部からの PR を機能要望として扱う場合は、値を `yes` にする。
 
-When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
+`yes` の場合、PR も課題と同じラベル・状態で管理し、対応する `gh pr` コマンドを使う。
 
-- **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
-- **List external PRs for triage**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` then keep only `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop `OWNER`/`MEMBER`/`COLLABORATOR`).
-- **Comment / label / close**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`, `gh pr close`.
+- **PR の参照**: `gh pr view <number> --comments`。差分は `gh pr diff <number>` で読む。
+- **仕分け対象の外部 PR の一覧**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments`。取得後、`authorAssociation` が `CONTRIBUTOR`、`FIRST_TIME_CONTRIBUTOR`、`NONE` のものだけを残し、`OWNER` / `MEMBER` / `COLLABORATOR` は除外する。
+- **コメント・ラベル・終了**: `gh pr comment`、`gh pr edit --add-label` / `--remove-label`、`gh pr close`。
 
-GitHub shares one number space across issues and PRs, so a bare `#42` may be either — resolve with `gh pr view 42` and fall back to `gh issue view 42`.
+GitHub では issue と PR が番号を共有する。`#42` だけではどちらか分からないため、まず `gh pr view 42` で確認し、PR でなければ `gh issue view 42` を使う。
 
-## When a skill says "publish to the issue tracker"
+## スキルが課題管理への公開を指示した場合
 
-Create a GitHub issue.
+GitHub issue を作成する。
 
-## When a skill says "fetch the relevant ticket"
+## スキルが関連チケットの取得を指示した場合
 
-Run `gh issue view <number> --comments`.
+`gh issue view <number> --comments` を実行する。
 
-## Wayfinding operations
+## 作業探索の操作
 
-Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
+`/wayfinder` が使う規約。全体の作業地図を一つの課題（map）とし、その子課題（child）を作業チケットにする。
 
-- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
-- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
-- **Blocking**: GitHub's **native issue dependencies** — the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only — the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
-- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
-- **Claim**: `gh issue edit <n> --add-assignee @me` — the session's first write.
-- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+- **作業地図**: `wayfinder:map` ラベルを付けた一つの課題。本文にメモ（Notes）、これまでの決定（Decisions-so-far）、未解明点（Fog）を記録する。`gh issue create --label wayfinder:map` で作成する。
+- **子チケット**: GitHub の子課題として地図に紐づける。`gh api` で子課題の端点を使う。子課題が使えない場合は地図の本文のタスクリストへ追加し、子の本文先頭に `Part of #<map>` を記す。ラベルは `wayfinder:<type>`（`research` / `prototype` / `grilling` / `task`）。着手時に担当開発者へ割り当てる。
+- **依存関係**: GitHub 標準の課題依存関係を正本とし、画面からも確認できる形にする。`gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>` で追加する。`<blocker-db-id>` は先行課題の数値のデータベース ID（`gh api repos/<owner>/<repo>/issues/<n> --jq .id`）であり、`#number` や `node_id` ではない。`issue_dependencies_summary.blocked_by` は未完了の先行課題数を示す。依存関係が使えない場合は、子の本文先頭に `Blocked by: #<n>, #<n>` を記す。先行課題がすべて終了したら着手可能になる。
+- **次の作業の選定**: `gh issue list --state open` を地図の子課題またはタスクリストの範囲に絞る。未完了の先行課題があるもの（`issue_dependencies_summary.blocked_by > 0`、または `Blocked by` に未完了課題があるもの）と担当者がいるものを除き、地図上の順序で先頭を選ぶ。
+- **担当の確保**: `gh issue edit <n> --add-assignee @me`。セッションで最初に行う書き込みとする。
+- **解決**: `gh issue comment <n> --body "<answer>"` で回答し、`gh issue close <n>` で閉じる。その後、地図の Decisions-so-far に要点とリンクを追記する。

@@ -70,6 +70,7 @@ public class OrderPointRollbackService {
         orderRepository
             .findScopedByIdForUpdate(orderId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
+    requireCompleted(order);
     PointLedgerService.PointRollbackPreview preview =
         pointLedgerService.previewRollbackForOrder(orderId);
     if (preview.reversibleUsedPoints() + order.getTotalFee() > Integer.MAX_VALUE) {
@@ -106,9 +107,7 @@ public class OrderPointRollbackService {
         orderRepository
             .findScopedByIdForUpdate(orderId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
-    if (order.getStatus() != OrderStatus.COMPLETED) {
-      throw new ServiceException("完了した受注だけがポイントを巻き戻せます");
-    }
+    requireCompleted(order);
     orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
     Long actorUserId = actorIdentityService.requireUserId(actorEmail);
     if (pointLedgerService.isRolledBack(orderId)) {
@@ -126,6 +125,12 @@ public class OrderPointRollbackService {
     orderRepository.flush();
     return OrderPointRollbackResponse.from(
         pointLedgerService.rollbackHistory(orderId).orElseThrow());
+  }
+
+  private void requireCompleted(Order order) {
+    if (order.getStatus() != OrderStatus.COMPLETED) {
+      throw new ServiceException("完了した受注だけがポイントを巻き戻せます");
+    }
   }
 
   /** この受注が現に帰属している会員のコード。帰属していなければ null。 */

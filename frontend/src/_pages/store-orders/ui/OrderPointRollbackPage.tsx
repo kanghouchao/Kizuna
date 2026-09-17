@@ -76,10 +76,9 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
     allowed
       ? async () => {
           try {
-            const [order, preview] = await Promise.all([
-              orderApi.get(orderId),
-              orderApi.pointRollbackPreview(orderId),
-            ]);
+            const order = await orderApi.get(orderId);
+            const preview =
+              order.status === 'COMPLETED' ? await orderApi.pointRollbackPreview(orderId) : null;
             return { denied: false as const, order, preview };
           } catch (error) {
             if (isForbidden(error)) return { denied: true as const };

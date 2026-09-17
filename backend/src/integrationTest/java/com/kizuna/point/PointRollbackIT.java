@@ -13,6 +13,7 @@ import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -21,6 +22,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
@@ -155,9 +158,10 @@ class PointRollbackIT extends CrossStoreTestSupport {
     assertThat(rollback(row.orderId(), "再試行").getStatusCode()).isEqualTo(HttpStatus.CREATED);
   }
 
-  @Test
-  @DisplayName("相殺明細の直送を拒み、通常明細の訂正でも利用と相殺は維持すること")
-  void correctionCannotForgeOrRemoveOffset() {
+  @ParameterizedTest
+  @ValueSource(ints = {0, 100})
+  @DisplayName("相殺後の訂正では元利用を下回る請求でも試算と保存の保護明細が一致すること")
+  void correctionCannotForgeOrRemoveOffset(int discount) {
     Attributed row = completedOrderUsingPoints();
     assertThat(rollback(row.orderId(), "返還").getStatusCode()).isEqualTo(HttpStatus.CREATED);
     var headers = managerHeaders(STORE_A);
@@ -185,13 +189,39 @@ class PointRollbackIT extends CrossStoreTestSupport {
               JsonNode.class);
       assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
-    var request =
-        confirmedRequest(
+    var input =
+        Map.of(
+            "expected_version",
+            order.path("version").asLong(),
+            "reason",
+            "通常明細の訂正",
+            "fee_lines",
+            discount == 0
+                ? List.of()
+                : List.of(Map.of("kind", "DISCOUNT", "name", "値引き", "amount", discount)));
+    var previewResponse =
+        rest.exchange(
             "/store/orders/" + row.orderId() + "/correction-preview",
-            "{\"expected_version\":"
-                + order.path("version").asLong()
-                + ",\"reason\":\"通常明細の訂正\",\"fee_lines\":[]}",
-            headers);
+            HttpMethod.POST,
+            new HttpEntity<>(input, headers),
+            JsonNode.class);
+    assertThat(previewResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode calculated = previewResponse.getBody();
+    var protectedLines =
+        calculated
+            .path("fee_lines")
+            .valueStream()
+            .filter(line -> line.path("system_owned").asBoolean())
+            .map(line -> List.of(line.path("kind").asString(), line.path("amount").asInt()))
+            .toList();
+    assertThat(protectedLines)
+        .containsExactlyInAnyOrder(
+            List.of("POINT_REDEMPTION", USED_POINTS),
+            List.of("POINT_REDEMPTION_OFFSET", USED_POINTS));
+    assertThat(calculated.path("total_fee").asInt()).isEqualTo(100 - discount);
+    var confirmed = new HashMap<String, Object>(input);
+    confirmed.put("confirmation_token", calculated.path("confirmation_token").asString());
+    var request = new HttpEntity<>(confirmed, headers);
     assertThat(
             rest.exchange(
                     "/store/orders/" + row.orderId() + "/corrections",
@@ -207,6 +237,15 @@ class PointRollbackIT extends CrossStoreTestSupport {
                 new HttpEntity<>(headers),
                 JsonNode.class)
             .getBody();
+    assertThat(corrected.path("total_fee")).isEqualTo(calculated.path("total_fee"));
+    assertThat(
+            corrected
+                .path("fee_lines")
+                .valueStream()
+                .filter(line -> line.path("system_owned").asBoolean())
+                .map(line -> List.of(line.path("kind").asString(), line.path("amount").asInt()))
+                .toList())
+        .containsExactlyInAnyOrderElementsOf(protectedLines);
     assertThat(
             corrected
                 .path("fee_lines")
@@ -353,12 +392,42 @@ class PointRollbackIT extends CrossStoreTestSupport {
     assertThat(balanceOf(customerId)).as("無効の付与は残高へ戻らないこと").isZero();
   }
 
-  @Test
-  @DisplayName("確定済み（未完了）の受注は巻き戻せないこと")
-  void confirmedOrderCannotBeRolledBack() {
+  @ParameterizedTest
+  @ValueSource(strings = {"CONFIRMED", "IN_SERVICE", "CANCELLED"})
+  @DisplayName("未完了と取消済みの受注は下見も巻き戻しも拒否すること")
+  void incompleteOrderCannotBeRolledBack(String status) {
     String orderId = createOrder(createCast("未完了担当-" + nonce), null);
 
-    ResponseEntity<JsonNode> rejected = rollback(orderId, "未完了への巻き戻し");
+    if (!status.equals("CONFIRMED")) {
+      boolean cancelled = status.equals("CANCELLED");
+      var changed =
+          rest.exchange(
+              "/store/orders/" + orderId + (cancelled ? "/cancellation" : "/start"),
+              HttpMethod.POST,
+              new HttpEntity<>(
+                  cancelled
+                      ? Map.of("reason", "状態の準備")
+                      : Map.of("reason", "状態の準備", "expected_version", 0),
+                  managerHeaders(STORE_A)),
+              JsonNode.class);
+      assertThat(changed.getStatusCode())
+          .isEqualTo(cancelled ? HttpStatus.NO_CONTENT : HttpStatus.OK);
+    }
+    ResponseEntity<JsonNode> previewRejected =
+        rest.exchange(
+            "/store/orders/" + orderId + "/point-rollback-preview",
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(previewRejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    ResponseEntity<JsonNode> rejected =
+        rest.exchange(
+            "/store/orders/" + orderId + "/point-rollback",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                Map.of("reason", "未完了への巻き戻し", "expected_total_fee", 0, "expected_offset_amount", 0),
+                managerHeaders(STORE_A)),
+            JsonNode.class);
 
     assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(rollbackRowsFor(orderId)).as("記録も書かれないこと").isZero();
