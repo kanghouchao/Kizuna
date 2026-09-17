@@ -1,5 +1,6 @@
 package com.kizuna.order.application;
 
+import com.kizuna.order.api.dto.OrderCompletionInvalidationRequest;
 import com.kizuna.order.api.dto.OrderCorrectionRequest;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderMapper;
@@ -10,8 +11,11 @@ import com.kizuna.order.domain.OrderCorrection;
 import com.kizuna.order.domain.OrderCorrectionCommand;
 import com.kizuna.order.domain.OrderCorrectionRepository;
 import com.kizuna.order.domain.OrderCorrectionSnapshot;
+import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.result.OrderCorrectionResult;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
@@ -20,6 +24,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,6 +40,7 @@ public class OrderCorrectionService {
 
   private final EntityManager entityManager;
   private final OrderRepository orderRepository;
+  private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final OrderCorrectionRepository orderCorrectionRepository;
   private final ActorIdentityService actorIdentityService;
   private final OrderMapper orderMapper;
@@ -58,6 +64,7 @@ public class OrderCorrectionService {
       throw new OrderConfirmationConflict(
           "expected_version", "この受注は別の操作者が訂正しました。最新の内容を読み直してからやり直してください");
     }
+    if (order.isCompletionInvalidated()) throw new ServiceException("無効化した受注は訂正できません");
     int previousTotalFee = order.getTotalFee();
     int previousRemuneration = order.getTotalRemuneration();
     int previousDuration = order.getTotalDurationMinutes();
@@ -134,6 +141,36 @@ public class OrderCorrectionService {
 
   @StoreScoped
   @Transactional
+  public OrderCorrectionResult invalidateCompletion(
+      String id, OrderCompletionInvalidationRequest request, String actorEmail) {
+    var order =
+        orderRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    if (!Objects.equals(order.getVersion(), request.expectedVersion())) {
+      throw new ConflictException(
+          "受注が変更されています。最新の内容を再取得して確認してください", Map.of("expected_version", "最新の内容を再取得して確認してください"));
+    }
+    // 受注 → 伝票の順に押さえ、申領の状態確認と帰属・付与の物化の間へ無効化を割り込ませない。
+    orderReceiptTokenRepository.findByOrderIdForUpdate(id);
+    long beforeVersion = order.getVersion();
+    var before = OrderCorrectionSnapshot.of(order);
+    order.invalidateCompletion();
+    orderRepository.saveAndFlush(order);
+    entityManager.refresh(order);
+    return OrderCorrectionHistory.result(
+        orderCorrectionRepository.saveAndFlush(
+            OrderCorrection.recorded(
+                order,
+                beforeVersion,
+                before,
+                request.reason().trim(),
+                actorIdentityService.requireUserId(actorEmail),
+                OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS))));
+  }
+
+  @StoreScoped
+  @Transactional
   public OrderPreviewResponse preview(String id, OrderCorrectionRequest request) {
     specialServices.lock();
     calculation.requirePreviewInput(request.getConfirmationToken());
@@ -142,7 +179,8 @@ public class OrderCorrectionService {
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     calculation.requireVersion(order, request.getExpectedVersion());
-    if (order.getStatus() != OrderStatus.COMPLETED) throw new ServiceException("完了した受注だけが訂正できます");
+    if (order.isCompletionInvalidated() || order.getStatus() != OrderStatus.COMPLETED)
+      throw new ServiceException("完了した受注だけが訂正できます");
     var course =
         request.getCourseRevisionId() == null
             ? order.getCourse()

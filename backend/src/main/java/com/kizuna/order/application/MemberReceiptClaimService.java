@@ -77,6 +77,10 @@ public class MemberReceiptClaimService {
             .findById(token.getOrderId())
             .orElseThrow(() -> new NotFoundException(UNCLAIMABLE_MESSAGE));
 
+    if (order.isCompletionInvalidated()) {
+      throw new NotFoundException(UNCLAIMABLE_MESSAGE);
+    }
+
     token.claim(now);
     orderReceiptTokenRepository.save(token);
     AttributionMaterializer.Result result =

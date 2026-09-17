@@ -176,7 +176,11 @@ export default function CustomerEditPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{order.used_points}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {order.status ? ORDER_STATUS_LABELS[order.status] : '-'}
+                    {order.completion_invalidated
+                      ? '誤完了・無効化済み'
+                      : order.status
+                        ? ORDER_STATUS_LABELS[order.status]
+                        : '-'}
                   </TableCell>
                 </TableRow>
               ))}

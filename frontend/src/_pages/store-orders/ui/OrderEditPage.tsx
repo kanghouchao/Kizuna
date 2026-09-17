@@ -281,6 +281,27 @@ export default function OrderEditPage() {
           )}
         </div>
 
+        {current?.status === 'COMPLETED' && (
+          <div className="space-y-2">
+            {current.completion_invalidated && (
+              <p>
+                誤完了・無効化済み。以下の項目と金額は原記録です。有効な費用・報酬・請求は零です。
+              </p>
+            )}
+            <Button
+              render={
+                <Link href={storePath(storeId, `/orders/${orderId}/completion-invalidation`)} />
+              }
+            >
+              {current.completion_invalidated ? '無効化詳細・再提供' : '誤完了の無効化'}
+            </Button>
+          </div>
+        )}
+        {current?.replacement_for_order_id && (
+          <Link href={storePath(storeId, `/orders/${current.replacement_for_order_id}/edit`)}>
+            再提供の元受注：{current.replacement_for_order_id}
+          </Link>
+        )}
         {current && (
           <p>
             {current.status === 'CANCELLED'

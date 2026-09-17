@@ -12,6 +12,15 @@ databaseChangeLog:
             remarks: 注文テーブル
             columns:
               - column:
+                  name: completion_invalidated
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: replacement_for_order_id
+                  type: VARCHAR(64)
+              - column:
                   name: completed_at
                   type: TIMESTAMP WITH TIME ZONE
               - column:
@@ -382,6 +391,20 @@ databaseChangeLog:
             tableName: t_orders
             constraintName: uq_t_orders_id_store
             columnNames: id, store_id
+        - addForeignKeyConstraint:
+            constraintName: fk_t_orders_replacement
+            baseTableName: t_orders
+            baseColumnNames: replacement_for_order_id, store_id
+            referencedTableName: t_orders
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE INDEX idx_t_orders_replacement ON t_orders (store_id, replacement_for_order_id);
+              ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_invalidation CHECK
+                (NOT completion_invalidated OR (status = 'COMPLETED' AND total_fee = 0 AND accrued_remuneration = 0));
+              ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_replacement CHECK (replacement_for_order_id <> id);
+
         - sql:
             sql: |
               ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_start CHECK (
@@ -942,6 +965,11 @@ databaseChangeLog:
             remarks: 完了後訂正の履歴（前後の姿・受注版・訂正者・時刻・理由）
             columns:
               - column:
+                  name: change_type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
                   name: id
                   type: VARCHAR(64)
                   constraints:
@@ -1058,6 +1086,12 @@ databaseChangeLog:
                 (store_id, order_id, after_version DESC, id DESC);
               ALTER TABLE t_order_corrections ADD CONSTRAINT ck_t_order_corrections_versions
                 CHECK (before_version >= 0 AND after_version > before_version);
+        - sql:
+            sql: |
+              ALTER TABLE t_order_corrections ADD CONSTRAINT ck_t_order_corrections_type
+                CHECK (change_type IN ('CORRECTION', 'COMPLETION_INVALIDATION'));
+              CREATE UNIQUE INDEX uq_t_order_corrections_invalidation ON t_order_corrections (order_id)
+                WHERE change_type = 'COMPLETION_INVALIDATION';
   - changeSet:
       id: store-v0100-004-order-application-schema
       author: kanghouchao

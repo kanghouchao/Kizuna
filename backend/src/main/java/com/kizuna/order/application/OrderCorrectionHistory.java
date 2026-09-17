@@ -78,7 +78,8 @@ public class OrderCorrectionHistory {
         c.getBeforeVersion(),
         c.getAfterVersion(),
         snapshot(c.getBeforeSnapshot()),
-        snapshot(c.getAfterSnapshot()));
+        snapshot(c.getAfterSnapshot()),
+        c.getChangeType());
   }
 
   private static OrderCorrectionResult.Snapshot snapshot(OrderCorrectionSnapshot s) {
@@ -142,6 +143,7 @@ public class OrderCorrectionHistory {
         s.totalFee(),
         s.totalDurationMinutes(),
         s.totalRemuneration(),
-        s.accruedRemuneration());
+        s.accruedRemuneration(),
+        s.completionInvalidated());
   }
 }

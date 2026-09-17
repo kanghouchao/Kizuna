@@ -127,6 +127,7 @@ public interface OrderMapper {
   @Mapping(target = "startReason", ignore = true)
   @Mapping(target = "completedAt", ignore = true)
   @Mapping(target = "accruedRemuneration", ignore = true)
+  @Mapping(target = "completionInvalidated", ignore = true)
   Order toEntity(OrderCreateRequest request);
 
   /** 注文更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */

@@ -76,6 +76,27 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
   private final long nonce = System.nanoTime();
 
   @Test
+  @DisplayName("完了無効化後に会員帰属を訂正しても伝票を再発行しないこと")
+  void invalidatedCompletionCannotReissueAfterAttributionCorrection() {
+    var member = registerAndLogin("completion-invalidated");
+    String orderId = completedOrderAttributedTo(member, "誤完了担当-" + nonce);
+    var headers = managerHeaders(STORE_A);
+    long version = orderVersion(headers, orderId);
+    var invalidated =
+        rest.postForEntity(
+            "/store/orders/" + orderId + "/completion-invalidation",
+            new HttpEntity<>("{\"expected_version\":" + version + ",\"reason\":\"未提供\"}", headers),
+            JsonNode.class);
+    assertThat(invalidated.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(invalidate(orderId, REASON).getStatusCode()).isEqualTo(HttpStatus.OK);
+    int tokensBefore = tokenCountFor(orderId);
+    var rejected = reissue(orderId);
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(rejected.getBody().path("error").asString()).isEqualTo("無効化した受注に伝票は発行できません");
+    assertThat(tokenCountFor(orderId)).isEqualTo(tokensBefore);
+  }
+
+  @Test
   @DisplayName("無効化は理由・実行者・時刻を行に残し、帰属そのものの記録は書き換えないこと")
   void invalidationPersistsTheReasonActorAndTime() {
     RegisteredMember wrongMember = registerAndLogin("wrong");

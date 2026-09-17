@@ -164,7 +164,7 @@ function CorrectionEditor() {
     });
   });
   const seeded = current !== null && initialized && !isLoading;
-  const completed = current?.status === 'COMPLETED';
+  const completed = current?.status === 'COMPLETED' && !current.completion_invalidated;
 
   /**
    * この受注が現に帰属している会員のコード。帰属していなければ null。
@@ -258,6 +258,11 @@ function CorrectionEditor() {
           />
         )}
 
+        {current?.completion_invalidated && (
+          <p role="alert">
+            無効化した受注は訂正できません。再提供は関連する新受注で記録してください。
+          </p>
+        )}
         {outcome !== null && <CorrectionOutcome outcome={outcome} />}
 
         {/* 門は台帳を読みも書きもしない（ADR 0019）。全否定が要る誤完了のためにポイント側の操作面を

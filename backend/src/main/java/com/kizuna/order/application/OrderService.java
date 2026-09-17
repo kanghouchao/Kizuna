@@ -221,6 +221,7 @@ public class OrderService {
   @Transactional
   public OrderResponse create(OrderCreateRequest request, String actorEmail) {
     specialServices.lock();
+    validateReplacement(request.getReplacementForOrderId());
     // Web 申請の経路（MEMBER_WEB / GUEST_WEB）は申請の確定だけが書く値。台帳を触るより先に撥ねる —
     // 広告費と効果集計の根拠になる記録が代理入力で偽装されると、後から申請と手入力を切り分ける手立てが無い。
     if (request.getReceptionRoute() != null && !request.getReceptionRoute().isStoreSelectable()) {
@@ -266,12 +267,16 @@ public class OrderService {
     return toResponse(saved);
   }
 
-  /**
-   * 作成時の受付担当を決める。明示された ID はそのまま検証し、省略されたときは実行者本人を確定操作と同じ適格述語（{@link #eligibleReceptionistId}）で解決する。
-   *
-   * <p>適格でない実行者（店舗を授権する HQ 管理者など）では黙って未設定にせず撥ねる。確定操作が未設定のまま残すのは
-   * 会員の申請が既に成立しているからで、こちらは受注そのものをこれから起こす — 誤りは早いほうが直せる。
-   */
+  private void validateReplacement(String id) {
+    if (id == null) return;
+    var original =
+        orderRepository
+            .findScopedByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("再提供の元受注が見つかりません"));
+    if (!original.isCompletionInvalidated()) throw new ServiceException("無効化した受注だけを再提供の元受注に指定できます");
+  }
+
+  /** 作成時は適格な受付担当を必須とし、省略時も実行者本人の適格性を検証する。 会員申請の確定と異なり既に成立した申請を引き継がないため、未設定のまま受注を起こさない。 */
   private Long resolveReceptionist(Long requested, String actorEmail) {
     if (requested != null) {
       validateReceptionist(requested);
@@ -684,6 +689,7 @@ public class OrderService {
   @Transactional
   public OrderPreviewResponse previewCreate(OrderCreateRequest request, String actor) {
     specialServices.lock();
+    validateReplacement(request.getReplacementForOrderId());
     calculation.requirePreviewInput(request.getConfirmationToken());
     if (request.getReceptionRoute() != null && !request.getReceptionRoute().isStoreSelectable())
       throw new ServiceException("受付経路に Web 申請は指定できません");

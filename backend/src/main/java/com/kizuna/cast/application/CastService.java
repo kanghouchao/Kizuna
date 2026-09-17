@@ -76,9 +76,12 @@ public class CastService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<CastSummaryResponse> list(String search, Pageable pageable) {
+    Sort requestedSort = pageable.getSort();
+    if (requestedSort.getOrderFor("id") == null)
+      requestedSort = requestedSort.and(Sort.sort(CastEnrollment.class).by(CastEnrollment::getId));
     Sort sort =
         Sort.by(
-            pageable.getSort().stream()
+            requestedSort.stream()
                 .map(
                     order -> {
                       String alias =
@@ -86,7 +89,6 @@ public class CastService {
                       return order.withProperty(alias + order.getProperty());
                     })
                 .toList());
-    if (sort.getOrderFor("e.id") == null) sort = sort.and(Sort.by("e.id"));
     Page<CastManagementView> page =
         profileRepository.search(
             pattern(search),

@@ -14,7 +14,8 @@ public record OrderCorrectionSnapshot(
     int totalFee,
     int totalDurationMinutes,
     int totalRemuneration,
-    int accruedRemuneration)
+    int accruedRemuneration,
+    boolean completionInvalidated)
     implements Serializable {
   public OrderCorrectionSnapshot {
     feeLines = List.copyOf(feeLines);
@@ -31,6 +32,7 @@ public record OrderCorrectionSnapshot(
         order.getTotalFee(),
         order.getTotalDurationMinutes(),
         order.getTotalRemuneration(),
-        order.getAccruedRemuneration());
+        order.getAccruedRemuneration(),
+        order.isCompletionInvalidated());
   }
 }

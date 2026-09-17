@@ -35,12 +35,19 @@ function OrderList() {
                 店舗 {order.store_id} / 受注 {order.id}
               </h2>
               <p>
-                {ORDER_STATUS_LABELS[order.status]} / 営業日 {order.business_date ?? '未設定'}
+                {order.completion_invalidated
+                  ? '誤完了・無効化済み'
+                  : ORDER_STATUS_LABELS[order.status]}{' '}
+                / 営業日 {order.business_date ?? '未設定'}
               </p>
               <p>
-                {order.course.name} / コース費用 ¥{order.course.price.toLocaleString()}
+                {order.course.name} / {order.completion_invalidated ? '原コース費用' : 'コース費用'}{' '}
+                ¥{order.course.price.toLocaleString()}
               </p>
               <p>請求総額 ¥{order.total_fee.toLocaleString()}</p>
+              {order.replacement_for_order_id && (
+                <p>再提供の元受注：{order.replacement_for_order_id}</p>
+              )}
               <p>
                 {order.status === 'CANCELLED'
                   ? '報酬発生なし'

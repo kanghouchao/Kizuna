@@ -7,6 +7,7 @@ import com.kizuna.order.api.dto.OrderAttributionInvalidationRequest;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
+import com.kizuna.order.api.dto.OrderCompletionInvalidationRequest;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCorrectionRequest;
@@ -327,6 +328,16 @@ public class OrderController {
       Principal principal) {
     orderService.cancel(id, request, principal.getName());
     return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/{id}/completion-invalidation")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
+  public ResponseEntity<OrderCorrectionResult> invalidateCompletion(
+      @PathVariable String id,
+      @Valid @RequestBody OrderCompletionInvalidationRequest request,
+      Principal principal) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(orderCorrectionService.invalidateCompletion(id, request, principal.getName()));
   }
 
   /** 完了受注の明細・実績時刻・コース・特殊サービスを理由付きで訂正する。 状態・ポイントを変えず、訂正前後の採用条件・金額・分数・報酬を返す。 */

@@ -314,6 +314,19 @@ class OrderAttributionServiceTest {
   }
 
   @Test
+  @DisplayName("完了を無効化した受注には伝票を再発行せず、既存トークンにも触れないこと")
+  void reissueRejectsAnInvalidatedCompletion() {
+    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
+        .thenReturn(
+            Optional.of(
+                Order.builder().status(OrderStatus.COMPLETED).completionInvalidated(true).build()));
+    assertThatThrownBy(() -> service.reissueReceiptToken(ORDER_ID))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("無効化した受注に伝票は発行できません");
+    Mockito.verifyNoInteractions(orderReceiptTokenRepository, receiptTokenGenerator);
+  }
+
+  @Test
   @DisplayName("完了していない受注へは再発行しないこと")
   void reissueRejectsAnIncompleteOrder() {
     givenOrder(OrderStatus.CONFIRMED);

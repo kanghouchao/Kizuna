@@ -378,3 +378,65 @@ Then('請求10000円と元利用と相殺が残り再訪しても処置履歴が
   await expect(page.getByText('10,000 円', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '巻き戻す', exact: true })).toHaveCount(0);
 });
+
+When('未提供の誤完了を確認して無効化する', async ({ page }) => {
+  await page.getByRole('link', { name: '誤完了の無効化へ', exact: true }).click();
+  await expect(page.getByText(/有効な請求 10,000 円 → 0 円/)).toBeVisible();
+  await page.getByLabel('理由', { exact: true }).fill('全く提供していない誤完了');
+  await page.getByRole('button', { name: '無効化を確認', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.getByRole('button', { name: '無効化を確認', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: '未提供を確認して無効化', exact: true }).click();
+  await expect(page.getByText(/変更 ID：/)).toBeVisible();
+});
+
+Then('原記録と零の請求報酬が残り新受注へ再提供を記録できる', async ({ page, request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const original = await getOrder(request, token, storeId, createdOrderId);
+  expect(original.total_fee).toBe(0);
+  expect(original.accrued_remuneration).toBe(0);
+  await expect(page.getByText(/原報酬/).first()).toBeVisible();
+  await expect(page.getByText('有効な請求 10,000 円 → 0 円', { exact: true })).toBeVisible();
+  await expect(page.getByText('発生済み報酬 7,000 円 → 0 円', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('有効な請求 10,000 円 → 0 円', { exact: true })).toBeVisible();
+  await expect(page.getByText('発生済み報酬 7,000 円 → 0 円', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/937-invalidation-light.png', fullPage: true });
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  await page.screenshot({ path: 'test-results/937-invalidation-dark.png', fullPage: true });
+  await page.evaluate(() => document.documentElement.classList.remove('dark'));
+  await page.setViewportSize({ width: 390, height: 844 });
+  const shell = page.locator('div.overflow-x-auto').filter({ has: page.locator('main') });
+  await shell.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  expect(await shell.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  await page.screenshot({ path: 'test-results/937-invalidation-narrow-right.png', fullPage: true });
+  await page.getByRole('link', { name: '関連する新受注で再提供', exact: true }).focus();
+  await expect(page.getByRole('link', { name: '関連する新受注で再提供', exact: true })).toBeInViewport();
+  await page.screenshot({ path: 'test-results/937-invalidation-narrow.png', fullPage: true });
+  await page.keyboard.press('Enter');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.getByText(/再提供の元受注：/)).toBeVisible();
+  await page.getByLabel('お客様名', { exact: true }).fill(customerName + '再提供');
+  await page.getByLabel('営業日', { exact: true }).fill(todayInTokyo());
+  await page.getByLabel('キャスト *', { exact: true }).click();
+  await page.getByPlaceholder('名前で検索').fill(createdCastName);
+  await page.getByRole('option', { name: createdCastName }).click();
+  await page.getByRole('combobox', { name: 'コース', exact: true }).click();
+  await page.getByLabel('コースを検索', { exact: true }).fill(courseName);
+  await page.getByRole('option', { name: new RegExp(courseName) }).click();
+  await page.getByRole('button', { name: '登録する', exact: true }).click();
+  const [saved] = await Promise.all([
+    page.waitForResponse(r => r.url().endsWith('/api/store/orders') && r.request().method() === 'POST'),
+    page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
+  ]);
+  expect(saved.status()).toBe(201);
+  const replacement = await saved.json();
+  expect(replacement.replacement_for_order_id).toBe(createdOrderId);
+  expect(replacement.completion_invalidated).toBe(false);
+  expect(replacement.status).toBe('CONFIRMED');
+  expect(replacement.total_fee).toBe(12000);
+  await cancelOrder(request, token, replacement.id, '検証終了');
+});

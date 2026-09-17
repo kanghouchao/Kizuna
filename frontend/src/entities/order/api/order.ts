@@ -71,6 +71,16 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 }
 
 export const orderApi = {
+  invalidateCompletion: async (
+    id: string,
+    request: { expected_version: number; reason: string }
+  ): Promise<OrderCorrectionHistoryEntry> => {
+    const response = await apiClient.post(
+      `/store/orders/${requireId(id, '受注')}/completion-invalidation`,
+      request
+    );
+    return response.data;
+  },
   platformList: async (page: number) => {
     const response = await apiClient.get('/platform/orders', {
       params: { page, size: 20, sort: 'createdAt,desc' },

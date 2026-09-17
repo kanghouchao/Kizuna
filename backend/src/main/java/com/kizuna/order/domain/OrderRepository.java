@@ -42,9 +42,10 @@ public interface OrderRepository
 
   String VIEW_SELECT =
       """
-      select o.startedAt as startedAt,
+      select o.completionInvalidated as completionInvalidated, o.replacementForOrderId as replacementForOrderId,
+             o.startedAt as startedAt,
              o.completedAt as completedAt, o.accruedRemuneration as accruedRemuneration,
-             (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id) as totalRemuneration,
+             case when o.completionInvalidated then 0 else (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id) end as totalRemuneration,
              (select cast(count(distinct e.serviceId) as Integer) from OrderSpecialServiceEvent e
               where e.orderId = o.id and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
@@ -136,9 +137,10 @@ public interface OrderRepository
   // 店舗（store）表示名の join は張らない。
   String PLATFORM_VIEW_SELECT =
       """
-      select o.startedAt as startedAt,
+      select o.completionInvalidated as completionInvalidated, o.replacementForOrderId as replacementForOrderId,
+             o.startedAt as startedAt,
              o.completedAt as completedAt, o.accruedRemuneration as accruedRemuneration,
-             (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id) as totalRemuneration,
+             case when o.completionInvalidated then 0 else (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id) end as totalRemuneration,
              (select cast(count(distinct e.serviceId) as Integer) from OrderSpecialServiceEvent e
               where e.orderId = o.id and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)

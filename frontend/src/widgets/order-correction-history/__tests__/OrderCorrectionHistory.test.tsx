@@ -8,6 +8,7 @@ jest.mock('@/entities/order', () => ({
 }));
 const fetchHistory = jest.mocked(orderApi.correctionHistory);
 const snapshot = {
+  completion_invalidated: false,
   course: {
     service_id: 's1',
     revision_id: 'r1',
@@ -36,6 +37,7 @@ const snapshot = {
   accrued_remuneration: 7000,
 };
 const entry: OrderCorrectionHistoryEntry = {
+  change_type: 'CORRECTION',
   correction_id: 'c1',
   order_id: 'o1',
   store_id: 1,

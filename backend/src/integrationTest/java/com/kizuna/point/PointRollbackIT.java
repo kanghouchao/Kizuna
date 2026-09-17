@@ -521,6 +521,62 @@ class PointRollbackIT extends CrossStoreTestSupport {
 
   // ==================== 端点の呼出 ====================
 
+  @Test
+  void pointRescueEnablesInvalidationWithoutChangingTheLedgerAgain() {
+    var member = registerAndLogin("無効化");
+    var customer = linkedCustomer(member.memberCode());
+    var headers = managerHeaders(STORE_A);
+    assertThat(
+            rest.postForEntity(
+                    "/store/customers/" + customer + "/point-adjustments",
+                    new HttpEntity<>(
+                        Map.of(
+                            "delta",
+                            3000,
+                            "reason",
+                            "救済検証の原資",
+                            "idempotency_key",
+                            UUID.randomUUID().toString()),
+                        headers),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    String id = createOrder(createCast("未提供の担当" + nonce), customer);
+    complete(id, 10000, 3000);
+    String path = "/store/orders/" + id;
+    var before =
+        rest.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class).getBody();
+    assertThat(before.path("total_fee").asInt()).isEqualTo(7000);
+    var rejected =
+        rest.postForEntity(
+            path + "/completion-invalidation",
+            new HttpEntity<>(
+                Map.of("expected_version", before.path("version").asLong(), "reason", "未提供"),
+                headers),
+            JsonNode.class);
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(rejected.getBody().path("details").has("point_redemption")).isTrue();
+    assertThat(rollback(id, "利用取消").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var rescued =
+        rest.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class).getBody();
+    assertThat(rescued.path("total_fee").asInt()).isEqualTo(10000);
+    long ledgerCount = pointEntryRepository.count();
+    var invalidated =
+        rest.postForEntity(
+            path + "/completion-invalidation",
+            new HttpEntity<>(
+                Map.of("expected_version", rescued.path("version").asLong(), "reason", "未提供"),
+                headers),
+            JsonNode.class);
+    assertThat(invalidated.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(invalidated.getBody().path("after").path("total_fee").asInt()).isZero();
+    assertThat(invalidated.getBody().path("after").path("accrued_remuneration").asInt()).isZero();
+    assertThat(invalidated.getBody().path("before").path("fee_lines"))
+        .isEqualTo(invalidated.getBody().path("after").path("fee_lines"));
+    assertThat(pointEntryRepository.count()).isEqualTo(ledgerCount);
+    assertThat(balanceOf(customer)).isEqualTo(3000);
+  }
+
   private ResponseEntity<JsonNode> rollback(String orderId, String reason) {
     JsonNode current = preview(orderId);
     return rest.exchange(

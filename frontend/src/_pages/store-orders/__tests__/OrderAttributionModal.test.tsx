@@ -49,6 +49,7 @@ function claimsWith(permissions: string[]): TokenClaims {
 }
 
 const completedOrder: OrderArchiveRow = {
+  completion_invalidated: false,
   accrued_remuneration: 0,
   total_remuneration: 7000,
   requires_attention: false,
@@ -282,6 +283,20 @@ describe('OrderAttributionModal', () => {
     renderModal();
 
     expect(await screen.findByText(/前に発行した伝票QRは使えなくなります/)).toBeInTheDocument();
+  });
+
+  it('完了を無効化した受注では再発行の案内とボタンを出さない', async () => {
+    mockedAttribution.mockResolvedValue(invalidated);
+    render(
+      <OrderAttributionModal
+        order={{ ...completedOrder, completion_invalidated: true }}
+        onClose={jest.fn()}
+      />
+    );
+    expect(await screen.findByText('無効化した受注に伝票は発行できません。')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '伝票QRを再発行' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/この来店を取り戻せます/)).not.toBeInTheDocument();
+    expect(mockedReissue).not.toHaveBeenCalled();
   });
 
   it('再発行した伝票の生値を QR が運ぶ', async () => {

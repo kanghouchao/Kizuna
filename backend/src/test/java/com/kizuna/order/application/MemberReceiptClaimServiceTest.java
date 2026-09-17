@@ -207,6 +207,25 @@ class MemberReceiptClaimServiceTest {
   }
 
   @Test
+  @DisplayName("無効化済み受注の伝票は不在と同じ応答で拒否し、帰属や付与を物化しないこと")
+  void refusesTheReceiptOfAnInvalidatedOrder() {
+    OrderReceiptToken token = issuedToken(OffsetDateTime.now());
+    givenToken(token);
+    Mockito.when(orderRepository.findById(ORDER_ID))
+        .thenReturn(Optional.of(Order.builder().completionInvalidated(true).build()));
+
+    Throwable invalidated = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+    Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
+        .thenReturn(Optional.empty());
+    Throwable missing = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+
+    assertThat(invalidated).isInstanceOf(NotFoundException.class).hasMessage(missing.getMessage());
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.ISSUED);
+    Mockito.verify(orderReceiptTokenRepository, Mockito.never()).save(Mockito.any());
+    Mockito.verifyNoInteractions(materializer);
+  }
+
+  @Test
   @DisplayName("会員でない主体には申領させないこと")
   void refusesANonMemberPrincipal() {
     Mockito.when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID))

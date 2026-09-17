@@ -20,6 +20,9 @@ import org.hibernate.annotations.Type;
 @Getter
 @NoArgsConstructor
 public class OrderCorrection extends StoreScopedEntity {
+  @Column(nullable = false, updatable = false, length = 32)
+  private String changeType;
+
   @Column(nullable = false, updatable = false, length = 64)
   private String orderId;
 
@@ -72,6 +75,7 @@ public class OrderCorrection extends StoreScopedEntity {
     var record = new OrderCorrection();
     record.setStoreId(after.getStoreId());
     record.orderId = after.getId();
+    record.changeType = after.isCompletionInvalidated() ? "COMPLETION_INVALIDATION" : "CORRECTION";
     record.reason = reason;
     record.correctedBy = actorId;
     record.correctedAt = at;

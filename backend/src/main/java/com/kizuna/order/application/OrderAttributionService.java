@@ -115,6 +115,9 @@ public class OrderAttributionService {
     if (order.getStatus() != OrderStatus.COMPLETED) {
       throw new ServiceException("完了していない受注に伝票は発行できません");
     }
+    if (order.isCompletionInvalidated()) {
+      throw new ServiceException("無効化した受注に伝票は発行できません");
+    }
     // トークン行を先に押さえてから帰属記録を読む。順序を入れ替えると、在途の申領が commit する前に読んだ
     // 「帰属していない」という観測のまま発行してしまい、有効な帰属と申領できる伝票が並ぶ。
     List<OrderReceiptToken> tokens = orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);

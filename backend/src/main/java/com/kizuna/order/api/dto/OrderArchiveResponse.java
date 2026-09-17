@@ -18,6 +18,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderArchiveResponse {
+  private boolean completionInvalidated;
+  private String replacementForOrderId;
   private boolean requiresAttention;
   private int unresolvedSpecialServiceCount;
   private OffsetDateTime startedAt;

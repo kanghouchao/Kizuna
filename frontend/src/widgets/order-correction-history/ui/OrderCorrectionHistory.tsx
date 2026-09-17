@@ -24,6 +24,9 @@ function Snapshot({ value, label }: { value: OrderCorrectionSnapshot; label: str
   return (
     <section className="min-w-0 space-y-3 rounded-lg border p-4" aria-label={label}>
       <h4 className="font-medium">{label}</h4>
+      {value.completion_invalidated && (
+        <p>無効化済み。項目の費用・報酬は原記録で、有効額は零です。</p>
+      )}
       <p>
         実際の到着 {value.actual_arrival_time ?? '未記録'} / 終了{' '}
         {value.actual_end_time ?? '未記録'}
@@ -118,8 +121,8 @@ export function OrderCorrectionHistory({ orderId, scope }: Props) {
             原営業日 {entry.business_date} / 原完了日時 {dateTime(entry.completed_at)}
           </p>
           <p>
-            訂正日時 {dateTime(entry.corrected_at)} / 操作者{' '}
-            {entry.corrected_by ?? '削除済み利用者'}
+            {entry.change_type === 'COMPLETION_INVALIDATION' ? '誤完了の無効化日時' : '訂正日時'}{' '}
+            {dateTime(entry.corrected_at)} / 操作者 {entry.corrected_by ?? '削除済み利用者'}
           </p>
           <p className="break-words">
             訂正 ID {entry.correction_id} / 受注版 {entry.before_version} → {entry.after_version}
