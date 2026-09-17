@@ -929,8 +929,8 @@ databaseChangeLog:
   - changeSet:
       id: store-v0100-004-order-correction-schema
       author: kanghouchao
-      # 完了後訂正の痕。1 回の訂正＝1 行で、訂正前の姿を保持する（当日実績の訂正履歴 t_attendance_corrections の拡張）。
-      # 標量の前値は列で、行に同一性の無い明細の前値は行集合全体の jsonb 写しで持つ。
+      # 1 回の訂正＝1 行で、項目・費用・報酬の前後を before_snapshot / after_snapshot の JSONB に独立保存する。
+      # 原営業日・原完了日時と前後の受注版を保持し、現在値や後続の訂正に依存せず変更根拠を辿れる。
       preConditions:
         - dbms:
             type: postgresql
