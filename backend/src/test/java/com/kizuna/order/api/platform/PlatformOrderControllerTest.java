@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.order.api.dto.PlatformOrderResponse;
+import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.application.PlatformOrderService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
@@ -39,6 +40,7 @@ class PlatformOrderControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
+  @MockitoBean private OrderCorrectionHistory correctionHistory;
   @MockitoBean private PlatformOrderService platformOrderService;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として

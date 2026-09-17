@@ -9,31 +9,31 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCorrection;
 import com.kizuna.order.domain.OrderCorrectionCommand;
 import com.kizuna.order.domain.OrderCorrectionRepository;
+import com.kizuna.order.domain.OrderCorrectionSnapshot;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 完了した受注の内容を権限付きで訂正する門（ADR 0013 が予告した誤完了の救済）。
- *
- * <p>ポイント台帳へ<b>依存を持たない</b>。完了時の自動付与は「完了時点の合計に基づく時点事実」であり、訂正で合計が変わっても 追随しない（帰属 ADR 0009
- * と同族）。台帳を読みも書きもしないことがその決定の構造的な証跡である。
- *
- * <p>付与の差額は算出も提示もしない。手当ては別機構（手動調整）が担い、その調整は受注にも帰属記録にも結び付かないため、 門は「前回の助言が実行されたか」を知る手立てを持たない —
- * 可執行の額として返すと、二度目の訂正が一度目の手当てを 勘定に入れないまま次の額を勧める。要否と額の判断は台帳側の画面に委ねる。
+ * 完了した受注の提供事実だけを訂正し、ポイント台帳は読み書きしない。 完了時の付与は独立した事実として保持する。手動調整との実行対応を追えないため、
+ * 付与の差額を実行指示として返さず、手当ての要否と額は台帳側の判断に委ねる。
  */
 @Service
 @RequiredArgsConstructor
 public class OrderCorrectionService {
 
+  private final EntityManager entityManager;
   private final OrderRepository orderRepository;
   private final OrderCorrectionRepository orderCorrectionRepository;
   private final ActorIdentityService actorIdentityService;
@@ -78,13 +78,10 @@ public class OrderCorrectionService {
     calculation.verify(
         request.getConfirmationToken(),
         calculation.preview("CORRECT", id, request, calculated, null));
-    var correction =
-        orderCorrectionRepository.save(
-            OrderCorrection.snapshotOf(
-                order,
-                request.getReason(),
-                actorIdentityService.requireUserId(actorEmail),
-                OffsetDateTime.now()));
+    long beforeVersion = order.getVersion();
+    var before = OrderCorrectionSnapshot.of(order);
+    // 子明細だけの同額訂正でも、親の受注版を進めて履歴順と競合検出を確定する。
+    entityManager.lock(order, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
     var previousSpecials = order.getSpecialServices();
     order.correctServices(
         calculated.getSpecialServices(),
@@ -94,6 +91,17 @@ public class OrderCorrectionService {
             course,
             calculated.editableFeeLines()));
     orderRepository.saveAndFlush(order);
+    // 列の日時精度と生成済み明細 ID を反映し、次の訂正の前値と同じ姿を記録する。
+    entityManager.refresh(order);
+    var correction =
+        orderCorrectionRepository.save(
+            OrderCorrection.recorded(
+                order,
+                beforeVersion,
+                before,
+                request.getReason(),
+                actorIdentityService.requireUserId(actorEmail),
+                OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS)));
 
     return new OrderCorrectionResponse(
         correction.getId(),
@@ -110,7 +118,18 @@ public class OrderCorrectionService {
         previousSpecials.stream()
             .map(s -> new OrderSpecialServiceResponse(s, false, null))
             .toList(),
-        specialServices.describe(order));
+        specialServices.describe(order),
+        order.getId(),
+        order.getStoreId(),
+        correction.getBusinessDate(),
+        correction.getCompletedAt(),
+        correction.getCorrectedAt(),
+        correction.getCorrectedBy(),
+        correction.getReason(),
+        correction.getBeforeVersion(),
+        correction.getAfterVersion(),
+        before.accruedRemuneration(),
+        order.getAccruedRemuneration());
   }
 
   @StoreScoped

@@ -1,5 +1,7 @@
 import type {
   CourseCandidate,
+  OrderCorrectionHistoryEntry,
+  PlatformOrder,
   SurchargeCandidate,
   OrderPreview,
   SpecialServiceCandidate,
@@ -69,6 +71,18 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 }
 
 export const orderApi = {
+  platformList: async (page: number) => {
+    const response = await apiClient.get('/platform/orders', {
+      params: { page, size: 20, sort: 'createdAt,desc' },
+    });
+    return fromSpringPage<PlatformOrder>(response.data);
+  },
+  correctionHistory: async (scope: 'store' | 'platform', id: string, cursor?: string) => {
+    const response = await apiClient.get(`/${scope}/orders/${requireId(id, '受注')}/corrections`, {
+      params: { cursor, size: 20 },
+    });
+    return fromCursorPage<OrderCorrectionHistoryEntry>(response.data);
+  },
   surchargeCandidates: async (search: string, page: number) => {
     const response = await apiClient.get('/store/orders/surcharge-candidates', {
       params: { search, page, size: 20 },

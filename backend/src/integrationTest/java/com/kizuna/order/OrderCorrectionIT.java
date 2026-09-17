@@ -1,17 +1,27 @@
 package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
 
-import com.kizuna.order.domain.OrderCorrection;
-import com.kizuna.order.domain.OrderCorrectionRepository;
-import com.kizuna.order.domain.OrderFeeLineKind;
-import com.kizuna.order.domain.OrderFeeLineSnapshot;
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.result.OrderCompletionResults;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.Role;
+import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,19 +31,11 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
-/**
- * 完了後訂正の門を本物の PostgreSQL で検証する統合テスト（ADR 0019）。
- *
- * <p>固定するのは 4 つ — 門を通れるのは {@code ORDER_CORRECT} だけであること、直せるのが明細行・実績時刻・コース
- * スナップショットの三組に限られること、訂正のたびに前値の快照が残って鎖から履歴を復元できること、そして門が ポイント台帳へ一切書かないこと。
- *
- * <p>権限の差は 2 人のシードユーザーで見る。基底クラスの yamada は店舗スタッフで {@code ORDER_MANAGE} を持つが {@code ORDER_CORRECT}
- * は持たず、店長 tanaka が持つ。
- *
- * <p>シード設定は「100 円ごとに 1 ポイント付与」。
- */
+/** 完了後訂正の権限・独立した前後快照・受注版とカーソルの順序を実 PostgreSQL で検証する。 台帳は訂正で変わらず、店舗と授権店舗集合の外へ履歴を返さない。 */
 class OrderCorrectionIT extends CrossStoreTestSupport {
 
   /** demo シード（seed/05-demo.yaml）の山田次郎（STORE_STAFF・授権店舗 = 店舗1）。 */
@@ -41,8 +43,14 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
 
   private static final int COMPLETED_FEE = 12000;
 
-  @Autowired private OrderCorrectionRepository orderCorrectionRepository;
   @Autowired private PointEntryRepository pointEntryRepository;
+  @Autowired private OrderCompletionResults results;
+  @Autowired private OrderRepository orders;
+  @Autowired private StoreContext storeContext;
+  @Autowired private JdbcTemplate jdbc;
+  @Autowired private PlatformUserRepository users;
+  @Autowired private RoleRepository roles;
+  @Autowired private PasswordEncoder passwords;
 
   private final long nonce = System.nanoTime();
 
@@ -109,31 +117,34 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         .as("2 度の訂正を通しても台帳へ 1 行も書かないこと")
         .isEqualTo(pointEntries);
 
-    List<OrderCorrection> chain =
-        orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAscIdAsc(orderId);
-    assertThat(chain).as("撥ねられた訂正は痕を残さないこと（快照は先に起こすが巻き戻る）").hasSize(2);
+    var chain = history(storeHeaders(STORE_A), orderId, "").getBody().path("content");
+    assertThat(chain).hasSize(2);
+    var latest = chain.get(0);
+    var firstRecord = chain.get(1);
+    assertThat(firstRecord.path("correction_id").asString())
+        .isEqualTo(first.getBody().path("correction_id").asString());
+    assertThat(firstRecord.path("before").path("total_fee").asInt()).isEqualTo(COMPLETED_FEE);
+    assertThat(firstRecord.path("after").path("total_fee").asInt()).isEqualTo(20000);
+    assertThat(latest.path("before")).isEqualTo(firstRecord.path("after"));
+    assertThat(latest.path("after").path("total_fee").asInt()).isEqualTo(18000);
+    assertThat(firstRecord.path("corrected_by").asLong()).isPositive();
+    assertThat(firstRecord.path("business_date")).isEqualTo(detail.path("business_date"));
+    assertThat(firstRecord.path("completed_at")).isEqualTo(detail.path("completed_at"));
+    assertThat(latest.path("after_version").asLong())
+        .isGreaterThan(firstRecord.path("after_version").asLong());
 
-    OrderCorrection before1 = chain.get(0);
-    assertThat(before1.getReason()).isEqualTo("コースの取り違え");
-    assertThat(before1.getCorrectedBy()).isNotNull();
-    assertThat(before1.getTotalFee()).isEqualTo(COMPLETED_FEE);
-    assertThat(before1.getActualArrivalTime()).as("訂正前は実績時刻を持たない受注だったこと").isNull();
-    assertThat(before1.getFeeLines())
-        .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
-        .containsExactly(
-            tuple(OrderFeeLineKind.BASE_COURSE, 100),
-            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, COMPLETED_FEE - 100));
-
-    OrderCorrection before2 = chain.get(1);
-    assertThat(before2.getReason()).isEqualTo("オプションの取り消し");
-    assertThat(before2.getTotalFee()).as("一度目の後値が二度目の前値であること").isEqualTo(20000);
-    assertThat(before2.getActualEndTime()).isEqualTo(LocalTime.of(22, 40));
-    assertThat(before2.getCourse().name()).isEqualTo("120 分コース");
-    assertThat(before2.getFeeLines())
-        .extracting(OrderFeeLineSnapshot::kind, OrderFeeLineSnapshot::amount)
-        .containsExactly(
-            tuple(OrderFeeLineKind.BASE_COURSE, 18000),
-            tuple(OrderFeeLineKind.CREDIT_SURCHARGE, 2000));
+    var page = history(storeHeaders(STORE_A), orderId, "?size=1").getBody();
+    assertThat(page.path("content")).hasSize(1);
+    var next =
+        history(
+                storeHeaders(STORE_A),
+                orderId,
+                "?size=1&cursor=" + page.path("next_cursor").asString())
+            .getBody();
+    assertThat(next.path("content").get(0)).isEqualTo(firstRecord);
+    assertThat(next.has("next_cursor")).isFalse();
+    assertThat(history(storeHeaders(STORE_A), orderId, "?cursor=invalid").getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
 
     // 二度目の要求は実績時刻と延長分数を載せていない。全量送信なので「変更しない」ではなく「値なし」が当たる
     JsonNode afterSecond = orderJson(managerHeaders(STORE_A), orderId);
@@ -159,14 +170,15 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     assertThat(orderJson(managerHeaders(STORE_A), orderId).path("total_fee").asInt())
         .isEqualTo(COMPLETED_FEE);
-    assertThat(orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAscIdAsc(orderId))
-        .isEmpty();
+    assertThat(history(storeHeaders(STORE_A), orderId, "").getBody().path("content")).isEmpty();
   }
 
   @Test
   @DisplayName("ポイント利用の行は門内でも編集できず、訂正を跨いで残ること")
   void pointRedemptionLinesSurviveTheGate() {
     String orderId = completedOrderUsingPoints("ポイント", 100);
+    assertThat(history(storeHeaders(STORE_A), orderId, "").getBody().path("content")).isEmpty();
+    assertPlatformTotalFee(orderId, COMPLETED_FEE - 100);
     long pointEntries = pointEntryRepository.count();
 
     // ポイント利用の誤りはポイント機構経由で直す。門の要求に混ぜることはできない
@@ -195,6 +207,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(lines.get(1).path("amount").asInt()).as("減項は正値で返ること").isEqualTo(100);
     // 合計はポイント控除後の請求額なので、残った利用の行のぶん下がったまま
     assertThat(accepted.getBody().path("total_fee").asInt()).isEqualTo(8000);
+    assertPlatformTotalFee(orderId, 8000);
 
     assertThat(pointEntryRepository.count()).as("門は台帳へ一切書かないこと").isEqualTo(pointEntries);
   }
@@ -232,7 +245,7 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
     assertThat(orderJson(managerHeaders(STORE_A), orderId).path("total_fee").asInt())
         .as("撥ねた訂正は先の訂正を巻き戻さないこと")
         .isEqualTo(9100);
-    assertThat(orderCorrectionRepository.findByOrderIdOrderByCorrectedAtAscIdAsc(orderId))
+    assertThat(history(storeHeaders(STORE_A), orderId, "").getBody().path("content"))
         .as("撥ねた訂正は痕を残さないこと")
         .hasSize(1);
   }
@@ -284,6 +297,204 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
+  @Test
+  @DisplayName("同時刻の訂正を版順で辿り、途中の追加でも既存履歴を欠落・重複させないこと")
+  void paginationAndPublicResultsPreserveEveryCorrection() {
+    String id = completedOrder("ページング");
+    var headers = managerHeaders(STORE_A);
+    var first = correct(headers, id, "{\"reason\":\"一回目\",\"fee_lines\":[]}").getBody();
+    var second =
+        correct(
+                headers,
+                id,
+                "{\"reason\":\"二回目\",\"actual_end_time\":\"22:00:00\",\"fee_lines\":[]}")
+            .getBody();
+    jdbc.update(
+        "update t_order_corrections set corrected_at = ?::timestamptz where order_id = ?",
+        "2026-09-16T09:00:00Z",
+        id);
+    var firstPage = history(headers, id, "?size=1").getBody();
+    assertThat(firstPage.path("content").get(0).path("correction_id"))
+        .isEqualTo(second.path("correction_id"));
+    var third =
+        correct(
+                headers,
+                id,
+                "{\"reason\":\"三回目\",\"actual_end_time\":\"23:00:00\",\"fee_lines\":[]}")
+            .getBody();
+    var cursor = firstPage.path("next_cursor").asString();
+    var next = history(headers, id, "?size=1&cursor=" + cursor).getBody();
+    assertThat(next.path("content")).hasSize(1);
+    assertThat(next.path("content").get(0).path("correction_id"))
+        .isEqualTo(first.path("correction_id"));
+    assertThat(next.has("next_cursor")).isFalse();
+    assertThat(history(headers, completedOrder("別の受注"), "?cursor=" + cursor).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(history(headers, id, "?size=999999").getBody().path("content")).hasSize(3);
+    try {
+      storeContext.setStoreId(STORE_A);
+      var result = results.find(id).orElseThrow();
+      assertThat(result.latestCorrectionId()).isEqualTo(third.path("correction_id").asString());
+      assertThat(result.latestCorrection().afterVersion()).isEqualTo(result.version());
+      assertThat(result.latestCorrection().after().totalFee()).isEqualTo(100);
+      var page = results.corrections(id, null, 2);
+      assertThat(page.content()).hasSize(2);
+      var tail = results.corrections(id, page.nextCursor(), 2);
+      assertThat(tail.content())
+          .extracting(c -> c.correctionId())
+          .containsExactly(first.path("correction_id").asString());
+      storeContext.setStoreId(STORE_B);
+      assertThat(results.find(id)).isEmpty();
+    } finally {
+      storeContext.clear();
+    }
+  }
+
+  @Test
+  @DisplayName("店舗管理と跨店参照は各作用域だけを読み、履歴カーソルの作用域を混用できないこと")
+  void historyRequiresPermissionAndVisibleOrder() {
+    String id = completedOrder("隔離");
+    var manager = managerHeaders(STORE_A);
+    correct(manager, id, "{\"reason\":\"一回目\",\"fee_lines\":[]}");
+    correct(manager, id, "{\"reason\":\"二回目\",\"fee_lines\":[]}");
+    assertThat(history(storeHeaders(STORE_A), id, "").getStatusCode()).isEqualTo(HttpStatus.OK);
+    var unauthenticated = new HttpHeaders();
+    unauthenticated.setBearerAuth("invalid-session");
+    assertThat(history(unauthenticated, id, "").getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(history(storeHeaders(STORE_A), "missing-order", "").getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    var platform = new HttpHeaders();
+    platform.setBearerAuth(login("admin@kizuna.test"));
+    var path = "/platform/orders/" + id + "/corrections";
+    var visible = rest.exchange(path, HttpMethod.GET, new HttpEntity<>(platform), JsonNode.class);
+    assertThat(visible.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(visible.getBody().path("content")).hasSize(2);
+    var readerRole =
+        roles.save(
+            Role.builder()
+                .name("訂正履歴店舗読取-" + nonce)
+                .permissionIds(
+                    Set.of(
+                        jdbc.queryForObject(
+                            "select id from t_permissions where code = 'ORDER_MANAGE'",
+                            Long.class)))
+                .build());
+    var readerEmail = "correction-reader-" + nonce + "@kizuna.test";
+    var readerCredential = UUID.randomUUID().toString();
+    users.save(
+        PlatformUser.builder()
+            .email(readerEmail)
+            .password(passwords.encode(readerCredential))
+            .displayName("店舗読取")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .roleIds(Set.of(readerRole.getId()))
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(STORE_A))
+            .build());
+    var reader = new HttpHeaders();
+    reader.setBearerAuth(loginWithPassword(readerEmail, readerCredential));
+    reader.set("X-Store-ID", Long.toString(STORE_A));
+    reader.set("X-Role", "store");
+    assertThat(history(reader, id, "").getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(
+            rest.exchange(path, HttpMethod.GET, new HttpEntity<>(reader), JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    var cursor = history(manager, id, "?size=1").getBody().path("next_cursor").asString();
+    assertThat(
+            rest.exchange(
+                    path + "?cursor=" + cursor,
+                    HttpMethod.GET,
+                    new HttpEntity<>(platform),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    var scopedPlatform = new HttpHeaders();
+    var email = "correction-scope-" + nonce + "@kizuna.test";
+    var credential = UUID.randomUUID().toString();
+    users.save(
+        PlatformUser.builder()
+            .email(email)
+            .password(passwords.encode(credential))
+            .displayName("店舗限定参照")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .roleIds(Set.of(roles.findByName("店長").orElseThrow().getId()))
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(STORE_A))
+            .build());
+    scopedPlatform.setBearerAuth(loginWithPassword(email, credential));
+    assertThat(
+            rest.exchange(path, HttpMethod.GET, new HttpEntity<>(scopedPlatform), JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    var foreign =
+        Order.builder()
+            .course(courseFixture(STORE_B, 100))
+            .businessDate(LocalDate.of(2026, 9, 14))
+            .status(OrderStatus.CONFIRMED)
+            .build();
+    foreign.setStoreId(STORE_B);
+    foreign.completeWith(0, 0);
+    var foreignId = orders.saveAndFlush(foreign).getId();
+    var foreignPath = "/platform/orders/" + foreignId + "/corrections";
+    assertThat(
+            rest.exchange(
+                    foreignPath, HttpMethod.GET, new HttpEntity<>(scopedPlatform), JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(history(storeHeaders(STORE_A), foreignId, "").getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  @DisplayName("同じ版を同時保存した敗者は 409 となり履歴と報酬を残さないこと")
+  void concurrentCorrectionsHaveOnlyOneWinner() throws Exception {
+    String id = completedOrder("並行訂正");
+    var headers = managerHeaders(STORE_A);
+    long version = currentVersion(headers, id);
+    var request =
+        confirmedRequest(
+            "/store/orders/" + id + "/correction-preview",
+            "{\"expected_version\":" + version + ",\"reason\":\"並行\",\"fee_lines\":[]}",
+            headers);
+    var start = new CountDownLatch(1);
+    var calls =
+        IntStream.range(0, 2)
+            .mapToObj(
+                i ->
+                    CompletableFuture.supplyAsync(
+                        () -> {
+                          try {
+                            start.await();
+                          } catch (InterruptedException e) {
+                            throw new IllegalStateException(e);
+                          }
+                          return rest.exchange(
+                              "/store/orders/" + id + "/corrections",
+                              HttpMethod.POST,
+                              request,
+                              JsonNode.class);
+                        }))
+            .toList();
+    start.countDown();
+    var statuses = List.of(calls.get(0).get().getStatusCode(), calls.get(1).get().getStatusCode());
+    assertThat(statuses).containsExactlyInAnyOrder(HttpStatus.CREATED, HttpStatus.CONFLICT);
+    var rows = history(headers, id, "").getBody().path("content");
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).path("after").path("accrued_remuneration"))
+        .isEqualTo(orderJson(headers, id).path("accrued_remuneration"));
+  }
+
+  private ResponseEntity<JsonNode> history(HttpHeaders headers, String id, String query) {
+    return rest.exchange(
+        "/store/orders/" + id + "/corrections" + query,
+        HttpMethod.GET,
+        new HttpEntity<>(headers),
+        JsonNode.class);
+  }
+
   /** 現物の版を載せて訂正する。画面が読み直してから送る通常の経路にあたる。 */
   private ResponseEntity<JsonNode> correct(HttpHeaders headers, String orderId, String body) {
     return correctAt(headers, orderId, currentVersion(headers, orderId), body);
@@ -303,6 +514,26 @@ class OrderCorrectionIT extends CrossStoreTestSupport {
 
   private long currentVersion(HttpHeaders headers, String orderId) {
     return orderJson(headers, orderId).path("version").asLong();
+  }
+
+  private void assertPlatformTotalFee(String orderId, int expected) {
+    var headers = new HttpHeaders();
+    headers.setBearerAuth(login("admin@kizuna.test"));
+    var response =
+        rest.exchange(
+            "/platform/orders?size=2000&sort=createdAt,desc",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    for (var row : response.getBody().path("content")) {
+      if (row.path("id").asString().equals(orderId)) {
+        assertThat(row.path("total_fee").isIntegralNumber()).isTrue();
+        assertThat(row.path("total_fee").asInt()).isEqualTo(expected);
+        return;
+      }
+    }
+    throw new AssertionError("平台一覧に対象受注がありません: " + orderId);
   }
 
   private JsonNode orderJson(HttpHeaders headers, String orderId) {

@@ -143,7 +143,7 @@ public interface OrderRepository
               where e.orderId = o.id and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
               and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id)) as unresolvedSpecialServiceCount,
-             o.id as id, o.storeId as storeId, o.course as course,
+             o.id as id, o.storeId as storeId, o.course as course, o.totalFee as totalFee,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,

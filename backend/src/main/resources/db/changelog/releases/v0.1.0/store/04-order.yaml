@@ -929,22 +929,16 @@ databaseChangeLog:
   - changeSet:
       id: store-v0100-004-order-correction-schema
       author: kanghouchao
-      # 完了後訂正の痕。1 回の訂正＝1 行で、訂正前の姿を保持する（当日実績の訂正履歴 t_attendance_corrections の拡張）。
-      # 標量の前値は列で、行に同一性の無い明細の前値は行集合全体の jsonb 写しで持つ。
+      # 1 回の訂正＝1 行で、項目・費用・報酬の前後を before_snapshot / after_snapshot の JSONB に独立保存する。
+      # 原営業日・原完了日時と前後の受注版を保持し、現在値や後続の訂正に依存せず変更根拠を辿れる。
       preConditions:
         - dbms:
             type: postgresql
       changes:
         - createTable:
             tableName: t_order_corrections
-            remarks: 完了後訂正の履歴（訂正前の姿・訂正者・時刻・理由）
+            remarks: 完了後訂正の履歴（前後の姿・受注版・訂正者・時刻・理由）
             columns:
-              - column:
-                  name: special_services
-                  type: JSONB
-                  defaultValueComputed: "'[]'::jsonb"
-                  constraints:
-                    nullable: false
               - column:
                   name: id
                   type: VARCHAR(64)
@@ -971,76 +965,35 @@ databaseChangeLog:
                     nullable: false
                   remarks: 訂正の理由
               - column:
-                  name: actual_arrival_time
-                  type: TIME
-                  remarks: 訂正前の実際の到着時間
-              - column:
-                  name: actual_end_time
-                  type: TIME
-                  remarks: 訂正前の実際の終了時間
-              - column:
-                  name: course_name
-                  type: VARCHAR(255)
-                  constraints:
-                    nullable: false
-                  remarks: 訂正前のコース名の写し
-              - column:
-                  name: course_minutes
-                  type: INTEGER
-                  constraints:
-                    nullable: false
-                  remarks: 訂正前のコース分数
-              - column:
-                  name: course_service_id
-                  type: VARCHAR(255)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: course_revision_id
-                  type: VARCHAR(255)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: course_revision_number
+                  name: before_version
                   type: BIGINT
                   constraints:
                     nullable: false
               - column:
-                  name: course_price
-                  type: INTEGER
+                  name: after_version
+                  type: BIGINT
                   constraints:
                     nullable: false
               - column:
-                  name: course_remuneration
-                  type: INTEGER
+                  name: business_date
+                  type: DATE
                   constraints:
                     nullable: false
               - column:
-                  name: course_adoption_basis
-                  type: VARCHAR(40)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: course_adopted_at
+                  name: completed_at
                   type: TIMESTAMP WITH TIME ZONE
                   constraints:
                     nullable: false
               - column:
-                  name: extension_minutes
-                  type: INTEGER
-                  remarks: 訂正前の延長分数
-              - column:
-                  name: total_fee
-                  type: INTEGER
-                  remarks: 訂正前の合計。明細の前値から導出できるが、差額の集計が行を展開せずに読めるよう列でも持つ
-              - column:
-                  # 門が触れない行（ポイント利用）も含む全行。履歴行だけで訂正前の姿が読める形にしておかないと、
-                  # 現在の行を突き合わせなければ意味が決まらない記録になる。
-                  name: fee_lines
-                  type: jsonb
+                  name: before_snapshot
+                  type: JSONB
                   constraints:
                     nullable: false
-                  remarks: 訂正前の明細の全行（帯符号の金額のまま）
+              - column:
+                  name: after_snapshot
+                  type: JSONB
+                  constraints:
+                    nullable: false
               - column:
                   name: corrected_by
                   type: BIGINT
@@ -1093,33 +1046,16 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: SET NULL
-        # 鎖は受注 1 件ぶんをまとめて古い順に辿る。
-        - createIndex:
-            indexName: idx_t_order_corrections_order
+        - addUniqueConstraint:
             tableName: t_order_corrections
-            columns:
-              - column:
-                  name: order_id
-        - addForeignKeyConstraint:
-            baseTableName: t_order_corrections
-            baseColumnNames: course_revision_id, store_id
-            referencedTableName: t_service_revisions
-            referencedColumnNames: id, store_id
-            constraintName: fk_t_order_corrections_course_revision
-            onDelete: NO ACTION
-        - createIndex:
-            tableName: t_order_corrections
-            indexName: idx_t_order_corrections_course_revision
-            columns:
-              - column:
-                  name: store_id
-              - column:
-                  name: course_revision_id
+            columnNames: order_id, after_version
+            constraintName: uq_t_order_corrections_order_version
         - sql:
             sql: |
-              ALTER TABLE t_order_corrections ADD CONSTRAINT ck_t_order_corrections_course CHECK (
-                course_minutes > 0 AND course_price >= 0 AND course_remuneration BETWEEN 0 AND course_price
-                AND course_adoption_basis IN ('CURRENT_SETTING', 'HISTORICAL_CORRECTION'));
+              CREATE INDEX idx_t_order_corrections_order ON t_order_corrections
+                (store_id, order_id, after_version DESC, id DESC);
+              ALTER TABLE t_order_corrections ADD CONSTRAINT ck_t_order_corrections_versions
+                CHECK (before_version >= 0 AND after_version > before_version);
   - changeSet:
       id: store-v0100-004-order-application-schema
       author: kanghouchao

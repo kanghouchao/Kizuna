@@ -17,6 +17,8 @@ public interface PlatformOrderView {
 
   int getTotalRemuneration();
 
+  int getTotalFee();
+
   Integer getUnresolvedSpecialServiceCount();
 
   default boolean getRequiresAttention() {

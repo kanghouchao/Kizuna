@@ -21,6 +21,7 @@ public class PlatformOrderResponse {
   private OffsetDateTime completedAt;
   private int accruedRemuneration;
   private int totalRemuneration;
+  private int totalFee;
   private OrderCourse course;
   private String id;
   private Long storeId;

@@ -391,6 +391,16 @@ class OrderExtrasIT extends CrossStoreTestSupport {
     assertThat(corrected.getBody().path("fee_lines").get(1).path("adoption_basis").asString())
         .isEqualTo("HISTORICAL_CORRECTION");
     correction.put(
+        "expected_version", get("/store/orders/" + id, headers).getBody().path("version").asLong());
+    var samePriceQuote = post("/store/orders/" + id + "/correction-preview", correction, headers);
+    var reselected =
+        save("/store/orders/" + id + "/corrections", correction, samePriceQuote.getBody(), headers);
+    assertThat(reselected.getStatusCode())
+        .as("同額の歴史版本を再選択しても訂正が成立する")
+        .isEqualTo(HttpStatus.CREATED);
+    assertThat(reselected.getBody().path("after_version").asLong())
+        .isGreaterThan(corrected.getBody().path("after_version").asLong());
+    correction.put(
         "fee_lines", List.of(Map.of("kind", "MANUAL_ADJUST", "name", "迂回", "amount", 1)));
     assertThat(
             post("/store/orders/" + id + "/correction-preview", correction, headers)

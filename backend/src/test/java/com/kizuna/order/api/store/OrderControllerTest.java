@@ -26,6 +26,7 @@ import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
+import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.application.OrderCorrectionService;
 import com.kizuna.order.application.OrderPointRollbackService;
 import com.kizuna.order.application.OrderService;
@@ -80,6 +81,7 @@ class OrderControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
+  @MockitoBean private OrderCorrectionHistory correctionHistory;
   @MockitoBean private OrderService orderService;
   @MockitoBean private OrderAttributionService orderAttributionService;
   @MockitoBean private OrderAttributionCorrectionService orderAttributionCorrectionService;
@@ -640,7 +642,18 @@ class OrderControllerTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of()));
+                List.of(),
+                "o1",
+                1L,
+                null,
+                null,
+                null,
+                1L,
+                "訂正",
+                3L,
+                4L,
+                0,
+                0));
 
     mockMvc
         .perform(storePost("/store/orders/o1/corrections", CORRECTION_BODY))
@@ -695,7 +708,18 @@ class OrderControllerTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of()));
+                List.of(),
+                "o1",
+                1L,
+                null,
+                null,
+                null,
+                1L,
+                "訂正",
+                3L,
+                4L,
+                0,
+                0));
     mockMvc
         .perform(
             storePost(

@@ -592,7 +592,7 @@ describe('OrderCompletionModal', () => {
     expect(screen.getByLabelText('明細1の金額')).toHaveValue(8000);
     expect(mockedGet).toHaveBeenCalledTimes(1);
     expect(notify.warning).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    fireEvent.click(await screen.findByRole('button', { name: '完了する' }));
     await confirmPreview();
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
     expect(mockedComplete.mock.calls[1][1]).toEqual(mockedComplete.mock.calls[0][1]);

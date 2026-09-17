@@ -4,6 +4,11 @@ import { notify } from '@/shared/notify';
 import OrderCorrectionPage from '../ui/OrderCorrectionPage';
 import { Order, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
+import { hasPermission } from '@/shared/lib';
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  hasPermission: jest.fn(() => true),
+}));
 
 const mockPush = jest.fn();
 let mockParams = { storeId: '1', id: 'o1' };
@@ -89,6 +94,7 @@ const ATTRIBUTED = { id: 1, attributed: true, member_code: '123456789012' };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(hasPermission).mockReturnValue(true);
   mockParams = { storeId: '1', id: 'o1' };
   mockedOrderApi.attribution.mockResolvedValue(ATTRIBUTED);
 });
@@ -97,6 +103,18 @@ describe('完了後訂正のページ', () => {
   it('三組の全量を送り、送らなかった欄は空として運ぶこと', async () => {
     mockedOrderApi.get.mockResolvedValue(completedOrder());
     mockedOrderApi.correct.mockResolvedValue({
+      correction_id: 'corr1',
+      order_id: 'o1',
+      store_id: 1,
+      business_date: '2026-08-20',
+      completed_at: '2026-08-21T01:00:00+09:00',
+      corrected_at: '2026-08-22T09:00:00+09:00',
+      corrected_by: 7,
+      reason: '訂正',
+      before_version: 7,
+      after_version: 8,
+      previous_accrued_remuneration: 7000,
+      accrued_remuneration: 8000,
       previous_total_remuneration: 0,
       total_remuneration: 0,
       previous_total_duration_minutes: 60,
@@ -137,6 +155,18 @@ describe('完了後訂正のページ', () => {
   it('会計金額の前後と、付与が動かないこと・どの会員の台帳を見るかを名乗ること', async () => {
     mockedOrderApi.get.mockResolvedValue(completedOrder());
     mockedOrderApi.correct.mockResolvedValue({
+      correction_id: 'corr1',
+      order_id: 'o1',
+      store_id: 1,
+      business_date: '2026-08-20',
+      completed_at: '2026-08-21T01:00:00+09:00',
+      corrected_at: '2026-08-22T09:00:00+09:00',
+      corrected_by: 7,
+      reason: '訂正',
+      before_version: 7,
+      after_version: 8,
+      previous_accrued_remuneration: 7000,
+      accrued_remuneration: 8000,
       previous_total_remuneration: 0,
       total_remuneration: 0,
       previous_total_duration_minutes: 60,
@@ -170,6 +200,18 @@ describe('完了後訂正のページ', () => {
     mockedOrderApi.get.mockResolvedValue(completedOrder({ auto_grant_points: 0 }));
     mockedOrderApi.attribution.mockResolvedValue({ attributed: false });
     mockedOrderApi.correct.mockResolvedValue({
+      correction_id: 'corr1',
+      order_id: 'o1',
+      store_id: 1,
+      business_date: '2026-08-20',
+      completed_at: '2026-08-21T01:00:00+09:00',
+      corrected_at: '2026-08-22T09:00:00+09:00',
+      corrected_by: 7,
+      reason: '訂正',
+      before_version: 7,
+      after_version: 8,
+      previous_accrued_remuneration: 7000,
+      accrued_remuneration: 8000,
       previous_total_remuneration: 0,
       total_remuneration: 0,
       previous_total_duration_minutes: 60,
@@ -201,6 +243,18 @@ describe('完了後訂正のページ', () => {
     mockedOrderApi.get.mockResolvedValue(completedOrder());
     mockedOrderApi.attribution.mockRejectedValue(new Error('boom'));
     mockedOrderApi.correct.mockResolvedValue({
+      correction_id: 'corr1',
+      order_id: 'o1',
+      store_id: 1,
+      business_date: '2026-08-20',
+      completed_at: '2026-08-21T01:00:00+09:00',
+      corrected_at: '2026-08-22T09:00:00+09:00',
+      corrected_by: 7,
+      reason: '訂正',
+      before_version: 7,
+      after_version: 8,
+      previous_accrued_remuneration: 7000,
+      accrued_remuneration: 8000,
       previous_total_remuneration: 0,
       total_remuneration: 0,
       previous_total_duration_minutes: 60,
@@ -359,6 +413,18 @@ test('訂正後の帰属取得中に別対象へ移ると、古い通知と結�
   let resolve!: (value: typeof ATTRIBUTED) => void;
   mockedOrderApi.get.mockResolvedValue(completedOrder());
   mockedOrderApi.correct.mockResolvedValueOnce({
+    correction_id: 'corr1',
+    order_id: 'o1',
+    store_id: 1,
+    business_date: '2026-08-20',
+    completed_at: '2026-08-21T01:00:00+09:00',
+    corrected_at: '2026-08-22T09:00:00+09:00',
+    corrected_by: 7,
+    reason: '訂正',
+    before_version: 7,
+    after_version: 8,
+    previous_accrued_remuneration: 7000,
+    accrued_remuneration: 8000,
     previous_total_remuneration: 0,
     total_remuneration: 0,
     previous_total_duration_minutes: 60,
@@ -393,6 +459,18 @@ test('帰属取得が未着でも訂正成功を通知し、詳細を更新し�
   let resolve!: (value: typeof ATTRIBUTED) => void;
   mockedOrderApi.get.mockResolvedValue(completedOrder({ version: 8 }));
   mockedOrderApi.correct.mockResolvedValueOnce({
+    correction_id: 'corr1',
+    order_id: 'o1',
+    store_id: 1,
+    business_date: '2026-08-20',
+    completed_at: '2026-08-21T01:00:00+09:00',
+    corrected_at: '2026-08-22T09:00:00+09:00',
+    corrected_by: 7,
+    reason: '訂正',
+    before_version: 7,
+    after_version: 8,
+    previous_accrued_remuneration: 7000,
+    accrued_remuneration: 8000,
     previous_total_remuneration: 0,
     total_remuneration: 0,
     previous_total_duration_minutes: 60,
@@ -421,4 +499,12 @@ test('帰属取得が未着でも訂正成功を通知し、詳細を更新し�
   await act(async () => resolve(ATTRIBUTED));
   expect(screen.getByText(/会員コード 123456789012/)).toBeInTheDocument();
   expect(notify.success).toHaveBeenCalledTimes(1);
+});
+
+it('訂正権限がない利用者には詳細も編集フォームも取得・表示しない', async () => {
+  jest.mocked(hasPermission).mockReturnValue(false);
+  render(<OrderCorrectionPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('完了後訂正を行う権限がありません');
+  expect(mockedOrderApi.get).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: '訂正を保存' })).not.toBeInTheDocument();
 });
