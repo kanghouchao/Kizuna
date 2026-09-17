@@ -2,6 +2,7 @@ package com.kizuna.point;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
@@ -10,10 +11,19 @@ import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointEntryType;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
@@ -24,6 +34,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 受注を宛先とするポイント巻き戻しを本物の PostgreSQL で検証する統合テスト。
@@ -65,6 +76,186 @@ class PointRollbackIT extends CrossStoreTestSupport {
   private final long nonce = System.nanoTime();
 
   @Test
+  @DisplayName("確認済み金額が変わった要求は台帳と請求を残さず409になること")
+  void staleBillIsRejected() {
+    Attributed row = completedOrderUsingPoints();
+    var rejected =
+        rest.exchange(
+            "/store/orders/" + row.orderId() + "/point-rollback",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                Map.of("reason", "古い確認", "expected_total_fee", 1, "expected_offset_amount", 300),
+                managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(rollbackRowsFor(row.orderId())).isZero();
+    assertThat(balanceOf(row.customerId())).isEqualTo(820);
+    assertThat(preview(row.orderId()).path("current_total_fee").asInt()).isEqualTo(11700);
+  }
+
+  @Test
+  @DisplayName("同時に送った巻き戻しは一方だけ成立し返還も相殺も一度になること")
+  void concurrentRollbackHasOneWinner() throws Exception {
+    Attributed row = completedOrderUsingPoints();
+    var headers = managerHeaders(STORE_A);
+    var request =
+        new HttpEntity<>(
+            Map.of("reason", "並行返還", "expected_total_fee", 11700, "expected_offset_amount", 300),
+            headers);
+    var start = new CountDownLatch(1);
+    var calls =
+        IntStream.range(0, 2)
+            .mapToObj(
+                i ->
+                    CompletableFuture.supplyAsync(
+                        () -> {
+                          try {
+                            start.await();
+                          } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(e);
+                          }
+                          return rest.exchange(
+                              "/store/orders/" + row.orderId() + "/point-rollback",
+                              HttpMethod.POST,
+                              request,
+                              JsonNode.class);
+                        }))
+            .toList();
+    start.countDown();
+    assertThat(List.of(calls.get(0).get().getStatusCode(), calls.get(1).get().getStatusCode()))
+        .containsExactlyInAnyOrder(HttpStatus.CREATED, HttpStatus.CONFLICT);
+    assertThat(balanceOf(row.customerId())).isEqualTo(1000);
+    assertThat(preview(row.orderId()).path("current_total_fee").asInt()).isEqualTo(12000);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM t_order_fee_lines WHERE order_id = ? AND kind = 'POINT_REDEMPTION_OFFSET'",
+                Integer.class,
+                row.orderId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("相殺明細の保存失敗では返還・操作記録・請求をまとめて巻き戻すこと")
+  void offsetFailureRollsBackTheWholeOperation() {
+    Attributed row = completedOrderUsingPoints();
+    jdbcTemplate.execute(
+        "CREATE FUNCTION fail_point_offset_936() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.kind = 'POINT_REDEMPTION_OFFSET' THEN RAISE EXCEPTION 'test failure'; END IF; RETURN NEW; END $$");
+    jdbcTemplate.execute(
+        "CREATE TRIGGER fail_point_offset_936 BEFORE INSERT ON t_order_fee_lines FOR EACH ROW EXECUTE FUNCTION fail_point_offset_936()");
+    try {
+      assertThat(rollback(row.orderId(), "保存失敗").getStatusCode())
+          .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+      assertThat(rollbackRowsFor(row.orderId())).isZero();
+      assertThat(entriesOfType(row.memberId(), PointEntryType.USE_CANCEL)).isEmpty();
+      assertThat(entriesOfType(row.memberId(), PointEntryType.CANCEL)).isEmpty();
+      assertThat(balanceOf(row.customerId())).isEqualTo(820);
+      assertThat(preview(row.orderId()).path("current_total_fee").asInt()).isEqualTo(11700);
+    } finally {
+      jdbcTemplate.execute("DROP TRIGGER fail_point_offset_936 ON t_order_fee_lines");
+      jdbcTemplate.execute("DROP FUNCTION fail_point_offset_936()");
+    }
+    assertThat(rollback(row.orderId(), "再試行").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, 100})
+  @DisplayName("相殺後の訂正では元利用を下回る請求でも試算と保存の保護明細が一致すること")
+  void correctionCannotForgeOrRemoveOffset(int discount) {
+    Attributed row = completedOrderUsingPoints();
+    assertThat(rollback(row.orderId(), "返還").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var headers = managerHeaders(STORE_A);
+    JsonNode order =
+        rest.exchange(
+                "/store/orders/" + row.orderId(),
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                JsonNode.class)
+            .getBody();
+    for (String kind : List.of("POINT_REDEMPTION", "POINT_REDEMPTION_OFFSET", "MANUAL_ADJUST")) {
+      var rejected =
+          rest.exchange(
+              "/store/orders/" + row.orderId() + "/correction-preview",
+              HttpMethod.POST,
+              new HttpEntity<>(
+                  Map.of(
+                      "expected_version",
+                      order.path("version").asLong(),
+                      "reason",
+                      "直送",
+                      "fee_lines",
+                      List.of(Map.of("kind", kind, "name", "任意額", "amount", 300))),
+                  headers),
+              JsonNode.class);
+      assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+    var input =
+        Map.of(
+            "expected_version",
+            order.path("version").asLong(),
+            "reason",
+            "通常明細の訂正",
+            "fee_lines",
+            discount == 0
+                ? List.of()
+                : List.of(Map.of("kind", "DISCOUNT", "name", "値引き", "amount", discount)));
+    var previewResponse =
+        rest.exchange(
+            "/store/orders/" + row.orderId() + "/correction-preview",
+            HttpMethod.POST,
+            new HttpEntity<>(input, headers),
+            JsonNode.class);
+    assertThat(previewResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    JsonNode calculated = previewResponse.getBody();
+    var protectedLines =
+        calculated
+            .path("fee_lines")
+            .valueStream()
+            .filter(line -> line.path("system_owned").asBoolean())
+            .map(line -> List.of(line.path("kind").asString(), line.path("amount").asInt()))
+            .toList();
+    assertThat(protectedLines)
+        .containsExactlyInAnyOrder(
+            List.of("POINT_REDEMPTION", USED_POINTS),
+            List.of("POINT_REDEMPTION_OFFSET", USED_POINTS));
+    assertThat(calculated.path("total_fee").asInt()).isEqualTo(100 - discount);
+    var confirmed = new HashMap<String, Object>(input);
+    confirmed.put("confirmation_token", calculated.path("confirmation_token").asString());
+    var request = new HttpEntity<>(confirmed, headers);
+    assertThat(
+            rest.exchange(
+                    "/store/orders/" + row.orderId() + "/corrections",
+                    HttpMethod.POST,
+                    request,
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.CREATED);
+    JsonNode corrected =
+        rest.exchange(
+                "/store/orders/" + row.orderId(),
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                JsonNode.class)
+            .getBody();
+    assertThat(corrected.path("total_fee")).isEqualTo(calculated.path("total_fee"));
+    assertThat(
+            corrected
+                .path("fee_lines")
+                .valueStream()
+                .filter(line -> line.path("system_owned").asBoolean())
+                .map(line -> List.of(line.path("kind").asString(), line.path("amount").asInt()))
+                .toList())
+        .containsExactlyInAnyOrderElementsOf(protectedLines);
+    assertThat(
+            corrected
+                .path("fee_lines")
+                .valueStream()
+                .map(line -> line.path("kind").asString())
+                .toList())
+        .contains("POINT_REDEMPTION", "POINT_REDEMPTION_OFFSET");
+  }
+
+  @Test
   @DisplayName("巻き戻しは付与を取消し、利用を元のロットへ期限そのまま返して残高を元へ戻すこと")
   void rollbackCancelsGrantsAndReturnsUsedPointsToTheOriginalLot() {
     Attributed attributed = completedOrderUsingPoints();
@@ -76,6 +267,35 @@ class PointRollbackIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> rolledBack = rollback(attributed.orderId(), "誤完了の全否定");
 
     assertThat(rolledBack.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(rolledBack.getBody().path("before_total_fee").asInt()).isEqualTo(11700);
+    assertThat(rolledBack.getBody().path("offset_amount").asInt()).isEqualTo(300);
+    assertThat(rolledBack.getBody().path("after_total_fee").asInt()).isEqualTo(12000);
+    JsonNode order =
+        rest.exchange(
+                "/store/orders/" + attributed.orderId(),
+                HttpMethod.GET,
+                new HttpEntity<>(managerHeaders(STORE_A)),
+                JsonNode.class)
+            .getBody();
+    assertThat(order.path("total_fee").asInt()).isEqualTo(12000);
+    assertThat(
+            order
+                .path("fee_lines")
+                .valueStream()
+                .filter(line -> line.path("kind").asString().equals("POINT_REDEMPTION_OFFSET"))
+                .toList())
+        .hasSize(1);
+    ObjectNode history = (ObjectNode) preview(attributed.orderId()).path("rollback");
+    ObjectNode executed = (ObjectNode) rolledBack.getBody().deepCopy();
+    // PostgreSQL の日時精度はマイクロ秒で、実行直後の JVM のナノ秒より粗い。
+    assertThat(OffsetDateTime.parse(history.path("created_at").asString()))
+        .isCloseTo(
+            OffsetDateTime.parse(executed.path("created_at").asString()),
+            within(1, ChronoUnit.MICROS));
+    history.remove("created_at");
+    executed.remove("created_at");
+    assertThat(history).isEqualTo(executed);
+
     assertThat(rolledBack.getBody().path("cancelled_points").asInt()).isEqualTo(EXPECTED_GRANT);
     assertThat(rolledBack.getBody().path("restored_points").asInt()).isEqualTo(USED_POINTS);
 
@@ -123,6 +343,13 @@ class PointRollbackIT extends CrossStoreTestSupport {
     assertThat(rolledBack.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(rolledBack.getBody().path("cancelled_points").asInt()).isZero();
     assertThat(ledgerRowsFor(issued.orderId())).as("前提: 台帳に仕訳が無いこと").isZero();
+    assertThat(rolledBack.getBody().path("offset_amount").asInt()).isZero();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM t_order_fee_lines WHERE order_id = ? AND kind = 'POINT_REDEMPTION_OFFSET'",
+                Integer.class,
+                issued.orderId()))
+        .isZero();
 
     RegisteredMember claimant = registerAndLogin("claim");
     ResponseEntity<JsonNode> claimed = claim(claimant, issued.token());
@@ -165,12 +392,42 @@ class PointRollbackIT extends CrossStoreTestSupport {
     assertThat(balanceOf(customerId)).as("無効の付与は残高へ戻らないこと").isZero();
   }
 
-  @Test
-  @DisplayName("確定済み（未完了）の受注は巻き戻せないこと")
-  void confirmedOrderCannotBeRolledBack() {
+  @ParameterizedTest
+  @ValueSource(strings = {"CONFIRMED", "IN_SERVICE", "CANCELLED"})
+  @DisplayName("未完了と取消済みの受注は下見も巻き戻しも拒否すること")
+  void incompleteOrderCannotBeRolledBack(String status) {
     String orderId = createOrder(createCast("未完了担当-" + nonce), null);
 
-    ResponseEntity<JsonNode> rejected = rollback(orderId, "未完了への巻き戻し");
+    if (!status.equals("CONFIRMED")) {
+      boolean cancelled = status.equals("CANCELLED");
+      var changed =
+          rest.exchange(
+              "/store/orders/" + orderId + (cancelled ? "/cancellation" : "/start"),
+              HttpMethod.POST,
+              new HttpEntity<>(
+                  cancelled
+                      ? Map.of("reason", "状態の準備")
+                      : Map.of("reason", "状態の準備", "expected_version", 0),
+                  managerHeaders(STORE_A)),
+              JsonNode.class);
+      assertThat(changed.getStatusCode())
+          .isEqualTo(cancelled ? HttpStatus.NO_CONTENT : HttpStatus.OK);
+    }
+    ResponseEntity<JsonNode> previewRejected =
+        rest.exchange(
+            "/store/orders/" + orderId + "/point-rollback-preview",
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(previewRejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    ResponseEntity<JsonNode> rejected =
+        rest.exchange(
+            "/store/orders/" + orderId + "/point-rollback",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                Map.of("reason", "未完了への巻き戻し", "expected_total_fee", 0, "expected_offset_amount", 0),
+                managerHeaders(STORE_A)),
+            JsonNode.class);
 
     assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(rollbackRowsFor(orderId)).as("記録も書かれないこと").isZero();
@@ -185,7 +442,9 @@ class PointRollbackIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/orders/" + issued.orderId() + "/point-rollback",
             HttpMethod.POST,
-            new HttpEntity<>("{\"reason\": \"権限のない巻き戻し\"}", storeHeaders(STORE_A)),
+            new HttpEntity<>(
+                "{\"reason\": \"権限のない巻き戻し\",\"expected_total_fee\":12000,\"expected_offset_amount\":0}",
+                storeHeaders(STORE_A)),
             JsonNode.class);
     ResponseEntity<JsonNode> previewForbidden =
         rest.exchange(
@@ -263,10 +522,19 @@ class PointRollbackIT extends CrossStoreTestSupport {
   // ==================== 端点の呼出 ====================
 
   private ResponseEntity<JsonNode> rollback(String orderId, String reason) {
+    JsonNode current = preview(orderId);
     return rest.exchange(
         "/store/orders/" + orderId + "/point-rollback",
         HttpMethod.POST,
-        new HttpEntity<>("{\"reason\": \"" + reason + "\"}", managerHeaders(STORE_A)),
+        new HttpEntity<>(
+            Map.of(
+                "reason",
+                reason,
+                "expected_total_fee",
+                current.path("current_total_fee").asInt(),
+                "expected_offset_amount",
+                current.path("offset_amount").asInt()),
+            managerHeaders(STORE_A)),
         JsonNode.class);
   }
 

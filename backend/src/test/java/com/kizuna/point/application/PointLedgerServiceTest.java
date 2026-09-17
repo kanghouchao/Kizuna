@@ -405,7 +405,7 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L, 12L)))
         .thenReturn(List.of());
 
-    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID))
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0))
         .isEqualTo(new PointLedgerService.PointRollbackResult(800, 0));
 
     verify(pointEntryRepository, times(2)).save(savedEntry.capture());
@@ -428,7 +428,7 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L, 12L)))
         .thenReturn(List.of(consumption(11L, 500), consumption(12L, 200)));
 
-    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID).cancelledPoints())
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0).cancelledPoints())
         .isEqualTo(300);
 
     verify(pointEntryRepository).save(savedEntry.capture());
@@ -443,10 +443,10 @@ class PointLedgerServiceTest {
   @Test
   @DisplayName("仕訳ゼロの受注でも操作記録は書かれること（事後申領を記録で拒むため）")
   void rollbackRecordsEvenWithoutEntries() {
-    assertThat(pointLedgerService.rollbackForOrder("empty", "無帰属のまま清零", ACTOR_ID))
+    assertThat(pointLedgerService.rollbackForOrder("empty", "無帰属のまま清零", ACTOR_ID, 0))
         .isEqualTo(new PointLedgerService.PointRollbackResult(0, 0));
 
-    verify(pointRollbackRepository).save(savedRollback.capture());
+    verify(pointRollbackRepository).saveAndFlush(savedRollback.capture());
     assertThat(savedRollback.getValue().getOrderId()).isEqualTo("empty");
     assertThat(savedRollback.getValue().getReason()).isEqualTo("無帰属のまま清零");
     verify(pointEntryRepository, never()).save(any());
@@ -457,10 +457,10 @@ class PointLedgerServiceTest {
   void rollbackRejectsSecondAttempt() {
     when(pointRollbackRepository.existsByOrderId("o1")).thenReturn(true);
 
-    assertThatThrownBy(() -> pointLedgerService.rollbackForOrder("o1", "二度目", ACTOR_ID))
+    assertThatThrownBy(() -> pointLedgerService.rollbackForOrder("o1", "二度目", ACTOR_ID, 0))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("既に巻き戻されています");
-    verify(pointRollbackRepository, never()).save(any());
+    verify(pointRollbackRepository, never()).saveAndFlush(any());
     verify(pointEntryRepository, never()).save(any());
   }
 
@@ -469,7 +469,7 @@ class PointLedgerServiceTest {
   void rollbackReversesUseIntoTheOriginalLots() {
     when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
 
-    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID).restoredPoints())
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0).restoredPoints())
         .isEqualTo(300);
 
     verify(pointEntryRepository).save(savedEntry.capture());
@@ -491,7 +491,7 @@ class PointLedgerServiceTest {
     when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
     when(pointEntryRepository.findReversedUseIds(List.of(21L))).thenReturn(List.of(21L));
 
-    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID).restoredPoints())
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0).restoredPoints())
         .isZero();
     verify(pointEntryRepository, never()).save(any());
   }
@@ -507,7 +507,7 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
         .thenReturn(List.of(consumption(11L, 200)));
 
-    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID))
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0))
         .isEqualTo(new PointLedgerService.PointRollbackResult(300, 300));
 
     verify(pointEntryRepository, times(2)).save(savedEntry.capture());
@@ -530,7 +530,7 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
         .thenReturn(List.of());
 
-    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID))
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0))
         .isEqualTo(new PointLedgerService.PointRollbackResult(500, 500));
 
     verify(pointEntryRepository, times(2)).save(savedEntry.capture());
@@ -547,7 +547,7 @@ class PointLedgerServiceTest {
         .thenReturn(List.of(use(21L, "o1", 500, 11L)));
     when(pointEntryRepository.findRolledBackCreditsAmong(Set.of(11L))).thenReturn(List.of());
 
-    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID))
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0))
         .isEqualTo(new PointLedgerService.PointRollbackResult(0, 500));
 
     verify(pointEntryRepository).save(savedEntry.capture());
@@ -562,7 +562,7 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(11L)))
         .thenReturn(List.of());
 
-    pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID);
+    pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0);
 
     InOrder inOrder = inOrder(pointEntryRepository, pointAllocationRepository);
     inOrder.verify(pointEntryRepository).findCreditsForUpdate(MEMBER_ID);
@@ -577,7 +577,7 @@ class PointLedgerServiceTest {
     when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
     when(pointEntryRepository.findRolledBackCreditsAmong(Set.of(1L))).thenReturn(List.of());
 
-    pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID);
+    pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0);
 
     InOrder inOrder = inOrder(pointEntryRepository);
     inOrder.verify(pointEntryRepository).findCreditsForUpdate(MEMBER_ID);

@@ -31,20 +31,49 @@ public class PointRollback extends BaseEntity {
   @Column(name = "actor_user_id", updatable = false)
   private Long actorUserId;
 
+  @Column(nullable = false, updatable = false)
+  private long cancelledPoints;
+
+  @Column(nullable = false, updatable = false)
+  private long restoredPoints;
+
+  @Column(nullable = false, updatable = false)
+  private int beforeTotalFee;
+
+  @Column(nullable = false, updatable = false)
+  private int afterTotalFee;
+
+  private void recordOutcome(long cancelled, long restored, int before) {
+    if (cancelled < 0
+        || restored < 0
+        || before < 0
+        || (long) before + restored > Integer.MAX_VALUE) {
+      throw new InvalidPointEntryException("巻き戻しの金額が扱える範囲を超えています");
+    }
+    cancelledPoints = cancelled;
+    restoredPoints = restored;
+    beforeTotalFee = before;
+    afterTotalFee = (int) (before + restored);
+  }
+
   private PointRollback(String orderId, String reason, Long actorUserId) {
     this.orderId = orderId;
     this.reason = reason;
     this.actorUserId = actorUserId;
   }
 
-  public static PointRollback of(String orderId, String reason, Long actorUserId) {
+  public static PointRollback of(
+      String orderId, String reason, Long actorUserId, long cancelled, long restored, int before) {
     if (orderId == null || orderId.isBlank()) {
       throw new InvalidPointEntryException("巻き戻す受注は必須です");
     }
     if (reason == null || reason.isBlank()) {
       throw new InvalidPointEntryException("巻き戻しの理由は必須です");
     }
-    return new PointRollback(orderId, reason, actorUserId);
+    if (actorUserId == null) throw new InvalidPointEntryException("操作者は必須です");
+    var rollback = new PointRollback(orderId, reason, actorUserId);
+    rollback.recordOutcome(cancelled, restored, before);
+    return rollback;
   }
 
   @Override

@@ -106,6 +106,13 @@ function ArchiveRow({
       {order.status === 'COMPLETED' && (
         <div className="flex shrink-0 items-center gap-1">
           {/* 訂正は ORDER_CORRECT（店長）限定。押せない導線を描くと、内容を入力し終えてから 403 を受け取る */}
+          <Button
+            variant="ghost"
+            size="sm"
+            render={<Link href={storePath(storeId, `/orders/${order.id}/point-rollback`)} />}
+          >
+            ポイント救済
+          </Button>
           {canCorrect && (
             <Button
               variant="ghost"

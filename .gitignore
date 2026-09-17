@@ -13,7 +13,9 @@ Thumbs.db
 
 # dev-loop のローカル作業文書（skill が「git-excluded」を前提とするため全クローンで除外する）
 docs/plans/
-docs/agents/
+!docs/agents/
+docs/agents/*
+!docs/agents/issue-tracker.md
 docs/superpowers/
 docs/research/
 

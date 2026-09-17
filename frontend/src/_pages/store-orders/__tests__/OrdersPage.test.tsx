@@ -512,6 +512,10 @@ describe('アーカイブ', () => {
     fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
     expect(await screen.findByText(/請求 ¥28,000/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /訂正/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ポイント救済' })).toHaveAttribute(
+      'href',
+      '/store/1/orders/x3/point-rollback'
+    );
 
     withoutPermission.unmount();
     mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'ORDER_CORRECT']));

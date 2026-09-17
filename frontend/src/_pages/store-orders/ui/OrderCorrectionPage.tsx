@@ -262,10 +262,11 @@ function CorrectionEditor() {
 
         {/* 門は台帳を読みも書きもしない（ADR 0019）。全否定が要る誤完了のためにポイント側の操作面を
           指すだけで、機構は繋がない — 門はここが実行されたかを知らないまま */}
-        {seeded && completed && canRollback && (
+        {seeded && completed && (
           <div className="bg-card flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
             <p className="text-muted-foreground text-sm">
-              この訂正でポイントは動きません。来店そのものが誤りで付与・利用を全否定するなら、ポイントの巻き戻しを使います。
+              この訂正でポイントは動きません。利用の返還は専用のポイント巻き戻しで行います。
+              {!canRollback && 'POINT_ADJUST を持つポイント救済担当者へ依頼してください。'}
             </p>
             <Button
               variant="outline"

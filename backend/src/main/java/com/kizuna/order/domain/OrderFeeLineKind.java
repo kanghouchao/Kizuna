@@ -1,7 +1,7 @@
 package com.kizuna.order.domain;
 
 /**
- * 受注明細の種別。閉じた七種で、ホテル代・交通費・釣銭のような受注金額外の回収・精算項目は型として持てない。
+ * 受注明細の種別。閉じた種別で、ホテル代・交通費・釣銭のような受注金額外の回収・精算項目は型として持てない。
  *
  * <p>加算の細分（指名・受付区分・場所エリア等）は {@link #SURCHARGE} に集約し、区別は行の名称の写しが担う。
  *
@@ -27,6 +27,9 @@ public enum OrderFeeLineKind {
   /** ポイント利用。完了処理が台帳の減算仕訳と対で書く唯一の行で、店舗の通常編集からは作れない。 */
   POINT_REDEMPTION(Sign.DEDUCTION),
 
+  /** 利用取消と同時に請求へ戻すシステム相殺。 */
+  POINT_REDEMPTION_OFFSET(Sign.ADDITION),
+
   /** クレジット利用時加算。 */
   CREDIT_SURCHARGE(Sign.ADDITION);
 
@@ -43,6 +46,7 @@ public enum OrderFeeLineKind {
 
   /** 保存する帯符号金額がこの種別の符号約定に合うか。DB 側の CHECK 制約と同じ判定を集約の側で先に行う。 */
   public boolean allows(int amount) {
+    if (this == POINT_REDEMPTION_OFFSET) return amount > 0;
     return switch (sign) {
       case ADDITION -> amount >= 0;
       case DEDUCTION -> amount <= 0;
@@ -54,9 +58,9 @@ public enum OrderFeeLineKind {
     return sign == Sign.DEDUCTION;
   }
 
-  /** 完了処理だけが書く行か。店舗が差し替える明細にこの種別は含められない。 */
+  /** 完了または巻き戻しだけが書く行か。店舗が差し替える明細にこの種別は含められない。 */
   public boolean isSystemOwned() {
-    return this == POINT_REDEMPTION;
+    return this == POINT_REDEMPTION || this == POINT_REDEMPTION_OFFSET;
   }
 
   /** 表示上の金額を保存する帯符号金額へ翻す。 */

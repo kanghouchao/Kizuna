@@ -14,6 +14,7 @@ import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.point.application.PointLedgerService.PointRollbackHistory;
 import com.kizuna.point.application.PointLedgerService.PointRollbackPreview;
 import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.NotFoundException;
@@ -33,6 +34,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -94,12 +97,16 @@ class OrderPointRollbackServiceTest {
   @DisplayName("完了した受注の巻き戻しは、実行者を解いて台帳へ受注 ID と理由をそのまま渡すこと")
   void rollbackDelegatesToTheLedgerWithTheResolvedActor() {
     givenOrder(OrderStatus.COMPLETED);
-    Mockito.when(pointLedgerService.rollbackForOrder(ORDER_ID, REASON, ACTOR_ID))
-        .thenReturn(new PointRollbackResult(120, 300));
+    Mockito.when(pointLedgerService.previewRollbackForOrder(ORDER_ID))
+        .thenReturn(new PointRollbackPreview(false, 0, 0));
+    Mockito.when(pointLedgerService.rollbackHistory(ORDER_ID))
+        .thenReturn(Optional.of(history(120, 0)));
+    Mockito.when(pointLedgerService.rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0))
+        .thenReturn(new PointRollbackResult(120, 0));
 
     OrderPointRollbackResponse response = service.rollback(ORDER_ID, request(), ACTOR_EMAIL);
 
-    assertThat(response).isEqualTo(new OrderPointRollbackResponse(120, 300));
+    assertThat(response).isEqualTo(OrderPointRollbackResponse.from(history(120, 0)));
   }
 
   @Test
@@ -108,7 +115,11 @@ class OrderPointRollbackServiceTest {
     // 押さえないと、申領は操作記録を見ず、巻き戻しは申領の付与を見ないまま双方が成立し、
     // 打ち消せない付与が残る。
     givenOrder(OrderStatus.COMPLETED);
-    Mockito.when(pointLedgerService.rollbackForOrder(ORDER_ID, REASON, ACTOR_ID))
+    Mockito.when(pointLedgerService.previewRollbackForOrder(ORDER_ID))
+        .thenReturn(new PointRollbackPreview(false, 0, 0));
+    Mockito.when(pointLedgerService.rollbackHistory(ORDER_ID))
+        .thenReturn(Optional.of(history(120, 0)));
+    Mockito.when(pointLedgerService.rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0))
         .thenReturn(new PointRollbackResult(0, 0));
 
     service.rollback(ORDER_ID, request(), ACTOR_EMAIL);
@@ -117,14 +128,21 @@ class OrderPointRollbackServiceTest {
         Mockito.inOrder(orderRepository, orderReceiptTokenRepository, pointLedgerService);
     inOrder.verify(orderRepository).findScopedByIdForUpdate(ORDER_ID);
     inOrder.verify(orderReceiptTokenRepository).findByOrderIdForUpdate(ORDER_ID);
-    inOrder.verify(pointLedgerService).rollbackForOrder(ORDER_ID, REASON, ACTOR_ID);
+    inOrder.verify(pointLedgerService).rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0);
   }
 
-  @Test
-  @DisplayName("完了していない受注は巻き戻せず、台帳へ届かないこと")
-  void refusesAnOrderThatIsNotCompleted() {
+  @ParameterizedTest
+  @EnumSource(
+      value = OrderStatus.class,
+      names = {"CONFIRMED", "IN_SERVICE", "CANCELLED"})
+  @DisplayName("未完了受注の下見と巻き戻しは台帳へ届かないこと")
+  void refusesAnOrderThatIsNotCompleted(OrderStatus status) {
     // 確定済みを許すと、記録だけが先に書かれたあとの完了が付与を積み、その付与を打ち消す手立てが残らない。
-    givenOrder(OrderStatus.CONFIRMED);
+    givenOrder(status);
+
+    assertThatThrownBy(() -> service.preview(ORDER_ID))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("完了した受注だけが");
 
     assertThatThrownBy(() -> service.rollback(ORDER_ID, request(), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
@@ -151,7 +169,6 @@ class OrderPointRollbackServiceTest {
 
     assertThatThrownBy(() -> service.rollback(ORDER_ID, request(), ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);
-    Mockito.verifyNoInteractions(pointLedgerService);
   }
 
   @Test
@@ -185,7 +202,7 @@ class OrderPointRollbackServiceTest {
   @Test
   @DisplayName("下見は台帳の見込みに、現に帰属している会員コードを添えて返すこと")
   void previewCarriesTheActiveMemberCode() {
-    Mockito.when(orderRepository.findScopedById(ORDER_ID))
+    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
         .thenReturn(Optional.of(completedOrder()));
     Mockito.when(pointLedgerService.previewRollbackForOrder(ORDER_ID))
         .thenReturn(new PointRollbackPreview(false, 120, 300));
@@ -194,14 +211,15 @@ class OrderPointRollbackServiceTest {
         .thenReturn(List.of(active));
 
     assertThat(service.preview(ORDER_ID))
-        .isEqualTo(new OrderPointRollbackPreviewResponse(false, MEMBER_CODE, 120, 300));
+        .isEqualTo(
+            new OrderPointRollbackPreviewResponse(false, MEMBER_CODE, 120, 300, 0, 300, 300, null));
   }
 
   @Test
   @DisplayName("無効化された帰属しか無い受注の下見は、宛先の会員を名乗らないこと")
   void previewNamesNoMemberWhenTheAttributionIsInvalidated() {
     // 無効化済みの記録は「現に帰属している」ではない。名乗ると、既に外れた相手の台帳を見に行かせる。
-    Mockito.when(orderRepository.findScopedById(ORDER_ID))
+    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
         .thenReturn(Optional.of(completedOrder()));
     Mockito.when(pointLedgerService.previewRollbackForOrder(ORDER_ID))
         .thenReturn(new PointRollbackPreview(true, 0, 0));
@@ -212,7 +230,7 @@ class OrderPointRollbackServiceTest {
         .thenReturn(List.of(invalidated));
 
     assertThat(service.preview(ORDER_ID))
-        .isEqualTo(new OrderPointRollbackPreviewResponse(true, null, 0, 0));
+        .isEqualTo(new OrderPointRollbackPreviewResponse(true, null, 0, 0, 0, 0, 0, null));
   }
 
   private void givenOrder(OrderStatus status) {
@@ -234,9 +252,16 @@ class OrderPointRollbackServiceTest {
     return order;
   }
 
+  private static PointRollbackHistory history(long cancelled, long restored) {
+    return new PointRollbackHistory(
+        "1", REASON, ACTOR_ID, NOW, cancelled, restored, 0, (int) restored);
+  }
+
   private static OrderPointRollbackRequest request() {
     OrderPointRollbackRequest request = new OrderPointRollbackRequest();
     request.setReason(REASON);
+    request.setExpectedTotalFee(0);
+    request.setExpectedOffsetAmount(0);
     return request;
   }
 }

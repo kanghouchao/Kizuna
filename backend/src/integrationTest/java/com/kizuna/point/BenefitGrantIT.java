@@ -10,6 +10,7 @@ import com.kizuna.shared.CrossStoreTestSupport;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -390,10 +391,25 @@ class BenefitGrantIT extends CrossStoreTestSupport {
   }
 
   private ResponseEntity<JsonNode> rollback(String orderId, String reason) {
+    JsonNode preview =
+        rest.exchange(
+                "/store/orders/" + orderId + "/point-rollback-preview",
+                HttpMethod.GET,
+                new HttpEntity<>(managerHeaders(STORE_A)),
+                JsonNode.class)
+            .getBody();
     return rest.exchange(
         "/store/orders/" + orderId + "/point-rollback",
         HttpMethod.POST,
-        new HttpEntity<>("{\"reason\": \"" + reason + "\"}", managerHeaders(STORE_A)),
+        new HttpEntity<>(
+            Map.of(
+                "reason",
+                reason,
+                "expected_total_fee",
+                preview.path("current_total_fee").asInt(),
+                "expected_offset_amount",
+                preview.path("offset_amount").asInt()),
+            managerHeaders(STORE_A)),
         JsonNode.class);
   }
 

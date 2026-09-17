@@ -127,6 +127,28 @@ public class Order extends StoreScopedEntity {
     return specialServiceLines.stream().map(OrderSpecialService::getSnapshot).toList();
   }
 
+  /** 採用候補の試算を別の受注で行い、利用と相殺を含む最終的な請求額を検証する。 */
+  public Order calculateWith(
+      OrderCourse nextCourse,
+      List<SpecialServiceSnapshot> services,
+      List<OrderFeeLineDraft> drafts) {
+    Order copy = Order.builder().status(OrderStatus.CONFIRMED).build();
+    copy.setId(getId());
+    copy.assignCast(castId);
+    copy.linkCustomer(customerId);
+    if (status == OrderStatus.COMPLETED) {
+      feeLines.stream()
+          .filter(line -> line.getKind().isSystemOwned())
+          .map(line -> OrderFeeLine.of(line.getKind(), line.getName(), line.getAmount()))
+          .forEach(copy.feeLines::add);
+    }
+    copy.adoptServices(nextCourse, services, drafts);
+    if (status == OrderStatus.COMPLETED) {
+      copy.completeWith(0, autoGrantPoints == null ? 0 : autoGrantPoints);
+    }
+    return copy;
+  }
+
   public void adoptServices(
       OrderCourse course, List<SpecialServiceSnapshot> services, List<OrderFeeLineDraft> drafts) {
     if (status.isTerminal()) throw new InvalidOrderFeeLineException("終端の内容は専用訂正で変更してください");
@@ -503,7 +525,10 @@ public class Order extends StoreScopedEntity {
     else getTotalRemuneration();
     checkedTotal(
         feeLines.stream()
-            .filter(line -> !line.getKind().isDeduction())
+            .filter(
+                line ->
+                    !line.getKind().isDeduction()
+                        && line.getKind() != OrderFeeLineKind.POINT_REDEMPTION_OFFSET)
             .mapToLong(OrderFeeLine::getAmount)
             .sum());
     long sum = feeLines.stream().mapToLong(OrderFeeLine::getAmount).sum();
@@ -514,6 +539,31 @@ public class Order extends StoreScopedEntity {
       this.totalFee = (int) sum;
     }
     return sum;
+  }
+
+  /** 台帳が返した利用だけを相殺し、元利用と固定報酬を保持する。 */
+  public void offsetPointRedemption(long restoredPoints) {
+    if (status != OrderStatus.COMPLETED
+        || feeLines.stream()
+            .anyMatch(line -> line.getKind() == OrderFeeLineKind.POINT_REDEMPTION_OFFSET)) {
+      throw new InvalidOrderFeeLineException("完了した受注の利用だけを一度相殺できます");
+    }
+    long used =
+        -feeLines.stream()
+            .filter(line -> line.getKind() == OrderFeeLineKind.POINT_REDEMPTION)
+            .mapToLong(OrderFeeLine::getAmount)
+            .sum();
+    if (restoredPoints != used || restoredPoints < 0) {
+      throw new InvalidOrderFeeLineException("台帳の返還量と受注の利用額が一致しません");
+    }
+    if (restoredPoints == 0) return;
+    checkedTotal((long) totalFee + restoredPoints);
+    var offset =
+        OrderFeeLine.of(
+            OrderFeeLineKind.POINT_REDEMPTION_OFFSET, "ポイント利用取消", checkedTotal(restoredPoints));
+    offset.attachStore(getStoreId());
+    feeLines.add(offset);
+    recalculateTotalFee();
   }
 
   /**
