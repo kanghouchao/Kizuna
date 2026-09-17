@@ -166,7 +166,7 @@ class OrderServiceTest {
         .thenReturn(
             new OrderServiceTerms(
                 "course", "revision", 1, "基本", 60, 0, 0, OffsetDateTime.now(), false));
-    Mockito.lenient().doCallRealMethod().when(orderMapper).toFeeLineDrafts(nullable(List.class));
+    Mockito.lenient().doCallRealMethod().when(orderMapper).toFeeLineDrafts(any());
     ReflectionTestUtils.setField(
         service,
         "calculation",

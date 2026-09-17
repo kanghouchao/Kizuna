@@ -48,9 +48,9 @@ class AttributionMaterializer implements MemberRankMetrics {
     OrderAttribution attribution =
         attributions.save(
             switch (trigger) {
-              case Completion ignored ->
+              case Completion _ ->
                   OrderAttribution.onCompletion(orderId, memberId, memberCode, occurredAt);
-              case ReceiptClaim ignored ->
+              case ReceiptClaim _ ->
                   OrderAttribution.onReceiptClaim(orderId, memberId, memberCode, occurredAt);
             });
     PointLedgerService.GrantedPoints grant =

@@ -47,7 +47,10 @@ public class ServiceSettingsService {
     Specification<ServiceItem> filter = (root, query, cb) -> cb.equal(root.get("deleted"), deleted);
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
-    return items.findAll(filter, PageRequest.of(page, size, Sort.by("id"))).map(mapper::summary);
+    return items
+        .findAll(
+            filter, PageRequest.of(page, size, Sort.sort(ServiceItem.class).by(ServiceItem::getId)))
+        .map(mapper::summary);
   }
 
   @Transactional(readOnly = true)

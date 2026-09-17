@@ -413,14 +413,6 @@ class MemberRankIT extends CrossStoreTestSupport {
     return histories.get(0);
   }
 
-  private String completionBody(String orderId, int totalFee) {
-    return "{\"expected_version\":"
-        + orderVersion(storeHeaders(STORE_A), orderId)
-        + ",\"fee_lines\":[{\"kind\":\"CREDIT_SURCHARGE\",\"name\":\"会計\",\"amount\":"
-        + totalFee
-        + "}]}";
-  }
-
   private String createOrder(String customerId, String label) {
     String castId = createCast(label);
     String body =

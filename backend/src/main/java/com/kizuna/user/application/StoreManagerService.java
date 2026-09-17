@@ -55,7 +55,10 @@ public class StoreManagerService {
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   /** 一覧・候補の並び。offset ページングの境界を確定させるため、表示名には一意な副キーを添える。 */
-  private static final Sort BY_DISPLAY_NAME = Sort.by("displayName", "id");
+  private static final Sort BY_DISPLAY_NAME =
+      Sort.sort(PlatformUser.class)
+          .by(PlatformUser::getDisplayName)
+          .and(Sort.sort(PlatformUser.class).by(PlatformUser::getId));
 
   /** 解任が撥ねられたときに残る出口。降格はこの面に、停止はアカウント管理にあり、どちらも実在する操作を指す。 */
   private static final String DISMISSAL_ALTERNATIVES = "降格で店舗スタッフにするか、退職の場合はアカウント管理で停止してください";

@@ -2,6 +2,7 @@ package com.kizuna.order.application;
 
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.PlatformOrderResponse;
+import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +25,7 @@ public class PlatformOrderService {
   @StoreSetScoped
   @Transactional(readOnly = true)
   public Page<PlatformOrderResponse> list(Pageable pageable) {
-    var sort = pageable.getSort().and(Sort.by(Sort.Direction.DESC, "id"));
+    var sort = pageable.getSort().and(Sort.sort(Order.class).by(Order::getId).descending());
     return orderRepository
         .findPlatformViews(PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort))
         .map(orderMapper::toPlatformResponse);
