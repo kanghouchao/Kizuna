@@ -1,5 +1,6 @@
 'use client';
 
+import { OrderEditorSection } from './OrderEditorSection';
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
@@ -11,10 +12,6 @@ import { OrderReceptionistField } from './OrderReceptionistField';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import {
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   Form,
   FormControl,
   FormField,
@@ -95,222 +92,216 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
       ng_type: 'NG無し',
     },
   });
-  const { register, handleSubmit, control, watch } = form;
+  const { register, handleSubmit, control } = form;
 
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>
-              基本情報
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <OrderReceptionistField scene="create" />
-              <div className="grid gap-2">
-                <Label htmlFor="business_date">営業日</Label>
-                <Input id="business_date" type="date" {...register('business_date')} />
-              </div>
-            </div>
-
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="rounded-xl border bg-card text-card-foreground shadow-sm"
+      >
+        <OrderEditorSection title="受付・日時" description="受付担当と訪問する日時を設定します。">
+          <div className="grid grid-cols-2 gap-6">
+            <OrderReceptionistField scene="create" />
             <div className="grid gap-2">
-              <Label>到着予定時刻</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="time"
-                  className="w-fit"
-                  {...register('arrival_scheduled_start_time')}
-                />
-                <span className="text-muted-foreground">～</span>
-                <Input type="time" className="w-fit" {...register('arrival_scheduled_end_time')} />
-              </div>
+              <Label htmlFor="business_date">営業日</Label>
+              <Input id="business_date" type="date" {...register('business_date')} />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>
-              お客様情報
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="customer_name">お客様名</Label>
-                <Input id="customer_name" type="text" {...register('customer_name')} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phone_number">電話番号</Label>
-                <Input id="phone_number" type="text" {...register('phone_number')} />
-              </div>
-              <div className="grid gap-2 md:col-span-2">
-                <Label htmlFor="address">住所</Label>
-                <Input id="address" type="text" {...register('address')} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="building_name">建物</Label>
-                <Input id="building_name" type="text" {...register('building_name')} />
-              </div>
-              <FormField
-                control={control}
-                name="classification"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>区分</FormLabel>
-                    <Select
-                      items={CLASSIFICATION_OPTIONS}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {CLASSIFICATION_OPTIONS.map(o => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={control}
-                name="has_pet"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ペット有無</FormLabel>
-                    <Select
-                      items={HAS_PET_OPTIONS}
-                      value={String(field.value)}
-                      onValueChange={v => field.onChange(v === 'true')}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {HAS_PET_OPTIONS.map(o => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-              <div className="grid gap-2">
-                <Label htmlFor="landmark">目印</Label>
-                <Input id="landmark" type="text" {...register('landmark')} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>
-              コース・料金
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              {/* キャストはサーバ側が @NotBlank。候補から選ばないと 400 になるため送信前に止める */}
-              <FormField
-                control={control}
-                name="cast_id"
-                rules={{ required: 'キャストを候補から選択してください' }}
-                render={({ field }) => (
-                  <FormItem>
+          <div className="grid gap-2">
+            <Label htmlFor="arrival_scheduled_start_time">到着予定時刻</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="arrival_scheduled_start_time"
+                aria-label="到着予定（開始）"
+                type="time"
+                className="w-fit"
+                {...register('arrival_scheduled_start_time')}
+              />
+              <span className="text-muted-foreground">～</span>
+              <Input
+                aria-label="到着予定（終了）"
+                type="time"
+                className="w-fit"
+                {...register('arrival_scheduled_end_time')}
+              />
+            </div>
+          </div>
+        </OrderEditorSection>
+        <OrderEditorSection title="お客様・訪問先" description="連絡先と訪問先を確認してください。">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid gap-2">
+              <Label htmlFor="customer_name">お客様名</Label>
+              <Input id="customer_name" type="text" {...register('customer_name')} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="phone_number">電話番号</Label>
+              <Input id="phone_number" type="text" {...register('phone_number')} />
+            </div>
+            <div className="grid gap-2 md:col-span-2">
+              <Label htmlFor="address">住所</Label>
+              <Input id="address" type="text" {...register('address')} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="building_name">建物</Label>
+              <Input id="building_name" type="text" {...register('building_name')} />
+            </div>
+            <FormField
+              control={control}
+              name="classification"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>区分</FormLabel>
+                  <Select
+                    items={CLASSIFICATION_OPTIONS}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
                     <FormControl>
-                      <CastSearchCombobox
-                        id="castName"
-                        label="キャスト *"
-                        castName=""
-                        onChange={field.onChange}
-                        triggerRef={field.ref}
-                        required
-                      />
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid gap-2">
-                <Label htmlFor="pax">人数</Label>
-                <Input id="pax" type="number" min={1} {...register('pax')} />
-              </div>
-              <FormField
-                control={control}
-                name="reception_route"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>受付経路</FormLabel>
-                    <Select
-                      items={RECEPTION_ROUTE_OPTIONS}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {RECEPTION_ROUTE_OPTIONS.map(o => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-              <OrderCourseField required />
-              <OrderSpecialServicesField />{' '}
+                    <SelectContent>
+                      {CLASSIFICATION_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name="has_pet"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ペット有無</FormLabel>
+                  <Select
+                    items={HAS_PET_OPTIONS}
+                    value={String(field.value)}
+                    onValueChange={v => field.onChange(v === 'true')}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {HAS_PET_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+            <div className="grid gap-2">
+              <Label htmlFor="landmark">目印</Label>
+              <Input id="landmark" type="text" {...register('landmark')} />
             </div>
-            <div className="mt-6">
-              <OrderFeeLinesField />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>
-              その他
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="remarks">備考</Label>
-                <Textarea id="remarks" rows={3} {...register('remarks')} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="cast_driver_message">キャスト・ドライバーへのメッセージ</Label>
-                <Textarea id="cast_driver_message" rows={3} {...register('cast_driver_message')} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </OrderEditorSection>
 
-        {/* ボタン */}
-        <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
-            キャンセル
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? '登録中...' : '登録する'}
-          </Button>
+        <OrderEditorSection
+          title="サービス・料金"
+          description="担当キャストと提供内容を選択します。金額は送信後の確認画面で試算します。"
+        >
+          <div className="grid grid-cols-2 gap-6">
+            {/* キャストはサーバ側が @NotBlank。候補から選ばないと 400 になるため送信前に止める */}
+            <FormField
+              control={control}
+              name="cast_id"
+              rules={{ required: 'キャストを候補から選択してください' }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <CastSearchCombobox
+                      id="castName"
+                      label="キャスト *"
+                      castName=""
+                      onChange={field.onChange}
+                      triggerRef={field.ref}
+                      required
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid gap-2">
+              <Label htmlFor="pax">人数</Label>
+              <Input id="pax" type="number" min={1} {...register('pax')} />
+            </div>
+            <FormField
+              control={control}
+              name="reception_route"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>受付経路</FormLabel>
+                  <Select
+                    items={RECEPTION_ROUTE_OPTIONS}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {RECEPTION_ROUTE_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+            <div className="col-span-2">
+              <OrderCourseField required />
+            </div>
+            <div className="col-span-2">
+              <OrderSpecialServicesField />
+            </div>
+          </div>
+          <div className="mt-6">
+            <OrderFeeLinesField />
+          </div>
+        </OrderEditorSection>
+        <OrderEditorSection
+          title="連絡・備考"
+          description="受付メモと、キャスト・ドライバーに伝える内容を記入します。"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid gap-2">
+              <Label htmlFor="remarks">備考</Label>
+              <Textarea id="remarks" rows={3} {...register('remarks')} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="cast_driver_message">キャスト・ドライバーへのメッセージ</Label>
+              <Textarea id="cast_driver_message" rows={3} {...register('cast_driver_message')} />
+            </div>
+          </div>
+        </OrderEditorSection>
+
+        <div className="sticky bottom-0 z-10 flex items-center justify-between gap-6 rounded-b-xl border-t bg-card p-6">
+          <p className="text-sm text-muted-foreground">登録前に料金・報酬を確認できます。</p>
+          <div className="flex shrink-0 gap-3">
+            <Button type="button" variant="outline" onClick={() => router.back()}>
+              キャンセル
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? '登録中...' : '登録する'}
+            </Button>
+          </div>
         </div>
       </form>
     </Form>

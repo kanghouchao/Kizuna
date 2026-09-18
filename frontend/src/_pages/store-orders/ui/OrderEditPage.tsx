@@ -4,6 +4,7 @@ import { OrderCorrectionHistoryDialog } from '@/widgets/order-correction-history
 
 import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
 
+import { OrderEditorSection } from './OrderEditorSection';
 import { OrderServiceProgress } from './OrderServiceProgress';
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
@@ -263,14 +264,16 @@ export default function OrderEditPage() {
       {confirmation.dialog}
       <div className="space-y-6">
         <div>
-          <h1 className="text-foreground text-2xl font-bold">受注の編集</h1>
-          {current && !failure && !isLoading && (
-            <OrderCorrectionHistoryDialog
-              key={`${storeId}:${orderId}`}
-              orderId={orderId}
-              scope="store"
-            />
-          )}
+          <div className="flex items-center justify-between gap-6">
+            <h1 className="text-foreground text-2xl font-bold">受注の編集</h1>
+            {current && !failure && !isLoading && (
+              <OrderCorrectionHistoryDialog
+                key={`${storeId}:${orderId}`}
+                orderId={orderId}
+                scope="store"
+              />
+            )}
+          </div>
           {/* 取れていない間は名乗らせない。「お客様名なし」は顧客の着いていない受注を指す文言で、
             まだ読めていない受注や存在しない受注に出すと、失敗の姿と区別が付かなくなる */}
           {current !== null && (
@@ -303,7 +306,7 @@ export default function OrderEditPage() {
           </Link>
         )}
         {current && (
-          <p>
+          <p className="rounded-lg border bg-card px-6 py-4 text-sm font-medium tabular-nums">
             {current.status === 'CANCELLED'
               ? '報酬発生なし'
               : current.status === 'COMPLETED'
@@ -339,10 +342,15 @@ export default function OrderEditPage() {
 
         {seeded && (
           <Form {...form}>
-            <form onSubmit={handleSubmit(submit)} className="space-y-6">
-              <section className="space-y-3">
-                <h2 className="text-muted-foreground text-sm font-medium">担当</h2>
-                <div className="grid grid-cols-2 gap-4">
+            <form
+              onSubmit={handleSubmit(submit)}
+              className="rounded-xl border bg-card text-card-foreground shadow-sm"
+            >
+              <OrderEditorSection
+                title="受付・担当"
+                description="受付担当と指名キャストを確認します。"
+              >
+                <div className="grid grid-cols-2 gap-6">
                   <OrderReceptionistField
                     scene="edit"
                     originalId={current.receptionist_id}
@@ -366,11 +374,13 @@ export default function OrderEditPage() {
                     )}
                   />
                 </div>
-              </section>
+              </OrderEditorSection>
 
-              <section className="space-y-3">
-                <h2 className="text-muted-foreground text-sm font-medium">日時</h2>
-                <div className="grid grid-cols-2 gap-4">
+              <OrderEditorSection
+                title="訪問日時"
+                description="営業日と到着予定の時間帯を設定します。"
+              >
+                <div className="grid grid-cols-2 gap-6">
                   <FormField
                     control={control}
                     name="business_date"
@@ -410,124 +420,12 @@ export default function OrderEditPage() {
                     />
                   </div>
                 </div>
-              </section>
+              </OrderEditorSection>
 
-              <section className="space-y-3">
-                <h2 className="text-muted-foreground text-sm font-medium">コース</h2>
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={control}
-                    name="pax"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>人数</FormLabel>
-                        <FormControl>
-                          <Input type="number" min={1} {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <OrderCourseField current={current.course} />
-                  <OrderSpecialServicesField
-                    current={current.special_services}
-                    originalCast={current.cast_id}
-                  />{' '}
-                </div>
-                <OrderFeeLinesField systemLines={readOnlyFeeLines(current?.fee_lines)} />
-              </section>
-
-              <section className="space-y-3">
-                <h2 className="text-muted-foreground text-sm font-medium">場所</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={control}
-                    name="location_address"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel>住所</FormLabel>
-                        <FormControl>
-                          <Input type="text" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="location_building"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>建物</FormLabel>
-                        <FormControl>
-                          <Input type="text" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </section>
-
-              <section className="space-y-3">
-                <h2 className="text-muted-foreground text-sm font-medium">媒体</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={control}
-                    name="carrier"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>キャリア</FormLabel>
-                        <FormControl>
-                          <Input type="text" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="media_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>知った媒体</FormLabel>
-                        <FormControl>
-                          <Input type="text" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </section>
-
-              <section className="space-y-3">
-                <h2 className="text-muted-foreground text-sm font-medium">その他</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={control}
-                    name="remarks"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>備考</FormLabel>
-                        <FormControl>
-                          <Textarea rows={2} {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="cast_driver_message"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>キャスト・ドライバーへのメッセージ</FormLabel>
-                        <FormControl>
-                          <Textarea rows={2} {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </section>
-
-              <section className="space-y-3">
-                <h2 className="text-muted-foreground text-sm font-medium">顧客</h2>
+              <OrderEditorSection
+                title="お客様・連絡先"
+                description="顧客台帳の情報は顧客詳細から確認できます。"
+              >
                 {linked ? (
                   // 台帳の項目はここから直せない。受注 1 件のつもりの訂正が同じ顧客の他の受注へ波及する
                   <div className="flex items-center justify-between rounded-lg border p-4">
@@ -548,7 +446,7 @@ export default function OrderEditPage() {
                   </div>
                 ) : (
                   // 顧客が着いていない受注では、録入された連絡先が唯一の名乗りなのでここでしか直せない
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-6">
                     <p className="text-muted-foreground col-span-2 text-xs">
                       台帳の顧客に着いていない受注です{UNLINKED_NOTE}
                       。ここで直せるのは受付で録入した連絡先だけで、 台帳への登録は行われません。
@@ -579,20 +477,148 @@ export default function OrderEditPage() {
                     />
                   </div>
                 )}
-              </section>
+              </OrderEditorSection>
 
-              <div className="flex justify-end gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={formState.isSubmitting}
-                  onClick={() => router.push(storePath(storeId, '/orders'))}
-                >
-                  キャンセル
-                </Button>
-                <Button type="submit" disabled={formState.isSubmitting}>
-                  {formState.isSubmitting ? '保存中...' : '保存'}
-                </Button>
+              <OrderEditorSection title="訪問先" description="この受注の訪問先を編集します。">
+                <div className="grid grid-cols-2 gap-6">
+                  <FormField
+                    control={control}
+                    name="location_address"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>住所</FormLabel>
+                        <FormControl>
+                          <Input type="text" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={control}
+                    name="location_building"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>建物</FormLabel>
+                        <FormControl>
+                          <Input type="text" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </OrderEditorSection>
+
+              <OrderEditorSection
+                title="サービス・料金"
+                description="現在の条件を確認し、変更する提供内容と内訳を選択します。"
+              >
+                <div className="grid grid-cols-2 gap-6">
+                  <FormField
+                    control={control}
+                    name="pax"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>人数</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={1} {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <div className="col-span-2">
+                    <OrderCourseField current={current.course} />
+                  </div>
+                  <div className="col-span-2">
+                    <OrderSpecialServicesField
+                      current={current.special_services}
+                      originalCast={current.cast_id}
+                    />
+                  </div>
+                </div>
+                <OrderFeeLinesField systemLines={readOnlyFeeLines(current?.fee_lines)} />
+              </OrderEditorSection>
+
+              <OrderEditorSection
+                title="受付情報"
+                description="キャリアと受付時の媒体情報を記録します。"
+              >
+                <div className="grid grid-cols-2 gap-6">
+                  <FormField
+                    control={control}
+                    name="carrier"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>キャリア</FormLabel>
+                        <FormControl>
+                          <Input type="text" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={control}
+                    name="media_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>知った媒体</FormLabel>
+                        <FormControl>
+                          <Input type="text" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </OrderEditorSection>
+
+              <OrderEditorSection
+                title="連絡・備考"
+                description="受付メモと、キャスト・ドライバーへの連絡を記入します。"
+              >
+                <div className="grid grid-cols-2 gap-6">
+                  <FormField
+                    control={control}
+                    name="remarks"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>備考</FormLabel>
+                        <FormControl>
+                          <Textarea rows={2} {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={control}
+                    name="cast_driver_message"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>キャスト・ドライバーへのメッセージ</FormLabel>
+                        <FormControl>
+                          <Textarea rows={2} {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </OrderEditorSection>
+
+              <div className="sticky bottom-0 z-10 flex items-center justify-between gap-6 rounded-b-xl border-t bg-card p-6">
+                <p className="text-sm text-muted-foreground">
+                  変更内容は保存前の確認画面で確認できます。
+                </p>
+                <div className="flex shrink-0 gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={formState.isSubmitting}
+                    onClick={() => router.push(storePath(storeId, '/orders'))}
+                  >
+                    キャンセル
+                  </Button>
+                  <Button type="submit" disabled={formState.isSubmitting}>
+                    {formState.isSubmitting ? '保存中...' : '保存'}
+                  </Button>
+                </div>
               </div>
             </form>
           </Form>
