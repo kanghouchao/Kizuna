@@ -64,9 +64,11 @@ function CreateOrder({ replacement }: { replacement?: string }) {
     <>
       {confirmation.dialog}
       <div>
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">新規オーダー登録</h1>
-          <p className="text-sm text-muted-foreground mt-1">新しい注文情報を入力してください。</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            受付情報・訪問先・提供内容を入力し、料金を確認して登録します。
+          </p>
         </div>
 
         {replacement && (

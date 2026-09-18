@@ -47,9 +47,13 @@ it('参照権限だけで一覧と履歴を開き、訂正操作は表示しな�
   });
   jest.mocked(orderApi.correctionHistory).mockResolvedValue({ rows: [], nextCursor: null });
   render(<PlatformOrdersPage />);
-  expect(await screen.findByText('発生済み報酬 ¥7,000')).toBeInTheDocument();
-  expect(screen.getByText('請求総額 ¥11,900')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '訂正履歴' }));
+  expect(await screen.findByRole('table', { name: '受注一覧' })).toBeInTheDocument();
+  expect(screen.getByText('¥7,000')).toBeInTheDocument();
+  expect(screen.getByText('¥11,900')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /詳細.*受注 o1/ }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('原完了日時');
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByRole('button', { name: /訂正履歴.*受注 o1/ }));
   expect(await screen.findByText('訂正履歴はありません')).toBeInTheDocument();
   expect(orderApi.correctionHistory).toHaveBeenCalledWith('platform', 'o1', undefined);
   expect(screen.queryByRole('button', { name: '訂正する' })).not.toBeInTheDocument();
