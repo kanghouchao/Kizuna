@@ -97,6 +97,7 @@ export default function EmergencyElevationsPage() {
 
   // 直近の発動結果。有効期限の明示は数秒で消える通知ではなく、頁に残る面で行う
   const [activation, setActivation] = useState<EmergencyElevationActivationResponse | null>(null);
+  const [revokingOpen, setRevokingOpen] = useState(false);
   const [revoking, setRevoking] = useState<EmergencyElevationSummary | null>(null);
 
   const submit = async (values: ActivationFormValues) => {
@@ -121,7 +122,7 @@ export default function EmergencyElevationsPage() {
   };
 
   const revoke = async (row: EmergencyElevationSummary) => {
-    setRevoking(null);
+    setRevokingOpen(false);
     try {
       await emergencyElevationApi.revoke(row.id ?? 0);
       // 自分の発動を撤回した場合はここで自分のセッションも失効しており、
@@ -301,7 +302,10 @@ export default function EmergencyElevationsPage() {
                         variant="ghost"
                         size="sm"
                         className="text-destructive-strong"
-                        onClick={() => setRevoking(row)}
+                        onClick={() => {
+                          setRevoking(row);
+                          setRevokingOpen(true);
+                        }}
                       >
                         撤回
                       </Button>
@@ -322,12 +326,12 @@ export default function EmergencyElevationsPage() {
       </TableCard>
 
       <ConfirmDialog
-        open={revoking !== null}
+        open={revokingOpen}
         title="緊急昇格を撤回しますか？"
         description={`${revoking?.activated_by_name ?? ''} の ${revoking?.store_name ?? ''} への昇格を撤回します。発動者の全セッション（通常のログインを含む）が失効します。自分の発動を撤回した場合は、直後に再ログインが必要です。`}
         confirmLabel="撤回する"
         onConfirm={() => void (revoking && revoke(revoking))}
-        onClose={() => setRevoking(null)}
+        onClose={() => setRevokingOpen(false)}
       />
     </div>
   );

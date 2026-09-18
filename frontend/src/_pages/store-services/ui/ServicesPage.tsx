@@ -50,7 +50,9 @@ function Services() {
   const [kind, setKind] = useState<ServiceKind | 'ALL'>('ALL');
   const [deleted, setDeleted] = useState(false);
   const [editor, setEditor] = useState<{ id: string | null } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [historyId, setHistoryId] = useState<string | null>(null);
+  const [targetOpen, setTargetOpen] = useState(false);
   const [target, setTarget] = useState<ServiceSummary | null>(null);
   const [removing, setRemoving] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -190,14 +192,24 @@ function Services() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setTarget(item)}
+                          onClick={() => {
+                            setTarget(item);
+                            setTargetOpen(true);
+                          }}
                           disabled={removing}
                         >
                           削除
                         </Button>
                       </>
                     )}
-                    <Button variant="outline" size="sm" onClick={() => setHistoryId(item.id)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setHistoryId(item.id);
+                        setHistoryOpen(true);
+                      }}
+                    >
                       履歴
                     </Button>
                   </div>
@@ -220,19 +232,20 @@ function Services() {
         <ServiceHistory
           key={historyId}
           id={historyId}
-          onClose={() => setHistoryId(null)}
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
           onForbidden={onForbidden}
         />
       )}
       <ConfirmDialog
-        open={!!target}
+        open={targetOpen}
         title="サービスを削除しますか？"
         description={
           target
             ? `${target.name}（版本 ${target.version}）を新規候補から除外します。保存済みの条件と変更履歴は残ります。`
             : undefined
         }
-        onClose={() => setTarget(null)}
+        onClose={() => setTargetOpen(false)}
         onConfirm={() => {
           if (target) void remove(target);
         }}

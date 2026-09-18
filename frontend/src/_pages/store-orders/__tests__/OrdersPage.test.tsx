@@ -1,5 +1,5 @@
 import { chooseCourse, confirmPreview } from '../lib/orderTestSupport';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
 import {
@@ -614,4 +614,28 @@ describe('新規オーダー登録', () => {
     // Web 申請の群（MEMBER_WEB / GUEST_WEB）は予約申請の確定だけが名乗る値（後端も拒否する）
     expect(screen.queryByText('Web 申請')).not.toBeInTheDocument();
   });
+});
+
+it('受注確定の退出中は入力を保ち、同じ申請を開き直すと初期値へ戻す', async () => {
+  stubInbox(pendingApplication());
+  render(<OrderListPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '確定' }));
+  const popup = await screen.findByRole('dialog');
+  await waitFor(() => expect(within(popup).getByLabelText('人数')).toHaveValue(2));
+  fireEvent.change(within(popup).getByLabelText('人数'), { target: { value: '5' } });
+  let finish!: () => void;
+  const finished = new Promise<void>(resolve => {
+    finish = resolve;
+  });
+  const getAnimations = jest.fn(() => [{ finished }]);
+  Object.defineProperty(popup, 'getAnimations', { value: getAnimations });
+  fireEvent.click(within(popup).getByRole('button', { name: 'キャンセル' }));
+  await waitFor(() => expect(getAnimations).toHaveBeenCalled());
+  expect(popup).toHaveAttribute('data-closed');
+  expect(within(popup).getByLabelText('人数')).toHaveValue(5);
+  expect(mockedApplicationApi.confirm).not.toHaveBeenCalled();
+  await act(async () => finish());
+  await waitFor(() => expect(popup).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: '確定' }));
+  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
 });

@@ -37,6 +37,7 @@ export default function CastListPage() {
   const params = useParams();
   const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
+  const [issuedInvitationOpen, setIssuedInvitationOpen] = useState(false);
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
   // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
@@ -65,6 +66,7 @@ export default function CastListPage() {
    *  モーダル state はページ層が持つためモーダルは表示され続ける） */
   const handleIssued = (result: IssuedInvitation) => {
     setIssuedInvitation(result);
+    setIssuedInvitationOpen(true);
     void list.reload();
   };
 
@@ -232,17 +234,17 @@ export default function CastListPage() {
 
       {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
       <InvitationModal
-        open={issuedInvitation !== null}
+        open={issuedInvitationOpen}
         link={
           issuedInvitation && typeof window !== 'undefined'
             ? castInviteUrl(issuedInvitation.token)
             : ''
         }
         expiresAt={issuedInvitation?.expiresAt ?? null}
-        onClose={() => setIssuedInvitation(null)}
+        onClose={() => setIssuedInvitationOpen(false)}
       />
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deletion.open}
         title={deletion.target ? `「${deletion.target.name}」を削除しますか？` : ''}
         onConfirm={() => void deletion.confirm()}
         onClose={deletion.cancel}

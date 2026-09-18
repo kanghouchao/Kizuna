@@ -38,7 +38,6 @@ export interface AttendanceFormTarget {
 interface AttendanceFormModalProps {
   open: boolean;
   onClose: () => void;
-  /** open が false の間は null。 */
   target: AttendanceFormTarget | null;
   /** 飛び込みの記録で選べるキャスト。同営業日に実績を持つキャストは呼び出し側が除いて渡す。 */
   castOptions: CastResponse[];

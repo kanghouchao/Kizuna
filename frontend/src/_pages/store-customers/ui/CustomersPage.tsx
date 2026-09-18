@@ -274,7 +274,7 @@ export default function CustomersPage() {
 
       {/* ダイアログは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deletion.open}
         title={deletion.target ? `「${deletion.target.name}」を削除しますか？` : ''}
         onConfirm={() => void deletion.confirm()}
         onClose={deletion.cancel}

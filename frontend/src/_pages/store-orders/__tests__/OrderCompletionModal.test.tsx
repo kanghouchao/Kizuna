@@ -63,6 +63,7 @@ const confirmedOrder: Order = {
 const renderModal = (onCompleted = jest.fn(), onClose = jest.fn(), onSuperseded = jest.fn()) =>
   render(
     <OrderCompletionModal
+      open
       order={confirmedOrder}
       onClose={onClose}
       onCompleted={onCompleted}
@@ -165,6 +166,7 @@ describe('OrderCompletionModal', () => {
 
     render(
       <OrderCompletionModal
+        open
         order={queueRow}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -257,6 +259,7 @@ describe('OrderCompletionModal', () => {
 
     rerender(
       <OrderCompletionModal
+        open
         order={null}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -265,6 +268,7 @@ describe('OrderCompletionModal', () => {
     );
     rerender(
       <OrderCompletionModal
+        open
         order={confirmedOrder}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -305,6 +309,7 @@ describe('OrderCompletionModal', () => {
     // 一覧に常時 mount されているので、開くまで取りに行くと 1 件も完了しない画面が毎回読む
     render(
       <OrderCompletionModal
+        open
         order={null}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -324,6 +329,7 @@ describe('OrderCompletionModal', () => {
     };
     render(
       <OrderCompletionModal
+        open
         order={unlinked}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -374,6 +380,7 @@ describe('OrderCompletionModal', () => {
     const otherOrder: Order = { ...confirmedOrder, id: 'o2', customer_name: '鈴木花子' };
     const { rerender } = render(
       <OrderCompletionModal
+        open
         order={confirmedOrder}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -384,6 +391,7 @@ describe('OrderCompletionModal', () => {
 
     rerender(
       <OrderCompletionModal
+        open
         order={null}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -393,6 +401,7 @@ describe('OrderCompletionModal', () => {
     mockedPreview.mockReturnValue(new Promise(() => {}));
     rerender(
       <OrderCompletionModal
+        open
         order={otherOrder}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -418,6 +427,7 @@ describe('OrderCompletionModal', () => {
     // 欄は空に戻るので、確定値だけ残ると空欄のまま前回の金額の付与予定が出る
     const { rerender } = render(
       <OrderCompletionModal
+        open
         order={confirmedOrder}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -439,6 +449,7 @@ describe('OrderCompletionModal', () => {
 
     rerender(
       <OrderCompletionModal
+        open
         order={null}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -447,6 +458,7 @@ describe('OrderCompletionModal', () => {
     );
     rerender(
       <OrderCompletionModal
+        open
         order={confirmedOrder}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -986,6 +998,7 @@ describe('OrderCompletionModal', () => {
     mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
     const { rerender } = render(
       <OrderCompletionModal
+        open
         order={confirmedOrder}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -997,6 +1010,7 @@ describe('OrderCompletionModal', () => {
 
     rerender(
       <OrderCompletionModal
+        open
         order={null}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
@@ -1005,6 +1019,7 @@ describe('OrderCompletionModal', () => {
     );
     rerender(
       <OrderCompletionModal
+        open
         order={reopened}
         onClose={jest.fn()}
         onCompleted={jest.fn()}

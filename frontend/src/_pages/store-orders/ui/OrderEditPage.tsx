@@ -602,7 +602,7 @@ export default function OrderEditPage() {
                 </div>
               </OrderEditorSection>
 
-              <div className="sticky bottom-0 z-10 flex items-center justify-between gap-6 rounded-b-xl border-t bg-card p-6">
+              <div className="flex items-center justify-between gap-6 rounded-b-xl border-t bg-card p-6">
                 <p className="text-sm text-muted-foreground">
                   変更内容は保存前の確認画面で確認できます。
                 </p>

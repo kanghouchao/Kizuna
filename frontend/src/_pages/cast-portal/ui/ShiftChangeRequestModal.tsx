@@ -29,13 +29,13 @@ interface ChangeFormValues {
 }
 
 interface ShiftChangeRequestModalProps {
-  /** 変更申請の対象（確定シフト）。null なら閉じている。 */
+  open: boolean;
   item: CastScheduleItem | null;
   onClose: () => void;
 }
 
 /** 確定シフトへの変更申請モーダル。現行の日時を初期値に、希望する日時・備考を提出する。 */
-export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestModalProps) {
+export function ShiftChangeRequestModal({ open, item, onClose }: ShiftChangeRequestModalProps) {
   const form = useForm<ChangeFormValues>({
     defaultValues: { work_date: '', start_time: '', end_time: '', note: '' },
   });
@@ -47,14 +47,14 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
   } = form;
 
   useEffect(() => {
-    if (!item) return;
+    if (!open || !item) return;
     reset({
       work_date: item.work_date ?? '',
       start_time: (item.start_time ?? '').slice(0, 5),
       end_time: (item.end_time ?? '').slice(0, 5),
       note: '',
     });
-  }, [item, reset]);
+  }, [open, item, reset]);
 
   const submit = async (values: ChangeFormValues) => {
     if (!item?.id) return;
@@ -79,7 +79,7 @@ export function ShiftChangeRequestModal({ item, onClose }: ShiftChangeRequestMod
 
   return (
     <Dialog
-      open={item !== null}
+      open={open}
       onOpenChange={next => {
         if (!next) onClose();
       }}

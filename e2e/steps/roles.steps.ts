@@ -22,7 +22,7 @@ When(
     createdRoleName = `${baseName}-${Date.now()}`;
     await page.getByRole('button', { name: 'ロールを追加', exact: true }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'ロールを追加' });
+    const dialog = page.getByRole('dialog', { name: 'ロールを追加', exact: true });
     await dialog.getByLabel('ロール名', { exact: true }).fill(createdRoleName);
     // 権限ラベルはバックエンドの権限コードをそのまま表示する（日本語名は持たない）。
     await dialog.getByRole('checkbox', { name: permissionCode, exact: true }).check();

@@ -130,6 +130,7 @@ ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み�
 - 検索欄は入力中の値と適用済み条件を分ける。submit で ref へ確定して search() を呼び、fetcher は ref を読む。Enter は shell の form に任せる。
 - offset sort は一意の副キーまで指定する（例 `displayOrder,id,asc`）。
 - ダイアログは ListPage の外に置く。children は読み込み中や空一覧で unmount される。
+- 通常の閉じる操作は `open=false` のみとし、退出中も本文を保つ。選択対象と開閉状態を分け、保存成功の通知・再取得を退出完了まで遅らせない。親によるアンマウントや一度きりの資格情報の破棄が必要な場合だけ `onOpenChangeComplete` を使う。
 - モーダルを開く操作は button、画面遷移は link のまま保つ。見た目だけで役割を交換しない。
 
 ## 通知と失敗状態

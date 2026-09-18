@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import type {
@@ -110,7 +110,9 @@ interface FormValues {
 }
 
 export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
-  const { stores, storesLoading, storesFailed, onReloadStores, onClose } = props;
+  const { stores, storesLoading, storesFailed, onReloadStores, onClose: handleClosed } = props;
+  const [open, setOpen] = useState(true);
+  const onClose = () => setOpen(false);
   const resource = props.mode === 'edit' ? props.resource : null;
   const staff = resource?.data;
   const form = useForm<FormValues>({
@@ -223,7 +225,10 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
   };
   return (
     <Dialog
-      open
+      open={open}
+      onOpenChangeComplete={next => {
+        if (!next) handleClosed();
+      }}
       onOpenChange={next => {
         if (!next) close();
       }}

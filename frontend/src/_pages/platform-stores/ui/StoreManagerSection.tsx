@@ -139,7 +139,7 @@ export function StoreManagerSection({ storeId }: StoreManagerSectionProps) {
       )}
 
       <ConfirmDialog
-        open={dismissal.target !== null}
+        open={dismissal.open}
         title="店長を解任しますか？"
         description={`${dismissal.target?.display_name ?? ''} をこの店舗の店長から外し、担当店舗からも除きます。`}
         confirmLabel="解任する"
@@ -149,7 +149,7 @@ export function StoreManagerSection({ storeId }: StoreManagerSectionProps) {
 
       {/* 前端は本人の担当店舗を列挙できないので、波及範囲は一般形（担当するすべての店舗）で述べる */}
       <ConfirmDialog
-        open={demotion.target !== null}
+        open={demotion.open}
         title="店長を降格しますか？"
         description={`${demotion.target?.display_name ?? ''} を店長から降格します。担当するすべての店舗で店舗スタッフになります。`}
         confirmLabel="降格する"

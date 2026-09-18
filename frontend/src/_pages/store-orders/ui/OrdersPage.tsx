@@ -85,9 +85,31 @@ export default function OrderListPage() {
   const [sortKey, setSortKey] = useState<OrderSortKey>('BUSINESS_DATE');
   const [descending, setDescending] = useState(false);
 
-  const [confirming, setConfirming] = useState<OrderApplicationRow | null>(null);
-  const [completing, setCompleting] = useState<OrderWorkQueueRow | null>(null);
-  const [correcting, setCorrecting] = useState<OrderArchiveRow | null>(null);
+  // 退出中は対象を保持し、再度開くときだけ key を変えて入力と取得結果を初期化する。
+  const [confirmingDialog, setConfirmingDialog] = useState<{
+    target: OrderApplicationRow;
+    open: boolean;
+    key: number;
+  } | null>(null);
+  const confirming = confirmingDialog?.target ?? null;
+  const setConfirming = (target: OrderApplicationRow) =>
+    setConfirmingDialog(previous => ({ target, open: true, key: (previous?.key ?? 0) + 1 }));
+  const [completingDialog, setCompletingDialog] = useState<{
+    target: OrderWorkQueueRow;
+    open: boolean;
+    key: number;
+  } | null>(null);
+  const completing = completingDialog?.target ?? null;
+  const setCompleting = (target: OrderWorkQueueRow) =>
+    setCompletingDialog(previous => ({ target, open: true, key: (previous?.key ?? 0) + 1 }));
+  const [correctingDialog, setCorrectingDialog] = useState<{
+    target: OrderArchiveRow;
+    open: boolean;
+    key: number;
+  } | null>(null);
+  const correcting = correctingDialog?.target ?? null;
+  const setCorrecting = (target: OrderArchiveRow) =>
+    setCorrectingDialog(previous => ({ target, open: true, key: (previous?.key ?? 0) + 1 }));
 
   // 群を跨いで同じ条件を当てる。参照が毎レンダー変わるとアーカイブが取り直し続けるため畳んで持つ
   const criteria: OrderListCriteria = useMemo(
@@ -332,14 +354,18 @@ export default function OrderListPage() {
 
       {/* 確定は申請内容を予填した受注の作成操作。申請原文はモーダルの外（受付箱の行）に残り続ける */}
       <OrderApplicationConfirmModal
+        key={`confirming-${confirmingDialog?.key}`}
+        open={confirmingDialog?.open ?? false}
         application={confirming}
-        onClose={() => setConfirming(null)}
+        onClose={() => setConfirmingDialog(previous => previous && { ...previous, open: false })}
         onConfirmed={() => settleConfirmed(confirming)}
       />
       <OrderCompletionModal
+        key={`completing-${completingDialog?.key}`}
+        open={completingDialog?.open ?? false}
         order={completing}
         onClose={missing => {
-          setCompleting(null);
+          setCompletingDialog(previous => previous && { ...previous, open: false });
           if (missing) queue.reload();
         }}
         // 完了した受注は作業キューから外れて完了のアーカイブへ移る
@@ -349,9 +375,11 @@ export default function OrderListPage() {
       />
       {/* 訂正は受注の状態も会計欄も変えないため、一覧の取り直しは要らない */}
       <OrderAttributionModal
+        key={`correcting-${correctingDialog?.key}`}
+        open={correctingDialog?.open ?? false}
         order={correcting}
         onClose={missing => {
-          setCorrecting(null);
+          setCorrectingDialog(previous => previous && { ...previous, open: false });
           if (missing) setArchived(prev => ({ ...prev, COMPLETED: prev.COMPLETED + 1 }));
         }}
       />

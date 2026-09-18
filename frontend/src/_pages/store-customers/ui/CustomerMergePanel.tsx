@@ -46,6 +46,7 @@ export function CustomerMergePanel({
     customerIds
   );
   const [survivingId, setSurvivingId] = useState<string | null>(null);
+  const [mergeCompleted, setMergeCompleted] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
   // 端点は 2 行そろわなければ 404 を返す。組にできない応答で見比べを描かないための型の絞り込み
@@ -61,12 +62,11 @@ export function CustomerMergePanel({
       await customerApi.merge(surviving.id, merged.id);
       notify.success('顧客を統合しました');
       setIsConfirming(false);
-      onMerged();
+      setMergeCompleted(true);
     } catch (error) {
       // 両行が会員に認領されている 409 は「先に関連を解除する」と読める文言をサーバが返す。
       // 汎用文言に潰すと、次の一手が画面から判らなくなる
       notify.error(getApiErrorMessage(error, '顧客の統合に失敗しました'));
-    } finally {
       onSubmittingChange(false);
     }
   };
@@ -107,6 +107,13 @@ export function CustomerMergePanel({
       )}
 
       <CustomerMergeConfirmDialog
+        onOpenChangeComplete={open => {
+          if (!open && mergeCompleted) {
+            setMergeCompleted(false);
+            onSubmittingChange(false);
+            onMerged();
+          }
+        }}
         open={isConfirming && surviving !== undefined && merged !== undefined}
         survivingName={surviving?.name ?? ''}
         mergedName={merged?.name ?? ''}

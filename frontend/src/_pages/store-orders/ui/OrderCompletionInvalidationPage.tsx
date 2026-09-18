@@ -78,6 +78,7 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
     [allowed, id, storeId]
   );
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<OrderCorrectionHistoryEntry | null>(null);
@@ -101,7 +102,7 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
     if (!canCorrect || confirmation === null || !order || order.version === undefined || submitting)
       return;
     setSubmitting(true);
-    setConfirmation(null);
+    setConfirmationOpen(false);
     setError(null);
     try {
       const result = await orderApi.invalidateCompletion(id, {
@@ -216,7 +217,10 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
               <form
                 noValidate
                 className="space-y-4"
-                onSubmit={form.handleSubmit(data => setConfirmation(data.reason.trim()))}
+                onSubmit={form.handleSubmit(data => {
+                  setConfirmation(data.reason.trim());
+                  setConfirmationOpen(true);
+                })}
               >
                 <FormField
                   control={form.control}
@@ -249,8 +253,8 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
         受注詳細へ
       </Button>
       <ConfirmDialog
-        open={confirmation !== null}
-        onClose={() => setConfirmation(null)}
+        open={confirmationOpen}
+        onClose={() => setConfirmationOpen(false)}
         title="全く提供していない受注ですか？"
         description={`理由：${confirmation ?? ''}。有効な費用・報酬・請求を零にします。元に戻せません。`}
         confirmLabel="未提供を確認して無効化"

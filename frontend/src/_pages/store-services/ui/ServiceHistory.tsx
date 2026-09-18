@@ -1,4 +1,5 @@
 'use client';
+
 import { serviceApi, ServiceSummary, serviceKindLabels } from '@/entities/service';
 import { useCursorList, isForbidden } from '@/shared/lib';
 import {
@@ -42,15 +43,29 @@ function Conditions({ value }: { value?: ServiceSummary }) {
     </dl>
   );
 }
-export function ServiceHistory({
-  id,
-  onClose,
-  onForbidden,
-}: {
+interface ServiceHistoryProps {
   id: string;
+  open: boolean;
   onClose: () => void;
   onForbidden: () => void;
-}) {
+}
+
+export function ServiceHistory({ id, open, onClose, onForbidden }: ServiceHistoryProps) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-3xl">
+        <HistoryContent id={id} onForbidden={onForbidden} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HistoryContent({ id, onForbidden }: Pick<ServiceHistoryProps, 'id' | 'onForbidden'>) {
   const history = useCursorList(async cursor => {
     try {
       return await serviceApi.history(id, cursor);
@@ -60,57 +75,50 @@ export function ServiceHistory({
     }
   });
   return (
-    <Dialog
-      open
-      onOpenChange={open => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>サービス変更履歴</DialogTitle>
-          <DialogDescription>
-            保存時の変更前後と操作者を、新しい版本から表示します。
-          </DialogDescription>
-        </DialogHeader>
-        {history.failed ? (
-          <RegionError message="変更履歴の取得に失敗しました" onRetry={history.reload} />
-        ) : (
-          <>
-            {history.rows.map(row => (
-              <section key={row.id} className="space-y-3 rounded-lg border p-4">
-                <h2 className="font-semibold">
-                  版本 {row.version} ·{' '}
-                  {{ CREATED: '作成', UPDATED: '変更', DELETED: '削除' }[row.operation]}
-                </h2>
-                <p className="text-sm">
-                  操作者 ID: {row.actor_id} · {new Date(row.occurred_at).toLocaleString('ja-JP')}
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <h3 className="mb-2 font-medium">変更前</h3>
-                    <Conditions value={row.before} />
-                  </div>
-                  <div>
-                    <h3 className="mb-2 font-medium">変更後</h3>
-                    <Conditions value={row.after} />
-                  </div>
+    <>
+      <DialogHeader>
+        <DialogTitle>サービス変更履歴</DialogTitle>
+        <DialogDescription>
+          保存時の変更前後と操作者を、新しい版本から表示します。
+        </DialogDescription>
+      </DialogHeader>
+      {history.failed ? (
+        <RegionError message="変更履歴の取得に失敗しました" onRetry={history.reload} />
+      ) : (
+        <>
+          {history.rows.map(row => (
+            <section key={row.id} className="space-y-3 rounded-lg border p-4">
+              <h2 className="font-semibold">
+                版本 {row.version} ·{' '}
+                {{ CREATED: '作成', UPDATED: '変更', DELETED: '削除' }[row.operation]}
+              </h2>
+              <p className="text-sm">
+                操作者 ID: {row.actor_id} · {new Date(row.occurred_at).toLocaleString('ja-JP')}
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 font-medium">変更前</h3>
+                  <Conditions value={row.before} />
                 </div>
-              </section>
-            ))}
-            {history.isLoading ? (
-              <p>読み込み中...</p>
-            ) : history.rows.length === 0 ? (
-              <p>変更履歴はありません</p>
-            ) : null}
-            {history.hasMore && (
-              <Button variant="outline" onClick={history.loadMore} disabled={history.isLoading}>
-                続きを表示
-              </Button>
-            )}
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+                <div>
+                  <h3 className="mb-2 font-medium">変更後</h3>
+                  <Conditions value={row.after} />
+                </div>
+              </div>
+            </section>
+          ))}
+          {history.isLoading ? (
+            <p>読み込み中...</p>
+          ) : history.rows.length === 0 ? (
+            <p>変更履歴はありません</p>
+          ) : null}
+          {history.hasMore && (
+            <Button variant="outline" onClick={history.loadMore} disabled={history.isLoading}>
+              続きを表示
+            </Button>
+          )}
+        </>
+      )}
+    </>
   );
 }

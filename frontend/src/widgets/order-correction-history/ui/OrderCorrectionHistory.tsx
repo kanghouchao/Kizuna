@@ -175,7 +175,7 @@ export function OrderCorrectionHistoryModal({
           <DialogTitle>訂正履歴</DialogTitle>
           <DialogDescription>受注 {props.orderId} の費用・報酬の変更記録</DialogDescription>
         </DialogHeader>
-        {open && <OrderCorrectionHistory key={`${props.scope}:${props.orderId}`} {...props} />}
+        <OrderCorrectionHistory key={`${props.scope}:${props.orderId}`} {...props} />
       </DialogContent>
     </Dialog>
   );

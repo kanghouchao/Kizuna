@@ -38,6 +38,7 @@ function specialServiceComparison(item: OrderSpecialService) {
 export function useOrderConfirmation(target?: string) {
   const params = useParams();
   const scope = `${params?.storeId}:${target ?? params?.id ?? ''}`;
+  const [open, setOpen] = useState(false);
   const [job, setJob] = useState<{
     load: () => Promise<OrderPreview>;
     key: number;
@@ -77,7 +78,7 @@ export function useOrderConfirmation(target?: string) {
   const close = (token: string | null) => {
     resolve.current?.(token);
     resolve.current = null;
-    setJob(null);
+    setOpen(false);
   };
   const confirm = (load: () => Promise<OrderPreview>) =>
     new Promise<string | null>((done, fail) => {
@@ -85,11 +86,12 @@ export function useOrderConfirmation(target?: string) {
       resolve.current?.(null);
       resolve.current = done;
       setJob({ load, key: ++sequence.current, scope });
+      setOpen(true);
     });
   const preview = resource.data?.preview;
   const dialog = (
     <Dialog
-      open={job !== null && job.scope === scope}
+      open={open && job?.scope === scope}
       onOpenChange={open => {
         if (!open) close(null);
       }}
@@ -111,7 +113,7 @@ export function useOrderConfirmation(target?: string) {
                   reject.current?.(resource.data?.cause);
                   resolve.current = null;
                   reject.current = null;
-                  setJob(null);
+                  setOpen(false);
                 }}
               >
                 最新の受注を読み直す

@@ -94,7 +94,7 @@ function optionalText(raw: string): string | null {
  * 付与の取消方法が遡って変わるため、更新の要求型に type は存在しない。
  */
 export function BenefitRuleFormModal({
-  onClose,
+  onClose: handleClosed,
   editingId,
   onSaved,
   stores,
@@ -102,6 +102,8 @@ export function BenefitRuleFormModal({
   storesFailed,
   onReloadStores,
 }: BenefitRuleFormModalProps) {
+  const [open, setOpen] = useState(true);
+  const onClose = () => setOpen(false);
   const {
     data: editingRule,
     isLoading: detailLoading,
@@ -213,7 +215,10 @@ export function BenefitRuleFormModal({
 
   return (
     <Dialog
-      open
+      open={open}
+      onOpenChangeComplete={next => {
+        if (!next) handleClosed();
+      }}
       onOpenChange={next => {
         // 送信中は閉じさせない。閉じると unmount で isSubmitting が消え、開き直した複製から
         // 二重送信できてしまう

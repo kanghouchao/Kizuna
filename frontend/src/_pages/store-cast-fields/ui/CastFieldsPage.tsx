@@ -28,6 +28,7 @@ export default function CastFieldsPage() {
     refetch,
   } = useManagedList<CastFieldDefinitionResponse>(() => castFieldDefinitionApi.list());
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingOpen, setEditingOpen] = useState(false);
   const [editing, setEditing] = useState<CastFieldDefinitionResponse | null>(null);
   const deletion = useDeleteAction<CastFieldDefinitionResponse>({
     remove: definition => castFieldDefinitionApi.delete(definition.id),
@@ -91,7 +92,10 @@ export default function CastFieldsPage() {
                       variant="ghost"
                       size="icon-sm"
                       aria-label="編集"
-                      onClick={() => setEditing(definition)}
+                      onClick={() => {
+                        setEditing(definition);
+                        setEditingOpen(true);
+                      }}
                     >
                       <SquarePenIcon />
                     </Button>
@@ -118,13 +122,13 @@ export default function CastFieldsPage() {
         onCreated={refetch}
       />
       <CastFieldEditModal
-        open={editing !== null}
+        open={editingOpen}
         definition={editing}
-        onClose={() => setEditing(null)}
+        onClose={() => setEditingOpen(false)}
         onUpdated={refetch}
       />
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deletion.open}
         title={deletion.target ? `「${deletion.target.label}」を削除しますか？` : ''}
         description="全キャストのこのフィールドの現在の値も削除されます。同じキーで再作成しても値は復元されません。"
         onConfirm={() => void deletion.confirm()}

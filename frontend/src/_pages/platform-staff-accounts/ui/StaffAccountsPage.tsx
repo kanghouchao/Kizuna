@@ -48,7 +48,9 @@ export default function StaffAccountsPage() {
 
   // 再設定の確認対象と、発行された仮パスワードの表示。どちらもページに置く —
   // 行に持たせると成功後の一覧取り直しで行ごと unmount され、表示が消える。
+  const [resetTargetOpen, setResetTargetOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<StaffAccountSummaryResponse | null>(null);
+  const [issuedOpen, setIssuedOpen] = useState(false);
   const [issued, setIssued] = useState<{
     displayName: string;
     email: string;
@@ -66,7 +68,7 @@ export default function StaffAccountsPage() {
   // 一覧の型では HQ 側ロールを判別できないので行は出し分けない。対象外（HQ 側ロール保持者・
   // 自分自身）の拒否はサーバだけが判定でき、文言は応答からそのまま出す。
   const resetPassword = async (account: StaffAccountSummaryResponse) => {
-    setResetTarget(null);
+    setResetTargetOpen(false);
     setResetting(true);
     const requestId = ++resetRequestIdRef.current;
     try {
@@ -77,6 +79,7 @@ export default function StaffAccountsPage() {
         email: account.email ?? '',
         password: result.temporary_password,
       });
+      setIssuedOpen(true);
     } catch (error) {
       if (requestId !== resetRequestIdRef.current) return;
       notify.error(getApiErrorMessage(error, 'パスワードの再設定に失敗しました'));
@@ -183,7 +186,10 @@ export default function StaffAccountsPage() {
                     variant="ghost"
                     size="sm"
                     disabled={resetting}
-                    onClick={() => setResetTarget(account)}
+                    onClick={() => {
+                      setResetTarget(account);
+                      setResetTargetOpen(true);
+                    }}
                   >
                     パスワード再設定
                   </Button>
@@ -214,7 +220,7 @@ export default function StaffAccountsPage() {
       </ListPage>
 
       <ConfirmDialog
-        open={suspension.target !== null}
+        open={suspension.open}
         title="アカウントを停止しますか？"
         description={`${suspension.target?.display_name ?? ''} のセッションは即時に失効し、ログインできなくなります。アカウントは削除されず、いつでも再開できます。`}
         confirmLabel="停止する"
@@ -223,20 +229,21 @@ export default function StaffAccountsPage() {
       />
 
       <ConfirmDialog
-        open={resetTarget !== null}
+        open={resetTargetOpen}
         title="パスワードを再設定しますか？"
         description={`${resetTarget?.display_name ?? ''} のセッションは即時に失効します。仮パスワードは発行直後に一度だけ表示され、閉じると二度と確認できません。`}
         confirmLabel="再設定する"
         onConfirm={() => void (resetTarget && resetPassword(resetTarget))}
-        onClose={() => setResetTarget(null)}
+        onClose={() => setResetTargetOpen(false)}
       />
 
       <TemporaryPasswordModal
-        open={issued !== null}
+        open={issuedOpen}
         temporaryPassword={issued?.password ?? ''}
         displayName={issued?.displayName ?? ''}
         email={issued?.email ?? ''}
-        onClose={() => setIssued(null)}
+        onClose={() => setIssuedOpen(false)}
+        onClosed={() => setIssued(null)}
       />
     </>
   );

@@ -100,6 +100,7 @@ function Conditions({ storeId }: { storeId: string }) {
   const [saveDenied, setSaveDenied] = useState(false);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [targetOpen, setTargetOpen] = useState(false);
   const [target, setTarget] = useState<{
     item: OwnServiceConditionSummary;
     decision: ConsentDecision;
@@ -111,7 +112,7 @@ function Conditions({ storeId }: { storeId: string }) {
     if (!target || saving || target.item.consent_version === undefined) return;
     const { item, decision } = target;
     setSaving(true);
-    setTarget(null);
+    setTargetOpen(false);
     setMessage('');
     try {
       await ownServiceApi.decide(storeId, item.id, {
@@ -181,14 +182,20 @@ function Conditions({ storeId }: { storeId: string }) {
                     <div className="flex gap-2">
                       <Button
                         disabled={saving || item.consent_status === 'ACCEPTED'}
-                        onClick={() => setTarget({ item, decision: 'ACCEPTED' })}
+                        onClick={() => {
+                          setTarget({ item, decision: 'ACCEPTED' });
+                          setTargetOpen(true);
+                        }}
                       >
                         受諾する
                       </Button>
                       <Button
                         variant="outline"
                         disabled={saving || item.consent_status === 'REJECTED'}
-                        onClick={() => setTarget({ item, decision: 'REJECTED' })}
+                        onClick={() => {
+                          setTarget({ item, decision: 'REJECTED' });
+                          setTargetOpen(true);
+                        }}
                       >
                         拒否する
                       </Button>
@@ -201,9 +208,9 @@ function Conditions({ storeId }: { storeId: string }) {
         </div>
       </ListPage>
       <Dialog
-        open={target !== null}
+        open={targetOpen}
         onOpenChange={open => {
-          if (!open) setTarget(null);
+          if (!open) setTargetOpen(false);
         }}
       >
         <DialogContent>
@@ -219,7 +226,7 @@ function Conditions({ storeId }: { storeId: string }) {
           <Button onClick={() => void save()} disabled={saving}>
             {target?.decision === 'ACCEPTED' ? '確認して受諾する' : '確認して拒否する'}
           </Button>
-          <Button variant="outline" onClick={() => setTarget(null)}>
+          <Button variant="outline" onClick={() => setTargetOpen(false)}>
             キャンセル
           </Button>
         </DialogContent>

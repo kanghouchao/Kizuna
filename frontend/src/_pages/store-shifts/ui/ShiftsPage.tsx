@@ -35,8 +35,11 @@ export default function ShiftsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftResponse | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [attendanceTargetOpen, setAttendanceTargetOpen] = useState(false);
   const [attendanceTarget, setAttendanceTarget] = useState<AttendanceFormTarget | null>(null);
+  const [cancellingOpen, setCancellingOpen] = useState(false);
   const [cancelling, setCancelling] = useState<AttendanceResponse | null>(null);
+  const [deletingOpen, setDeletingOpen] = useState(false);
   const [deleting, setDeleting] = useState<ShiftResponse | null>(null);
 
   // キャスト一覧（フォームの選択肢 + タイムラインの名前解決）。101 人以上でも氏名を解決できるよう
@@ -290,7 +293,10 @@ export default function ShiftsPage() {
               onChangePublication={(targets, published) =>
                 void changePublication(targets, published)
               }
-              onDelete={setDeleting}
+              onDelete={value => {
+                setDeleting(value);
+                setDeletingOpen(true);
+              }}
             />
           )}
         </TabsContent>
@@ -316,8 +322,14 @@ export default function ShiftsPage() {
               onRetry: () => void reloadAbsences(),
             }}
             onChangeDate={setSelectedDate}
-            onOpenForm={setAttendanceTarget}
-            onCancel={setCancelling}
+            onOpenForm={value => {
+              setAttendanceTarget(value);
+              setAttendanceTargetOpen(true);
+            }}
+            onCancel={value => {
+              setCancelling(value);
+              setCancellingOpen(true);
+            }}
           />
         </TabsContent>
         <TabsContent value={REQUESTS_TAB} className="mt-6">
@@ -336,8 +348,8 @@ export default function ShiftsPage() {
       />
 
       <AttendanceFormModal
-        open={attendanceTarget !== null}
-        onClose={() => setAttendanceTarget(null)}
+        open={attendanceTargetOpen}
+        onClose={() => setAttendanceTargetOpen(false)}
         target={attendanceTarget}
         castOptions={walkInCastOptions}
         casts={casts}
@@ -346,19 +358,19 @@ export default function ShiftsPage() {
       />
 
       <AttendanceCancelDialog
-        open={cancelling !== null}
-        onClose={() => setCancelling(null)}
+        open={cancellingOpen}
+        onClose={() => setCancellingOpen(false)}
         attendance={cancelling}
         onCancelled={reloadAttendanceViews}
       />
 
       {/* 一覧の行から呼ばれるので、どの行を消すのかは確認の側でも名乗る */}
       <ConfirmDialog
-        open={deleting !== null}
+        open={deletingOpen}
         title="このシフトを削除しますか？"
         description={deleting === null ? undefined : shiftLabel(deleting, casts)}
         onConfirm={() => deleting !== null && void deleteShift(deleting)}
-        onClose={() => setDeleting(null)}
+        onClose={() => setDeletingOpen(false)}
       />
     </div>
   );

@@ -107,7 +107,7 @@ const reclaimedByOther: OrderAttribution = {
 };
 
 const renderModal = (onClose = jest.fn()) =>
-  render(<OrderAttributionModal order={completedOrder} onClose={onClose} />);
+  render(<OrderAttributionModal open order={completedOrder} onClose={onClose} />);
 
 describe('OrderAttributionModal', () => {
   beforeEach(() => {
@@ -119,7 +119,7 @@ describe('OrderAttributionModal', () => {
 
   it('閉じている間は帰属の現況を取りに行かない', () => {
     // 一覧に常時 mount されているので、開くまで取りに行くと訂正しない画面が毎回読む
-    render(<OrderAttributionModal order={null} onClose={jest.fn()} />);
+    render(<OrderAttributionModal open order={null} onClose={jest.fn()} />);
 
     expect(mockedAttribution).not.toHaveBeenCalled();
   });
@@ -289,6 +289,7 @@ describe('OrderAttributionModal', () => {
     mockedAttribution.mockResolvedValue(invalidated);
     render(
       <OrderAttributionModal
+        open
         order={{ ...completedOrder, completion_invalidated: true }}
         onClose={jest.fn()}
       />
@@ -461,12 +462,12 @@ test('旧対象の無効化応答は別対象の現況・通知・訂正段階�
     })
   );
   const props = { order: completedOrder, onClose: jest.fn() };
-  const { rerender } = render(<OrderAttributionModal {...props} />);
+  const { rerender } = render(<OrderAttributionModal open {...props} />);
   fireEvent.change(await screen.findByLabelText('無効化の理由'), { target: { value: '訂正' } });
   fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
   await waitFor(() => expect(mockedInvalidate).toHaveBeenCalled());
   mockedAttribution.mockResolvedValue({ ...attributed, id: 502, member_code: '999999999999' });
-  rerender(<OrderAttributionModal {...props} order={{ ...completedOrder, id: 'o2' }} />);
+  rerender(<OrderAttributionModal open {...props} order={{ ...completedOrder, id: 'o2' }} />);
   await screen.findByText('999999999999');
   await act(async () => resolve(invalidated));
   expect(screen.getByText('999999999999')).toBeInTheDocument();
