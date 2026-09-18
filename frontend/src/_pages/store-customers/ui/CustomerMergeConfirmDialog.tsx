@@ -13,7 +13,6 @@ interface CustomerMergeConfirmDialogProps {
   isSubmitting: boolean;
   onConfirm: () => void;
   onClose: () => void;
-  onOpenChangeComplete: (open: boolean) => void;
 }
 
 /**
@@ -33,12 +32,10 @@ export function CustomerMergeConfirmDialog({
   isSubmitting,
   onConfirm,
   onClose,
-  onOpenChangeComplete,
 }: CustomerMergeConfirmDialogProps) {
   return (
     <Dialog
       open={open}
-      onOpenChangeComplete={onOpenChangeComplete}
       // onOpenChange を握り潰すことで ESC と背景押下を無効にする。ConfirmDialog（AlertDialog）は
       // ESC で閉じるため、この確認には使えない。
       onOpenChange={() => {}}

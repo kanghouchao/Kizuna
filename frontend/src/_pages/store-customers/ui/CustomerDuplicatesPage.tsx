@@ -48,7 +48,11 @@ export default function CustomerDuplicatesPage() {
   } = useCursorList(cursor => customerApi.duplicates({ cursor }));
   const [selection, setSelection] = useState<Selection | null>(null);
   const [survivingId, setSurvivingId] = useState<string | null>(null);
-  const [mergeCompleted, setMergeCompleted] = useState(false);
+  const [confirmation, setConfirmation] = useState<{
+    survivingName: string;
+    mergedName: string;
+    movedOrderCount: number;
+  } | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -88,17 +92,20 @@ export default function CustomerDuplicatesPage() {
   const merged = findSelected(selection?.ids.find(id => id !== survivingId) ?? null);
 
   const handleMerge = async () => {
-    if (!surviving?.id || !merged?.id) return;
+    if (!isConfirming || !surviving?.id || !merged?.id || isSubmitting) return;
     try {
       setIsSubmitting(true);
       await customerApi.merge(surviving.id, merged.id);
       notify.success('顧客を統合しました');
       setIsConfirming(false);
-      setMergeCompleted(true);
+      setSelection(null);
+      setSurvivingId(null);
+      reload();
     } catch (error) {
       // 両行が会員に認領されている 409 は「先に関連を解除する」と読める文言をサーバが返す。
       // 汎用文言に潰すと、次の一手が画面から判らなくなる
       notify.error(getApiErrorMessage(error, '顧客の統合に失敗しました'));
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -230,7 +237,15 @@ export default function CustomerDuplicatesPage() {
                     rows={pair}
                     survivingId={survivingId}
                     onSurvivingChange={setSurvivingId}
-                    onMerge={() => setIsConfirming(true)}
+                    onMerge={() => {
+                      if (!surviving || !merged) return;
+                      setConfirmation({
+                        survivingName: surviving.name ?? '',
+                        mergedName: merged.name ?? '',
+                        movedOrderCount: merged.order_count ?? 0,
+                      });
+                      setIsConfirming(true);
+                    }}
                     disabled={isSubmitting}
                   />
                 )}
@@ -249,19 +264,10 @@ export default function CustomerDuplicatesPage() {
 
       {/* 確認は候補の取り直しで消えないよう外殻の外に置く */}
       <CustomerMergeConfirmDialog
-        onOpenChangeComplete={open => {
-          if (!open && mergeCompleted) {
-            setMergeCompleted(false);
-            setIsSubmitting(false);
-            setSelection(null);
-            setSurvivingId(null);
-            reload();
-          }
-        }}
-        open={isConfirming && surviving !== undefined && merged !== undefined}
-        survivingName={surviving?.name ?? ''}
-        mergedName={merged?.name ?? ''}
-        movedOrderCount={merged?.order_count ?? 0}
+        open={isConfirming}
+        survivingName={confirmation?.survivingName ?? ''}
+        mergedName={confirmation?.mergedName ?? ''}
+        movedOrderCount={confirmation?.movedOrderCount ?? 0}
         isSubmitting={isSubmitting}
         onConfirm={() => void handleMerge()}
         onClose={() => setIsConfirming(false)}
