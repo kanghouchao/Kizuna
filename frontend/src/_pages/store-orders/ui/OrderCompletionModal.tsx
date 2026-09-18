@@ -244,6 +244,9 @@ export function OrderCompletionModal({
       {confirmation.dialog}
       <Dialog
         open={open}
+        onOpenChangeComplete={next => {
+          if (!next) setIssued(null);
+        }}
         onOpenChange={next => {
           // 送信中に閉じると、台帳へ記帳されたかどうか分からないまま古い一覧が残る。
           // QR を出している間も同じく閉じない — 生値はこの応答にしか無く、ESC や背景押下で

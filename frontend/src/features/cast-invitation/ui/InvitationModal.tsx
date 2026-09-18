@@ -10,10 +10,17 @@ interface InvitationModalProps {
   /** 有効期限（ISO 文字列）。 */
   expiresAt: string | null;
   onClose: () => void;
+  onClosed?: () => void;
 }
 
 /** 招待発行モーダル（リンク+コピー+有効期限+跨店注記のみ。LINE送信ボタンは付けない。裁定10）。 */
-export function InvitationModal({ open, link, expiresAt, onClose }: InvitationModalProps) {
+export function InvitationModal({
+  open,
+  link,
+  expiresAt,
+  onClose,
+  onClosed,
+}: InvitationModalProps) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(link);
@@ -26,6 +33,9 @@ export function InvitationModal({ open, link, expiresAt, onClose }: InvitationMo
   return (
     <Dialog
       open={open}
+      onOpenChangeComplete={next => {
+        if (!next) onClosed?.();
+      }}
       onOpenChange={next => {
         if (!next) onClose();
       }}

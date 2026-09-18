@@ -313,6 +313,22 @@ describe('OrderAttributionModal', () => {
     expect(qr.getAttribute('data-value')).toContain('/member/receipts#');
   });
 
+  it('退出完了後は同じ受注でも再発行したトークンを保持しない', async () => {
+    mockedAttribution.mockResolvedValue(invalidated);
+    mockedReissue.mockResolvedValue({ receipt_token: 'raw-token-value' });
+    const props = { order: completedOrder, onClose: jest.fn() };
+    const { rerender } = render(<OrderAttributionModal open {...props} />);
+    fireEvent.click(await screen.findByRole('button', { name: '伝票QRを再発行' }));
+    await screen.findByTestId('qr');
+
+    rerender(<OrderAttributionModal open={false} {...props} />);
+    await waitFor(() => expect(screen.queryByTestId('qr')).not.toBeInTheDocument());
+    rerender(<OrderAttributionModal open {...props} />);
+
+    expect(await screen.findByRole('button', { name: '伝票QRを再発行' })).toBeInTheDocument();
+    expect(screen.queryByTestId('qr')).not.toBeInTheDocument();
+  });
+
   it('QR を出している間は明示のボタン以外で閉じない', async () => {
     mockedAttribution.mockResolvedValue(invalidated);
     mockedReissue.mockResolvedValue({ receipt_token: 'raw-token-value' });

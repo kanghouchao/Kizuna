@@ -1010,13 +1010,14 @@ describe('OrderCompletionModal', () => {
 
     rerender(
       <OrderCompletionModal
-        open
-        order={null}
+        open={false}
+        order={confirmedOrder}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
       />
     );
+    await waitFor(() => expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument());
     rerender(
       <OrderCompletionModal
         open

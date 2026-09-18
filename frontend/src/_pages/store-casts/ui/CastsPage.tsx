@@ -242,6 +242,7 @@ export default function CastListPage() {
         }
         expiresAt={issuedInvitation?.expiresAt ?? null}
         onClose={() => setIssuedInvitationOpen(false)}
+        onClosed={() => setIssuedInvitation(null)}
       />
       <ConfirmDialog
         open={deletion.open}

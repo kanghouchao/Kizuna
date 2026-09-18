@@ -212,6 +212,9 @@ export function OrderAttributionModal({
   return (
     <Dialog
       open={open}
+      onOpenChangeComplete={next => {
+        if (!next) setReissued(null);
+      }}
       onOpenChange={next => {
         // 送信中に閉じると、訂正が成立したかどうか分からないまま古い現況が残る。
         // QR を出している間も同じく閉じない — 生値はこの応答にしか無く、ESC や背景押下で

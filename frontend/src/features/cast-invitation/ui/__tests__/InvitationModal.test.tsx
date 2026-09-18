@@ -67,6 +67,21 @@ describe('キャスト招待リンクのモーダル', () => {
     expect(screen.queryByText(/有効期限:/)).not.toBeInTheDocument();
   });
 
+  it('閉じる要求と退出完了の通知を分離する', async () => {
+    const onClose = jest.fn();
+    const onClosed = jest.fn();
+    const props = { link: LINK, expiresAt: null, onClose, onClosed };
+    const { rerender } = render(<InvitationModal open {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClosed).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('招待リンク')).toHaveValue(LINK);
+
+    rerender(<InvitationModal open={false} {...props} />);
+    await waitFor(() => expect(onClosed).toHaveBeenCalledTimes(1));
+    expect(screen.queryByLabelText('招待リンク')).not.toBeInTheDocument();
+  });
+
   it('閉じるは onClose を呼ぶ', () => {
     const onClose = jest.fn();
     render(<InvitationModal open link={LINK} expiresAt={null} onClose={onClose} />);
