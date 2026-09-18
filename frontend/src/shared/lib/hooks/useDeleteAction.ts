@@ -26,10 +26,11 @@ export function useDeleteAction<T>({
   errorMessage,
   onDeleted,
 }: DeleteActionOptions<T>) {
+  const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<T | null>(null);
 
   const confirm = async () => {
-    if (!target) return;
+    if (!open || !target) return;
     try {
       await remove(target);
       notify.success(successMessage);
@@ -40,11 +41,15 @@ export function useDeleteAction<T>({
   };
 
   return {
-    /** 確認中の対象。null なら確認ダイアログは閉じている */
+    open,
+    /** 退出中も確認文を保持するため、対象は次の選択時に置き換える。 */
     target,
     /** 行の削除ボタンから確認を開く */
-    ask: (row: T) => setTarget(row),
+    ask: (row: T) => {
+      setTarget(row);
+      setOpen(true);
+    },
     confirm,
-    cancel: () => setTarget(null),
+    cancel: () => setOpen(false),
   };
 }

@@ -89,6 +89,7 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
     [allowed, orderId, storeId]
   );
   const form = useForm<RollbackFormValues>({ defaultValues: { reason: '' } });
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<RollbackFormValues | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<OrderPointRollbackResult | null>(null);
@@ -98,7 +99,7 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
   const submit = async () => {
     if (!confirmation || !preview || submitting) return;
     setSubmitting(true);
-    setConfirmation(null);
+    setConfirmationOpen(false);
     try {
       const response = await orderApi.pointRollback(orderId, {
         reason: confirmation.reason.trim(),
@@ -229,7 +230,10 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
               <Form {...form}>
                 <form
                   noValidate
-                  onSubmit={form.handleSubmit(setConfirmation)}
+                  onSubmit={form.handleSubmit(values => {
+                    setConfirmation(values);
+                    setConfirmationOpen(true);
+                  })}
                   className="space-y-6"
                 >
                   <FormField
@@ -270,8 +274,8 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
         オーダー一覧へ
       </Button>
       <ConfirmDialog
-        open={confirmation !== null}
-        onClose={() => setConfirmation(null)}
+        open={confirmationOpen}
+        onClose={() => setConfirmationOpen(false)}
         title="ポイントを巻き戻しますか？"
         description={
           preview

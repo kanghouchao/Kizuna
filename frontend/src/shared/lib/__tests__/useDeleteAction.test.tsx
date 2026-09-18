@@ -25,14 +25,22 @@ const setup = (remove: (target: Row) => Promise<void>, onDeleted = jest.fn()) =>
 describe('useDeleteAction', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('ask で対象を保持し cancel で手放す', () => {
-    const { result } = setup(jest.fn(async () => {}));
+  it('cancel は確認を閉じ、退出中の表示用に対象を保持する', async () => {
+    const remove = jest.fn(async () => {});
+    const { result } = setup(remove);
 
     expect(result.current.target).toBeNull();
     act(() => result.current.ask({ id: '1' }));
     expect(result.current.target).toEqual({ id: '1' });
+    expect(result.current.open).toBe(true);
     act(() => result.current.cancel());
-    expect(result.current.target).toBeNull();
+    expect(result.current.open).toBe(false);
+    expect(result.current.target).toEqual({ id: '1' });
+    await act(async () => result.current.confirm());
+    expect(remove).not.toHaveBeenCalled();
+    act(() => result.current.ask({ id: '2' }));
+    expect(result.current.open).toBe(true);
+    expect(result.current.target).toEqual({ id: '2' });
   });
 
   it('confirm は確認中の対象を削除し、成功文言と後始末を走らせる', async () => {

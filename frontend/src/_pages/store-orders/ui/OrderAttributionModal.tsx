@@ -75,7 +75,7 @@ interface CorrectionTarget {
 }
 
 interface OrderAttributionModalProps {
-  /** 訂正の対象。null なら閉じている。 */
+  open: boolean;
   order: OrderArchiveRow | null;
   onClose: (missing?: boolean) => void;
 }
@@ -95,7 +95,11 @@ function formatDateTime(value?: string): string {
  * 無効化された受注は「会員へ帰属しない状態」へ戻り、正しい本人は再発行された QR の所持証明で
  * 来店を取り戻せる。申領期限は再発行から 90 日で数え直される。
  */
-export function OrderAttributionModal({ order, onClose: closeModal }: OrderAttributionModalProps) {
+export function OrderAttributionModal({
+  open,
+  order,
+  onClose: closeModal,
+}: OrderAttributionModalProps) {
   const form = useForm<InvalidationFormValues>({ defaultValues: { reason: '' } });
   const {
     control,
@@ -207,7 +211,10 @@ export function OrderAttributionModal({ order, onClose: closeModal }: OrderAttri
 
   return (
     <Dialog
-      open={order !== null}
+      open={open}
+      onOpenChangeComplete={next => {
+        if (!next) setReissued(null);
+      }}
       onOpenChange={next => {
         // 送信中に閉じると、訂正が成立したかどうか分からないまま古い現況が残る。
         // QR を出している間も同じく閉じない — 生値はこの応答にしか無く、ESC や背景押下で

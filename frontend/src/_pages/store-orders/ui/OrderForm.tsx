@@ -292,7 +292,7 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
           </div>
         </OrderEditorSection>
 
-        <div className="sticky bottom-0 z-10 flex items-center justify-between gap-6 rounded-b-xl border-t bg-card p-6">
+        <div className="flex items-center justify-between gap-6 rounded-b-xl border-t bg-card p-6">
           <p className="text-sm text-muted-foreground">登録前に料金・報酬を確認できます。</p>
           <div className="flex shrink-0 gap-3">
             <Button type="button" variant="outline" onClick={() => router.back()}>

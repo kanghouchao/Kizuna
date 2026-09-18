@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CustomersPage from '../ui/CustomersPage';
 import CustomerCreatePage from '../ui/CustomerCreatePage';
 import { CustomerForm } from '../ui/CustomerForm';
@@ -316,12 +316,23 @@ describe('顧客一覧からの統合', () => {
     expect(mockedCustomerApi.merge).not.toHaveBeenCalled();
 
     const dialog = screen.getByRole('dialog');
+    let finish!: () => void;
+    const finished = new Promise<void>(resolve => {
+      finish = resolve;
+    });
+    Object.defineProperty(dialog, 'getAnimations', { value: () => [{ finished }] });
     fireEvent.click(within(dialog).getByRole('button', { name: '統合する' }));
 
     await waitFor(() => expect(mockedCustomerApi.merge).toHaveBeenCalledWith('c1', 'c2'));
     // 畳んだ行が選ばれたままだと、次の操作が既に墓標の行を指す
     await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument());
     expect(mockedCustomerApi.list).toHaveBeenCalledTimes(2);
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('data-closed');
+    expect(dialog).toHaveTextContent('ヤマダタロウ');
+    expect(dialog).toHaveTextContent('山田太郎');
+    await act(async () => finish());
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
   });
 
   it('統合の実行中は選択を変えられないこと', async () => {

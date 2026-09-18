@@ -20,7 +20,6 @@ import {
 interface AttendanceCancelDialogProps {
   open: boolean;
   onClose: () => void;
-  /** 取消の対象。open が false の間は null。 */
   attendance: AttendanceResponse | null;
   /** 取消の成功後に呼ばれる（実績・欠勤の再取得用）。 */
   onCancelled: () => void;

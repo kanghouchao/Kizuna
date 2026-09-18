@@ -65,10 +65,11 @@ export default function BenefitRulesPage() {
 
   // null = 閉じている、'new' = 新規作成、数値 = その規則の編集
   const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const [deactivatingOpen, setDeactivatingOpen] = useState(false);
   const [deactivating, setDeactivating] = useState<BenefitRuleSummaryResponse | null>(null);
 
   const deactivate = async (rule: BenefitRuleSummaryResponse) => {
-    setDeactivating(null);
+    setDeactivatingOpen(false);
     try {
       await benefitRuleApi.deactivate(rule.id ?? 0, rule.version ?? 0);
       notify.success('特典規則を停用しました');
@@ -154,7 +155,10 @@ export default function BenefitRulesPage() {
                         variant="ghost"
                         size="sm"
                         className="text-destructive-strong"
-                        onClick={() => setDeactivating(rule)}
+                        onClick={() => {
+                          setDeactivating(rule);
+                          setDeactivatingOpen(true);
+                        }}
                       >
                         停用
                       </Button>
@@ -180,12 +184,12 @@ export default function BenefitRulesPage() {
       )}
 
       <ConfirmDialog
-        open={deactivating !== null}
+        open={deactivatingOpen}
         title="特典規則を停用しますか？"
         description={`${deactivating?.name ?? ''} は以後発火しなくなります。規則は削除されず一覧に残りますが、再開の口はありません（同じ内容で作り直してください）。`}
         confirmLabel="停用する"
         onConfirm={() => void (deactivating && deactivate(deactivating))}
-        onClose={() => setDeactivating(null)}
+        onClose={() => setDeactivatingOpen(false)}
       />
     </>
   );

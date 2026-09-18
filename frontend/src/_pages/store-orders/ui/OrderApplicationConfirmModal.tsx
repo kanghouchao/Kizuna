@@ -78,7 +78,7 @@ interface ConfirmFormValues {
 }
 
 interface OrderApplicationConfirmModalProps {
-  /** 確定対象の申請。null なら閉じている。 */
+  open: boolean;
   application: OrderApplicationRow | null;
   onClose: () => void;
   /** 確定の成功後に、生成された受注を伴って呼ばれる（受付箱からの行の除去と作業キューの取り直し用）。 */
@@ -93,6 +93,7 @@ interface OrderApplicationConfirmModalProps {
  * ここに無い項目（割引・媒体など）は、確定後の受注を汎用更新で整える。
  */
 export function OrderApplicationConfirmModal({
+  open,
   application,
   onClose,
   onConfirmed,
@@ -236,7 +237,7 @@ export function OrderApplicationConfirmModal({
     <>
       {confirmation.dialog}
       <Dialog
-        open={application !== null}
+        open={open}
         onOpenChange={next => {
           // 確定中に閉じると、結果が分からないまま古い一覧が残る
           if (!next && !isSubmitting) onClose();

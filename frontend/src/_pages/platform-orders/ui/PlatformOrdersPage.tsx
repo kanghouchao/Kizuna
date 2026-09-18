@@ -32,6 +32,8 @@ export default function PlatformOrdersPage() {
 function OrderList() {
   const list = useListPage(orderApi.platformList);
   const [details, setDetails] = useState<PlatformOrder | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   return (
     <>
@@ -119,10 +121,24 @@ function OrderList() {
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => setDetails(order)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setDetails(order);
+                        setDetailsOpen(true);
+                      }}
+                    >
                       詳細<span className="sr-only">：受注 {order.id}</span>
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setSelected(order.id)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelected(order.id);
+                        setHistoryOpen(true);
+                      }}
+                    >
                       訂正履歴<span className="sr-only">：受注 {order.id}</span>
                     </Button>
                   </div>
@@ -132,12 +148,7 @@ function OrderList() {
           </TableBody>
         </Table>
       </ListPage>
-      <Dialog
-        open={details !== null}
-        onOpenChange={open => {
-          if (!open) setDetails(null);
-        }}
-      >
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>受注詳細</DialogTitle>
@@ -191,10 +202,8 @@ function OrderList() {
         <OrderCorrectionHistoryModal
           orderId={selected}
           scope="platform"
-          open
-          onOpenChange={open => {
-            if (!open) setSelected(null);
-          }}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
         />
       )}
     </>

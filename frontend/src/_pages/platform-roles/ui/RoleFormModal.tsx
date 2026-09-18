@@ -81,7 +81,9 @@ function groupByConsole(
  * 中身（権限コードと楽観ロック用 version）は mount 時に id で個別取得する。権限目録の取得も
  * mount 時 = 開いた時点に遅延される。
  */
-export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProps) {
+export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: RoleFormModalProps) {
+  const [open, setOpen] = useState(true);
+  const onClose = () => setOpen(false);
   // 編集対象の詳細取得。409 の後にも取り直し、最新の name / permissions / version でフォームを
   // 初期化し直す（version 固着で再試行が同じ 409 を繰り返さないように）。
   const {
@@ -170,7 +172,10 @@ export function RoleFormModal({ onClose, editingId, onSaved }: RoleFormModalProp
 
   return (
     <Dialog
-      open
+      open={open}
+      onOpenChangeComplete={next => {
+        if (!next) handleClosed();
+      }}
       onOpenChange={next => {
         // 送信中は閉じさせない。閉じると unmount で isSubmitting が消え、開き直した複製から
         // 二重送信できるうえ、古い継続の onClose が複製のモーダルまで閉じてしまう

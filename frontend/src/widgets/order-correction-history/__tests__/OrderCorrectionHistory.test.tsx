@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { orderApi, OrderCorrectionHistoryEntry } from '@/entities/order';
-import { OrderCorrectionHistory } from '../ui/OrderCorrectionHistory';
+import { OrderCorrectionHistory, OrderCorrectionHistoryModal } from '../ui/OrderCorrectionHistory';
 
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
@@ -89,4 +90,45 @@ it('対象切替後に旧対象の遅い応答を表示しない', async () => {
   expect(await screen.findByText('訂正履歴はありません')).toBeInTheDocument();
   await act(async () => resolveOld({ rows: [entry], nextCursor: null }));
   expect(screen.queryByText('提供コースの訂正')).not.toBeInTheDocument();
+});
+
+it('閉じる要求を即時に反映しても退出中の本文を保ち、再表示で履歴を取り直す', async () => {
+  fetchHistory.mockResolvedValue({ rows: [entry], nextCursor: null });
+  const changed = jest.fn();
+  function Page() {
+    const [open, setOpen] = useState(true);
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>再表示</button>
+        <OrderCorrectionHistoryModal
+          orderId="o1"
+          scope="platform"
+          open={open}
+          onOpenChange={next => {
+            changed(next);
+            setOpen(next);
+          }}
+        />
+      </>
+    );
+  }
+  render(<Page />);
+  expect(await screen.findByText('提供コースの訂正')).toBeInTheDocument();
+  const popup = screen.getByRole('dialog');
+  let finish!: () => void;
+  const finished = new Promise<void>(resolve => {
+    finish = resolve;
+  });
+  const getAnimations = jest.fn(() => [{ finished }]);
+  Object.defineProperty(popup, 'getAnimations', { value: getAnimations });
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(changed).toHaveBeenCalledWith(false);
+  await waitFor(() => expect(getAnimations).toHaveBeenCalled());
+  expect(popup).toHaveAttribute('data-closed');
+  expect(popup).toHaveTextContent('提供コースの訂正');
+  await act(async () => finish());
+  await waitFor(() => expect(popup).not.toBeInTheDocument());
+  fireEvent.click(screen.getByText('再表示'));
+  expect(await screen.findByText('提供コースの訂正')).toBeInTheDocument();
+  expect(fetchHistory).toHaveBeenCalledTimes(2);
 });

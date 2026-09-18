@@ -12,6 +12,7 @@ interface TemporaryPasswordModalProps {
   /** 対象アカウントのメールアドレス。表示名は一意でないため、取り違え防止の同定は一意なこちらが担う。 */
   email: string;
   onClose: () => void;
+  onClosed: () => void;
 }
 
 /**
@@ -24,6 +25,7 @@ export function TemporaryPasswordModal({
   displayName,
   email,
   onClose,
+  onClosed,
 }: TemporaryPasswordModalProps) {
   const handleCopy = async () => {
     try {
@@ -37,6 +39,9 @@ export function TemporaryPasswordModal({
   return (
     <Dialog
       open={open}
+      onOpenChangeComplete={next => {
+        if (!next) onClosed();
+      }}
       onOpenChange={next => {
         // 閉じる要求（next === false）は握り潰す。閉じるのは下の「閉じる」ボタンだけ。
         if (next) return;

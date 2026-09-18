@@ -4,8 +4,13 @@ import Link from 'next/link';
 import { CopyIcon, PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CustomerResponse, customerApi } from '@/entities/customer';
 import {
+  CustomerMergeComparisonResponse,
+  CustomerResponse,
+  customerApi,
+} from '@/entities/customer';
+import {
+  getApiErrorMessage,
   hasPermission,
   readTokenClaims,
   storePath,
@@ -14,6 +19,8 @@ import {
 } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import { CustomerMergePanel } from './CustomerMergePanel';
+import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
+import { notify } from '@/shared/notify';
 import {
   Badge,
   Button,
@@ -83,6 +90,28 @@ export default function CustomersPage() {
   const [isMerging, setIsMerging] = useState(false);
   const pair =
     selectedIds.length === PAIR_SIZE ? ([selectedIds[0], selectedIds[1]] as const) : null;
+
+  const [mergeTarget, setMergeTarget] = useState<{
+    surviving: CustomerMergeComparisonResponse;
+    merged: CustomerMergeComparisonResponse;
+  } | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+
+  const handleMerge = async () => {
+    if (!mergeOpen || !mergeTarget?.surviving.id || !mergeTarget.merged.id || isMerging) return;
+    setIsMerging(true);
+    try {
+      await customerApi.merge(mergeTarget.surviving.id, mergeTarget.merged.id);
+      notify.success('顧客を統合しました');
+      setMergeOpen(false);
+      setSelectedIds([]);
+      list.reload();
+    } catch (error) {
+      notify.error(getApiErrorMessage(error, '顧客の統合に失敗しました'));
+    } finally {
+      setIsMerging(false);
+    }
+  };
 
   const toggleSelected = (customerId: string) =>
     setSelectedIds(current =>
@@ -260,21 +289,29 @@ export default function CustomersPage() {
           {pair && (
             <CustomerMergePanel
               customerIds={[pair[0], pair[1]]}
-              onMerged={() => {
-                setSelectedIds([]);
-                list.reload();
+              onMerge={(surviving, merged) => {
+                setMergeTarget({ surviving, merged });
+                setMergeOpen(true);
               }}
               onClear={() => setSelectedIds([])}
               isSubmitting={isMerging}
-              onSubmittingChange={setIsMerging}
             />
           )}
         </div>
       )}
 
       {/* ダイアログは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
+      <CustomerMergeConfirmDialog
+        open={mergeOpen}
+        survivingName={mergeTarget?.surviving.name ?? ''}
+        mergedName={mergeTarget?.merged.name ?? ''}
+        movedOrderCount={mergeTarget?.merged.order_count ?? 0}
+        isSubmitting={isMerging}
+        onConfirm={() => void handleMerge()}
+        onClose={() => setMergeOpen(false)}
+      />
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deletion.open}
         title={deletion.target ? `「${deletion.target.name}」を削除しますか？` : ''}
         onConfirm={() => void deletion.confirm()}
         onClose={deletion.cancel}

@@ -249,7 +249,7 @@ export default function ServiceIdentitiesPage() {
       </ListPage>
 
       <ConfirmDialog
-        open={suspension.target !== null}
+        open={suspension.open}
         title="サービスIDを停止しますか？"
         description={`${suspension.target?.display_name ?? ''} を使う定期処理・外部連携は動かなくなります。サービスIDは削除されず、いつでも再開できます。`}
         confirmLabel="停止する"

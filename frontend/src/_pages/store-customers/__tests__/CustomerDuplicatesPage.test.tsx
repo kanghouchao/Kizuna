@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import CustomerDuplicatesPage from '../ui/CustomerDuplicatesPage';
 import {
@@ -247,14 +247,26 @@ describe('CustomerDuplicatesPage', () => {
     expect(notify.success).toHaveBeenCalledWith('顧客を統合しました');
   });
 
-  it('統合の成功後、被統合行が一覧から消えていること', async () => {
+  it('退出を待たず候補を再取得し、確認文は退出完了まで保持すること', async () => {
     render(<CustomerDuplicatesPage />);
     await openConfirmation();
-    // 畳んだ番号はグループを成さなくなるので、取り直した候補から丸ごと落ちる
+    const dialog = screen.getByRole('dialog');
+    let finish!: () => void;
+    const finished = new Promise<void>(resolve => {
+      finish = resolve;
+    });
+    Object.defineProperty(dialog, 'getAnimations', { value: () => [{ finished }] });
     mockedDuplicates.mockResolvedValue({ rows: [], nextCursor: null });
     await confirmMerge();
 
     expect(await screen.findByText('電話番号が重複している顧客はいません')).toBeInTheDocument();
+    expect(mockedDuplicates).toHaveBeenCalledTimes(2);
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('data-closed');
+    expect(dialog).toHaveTextContent('ヤマダタロウ');
+    expect(dialog).toHaveTextContent('山田太郎');
+    await act(async () => finish());
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
     expect(screen.queryByText('ヤマダタロウ')).not.toBeInTheDocument();
   });
 

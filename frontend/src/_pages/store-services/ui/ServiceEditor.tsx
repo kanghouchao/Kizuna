@@ -23,7 +23,7 @@ import { ServiceForm } from './ServiceForm';
 
 export function ServiceEditor({
   id,
-  onClose,
+  onClose: handleClosed,
   onSaved,
   onForbidden,
 }: {
@@ -32,6 +32,8 @@ export function ServiceEditor({
   onSaved: () => void;
   onForbidden: () => void;
 }) {
+  const [open, setOpen] = useState(true);
+  const onClose = () => setOpen(false);
   const resource = useResource(
     id
       ? async () => {
@@ -85,7 +87,10 @@ export function ServiceEditor({
   const unavailable = missing || resource.failure === 'notFound' || resource.data?.deleted;
   return (
     <Dialog
-      open
+      open={open}
+      onOpenChangeComplete={next => {
+        if (!next) handleClosed();
+      }}
       onOpenChange={open => {
         if (!open && !saving) {
           onClose();

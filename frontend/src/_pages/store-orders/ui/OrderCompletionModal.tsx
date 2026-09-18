@@ -56,7 +56,7 @@ interface IssuedReceiptToken {
 }
 
 interface OrderCompletionModalProps {
-  /** 完了処理の対象。null なら閉じている。 */
+  open: boolean;
   order: OrderWorkQueueRow | null;
   onClose: (missing?: boolean) => void;
   /** 完了の成功後に呼ばれる（受注の状態と会計欄が変わるため、一覧の取り直しに使う）。 */
@@ -80,6 +80,7 @@ interface OrderCompletionModalProps {
  * 最終的な権威はサーバ側にある。
  */
 export function OrderCompletionModal({
+  open,
   order,
   onClose: closeModal,
   onCompleted,
@@ -242,7 +243,10 @@ export function OrderCompletionModal({
     <>
       {confirmation.dialog}
       <Dialog
-        open={order !== null}
+        open={open}
+        onOpenChangeComplete={next => {
+          if (!next) setIssued(null);
+        }}
         onOpenChange={next => {
           // 送信中に閉じると、台帳へ記帳されたかどうか分からないまま古い一覧が残る。
           // QR を出している間も同じく閉じない — 生値はこの応答にしか無く、ESC や背景押下で

@@ -57,6 +57,7 @@ function memberApplication(): OrderApplicationRow {
 const renderModal = (application: OrderApplicationRow | null) =>
   render(
     <OrderApplicationConfirmModal
+      open
       application={application}
       onClose={jest.fn()}
       onConfirmed={jest.fn()}
@@ -264,9 +265,11 @@ describe('確定対象と受付候補の取得', () => {
       list.mockResolvedValueOnce([{ id: 7, display_name: '旧受付' }]);
       const props = { onClose: jest.fn(), onConfirmed: jest.fn() };
       const application = guestApplication();
-      const { rerender } = render(<OrderApplicationConfirmModal {...props} application={null} />);
+      const { rerender } = render(
+        <OrderApplicationConfirmModal open {...props} application={null} />
+      );
       expect(list).not.toHaveBeenCalled();
-      rerender(<OrderApplicationConfirmModal {...props} application={application} />);
+      rerender(<OrderApplicationConfirmModal open {...props} application={application} />);
       fireEvent.click(await screen.findByRole('combobox', { name: '受付担当' }));
       const old = await screen.findByRole('option', { name: '旧受付' });
       fireEvent.pointerDown(old);
@@ -274,11 +277,12 @@ describe('確定対象と受付候補の取得', () => {
 
       list.mockResolvedValueOnce([{ id: 9, display_name: '新受付' }]);
       if (mode === '同じ申請を開き直す') {
-        rerender(<OrderApplicationConfirmModal {...props} application={null} />);
+        rerender(<OrderApplicationConfirmModal open {...props} application={null} />);
         expect(list).toHaveBeenCalledTimes(1);
       }
       rerender(
         <OrderApplicationConfirmModal
+          open
           {...props}
           application={
             mode === '同じ申請を開き直す' ? application : guestApplication({ id: 'app-3' })

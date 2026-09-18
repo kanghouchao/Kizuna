@@ -167,7 +167,7 @@ export default function RolesPage() {
         />
       )}
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deletion.open}
         title={`${deletion.target?.name ?? ''} を削除しますか？`}
         description="このロールを付与されているスタッフがいる場合は削除できません。"
         onConfirm={() => void deletion.confirm()}

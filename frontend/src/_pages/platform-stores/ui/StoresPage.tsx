@@ -185,7 +185,7 @@ export default function StoresPage() {
 
       {/* ダイアログは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
       <ConfirmDialog
-        open={deletion.target !== null}
+        open={deletion.open}
         title={deletion.target ? `店舗「${deletion.target.name}」を削除しますか？` : ''}
         description="この操作は取り消せません。"
         onConfirm={() => void deletion.confirm()}

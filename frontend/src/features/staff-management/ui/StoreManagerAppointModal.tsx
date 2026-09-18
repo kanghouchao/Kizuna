@@ -57,9 +57,11 @@ interface NewManagerFormValues {
  */
 export function StoreManagerAppointModal({
   storeId,
-  onClose,
+  onClose: handleClosed,
   onAppointed,
 }: StoreManagerAppointModalProps) {
+  const [open, setOpen] = useState(true);
+  const onClose = () => setOpen(false);
   const [tab, setTab] = useState(EXISTING_TAB);
   const [searchTerm, setSearchTerm] = useState('');
   // 選択中の候補ではなく送信中の候補を持つ。行ごとにボタンを置くので、押した行だけを塞げばよい。
@@ -114,7 +116,10 @@ export function StoreManagerAppointModal({
 
   return (
     <Dialog
-      open
+      open={open}
+      onOpenChangeComplete={next => {
+        if (!next) handleClosed();
+      }}
       onOpenChange={next => {
         // 送信中は閉じさせない。閉じると unmount で送信中の印が消え、開き直した複製から二重送信できる
         if (!next && !busy) onClose();

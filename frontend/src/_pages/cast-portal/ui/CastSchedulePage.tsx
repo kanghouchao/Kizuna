@@ -27,6 +27,7 @@ function formatDateLabel(dateStr: string): string {
 /** 全所属店の確定シフトを週集約で表示する（cast_id 単層自限）。日曜起点の週ナビ付き。 */
 export function CastSchedulePage() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => weekStart(new Date()));
+  const [changeOpen, setChangeOpen] = useState(false);
   const [changeTarget, setChangeTarget] = useState<CastScheduleItem | null>(null);
 
   const {
@@ -98,7 +99,10 @@ export function CastSchedulePage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => setChangeTarget(item)}
+                            onClick={() => {
+                              setChangeTarget(item);
+                              setChangeOpen(true);
+                            }}
                           >
                             変更申請
                           </Button>
@@ -114,7 +118,11 @@ export function CastSchedulePage() {
       )}
 
       {/* 提出は履歴（希望提出ページ）側に現れるだけでスケジュール自体は変わらないため、成功後の再取得は不要。 */}
-      <ShiftChangeRequestModal item={changeTarget} onClose={() => setChangeTarget(null)} />
+      <ShiftChangeRequestModal
+        open={changeOpen}
+        item={changeTarget}
+        onClose={() => setChangeOpen(false)}
+      />
     </div>
   );
 }
