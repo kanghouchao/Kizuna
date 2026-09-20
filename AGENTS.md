@@ -52,3 +52,17 @@ Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/
 - `logback` — log4j2 is the logging backend and logback is explicitly excluded in `backend/build.gradle`.
 - ModelMapper / Dozer (MapStruct is the mapper), MyBatis (Spring Data JPA is the data layer), TestNG (JUnit 5 is the test framework).
 - `jjwt` or a hand-written JWT filter — authentication is the Spring Security standard stack (`docs/adr/0001-authentication-spring-security-standard-stack.md`).
+
+## Agent skills
+
+### Issue tracker
+
+Before reading or publishing tickets, read `docs/agents/issue-tracker.md` for the GitHub Issues workflow.
+
+### Triage labels
+
+Before triaging tickets, read `docs/agents/triage-labels.md` for the five canonical label mappings.
+
+### Domain docs
+
+Before exploring domain behavior or architectural decisions, read `docs/agents/domain.md` for the single-context documentation layout and consumer rules.

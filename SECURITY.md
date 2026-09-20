@@ -6,6 +6,12 @@
 
 実行版は [backend/build.gradle](backend/build.gradle) と [frontend/package.json](frontend/package.json)、および対象コミットで特定する。
 
+## リポジトリ内の検査と実行設定
+
+[CodeQL](.github/workflows/codeql.yml) は Java と JavaScript / TypeScript を PR・対象ブランチへの push・週次で解析する。[Dependabot](.github/dependabot.yml) の更新チェックは GitHub Actions、`frontend/` の npm、`backend/` の Gradle を月次で対象にする。E2E の npm と Docker イメージは現在の Dependabot 設定には含まれない。
+
+[release 用 Compose](infrastructure/release/docker-compose.yml) は DB・Redis・MinIO の資格情報、`APP_JWT_SECRET`、`INITIAL_ADMIN_PASSWORD_HASH` を必須とし、Liquibase のコンテキストは既定で `production` とする。初期管理者ハッシュは初回 DB 投入用で、既存アカウントのパスワード更新には使わない。開発環境の初期設定は [README](README.md#開発環境の起動) を参照する。
+
 ## 非公開での報告
 
 連絡先: [kanhouchou@gmail.com](mailto:kanhouchou@gmail.com)。GitHub 上の公開済み情報は [Security Advisories](https://github.com/kanghouchao/Kizuna/security/advisories)を参照する。非公開報告機能の有効化はこの文書では保証しない。

@@ -2,7 +2,7 @@
 
 現在の概念と不変条件は [領域用語](../CONTEXT.md)、開発・検証手順は [貢献ガイド](../CONTRIBUTING.md)、API の規範は [バックエンド指示の API contract](../backend/AGENTS.md#api-contract)、画面の規範は [デザインシステム](../frontend/DESIGN.md)を正本とする。起動は [README](../README.md)、AI の読み分けと安全制約は [AGENTS.md](../AGENTS.md)を参照する。
 
-文書と実装の照合結果、既知の規範との差、各文書の処置は [文書監査](documentation-audit.md)に記録する。規範との不一致は実装済みの保証ではない。
+[文書監査](documentation-audit.md) は 2026-09-11 の整理と当時の照合・検証結果の記録であり、現在の差異一覧や検証結果ではない。
 
 ## アーキテクチャ決定
 
@@ -59,4 +59,4 @@
 
 ## 生成されたモジュール資料
 
-[backend/docs/modulith](../backend/docs/modulith/) は [ModularityTests](../backend/src/test/java/com/kizuna/ModularityTests.java) が生成する図と AsciiDoc の保存物。**現在のコードと不一致があるスナップショット**であり、現在の API・サービス一覧の正本にはしない。例えば Cast の資料には `CastEnrollmentService` が未反映である。本整理では手で生成結果を書き換えず保留し、現在の構成はソースを参照する。再生成は JDK 25 で所定のテストを実行して行う。
+[backend/docs/modulith](../backend/docs/modulith/) は [ModularityTests](../backend/src/test/java/com/kizuna/ModularityTests.java) が生成する図と AsciiDoc の保存物。コード変更へ自動追随する資料ではないため、現在の API・サービス一覧はソースと照合する。再生成は JDK 25 で同テストを実行して行い、生成結果は手書きで修正しない。
