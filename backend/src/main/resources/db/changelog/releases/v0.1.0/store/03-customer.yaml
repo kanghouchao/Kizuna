@@ -282,6 +282,18 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
+                  name: business_status
+                  type: VARCHAR(10)
+                  defaultValue: UNKNOWN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: marketing_status
+                  type: VARCHAR(10)
+                  defaultValue: UNKNOWN
+                  constraints:
+                    nullable: false
+              - column:
                   name: preferred
                   type: BOOLEAN
                   constraints:
@@ -366,7 +378,7 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: action
-                  type: VARCHAR(20)
+                  type: VARCHAR(30)
                   constraints:
                     nullable: false
               - column:
@@ -379,6 +391,23 @@ databaseChangeLog:
                   type: TIMESTAMP WITH TIME ZONE
                   constraints:
                     nullable: false
+              - column:
+                  name: operation_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: purpose
+                  type: VARCHAR(10)
+              - column:
+                  name: source
+                  type: VARCHAR(200)
+              - column:
+                  name: reason
+                  type: VARCHAR(2000)
+              - column:
+                  name: source_contact_id
+                  type: VARCHAR(64)
               - column:
                   name: before_state
                   type: JSONB

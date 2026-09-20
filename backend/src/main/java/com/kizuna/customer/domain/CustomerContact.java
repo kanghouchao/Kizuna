@@ -38,6 +38,32 @@ public class CustomerContact extends StoreScopedEntity {
   @Column(nullable = false)
   private boolean deleted;
 
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 10)
+  private ContactPermissionStatus businessStatus = ContactPermissionStatus.UNKNOWN;
+
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 10)
+  private ContactPermissionStatus marketingStatus = ContactPermissionStatus.UNKNOWN;
+
+  public ContactPermissions permissions() {
+    return new ContactPermissions(businessStatus, marketingStatus);
+  }
+
+  public void inheritRestriction(ContactPermissions restriction) {
+    var inherited = permissions().restrict(restriction);
+    businessStatus = inherited.business();
+    marketingStatus = inherited.marketing();
+  }
+
+  public void changePermission(ContactPurpose purpose, ContactPermissionStatus status) {
+    var current = purpose == ContactPurpose.BUSINESS ? businessStatus : marketingStatus;
+    if (current == ContactPermissionStatus.DENIED && status == ContactPermissionStatus.UNKNOWN)
+      throw new ServiceException("拒否の解除には新しい根拠付きの許可変更が必要です");
+    if (purpose == ContactPurpose.BUSINESS) businessStatus = status;
+    else marketingStatus = status;
+  }
+
   public static CustomerContact create(String customerId, ContactType type, String value) {
     var contact = new CustomerContact();
     contact.customerId = customerId;
@@ -49,12 +75,17 @@ public class CustomerContact extends StoreScopedEntity {
   public void change(ContactType type, String value) {
     if (type == null || value == null || value.isBlank() || value.length() > 320)
       throw new ServiceException("連絡先の種類と320文字以内の値を入力してください");
-    this.value =
+    String normalized =
         switch (type) {
           case PHONE -> ContactValues.phone(value, "value");
           case EMAIL -> ContactValues.email(value, "value");
           case LINE -> value.strip();
         };
+    if (this.type != type || !normalized.equals(this.value)) {
+      businessStatus = ContactPermissionStatus.UNKNOWN;
+      marketingStatus = ContactPermissionStatus.UNKNOWN;
+    }
+    this.value = normalized;
     this.type = type;
   }
 
@@ -72,6 +103,7 @@ public class CustomerContact extends StoreScopedEntity {
   }
 
   public ContactState state() {
-    return new ContactState(customerId, type, value, preferred, deleted);
+    return new ContactState(
+        customerId, type, value, preferred, deleted, businessStatus, marketingStatus);
   }
 }

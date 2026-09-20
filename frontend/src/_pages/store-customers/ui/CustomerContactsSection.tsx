@@ -1,5 +1,8 @@
 'use client';
 
+import { ContactPermissionDialog } from './ContactPermissionDialog';
+import { PERMISSION_STATUSES, CONTACT_PURPOSES } from '../lib/contactPermissions';
+import type { ContactPurpose } from '@/entities/customer';
 import { useState } from 'react';
 import { validateContactValue } from '../lib/contactValidation';
 import { useForm } from 'react-hook-form';
@@ -39,15 +42,23 @@ const ACTIONS = {
   DELETE: '削除',
   PREFERENCE: '優先指定',
   TRANSFER: '統合による移動',
+  PERMISSION_CHANGE: '連絡可否の変更',
+  RESTRICTION_INHERITANCE: '制約の継承（新たな同意ではありません）',
 };
 const stateLabel = (state?: ContactState) =>
   state
-    ? `${TYPES[state.type]}: ${state.value}／${state.preferred ? '優先' : '指定なし'}${state.deleted ? '／削除済み' : ''}／顧客 ${state.customer_id}`
+    ? `${TYPES[state.type]}: ${state.value}／${state.preferred ? '優先' : '指定なし'}${state.deleted ? '／削除済み' : ''}／顧客 ${state.customer_id}／業務: ${PERMISSION_STATUSES[state.business_status]}／販促: ${PERMISSION_STATUSES[state.marketing_status]}`
     : '未登録';
 
 export function CustomerContactsSection({ customerId }: { customerId: string }) {
   const contacts = useCursorList(cursor => customerApi.contacts(customerId, { cursor }));
   const history = useCursorList(cursor => customerApi.contactHistory(customerId, { cursor }));
+  const [permission, setPermission] = useState<{
+    contact: ContactResponse;
+    purpose: ContactPurpose;
+    key: number;
+  } | null>(null);
+  const [permissionOpen, setPermissionOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [gone, setGone] = useState(false);
   const [editing, setEditing] = useState<ContactResponse | null>(null);
@@ -117,18 +128,43 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
             <p>連絡先はありません</p>
           ) : (
             contacts.rows.map(contact => (
-              <div
-                key={contact.id}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4"
-              >
-                <div className="min-w-0 flex-1">
+              <div key={contact.id} className="space-y-3 rounded-lg border p-4">
+                <div className="min-w-0">
                   <p className="text-sm">
                     {TYPES[contact.type]}
                     {contact.preferred && '・優先'}
                   </p>
                   <p className="break-all">{contact.value}</p>
+                  {(['BUSINESS', 'MARKETING'] as const).map(purpose => {
+                    const own =
+                      purpose === 'BUSINESS' ? contact.business_status : contact.marketing_status;
+                    const effective =
+                      purpose === 'BUSINESS'
+                        ? contact.effective_business_status
+                        : contact.effective_marketing_status;
+                    return (
+                      <p key={purpose} className="text-sm">
+                        {CONTACT_PURPOSES[purpose]}: {PERMISSION_STATUSES[own]}／共同制約:{' '}
+                        {PERMISSION_STATUSES[effective]}（
+                        {effective === 'ALLOWED' ? '連絡可' : '連絡不可'}）
+                      </p>
+                    );
+                  })}
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {(['BUSINESS', 'MARKETING'] as const).map(purpose => (
+                    <Button
+                      key={purpose}
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        setPermission({ contact, purpose, key: Date.now() });
+                        setPermissionOpen(true);
+                      }}
+                    >
+                      {CONTACT_PURPOSES[purpose]}の可否を変更
+                    </Button>
+                  ))}
                   <Button
                     variant="outline"
                     disabled={busy}
@@ -193,6 +229,15 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
                 </p>
                 <p className="break-all">変更前: {stateLabel(row.before)}</p>
                 <p className="break-all">変更後: {stateLabel(row.after)}</p>
+                {row.purpose && <p>用途: {CONTACT_PURPOSES[row.purpose]}</p>}
+                {row.source && <p className="break-all">出所: {row.source}</p>}
+                {row.reason && <p className="break-all whitespace-pre-wrap">根拠: {row.reason}</p>}
+                {row.source_contact_id && (
+                  <p className="break-all">
+                    除去元: {row.source_contact_id}／引継先: {row.contact_id}
+                  </p>
+                )}
+                <p className="break-all text-muted-foreground">操作 ID: {row.operation_id}</p>
               </div>
             ))
           )}
@@ -292,11 +337,24 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
           )}
         </DialogContent>
       </Dialog>
+      {permission && (
+        <ContactPermissionDialog
+          key={permission.key}
+          customerId={customerId}
+          contact={permission.contact}
+          purpose={permission.purpose}
+          open={permissionOpen}
+          onClose={() => setPermissionOpen(false)}
+          onSaved={refresh}
+        />
+      )}
       <ConfirmDialog
         open={confirmOpen}
         title="連絡先を削除しますか？"
         description={
-          deleting ? `${deleting.value} を通常の表示から除外します。履歴は残ります。` : undefined
+          deleting
+            ? `${deleting.value} を通常の表示から除外します。履歴は残ります。同じ連絡先が残る場合、拒否・未確認の制約を引き継ぎます。`
+            : undefined
         }
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => {
