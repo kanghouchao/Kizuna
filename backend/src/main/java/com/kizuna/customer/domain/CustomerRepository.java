@@ -68,60 +68,35 @@ public interface CustomerRepository
    */
   @Query(
       """
-      select c from com.kizuna.customer.domain.Customer c
+      select c from Customer c
       where c.id = coalesce(
-        (select m.mergedIntoId from com.kizuna.customer.domain.Customer m where m.id = :id), :id)
+        (select m.mergedIntoId from Customer m where m.id = :id), :id)
       """)
   Optional<Customer> findResolvingMerge(@Param("id") String id);
 
-  Optional<Customer> findByPhoneNumber(String phoneNumber);
-
-  /**
-   * 同店の生きた顧客が共有する第一電話番号を重複候補として返す。 空白だけの番号は除く。PostgreSQL の trim は全角空白を残すため正規表現を使う。 店舗境界の
-   * storeFilter を保つため、問い合わせは HQL に留める。
-   */
   String DUPLICATE_PHONE_SELECT =
       """
-      select c.phoneNumber as phoneNumber, count(c) as total
-      from com.kizuna.customer.domain.Customer c
-      where c.mergedIntoId is null and c.phoneNumber is not null
-        and function('regexp_like', c.phoneNumber, '[^[:space:]]') = true
-      """;
-
-  String DUPLICATE_PHONE_GROUP_ORDER =
-      """
-      group by c.phoneNumber having count(c) >= 2
-      order by c.phoneNumber
-      """;
+    select p.value as phoneNumber, count(c) as total
+    from Customer c
+    join CustomerContact p on p.customerId = c.id
+    where c.mergedIntoId is null and p.deleted = false and p.preferred = true and p.type = 'PHONE'
+    """;
+  String DUPLICATE_PHONE_GROUP_ORDER = " group by p.value having count(c) >= 2 order by p.value";
 
   @Query(DUPLICATE_PHONE_SELECT + DUPLICATE_PHONE_GROUP_ORDER)
   List<CustomerDuplicateGroupView> findDuplicatePhoneNumbers(Limit limit);
 
-  /**
-   * 重複候補の続き。渡された位置より後ろ（＝電話番号の昇順で先）だけを返す。
-   *
-   * <p>副キーを添えないのは、電話番号がグループの鍵そのもので、返る行の間で一意だから — 全順序が既に成立しており、同値の境界が存在しない。
-   *
-   * <p>続きを辿れることは飾りではない。上限で切って黙ると、番号を共有する同伴者のような<b>正当な偽陽性</b>が先頭側に居座ったとき、
-   * それらは決して統合されないので枠を永久に占め、以降の真の重複が一生画面に出ない。
-   */
-  @Query(
-      DUPLICATE_PHONE_SELECT
-          + """
-            and c.phoneNumber > :cursor
-            """
-          + DUPLICATE_PHONE_GROUP_ORDER)
-  List<CustomerDuplicateGroupView> findDuplicatePhoneNumbersAfter(
-      @Param("cursor") String cursor, Limit limit);
+  @Query(DUPLICATE_PHONE_SELECT + " and p.value > :cursor" + DUPLICATE_PHONE_GROUP_ORDER)
+  List<CustomerDuplicateGroupView> findDuplicatePhoneNumbersAfter(String cursor, Limit limit);
 
-  /**
-   * 与えた電話番号を持つ当店の生きた行。並びは電話番号 → ID で、同じ番号の行が隣り合う。
-   *
-   * <p>件数の上限を持たないので、呼出側は<b>グループの件数が上限に収まる番号だけ</b>を渡すこと。返る行数は「渡した番号の数 × その上限」で頭打ちになり、1
-   * つの巨大なグループが取得を食い潰す形にならない。
-   */
-  List<Customer> findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
-      Collection<String> phoneNumbers);
+  @Query(
+      """
+    select c from Customer c
+    join CustomerContact p on p.customerId = c.id
+    where c.mergedIntoId is null and p.deleted = false and p.preferred = true and p.type = 'PHONE'
+      and p.value in :phoneNumbers order by p.value, c.id
+    """)
+  List<Customer> findByPreferredPhones(Collection<String> phoneNumbers);
 
   /**
    * 名指された顧客のうち、生きている行だけを返す。統合の前に 2 行を見比べる読み口の入口。
@@ -140,7 +115,7 @@ public interface CustomerRepository
    */
   @Query(
       """
-      select c.mergedIntoId from com.kizuna.customer.domain.Customer c
+      select c.mergedIntoId from Customer c
       where c.id = :id
       """)
   Optional<String> findMergedIntoId(@Param("id") String id);
@@ -165,7 +140,7 @@ public interface CustomerRepository
   @Modifying
   @Query(
       """
-      update versioned com.kizuna.customer.domain.Customer c set c.mergedIntoId = :survivingId
+      update versioned Customer c set c.mergedIntoId = :survivingId
       where c.mergedIntoId = :mergedId and c.storeId = :storeId
       """)
   int flattenMergedInto(

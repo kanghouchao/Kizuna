@@ -2,11 +2,17 @@
 
 import Link from 'next/link';
 import { ChevronLeftIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { notify } from '@/shared/notify';
 import { CustomerMergeComparisonResponse, customerApi } from '@/entities/customer';
-import { getApiErrorMessage, storePath, useCursorList } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  storePath,
+  useCursorList,
+  hasPermission,
+  readTokenClaims,
+} from '@/shared/lib';
 import { CustomerMergeComparison } from './CustomerMergeComparison';
 import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
 import {
@@ -36,6 +42,17 @@ interface Selection {
 }
 
 export default function CustomerDuplicatesPage() {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  useEffect(() => {
+    const claims = readTokenClaims();
+    setAllowed(hasPermission(claims, 'CUSTOMER_MANAGE') && hasPermission(claims, 'CUSTOMER_MERGE'));
+  }, []);
+  if (allowed === null) return <p>読み込み中...</p>;
+  if (!allowed) return <p role="alert">顧客の管理と統合の権限が必要です。</p>;
+  return <CustomerDuplicatesContent />;
+}
+
+function CustomerDuplicatesContent() {
   const params = useParams();
   const storeId = params.storeId as string;
   const {
@@ -141,7 +158,7 @@ export default function CustomerDuplicatesPage() {
           </div>
         ) : (
           groups.map(group => {
-            const phoneNumber = group.phone_number ?? '';
+            const phoneNumber = group.matched_value ?? '';
             const pair = selectedPair(group.customers);
             return (
               <div key={phoneNumber} className="border-b last:border-b-0">

@@ -14,6 +14,7 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
@@ -46,9 +48,15 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
     String name = "連絡先のみ" + UUID.randomUUID();
     String phone = "0809876543" + matches;
     for (int i = 0; i < matches; i++) {
-      var customer = Customer.builder().name("既存" + UUID.randomUUID()).phoneNumber(phone).build();
+      var customer = Customer.builder().name("既存" + UUID.randomUUID()).build();
       customer.setStoreId(STORE_A);
       customers.save(customer);
+      var contact =
+          rest.postForEntity(
+              "/store/customers/" + customer.getId() + "/contacts",
+              new HttpEntity<>(Map.of("type", "PHONE", "value", phone), managerHeaders(STORE_A)),
+              JsonNode.class);
+      assertThat(contact.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     }
     ObjectNode input = input("NONE");
     input.set(
@@ -97,7 +105,7 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
         rest.exchange(
             "/store/customers/" + source,
             HttpMethod.PUT,
-            new HttpEntity<>(Map.of("name", "台帳変更", "phone_number", ""), managerHeaders(STORE_A)),
+            new HttpEntity<>(Map.of("name", "台帳変更"), managerHeaders(STORE_A)),
             JsonNode.class);
     assertThat(edited.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(detail(order).path("contact_snapshot")).isEqualTo(original);
@@ -247,14 +255,14 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
             .storeIds(Set.of())
             .build());
     HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+    headers.setContentType(MediaType.APPLICATION_JSON);
     headers.set("X-Role", "store");
     headers.set("X-Store-ID", String.valueOf(STORE_A));
     headers.setBearerAuth(loginWithPassword(email, NEW_ACCOUNT_PASSWORD));
     String prefix = "候補" + nonce;
     String first = customer(prefix + "甲");
     String second = customer(prefix + "乙");
-    var foreign = Customer.builder().name(prefix + "他店舗").phoneNumber("09098765432").build();
+    var foreign = Customer.builder().name(prefix + "他店舗").build();
     foreign.setStoreId(STORE_B);
     customers.save(foreign);
     var page =
@@ -377,7 +385,12 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
         rest.postForEntity(
             "/store/customers",
             new HttpEntity<>(
-                Map.of("name", name, "phone_number", "09012345678"), managerHeaders(STORE_A)),
+                Map.of(
+                    "name",
+                    name,
+                    "contacts",
+                    List.of(Map.of("type", "PHONE", "value", "09012345678"))),
+                managerHeaders(STORE_A)),
             JsonNode.class);
     assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     return result.getBody().path("id").asString();

@@ -49,6 +49,7 @@ public class CustomerMergeService {
   private static final String RELEASE_THE_LINK_FIRST = "両方の顧客に会員が紐づいています。先に関連を解除してから統合してください";
 
   private final CustomerRepository customerRepository;
+  private final CustomerContactService customerContactService;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
   private final PlatformUserRepository platformUserRepository;
@@ -82,6 +83,7 @@ public class CustomerMergeService {
       throw new ConflictException(RELEASE_THE_LINK_FIRST);
     }
 
+    customerContactService.transfer(survivingCustomerId, mergedCustomerId, actorId);
     Long storeId = storeContext.getStoreId();
     int movedOrderCount =
         customerMergeRepository.repointOrders(survivingCustomerId, mergedCustomerId, storeId);

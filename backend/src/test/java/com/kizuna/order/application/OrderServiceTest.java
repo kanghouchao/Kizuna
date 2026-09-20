@@ -1721,7 +1721,6 @@ class OrderServiceTest {
     verify(customerRepository).save(customerCaptor.capture());
     Customer created = customerCaptor.getValue();
     assertThat(created.getName()).as("台帳行の氏名は本人が名乗った名前であること").isEqualTo("名乗り太郎");
-    assertThat(created.getPhoneNumber()).as("申請は電話番号を運ばないこと").isNull();
 
     verify(customerMemberLinkRepository).saveAndFlush(linkCaptor.capture());
     CustomerMemberLink link = linkCaptor.getValue();

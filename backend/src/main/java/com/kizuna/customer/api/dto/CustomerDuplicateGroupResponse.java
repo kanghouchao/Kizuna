@@ -3,7 +3,7 @@ package com.kizuna.customer.api.dto;
 import java.util.List;
 
 /**
- * 同じ第一電話番号を持つ生きた顧客のグループ。
+ * 同じ優先電話番号を持つ生きた顧客のグループ。
  *
  * <p>一致は手がかりであって判定ではない。同伴者が連絡先を共有する場合のように、同じ番号の別人は正規に起こりうる（ADR 0010）。
  *
@@ -11,4 +11,7 @@ import java.util.List;
  * CustomerService.MAX_LISTED_GROUP_SIZE}）。件数の表示には必ず {@code total} を使う。
  */
 public record CustomerDuplicateGroupResponse(
-    String phoneNumber, long total, List<CustomerMergeComparisonResponse> customers) {}
+    String matchedType,
+    String matchedValue,
+    long total,
+    List<CustomerMergeComparisonResponse> customers) {}

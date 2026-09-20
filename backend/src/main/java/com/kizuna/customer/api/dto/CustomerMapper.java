@@ -2,6 +2,7 @@ package com.kizuna.customer.api.dto;
 
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerPatch;
+import java.util.List;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -14,17 +15,22 @@ public interface CustomerMapper {
   @Mapping(target = "linkedMemberCode", ignore = true)
   @Mapping(target = "merged", ignore = true)
   @Mapping(target = "mergedFromId", ignore = true)
+  @Mapping(target = "preferredContacts", ignore = true)
   CustomerResponse toResponse(Customer customer);
 
   // 同上。一覧は紐づけの有無だけを持ち、会員コードは載せない。
   @Mapping(target = "memberLinked", ignore = true)
+  @Mapping(target = "preferredContacts", ignore = true)
   CustomerSummaryResponse toSummaryResponse(Customer customer);
 
   // 受注件数と紐づけの有無は顧客行が持たない事実なので、application 層が引いた値を引数で受ける。
   @Mapping(target = "memberLinked", source = "memberLinked")
   @Mapping(target = "orderCount", source = "orderCount")
   CustomerMergeComparisonResponse toComparisonResponse(
-      Customer customer, boolean memberLinked, long orderCount);
+      Customer customer,
+      boolean memberLinked,
+      long orderCount,
+      List<ContactSummary> preferredContacts);
 
   @Mapping(target = "landmark", ignore = true)
   // 起こしたばかりの行は定義上まだ生きている。統合先参照は統合だけが立てる。

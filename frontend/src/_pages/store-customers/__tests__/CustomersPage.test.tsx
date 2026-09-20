@@ -47,8 +47,8 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
         {
           id: '1',
           name: '山田太郎',
-          phone_number: '090-1111-2222',
-          line_id: 'yamada',
+          preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '090-1111-2222' }],
+
           classification: '常連',
           ng_type: '注意',
         },
@@ -62,7 +62,7 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
 
     expect(await screen.findByText('山田太郎')).toBeInTheDocument();
     expect(screen.getByText('090-1111-2222')).toBeInTheDocument();
-    expect(screen.getByText('yamada')).toBeInTheDocument();
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
     // NG バッジは ng_type をそのまま表示する
     expect(screen.getByText('注意')).toBeInTheDocument();
   });
@@ -80,7 +80,8 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
     // 未操作チェックボックスは boolean false のまま（挙動維持の錨）
     expect(body).toHaveProperty('has_pet', false);
     // 空文字フィールドは toCustomerRequest で undefined に落ちる
-    expect(body).toHaveProperty('phone_number', undefined);
+    expect(body).not.toHaveProperty('phone_number');
+    expect(body).toHaveProperty('contacts', []);
     // camelCase キーが混入しないこと
     expect(body).not.toHaveProperty('phoneNumber');
     expect(body).not.toHaveProperty('hasPet');
@@ -138,8 +139,14 @@ describe('顧客一覧ページ固有の要素', () => {
   it('会員列は紐づけ済み・未紐づけを状態バッジで出し分けること', async () => {
     mockedCustomerApi.list.mockResolvedValue({
       rows: [
-        { id: '1', name: '紐づけ太郎', member_linked: true, linked_member_code: '123456789012' },
-        { id: '2', name: '未紐づけ次郎', member_linked: false },
+        {
+          preferred_contacts: [],
+          id: '1',
+          name: '紐づけ太郎',
+          member_linked: true,
+          linked_member_code: '123456789012',
+        },
+        { preferred_contacts: [], id: '2', name: '未紐づけ次郎', member_linked: false },
       ],
       page: 0,
       pageCount: 1,
@@ -156,7 +163,7 @@ describe('顧客一覧ページ固有の要素', () => {
     render(<CustomersPage />);
     await screen.findByText('顧客が登録されていません');
 
-    fireEvent.change(screen.getByPlaceholderText('名前・電話番号・LINE ID で検索...'), {
+    fireEvent.change(screen.getByPlaceholderText('名前・電話・メール・LINE ID で検索...'), {
       target: { value: '山田' },
     });
     fireEvent.change(screen.getByPlaceholderText('区分'), { target: { value: '常連' } });
@@ -185,7 +192,7 @@ describe('顧客一覧ページ固有の要素', () => {
 
   it('統合権限を持つ利用者には重複候補への導線を出すこと', async () => {
     mockedReadClaims.mockReturnValue({
-      authorities: ['PERM_CUSTOMER_MERGE'],
+      authorities: ['PERM_CUSTOMER_MANAGE', 'PERM_CUSTOMER_MERGE'],
       userType: 'STAFF',
       storeBridge: true,
     });
@@ -203,9 +210,9 @@ describe('顧客一覧ページ固有の要素', () => {
 describe('顧客一覧からの統合', () => {
   /** 一覧の行は「絞り込んで選ぶ」ための項目しか持たない（住所も受注件数も無い）。 */
   const listRows = [
-    { id: 'c1', name: '山田太郎', phone_number: '090-1111-2222' },
-    { id: 'c2', name: 'ヤマダタロウ', phone_number: '090-1111-2222' },
-    { id: 'c3', name: '別人三郎', phone_number: '090-3333-4444' },
+    { preferred_contacts: [], id: 'c1', name: '山田太郎', phone_number: '090-1111-2222' },
+    { preferred_contacts: [], id: 'c2', name: 'ヤマダタロウ', phone_number: '090-1111-2222' },
+    { preferred_contacts: [], id: 'c3', name: '別人三郎', phone_number: '090-3333-4444' },
   ];
 
   /** 見比べの読み口が返す 2 行。一覧に無い材料（住所・受注件数・紐づけ）を持つ。 */
@@ -213,7 +220,7 @@ describe('顧客一覧からの統合', () => {
     {
       id: 'c1',
       name: '山田太郎',
-      phone_number: '090-1111-2222',
+      preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '090-1111-2222' }],
       address: '東京都渋谷区1-1',
       member_linked: false,
       order_count: 3,
@@ -221,7 +228,7 @@ describe('顧客一覧からの統合', () => {
     {
       id: 'c2',
       name: 'ヤマダタロウ',
-      phone_number: '090-1111-2222',
+      preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '090-1111-2222' }],
       address: '東京都新宿区2-2',
       member_linked: true,
       order_count: 0,
@@ -369,7 +376,7 @@ describe('顧客一覧からの統合', () => {
     mockedCustomerApi.list
       .mockResolvedValueOnce({ rows: listRows, page: 0, pageCount: 2, total: 21 } as never)
       .mockResolvedValueOnce({
-        rows: [{ id: 'c9', name: '次頁太郎' }],
+        rows: [{ preferred_contacts: [], id: 'c9', name: '次頁太郎' }],
         page: 1,
         pageCount: 2,
         total: 21,

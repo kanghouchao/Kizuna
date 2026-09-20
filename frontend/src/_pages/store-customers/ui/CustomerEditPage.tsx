@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
+import { CustomerContactsSection } from './CustomerContactsSection';
 import { MemberLinkSection } from './MemberLinkSection';
 import { MergeHistorySection } from './MergeHistorySection';
 import { customerApi } from '@/entities/customer';
@@ -62,7 +63,8 @@ export default function CustomerEditPage() {
   const handleSubmit = async (data: CustomerFormData) => {
     try {
       setIsSubmitting(true);
-      await customerApi.update(resolvedId, toCustomerRequest(data));
+      const { contacts: _contacts, ...profile } = toCustomerRequest(data);
+      await customerApi.update(resolvedId, profile);
       notify.success('顧客情報を更新しました');
       router.push(storePath(storeId, '/customers'));
     } catch {
@@ -111,13 +113,12 @@ export default function CustomerEditPage() {
       <CustomerForm
         initialData={{
           name: customer.name,
-          phone_number: customer.phone_number || '',
-          phone_number2: customer.phone_number2 || '',
+
           address: customer.address || '',
           building_name: customer.building_name || '',
           classification: customer.classification || '',
           has_pet: customer.has_pet ?? false,
-          line_id: customer.line_id || '',
+
           usage_areas: customer.usage_areas || '',
           ng_type: customer.ng_type || '',
           ng_content: customer.ng_content || '',
@@ -129,6 +130,7 @@ export default function CustomerEditPage() {
       {/* 顧客が変わったら区画ごと作り直す。中の履歴はカーソルで辿る読み口で、マウント時にしか
           取りに行かない — 同じ画面位置で [id] だけが変わる遷移では前の顧客の行が残る。
           入力途中の会員コードも同時に捨てる。 */}
+      <CustomerContactsSection key={`contacts-${resolvedId}`} customerId={resolvedId} />
       <MemberLinkSection key={resolvedId} customerId={resolvedId} />
 
       {/* 統合履歴は統合権限を持つ者だけの読み口なので、持たない利用者には区画ごと出さない。

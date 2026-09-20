@@ -23,12 +23,6 @@ public class Customer extends StoreScopedEntity {
   @Column(name = "name")
   private String name;
 
-  @Column(name = "phone_number")
-  private String phoneNumber;
-
-  @Column(name = "phone_number2")
-  private String phoneNumber2;
-
   @Column(name = "address")
   private String address;
 
@@ -43,9 +37,6 @@ public class Customer extends StoreScopedEntity {
 
   @Column(name = "has_pet")
   private Boolean hasPet;
-
-  @Column(name = "line_id")
-  private String lineId;
 
   @Column(name = "usage_areas")
   private String usageAreas;
@@ -80,12 +71,6 @@ public class Customer extends StoreScopedEntity {
     if (patch.name() != null) {
       this.name = patch.name();
     }
-    if (patch.phoneNumber() != null) {
-      this.phoneNumber = patch.phoneNumber();
-    }
-    if (patch.phoneNumber2() != null) {
-      this.phoneNumber2 = patch.phoneNumber2();
-    }
     if (patch.address() != null) {
       this.address = patch.address();
     }
@@ -94,9 +79,6 @@ public class Customer extends StoreScopedEntity {
     }
     if (patch.classification() != null) {
       this.classification = patch.classification();
-    }
-    if (patch.lineId() != null) {
-      this.lineId = patch.lineId();
     }
     if (patch.usageAreas() != null) {
       this.usageAreas = patch.usageAreas();
@@ -114,14 +96,6 @@ public class Customer extends StoreScopedEntity {
 
   @Override
   public String toString() {
-    return "Customer(id="
-        + getId()
-        + ", name="
-        + name
-        + ", phoneNumber="
-        + phoneNumber
-        + ", classification="
-        + classification
-        + ")";
+    return "Customer(id=" + getId() + ", name=" + name + ", classification=" + classification + ")";
   }
 }

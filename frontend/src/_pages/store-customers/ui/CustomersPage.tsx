@@ -57,7 +57,10 @@ export default function CustomersPage() {
   // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
   const [canMerge, setCanMerge] = useState(false);
   useEffect(() => {
-    setCanMerge(hasPermission(readTokenClaims(), 'CUSTOMER_MERGE'));
+    const claims = readTokenClaims();
+    setCanMerge(
+      hasPermission(claims, 'CUSTOMER_MERGE') && hasPermission(claims, 'CUSTOMER_MANAGE')
+    );
   }, []);
 
   const list = useListPage<CustomerResponse, CustomerCriteria>(
@@ -157,7 +160,7 @@ export default function CustomersPage() {
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   className="pl-10"
-                  placeholder="名前・電話番号・LINE ID で検索..."
+                  placeholder="名前・電話・メール・LINE ID で検索..."
                 />
               </div>
               <Input
@@ -184,6 +187,7 @@ export default function CustomersPage() {
               {canMerge && <TableHead className="w-24">見比べる</TableHead>}
               <TableHead>名前</TableHead>
               <TableHead>電話番号</TableHead>
+              <TableHead>メール</TableHead>
               <TableHead>LINE ID</TableHead>
               <TableHead>区分</TableHead>
               <TableHead>会員</TableHead>
@@ -217,9 +221,17 @@ export default function CustomersPage() {
                 )}
                 <TableCell className="font-medium text-foreground">{customer.name}</TableCell>
                 <TableCell className="text-muted-foreground">
-                  {customer.phone_number || '-'}
+                  {customer.preferred_contacts.find(contact => contact.type === 'PHONE')?.value ||
+                    '-'}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{customer.line_id || '-'}</TableCell>
+                <TableCell className="max-w-64 break-all text-muted-foreground">
+                  {customer.preferred_contacts.find(contact => contact.type === 'EMAIL')?.value ||
+                    '-'}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {customer.preferred_contacts.find(contact => contact.type === 'LINE')?.value ||
+                    '-'}
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {customer.classification || '-'}
                 </TableCell>

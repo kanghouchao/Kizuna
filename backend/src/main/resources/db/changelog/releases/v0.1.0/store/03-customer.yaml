@@ -27,14 +27,6 @@ databaseChangeLog:
                   type: VARCHAR(255)
                   remarks: 顧客名
               - column:
-                  name: phone_number
-                  type: VARCHAR(50)
-                  remarks: 電話番号
-              - column:
-                  name: phone_number2
-                  type: VARCHAR(50)
-                  remarks: 電話番号2
-              - column:
                   name: address
                   type: VARCHAR(500)
                   remarks: 住所
@@ -55,10 +47,6 @@ databaseChangeLog:
                   type: BOOLEAN
                   defaultValueBoolean: false
                   remarks: ペットの有無
-              - column:
-                  name: line_id
-                  type: VARCHAR(100)
-                  remarks: LINE ID
               - column:
                   name: usage_areas
                   type: VARCHAR(255)
@@ -122,14 +110,6 @@ databaseChangeLog:
             tableName: t_customers
             columnNames: id,alive
             constraintName: uq_t_customers_id_alive
-        - createIndex:
-            indexName: idx_t_customers_phone
-            tableName: t_customers
-            columns:
-              - column:
-                  name: phone_number
-              - column:
-                  name: store_id
         - sql:
             # 連鎖統合の圧平は「被統合行を指している墓標」を一括で書き換える。PostgreSQL は参照側の
             # 外部キー列に索引を作らず、値を持つのは墓標だけなので部分索引にする。
@@ -261,3 +241,198 @@ databaseChangeLog:
             columns:
               - column:
                   name: merged_customer_id
+
+  - changeSet:
+      id: store-v0100-003-t_customer_contacts
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_customer_contacts
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_customer_contacts
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: customer_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: origin_customer_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: type
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: value
+                  type: VARCHAR(320)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: preferred
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deleted
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_contacts_store
+            baseTableName: t_customer_contacts
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_contacts_customer
+            baseTableName: t_customer_contacts
+            baseColumnNames: customer_id
+            referencedTableName: t_customers
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_contacts_origin
+            baseTableName: t_customer_contacts
+            baseColumnNames: origin_customer_id
+            referencedTableName: t_customers
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - createIndex:
+            tableName: t_customer_contacts
+            indexName: idx_t_customer_contacts_owner
+            columns:
+              - column:
+                  name: customer_id
+
+  - changeSet:
+      id: store-v0100-003-t_customer_contact_history
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_customer_contact_history
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_customer_contact_history
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: contact_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: origin_customer_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: action
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: occurred_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: before_state
+                  type: JSONB
+              - column:
+                  name: after_state
+                  type: JSONB
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_contact_history_store
+            baseTableName: t_customer_contact_history
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_contact_history_contact
+            baseTableName: t_customer_contact_history
+            baseColumnNames: contact_id
+            referencedTableName: t_customer_contacts
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            constraintName: fk_t_customer_contact_history_origin
+            baseTableName: t_customer_contact_history
+            baseColumnNames: origin_customer_id
+            referencedTableName: t_customers
+            referencedColumnNames: id
+            onDelete: NO ACTION
+        - createIndex:
+            tableName: t_customer_contact_history
+            indexName: idx_t_customer_contact_history_owner
+            columns:
+              - column:
+                  name: contact_id
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_customer_contacts_preferred ON t_customer_contacts(customer_id, type) WHERE preferred AND NOT deleted;
+              CREATE INDEX idx_t_customer_contact_history_cursor ON t_customer_contact_history(occurred_at DESC, id DESC);
+              ALTER TABLE t_customer_contacts ADD CONSTRAINT ck_t_customer_contacts_type CHECK (type IN ('PHONE', 'EMAIL', 'LINE'));
+              ALTER TABLE t_customer_contacts ADD CONSTRAINT ck_t_customer_contacts_deleted CHECK (NOT (deleted AND preferred));

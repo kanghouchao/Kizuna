@@ -9,6 +9,10 @@ import {
 } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import {
+  ContactInput,
+  ContactResponse,
+  ContactHistoryResponse,
+  ContactType,
   CustomerCreateRequest,
   CustomerDuplicateGroupResponse,
   CustomerMemberLinkHistoryResponse,
@@ -29,13 +33,52 @@ export type CustomerListParams = PaginationParams & {
 };
 
 export const customerApi = {
+  contacts: async (id: string, params?: CursorParams): Promise<CursorPageResult<ContactResponse>> =>
+    fromCursorPage(
+      (await apiClient.get(`/store/customers/${requireId(id, '顧客')}/contacts`, { params })).data
+    ),
+  contactHistory: async (
+    id: string,
+    params?: CursorParams
+  ): Promise<CursorPageResult<ContactHistoryResponse>> =>
+    fromCursorPage(
+      (await apiClient.get(`/store/customers/${requireId(id, '顧客')}/contact-history`, { params }))
+        .data
+    ),
+  addContact: async (id: string, data: ContactInput): Promise<ContactResponse> =>
+    (await apiClient.post(`/store/customers/${requireId(id, '顧客')}/contacts`, data)).data,
+  updateContact: async (
+    id: string,
+    contactId: string,
+    data: ContactInput
+  ): Promise<ContactResponse> =>
+    (
+      await apiClient.put(
+        `/store/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}`,
+        data
+      )
+    ).data,
+  deleteContact: async (id: string, contactId: string): Promise<void> => {
+    await apiClient.delete(
+      `/store/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}`
+    );
+  },
+  setContactPreference: async (
+    id: string,
+    type: ContactType,
+    contactId: string | null
+  ): Promise<void> => {
+    await apiClient.put(`/store/customers/${requireId(id, '顧客')}/contact-preferences/${type}`, {
+      contact_id: contactId,
+    });
+  },
   /** 顧客一覧を取得する */
   list: async (params?: CustomerListParams): Promise<PageResult<CustomerSummaryResponse>> => {
     const response = await apiClient.get('/store/customers', { params });
     return fromSpringPage(response.data);
   },
   /**
-   * 重複候補（同店・生きた行・第一電話番号が一致する 2 行以上のグループ）を取得する。
+   * 重複候補（同店・生きた行・優先電話番号が一致する 2 行以上のグループ）を取得する。
    * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
    * 続きは応答の nextCursor をそのまま cursor に渡して取る。
    */

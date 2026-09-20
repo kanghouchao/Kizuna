@@ -1,8 +1,9 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { validateContactValue } from '../lib/contactValidation';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { CustomerCreateRequest } from '@/entities/customer';
+import { CustomerCreateRequest, ContactInput } from '@/entities/customer';
 import {
   Button,
   Card,
@@ -19,18 +20,21 @@ import {
   Input,
   Label,
   Textarea,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/shared/ui';
 
 /** 顧客フォームのデータ型 */
 export interface CustomerFormData {
   name: string;
-  phone_number: string;
-  phone_number2: string;
+  contacts: ContactInput[];
   address: string;
   building_name: string;
   classification: string;
   has_pet: boolean;
-  line_id: string;
   usage_areas: string;
   ng_type: string;
   ng_content: string;
@@ -40,13 +44,13 @@ export interface CustomerFormData {
 export function toCustomerRequest(data: CustomerFormData): CustomerCreateRequest {
   return {
     name: data.name,
-    phone_number: data.phone_number || undefined,
-    phone_number2: data.phone_number2 || undefined,
+    contacts: data.contacts,
+
     address: data.address || undefined,
     building_name: data.building_name || undefined,
     classification: data.classification || undefined,
     has_pet: data.has_pet,
-    line_id: data.line_id || undefined,
+
     usage_areas: data.usage_areas || undefined,
     ng_type: data.ng_type || undefined,
     ng_content: data.ng_content || undefined,
@@ -56,6 +60,7 @@ export function toCustomerRequest(data: CustomerFormData): CustomerCreateRequest
 interface CustomerFormProps {
   /** 編集時の初期データ */
   initialData?: Partial<CustomerFormData>;
+  creating?: boolean;
   /** フォーム送信時のコールバック */
   onSubmit: (data: CustomerFormData) => void;
   /** 送信中フラグ */
@@ -63,18 +68,23 @@ interface CustomerFormProps {
 }
 
 /** 顧客登録・編集フォームコンポーネント */
-export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFormProps) {
+export function CustomerForm({
+  initialData,
+  onSubmit,
+  isSubmitting,
+  creating = false,
+}: CustomerFormProps) {
   const router = useRouter();
   const form = useForm<CustomerFormData>({
     defaultValues: {
       name: '',
-      phone_number: '',
-      phone_number2: '',
+      contacts: [],
+
       address: '',
       building_name: '',
       classification: '',
       has_pet: false,
-      line_id: '',
+
       usage_areas: '',
       ng_type: '',
       ng_content: '',
@@ -82,6 +92,7 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
     },
   });
   const { register, handleSubmit, control } = form;
+  const contacts = useFieldArray({ control, name: 'contacts' });
 
   return (
     <Form {...form}>
@@ -115,21 +126,98 @@ export function CustomerForm({ initialData, onSubmit, isSubmitting }: CustomerFo
                 <Label htmlFor="classification">区分</Label>
                 <Input id="classification" type="text" {...register('classification')} />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phone_number">電話番号</Label>
-                <Input id="phone_number" type="tel" {...register('phone_number')} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phone_number2">電話番号2</Label>
-                <Input id="phone_number2" type="tel" {...register('phone_number2')} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="line_id">LINE ID</Label>
-                <Input id="line_id" type="text" {...register('line_id')} />
-              </div>
             </div>
           </CardContent>
         </Card>
+
+        {creating && (
+          <Card>
+            <CardHeader>
+              <CardTitle role="heading" aria-level={2}>
+                連絡先
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                登録は任意です。優先指定は登録後の顧客編集で選べます。入力だけでは本人確認や連絡の許可になりません。
+              </p>
+              {contacts.fields.map((contact, index) => (
+                <div key={contact.id} className="grid grid-cols-[8rem_1fr_auto] items-start gap-4">
+                  <FormField
+                    control={control}
+                    name={`contacts.${index}.type`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>種類</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          items={{ PHONE: '電話', EMAIL: 'メール', LINE: 'LINE ID' }}
+                        >
+                          <FormControl>
+                            <SelectTrigger ref={field.ref}>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="PHONE">電話</SelectItem>
+                            <SelectItem value="EMAIL">メール</SelectItem>
+                            <SelectItem value="LINE">LINE ID</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={control}
+                    name={`contacts.${index}.value`}
+                    rules={{
+                      required: '連絡先を入力してください',
+                      maxLength: { value: 320, message: '320文字以内で入力してください' },
+                      validate: value =>
+                        validateContactValue(value, form.getValues(`contacts.${index}.type`)),
+                    }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>連絡先の値</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type={
+                              form.watch(`contacts.${index}.type`) === 'EMAIL'
+                                ? 'email'
+                                : form.watch(`contacts.${index}.type`) === 'PHONE'
+                                  ? 'tel'
+                                  : 'text'
+                            }
+                            required
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-6"
+                    onClick={() => contacts.remove(index)}
+                  >
+                    取り消す
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={contacts.fields.length >= 100}
+                onClick={() => contacts.append({ type: 'PHONE', value: '' })}
+              >
+                連絡先を追加
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 住所 */}
         <Card>

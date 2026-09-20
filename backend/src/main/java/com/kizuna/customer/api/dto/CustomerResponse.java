@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,13 +13,11 @@ import lombok.NoArgsConstructor;
 public class CustomerResponse {
   private String id;
   private String name;
-  private String phoneNumber;
-  private String phoneNumber2;
+  private List<ContactSummary> preferredContacts;
   private String address;
   private String buildingName;
   private String classification;
   private Boolean hasPet;
-  private String lineId;
   private String usageAreas;
   private String ngType;
   private String ngContent;

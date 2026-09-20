@@ -131,7 +131,7 @@ class CustomerControllerTest {
 
   @Test
   @DisplayName("見比べは詳細ではなく専用の読み口へ届き、選んだ順の 2 件が渡ること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
+  @WithMockUser(authorities = {"PERM_CUSTOMER_MERGE", "PERM_CUSTOMER_MANAGE"})
   void mergeComparisonRoutesPastTheDetailHandlerWithBothIdsInOrder() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<List<String>> idsCaptor = ArgumentCaptor.captor();

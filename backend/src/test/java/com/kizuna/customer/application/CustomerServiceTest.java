@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.customer.api.dto.ContactSummary;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
@@ -15,7 +16,9 @@ import com.kizuna.customer.api.dto.CustomerMergeComparisonResponse;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
+import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerDuplicateGroupView;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
@@ -34,6 +37,7 @@ import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -54,6 +58,8 @@ import org.springframework.transaction.annotation.Transactional;
 @ExtendWith(MockitoExtension.class)
 class CustomerServiceTest {
 
+  @Mock private CustomerContactService customerContactService;
+  @Mock private CustomerContactRepository customerContactRepository;
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;
@@ -136,7 +142,7 @@ class CustomerServiceTest {
 
     when(customerMapper.toEntity(req)).thenReturn(customerEntity);
 
-    when(customerRepository.save(any()))
+    when(customerRepository.saveAndFlush(any()))
         .thenAnswer(
             i -> {
               Customer saved = i.getArgument(0);
@@ -166,9 +172,7 @@ class CustomerServiceTest {
     req.setName("Updated");
 
     when(customerMapper.toPatch(req))
-        .thenReturn(
-            new CustomerPatch(
-                "Updated", null, null, null, null, null, null, null, null, null, null));
+        .thenReturn(new CustomerPatch("Updated", null, null, null, null, null, null, null));
 
     CustomerResponse resp = new CustomerResponse();
     resp.setName("Updated");
@@ -299,7 +303,7 @@ class CustomerServiceTest {
   @Test
   @DisplayName("墓標の削除は、統合に関与した行の案内より先に統合済みとして撥ねられること")
   void delete_rejectsTombstonesBeforeTheInvolvementCheck() {
-    when(customerRepository.existsById("c1")).thenReturn(true);
+    when(customerRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(aliveCustomer("c1")));
     when(customerRepository.isMerged("c1")).thenReturn(true);
 
     assertThatThrownBy(() -> customerService.delete("c1"))
@@ -323,7 +327,7 @@ class CustomerServiceTest {
 
   @Test
   void delete_removesIfExists() {
-    when(customerRepository.existsById("c1")).thenReturn(true);
+    when(customerRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(aliveCustomer("c1")));
     customerService.delete("c1");
     verify(customerRepository).deleteById("c1");
   }
@@ -331,7 +335,7 @@ class CustomerServiceTest {
   @Test
   @DisplayName("統合に関与した顧客の削除は 409 で撥ねられ、行が消えないこと")
   void delete_rejectsCustomersInvolvedInAMerge() {
-    when(customerRepository.existsById("c1")).thenReturn(true);
+    when(customerRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(aliveCustomer("c1")));
     when(customerMergeRepository.existsInvolving("c1")).thenReturn(true);
 
     assertThatThrownBy(() -> customerService.delete("c1"))
@@ -342,7 +346,7 @@ class CustomerServiceTest {
 
   @Test
   void delete_throwsWhenNotFound() {
-    when(customerRepository.existsById("missing")).thenReturn(false);
+    when(customerRepository.findByIdForUpdate("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> customerService.delete("missing"))
         .isInstanceOf(NotFoundException.class)
@@ -366,8 +370,20 @@ class CustomerServiceTest {
         groups.subList(0, PAGE_SIZE).stream()
             .map(CustomerDuplicateGroupView::getPhoneNumber)
             .toList();
-    when(customerRepository.findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
-            keptPhoneNumbers))
+    when(customerContactService.preferred(any()))
+        .thenAnswer(
+            invocation -> {
+              List<String> ids = invocation.getArgument(0);
+              return ids.stream()
+                  .collect(
+                      Collectors.toMap(
+                          id -> id,
+                          id ->
+                              List.of(
+                                  new ContactSummary(
+                                      id, ContactType.PHONE, id.substring(0, id.length() - 2)))));
+            });
+    when(customerRepository.findByPreferredPhones(keptPhoneNumbers))
         .thenReturn(keptPhoneNumbers.stream().flatMap(CustomerServiceTest::duplicatePair).toList());
     when(customerMemberLinkRepository.findByCustomerIdInAndStatus(any(), any()))
         .thenReturn(List.of());
@@ -444,8 +460,20 @@ class CustomerServiceTest {
             List.of(
                 new GroupView("0000000000", MAX_LISTED_GROUP_SIZE + 1),
                 new GroupView("090-1111-2222", 2)));
-    when(customerRepository.findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(
-            List.of("090-1111-2222")))
+    when(customerContactService.preferred(any()))
+        .thenAnswer(
+            invocation -> {
+              List<String> ids = invocation.getArgument(0);
+              return ids.stream()
+                  .collect(
+                      Collectors.toMap(
+                          id -> id,
+                          id ->
+                              List.of(
+                                  new ContactSummary(
+                                      id, ContactType.PHONE, id.substring(0, id.length() - 2)))));
+            });
+    when(customerRepository.findByPreferredPhones(List.of("090-1111-2222")))
         .thenReturn(duplicatePair("090-1111-2222").toList());
     when(customerMemberLinkRepository.findByCustomerIdInAndStatus(any(), any()))
         .thenReturn(List.of());
@@ -456,7 +484,7 @@ class CustomerServiceTest {
 
     // 行が無くても候補からは落とさない。番号そのものと総数は、台帳に何が起きているかの手がかりである
     assertThat(page.content())
-        .extracting(CustomerDuplicateGroupResponse::phoneNumber)
+        .extracting(CustomerDuplicateGroupResponse::matchedValue)
         .containsExactly("0000000000", "090-1111-2222");
     assertThat(page.content().get(0).customers()).isEmpty();
     assertThat(page.content().get(0).total()).isEqualTo(MAX_LISTED_GROUP_SIZE + 1);
@@ -478,8 +506,9 @@ class CustomerServiceTest {
     when(customerMergeRepository.countOrdersByCustomerId(requested))
         .thenReturn(List.of(new OrderCountView("c2", 3)));
     // 材料が食い違えば写像は素通しの null になり、下の containsExactly が落ちる
-    when(customerMapper.toComparisonResponse(c2, false, 3L)).thenReturn(comparison("c2"));
-    when(customerMapper.toComparisonResponse(c1, true, 0L)).thenReturn(comparison("c1"));
+    when(customerMapper.toComparisonResponse(c2, false, 3L, List.of()))
+        .thenReturn(comparison("c2"));
+    when(customerMapper.toComparisonResponse(c1, true, 0L, List.of())).thenReturn(comparison("c1"));
 
     List<CustomerMergeComparisonResponse> rows = customerService.mergeComparison(requested);
 
@@ -535,9 +564,7 @@ class CustomerServiceTest {
 
   /** グループを成す最小の形（同じ番号の 2 行）。 */
   private static Stream<Customer> duplicatePair(String phoneNumber) {
-    return Stream.of(
-        Customer.builder().phoneNumber(phoneNumber).build(),
-        Customer.builder().phoneNumber(phoneNumber).build());
+    return Stream.of(aliveCustomer(phoneNumber + "-1"), aliveCustomer(phoneNumber + "-2"));
   }
 
   /** 受注件数の読み側 projection の最小の実装。 */
@@ -563,6 +590,6 @@ class CustomerServiceTest {
   /** 写像の結果は同一性だけを見るので、識別のつく id 以外は空でよい。 */
   private static CustomerMergeComparisonResponse comparison(String id) {
     return new CustomerMergeComparisonResponse(
-        id, null, null, null, null, null, null, null, null, null, null, null, false, 0L);
+        id, null, List.of(), null, null, null, null, null, null, null, false, 0L);
   }
 }
