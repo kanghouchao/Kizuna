@@ -373,7 +373,7 @@ class MemberOrderIT extends CrossStoreTestSupport {
     ResponseEntity<JsonNode> confirmed = confirm(STORE_A, applicationId);
     assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(confirmed.getBody().path("status").asString()).isEqualTo("CONFIRMED");
-    assertThat(confirmed.getBody().path("customer_id").isMissingNode())
+    assertThat(confirmed.getBody().path("customer_id").isNull())
         .as("整備する先が無いため顧客未設定のまま成立すること（無帰属受注は正規の状態）")
         .isTrue();
   }

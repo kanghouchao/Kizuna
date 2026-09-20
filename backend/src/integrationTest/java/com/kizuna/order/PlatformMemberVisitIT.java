@@ -357,7 +357,11 @@ class PlatformMemberVisitIT extends CrossStoreTestSupport {
             + castId
             + "\", \"pax\": "
             + pax
-            + (customerId == null ? "" : ", \"customer_id\": \"" + customerId + "\"")
+            + (customerId == null
+                ? ""
+                : ", \"customer_selection\": {\"mode\":\"EXISTING\",\"customer_id\": \""
+                    + customerId
+                    + "\"}")
             + ", \"remarks\": \""
             + remarks
             + "\"}";

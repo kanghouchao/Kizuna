@@ -45,6 +45,7 @@ configurations.configureEach {
 }
 
 dependencies {
+    implementation 'com.googlecode.libphonenumber:libphonenumber:9.0.39'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'

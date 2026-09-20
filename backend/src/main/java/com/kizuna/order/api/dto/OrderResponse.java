@@ -1,5 +1,7 @@
 package com.kizuna.order.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.kizuna.order.domain.ContactSnapshot;
 import com.kizuna.order.domain.OrderCourse;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -30,11 +32,15 @@ public class OrderResponse {
   private LocalDate businessDate;
   private LocalTime arrivalScheduledStartTime;
   private LocalTime arrivalScheduledEndTime;
+
+  @JsonInclude(JsonInclude.Include.ALWAYS)
   private String customerId;
+
+  @JsonInclude(JsonInclude.Include.ALWAYS)
   private String customerName;
-  // 受付で録入された連絡先。顧客が着かなかった受注にだけ入る（着いた受注では台帳の行が名乗りを持つ）
-  private String contactName;
-  private String contactPhoneNumber;
+
+  private ContactSnapshot contactSnapshot;
+
   private String castId;
   private String castName;
   private Integer pax;

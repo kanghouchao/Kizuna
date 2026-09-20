@@ -92,9 +92,9 @@ class CustomerDeletionIT extends CrossStoreTestSupport {
             + LocalDate.now()
             + "\", \"cast_id\": \""
             + cast.getBody().path("id").asString()
-            + "\", \"pax\": 2, \"customer_id\": \""
+            + "\", \"pax\": 2, \"customer_selection\": {\"mode\":\"EXISTING\",\"customer_id\": \""
             + customerId
-            + "\"}";
+            + "\"}}";
     ResponseEntity<JsonNode> created =
         rest.postForEntity(
             "/store/orders", orderFixtureRequest(body, managerHeaders(STORE_A)), JsonNode.class);

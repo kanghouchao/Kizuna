@@ -28,7 +28,7 @@ class OrderCourseIT extends CrossStoreTestSupport {
     String cast =
         post("/store/casts", "{\"name\":\"確認検証\"}", manager).getBody().path("id").asString();
     String input =
-        "{\"business_date\":\"2027-01-20\",\"cast_id\":\""
+        "{\"customer_selection\":{\"mode\":\"NONE\"},\"business_date\":\"2027-01-20\",\"cast_id\":\""
             + cast
             + "\",\"course_id\":\""
             + course.serviceId()
@@ -128,7 +128,7 @@ class OrderCourseIT extends CrossStoreTestSupport {
         post("/store/casts", "{\"name\":\"試算担当\"}", headers).getBody().path("id").asString();
     String input =
         """
-        {"business_date":"2027-01-20","cast_id":"%s","course_id":"%s",
+        {"customer_selection":{"mode":"NONE"},"business_date":"2027-01-20","cast_id":"%s","course_id":"%s",
          "fee_lines":[{"kind":"DISCOUNT","name":"割引","amount":2000}]}
         """
             .formatted(cast, course);
@@ -253,7 +253,7 @@ class OrderCourseIT extends CrossStoreTestSupport {
       String cast =
           post("/store/casts", "{\"name\":\"競合担当\"}", headers).getBody().path("id").asString();
       String input =
-          "{\"business_date\":\"2027-01-20\",\"cast_id\":\""
+          "{\"customer_selection\":{\"mode\":\"NONE\"},\"business_date\":\"2027-01-20\",\"cast_id\":\""
               + cast
               + "\",\"course_id\":\""
               + service
@@ -314,7 +314,7 @@ class OrderCourseIT extends CrossStoreTestSupport {
     String cast =
         post("/store/casts", "{\"name\":\"順序検証\"}", headers).getBody().path("id").asString();
     String input =
-        "{\"business_date\":\"2027-01-20\",\"cast_id\":\""
+        "{\"customer_selection\":{\"mode\":\"NONE\"},\"business_date\":\"2027-01-20\",\"cast_id\":\""
             + cast
             + "\",\"course_id\":\""
             + course.serviceId()

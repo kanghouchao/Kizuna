@@ -96,9 +96,9 @@ class OrderCrossStoreIT extends CrossStoreTestSupport {
         + LocalDate.now()
         + "\", \"cast_id\": \""
         + castId
-        + "\", \"customer_id\": \""
+        + "\", \"customer_selection\": {\"mode\":\"EXISTING\",\"customer_id\": \""
         + customerId
-        + "\"}";
+        + "\"}}";
   }
 
   /** 更新の要求体。OrderUpdateRequest は営業日を持たないため、作成の体をそのまま流用できない。 */

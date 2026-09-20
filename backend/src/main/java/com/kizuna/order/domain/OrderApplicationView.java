@@ -30,6 +30,15 @@ public interface OrderApplicationView {
 
   String getContactPhoneNumber();
 
+  String getContactEmail();
+
+  String getContactLineId();
+
+  default ContactSnapshot getContactSnapshot() {
+    return new ContactSnapshot(
+        getContactName(), getContactPhoneNumber(), getContactEmail(), getContactLineId());
+  }
+
   String getOrderId();
 
   String getDeclinedReason();

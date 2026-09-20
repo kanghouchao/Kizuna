@@ -40,9 +40,10 @@ Given('店舗コンソールへ入り受注一覧を開く', async ({ page, requ
   await expect(page.getByRole('heading', { name: 'オーダー一覧', exact: true })).toBeVisible();
 });
 
-When('電話受付の受注を登録する', async ({ page }) => {
+async function registerPhoneOrder(page: Page, chooseCustomer?: () => Promise<void>) {
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/create`);
   await page.getByLabel('お客様名', { exact: true }).fill(customerName);
+  if (chooseCustomer) await chooseCustomer();
   await page.getByLabel('営業日', { exact: true }).fill(todayInTokyo());
   await page.getByLabel('人数', { exact: true }).fill('2');
 
@@ -68,7 +69,9 @@ When('電話受付の受注を登録する', async ({ page }) => {
   ]);
   expect(response.status()).toBe(201);
   createdOrderId = (await response.json()).id as string;
-});
+}
+
+When('電話受付の受注を登録する', async ({ page }) => registerPhoneOrder(page));
 
 Then('登録した受注が「対応が要る」群に確定として現れる', async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`), { timeout: 15000 });
@@ -338,7 +341,7 @@ Given('3000ポイントを利用した請求7000円の完了受注がある', as
     headers, data: { delta: 3000, reason: '利用取消の原資', idempotency_key: crypto.randomUUID() },
   });
   expect(adjustment.status()).toBe(200);
-  const input = { customer_id: customerId, cast_id: createdCastId, course_id: courseId,
+  const input = { customer_selection: { mode: 'EXISTING', customer_id: customerId }, cast_id: createdCastId, course_id: courseId,
     business_date: todayInTokyo(), pax: 1, fee_lines: [{ kind: 'DISCOUNT', name: '割引', amount: 2000 }] };
   const preview = await request.post('/api/store/orders/preview', { headers, data: input });
   expect(preview.status()).toBe(200);
@@ -439,4 +442,134 @@ Then('原記録と零の請求報酬が残り新受注へ再提供を記録で�
   expect(replacement.status).toBe('CONFIRMED');
   expect(replacement.total_fee).toBe(12000);
   await cancelOrder(request, token, replacement.id, '検証終了');
+});
+
+let selectedCustomerId: string | null = null;
+When('顧客の選択を {string} にして三種類の受付時連絡先を保存する', async ({ page, request }, mode: string) => {
+  const token = await loginAsStoreAdmin(request);
+  const ledgerName = `選択する顧客-${Date.now()}`;
+  selectedCustomerId = mode === '既存顧客' ? await createCustomer(request, token, ledgerName, '09012345678') : null;
+  await registerPhoneOrder(page, async () => {
+    await page.getByRole('combobox', { name: '顧客の選択' }).click();
+    await page.getByRole('option', { name: mode, exact: true }).click();
+    if (mode === '既存顧客') {
+      await page.getByRole('combobox', { name: '既存顧客の検索' }).click();
+      await page.getByLabel('顧客検索（氏名・電話）').fill(ledgerName);
+      await expect(page.getByRole('option')).toHaveCount(1);
+      await expect(page.getByRole('option', { name: new RegExp(ledgerName) })).toBeVisible();
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('combobox', { name: '既存顧客の検索' })).toContainText(ledgerName);
+    } else if (mode === '新規顧客') {
+      await page.getByLabel('新規顧客名').fill(ledgerName);
+    }
+    await page.getByLabel('電話番号', { exact: true }).fill('090-1234-5678');
+    await page.getByLabel('メール', { exact: true }).fill('Once@EXAMPLE.COM');
+    await page.getByLabel('LINE ID', { exact: true }).fill('once-line');
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.getByLabel('メール', { exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `test-results/create-contact-${mode}-${colorScheme}.png` });
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+  });
+  const saved = await getOrder(request, token, storeId, createdOrderId);
+  expect(saved.contact_snapshot).toEqual({ name: customerName, phone_number: '+819012345678', email: 'Once@example.com', line_id: 'once-line' });
+  if (mode === '顧客未設定') expect(saved.customer_id).toBeNull();
+  else if (mode === '既存顧客') expect(saved.customer_id).toBe(selectedCustomerId);
+  else {
+    expect(saved.customer_id).toBeTruthy();
+    selectedCustomerId = saved.customer_id;
+  }
+});
+
+Then('顧客の選択を保ったまま受付時連絡先だけを編集できる', async ({ page, request }) => {
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await expect(page.getByLabel('メール', { exact: true })).toHaveValue('Once@example.com');
+  await page.getByLabel('メール', { exact: true }).fill('edited@example.com');
+  await page.getByLabel('LINE ID', { exact: true }).fill('編集用の長いLINE表示'.repeat(15));
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.getByText('受付時の連絡先（任意）', { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `test-results/contact-${selectedCustomerId ? 'linked' : 'none'}-${colorScheme}.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.route(`**/api/store/orders/${createdOrderId}/preview`, route => route.abort('failed'), { times: 1 });
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('試算できませんでした');
+  await page.getByRole('button', { name: '入力に戻る', exact: true }).click();
+  await expect(page.getByLabel('メール', { exact: true })).toHaveValue('edited@example.com');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await Promise.all([
+    page.waitForResponse(resp => resp.url().endsWith(`/api/store/orders/${createdOrderId}`) && resp.request().method() === 'PUT'),
+    page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
+  ]);
+  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`));
+  const token = await loginAsStoreAdmin(request);
+  const saved = await getOrder(request, token, storeId, createdOrderId);
+  expect(saved.customer_id).toBe(selectedCustomerId);
+  expect(saved.contact_snapshot.email).toBe('edited@example.com');
+  expect(saved.contact_snapshot.phone_number).toBe('+819012345678');
+});
+
+let guestApplicationId = '';
+When('公開サイトからメールとLINEだけで予約を希望する', async ({ page }) => {
+  await page.goto('/reservation');
+  await page.getByRole('button', { name: 'はい' }).click();
+  await expect(page.getByRole('button', { name: 'はい' })).toBeHidden();
+  await page.getByLabel('お名前', { exact: true }).fill(customerName);
+  await page.getByLabel('メール', { exact: true }).fill('Guest@EXAMPLE.COM');
+  await page.getByLabel('LINE ID', { exact: true }).fill('guest-line');
+  await page.getByLabel('ご希望日', { exact: true }).fill(todayInTokyo());
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByLabel('メール', { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/guest-contact-narrow.png' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  const [response] = await Promise.all([
+    page.waitForResponse(resp => resp.url().endsWith('/order-applications/public') && resp.request().method() === 'POST'),
+    page.getByRole('button', { name: 'この内容で予約を希望する' }).click(),
+  ]);
+  expect(response.status()).toBe(201);
+  guestApplicationId = (await response.json()).id;
+});
+
+Then('受付箱で連絡先を補正して顧客未設定で確定でき原文が残る', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.getByRole('listitem').filter({ hasText: customerName }).getByRole('button', { name: '確定', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('メール', { exact: true })).toHaveValue('Guest@EXAMPLE.COM');
+  await dialog.getByLabel('メール', { exact: true }).fill('corrected@example.com');
+  await dialog.getByRole('combobox', { name: '顧客の選択' }).click();
+  await page.getByRole('option', { name: '顧客未設定', exact: true }).click();
+  await dialog.getByRole('combobox', { name: 'コース', exact: true }).click();
+  await page.getByLabel('コースを検索').fill(courseName);
+  await page.getByRole('option', { name: new RegExp(courseName) }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await dialog.getByLabel('メール', { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `test-results/guest-confirm-${colorScheme}.png` });
+  }
+  await dialog.getByRole('button', { name: '確定する' }).click();
+  const [response] = await Promise.all([
+    page.waitForResponse(resp => resp.url().endsWith('/confirmation') && resp.request().method() === 'POST'),
+    page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
+  ]);
+  expect(response.status()).toBe(201);
+  const order = await response.json();
+  createdOrderId = order.id;
+  expect(order.customer_id).toBeNull();
+  expect(order.contact_snapshot.email).toBe('corrected@example.com');
+  expect(order.contact_snapshot.line_id).toBe('guest-line');
+  const token = await loginAsStoreAdmin(request);
+  const applications = await request.get('/api/store/order-applications?statuses=CONFIRMED&size=2000', {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(applications.status()).toBe(200);
+  const original = (await applications.json()).content.find((row: { id: string }) => row.id === guestApplicationId);
+  expect(original.contact_snapshot.email).toBe('Guest@EXAMPLE.COM');
 });

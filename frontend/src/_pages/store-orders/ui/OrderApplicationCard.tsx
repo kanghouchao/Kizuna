@@ -76,9 +76,9 @@ export function OrderApplicationCard({
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             {/* 名乗りの出所は入口で違う。会員は名乗った名前、ゲストは連絡先の氏名しか持たない */}
-            {application.requester_declared_name || application.contact_name ? (
+            {application.requester_declared_name || application.contact_snapshot?.name ? (
               <span className="text-foreground font-medium">
-                {application.requester_declared_name ?? application.contact_name}
+                {application.requester_declared_name ?? application.contact_snapshot?.name}
               </span>
             ) : (
               <span className="text-muted-foreground">お名前なし</span>
@@ -107,11 +107,17 @@ export function OrderApplicationCard({
             </p>
           )}
           {/* 確定は店舗の折返し連絡を経る操作なので、ゲスト申請では折返し先が行の必須情報になる */}
-          {application.contact_phone_number && (
-            <p className="text-muted-foreground text-xs">
-              連絡先: {application.contact_phone_number}
-            </p>
-          )}
+          {[
+            application.contact_snapshot?.phone_number,
+            application.contact_snapshot?.email,
+            application.contact_snapshot?.line_id,
+          ]
+            .filter(Boolean)
+            .map((value, index) => (
+              <p key={index} className="break-all text-sm text-muted-foreground">
+                連絡先: {value}
+              </p>
+            ))}
           {application.remarks && (
             <p className="text-muted-foreground text-xs">{application.remarks}</p>
           )}

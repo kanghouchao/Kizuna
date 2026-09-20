@@ -182,6 +182,12 @@ public abstract class CrossStoreTestSupport {
 
   protected HttpEntity<String> confirmedRequest(
       String previewPath, String body, HttpHeaders headers) {
+    if (previewPath.equals("/store/orders/preview")) {
+      var input = (ObjectNode) fixtureJson.readTree(body);
+      if (!input.has("customer_selection"))
+        input.putObject("customer_selection").put("mode", "NONE");
+      body = input.toString();
+    }
     var preview = rest.postForEntity(previewPath, new HttpEntity<>(body, headers), JsonNode.class);
     assertThat(preview.getStatusCode())
         .as("前提: 入力を試算できること %s", preview.getBody())
@@ -222,6 +228,12 @@ public abstract class CrossStoreTestSupport {
   /** 試算で拒否された入力は保存せず、確認できた要求だけを送る利用者の操作。 */
   protected ResponseEntity<JsonNode> submitPreviewed(
       String path, HttpMethod method, String previewPath, String body, HttpHeaders headers) {
+    if (previewPath.equals("/store/orders/preview")) {
+      var input = (ObjectNode) fixtureJson.readTree(body);
+      if (!input.has("customer_selection"))
+        input.putObject("customer_selection").put("mode", "NONE");
+      body = input.toString();
+    }
     var preview = rest.postForEntity(previewPath, new HttpEntity<>(body, headers), JsonNode.class);
     if (!preview.getStatusCode().is2xxSuccessful()) return preview;
     var input = (ObjectNode) fixtureJson.readTree(body);

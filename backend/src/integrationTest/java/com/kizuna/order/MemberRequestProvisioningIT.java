@@ -85,6 +85,51 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("会員申請由来の受注は連絡先だけ変更でき、顧客差し替えはできないこと")
+  void memberOrderKeepsIdentityWhileContactCanChange() {
+    Applicant applicant = register("連絡先編集");
+    var confirmed = confirm(request(applicant, STORE_A, "会員の名乗り"), storeHeaders(STORE_A));
+    assertThat(confirmed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    JsonNode order = confirmed.getBody();
+    assertThat(order.path("contact_snapshot").path("name").asString()).isEqualTo("会員の名乗り");
+    String path = "/store/orders/" + order.path("id").asString();
+    String version =
+        "{\"receptionist_id\":"
+            + order.path("receptionist_id").asLong()
+            + ",\"expected_version\":"
+            + order.path("version").asLong();
+    for (String choice :
+        new String[] {
+          "{\"mode\":\"NONE\"}",
+          "{\"mode\":\"NEW\",\"new_customer\":{\"name\":\"差し替え\"}}",
+          "{\"mode\":\"EXISTING\",\"customer_id\":\"" + createCustomer("別人") + "\"}"
+        }) {
+      var denied =
+          rest.postForEntity(
+              path + "/preview",
+              new HttpEntity<>(
+                  version + ",\"customer_selection\":" + choice + "}", storeHeaders(STORE_A)),
+              JsonNode.class);
+      assertThat(denied.getStatusCode())
+          .as("%s", denied.getBody())
+          .isEqualTo(HttpStatus.BAD_REQUEST);
+      assertThat(denied.getBody().path("error").asString()).contains("会員申請の顧客は変更できません");
+    }
+    var changed =
+        submitPreviewed(
+            path,
+            HttpMethod.PUT,
+            path + "/preview",
+            version + ",\"contact_snapshot\":{\"email\":\"once@example.com\"}}",
+            storeHeaders(STORE_A));
+    assertThat(changed.getStatusCode()).as("%s", changed.getBody()).isEqualTo(HttpStatus.OK);
+    assertThat(changed.getBody().path("customer_id")).isEqualTo(order.path("customer_id"));
+    assertThat(changed.getBody().path("contact_snapshot").path("email").asString())
+        .isEqualTo("once@example.com");
+    assertThat(activeLinks(applicant)).hasSize(1);
+  }
+
+  @Test
   @DisplayName("既に有効な関連がある店舗では、確定がその顧客を使い新しい台帳行を作らないこと")
   void confirmationReusesTheEstablishedLink() {
     Applicant applicant = register("再利用");

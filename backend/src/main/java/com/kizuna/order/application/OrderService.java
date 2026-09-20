@@ -1,14 +1,15 @@
 package com.kizuna.order.application;
 
 import com.kizuna.customer.application.CustomerProvisioningService;
-import com.kizuna.customer.application.CustomerReferenceResolver;
 import com.kizuna.customer.application.MemberRequestCustomerInput;
 import com.kizuna.customer.application.NewCustomerInput;
-import com.kizuna.customer.application.StoreCustomerInput;
+import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.api.dto.ContactSnapshotRequest;
+import com.kizuna.order.api.dto.CustomerSelectionRequest;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
@@ -18,6 +19,7 @@ import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCompletionRequest;
 import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderCustomerCandidateResponse;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
@@ -25,6 +27,7 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
+import com.kizuna.order.domain.ContactSnapshot;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderApplication;
@@ -53,8 +56,10 @@ import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.ReceptionistEligibilityService;
+import jakarta.persistence.criteria.Predicate;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -66,7 +71,12 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,7 +95,6 @@ public class OrderService {
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
-  private final CustomerReferenceResolver customerReferenceResolver;
   private final CustomerProvisioningService customerProvisioningService;
   private final NominatableCastLookup nominatableCast;
 
@@ -254,7 +263,8 @@ public class OrderService {
             true);
     order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
 
-    handleCustomerLinking(request, order);
+    order.linkCustomer(selectCustomer(request.getCustomerSelection(), true));
+    order.replaceContact(snapshot(request.getContactSnapshot()));
     calculated.linkCustomer(order.getCustomerId());
     calculation.verify(
         request.getConfirmationToken(),
@@ -293,7 +303,7 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public OrderWorkQueueResponse update(String id, OrderUpdateRequest request) {
+  public OrderResponse update(String id, OrderUpdateRequest request) {
     specialServices.lock();
     Order order =
         orderRepository
@@ -320,11 +330,11 @@ public class OrderService {
         receptionistId,
         calculation.wasPreviewed("UPDATE", id, request, request.getConfirmationToken()));
 
-    // 連絡先の訂正も書き換えより先に判定させる。顧客が着いた受注では集約が撥ねる（黙って捨てない）。
-    // 送られなかった要求で呼ばないのは、顧客が着いた受注の他項目の編集まで巻き添えで撥ねないため。
-    if (request.getContactName() != null || request.getContactPhoneNumber() != null) {
-      order.correctContact(request.getContactName(), request.getContactPhoneNumber());
-    }
+    validateEditableCustomer(order, request.getCustomerSelection());
+    if (request.getCustomerSelection() != null)
+      order.linkCustomer(selectCustomer(request.getCustomerSelection(), true));
+    if (request.getContactSnapshot() != null)
+      order.replaceContact(snapshot(request.getContactSnapshot()));
 
     // 非nullフィールドのみをドメインの部分更新コマンドとして適用
     var course =
@@ -363,7 +373,7 @@ public class OrderService {
     specialServices.resolve(order, previousSpecials, previousTotal, previousCast);
     Order saved = orderRepository.save(order);
     orderRepository.flush();
-    return toWorkQueueResponse(saved.getId());
+    return toResponse(saved);
   }
 
   /**
@@ -413,8 +423,7 @@ public class OrderService {
         .status(view.getStatus() == null ? null : view.getStatus().name())
         .requesterMemberCode(view.getRequesterMemberCode())
         .requesterDeclaredName(view.getRequesterDeclaredName())
-        .contactName(view.getContactName())
-        .contactPhoneNumber(view.getContactPhoneNumber())
+        .contactSnapshot(view.getContactSnapshot())
         .orderId(view.getOrderId())
         .declinedReason(view.getDeclinedReason())
         .expired(
@@ -511,7 +520,7 @@ public class OrderService {
       eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
     }
     if (application.isGuest()) {
-      linkCustomerChosenByStaff(order, application, request);
+      order.linkCustomer(selectCustomer(request.getCustomerSelection(), true));
     } else if (application.getRequesterMemberId() != null) {
       // 申請者の会員 ID が欠落した申請（会員行の削除後）は整える先が無いため、顧客未設定のまま成立させる
       // （無帰属受注は正規の状態）。
@@ -523,6 +532,17 @@ public class OrderService {
                   application.getRequesterDeclaredName(),
                   actorId)));
     }
+    order.replaceContact(
+        request.getContactSnapshot() != null
+            ? snapshot(request.getContactSnapshot())
+            : application.isGuest()
+                ? ContactSnapshot.normalize(
+                    application.getContactName(),
+                    application.getContactPhoneNumber(),
+                    application.getContactEmail(),
+                    application.getContactLineId())
+                : ContactSnapshot.normalize(
+                    application.getRequesterDeclaredName(), null, null, null));
     calculated.linkCustomer(order.getCustomerId());
     calculation.verify(
         request.getConfirmationToken(),
@@ -533,47 +553,12 @@ public class OrderService {
     return toResponse(saved);
   }
 
-  /**
-   * 確定要求が名乗る顧客の選択を検める。書き換えより先に済ませる。
-   *
-   * <p>会員申請では受け付けない。会員の顧客は「今の関連」だけが決める一本道であり（ADR 0008）、店員が別の行を 選べると完了時のポイントが別会員へ積まれる。
-   */
-  private static void validateCustomerChoice(
+  private void validateCustomerChoice(
       OrderApplication application, OrderApplicationConfirmationRequest request) {
-    boolean choosesExisting = request.getCustomerId() != null && !request.getCustomerId().isBlank();
-    boolean createsNew = request.getNewCustomer() != null;
-    if (!application.isGuest() && (choosesExisting || createsNew)) {
+    if (!application.isGuest() && request.getCustomerSelection() != null)
       throw new ServiceException("会員の申請では顧客を選べません。顧客は会員の紐づけから決まります");
-    }
-    if (choosesExisting && createsNew) {
-      throw new ServiceException("既存の顧客と新規作成のどちらか一方を選んでください");
-    }
-  }
-
-  /**
-   * ゲスト申請の受注が着く当店の顧客を、店員の判断のまま決める。既存の行を名指すか新しく起こすかの二択で、 どちらも無ければ顧客未設定のまま成立させ、申請の連絡先を受注側へ写す
-   * （写さないと折返し先がどこにも残らない）。
-   *
-   * <p>電話番号での自動照合は行わない（ADR 0009）— 同店同号は正規に起こりうるうえ、一致行に会員関連付きの行があり得る以上、 機械が 1
-   * 行を選ぶことが誤帰属・なりすましの入口になる。この判断の根拠を述べるのはここだけで、他の層は繰り返さない。
-   */
-  private void linkCustomerChosenByStaff(
-      Order order, OrderApplication application, OrderApplicationConfirmationRequest request) {
-    if (request.getCustomerId() != null && !request.getCustomerId().isBlank()) {
-      // 既存の行へ着ける ID は顧客参照の解決口から得る。書く直前に対象の行を押さえ、
-      // 取得できない顧客（不在・他店舗・墓標）はそこで 404 になる。
-      order.linkCustomer(customerReferenceResolver.resolveForWrite(request.getCustomerId()));
-      return;
-    }
-    if (request.getNewCustomer() != null) {
-      order.linkCustomer(
-          customerProvisioningService.createCustomer(
-              new NewCustomerInput(
-                  request.getNewCustomer().getName(), request.getNewCustomer().getPhoneNumber())));
-      return;
-    }
-    order.recordContactIfUnlinked(
-        application.getContactName(), application.getContactPhoneNumber());
+    if (application.isGuest()) selectCustomer(request.getCustomerSelection(), false);
+    if (request.getContactSnapshot() != null) snapshot(request.getContactSnapshot());
   }
 
   /** 会計と会員への帰属を同一トランザクションで確定する。汎用更新からは完了へ遷移させない。 会員に達しない受注では、事後帰属の所持証明となる伝票トークンを発行して生値を返す。 */
@@ -697,8 +682,7 @@ public class OrderService {
         .findForUpdate(storeContext.getStoreId(), request.getCastId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
     resolveReceptionist(request.getReceptionistId(), actor);
-    if (request.getCustomerId() != null)
-      customerReferenceResolver.resolveForWrite(request.getCustomerId());
+    snapshot(request.getContactSnapshot());
     var course = calculation.current(request.getCourseId(), false);
     var calculated =
         calculation.calculate(
@@ -708,7 +692,7 @@ public class OrderService {
             specialServices.select(
                 null, request.getCastId(), request.getSpecialServiceIds(), false),
             false);
-    String customerId = previewCustomer(request);
+    String customerId = selectCustomer(request.getCustomerSelection(), false);
     calculated.linkCustomer(customerId);
     return calculation.preview("CREATE", "", request, calculated, completionPoints(calculated, 0));
   }
@@ -734,8 +718,7 @@ public class OrderService {
         throw new ServiceException("確定シフトがありません");
     }
     if (request.getReceptionistId() != null) validateReceptionist(request.getReceptionistId());
-    if (request.getCustomerId() != null)
-      customerReferenceResolver.resolveForWrite(request.getCustomerId());
+    snapshot(request.getContactSnapshot());
     var course = calculation.current(request.getCourseId(), false);
     var calculated =
         calculation.calculate(
@@ -756,9 +739,7 @@ public class OrderService {
               false);
     } else {
       calculated.linkCustomer(
-          request.getCustomerId() == null
-              ? null
-              : customerReferenceResolver.resolveForWrite(request.getCustomerId()));
+          application.isGuest() ? selectCustomer(request.getCustomerSelection(), false) : null);
       points = completionPoints(calculated, 0);
     }
     return calculation.preview("CONFIRM", id, request, calculated, points);
@@ -811,9 +792,8 @@ public class OrderService {
     String castId =
         request.getCastId() == null || request.getCastId().isBlank() ? null : request.getCastId();
     validateUpdateAssignments(order, castId, request.getReceptionistId(), false);
-    if (request.getContactName() != null || request.getContactPhoneNumber() != null) {
-      if (order.getCustomerId() != null) throw new ServiceException("顧客が設定された受注の連絡先は変更できません");
-    }
+    validateEditableCustomer(order, request.getCustomerSelection());
+    if (request.getContactSnapshot() != null) snapshot(request.getContactSnapshot());
     var course =
         request.getCourseId() == null
             ? order.getCourse()
@@ -825,6 +805,8 @@ public class OrderService {
             request.getFeeLines(),
             specialServices.select(order, castId, request.getSpecialServiceIds(), false),
             false);
+    if (request.getCustomerSelection() != null)
+      calculated.linkCustomer(selectCustomer(request.getCustomerSelection(), false));
     return calculation.preview("UPDATE", id, request, calculated, completionPoints(calculated, 0));
   }
 
@@ -848,14 +830,82 @@ public class OrderService {
     return calculation.preview("COMPLETE", id, request, calculated, points);
   }
 
-  private String previewCustomer(OrderCreateRequest request) {
-    if (request.getCustomerId() != null && !request.getCustomerId().isEmpty())
-      return customerReferenceResolver.resolveForWrite(request.getCustomerId());
-    if (request.getPhoneNumber() == null || request.getPhoneNumber().isEmpty()) return null;
-    var matches =
-        customerRepository.findAliveIdsByPhoneNumberAndStoreId(
-            request.getPhoneNumber(), storeContext.getStoreId());
-    return matches.size() == 1 ? matches.getFirst() : null;
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public CursorPage<OrderCustomerCandidateResponse> customerCandidates(
+      String search, String cursor, int size) {
+    if (size < 1 || size > 100 || (cursor != null && !cursor.matches("[0-9]{1,64}")))
+      throw new ServiceException("検索の件数またはカーソルを確認してください");
+    Specification<Customer> spec =
+        (root, query, cb) -> {
+          var predicates = new ArrayList<Predicate>();
+          predicates.add(cb.isNull(root.get("mergedIntoId")));
+          if (cursor != null) predicates.add(cb.greaterThan(root.get("id"), cursor));
+          if (search != null && !search.isBlank()) {
+            String term =
+                "%" + search.strip().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+            predicates.add(
+                cb.or(
+                    cb.like(root.get("name"), term, '!'),
+                    cb.like(root.get("phoneNumber"), term, '!'),
+                    cb.like(root.get("phoneNumber2"), term, '!')));
+          }
+          return cb.and(predicates.toArray(Predicate[]::new));
+        };
+    var rows =
+        customerRepository
+            .findAll(spec, PageRequest.of(0, size + 1, Sort.by("id")))
+            .getContent()
+            .stream()
+            .map(
+                c -> new OrderCustomerCandidateResponse(c.getId(), c.getName(), c.getPhoneNumber()))
+            .toList();
+    return CursorPage.of(rows, size, OrderCustomerCandidateResponse::id);
+  }
+
+  private static ContactSnapshot snapshot(ContactSnapshotRequest input) {
+    return input == null ? ContactSnapshot.empty() : input.normalized();
+  }
+
+  private void validateEditableCustomer(Order order, CustomerSelectionRequest selection) {
+    if (selection == null) return;
+    selection.validate();
+    if (order.getRequesterMemberCode() != null
+        && (selection.mode() == CustomerSelectionRequest.Mode.NEW
+            || !Objects.equals(order.getCustomerId(), selection.customerId())))
+      throw new ServiceException("会員申請の顧客は変更できません");
+  }
+
+  private String selectCustomer(CustomerSelectionRequest selection, boolean create) {
+    if (selection == null) throw new ServiceException("顧客の選択方法を指定してください");
+    selection.validate();
+    return switch (selection.mode()) {
+      case NONE -> null;
+      case NEW -> {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+            || authentication.getAuthorities().stream()
+                .noneMatch(a -> a.getAuthority().equals("PERM_CUSTOMER_MANAGE")))
+          throw new AccessDeniedException("顧客の新規登録には顧客管理権限が必要です");
+        yield create
+            ? customerProvisioningService.createCustomer(
+                new NewCustomerInput(selection.newCustomer().name()))
+            : null;
+      }
+      case EXISTING -> {
+        // 受注を保持する編集と顧客統合のロック順序が逆になるため、顧客の取得では待たない。
+        try {
+          var customer =
+              customerRepository
+                  .findByIdForUpdateNoWait(selection.customerId())
+                  .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+          if (customer.getMergedIntoId() != null) throw new NotFoundException("顧客が見つかりません");
+          yield customer.getId();
+        } catch (CannotAcquireLockException ex) {
+          throw new ConflictException("顧客情報が変更中です。入力を保持して再試算してください");
+        }
+      }
+    };
   }
 
   /** 受注行を保持したまま顧客行を待つと、顧客から受注へ進む統合と循環するため、競合時は巻き戻す。 */
@@ -1028,24 +1078,5 @@ public class OrderService {
                     .displayName(candidate.displayName())
                     .build())
         .toList();
-  }
-
-  private void handleCustomerLinking(OrderCreateRequest req, Order order) {
-    customerProvisioningService
-        .resolveStoreCustomer(
-            new StoreCustomerInput(
-                req.getCustomerId(),
-                req.getCustomerName(),
-                req.getPhoneNumber(),
-                req.getPhoneNumber2(),
-                req.getAddress(),
-                req.getBuildingName(),
-                req.getLandmark(),
-                req.getClassification(),
-                req.getHasPet(),
-                req.getNgType(),
-                req.getNgContent()))
-        .ifPresent(order::linkCustomer);
-    order.recordContactIfUnlinked(req.getCustomerName(), req.getPhoneNumber());
   }
 }

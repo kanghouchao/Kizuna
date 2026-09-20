@@ -13,6 +13,7 @@ import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCorrectionRequest;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderCustomerCandidateResponse;
 import com.kizuna.order.api.dto.OrderPointRollbackPreviewResponse;
 import com.kizuna.order.api.dto.OrderPointRollbackRequest;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
@@ -139,6 +140,15 @@ public class OrderController {
       boolean descending) {
     String search = (customerName == null || customerName.isBlank()) ? null : customerName.trim();
     return new OrderQueryCriteria(statuses, search, businessDate, sortKey, descending);
+  }
+
+  @GetMapping("/customer-candidates")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public CursorPage<OrderCustomerCandidateResponse> customerCandidates(
+      @RequestParam(required = false) String search,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return orderService.customerCandidates(search, cursor, size);
   }
 
   @GetMapping("/{id}")
@@ -358,7 +368,7 @@ public class OrderController {
    */
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderWorkQueueResponse> update(
+  public ResponseEntity<OrderResponse> update(
       @PathVariable String id, @Valid @RequestBody OrderUpdateRequest request) {
     return ResponseEntity.ok(orderService.update(id, request));
   }

@@ -1,9 +1,7 @@
 package com.kizuna.customer.application;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.customer.domain.Customer;
@@ -26,34 +24,6 @@ class CustomerProvisioningServiceTest {
   @Mock CustomerReferenceResolver resolver;
   @Mock StoreContext storeContext;
   @InjectMocks CustomerProvisioningService service;
-
-  @Test
-  void storeCreationPreservesEveryInputField() {
-    when(storeContext.getStoreId()).thenReturn(7L);
-    when(customers.save(any()))
-        .thenAnswer(
-            invocation -> {
-              Customer customer = invocation.getArgument(0);
-              assertThat(customer.getName()).isEqualTo("氏名");
-              assertThat(customer.getPhoneNumber()).isEqualTo("0901");
-              assertThat(customer.getPhoneNumber2()).isEqualTo("0902");
-              assertThat(customer.getAddress()).isEqualTo("住所");
-              assertThat(customer.getBuildingName()).isEqualTo("建物");
-              assertThat(customer.getLandmark()).isEqualTo("目印");
-              assertThat(customer.getClassification()).isEqualTo("区分");
-              assertThat(customer.getHasPet()).isTrue();
-              assertThat(customer.getNgType()).isEqualTo("種別");
-              assertThat(customer.getNgContent()).isEqualTo("内容");
-              customer.setId("new");
-              return customer;
-            });
-    assertThat(
-            service.resolveStoreCustomer(
-                new StoreCustomerInput(
-                    null, "氏名", "0901", "0902", "住所", "建物", "目印", "区分", true, "種別", "内容")))
-        .contains("new");
-    verifyNoInteractions(resolver);
-  }
 
   @Test
   void translatesOnlyTheActiveMemberConstraint() {

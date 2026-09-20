@@ -45,7 +45,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
     String survivor =
         post("/store/customers", Map.of("name", "統合先"), headers).getBody().path("id").asString();
     var input = input(headers);
-    input.put("customer_id", customer);
+    input.put("customer_selection", Map.of("mode", "EXISTING", "customer_id", customer));
     var saved =
         save(
                 "/store/orders",
@@ -117,7 +117,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
         "delete from t_members where id = (select member_id from t_customer_member_links where customer_id = ?)",
         customer);
     var input = input(headers);
-    input.put("customer_id", customer);
+    input.put("customer_selection", Map.of("mode", "EXISTING", "customer_id", customer));
     var preview = post("/store/orders/preview", input, headers);
     assertNoMember(preview);
     var saved = save("/store/orders", input, preview.getBody(), headers).getBody();
@@ -414,7 +414,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
     String customer = linkedCustomer(headers);
     adjustPoints(customer, 5000, headers);
     var input = input(headers);
-    input.put("customer_id", customer);
+    input.put("customer_selection", Map.of("mode", "EXISTING", "customer_id", customer));
     input.put("business_date", "2026-09-14");
     var surcharge = service(headers, "SURCHARGE", 3000, 0);
     input.put(
@@ -465,7 +465,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
     var headers = managerHeaders(STORE_A);
     String customer = linkedCustomer(headers);
     var input = input(headers);
-    input.put("customer_id", customer);
+    input.put("customer_selection", Map.of("mode", "EXISTING", "customer_id", customer));
     var first = post("/store/orders/preview", input, headers).getBody();
     assertThat(
             rest.exchange(
@@ -511,7 +511,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
     String customer = linkedCustomer(headers);
     adjustPoints(customer, 3000, headers);
     var input = input(headers);
-    input.put("customer_id", customer);
+    input.put("customer_selection", Map.of("mode", "EXISTING", "customer_id", customer));
     var saved =
         save(
                 "/store/orders",
@@ -541,7 +541,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
     String customer = linkedCustomer(headers);
     adjustPoints(customer, 5000, headers);
     var input = input(headers);
-    input.put("customer_id", customer);
+    input.put("customer_selection", Map.of("mode", "EXISTING", "customer_id", customer));
     var saved =
         save(
                 "/store/orders",
@@ -618,6 +618,8 @@ class OrderExtrasIT extends CrossStoreTestSupport {
     var cast = post("/store/casts", Map.of("name", "延長担当"), headers).getBody();
     return new HashMap<>(
         Map.of(
+            "customer_selection",
+            Map.of("mode", "NONE"),
             "business_date",
             "2027-01-20",
             "cast_id",

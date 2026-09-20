@@ -34,8 +34,12 @@ describe('GuestReservationSection', () => {
       expect.objectContaining({
         business_date: '2026-08-25',
         pax: 3,
-        contact_name: 'ゲスト花子',
-        contact_phone_number: '09000000000',
+        contact_snapshot: {
+          name: 'ゲスト花子',
+          phone_number: '09000000000',
+          email: '',
+          line_id: '',
+        },
       })
     );
   });
@@ -53,6 +57,25 @@ describe('GuestReservationSection', () => {
     expect(screen.queryByLabelText('お名前')).not.toBeInTheDocument();
   });
 
+  it('電話なしでメールだけの申請を送信できる', async () => {
+    jest.mocked(guestOrderApplicationApi.request).mockResolvedValue({ id: 'email-only' });
+    render(<GuestReservationSection />);
+    fireEvent.change(screen.getByLabelText('お名前'), { target: { value: 'メールの来客' } });
+    fireEvent.change(screen.getByLabelText('ご希望日'), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByLabelText('メール'), { target: { value: 'guest@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'この内容で予約を希望する' }));
+    await waitFor(() =>
+      expect(guestOrderApplicationApi.request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contact_snapshot: expect.objectContaining({
+            email: 'guest@example.com',
+            phone_number: '',
+          }),
+        })
+      )
+    );
+  });
+
   it('連絡先が欠けたままでは送らず、欄の傍で理由を述べる', async () => {
     render(<GuestReservationSection />);
     fireEvent.change(screen.getByLabelText('ご希望日'), { target: { value: '2026-08-25' } });
@@ -60,7 +83,7 @@ describe('GuestReservationSection', () => {
 
     // 折返し先の無い申請は店舗が処理しようがない
     expect(await screen.findByText('お名前をご入力ください')).toBeInTheDocument();
-    expect(screen.getByText('お電話番号をご入力ください')).toBeInTheDocument();
+    expect(guestOrderApplicationApi.request).not.toHaveBeenCalled();
     expect(mockedRequest).not.toHaveBeenCalled();
   });
 

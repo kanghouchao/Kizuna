@@ -1,5 +1,6 @@
 import type {
   CourseCandidate,
+  OrderCustomerCandidate,
   OrderCorrectionHistoryEntry,
   PlatformOrder,
   SurchargeCandidate,
@@ -71,6 +72,12 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 }
 
 export const orderApi = {
+  customerCandidates: async (search: string, cursor?: string) => {
+    const response = await apiClient.get('/store/orders/customer-candidates', {
+      params: { search, cursor, size: 20 },
+    });
+    return fromCursorPage<OrderCustomerCandidate>(response.data);
+  },
   invalidateCompletion: async (
     id: string,
     request: { expected_version: number; reason: string }
@@ -188,7 +195,7 @@ export const orderApi = {
    * 既に設定済みの指名・受付担当だけは例外で、直していなくても毎回運ぶこと — 省略すると「外す」と
    * 区別できないため 400 になる。
    */
-  update: async (id: string | undefined, data: OrderUpdateRequest): Promise<OrderWorkQueueRow> => {
+  update: async (id: string | undefined, data: OrderUpdateRequest): Promise<Order> => {
     const response = await apiClient.put(`/store/orders/${requireId(id, '受注')}`, data);
     return response.data;
   },

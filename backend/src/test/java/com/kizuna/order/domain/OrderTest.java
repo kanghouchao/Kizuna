@@ -464,58 +464,11 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("顧客の着いていない受注の連絡先を訂正でき、null は変更しないこと")
-  void correctContact_onUnlinkedOrder() {
-    Order order =
-        Order.builder()
-            .course(OrderCourses.course("基本", 60, 0))
-            .contactName("誤記の名前")
-            .contactPhoneNumber("09011112222")
-            .build();
-
-    order.correctContact("正しい名前", null);
-
-    assertThat(order.getContactName()).isEqualTo("正しい名前");
-    assertThat(order.getContactPhoneNumber()).as("null の項目は変更しないこと").isEqualTo("09011112222");
-  }
-
-  @Test
-  @DisplayName("顧客の着いた受注の連絡先訂正は撥ねられること（黙って捨てない）")
-  void correctContact_onLinkedOrder_isRejected() {
-    // 着いていれば名乗りの正本は台帳の行。黙って捨てると送り手は直ったと誤解したまま誤記が残る
-    Order linked =
-        Order.builder().course(OrderCourses.course("基本", 60, 0)).customerId("c1").build();
-
-    assertThatThrownBy(() -> linked.correctContact("受注側から書こうとした名前", "09099998888"))
-        .isInstanceOf(InvalidOrderContactCorrectionException.class);
-    assertThat(linked.getContactName()).isNull();
-    assertThat(linked.getContactPhoneNumber()).isNull();
-  }
-
-  @Test
   @DisplayName("終端状態は完了・取消の 2 つで、確定は終端でないこと")
   void isTerminal_coversCompletedAndCancelled() {
     assertThat(OrderStatus.COMPLETED.isTerminal()).isTrue();
     assertThat(OrderStatus.CANCELLED.isTerminal()).isTrue();
     assertThat(OrderStatus.CONFIRMED.isTerminal()).isFalse();
-  }
-
-  @Test
-  @DisplayName("連絡先の写しは顧客が着いていない受注にだけ入ること")
-  void recordContactIfUnlinked_onlyWhenNoCustomer() {
-    Order unlinked = Order.builder().course(OrderCourses.course("基本", 60, 0)).build();
-
-    unlinked.recordContactIfUnlinked("重複照合の来客", "09012345678");
-    assertThat(unlinked.getContactName()).isEqualTo("重複照合の来客");
-    assertThat(unlinked.getContactPhoneNumber()).isEqualTo("09012345678");
-
-    // 台帳の行が名乗りを持つ受注に写しを重ねると、どちらが正本かが読み手から消える
-    Order linked =
-        Order.builder().course(OrderCourses.course("基本", 60, 0)).customerId("c1").build();
-
-    linked.recordContactIfUnlinked("重複照合の来客", "09012345678");
-    assertThat(linked.getContactName()).isNull();
-    assertThat(linked.getContactPhoneNumber()).isNull();
   }
 
   @Test

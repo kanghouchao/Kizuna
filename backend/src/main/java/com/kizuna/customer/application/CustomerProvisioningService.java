@@ -11,7 +11,6 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,43 +27,6 @@ public class CustomerProvisioningService {
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerReferenceResolver customerReferenceResolver;
   private final StoreContext storeContext;
-
-  @StoreScopeExempt(reason = "MANDATORY で呼出元の店舗境界とトランザクションに参加する")
-  @Transactional(propagation = Propagation.MANDATORY)
-  public Optional<String> resolveStoreCustomer(StoreCustomerInput input) {
-    if (input.customerId() != null && !input.customerId().isEmpty()) {
-      return Optional.of(customerReferenceResolver.resolveForWrite(input.customerId()));
-    }
-    if (input.phoneNumber() == null || input.phoneNumber().isEmpty()) {
-      return Optional.empty();
-    }
-    List<String> matched =
-        customerRepository.findAliveIdsByPhoneNumberAndStoreId(
-            input.phoneNumber(), storeContext.getStoreId());
-    if (matched.size() == 1) {
-      return Optional.of(customerReferenceResolver.resolveForWrite(matched.getFirst()));
-    }
-    // 同店同号は正規に存在するため、複数一致から一人を選ぶと誤帰属になる。
-    if (!matched.isEmpty()) {
-      return Optional.empty();
-    }
-    return Optional.of(
-        customerRepository
-            .save(
-                Customer.builder()
-                    .name(input.name())
-                    .phoneNumber(input.phoneNumber())
-                    .phoneNumber2(input.phoneNumber2())
-                    .address(input.address())
-                    .buildingName(input.buildingName())
-                    .landmark(input.landmark())
-                    .classification(input.classification())
-                    .hasPet(input.hasPet())
-                    .ngType(input.ngType())
-                    .ngContent(input.ngContent())
-                    .build())
-            .getId());
-  }
 
   @StoreScopeExempt(reason = "MANDATORY で呼出元の店舗境界とトランザクションに参加する")
   @Transactional(propagation = Propagation.MANDATORY)
@@ -101,8 +63,6 @@ public class CustomerProvisioningService {
   @StoreScopeExempt(reason = "MANDATORY で呼出元の店舗境界とトランザクションに参加する")
   @Transactional(propagation = Propagation.MANDATORY)
   public String createCustomer(NewCustomerInput input) {
-    return customerRepository
-        .save(Customer.builder().name(input.name()).phoneNumber(input.phoneNumber()).build())
-        .getId();
+    return customerRepository.save(Customer.builder().name(input.name()).build()).getId();
   }
 }

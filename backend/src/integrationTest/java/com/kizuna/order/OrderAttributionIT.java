@@ -218,7 +218,11 @@ class OrderAttributionIT extends CrossStoreTestSupport {
             + "\", \"cast_id\": \""
             + castId
             + "\""
-            + (customerId == null ? "" : ", \"customer_id\": \"" + customerId + "\"")
+            + (customerId == null
+                ? ""
+                : ", \"customer_selection\": {\"mode\":\"EXISTING\",\"customer_id\": \""
+                    + customerId
+                    + "\"}")
             + ", \"remarks\": \""
             + remarks
             + "\"}";

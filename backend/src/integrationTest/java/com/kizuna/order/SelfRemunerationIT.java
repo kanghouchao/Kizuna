@@ -395,7 +395,7 @@ class SelfRemunerationIT extends CrossStoreTestSupport {
     assertThat(course.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     String body =
         """
-        {"business_date":"%s","cast_id":"%s","course_id":"%s","customer_name":"秘密顧客","remarks":"非公開備考"}
+        {"business_date":"%s","cast_id":"%s","course_id":"%s","customer_selection":{"mode":"NONE"},"contact_snapshot":{"name":"秘密顧客"},"remarks":"非公開備考"}
         """
             .formatted(
                 LocalDate.now(), owner.enrollmentId(), course.getBody().path("id").asString());

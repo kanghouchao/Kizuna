@@ -148,7 +148,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
   @Test
   @DisplayName("作成も同じ入力を同じ 400 で撥ねること（更新だけ直すと同じ値が口によって 400 と 500 に割れる）")
   void createRejectsTheSameOverlongTextsAsUpdate() {
-    // 作成の住所は派遣先と顧客台帳の 2 つへ入るが、上限はどちらも 500 で一致する
+    // 派遣先の住所は列の上限で検証する
     ResponseEntity<JsonNode> longAddress =
         createOrder(body -> body.field("address", "\"" + "あ".repeat(501) + "\""));
     assertThat(longAddress.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -158,43 +158,49 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
         createOrder(body -> body.field("carrier", "\"" + "あ".repeat(101) + "\""));
     assertThat(longCarrier.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
-    // 台帳だけへ入る項目も同じ扱い。溢れは顧客行の挿入で起きるため、契約で撥ねないと受注の口からは
-    // 「受注の作成が 500 で落ちた」としか見えない
-    ResponseEntity<JsonNode> longLandmark =
+    ResponseEntity<JsonNode> longName =
         createOrder(
-            body ->
-                body.field("phone_number", "\"0901111" + (nonce % 10000) + "\"")
-                    .field("landmark", "\"" + "あ".repeat(256) + "\""));
-    assertThat(longLandmark.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            body -> body.field("contact_snapshot", "{\"name\":\"" + "あ".repeat(256) + "\"}"));
+    assertThat(longName.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   @Test
   @DisplayName("顧客の着いていない受注の連絡先を訂正できること")
   void updateCorrectsTheContactOfAnUnlinkedOrder() {
-    // 電話番号を送らなければ台帳照合は起きず、録入した連絡先が受注側の写しとして残る
-    String orderId = orderId(createOrder(body -> body.field("customer_name", "\"誤記の名前\"")));
+    String orderId =
+        orderId(
+            createOrder(body -> body.field("contact_snapshot", "{\"name\":" + "\"誤記の名前\"" + "}")));
 
     ResponseEntity<JsonNode> corrected =
-        update(orderId, "{\"contact_name\": \"正しい名前\", \"contact_phone_number\": \"09099998888\"}");
+        update(
+            orderId,
+            "{\"contact_snapshot\":{\"name\": \"正しい名前\", \"phone_number\": \"09099998888\"}}");
 
     assertThat(corrected.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(corrected.getBody().path("contact_name").asString()).isEqualTo("正しい名前");
-    assertThat(corrected.getBody().path("contact_phone_number").asString())
-        .isEqualTo("09099998888");
+    assertThat(corrected.getBody().path("contact_snapshot").path("name").asString())
+        .isEqualTo("正しい名前");
+    assertThat(corrected.getBody().path("contact_snapshot").path("phone_number").asString())
+        .isEqualTo("+819099998888");
   }
 
   @Test
-  @DisplayName("顧客が着いた受注へ連絡先を送ると明示的に撥ねられること")
-  void updateRejectsContactCorrectionOnALinkedOrder() {
+  @DisplayName("顧客が着いた受注でも受付時の連絡先を訂正できること")
+  void updateAllowsContactCorrectionOnALinkedOrder() {
     String customerId = createCustomer("連絡先訂正拒否");
     String orderId =
-        orderId(createOrder(body -> body.field("customer_id", "\"" + customerId + "\"")));
+        orderId(
+            createOrder(
+                body ->
+                    body.field(
+                        "customer_selection",
+                        "{\"mode\":\"EXISTING\",\"customer_id\":\"" + customerId + "\"}")));
 
-    ResponseEntity<JsonNode> rejected = update(orderId, "{\"contact_name\": \"受注側から書こうとした名前\"}");
+    ResponseEntity<JsonNode> rejected =
+        update(orderId, "{\"contact_snapshot\":{\"name\": \"受注側の名乗り\"}}");
 
-    // 黙って捨てると送り手は直ったと誤解したまま台帳の誤記が残る
-    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(rejected.getBody().path("error").asString()).contains("連絡先は変更できません");
+    assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(rejected.getBody().path("contact_snapshot").path("name").asString())
+        .isEqualTo("受注側の名乗り");
   }
 
   @Test
@@ -337,9 +343,11 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
         orderId(
             createOrder(
                 body ->
-                    body.field("customer_name", "\"" + unique + "\"")
+                    body.field("contact_snapshot", "{\"name\":" + "\"" + unique + "\"" + "}")
                         .field("business_date", "\"" + day + "\"")));
-    String other = orderId(createOrder(body -> body.field("customer_name", "\"無関係の客\"")));
+    String other =
+        orderId(
+            createOrder(body -> body.field("contact_snapshot", "{\"name\":" + "\"無関係の客\"" + "}")));
 
     List<String> byName =
         idsOf(workQueue("statuses=CONFIRMED&size=2000&customer_name=" + unique.substring(0, 6)));
@@ -374,8 +382,8 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
 
     // null の項目はキーごと応答から消えるため、欠落は has() で見る（isNull() は欠落に対して偽）
     JsonNode row = orderJson(orderId);
-    assertThat(row.has("customer_name")).as("前提: 台帳の顧客名を持たないこと").isFalse();
-    assertThat(row.has("contact_name")).as("前提: 録入された連絡先も持たないこと").isFalse();
+    assertThat(row.hasNonNull("customer_name")).as("前提: 台帳の顧客名を持たないこと").isFalse();
+    assertThat(row.path("contact_snapshot").path("name").isNull()).isTrue();
     // 呼び名を出せなければ、作業キューでは「お客様名なし」としか名乗れない
     assertThat(row.path("requester_declared_name").asString()).isEqualTo(declared);
   }
@@ -389,10 +397,15 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     String withPax =
         orderId(
             createOrder(
-                body -> body.field("customer_name", "\"" + unique + "\"").field("pax", "2")));
+                body ->
+                    body.field("contact_snapshot", "{\"name\":" + "\"" + unique + "\"" + "}")
+                        .field("pax", "2")));
     String withoutPax =
         orderId(
-            createOrder(body -> body.field("customer_name", "\"" + unique + "\"").without("pax")));
+            createOrder(
+                body ->
+                    body.field("contact_snapshot", "{\"name\":" + "\"" + unique + "\"" + "}")
+                        .without("pax")));
 
     String query = "statuses=CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=1";
     JsonNode first = workQueue(query);
@@ -417,7 +430,7 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
           orderId(
               createOrder(
                   body ->
-                      body.field("customer_name", "\"" + unique + "\"")
+                      body.field("contact_snapshot", "{\"name\":" + "\"" + unique + "\"" + "}")
                           .field("pax", String.valueOf(value)))));
     }
 
@@ -441,11 +454,15 @@ class OrderLifecycleIT extends CrossStoreTestSupport {
     String small =
         orderId(
             createOrder(
-                body -> body.field("customer_name", "\"" + unique + "\"").field("pax", "1")));
+                body ->
+                    body.field("contact_snapshot", "{\"name\":" + "\"" + unique + "\"" + "}")
+                        .field("pax", "1")));
     String large =
         orderId(
             createOrder(
-                body -> body.field("customer_name", "\"" + unique + "\"").field("pax", "9")));
+                body ->
+                    body.field("contact_snapshot", "{\"name\":" + "\"" + unique + "\"" + "}")
+                        .field("pax", "9")));
 
     String base = "statuses=CONFIRMED&sort_key=PAX&customer_name=" + unique + "&size=2000";
     assertThat(idsOf(workQueue(base + "&desc=false"))).containsExactly(small, large);

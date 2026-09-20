@@ -7,6 +7,7 @@ import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.order.api.dto.CustomerSelectionRequest;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplication;
@@ -152,13 +153,13 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
 
   @ParameterizedTest
   @ValueSource(strings = {"CREATE", "CONFIRM"})
-  void nominationWritesLockEnrollmentBeforeCustomer(String operation) throws Exception {
+  void customerLockContentionRollsBackNominationAndAllowsRetry(String operation) throws Exception {
     var prepared = prepare(operation);
     Customer customer = Customer.builder().name("指名顧客ロック検証").build();
     customer.setStoreId(STORE_A);
     String customerId = customers.save(customer).getId();
     Map<String, Object> body = new HashMap<>(prepared.body());
-    body.put("customer_id", customerId);
+    body.put("customer_selection", Map.of("mode", "EXISTING", "customer_id", customerId));
     var fixture =
         confirmFixture(
             new NominationOperation(
@@ -170,37 +171,14 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
                 prepared.originalCastId()));
     try (Connection holder = dataSource.getConnection()) {
       holder.setAutoCommit(false);
-      int blocker;
-      try (var statement = holder.createStatement();
-          var result = statement.executeQuery("select pg_backend_pid()")) {
-        assertThat(result.next()).isTrue();
-        blocker = result.getInt(1);
-      }
       try (var statement =
           holder.prepareStatement("select id from t_customers where id = ? for update")) {
         statement.setString(1, customerId);
         assertThat(statement.executeQuery().next()).isTrue();
       }
-      var competing = CompletableFuture.supplyAsync(() -> execute(fixture));
-      try {
-        assertWaitingOn(competing, blocker, "t_customers");
-        assertThatThrownBy(
-                () -> {
-                  try (var statement =
-                      holder.prepareStatement(
-                          "select id from t_cast_enrollments where id = ? for update nowait")) {
-                    statement.setString(1, fixture.castId());
-                    statement.executeQuery();
-                  }
-                })
-            .as("顧客を待つ指名操作が先に在籍行を保持していること")
-            .isInstanceOf(SQLException.class)
-            .extracting("SQLState")
-            .isEqualTo("55P03");
-      } finally {
-        holder.rollback();
-      }
-      var response = competing.get(30, TimeUnit.SECONDS);
+      assertThat(execute(fixture).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+      holder.rollback();
+      var response = execute(fixture);
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
       assertThat(response.getBody().path("customer_id").asString()).isEqualTo(customerId);
       assertThat(response.getBody().path("cast_id").asString()).isEqualTo(fixture.castId());
@@ -225,6 +203,9 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
                     .execute(
                         tx -> {
                           OrderCreateRequest request = new OrderCreateRequest();
+                          request.setCustomerSelection(
+                              new CustomerSelectionRequest(
+                                  CustomerSelectionRequest.Mode.NONE, null, null));
                           request.setCastId(castId);
                           request.setBusinessDate(LocalDate.now().plusDays(1));
                           request.setReceptionistId(3L);
@@ -320,6 +301,7 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
                 "receptionist_id",
                 3L));
     body.put("course_id", courseFixture(STORE_A, 100).serviceId());
+    body.put("customer_selection", Map.of("mode", "NONE"));
     if (operation.equals("UPDATE")) {
       String originalCastId = createCast();
       var created =
@@ -358,7 +340,7 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
               .pax(2)
               .castId(castId)
               .contactName("指名競合検証")
-              .contactPhoneNumber("09000000000")
+              .contactPhoneNumber("09012345678")
               .build();
       application.setStoreId(STORE_A);
       String applicationId = applications.save(application).getId();

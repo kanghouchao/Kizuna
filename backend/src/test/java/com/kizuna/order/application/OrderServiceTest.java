@@ -28,6 +28,8 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.api.dto.ContactSnapshotRequest;
+import com.kizuna.order.api.dto.CustomerSelectionRequest;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
@@ -326,7 +328,10 @@ class OrderServiceTest {
   @Test
   void createSavesOrderWithAssociations() {
     OrderCreateRequest req = new OrderCreateRequest();
-    req.setCustomerId("c1");
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "c1", null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
@@ -340,7 +345,9 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(1L);
     when(orderMapper.toEntity(req)).thenReturn(entity);
     // 指定された顧客は共有の解決口を通って書き込み先になる（そこで行が押さえられる）
-    when(customerReferenceResolver.resolveForWrite("c1")).thenReturn("c1");
+    Customer selected = Customer.builder().build();
+    selected.setId("c1");
+    when(customerRepository.findByIdForUpdateNoWait("c1")).thenReturn(Optional.of(selected));
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -361,7 +368,10 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     // 不在の顧客も他店舗の顧客も、解決口が同じ 404 に落とす（存在の有無は漏れない）
     OrderCreateRequest req = new OrderCreateRequest();
-    req.setCustomerId("missing");
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "missing", null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
@@ -372,133 +382,13 @@ class OrderServiceTest {
                 .course(OrderCourses.course("基本", 60, 0))
                 .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
-    when(customerReferenceResolver.resolveForWrite("missing"))
+    when(customerRepository.findByIdForUpdateNoWait("missing"))
         .thenThrow(new NotFoundException("顧客が見つかりません"));
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
     verify(orderRepository, never()).save(any(Order.class));
-  }
-
-  @Test
-  void createCreatesCustomerWhenPhoneProvided() {
-    OrderCreateRequest req = new OrderCreateRequest();
-    req.setPhoneNumber("09012345678");
-    req.setCustomerName("New Guy");
-    req.setCastId("g1");
-    req.setReceptionistId(1L);
-
-    req.setPhoneNumber2("0902");
-    req.setAddress("住所");
-    req.setBuildingName("建物");
-    req.setLandmark("目印");
-    req.setClassification("区分");
-    req.setHasPet(true);
-    req.setNgType("種別");
-    req.setNgContent("内容");
-
-    when(storeContext.getStoreId()).thenReturn(1L);
-    when(orderMapper.toEntity(req))
-        .thenReturn(
-            Order.builder()
-                .status(OrderStatus.CONFIRMED)
-                .course(OrderCourses.course("基本", 60, 0))
-                .build());
-    when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", 1L))
-        .thenReturn(List.of());
-    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
-    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
-
-    when(customerRepository.save(any(Customer.class)))
-        .thenAnswer(
-            i -> {
-              Customer saved = i.getArgument(0);
-              saved.setId("c-new");
-              return saved;
-            });
-    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
-    when(orderRepository.findViewById(nullable(String.class)))
-        .thenReturn(Optional.of(mock(OrderView.class)));
-    stubRowResponses();
-
-    service.create(req, ACTOR_EMAIL);
-
-    verify(customerRepository).save(customerCaptor.capture());
-    assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09012345678");
-    Customer created = customerCaptor.getValue();
-    assertThat(created.getName()).isEqualTo("New Guy");
-    assertThat(created.getPhoneNumber2()).isEqualTo("0902");
-    assertThat(created.getAddress()).isEqualTo("住所");
-    assertThat(created.getBuildingName()).isEqualTo("建物");
-    assertThat(created.getLandmark()).isEqualTo("目印");
-    assertThat(created.getClassification()).isEqualTo("区分");
-    assertThat(created.getHasPet()).isTrue();
-    assertThat(created.getNgType()).isEqualTo("種別");
-    assertThat(created.getNgContent()).isEqualTo("内容");
-    // 起こしたばかりの行は他の経路の書き換えに晒されていないので、解決を経ずに着ける
-    verifyNoInteractions(customerReferenceResolver);
-    verify(orderRepository).save(orderCaptor.capture());
-    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c-new");
-    // 台帳に行を起こした以上、受注側の写しは要らない
-    assertThat(orderCaptor.getValue().getContactName()).isNull();
-    assertThat(orderCaptor.getValue().getContactPhoneNumber()).isNull();
-  }
-
-  @Test
-  void createLinksTheOnlyCustomerMatchingThePhone() {
-    OrderCreateRequest req = phoneOrderRequest("09012345678", "常連さん");
-
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req))
-        .thenReturn(
-            Order.builder()
-                .status(OrderStatus.CONFIRMED)
-                .course(OrderCourses.course("基本", 60, 0))
-                .build());
-    when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", STORE_ID))
-        .thenReturn(List.of("c1"));
-    // 照合は行を押さえない問い合わせなので、着ける前に共有の解決口を通る
-    when(customerReferenceResolver.resolveForWrite("c1")).thenReturn("c1");
-    stubCreateHappyPath();
-
-    service.create(req, ACTOR_EMAIL);
-
-    verify(orderRepository).save(orderCaptor.capture());
-    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c1");
-    // 台帳の行が連絡先を持つので、受注側の写しは残さない
-    assertThat(orderCaptor.getValue().getContactName()).isNull();
-    verify(customerRepository, never()).save(any());
-  }
-
-  @Test
-  void createLeavesTheCustomerUnsetWhenThePhoneMatchesSeveral() {
-    // 同店同号は正規に起こりうる（同伴者の連絡先共有・移行データ）。一致行に会員関連付きの行が
-    // あり得る以上、機械が 1 行を選ぶのは誤帰属の入口なので、自動照合を断念して顧客未設定で成立させる
-    OrderCreateRequest req = phoneOrderRequest("09012345678", "重複照合の来客");
-
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderMapper.toEntity(req))
-        .thenReturn(
-            Order.builder()
-                .status(OrderStatus.CONFIRMED)
-                .course(OrderCourses.course("基本", 60, 0))
-                .build());
-    when(customerRepository.findAliveIdsByPhoneNumberAndStoreId("09012345678", STORE_ID))
-        .thenReturn(List.of("c1", "c2"));
-    stubCreateHappyPath();
-
-    service.create(req, ACTOR_EMAIL);
-
-    verify(orderRepository).save(orderCaptor.capture());
-    assertThat(orderCaptor.getValue().getCustomerId()).isNull();
-    // 顧客を起こして重複を増やすこともしない
-    verify(customerRepository, never()).save(any());
-    // どの行にも着けない以上、一致行のどれも押さえない
-    verifyNoInteractions(customerReferenceResolver);
-    // 顧客未設定で成立させる以上、録入された連絡先は受注側に残さないと消える
-    assertThat(orderCaptor.getValue().getContactName()).isEqualTo("重複照合の来客");
-    assertThat(orderCaptor.getValue().getContactPhoneNumber()).isEqualTo("09012345678");
   }
 
   @Test
@@ -527,8 +417,9 @@ class OrderServiceTest {
 
   private OrderCreateRequest phoneOrderRequest(String phoneNumber, String customerName) {
     OrderCreateRequest req = new OrderCreateRequest();
-    req.setPhoneNumber(phoneNumber);
-    req.setCustomerName(customerName);
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
+    req.setContactSnapshot(new ContactSnapshotRequest(customerName, phoneNumber, null, null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
     return req;
@@ -549,6 +440,8 @@ class OrderServiceTest {
     // 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。店舗が起こす受注は常に新しい指名を
     // 立てるため据え置きの余地が無く、無条件に要求する
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("retired");
     req.setReceptionistId(1L);
 
@@ -572,6 +465,8 @@ class OrderServiceTest {
   @Test
   void createRejectsReceptionistAuthorizedForDifferentStore() {
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
@@ -597,6 +492,8 @@ class OrderServiceTest {
   @Test
   void createRejectsCastRoleReceptionist() {
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
@@ -621,6 +518,8 @@ class OrderServiceTest {
   @Test
   void createRejectsStaffWithoutOrderManagePermission() {
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
@@ -655,6 +554,8 @@ class OrderServiceTest {
   @Test
   void createRejectsStoppedReceptionist() {
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
@@ -684,6 +585,8 @@ class OrderServiceTest {
   void createRejectsEveryWebApplicationReceptionRoute(ReceptionRoute route) {
     // Web 申請の経路は申請の確定だけが書く値。代理入力で経路記録を偽装させない
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
     req.setReceptionRoute(route);
@@ -699,6 +602,8 @@ class OrderServiceTest {
   @Test
   void createAcceptsPhoneAsTheReceptionRoute() {
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
     req.setReceptionistId(1L);
     req.setReceptionRoute(ReceptionRoute.PHONE);
@@ -721,6 +626,8 @@ class OrderServiceTest {
   void createAssignsTheActorAsReceptionistWhenTheSlotIsOmitted() {
     // 受付担当は既定で実行者本人。毎回自分を探して選ぶ手間を省く
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
 
     PlatformUser actor = authorizedReceptionist();
@@ -750,6 +657,8 @@ class OrderServiceTest {
     // 受付候補でない実行者（店舗を授権する HQ 管理者など）は黙って未設定にせず撥ねる。
     // 確定操作が未設定を許すのは会員の申請が既に成立しているからで、こちらは受注をこれから起こす
     OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
 
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
@@ -945,36 +854,12 @@ class OrderServiceTest {
     stubRowResponses();
 
     OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setContactName("正しい名前");
-    req.setContactPhoneNumber("09099998888");
+    req.setContactSnapshot(new ContactSnapshotRequest("正しい名前", "09099998888", null, null));
 
     service.update("o1", req);
 
     assertThat(existing.getContactName()).isEqualTo("正しい名前");
-    assertThat(existing.getContactPhoneNumber()).isEqualTo("09099998888");
-  }
-
-  @Test
-  void updateRejectsContactCorrectionOnALinkedOrder() {
-    // 顧客が着いていれば名乗りの正本は台帳の行。黙って捨てると送り手は直ったと誤解したまま誤記が残る
-    Order linked =
-        Order.builder()
-            .status(OrderStatus.CONFIRMED)
-            .course(OrderCourses.course("基本", 60, 0))
-            .status(OrderStatus.CONFIRMED)
-            .customerId("c1")
-            .pax(2)
-            .build();
-    when(orderRepository.findById("o1")).thenReturn(Optional.of(linked));
-
-    OrderUpdateRequest req = new OrderUpdateRequest();
-    req.setContactName("受注側から書こうとした名前");
-
-    assertThatThrownBy(() -> service.update("o1", req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("顧客詳細");
-    assertThat(linked.getContactName()).isNull();
-    verify(orderRepository, never()).save(any(Order.class));
+    assertThat(existing.getContactPhoneNumber()).isEqualTo("+819099998888");
   }
 
   @Test
@@ -1614,7 +1499,7 @@ class OrderServiceTest {
             .status(OrderApplicationStatus.PENDING)
             .businessDate(CURRENT_BUSINESS_DATE)
             .contactName("ゲスト花子")
-            .contactPhoneNumber("09000000000")
+            .contactPhoneNumber("09012345678")
             .build();
     application.setStoreId(STORE_ID);
     stubBusinessDate();
@@ -1623,7 +1508,7 @@ class OrderServiceTest {
     stubConfirmActor();
     stubOrderCreation();
 
-    service.confirmApplication("a1", confirmation(), "staff@kizuna.test");
+    service.confirmApplication("a1", guestConfirmation(), "staff@kizuna.test");
 
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getReceptionRoute()).isEqualTo(ReceptionRoute.GUEST_WEB);
@@ -1646,14 +1531,19 @@ class OrderServiceTest {
     assertThat(orderCaptor.getValue().getReceptionRoute()).isEqualTo(ReceptionRoute.MEMBER_WEB);
   }
 
-  // ==================== ゲスト申請の確定時の顧客化（人工判断） ====================
+  private OrderApplicationConfirmationRequest guestConfirmation() {
+    var request = confirmation();
+    request.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
+    return request;
+  }
 
   private static OrderApplication.OrderApplicationBuilder pendingGuestApplication() {
     return OrderApplication.builder()
         .status(OrderApplicationStatus.PENDING)
         .businessDate(CURRENT_BUSINESS_DATE)
         .contactName("ゲスト花子")
-        .contactPhoneNumber("09000000000");
+        .contactPhoneNumber("09012345678");
   }
 
   @Test
@@ -1663,47 +1553,19 @@ class OrderServiceTest {
     stubBusinessDate();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
-    when(customerReferenceResolver.resolveForWrite("cust-既存")).thenReturn("cust-既存");
+    Customer selected = Customer.builder().build();
+    selected.setId("cust-既存");
+    when(customerRepository.findByIdForUpdateNoWait("cust-既存")).thenReturn(Optional.of(selected));
     stubConfirmActor();
     stubOrderCreation();
 
-    OrderApplicationConfirmationRequest request = confirmation();
-    request.setCustomerId("cust-既存");
+    OrderApplicationConfirmationRequest request = guestConfirmation();
+    request.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "cust-既存", null));
     service.confirmApplication("a1", request, "staff@kizuna.test");
 
     verify(orderRepository).save(orderCaptor.capture());
     assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("cust-既存");
-    // 電話番号での自動照合は行わない（機械が 1 行を選ぶことが誤帰属の入口になる）
-    verify(customerRepository, never()).findAliveIdsByPhoneNumberAndStoreId(anyString(), anyLong());
-  }
-
-  @Test
-  void confirmCreatesTheLedgerRowTheStaffFilledIn() {
-    OrderApplication application = pendingGuestApplication().build();
-    application.setStoreId(STORE_ID);
-    stubBusinessDate();
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
-    Customer created = Customer.builder().name("ゲスト花子").build();
-    created.setId("cust-new");
-    when(customerRepository.save(any(Customer.class))).thenReturn(created);
-    stubConfirmActor();
-    stubOrderCreation();
-
-    OrderApplicationConfirmationRequest request = confirmation();
-    OrderApplicationConfirmationRequest.NewCustomer newCustomer =
-        new OrderApplicationConfirmationRequest.NewCustomer();
-    newCustomer.setName("ゲスト花子");
-    newCustomer.setPhoneNumber("09000000000");
-    request.setNewCustomer(newCustomer);
-
-    service.confirmApplication("a1", request, "staff@kizuna.test");
-
-    verify(customerRepository).save(customerCaptor.capture());
-    assertThat(customerCaptor.getValue().getName()).isEqualTo("ゲスト花子");
-    assertThat(customerCaptor.getValue().getPhoneNumber()).isEqualTo("09000000000");
-    verify(orderRepository).save(orderCaptor.capture());
-    assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("cust-new");
   }
 
   @Test
@@ -1717,35 +1579,14 @@ class OrderServiceTest {
     stubConfirmActor();
     stubOrderCreation();
 
-    service.confirmApplication("a1", confirmation(), "staff@kizuna.test");
+    service.confirmApplication("a1", guestConfirmation(), "staff@kizuna.test");
 
     verify(orderRepository).save(orderCaptor.capture());
     Order created = orderCaptor.getValue();
     assertThat(created.getCustomerId()).isNull();
     assertThat(created.getContactName()).isEqualTo("ゲスト花子");
-    assertThat(created.getContactPhoneNumber()).isEqualTo("09000000000");
+    assertThat(created.getContactPhoneNumber()).isEqualTo("+819012345678");
     verify(customerRepository, never()).save(any(Customer.class));
-  }
-
-  @Test
-  void confirmRejectsChoosingBothAnExistingCustomerAndANewOne() {
-    OrderApplication application = pendingGuestApplication().build();
-    application.setStoreId(STORE_ID);
-    stubBusinessDate();
-    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
-
-    OrderApplicationConfirmationRequest request = confirmation();
-    request.setCustomerId("cust-既存");
-    OrderApplicationConfirmationRequest.NewCustomer newCustomer =
-        new OrderApplicationConfirmationRequest.NewCustomer();
-    newCustomer.setName("ゲスト花子");
-    request.setNewCustomer(newCustomer);
-
-    assertThatThrownBy(() -> service.confirmApplication("a1", request, "staff@kizuna.test"))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("どちらか一方");
-    // 検証は書き換えより先に済ませる（拒否の健全さを巻き戻しに委ねない）
-    verify(orderRepository, never()).save(any(Order.class));
   }
 
   @Test
@@ -1757,7 +1598,8 @@ class OrderServiceTest {
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
 
     OrderApplicationConfirmationRequest request = confirmation();
-    request.setCustomerId("cust-別人");
+    request.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "cust-別人", null));
 
     assertThatThrownBy(() -> service.confirmApplication("a1", request, "staff@kizuna.test"))
         .isInstanceOf(ServiceException.class)
