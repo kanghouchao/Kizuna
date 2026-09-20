@@ -37,6 +37,59 @@ class CustomerContactsIT extends CrossStoreTestSupport {
   @Autowired PasswordEncoder passwords;
 
   @Test
+  void searchesDomesticPhoneFragmentsWithoutChangingNamesOrLineIds() {
+    String customerId =
+        request(HttpMethod.POST, "/store/customers", "{\"name\":\"電話検索検証\"}")
+            .getBody()
+            .path("id")
+            .asString();
+    String path = "/store/customers/" + customerId;
+    String contactId =
+        request(
+                HttpMethod.POST,
+                path + "/contacts",
+                "{\"type\":\"PHONE\",\"value\":\"090-2345-6789\"}")
+            .getBody()
+            .path("id")
+            .asString();
+    String namedId =
+        request(HttpMethod.POST, "/store/customers", "{\"name\":\"090\"}")
+            .getBody()
+            .path("id")
+            .asString();
+    for (String endpoint : List.of("/store/customers", "/store/orders/customer-candidates")) {
+      for (String query :
+          List.of("090", "090-234", "(090)2345", "2345-678", "09023456789", "010819023456789")) {
+        var response = request(HttpMethod.GET, endpoint + "?size=100&search=" + query, null);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().path("content"))
+            .anySatisfy(row -> assertThat(row.path("id").asString()).isEqualTo(customerId));
+      }
+      assertThat(
+              request(HttpMethod.GET, endpoint + "?size=100&search=090", null)
+                  .getBody()
+                  .path("content"))
+          .anySatisfy(row -> assertThat(row.path("id").asString()).isEqualTo(namedId));
+    }
+    request(HttpMethod.DELETE, path + "/contacts/" + contactId, null);
+    for (String endpoint : List.of("/store/customers", "/store/orders/customer-candidates")) {
+      assertThat(
+              request(HttpMethod.GET, endpoint + "?size=100&search=090", null)
+                  .getBody()
+                  .path("content"))
+          .noneSatisfy(row -> assertThat(row.path("id").asString()).isEqualTo(customerId));
+    }
+    request(HttpMethod.POST, path + "/contacts", "{\"type\":\"LINE\",\"value\":\"090Line\"}");
+    for (String endpoint : List.of("/store/customers", "/store/orders/customer-candidates")) {
+      assertThat(
+              request(HttpMethod.GET, endpoint + "?size=100&search=090", null)
+                  .getBody()
+                  .path("content"))
+          .anySatisfy(row -> assertThat(row.path("id").asString()).isEqualTo(customerId));
+    }
+  }
+
+  @Test
   void recordsNormalizedContactAndRetainsHistoryAfterDeletion() {
     var customer = request(HttpMethod.POST, "/store/customers", "{\"name\":\"連絡先検証\"}");
     assertThat(customer.getStatusCode()).isEqualTo(HttpStatus.CREATED);

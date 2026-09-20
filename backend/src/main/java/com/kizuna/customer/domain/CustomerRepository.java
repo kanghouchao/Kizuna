@@ -68,17 +68,17 @@ public interface CustomerRepository
    */
   @Query(
       """
-      select c from Customer c
+      select c from com.kizuna.customer.domain.Customer c
       where c.id = coalesce(
-        (select m.mergedIntoId from Customer m where m.id = :id), :id)
+        (select m.mergedIntoId from com.kizuna.customer.domain.Customer m where m.id = :id), :id)
       """)
   Optional<Customer> findResolvingMerge(@Param("id") String id);
 
   String DUPLICATE_PHONE_SELECT =
       """
     select p.value as phoneNumber, count(c) as total
-    from Customer c
-    join CustomerContact p on p.customerId = c.id
+    from com.kizuna.customer.domain.Customer c
+    join com.kizuna.customer.domain.CustomerContact p on p.customerId = c.id
     where c.mergedIntoId is null and p.deleted = false and p.preferred = true and p.type = 'PHONE'
     """;
   String DUPLICATE_PHONE_GROUP_ORDER = " group by p.value having count(c) >= 2 order by p.value";
@@ -91,8 +91,8 @@ public interface CustomerRepository
 
   @Query(
       """
-    select c from Customer c
-    join CustomerContact p on p.customerId = c.id
+    select c from com.kizuna.customer.domain.Customer c
+    join com.kizuna.customer.domain.CustomerContact p on p.customerId = c.id
     where c.mergedIntoId is null and p.deleted = false and p.preferred = true and p.type = 'PHONE'
       and p.value in :phoneNumbers order by p.value, c.id
     """)
@@ -115,7 +115,7 @@ public interface CustomerRepository
    */
   @Query(
       """
-      select c.mergedIntoId from Customer c
+      select c.mergedIntoId from com.kizuna.customer.domain.Customer c
       where c.id = :id
       """)
   Optional<String> findMergedIntoId(@Param("id") String id);
@@ -140,7 +140,7 @@ public interface CustomerRepository
   @Modifying
   @Query(
       """
-      update versioned Customer c set c.mergedIntoId = :survivingId
+      update versioned com.kizuna.customer.domain.Customer c set c.mergedIntoId = :survivingId
       where c.mergedIntoId = :mergedId and c.storeId = :storeId
       """)
   int flattenMergedInto(

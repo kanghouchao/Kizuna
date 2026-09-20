@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CustomerContactsSection } from '../ui/CustomerContactsSection';
 import { customerApi } from '@/entities/customer';
+import { notify } from '@/shared/notify';
 
 jest.mock('@/entities/customer', () => ({
   customerApi: {
@@ -12,7 +13,9 @@ jest.mock('@/entities/customer', () => ({
     setContactPreference: jest.fn(),
   },
 }));
-jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
+}));
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -99,4 +102,22 @@ test('編集中の連絡先が消えたら保存を外し、閉じて一覧を�
   (customerApi.contacts as jest.Mock).mockResolvedValue({ rows: [], nextCursor: null });
   fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
   expect(await screen.findByText('連絡先はありません')).toBeInTheDocument();
+});
+
+test.each(['削除', '優先にする'])('%s が 404 なら消えた行と履歴を再取得する', async action => {
+  (customerApi.contacts as jest.Mock)
+    .mockResolvedValueOnce({
+      rows: [{ id: 'gone', type: 'PHONE', value: '+819012345678', preferred: false }],
+      nextCursor: null,
+    })
+    .mockResolvedValue({ rows: [], nextCursor: null });
+  (customerApi.deleteContact as jest.Mock).mockRejectedValue({ response: { status: 404 } });
+  (customerApi.setContactPreference as jest.Mock).mockRejectedValue({ response: { status: 404 } });
+  render(<CustomerContactsSection customerId="customer1" />);
+  fireEvent.click(await screen.findByRole('button', { name: action }));
+  if (action === '削除') fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
+  expect(await screen.findByText('連絡先はありません')).toBeInTheDocument();
+  expect(customerApi.contactHistory).toHaveBeenCalledTimes(2);
+  expect(notify.warning).toHaveBeenCalled();
+  expect(notify.error).not.toHaveBeenCalled();
 });

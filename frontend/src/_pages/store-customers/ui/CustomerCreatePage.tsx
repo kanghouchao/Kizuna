@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { customerApi } from '@/entities/customer';
 import { notify } from '@/shared/notify';
-import { storePath } from '@/shared/lib';
+import { getApiErrorMessage, storePath } from '@/shared/lib';
 
 /** 新規顧客登録ページ */
 export default function CustomerCreatePage() {
@@ -20,8 +20,8 @@ export default function CustomerCreatePage() {
       await customerApi.create(toCustomerRequest(data));
       notify.success('顧客を登録しました');
       router.push(storePath(storeId, '/customers'));
-    } catch {
-      notify.error('顧客の登録に失敗しました');
+    } catch (error) {
+      notify.error(getApiErrorMessage(error, '顧客の登録に失敗しました'));
     } finally {
       setIsSubmitting(false);
     }

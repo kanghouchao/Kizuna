@@ -299,6 +299,10 @@ public class CustomerService {
                 cb.or(
                     cb.like(
                         contact.get("value"),
+                        "%" + LIKE_ESCAPE.escape(search.strip()) + "%",
+                        escape),
+                    cb.like(
+                        contact.get("value"),
                         "%" + LIKE_ESCAPE.escape(ContactValues.search(search)) + "%",
                         escape),
                     cb.and(

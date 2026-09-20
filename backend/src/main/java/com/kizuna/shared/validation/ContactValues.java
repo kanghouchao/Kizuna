@@ -47,11 +47,19 @@ public final class ContactValues {
 
   public static String search(String value) {
     String term = value.strip();
+    boolean phoneTerm = term.matches("[+0-9()\\s-]+");
     try {
       if (term.contains("@")) return email(term, "search");
-      if (term.matches("[+0-9()\\s-]+")) return phone(term, "search");
+      if (phoneTerm) return phone(term, "search");
     } catch (ServiceException ignored) {
       // 完全な宛先ではない検索語は部分一致に用いる。
+    }
+    if (phoneTerm) {
+      String digits = term.replaceAll("[()\\s-]", "");
+      if (digits.matches("\\+?[0-9]+")) {
+        // 部分検索には番号全体の検証を適用せず、国内接頭辞だけを保存形式へ揃える。
+        return digits.startsWith("0") ? "+81" + digits.substring(1) : digits;
+      }
     }
     return term;
   }

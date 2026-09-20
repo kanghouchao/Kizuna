@@ -74,7 +74,10 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
       refresh();
       notify.success('連絡先を更新しました');
     } catch (error) {
-      notify.error(getApiErrorMessage(error, '連絡先を更新できませんでした'));
+      if (isNotFound(error)) {
+        refresh();
+        notify.warning(getApiErrorMessage(error, '連絡先が見つからないため一覧を更新しました'));
+      } else notify.error(getApiErrorMessage(error, '連絡先を更新できませんでした'));
     } finally {
       setBusy(false);
     }

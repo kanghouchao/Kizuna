@@ -10,8 +10,8 @@ public interface CustomerContactHistoryRepository
     extends JpaRepository<CustomerContactHistory, String> {
   String HISTORY =
       """
-    select h from CustomerContactHistory h
-    join CustomerContact c on c.id = h.contactId
+    select h from com.kizuna.customer.domain.CustomerContactHistory h
+    join com.kizuna.customer.domain.CustomerContact c on c.id = h.contactId
     where c.customerId = :customerId
     """;
 

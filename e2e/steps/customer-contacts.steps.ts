@@ -88,3 +88,39 @@ Then('連絡先の履歴が残り顧客の削除が拒否される', async ({ pa
   expect(response.status()).toBe(409);
   expect((await response.json()).error).toContain('履歴');
 });
+
+When('別の担当者が削除したメールを削除しようとする', async ({ page, request }) => {
+  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
+  const response = await request.get(`/api/store/customers/${customerId}/contacts`, { headers });
+  expect(response.ok()).toBeTruthy();
+  const contact = (await response.json()).content.find((row: { type: string }) => row.type === 'EMAIL');
+  const deleted = await request.delete(`/api/store/customers/${customerId}/contacts/${contact.id}`, { headers });
+  expect(deleted.status()).toBe(204);
+  await page.getByRole('button', { name: '削除', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '削除する' }).click();
+});
+
+Then('古い連絡先が画面から消える', async ({ page }) => {
+  await expect(page.getByText('連絡先はありません', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '削除', exact: true })).toHaveCount(0);
+});
+
+Given('新規顧客登録画面を開く', async ({ page }) => {
+  const storeId = await loginViaUiAndEnterStore(page);
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers/create`);
+});
+
+When('海外の電話番号を連絡先に指定して顧客を保存する', async ({ page }) => {
+  await page.getByLabel('名前 *', { exact: true }).fill(`連絡先修正-${Date.now()}`);
+  await page.getByRole('button', { name: '連絡先を追加', exact: true }).click();
+  await page.getByLabel('連絡先の値').fill('+12025550123');
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+});
+
+Then('電話番号のエラー理由と入力が残り修正して登録できる', async ({ page }) => {
+  await expect(page.getByText('日本の有効な電話番号を入力してください', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('連絡先の値')).toHaveValue('+12025550123');
+  await page.getByLabel('連絡先の値').fill('09012345678');
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page).toHaveURL(/\/customers\/?$/);
+});

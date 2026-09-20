@@ -858,7 +858,9 @@ public class OrderService {
                         .replace("%", "!%")
                         .replace("_", "!_")
                     + "%";
-            var names = cb.like(root.get("name"), term, '!');
+            String literalTerm =
+                "%" + search.strip().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+            var names = cb.like(root.get("name"), literalTerm, '!');
             if (canReadContacts) {
               var sq = query.subquery(String.class);
               var contact = sq.from(CustomerContact.class);
@@ -868,12 +870,13 @@ public class OrderService {
                       cb.equal(contact.get("storeId"), root.get("storeId")),
                       cb.isFalse(contact.get("deleted")),
                       cb.or(
+                          cb.like(contact.get("value"), literalTerm, '!'),
                           cb.like(contact.get("value"), term, '!'),
                           cb.and(
                               cb.equal(contact.get("type"), ContactType.LINE),
                               cb.like(
                                   cb.lower(contact.get("value")),
-                                  term.toLowerCase(Locale.ROOT),
+                                  literalTerm.toLowerCase(Locale.ROOT),
                                   '!'))));
               predicates.add(cb.or(names, cb.exists(sq)));
             } else predicates.add(names);
