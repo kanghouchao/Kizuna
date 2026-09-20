@@ -884,7 +884,9 @@ public class OrderService {
           return cb.and(predicates.toArray(Predicate[]::new));
         };
     var candidates =
-        customerRepository.findAll(spec, PageRequest.of(0, size + 1, Sort.by("id"))).getContent();
+        customerRepository
+            .findAll(spec, PageRequest.of(0, size + 1, Sort.by(Customer::getId)))
+            .getContent();
     var phoneByCustomer =
         canReadContacts
             ? customerContactRepository
@@ -1093,14 +1095,6 @@ public class OrderService {
     response.setTotalRemuneration(order.getTotalRemuneration());
     response.setTotalDurationMinutes(order.getTotalDurationMinutes());
     return response;
-  }
-
-  /** 行を書き戻す操作の応答。作業キューが持つ行と同じ形で返し、呼出側がその場で 1 行だけ差し替えられるようにする。 */
-  private OrderWorkQueueResponse toWorkQueueResponse(String id) {
-    return orderRepository
-        .findViewById(id)
-        .map(orderMapper::toWorkQueueResponse)
-        .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
   }
 
   private void validateReceptionist(Long receptionistId) {

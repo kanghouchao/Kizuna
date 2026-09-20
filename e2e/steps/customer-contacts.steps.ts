@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { createCustomer, loginAsStoreAdmin, loginViaUiAndEnterStore, STORE_HEADERS } from './store-api';
 import { PLATFORM_URL } from '../base-url';
@@ -123,4 +123,80 @@ Then('電話番号のエラー理由と入力が残り修正して登録でき�
   await page.getByLabel('連絡先の値').fill('09012345678');
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page).toHaveURL(/\/customers\/?$/);
+});
+
+async function changeBusinessPermission(page: Page, status: string, index = 0) {
+  await page.getByRole('button', { name: '業務連絡の可否を変更', exact: true }).nth(index).click();
+  const dialog = page.getByRole('dialog', { name: '業務連絡の可否を変更' });
+  await dialog.getByRole('combobox').click();
+  await page.getByRole('option', { name: status, exact: true }).click();
+  await dialog.getByLabel('出所', { exact: true }).fill('電話で確認');
+  await dialog.getByLabel('根拠', { exact: true }).fill('本人から用途を確認して回答を取得');
+  await dialog.getByRole('button', { name: '可否を保存', exact: true }).click();
+  await expect(dialog).toBeHidden();
+}
+
+When('同じ電話を二件追加して業務連絡を許可する', async ({ page }) => {
+  for (let i = 0; i < 2; i++) {
+    await page.getByRole('button', { name: '連絡先を追加', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '連絡先を追加' });
+    await dialog.getByLabel('連絡先の値').fill('090-1234-5678');
+    await dialog.getByRole('button', { name: '保存する' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('button', { name: '業務連絡の可否を変更', exact: true })).toHaveCount(i + 1);
+    await changeBusinessPermission(page, '許可', i);
+  }
+  await expect(page.getByText('業務連絡: 許可／共同制約: 許可（連絡可）', { exact: true })).toHaveCount(2);
+});
+
+When('一件の業務連絡を拒否して削除する', async ({ page }) => {
+  await changeBusinessPermission(page, '拒否');
+  await expect(page.getByText('業務連絡: 許可／共同制約: 拒否（連絡不可）', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '削除', exact: true }).first().click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '削除する' }).click();
+});
+
+Then('残る電話は業務連絡の拒否を引き継ぎ履歴に由来が残る', async ({ page }) => {
+  await expect(page.getByText('業務連絡: 拒否／共同制約: 拒否（連絡不可）', { exact: true })).toBeVisible();
+  await expect(page.getByText('制約の継承（新たな同意ではありません）', { exact: false })).toBeVisible();
+  await expect(page.getByText(/^除去元: .*／引継先: /)).toBeVisible();
+});
+
+When('残る電話の業務連絡を根拠付きで許可する', async ({ page }) => {
+  await changeBusinessPermission(page, '許可');
+});
+
+Then('業務連絡だけが可能になり販促は未確認のままになる', async ({ page }) => {
+  await expect(page.getByText('業務連絡: 許可／共同制約: 許可（連絡可）', { exact: true })).toBeVisible();
+  await expect(page.getByText('販促連絡: 未確認／共同制約: 未確認（連絡不可）', { exact: true })).toBeVisible();
+});
+
+Then('可否変更画面を狭幅と両テーマでキーボード操作できる', async ({ page }) => {
+  await expect(page.locator('[data-slot=toast]')).toHaveCount(0, { timeout: 15000 });
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => { localStorage.setItem('theme', value); document.documentElement.classList.toggle('dark', value === 'dark'); }, theme);
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const trigger = page.getByRole('button', { name: '業務連絡の可否を変更', exact: true });
+      await trigger.scrollIntoViewIfNeeded();
+      await trigger.focus();
+      await page.keyboard.press('Enter');
+      const dialog = page.getByRole('dialog', { name: '業務連絡の可否を変更' });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: '可否を保存' }).click();
+      await expect(dialog.getByText('出所を入力してください')).toBeVisible();
+      await expect(dialog.getByLabel('出所', { exact: true })).toBeFocused();
+      await dialog.getByLabel('出所', { exact: true }).fill('取得元'.repeat(60));
+      await expect(dialog.getByText('出所を入力してください')).toBeHidden();
+      await dialog.getByLabel('出所', { exact: true }).press('Tab');
+      await expect(dialog.getByLabel('根拠', { exact: true })).toBeFocused();
+      await dialog.getByLabel('根拠', { exact: true }).fill('長い根拠の確認。'.repeat(120));
+      await expect(dialog.getByRole('button', { name: '可否を保存' })).toBeInViewport();
+      await expect(dialog.getByRole('heading', { name: '業務連絡の可否を変更' })).toBeInViewport();
+      await page.screenshot({ path: `test-results/contact-permission-${theme}-${width}.png` });
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+    }
+  }
 });

@@ -187,6 +187,13 @@ export interface CustomerUpdateRequest {
   ng_content?: string;
 }
 
+export type ContactPermissionStatus = 'UNKNOWN' | 'ALLOWED' | 'DENIED';
+export type ContactPurpose = 'BUSINESS' | 'MARKETING';
+export interface ContactPermissionInput {
+  status: ContactPermissionStatus;
+  source: string;
+  reason: string;
+}
 export type ContactType = 'PHONE' | 'EMAIL' | 'LINE';
 export interface ContactInput {
   type: ContactType;
@@ -196,6 +203,10 @@ export interface ContactSummary extends ContactInput {
   id: string;
 }
 export interface ContactResponse extends ContactSummary {
+  business_status: ContactPermissionStatus;
+  marketing_status: ContactPermissionStatus;
+  effective_business_status: ContactPermissionStatus;
+  effective_marketing_status: ContactPermissionStatus;
   customer_id: string;
   origin_customer_id: string;
   preferred: boolean;
@@ -203,6 +214,8 @@ export interface ContactResponse extends ContactSummary {
   updated_at: string;
 }
 export interface ContactState extends ContactInput {
+  business_status: ContactPermissionStatus;
+  marketing_status: ContactPermissionStatus;
   customer_id: string;
   preferred: boolean;
   deleted: boolean;
@@ -211,7 +224,19 @@ export interface ContactHistoryResponse {
   id: string;
   contact_id: string;
   origin_customer_id: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'PREFERENCE' | 'TRANSFER';
+  action:
+    | 'CREATE'
+    | 'UPDATE'
+    | 'DELETE'
+    | 'PREFERENCE'
+    | 'TRANSFER'
+    | 'PERMISSION_CHANGE'
+    | 'RESTRICTION_INHERITANCE';
+  operation_id: string;
+  purpose?: ContactPurpose;
+  source?: string;
+  reason?: string;
+  source_contact_id?: string;
   actor_id: number;
   occurred_at: string;
   before?: ContactState;

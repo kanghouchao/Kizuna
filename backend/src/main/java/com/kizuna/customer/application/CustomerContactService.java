@@ -1,10 +1,15 @@
 package com.kizuna.customer.application;
 
 import com.kizuna.customer.api.dto.ContactHistoryResponse;
+import com.kizuna.customer.api.dto.ContactPermissionRequest;
 import com.kizuna.customer.api.dto.ContactRequest;
 import com.kizuna.customer.api.dto.ContactResponse;
 import com.kizuna.customer.api.dto.ContactSummary;
 import com.kizuna.customer.domain.ContactAction;
+import com.kizuna.customer.domain.ContactPermissionStatus;
+import com.kizuna.customer.domain.ContactPermissions;
+import com.kizuna.customer.domain.ContactPurpose;
+import com.kizuna.customer.domain.ContactRestrictionView;
 import com.kizuna.customer.domain.ContactState;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.CustomerContact;
@@ -23,11 +28,13 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -39,16 +46,28 @@ public class CustomerContactService {
   private final PlatformUserRepository users;
 
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<ContactResponse> list(String customerId, String cursor, int requestedSize) {
     String resolved = resolve(customerId);
     int size = CursorPage.clampSize(requestedSize);
-    return CursorPage.of(
+    var page =
+        CursorPage.of(
             contacts.findByCustomerIdAndDeletedFalseAndIdGreaterThanOrderByIdAsc(
                 resolved, cursor == null ? "" : PageCursor.decodeKey(cursor), Limit.of(size + 1)),
             size,
-            c -> PageCursor.encodeKey(c.getId()))
-        .map(ContactResponse::from);
+            c -> PageCursor.encodeKey(c.getId()));
+    var values = page.content().stream().map(CustomerContact::getValue).distinct().toList();
+    if (values.isEmpty()) return new CursorPage<>(List.of(), null);
+    // 同値の状態組だけを読むため、重複行数によらず一値あたり最大 3 種類 × 9 状態組に収まる。
+    var restrictions =
+        contacts.findRestrictions(resolved, values).stream()
+            .collect(
+                Collectors.toMap(
+                    c -> new ContactKey(c.getType(), c.getValue()),
+                    ContactRestrictionView::permissions,
+                    ContactPermissions::restrict));
+    return page.map(
+        c -> ContactResponse.from(c, restrictions.get(new ContactKey(c.getType(), c.getValue()))));
   }
 
   @StoreScoped
@@ -57,8 +76,8 @@ public class CustomerContactService {
     lock(customerId);
     CustomerContact contact =
         contacts.saveAndFlush(CustomerContact.create(customerId, input.type(), input.value()));
-    record(contact, ContactAction.CREATE, null, actorId());
-    return ContactResponse.from(contact);
+    record(contact, ContactAction.CREATE, null, actorId(), UUID.randomUUID().toString());
+    return response(contact);
   }
 
   @StoreScoped
@@ -77,9 +96,34 @@ public class CustomerContactService {
               });
     }
     contact.change(input.type(), input.value());
-    record(contact, ContactAction.UPDATE, before, actorId());
+    String operationId = UUID.randomUUID().toString();
+    Long actorId = actorId();
+    if (before.type() != contact.getType() || !before.value().equals(contact.getValue()))
+      inheritBeforeRemoval(contact, before, operationId, actorId);
+    record(contact, ContactAction.UPDATE, before, actorId, operationId);
     contacts.flush();
-    return ContactResponse.from(contact);
+    return response(contact);
+  }
+
+  @StoreScoped
+  @Transactional
+  public ContactResponse changePermission(
+      String customerId, String id, ContactPurpose purpose, ContactPermissionRequest input) {
+    lock(customerId);
+    var contact = active(customerId, id);
+    var before = contact.state();
+    contact.changePermission(purpose, input.status());
+    histories.save(
+        CustomerContactHistory.permission(
+            contact,
+            actorId(),
+            before,
+            purpose,
+            input.source(),
+            input.reason(),
+            UUID.randomUUID().toString()));
+    contacts.flush();
+    return response(contact);
   }
 
   @StoreScoped
@@ -88,8 +132,11 @@ public class CustomerContactService {
     lock(customerId);
     var contact = active(customerId, id);
     var before = contact.state();
+    String operationId = UUID.randomUUID().toString();
+    Long actorId = actorId();
+    inheritBeforeRemoval(contact, before, operationId, actorId);
     contact.delete();
-    record(contact, ContactAction.DELETE, before, actorId());
+    record(contact, ContactAction.DELETE, before, actorId, operationId);
   }
 
   @StoreScoped
@@ -101,17 +148,18 @@ public class CustomerContactService {
     var previous = contacts.findPreferred(customerId, type).orElse(null);
     if (previous == chosen) return;
     Long actorId = actorId();
+    String operationId = UUID.randomUUID().toString();
     if (previous != null) {
       var before = previous.state();
       previous.prefer(false);
-      record(previous, ContactAction.PREFERENCE, before, actorId);
+      record(previous, ContactAction.PREFERENCE, before, actorId, operationId);
       // 部分一意索引を満たしたまま指定先を切り替えるため、解除を先に確定させる。
       contacts.flush();
     }
     if (chosen != null) {
       var before = chosen.state();
       chosen.prefer(true);
-      record(chosen, ContactAction.PREFERENCE, before, actorId);
+      record(chosen, ContactAction.PREFERENCE, before, actorId, operationId);
     }
   }
 
@@ -138,7 +186,12 @@ public class CustomerContactService {
                     h.getActorId(),
                     h.getOccurredAt(),
                     h.getBefore(),
-                    h.getAfter()));
+                    h.getAfter(),
+                    h.getOperationId(),
+                    h.getPurpose(),
+                    h.getSource(),
+                    h.getReason(),
+                    h.getSourceContactId()));
   }
 
   @StoreScoped
@@ -167,17 +220,60 @@ public class CustomerContactService {
           && surviving.stream().anyMatch(c -> c.getType() == contact.getType()))
         throw new ConflictException("両方の顧客に同じ種類の優先連絡先があります。顧客編集で優先指定を解除してから統合してください");
     }
+    String operationId = UUID.randomUUID().toString();
     for (var contact : moving) {
       var before = contact.state();
       contact.transfer(survivingId);
-      record(contact, ContactAction.TRANSFER, before, actorId);
+      record(contact, ContactAction.TRANSFER, before, actorId, operationId);
     }
   }
 
   private void record(
-      CustomerContact contact, ContactAction action, ContactState before, Long actorId) {
+      CustomerContact contact,
+      ContactAction action,
+      ContactState before,
+      Long actorId,
+      String operationId) {
     if (!contact.state().equals(before))
-      histories.save(CustomerContactHistory.record(contact, action, actorId, before));
+      histories.save(CustomerContactHistory.record(contact, action, actorId, before, operationId));
+  }
+
+  private record ContactKey(ContactType type, String value) {}
+
+  private ContactResponse response(CustomerContact contact) {
+    var group =
+        contacts.findByCustomerIdAndTypeAndValueAndDeletedFalse(
+            contact.getCustomerId(), contact.getType(), contact.getValue());
+    return ContactResponse.from(contact, restriction(group));
+  }
+
+  private ContactPermissions restriction(List<CustomerContact> group) {
+    return group.stream()
+        .map(CustomerContact::permissions)
+        .reduce(
+            new ContactPermissions(
+                ContactPermissionStatus.ALLOWED, ContactPermissionStatus.ALLOWED),
+            ContactPermissions::restrict);
+  }
+
+  private void inheritBeforeRemoval(
+      CustomerContact source, ContactState beforeRemoval, String operationId, Long actorId) {
+    var group =
+        contacts.findByCustomerIdAndTypeAndValueAndDeletedFalse(
+            source.getCustomerId(), beforeRemoval.type(), beforeRemoval.value());
+    // 値変更後の照会には除去元が含まれないため、操作直前の状態を共同制約へ戻す。
+    var restriction =
+        restriction(group)
+            .restrict(
+                new ContactPermissions(
+                    beforeRemoval.businessStatus(), beforeRemoval.marketingStatus()));
+    for (var target : group) {
+      if (target.getId().equals(source.getId())) continue;
+      var before = target.state();
+      target.inheritRestriction(restriction);
+      histories.save(
+          CustomerContactHistory.inheritance(target, actorId, before, operationId, source.getId()));
+    }
   }
 
   private CustomerContact active(String customerId, String id) {

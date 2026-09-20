@@ -1,10 +1,12 @@
 package com.kizuna.customer.api.store;
 
 import com.kizuna.customer.api.dto.ContactHistoryResponse;
+import com.kizuna.customer.api.dto.ContactPermissionRequest;
 import com.kizuna.customer.api.dto.ContactPreferenceRequest;
 import com.kizuna.customer.api.dto.ContactRequest;
 import com.kizuna.customer.api.dto.ContactResponse;
 import com.kizuna.customer.application.CustomerContactService;
+import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
@@ -51,6 +53,16 @@ public class CustomerContactController {
       @PathVariable String contactId,
       @Valid @RequestBody ContactRequest request) {
     return service.update(customerId, contactId, request);
+  }
+
+  @PutMapping("/contacts/{contactId}/permissions/{purpose}")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
+  public ContactResponse permission(
+      @PathVariable String customerId,
+      @PathVariable String contactId,
+      @PathVariable ContactPurpose purpose,
+      @Valid @RequestBody ContactPermissionRequest request) {
+    return service.changePermission(customerId, contactId, purpose, request);
   }
 
   @DeleteMapping("/contacts/{contactId}")

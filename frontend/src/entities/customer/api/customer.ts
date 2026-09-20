@@ -1,3 +1,4 @@
+import type { ContactPurpose, ContactPermissionInput } from '../model/types';
 import {
   CursorPageResult,
   CursorParams,
@@ -55,6 +56,18 @@ export const customerApi = {
     (
       await apiClient.put(
         `/store/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}`,
+        data
+      )
+    ).data,
+  setContactPermission: async (
+    id: string,
+    contactId: string,
+    purpose: ContactPurpose,
+    data: ContactPermissionInput
+  ): Promise<ContactResponse> =>
+    (
+      await apiClient.put(
+        `/store/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}/permissions/${purpose}`,
         data
       )
     ).data,

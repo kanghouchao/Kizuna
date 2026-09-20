@@ -20,6 +20,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +29,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
@@ -35,6 +38,302 @@ class CustomerContactsIT extends CrossStoreTestSupport {
   @Autowired PermissionRepository permissions;
   @Autowired PlatformUserRepository users;
   @Autowired PasswordEncoder passwords;
+  @Autowired JdbcTemplate jdbc;
+
+  @Test
+  void recordsPurposeSpecificPermissionWithEvidence() {
+    String path =
+        "/store/customers/"
+            + request(HttpMethod.POST, "/store/customers", "{\"name\":\"連絡可否\"}")
+                .getBody()
+                .path("id")
+                .asString();
+    var created =
+        request(
+                HttpMethod.POST,
+                path + "/contacts",
+                "{\"type\":\"PHONE\",\"value\":\"09012345678\"}")
+            .getBody();
+    assertThat(created.path("business_status").asString()).isEqualTo("UNKNOWN");
+    assertThat(created.path("effective_marketing_status").asString()).isEqualTo("UNKNOWN");
+    String id = created.path("id").asString();
+    var changed = permission(path, id, "BUSINESS", "ALLOWED");
+    assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(changed.getBody().path("business_status").asString()).isEqualTo("ALLOWED");
+    assertThat(changed.getBody().path("effective_business_status").asString()).isEqualTo("ALLOWED");
+    assertThat(changed.getBody().path("marketing_status").asString()).isEqualTo("UNKNOWN");
+    var history =
+        request(HttpMethod.GET, path + "/contact-history", null).getBody().path("content");
+    assertThat(history.get(0).path("action").asString()).isEqualTo("PERMISSION_CHANGE");
+    assertThat(history.get(0).path("before").path("business_status").asString())
+        .isEqualTo("UNKNOWN");
+    assertThat(history.get(0).path("after").path("business_status").asString())
+        .isEqualTo("ALLOWED");
+    assertThat(history.get(0).path("source").asString()).isEqualTo("電話");
+    assertThat(history.get(0).path("reason").asString()).isEqualTo("本人からの回答");
+    assertThat(history.get(0).path("actor_id").asLong()).isPositive();
+    assertThat(history.get(0).path("operation_id").asString()).isNotBlank();
+  }
+
+  @Test
+  void duplicateRestrictionsIncludeOtherPagesAndSurviveRemoval() {
+    String path =
+        "/store/customers/"
+            + request(HttpMethod.POST, "/store/customers", "{\"name\":\"重複制約\"}")
+                .getBody()
+                .path("id")
+                .asString();
+    String input = "{\"type\":\"PHONE\",\"value\":\"090-1234-5678\"}";
+    String a = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    String b = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    permission(path, a, "BUSINESS", "ALLOWED");
+    permission(path, b, "BUSINESS", "DENIED");
+    permission(path, a, "MARKETING", "ALLOWED");
+    var page = request(HttpMethod.GET, path + "/contacts?size=1", null).getBody().path("content");
+    assertThat(page.get(0).path("business_status").asString()).isEqualTo("ALLOWED");
+    assertThat(page.get(0).path("effective_business_status").asString()).isEqualTo("DENIED");
+    assertThat(page.get(0).path("effective_marketing_status").asString()).isEqualTo("UNKNOWN");
+    assertThat(request(HttpMethod.DELETE, path + "/contacts/" + b, null).getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    var remaining =
+        request(HttpMethod.GET, path + "/contacts", null).getBody().path("content").get(0);
+    assertThat(remaining.path("business_status").asString()).isEqualTo("DENIED");
+    assertThat(remaining.path("marketing_status").asString()).isEqualTo("UNKNOWN");
+    var history =
+        request(HttpMethod.GET, path + "/contact-history", null).getBody().path("content");
+    var inherited = history.get(1);
+    assertThat(inherited.path("action").asString()).isEqualTo("RESTRICTION_INHERITANCE");
+    assertThat(inherited.path("source_contact_id").asString()).isEqualTo(b);
+    assertThat(inherited.path("contact_id").asString()).isEqualTo(a);
+    assertThat(inherited.path("before").path("business_status").asString()).isEqualTo("ALLOWED");
+    assertThat(inherited.path("after").path("business_status").asString()).isEqualTo("DENIED");
+    assertThat(inherited.path("operation_id").asString())
+        .isEqualTo(history.get(0).path("operation_id").asString());
+    assertThat(inherited.has("source")).isFalse();
+    assertThat(permission(path, a, "BUSINESS", "UNKNOWN").getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(
+            permission(path, a, "BUSINESS", "ALLOWED")
+                .getBody()
+                .path("effective_business_status")
+                .asString())
+        .isEqualTo("ALLOWED");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"LINE,A@example.com", "EMAIL,B@example.com"})
+  void identityChangeResetsBothPurposesAndPreservesTheOldGroupRestriction(
+      String type, String value) {
+    String path =
+        "/store/customers/"
+            + request(HttpMethod.POST, "/store/customers", "{\"name\":\"宛先変更\"}")
+                .getBody()
+                .path("id")
+                .asString();
+    String input = "{\"type\":\"EMAIL\",\"value\":\"A@EXAMPLE.COM\"}";
+    String a = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    String b = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    permission(path, a, "BUSINESS", "DENIED");
+    permission(path, a, "MARKETING", "ALLOWED");
+    permission(path, b, "BUSINESS", "ALLOWED");
+    permission(path, b, "MARKETING", "ALLOWED");
+    var unchanged =
+        request(
+                HttpMethod.PUT,
+                path + "/contacts/" + a,
+                "{\"type\":\"EMAIL\",\"value\":\" A@example.com \"}")
+            .getBody();
+    assertThat(unchanged.path("business_status").asString()).isEqualTo("DENIED");
+    assertThat(unchanged.path("marketing_status").asString()).isEqualTo("ALLOWED");
+    request(HttpMethod.PUT, path + "/contact-preferences/EMAIL", "{\"contact_id\":\"" + a + "\"}");
+    var changed =
+        request(
+            HttpMethod.PUT,
+            path + "/contacts/" + a,
+            "{\"type\":\"" + type + "\",\"value\":\"" + value + "\"}");
+    assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(changed.getBody().path("business_status").asString()).isEqualTo("UNKNOWN");
+    assertThat(changed.getBody().path("marketing_status").asString()).isEqualTo("UNKNOWN");
+    var rows = request(HttpMethod.GET, path + "/contacts", null).getBody().path("content");
+    assertThat(rows.get(1).path("business_status").asString()).isEqualTo("DENIED");
+    assertThat(rows.get(1).path("marketing_status").asString()).isEqualTo("ALLOWED");
+    var history =
+        request(HttpMethod.GET, path + "/contact-history", null).getBody().path("content");
+    assertThat(history.get(0).path("action").asString()).isEqualTo("UPDATE");
+    assertThat(history.get(1).path("action").asString()).isEqualTo("RESTRICTION_INHERITANCE");
+    assertThat(history.get(1).path("operation_id").asString())
+        .isEqualTo(history.get(0).path("operation_id").asString());
+    request(HttpMethod.DELETE, path + "/contacts/" + a, null);
+    request(HttpMethod.DELETE, path + "/contacts/" + b, null);
+    var recreated = request(HttpMethod.POST, path + "/contacts", input).getBody();
+    assertThat(recreated.path("id").asString()).isNotEqualTo(a).isNotEqualTo(b);
+    assertThat(recreated.path("effective_business_status").asString()).isEqualTo("UNKNOWN");
+    assertThat(recreated.path("effective_marketing_status").asString()).isEqualTo("UNKNOWN");
+    assertThat(request(HttpMethod.DELETE, path, null).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+  }
+
+  @Test
+  void permissionChangesRequireEvidenceManagementAuthorityAndStoreOwnership() {
+    String path =
+        "/store/customers/"
+            + request(HttpMethod.POST, "/store/customers", "{\"name\":\"可否権限\"}")
+                .getBody()
+                .path("id")
+                .asString();
+    String id =
+        request(HttpMethod.POST, path + "/contacts", "{\"type\":\"LINE\",\"value\":\"contact\"}")
+            .getBody()
+            .path("id")
+            .asString();
+    String endpoint = path + "/contacts/" + id + "/permissions/BUSINESS";
+    for (String invalid :
+        List.of(
+            "{}",
+            "{\"status\":\"ALLOWED\"}",
+            "{\"status\":\"ALLOWED\",\"source\":\" \" ,\"reason\":\"根拠\"}",
+            "{\"status\":\"ALLOWED\",\"source\":\"電話\",\"reason\":\" \"}")) {
+      assertThat(request(HttpMethod.PUT, endpoint, invalid).getStatusCode())
+          .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+    var input = Map.of("status", "ALLOWED", "source", " 電話 ", "reason", " 本人回答 ");
+    assertThat(
+            rest.exchange(
+                    endpoint,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(input, managerHeaders(STORE_B)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    for (var granted :
+        List.of(
+            Set.of("CUSTOMER_MANAGE"),
+            Set.of("CUSTOMER_MERGE"),
+            Set.of("CUSTOMER_MANAGE", "CUSTOMER_MERGE"),
+            Set.of("ORDER_MANAGE"))) {
+      var response =
+          rest.exchange(
+              endpoint,
+              HttpMethod.PUT,
+              new HttpEntity<>(input, customHeaders(granted)),
+              JsonNode.class);
+      assertThat(response.getStatusCode())
+          .isEqualTo(granted.contains("CUSTOMER_MANAGE") ? HttpStatus.OK : HttpStatus.FORBIDDEN);
+    }
+    var history =
+        request(HttpMethod.GET, path + "/contact-history", null).getBody().path("content");
+    assertThat(history.size()).isEqualTo(3);
+    assertThat(history.get(0).path("source").asString()).isEqualTo("電話");
+    assertThat(history.get(0).path("reason").asString()).isEqualTo("本人回答");
+    request(HttpMethod.DELETE, path + "/contacts/" + id, null);
+    assertThat(
+            request(
+                    HttpMethod.PUT,
+                    endpoint,
+                    "{\"status\":\"ALLOWED\",\"source\":\"電話\",\"reason\":\"本人回答\"}")
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(request(HttpMethod.DELETE, path, null).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+  }
+
+  @Test
+  void failureWhileWritingInheritanceRollsBackContactAndAllHistory() {
+    String path =
+        "/store/customers/"
+            + request(HttpMethod.POST, "/store/customers", "{\"name\":\"継承巻戻し\"}")
+                .getBody()
+                .path("id")
+                .asString();
+    String input = "{\"type\":\"LINE\",\"value\":\"rollback\"}";
+    String a = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    String b = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    permission(path, a, "BUSINESS", "DENIED");
+    permission(path, b, "BUSINESS", "ALLOWED");
+    var beforeRows = request(HttpMethod.GET, path + "/contacts", null).getBody();
+    var beforeHistory = request(HttpMethod.GET, path + "/contact-history", null).getBody();
+    jdbc.execute(
+        "CREATE FUNCTION test_contact_history_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test failure'; END; $$");
+    try {
+      jdbc.execute(
+          "CREATE TRIGGER test_contact_history_failure BEFORE INSERT ON t_customer_contact_history FOR EACH ROW WHEN (NEW.source_contact_id = '"
+              + a
+              + "') EXECUTE FUNCTION test_contact_history_failure()");
+      assertThat(request(HttpMethod.DELETE, path + "/contacts/" + a, null).getStatusCode())
+          .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+      assertThat(request(HttpMethod.GET, path + "/contacts", null).getBody()).isEqualTo(beforeRows);
+      assertThat(request(HttpMethod.GET, path + "/contact-history", null).getBody())
+          .isEqualTo(beforeHistory);
+      assertThat(
+              request(
+                      HttpMethod.PUT,
+                      path + "/contacts/" + a,
+                      "{\"type\":\"LINE\",\"value\":\"new-value\"}")
+                  .getStatusCode())
+          .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+      assertThat(request(HttpMethod.GET, path + "/contacts", null).getBody()).isEqualTo(beforeRows);
+      assertThat(request(HttpMethod.GET, path + "/contact-history", null).getBody())
+          .isEqualTo(beforeHistory);
+    } finally {
+      jdbc.execute(
+          "DROP TRIGGER IF EXISTS test_contact_history_failure ON t_customer_contact_history");
+      jdbc.execute("DROP FUNCTION test_contact_history_failure()");
+    }
+  }
+
+  @Test
+  void concurrentRemovalsCannotLoseTheRestriction() throws Exception {
+    String path =
+        "/store/customers/"
+            + request(HttpMethod.POST, "/store/customers", "{\"name\":\"並行継承\"}")
+                .getBody()
+                .path("id")
+                .asString();
+    String input = "{\"type\":\"LINE\",\"value\":\"concurrent\"}";
+    String a = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    String b = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    String c = request(HttpMethod.POST, path + "/contacts", input).getBody().path("id").asString();
+    permission(path, a, "BUSINESS", "DENIED");
+    permission(path, b, "BUSINESS", "ALLOWED");
+    permission(path, c, "BUSINESS", "ALLOWED");
+    var ready = new CountDownLatch(1);
+    try (var pool = Executors.newFixedThreadPool(2)) {
+      var first =
+          pool.submit(
+              () -> {
+                ready.await();
+                return request(HttpMethod.DELETE, path + "/contacts/" + a, null);
+              });
+      var second =
+          pool.submit(
+              () -> {
+                ready.await();
+                return request(HttpMethod.DELETE, path + "/contacts/" + b, null);
+              });
+      ready.countDown();
+      assertThat(first.get(15, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+      assertThat(second.get(15, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+    var rows = request(HttpMethod.GET, path + "/contacts", null).getBody().path("content");
+    assertThat(rows.size()).isEqualTo(1);
+    assertThat(rows.get(0).path("id").asString()).isEqualTo(c);
+    assertThat(rows.get(0).path("business_status").asString()).isEqualTo("DENIED");
+    assertThat(rows.get(0).path("effective_business_status").asString()).isEqualTo("DENIED");
+    assertThat(
+            request(HttpMethod.GET, path + "/contact-history", null)
+                .getBody()
+                .path("content")
+                .size())
+        .isEqualTo(11);
+  }
+
+  private ResponseEntity<JsonNode> permission(
+      String path, String id, String purpose, String status) {
+    return request(
+        HttpMethod.PUT,
+        path + "/contacts/" + id + "/permissions/" + purpose,
+        "{\"status\":\"" + status + "\",\"source\":\"電話\",\"reason\":\"本人からの回答\"}");
+  }
 
   @Test
   void searchesDomesticPhoneFragmentsWithoutChangingNamesOrLineIds() {
@@ -153,6 +452,8 @@ class CustomerContactsIT extends CrossStoreTestSupport {
         HttpMethod.PUT,
         pathB + "/contact-preferences/EMAIL",
         "{\"contact_id\":\"" + second + "\"}");
+    permission(pathA, first, "BUSINESS", "ALLOWED");
+    permission(pathB, second, "BUSINESS", "DENIED");
     String merge = "{\"merged_customer_id\":\"" + b + "\"}";
     assertThat(request(HttpMethod.PUT, pathB + "/contact-preferences/EMAIL", "{}").getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
@@ -163,6 +464,8 @@ class CustomerContactsIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.OK);
     var contacts = request(HttpMethod.GET, pathA + "/contacts", null).getBody().path("content");
     assertThat(contacts.size()).isEqualTo(2);
+    assertThat(contacts.get(0).path("business_status").asString()).isEqualTo("ALLOWED");
+    assertThat(contacts.get(0).path("effective_business_status").asString()).isEqualTo("DENIED");
     assertThat(contacts.get(1).path("id").asString()).isEqualTo(second);
     assertThat(contacts.get(1).path("origin_customer_id").asString()).isEqualTo(b);
     assertThat(contacts.get(1).path("value").asString()).isEqualTo("A+tag@example.com");
@@ -171,7 +474,7 @@ class CustomerContactsIT extends CrossStoreTestSupport {
                 .getBody()
                 .path("content")
                 .size())
-        .isEqualTo(6);
+        .isEqualTo(8);
   }
 
   @Test
