@@ -507,7 +507,7 @@ class CustomerContactsIT extends CrossStoreTestSupport {
             .getBody();
     assertThat(line.path("value").asString()).isEqualTo("Mixed.Case");
     assertThat(
-            request(HttpMethod.GET, "/store/customers?search=mixed.case", null)
+            request(HttpMethod.GET, "/store/customers?search=Mixed.Case", null)
                 .getBody()
                 .path("content"))
         .isNotEmpty();
@@ -714,6 +714,18 @@ class CustomerContactsIT extends CrossStoreTestSupport {
       assertThat(created.getStatusCode())
           .isEqualTo(
               granted.contains("CUSTOMER_MANAGE") ? HttpStatus.CREATED : HttpStatus.FORBIDDEN);
+      for (String endpoint :
+          List.of(
+              "/store/customers/duplicates",
+              "/store/customers/duplicates/customers?type=LINE&value=x")) {
+        assertThat(
+                rest.exchange(endpoint, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class)
+                    .getStatusCode())
+            .isEqualTo(
+                granted.containsAll(Set.of("CUSTOMER_MANAGE", "CUSTOMER_MERGE"))
+                    ? HttpStatus.OK
+                    : HttpStatus.FORBIDDEN);
+      }
       var merge =
           rest.postForEntity(
               path + "/merges",

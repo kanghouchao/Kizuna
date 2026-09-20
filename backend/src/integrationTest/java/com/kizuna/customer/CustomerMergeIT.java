@@ -306,7 +306,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     // 1 件ずつ辿る。上限で切って黙る形だと、番号を共有する同伴者のような正当な偽陽性が
     // 先頭側を永久に占めたとき、以降の真の重複が一生画面に出ない
     List<String> reached = new ArrayList<>();
-    String cursor = PageCursor.encodeKey(prefix);
+    String cursor = new PageCursor("PHONE", PageCursor.encodeKey(prefix)).encode();
     for (int page = 0; page < 2; page++) {
       ResponseEntity<JsonNode> response = duplicatesPage(STORE_A, cursor, 1);
       response

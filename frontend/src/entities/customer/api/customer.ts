@@ -91,16 +91,20 @@ export const customerApi = {
     return fromSpringPage(response.data);
   },
   /**
-   * 重複候補（同店・生きた行・優先電話番号が一致する 2 行以上のグループ）を取得する。
+   * 重複候補（同店・未統合顧客・有効連絡先が一致する 2 行以上のグループ）を取得する。
    * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
    * 続きは応答の nextCursor をそのまま cursor に渡して取る。
    */
   duplicates: async (
-    params?: CursorParams
+    params?: CursorParams & { search?: string; type?: ContactType }
   ): Promise<CursorPageResult<CustomerDuplicateGroupResponse>> => {
     const response = await apiClient.get('/store/customers/duplicates', { params });
     return fromCursorPage(response.data);
   },
+  duplicateCustomers: async (
+    params: CursorParams & { type: ContactType; value: string }
+  ): Promise<CursorPageResult<CustomerMergeComparisonResponse>> =>
+    fromCursorPage((await apiClient.get('/store/customers/duplicates/customers', { params })).data),
   /**
    * 統合の前に見比べる 2 行を取得する。重複候補に出てこない行どうしでも引ける。
    * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。

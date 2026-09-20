@@ -5,7 +5,6 @@ import jakarta.persistence.QueryHint;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -73,30 +72,6 @@ public interface CustomerRepository
         (select m.mergedIntoId from com.kizuna.customer.domain.Customer m where m.id = :id), :id)
       """)
   Optional<Customer> findResolvingMerge(@Param("id") String id);
-
-  String DUPLICATE_PHONE_SELECT =
-      """
-    select p.value as phoneNumber, count(c) as total
-    from com.kizuna.customer.domain.Customer c
-    join com.kizuna.customer.domain.CustomerContact p on p.customerId = c.id
-    where c.mergedIntoId is null and p.deleted = false and p.preferred = true and p.type = 'PHONE'
-    """;
-  String DUPLICATE_PHONE_GROUP_ORDER = " group by p.value having count(c) >= 2 order by p.value";
-
-  @Query(DUPLICATE_PHONE_SELECT + DUPLICATE_PHONE_GROUP_ORDER)
-  List<CustomerDuplicateGroupView> findDuplicatePhoneNumbers(Limit limit);
-
-  @Query(DUPLICATE_PHONE_SELECT + " and p.value > :cursor" + DUPLICATE_PHONE_GROUP_ORDER)
-  List<CustomerDuplicateGroupView> findDuplicatePhoneNumbersAfter(String cursor, Limit limit);
-
-  @Query(
-      """
-    select c from com.kizuna.customer.domain.Customer c
-    join com.kizuna.customer.domain.CustomerContact p on p.customerId = c.id
-    where c.mergedIntoId is null and p.deleted = false and p.preferred = true and p.type = 'PHONE'
-      and p.value in :phoneNumbers order by p.value, c.id
-    """)
-  List<Customer> findByPreferredPhones(Collection<String> phoneNumbers);
 
   /**
    * 名指された顧客のうち、生きている行だけを返す。統合の前に 2 行を見比べる読み口の入口。

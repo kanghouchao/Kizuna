@@ -1,12 +1,14 @@
 'use client';
 
+import { contactLabels } from '../lib/contactLabels';
+
 import Link from 'next/link';
 import { CopyIcon, PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
   CustomerMergeComparisonResponse,
-  CustomerResponse,
+  CustomerSummaryResponse,
   customerApi,
 } from '@/entities/customer';
 import {
@@ -63,7 +65,7 @@ export default function CustomersPage() {
     );
   }, []);
 
-  const list = useListPage<CustomerResponse, CustomerCriteria>(
+  const list = useListPage<CustomerSummaryResponse, CustomerCriteria>(
     (page, criteria) =>
       customerApi.list({
         page,
@@ -78,7 +80,7 @@ export default function CustomersPage() {
   );
   const customers = list.rows;
 
-  const deletion = useDeleteAction<CustomerResponse>({
+  const deletion = useDeleteAction<CustomerSummaryResponse>({
     remove: customer => customerApi.delete(customer.id),
     successMessage: '顧客を削除しました',
     errorMessage: '顧客の削除に失敗しました',
@@ -219,7 +221,17 @@ export default function CustomersPage() {
                     </div>
                   </TableCell>
                 )}
-                <TableCell className="font-medium text-foreground">{customer.name}</TableCell>
+                <TableCell className="font-medium text-foreground">
+                  {customer.name}
+                  {customer.matched_contacts.map(contact => (
+                    <div
+                      key={contact.id}
+                      className="max-w-64 break-all whitespace-normal text-sm font-normal"
+                    >
+                      一致: {contactLabels[contact.type]} {contact.value}
+                    </div>
+                  ))}
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {customer.preferred_contacts.find(contact => contact.type === 'PHONE')?.value ||
                     '-'}

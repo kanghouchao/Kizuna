@@ -7,6 +7,7 @@ import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.application.CustomerService;
+import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -43,21 +44,25 @@ public class CustomerController {
     return ResponseEntity.ok(customerService.list(search, classification, pageable));
   }
 
-  /**
-   * 重複候補（同店・生きた行・優先電話番号が一致する 2 行以上のグループ）。
-   *
-   * <p>統合と同じ {@code CUSTOMER_MERGE} で守る。候補の提示は統合画面の一部で単独の価値を持たず、重複の在り処は機微情報だからである。
-   *
-   * <p>続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。
-   *
-   * <p>字面セグメントは {@code /{id}} の値空間を恒久的に侵食する。顧客 ID はアプリ生成の数字列なので {@code duplicates} と衝突しえないが、 ID
-   * の採番規則を変えるときはこの端点が先に隠れることを思い出すこと。
-   */
+  /** 同店の未統合顧客が共有する有効連絡先を、種類・値の順で提示する。 */
   @GetMapping("/duplicates")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CursorPage<CustomerDuplicateGroupResponse>> listDuplicates(
-      @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(customerService.listDuplicateCandidates(cursor, size));
+      @RequestParam(required = false) String search,
+      @RequestParam(required = false) ContactType type,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return ResponseEntity.ok(customerService.listDuplicateCandidates(search, type, cursor, size));
+  }
+
+  @GetMapping("/duplicates/customers")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
+  public ResponseEntity<CursorPage<CustomerMergeComparisonResponse>> duplicateCustomers(
+      @RequestParam ContactType type,
+      @RequestParam String value,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return ResponseEntity.ok(customerService.duplicateCustomers(type, value, cursor, size));
   }
 
   /**

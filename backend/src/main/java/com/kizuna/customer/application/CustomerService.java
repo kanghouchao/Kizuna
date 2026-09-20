@@ -1,5 +1,6 @@
 package com.kizuna.customer.application;
 
+import com.kizuna.customer.api.dto.ContactSummary;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
 import com.kizuna.customer.api.dto.CustomerMapper;
@@ -9,9 +10,10 @@ import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerCandidateRepository;
 import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactRepository;
-import com.kizuna.customer.domain.CustomerDuplicateGroupView;
+import com.kizuna.customer.domain.CustomerContactSearch;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
@@ -39,9 +41,9 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.stereotype.Service;
@@ -55,12 +57,7 @@ public class CustomerService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
-  /**
-   * 行を並べるグループの大きさの上限。これを超えるグループは総数だけを返し、行は 1 つも返さない。
-   *
-   * <p>識別の手がかりを持たない番号（移行データの代替値 {@code 0000000000} 等）を数百行が共有する形は必ず起こる。そこから取り出した標本は本人を見分ける材料にならず、
-   * 並べれば「この中から選べ」と読ませることになる。上限の外の行も顧客一覧から統合できる（{@link #mergeComparison}）ので、並べない選択に到達性の代償は無い。
-   */
+  /** 初回応答に同梱する顧客数の上限。大きいグループは専用のカーソル一覧で読む。 */
   private static final int MAX_LISTED_GROUP_SIZE = 20;
 
   /** 見比べる対象は 2 行。3 行以上を一度に畳む形は持たない（ADR 0010）。 */
@@ -78,6 +75,7 @@ public class CustomerService {
   private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
 
   private final CustomerRepository customerRepository;
+  private final CustomerCandidateRepository candidateRepository;
   private final CustomerContactService customerContactService;
   private final CustomerContactRepository customerContactRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
@@ -102,69 +100,118 @@ public class CustomerService {
                     Collectors.toMap(
                         CustomerMemberLink::getCustomerId, CustomerMemberLink::getMemberCode));
     var preferred = customerContactService.preferred(ids);
+    Map<String, List<ContactSummary>> matched =
+        ids.isEmpty() || search == null || search.isBlank()
+            ? Map.of()
+            : customerContactRepository
+                .findAll(
+                    (root, query, cb) ->
+                        cb.and(
+                            root.get("customerId").in(ids),
+                            cb.isFalse(root.get("deleted")),
+                            CustomerContactSearch.matches(root, cb, search)),
+                    Sort.by("id"))
+                .stream()
+                .collect(
+                    Collectors.groupingBy(
+                        CustomerContact::getCustomerId,
+                        Collectors.mapping(ContactSummary::from, Collectors.toList())));
     return page.map(
         customer -> {
           CustomerSummaryResponse row = customerMapper.toSummaryResponse(customer);
           row.setPreferredContacts(preferred.getOrDefault(customer.getId(), List.of()));
+          row.setMatchedContacts(matched.getOrDefault(customer.getId(), List.of()));
           row.setMemberLinked(activeCodes.containsKey(customer.getId()));
           return row;
         });
   }
 
-  /**
-   * 重複候補 — 同店の生きた行のうち、優先電話番号が一致する 2 行以上のグループ。
-   *
-   * <p>提示は手がかりであって判定ではない。確度スコアも自動統合も持たず、どれを畳むかは常に人が決める（ADR 0010）。 同じ番号の別人（連絡先を共有する同伴者）は正規に起こりうる。
-   *
-   * <p>受注件数と紐づけの有無を添えるのは、別人を誤って畳まないための材料だからである。無いと人手の確認が形だけになる。
-   *
-   * <p><b>4 段は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。見出し・行・紐づけ・受注件数と 4 回問い合わせるので、既定の READ
-   * COMMITTED では文ごとに断面を取り直し、間に他者の commit が挟まると同じ応答の中で違う世界を見る — 件数 {@code total} だけが古いまま行が 1
-   * つ増え、上限に収まると数えたグループが上限を超えて返る。変種ごとに手当てせず断面を固定して根を断つのは {@code OrderService} の群読み口と同じ選択で、機構そのものは
-   * {@code OrderGroupReadSnapshotIT} が実 PostgreSQL で見ている。
-   */
+  /** グループ件数と判断材料を同じ断面から読み、途中の削除・統合による不一致を避ける。 */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<CustomerDuplicateGroupResponse> listDuplicateCandidates(
-      String cursor, int requestedSize) {
-    int size = CursorPage.clampSize(requestedSize);
-    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    Limit limit = Limit.of(size + 1);
-    CursorPage<CustomerDuplicateGroupView> page =
+      String search, ContactType type, String cursor, int requestedSize) {
+    int size = candidatePageSize(requestedSize);
+    ContactType afterType = null;
+    String afterValue = null;
+    if (cursor != null) {
+      var decoded = PageCursor.decode(cursor);
+      try {
+        afterType = ContactType.valueOf(decoded.key());
+      } catch (IllegalArgumentException e) {
+        throw new ServiceException("続きの位置（cursor）が不正です");
+      }
+      afterValue = PageCursor.decodeKey(decoded.id());
+    }
+    var page =
         CursorPage.of(
-            cursor == null
-                ? customerRepository.findDuplicatePhoneNumbers(limit)
-                : customerRepository.findDuplicatePhoneNumbersAfter(
-                    PageCursor.decodeKey(cursor), limit),
+            candidateRepository.groups(search, type, afterType, afterValue, size + 1),
             size,
-            group -> PageCursor.encodeKey(group.getPhoneNumber()));
-
-    Map<String, List<Customer>> rowsByPhoneNumber = fetchRows(page.content());
-    ComparisonMaterial material =
-        fetchComparisonMaterial(
-            rowsByPhoneNumber.values().stream()
-                .flatMap(List::stream)
-                .map(Customer::getId)
+            group -> groupCursor(group.type(), group.value()));
+    var matches =
+        candidateRepository.members(
+            page.content().stream()
+                .filter(group -> group.total() <= MAX_LISTED_GROUP_SIZE)
                 .toList());
+    var rows =
+        matches.stream()
+            .collect(
+                Collectors.groupingBy(
+                    match -> groupCursor(match.type(), match.value()),
+                    LinkedHashMap::new,
+                    Collectors.mapping(
+                        CustomerCandidateRepository.Match::customer, Collectors.toList())));
+    var customers =
+        matches.stream().map(CustomerCandidateRepository.Match::customer).distinct().toList();
+    var material = fetchComparisonMaterial(customers.stream().map(Customer::getId).toList());
+    var comparisons =
+        toComparisonRows(customers, material).stream()
+            .collect(Collectors.toMap(CustomerMergeComparisonResponse::id, Function.identity()));
+    return page.map(
+        group ->
+            new CustomerDuplicateGroupResponse(
+                group.type(),
+                group.value(),
+                group.total(),
+                rows.getOrDefault(groupCursor(group.type(), group.value()), List.of()).stream()
+                    .map(customer -> comparisons.get(customer.getId()))
+                    .toList()));
+  }
 
+  @StoreScoped
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public CursorPage<CustomerMergeComparisonResponse> duplicateCustomers(
+      ContactType type, String value, String cursor, int requestedSize) {
+    if (value == null || value.isBlank() || value.length() > 320)
+      throw new ServiceException("320文字以内の連絡先を指定してください");
+    String normalized =
+        switch (type) {
+          case PHONE -> ContactValues.phone(value, "value");
+          case EMAIL -> ContactValues.email(value, "value");
+          case LINE -> value.strip();
+        };
+    int size = candidatePageSize(requestedSize);
+    String afterId = cursor == null ? "" : PageCursor.decodeKey(cursor);
+    if (!afterId.matches("[0-9]*")) throw new ServiceException("続きの位置（cursor）が不正です");
+    var page =
+        CursorPage.of(
+            candidateRepository.members(type, normalized, afterId, size + 1),
+            size,
+            customer -> PageCursor.encodeKey(customer.getId()));
     return new CursorPage<>(
-        page.content().stream()
-            .map(
-                group ->
-                    new CustomerDuplicateGroupResponse(
-                        "PHONE",
-                        group.getPhoneNumber(),
-                        group.getTotal(),
-                        toComparisonRows(
-                            rowsByPhoneNumber.getOrDefault(group.getPhoneNumber(), List.of()),
-                            material)))
-            // 候補を数えてから引き直すまでの間に統合が確定すると、片方が墓標になって 1 行だけの
-            // グループが残る。1 行は重複ではないので、候補として出さない。行を持たない桁外れの
-            // グループはこの判定の外 — そちらの 0 行は「多すぎるので並べない」の結果である
-            .filter(group -> group.customers().size() >= 2 || group.total() > MAX_LISTED_GROUP_SIZE)
-            .toList(),
-        // 続きの位置は電話番号から決まるので、上で落ちたグループがあっても付け替えない
+        toComparisonRows(
+            page.content(),
+            fetchComparisonMaterial(page.content().stream().map(Customer::getId).toList())),
         page.nextCursor());
+  }
+
+  private static int candidatePageSize(int size) {
+    if (size < 1 || size > CursorPage.MAX_SIZE) throw new ServiceException("取得件数は1〜2000件で指定してください");
+    return size;
+  }
+
+  private static String groupCursor(ContactType type, String value) {
+    return new PageCursor(type.name(), PageCursor.encodeKey(value)).encode();
   }
 
   /**
@@ -197,35 +244,6 @@ public class CustomerService {
     // 並びは要求のまま返す。左右が入れ替わると、画面で選んだ「残す行」が別人を指しうる
     return toComparisonRows(
         customerIds.stream().map(rows::get).toList(), fetchComparisonMaterial(customerIds));
-  }
-
-  /**
-   * グループごとの行を引く。行を並べるグループの番号だけをまとめて 1 回で引く。
-   *
-   * <p>桁外れのグループの行は引かない（{@link #MAX_LISTED_GROUP_SIZE}）。返る行数は「渡した番号の数 × 上限」で頭打ちになり、
-   * グループがいくつあっても問い合わせは 1 本のままである。
-   */
-  private Map<String, List<Customer>> fetchRows(List<CustomerDuplicateGroupView> groups) {
-    List<String> listedPhoneNumbers =
-        groups.stream()
-            .filter(group -> group.getTotal() <= MAX_LISTED_GROUP_SIZE)
-            .map(CustomerDuplicateGroupView::getPhoneNumber)
-            .toList();
-    if (listedPhoneNumbers.isEmpty()) return Map.of();
-    var customers = customerRepository.findByPreferredPhones(listedPhoneNumbers);
-    var preferred =
-        customerContactService.preferred(customers.stream().map(Customer::getId).toList());
-    return customers.stream()
-        .collect(
-            Collectors.groupingBy(
-                c ->
-                    preferred.get(c.getId()).stream()
-                        .filter(p -> p.type() == ContactType.PHONE)
-                        .findFirst()
-                        .orElseThrow()
-                        .value(),
-                LinkedHashMap::new,
-                Collectors.toList()));
   }
 
   private List<CustomerMergeComparisonResponse> toComparisonRows(
@@ -275,10 +293,7 @@ public class CustomerService {
     }
   }
 
-  /**
-   * 検索語は 名前・電話番号・LINE ID を横断し、classification は完全一致の絞り込み。 null の条件は述語を生成しない（JPQL の ":param is null
-   * or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため Specification で組み立てる）。
-   */
+  /** 名前と全有効連絡先を検索する。省略された条件は SQL へ渡さず、可変の述語として組み立てる。 */
   private static Specification<Customer> searchSpec(String search, String classification) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
@@ -287,7 +302,7 @@ public class CustomerService {
       predicates.add(cb.isNull(root.get("mergedIntoId")));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
-        String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase()) + "%";
+        String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
         var contactQuery = query.subquery(String.class);
         var contact = contactQuery.from(CustomerContact.class);
         contactQuery
@@ -296,21 +311,7 @@ public class CustomerService {
                 cb.equal(contact.get("customerId"), root.get("id")),
                 cb.equal(contact.get("storeId"), root.get("storeId")),
                 cb.isFalse(contact.get("deleted")),
-                cb.or(
-                    cb.like(
-                        contact.get("value"),
-                        "%" + LIKE_ESCAPE.escape(search.strip()) + "%",
-                        escape),
-                    cb.like(
-                        contact.get("value"),
-                        "%" + LIKE_ESCAPE.escape(ContactValues.search(search)) + "%",
-                        escape),
-                    cb.and(
-                        cb.equal(contact.get("type"), ContactType.LINE),
-                        cb.like(
-                            cb.lower(contact.get("value")),
-                            "%" + LIKE_ESCAPE.escape(search.strip().toLowerCase(Locale.ROOT)) + "%",
-                            escape))));
+                CustomerContactSearch.matches(contact, cb, search));
         predicates.add(
             cb.or(cb.like(cb.lower(root.get("name")), pattern, escape), cb.exists(contactQuery)));
       }
