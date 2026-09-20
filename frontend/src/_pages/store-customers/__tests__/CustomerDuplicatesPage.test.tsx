@@ -8,6 +8,11 @@ import {
 } from '@/entities/customer';
 import { CursorPageResult } from '@/shared/api';
 
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: () => ({ authorities: ['PERM_CUSTOMER_MANAGE', 'PERM_CUSTOMER_MERGE'] }),
+}));
+
 jest.mock('@/entities/customer', () => ({
   customerApi: { duplicates: jest.fn(), merge: jest.fn() },
 }));
@@ -27,20 +32,21 @@ const mockedMerge = customerApi.merge as jest.Mock;
 function candidate(
   overrides: Partial<CustomerMergeComparisonResponse>
 ): CustomerMergeComparisonResponse {
-  return { member_linked: false, order_count: 0, ...overrides };
+  return { preferred_contacts: [], member_linked: false, order_count: 0, ...overrides };
 }
 
 /** 同じ番号の 2 行。氏名以外にも食い違う項目を持たせ、見比べる材料が出ることを確かめられるようにする。 */
 const twoRowGroup: CursorPageResult<CustomerDuplicateGroupResponse> = {
   rows: [
     {
-      phone_number: '090-1111-2222',
+      matched_type: 'PHONE',
+      matched_value: '090-1111-2222',
       total: 2,
       customers: [
         candidate({
           id: 'c1',
           name: '山田太郎',
-          phone_number: '090-1111-2222',
+          preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '090-1111-2222' }],
           address: '東京都渋谷区1-1',
           classification: '常連',
           ng_type: '注意',
@@ -49,7 +55,7 @@ const twoRowGroup: CursorPageResult<CustomerDuplicateGroupResponse> = {
         candidate({
           id: 'c2',
           name: 'ヤマダタロウ',
-          phone_number: '090-1111-2222',
+          preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '090-1111-2222' }],
           address: '東京都新宿区2-2',
           classification: '新規',
           member_linked: true,
@@ -157,7 +163,13 @@ describe('CustomerDuplicatesPage', () => {
   it('行を並べない桁外れのグループは、総数と統合できる画面を案内すること', async () => {
     // 桁外れのグループは行が返らない（標本は本人を見分ける材料にならない）。総数だけは偽らない
     mockedDuplicates.mockResolvedValue({
-      rows: [{ phone_number: '0000000000', total: 200, customers: [] }],
+      rows: [
+        {
+          preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '0000000000' }],
+          total: 200,
+          customers: [],
+        },
+      ],
       nextCursor: null,
     });
 

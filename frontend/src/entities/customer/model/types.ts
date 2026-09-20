@@ -1,14 +1,12 @@
 // 顧客（Customer）レスポンス
 export interface CustomerResponse {
+  preferred_contacts: ContactSummary[];
   id?: string;
   name?: string;
-  phone_number?: string;
-  phone_number2?: string;
   address?: string;
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  line_id?: string;
   usage_areas?: string;
   ng_type?: string;
   ng_content?: string;
@@ -29,10 +27,9 @@ export interface CustomerResponse {
  * 紐づけの有無だけである。
  */
 export interface CustomerSummaryResponse {
+  preferred_contacts: ContactSummary[];
   id?: string;
   name?: string;
-  phone_number?: string;
-  line_id?: string;
   classification?: string;
   /** 会員紐づけの有無。一覧の応答では常に真偽値が入る。 */
   member_linked?: boolean;
@@ -49,15 +46,13 @@ export interface CustomerSummaryResponse {
  * すべて生きた行である。
  */
 export interface CustomerMergeComparisonResponse {
+  preferred_contacts: ContactSummary[];
   id?: string;
   name?: string;
-  phone_number?: string;
-  phone_number2?: string;
   address?: string;
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  line_id?: string;
   usage_areas?: string;
   ng_type?: string;
   ng_content?: string;
@@ -68,13 +63,14 @@ export interface CustomerMergeComparisonResponse {
 }
 
 /**
- * 同じ第一電話番号を持つ生きた顧客のグループ。
+ * 同じ優先電話番号を持つ生きた顧客のグループ。
  *
  * customers は全行か空のいずれかで、桁外れに大きいグループでは空になる。件数の表示には
  * 必ず total を使う（length を出すと 200 件のグループが 0 件と名乗る）。
  */
 export interface CustomerDuplicateGroupResponse {
-  phone_number?: string;
+  matched_type: 'PHONE';
+  matched_value: string;
   /** その番号を持つ生きた行の総数。Java 側が primitive のため、キーは必ず応答に含まれる。 */
   total: number;
   customers: CustomerMergeComparisonResponse[];
@@ -168,14 +164,12 @@ export interface CustomerMemberLinkHistoryResponse {
 
 // 顧客作成リクエスト
 export interface CustomerCreateRequest {
+  contacts?: ContactInput[];
   name: string;
-  phone_number?: string;
-  phone_number2?: string;
   address?: string;
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  line_id?: string;
   usage_areas?: string;
   ng_type?: string;
   ng_content?: string;
@@ -184,14 +178,42 @@ export interface CustomerCreateRequest {
 // 顧客更新リクエスト
 export interface CustomerUpdateRequest {
   name?: string;
-  phone_number?: string;
-  phone_number2?: string;
   address?: string;
   building_name?: string;
   classification?: string;
   has_pet?: boolean;
-  line_id?: string;
   usage_areas?: string;
   ng_type?: string;
   ng_content?: string;
+}
+
+export type ContactType = 'PHONE' | 'EMAIL' | 'LINE';
+export interface ContactInput {
+  type: ContactType;
+  value: string;
+}
+export interface ContactSummary extends ContactInput {
+  id: string;
+}
+export interface ContactResponse extends ContactSummary {
+  customer_id: string;
+  origin_customer_id: string;
+  preferred: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export interface ContactState extends ContactInput {
+  customer_id: string;
+  preferred: boolean;
+  deleted: boolean;
+}
+export interface ContactHistoryResponse {
+  id: string;
+  contact_id: string;
+  origin_customer_id: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'PREFERENCE' | 'TRANSFER';
+  actor_id: number;
+  occurred_at: string;
+  before?: ContactState;
+  after: ContactState;
 }

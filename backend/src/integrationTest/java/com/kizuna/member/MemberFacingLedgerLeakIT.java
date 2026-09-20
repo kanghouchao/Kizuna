@@ -24,6 +24,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,7 +61,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
 
   private static final String CANARY_NG_TYPE = "CANARY-NGTYPE-ecb1f0d4-8a2c";
   private static final String CANARY_NG_CONTENT = "CANARY-NGCONTENT-ecb1f0d4-8a2c";
-  private static final String CANARY_PHONE = "CANARY-PHONE-ecb1f0d4-8a2c";
+  private static final String CANARY_PHONE = "+819012349876";
   private static final String CANARY_LINE_ID = "CANARY-LINEID-ecb1f0d4-8a2c";
   private static final String CANARY_ADDRESS = "CANARY-ADDRESS-ecb1f0d4-8a2c";
   private static final String CANARY_USAGE_AREAS = "CANARY-USAGEAREAS-ecb1f0d4-8a2c";
@@ -209,19 +210,27 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
     Customer customer =
         Customer.builder()
             .name("台帳漏洩検証顧客")
-            .phoneNumber(CANARY_PHONE)
-            .phoneNumber2(CANARY_PHONE)
             .address(CANARY_ADDRESS)
             .buildingName(CANARY_ADDRESS)
             .classification(CANARY_CLASSIFICATION)
             .hasPet(true)
-            .lineId(CANARY_LINE_ID)
             .usageAreas(CANARY_USAGE_AREAS)
             .ngType(CANARY_NG_TYPE)
             .ngContent(CANARY_NG_CONTENT)
             .build();
     customer.setStoreId(STORE_A);
     customerId = customerRepository.save(customer).getId();
+    for (var input :
+        List.of(
+            Map.of("type", "PHONE", "value", CANARY_PHONE),
+            Map.of("type", "LINE", "value", CANARY_LINE_ID))) {
+      var contact =
+          rest.postForEntity(
+              "/store/customers/" + customerId + "/contacts",
+              new HttpEntity<>(input, managerHeaders(STORE_A)),
+              JsonNode.class);
+      assertThat(contact.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
 
     memberEmail = "ledger-leak-it-" + System.nanoTime() + "@kizuna.test";
     ResponseEntity<String> registration =

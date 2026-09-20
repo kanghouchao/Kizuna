@@ -78,8 +78,7 @@ Given('会員を登録し店舗側で顧客台帳に紐づける', async ({ requ
   createdCustomerId = await createCustomer(
     request,
     adminToken,
-    `E2E会員顧客-${suffix}`,
-    `090${String(suffix).slice(-8)}`
+    `E2E会員顧客-${suffix}`
   );
   await linkMemberToCustomer(request, adminToken, createdCustomerId, memberCode);
 });

@@ -9,6 +9,8 @@ const mockPush = jest.fn();
 
 jest.mock('@/entities/customer', () => ({
   customerApi: {
+    contacts: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
+    contactHistory: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
     get: jest.fn(),
     update: jest.fn(),
     linkMember: jest.fn(),
@@ -57,6 +59,7 @@ function claimsWith(permissions: string[]): TokenClaims {
 }
 
 const customer = {
+  preferred_contacts: [],
   id: 'cus-1',
   name: '山田太郎',
   created_at: '2026-07-01T00:00:00Z',

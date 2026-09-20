@@ -3,7 +3,10 @@ package com.kizuna.order.application;
 import com.kizuna.customer.application.CustomerProvisioningService;
 import com.kizuna.customer.application.MemberRequestCustomerInput;
 import com.kizuna.customer.application.NewCustomerInput;
+import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerContact;
+import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
@@ -51,6 +54,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.shared.validation.ContactValues;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
@@ -61,6 +65,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -94,6 +99,7 @@ public class OrderService {
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final CustomerRepository customerRepository;
+  private final CustomerContactRepository customerContactRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerProvisioningService customerProvisioningService;
   private final NominatableCastLookup nominatableCast;
@@ -132,7 +138,7 @@ public class OrderService {
    * 件数で位置を指すと確定・取消のたびに後続が繰り上がり、続きを取った時点で境界の受注を飛ばす。
    *
    * <p>取得は 2 段。条件と並びは要求ごとに変わるので ID の並びだけを動的な問い合わせで確定させ、行の中身は 表示名の join を持つ既存の読み口で引き直す（{@link
-   * com.kizuna.order.infrastructure.OrderSearchQuery} にその理由を記す）。
+   * OrderSearchQuery} にその理由を記す）。
    *
    * <p><b>2 段は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。既定の READ COMMITTED では文ごとに断面を取り直すため、 2
    * 本の間に他の操作者の commit が挟まると 2 本が違う世界を見る — 境界行の並び鍵が書き換われば続きが行を飛ばし、
@@ -836,6 +842,9 @@ public class OrderService {
       String search, String cursor, int size) {
     if (size < 1 || size > 100 || (cursor != null && !cursor.matches("[0-9]{1,64}")))
       throw new ServiceException("検索の件数またはカーソルを確認してください");
+    boolean canReadContacts =
+        SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equals("PERM_CUSTOMER_MANAGE"));
     Specification<Customer> spec =
         (root, query, cb) -> {
           var predicates = new ArrayList<Predicate>();
@@ -843,22 +852,55 @@ public class OrderService {
           if (cursor != null) predicates.add(cb.greaterThan(root.get("id"), cursor));
           if (search != null && !search.isBlank()) {
             String term =
+                "%"
+                    + ContactValues.search(search)
+                        .replace("!", "!!")
+                        .replace("%", "!%")
+                        .replace("_", "!_")
+                    + "%";
+            String literalTerm =
                 "%" + search.strip().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
-            predicates.add(
-                cb.or(
-                    cb.like(root.get("name"), term, '!'),
-                    cb.like(root.get("phoneNumber"), term, '!'),
-                    cb.like(root.get("phoneNumber2"), term, '!')));
+            var names = cb.like(root.get("name"), literalTerm, '!');
+            if (canReadContacts) {
+              var sq = query.subquery(String.class);
+              var contact = sq.from(CustomerContact.class);
+              sq.select(contact.get("customerId"))
+                  .where(
+                      cb.equal(contact.get("customerId"), root.get("id")),
+                      cb.equal(contact.get("storeId"), root.get("storeId")),
+                      cb.isFalse(contact.get("deleted")),
+                      cb.or(
+                          cb.like(contact.get("value"), literalTerm, '!'),
+                          cb.like(contact.get("value"), term, '!'),
+                          cb.and(
+                              cb.equal(contact.get("type"), ContactType.LINE),
+                              cb.like(
+                                  cb.lower(contact.get("value")),
+                                  literalTerm.toLowerCase(Locale.ROOT),
+                                  '!'))));
+              predicates.add(cb.or(names, cb.exists(sq)));
+            } else predicates.add(names);
           }
           return cb.and(predicates.toArray(Predicate[]::new));
         };
+    var candidates =
+        customerRepository.findAll(spec, PageRequest.of(0, size + 1, Sort.by("id"))).getContent();
+    var phoneByCustomer =
+        canReadContacts
+            ? customerContactRepository
+                .findByCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(
+                    candidates.stream().map(Customer::getId).toList())
+                .stream()
+                .filter(c -> c.getType() == ContactType.PHONE)
+                .collect(
+                    Collectors.toMap(CustomerContact::getCustomerId, CustomerContact::getValue))
+            : Map.<String, String>of();
     var rows =
-        customerRepository
-            .findAll(spec, PageRequest.of(0, size + 1, Sort.by("id")))
-            .getContent()
-            .stream()
+        candidates.stream()
             .map(
-                c -> new OrderCustomerCandidateResponse(c.getId(), c.getName(), c.getPhoneNumber()))
+                c ->
+                    new OrderCustomerCandidateResponse(
+                        c.getId(), c.getName(), phoneByCustomer.get(c.getId())))
             .toList();
     return CursorPage.of(rows, size, OrderCustomerCandidateResponse::id);
   }

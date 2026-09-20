@@ -32,7 +32,7 @@ public class CustomerMergeController {
 
   /** 統合を実行する。パスが名指すのが存続行で、本文が被統合行を指す。 */
   @PostMapping
-  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerMergeResponse> merge(
       @PathVariable String customerId,
       @Valid @RequestBody CustomerMergeRequest request,

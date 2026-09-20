@@ -1,5 +1,7 @@
 package com.kizuna.customer.api.dto;
 
+import java.util.List;
+
 /**
  * 統合の前に見比べる 1 行。重複候補のグループと、顧客一覧から選んだ任意の 2 行の両方がこの型で返る（一覧から選んだ 2 行は重複候補とは限らない）。JSON キーは snake_case。
  *
@@ -9,13 +11,11 @@ package com.kizuna.customer.api.dto;
 public record CustomerMergeComparisonResponse(
     String id,
     String name,
-    String phoneNumber,
-    String phoneNumber2,
+    List<ContactSummary> preferredContacts,
     String address,
     String buildingName,
     String classification,
     Boolean hasPet,
-    String lineId,
     String usageAreas,
     String ngType,
     String ngContent,

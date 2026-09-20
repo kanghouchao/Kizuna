@@ -57,6 +57,7 @@ class CustomerMergeServiceTest {
 
   private static final OffsetDateTime MERGED_AT = OffsetDateTime.parse("2026-08-10T10:00:00+09:00");
 
+  @Mock private CustomerContactService customerContactService;
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;

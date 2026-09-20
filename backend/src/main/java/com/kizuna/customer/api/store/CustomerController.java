@@ -44,7 +44,7 @@ public class CustomerController {
   }
 
   /**
-   * 重複候補（同店・生きた行・第一電話番号が一致する 2 行以上のグループ）。
+   * 重複候補（同店・生きた行・優先電話番号が一致する 2 行以上のグループ）。
    *
    * <p>統合と同じ {@code CUSTOMER_MERGE} で守る。候補の提示は統合画面の一部で単独の価値を持たず、重複の在り処は機微情報だからである。
    *
@@ -54,7 +54,7 @@ public class CustomerController {
    * の採番規則を変えるときはこの端点が先に隠れることを思い出すこと。
    */
   @GetMapping("/duplicates")
-  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CursorPage<CustomerDuplicateGroupResponse>> listDuplicates(
       @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok(customerService.listDuplicateCandidates(cursor, size));
@@ -66,7 +66,7 @@ public class CustomerController {
    * <p>統合と同じ {@code CUSTOMER_MERGE} で守る。返すのは NG・区分・住所を含む台帳の内部評価で、統合に当たる者だけが読めばよい。
    */
   @GetMapping("/merge-comparison")
-  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<List<CustomerMergeComparisonResponse>> mergeComparison(
       @RequestParam List<String> ids) {
     return ResponseEntity.ok(customerService.mergeComparison(ids));

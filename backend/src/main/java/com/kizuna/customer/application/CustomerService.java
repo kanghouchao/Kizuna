@@ -7,7 +7,10 @@ import com.kizuna.customer.api.dto.CustomerMergeComparisonResponse;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
+import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerContact;
+import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerDuplicateGroupView;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
@@ -21,12 +24,14 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
+import com.kizuna.shared.validation.ContactValues;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -73,6 +78,8 @@ public class CustomerService {
   private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
 
   private final CustomerRepository customerRepository;
+  private final CustomerContactService customerContactService;
+  private final CustomerContactRepository customerContactRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
   private final CustomerMapper customerMapper;
@@ -94,16 +101,18 @@ public class CustomerService {
                 .collect(
                     Collectors.toMap(
                         CustomerMemberLink::getCustomerId, CustomerMemberLink::getMemberCode));
+    var preferred = customerContactService.preferred(ids);
     return page.map(
         customer -> {
           CustomerSummaryResponse row = customerMapper.toSummaryResponse(customer);
+          row.setPreferredContacts(preferred.getOrDefault(customer.getId(), List.of()));
           row.setMemberLinked(activeCodes.containsKey(customer.getId()));
           return row;
         });
   }
 
   /**
-   * 重複候補 — 同店の生きた行のうち、第一電話番号が一致する 2 行以上のグループ。
+   * 重複候補 — 同店の生きた行のうち、優先電話番号が一致する 2 行以上のグループ。
    *
    * <p>提示は手がかりであって判定ではない。確度スコアも自動統合も持たず、どれを畳むかは常に人が決める（ADR 0010）。 同じ番号の別人（連絡先を共有する同伴者）は正規に起こりうる。
    *
@@ -143,6 +152,7 @@ public class CustomerService {
             .map(
                 group ->
                     new CustomerDuplicateGroupResponse(
+                        "PHONE",
                         group.getPhoneNumber(),
                         group.getTotal(),
                         toComparisonRows(
@@ -201,25 +211,35 @@ public class CustomerService {
             .filter(group -> group.getTotal() <= MAX_LISTED_GROUP_SIZE)
             .map(CustomerDuplicateGroupView::getPhoneNumber)
             .toList();
-    return listedPhoneNumbers.isEmpty()
-        ? Map.of()
-        : customerRepository
-            .findByPhoneNumberInAndMergedIntoIdIsNullOrderByPhoneNumberAscIdAsc(listedPhoneNumbers)
-            .stream()
-            .collect(
-                Collectors.groupingBy(
-                    Customer::getPhoneNumber, LinkedHashMap::new, Collectors.toList()));
+    if (listedPhoneNumbers.isEmpty()) return Map.of();
+    var customers = customerRepository.findByPreferredPhones(listedPhoneNumbers);
+    var preferred =
+        customerContactService.preferred(customers.stream().map(Customer::getId).toList());
+    return customers.stream()
+        .collect(
+            Collectors.groupingBy(
+                c ->
+                    preferred.get(c.getId()).stream()
+                        .filter(p -> p.type() == ContactType.PHONE)
+                        .findFirst()
+                        .orElseThrow()
+                        .value(),
+                LinkedHashMap::new,
+                Collectors.toList()));
   }
 
   private List<CustomerMergeComparisonResponse> toComparisonRows(
       List<Customer> customers, ComparisonMaterial material) {
+    var preferred =
+        customerContactService.preferred(customers.stream().map(Customer::getId).toList());
     return customers.stream()
         .map(
             customer ->
                 customerMapper.toComparisonResponse(
                     customer,
                     material.linked(customer.getId()),
-                    material.orderCount(customer.getId())))
+                    material.orderCount(customer.getId()),
+                    preferred.getOrDefault(customer.getId(), List.of())))
         .toList();
   }
 
@@ -268,11 +288,31 @@ public class CustomerService {
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase()) + "%";
+        var contactQuery = query.subquery(String.class);
+        var contact = contactQuery.from(CustomerContact.class);
+        contactQuery
+            .select(contact.get("customerId"))
+            .where(
+                cb.equal(contact.get("customerId"), root.get("id")),
+                cb.equal(contact.get("storeId"), root.get("storeId")),
+                cb.isFalse(contact.get("deleted")),
+                cb.or(
+                    cb.like(
+                        contact.get("value"),
+                        "%" + LIKE_ESCAPE.escape(search.strip()) + "%",
+                        escape),
+                    cb.like(
+                        contact.get("value"),
+                        "%" + LIKE_ESCAPE.escape(ContactValues.search(search)) + "%",
+                        escape),
+                    cb.and(
+                        cb.equal(contact.get("type"), ContactType.LINE),
+                        cb.like(
+                            cb.lower(contact.get("value")),
+                            "%" + LIKE_ESCAPE.escape(search.strip().toLowerCase(Locale.ROOT)) + "%",
+                            escape))));
         predicates.add(
-            cb.or(
-                cb.like(cb.lower(root.get("name")), pattern, escape),
-                cb.like(root.get("phoneNumber"), "%" + LIKE_ESCAPE.escape(search) + "%", escape),
-                cb.like(cb.lower(root.get("lineId")), pattern, escape)));
+            cb.or(cb.like(cb.lower(root.get("name")), pattern, escape), cb.exists(contactQuery)));
       }
       if (classification != null) {
         predicates.add(cb.equal(root.get("classification"), classification));
@@ -294,6 +334,10 @@ public class CustomerService {
             .findResolvingMerge(id)
             .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
     CustomerResponse response = customerMapper.toResponse(customer);
+    response.setPreferredContacts(
+        customerContactService
+            .preferred(List.of(customer.getId()))
+            .getOrDefault(customer.getId(), List.of()));
     withMemberLink(response, activeMemberCodeOf(customer.getId()));
     return withMergeMark(response, id, customer.getId());
   }
@@ -304,7 +348,12 @@ public class CustomerService {
     // store_id は StoreScopeStampListener が @PrePersist で採番する
     Customer customer = customerMapper.toEntity(request);
     // 作成直後の顧客は定義上まだ会員と紐づいていない
-    return withMemberLink(customerMapper.toResponse(customerRepository.save(customer)), null);
+    customerRepository.saveAndFlush(customer);
+    for (var contact : request.getContacts())
+      customerContactService.create(customer.getId(), contact);
+    var response = customerMapper.toResponse(customer);
+    response.setPreferredContacts(List.of());
+    return withMemberLink(response, null);
   }
 
   @StoreScoped
@@ -318,8 +367,10 @@ public class CustomerService {
 
     customer.apply(customerMapper.toPatch(request));
 
-    return withMemberLink(
-        customerMapper.toResponse(customerRepository.save(customer)), activeMemberCodeOf(id));
+    var response = customerMapper.toResponse(customerRepository.save(customer));
+    response.setPreferredContacts(
+        customerContactService.preferred(List.of(id)).getOrDefault(id, List.of()));
+    return withMemberLink(response, activeMemberCodeOf(id));
   }
 
   /**
@@ -329,13 +380,16 @@ public class CustomerService {
   @StoreScoped
   @Transactional
   public void delete(String id) {
-    if (!customerRepository.existsById(id)) {
+    if (customerRepository.findByIdForUpdate(id).isEmpty()) {
       throw new NotFoundException("顧客が見つかりません");
     }
     // 墓標も「統合に関与した行」なので下の判定でも撥ねられるが、次の一手が違う — 墓標を消したい人が
     // 求めているのは統合先の編集である。先に判定して案内を分ける。
     if (customerRepository.isMerged(id)) {
       throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
+    }
+    if (customerContactRepository.existsByCustomerIdOrOriginCustomerId(id, id)) {
+      throw new ConflictException("連絡先の履歴がある顧客は削除できません");
     }
     if (customerMergeRepository.existsInvolving(id)) {
       throw new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
@@ -356,6 +410,12 @@ public class CustomerService {
       throw IntegrityViolations.translate(
           ex,
           Map.of(
+              DbConstraint.FK_T_CUSTOMER_CONTACTS_CUSTOMER,
+                  () -> new ConflictException("連絡先の履歴がある顧客は削除できません"),
+              DbConstraint.FK_T_CUSTOMER_CONTACTS_ORIGIN,
+                  () -> new ConflictException("連絡先の履歴がある顧客は削除できません"),
+              DbConstraint.FK_T_CUSTOMER_CONTACT_HISTORY_ORIGIN,
+                  () -> new ConflictException("連絡先の履歴がある顧客は削除できません"),
               DbConstraint.FK_T_CUSTOMER_MERGES_SURVIVING, undeletable,
               DbConstraint.FK_T_CUSTOMER_MERGES_MERGED, undeletable,
               DbConstraint.FK_T_CUSTOMERS_MERGED_INTO, undeletable,

@@ -17,6 +17,9 @@ package com.kizuna.shared.exception;
  * <p>各成員の字面が DDL に実在することと、上の NO ACTION 規律は適応度テスト（{@code DbConstraintLiteralTests}）が機械検証する。
  */
 public enum DbConstraint {
+  FK_T_CUSTOMER_CONTACTS_CUSTOMER("fk_t_customer_contacts_customer"),
+  FK_T_CUSTOMER_CONTACTS_ORIGIN("fk_t_customer_contacts_origin"),
+  FK_T_CUSTOMER_CONTACT_HISTORY_ORIGIN("fk_t_customer_contact_history_origin"),
   UQ_T_CAST_ENROLLMENTS_CURRENT("uq_t_cast_enrollments_current"),
 
   /** t_users.email の一意制約。 */

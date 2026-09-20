@@ -22,6 +22,7 @@ import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -208,7 +209,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("第一電話番号が一致する 2 行が候補に出て、見比べる材料（受注件数・紐づけの有無）が並ぶこと")
+  @DisplayName("優先電話番号が一致する 2 行が候補に出て、見比べる材料（受注件数・紐づけの有無）が並ぶこと")
   void listsDuplicateCandidatesWithTheMaterialNeededToCompareThem() {
     String phoneNumber = phone("候補");
     String withOrder = createCustomerWithPhone("候補甲-" + nonce, phoneNumber);
@@ -222,7 +223,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     // 件数と紐づけが無ければ、どちらに来店が積まれているか判らないまま畳むことになる
     JsonNode orderRow = candidateRow(group, withOrder);
     assertThat(orderRow.path("name").asString()).isEqualTo("候補甲-" + nonce);
-    assertThat(orderRow.path("phone_number").asString()).isEqualTo(phoneNumber);
+    assertThat(orderRow.path("preferred_contacts").get(0).path("value").asString())
+        .isEqualTo(phoneNumber);
     assertThat(orderRow.path("order_count").asInt()).isEqualTo(1);
     assertThat(orderRow.path("member_linked").asBoolean()).isFalse();
     JsonNode memberRow = candidateRow(group, withMember);
@@ -237,6 +239,11 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     String surviving = createCustomerWithPhone("候補墓標存続-" + nonce, phoneNumber);
     String merged = createCustomerWithPhone("候補墓標被統合-" + nonce, phoneNumber);
     assertThat(duplicateGroup(STORE_A, phoneNumber).path("customers")).hasSize(2);
+    rest.exchange(
+        "/store/customers/" + merged + "/contact-preferences/PHONE",
+        HttpMethod.PUT,
+        new HttpEntity<>("{\"contact_id\":null}", managerHeaders(STORE_A)),
+        Void.class);
 
     assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -268,8 +275,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
     assertThat(duplicateGroups(STORE_A))
         .anySatisfy(
-            group -> assertThat(group.path("phone_number").asString()).isEqualTo(phoneNumber))
-        .allSatisfy(group -> assertThat(group.path("phone_number").asString()).isNotBlank());
+            group -> assertThat(group.path("matched_value").asString()).isEqualTo(phoneNumber))
+        .allSatisfy(group -> assertThat(group.path("matched_value").asString()).isNotBlank());
   }
 
   @Test
@@ -287,7 +294,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   @DisplayName("続きを辿ると、1 ページ目に載らなかったグループへ到達できること")
   void reachesGroupsBeyondTheFirstPageThroughTheCursor() {
     // 番号の昇順で並ぶので、接頭辞を共有させて隣り合わせる
-    String prefix = "0119" + Math.abs(("到達" + nonce).hashCode());
+    String number = phone("到達");
+    String prefix = number.substring(0, number.length() - 1);
     String first = prefix + "1";
     String second = prefix + "2";
     createCustomerWithPhone("到達甲-" + nonce, first);
@@ -304,7 +312,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
       response
           .getBody()
           .path("content")
-          .forEach(g -> reached.add(g.path("phone_number").asString()));
+          .forEach(g -> reached.add(g.path("matched_value").asString()));
       cursor = nextCursorOf(response.getBody());
     }
 
@@ -347,6 +355,11 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     assertThat(comparisonRows(STORE_A, created.get(0), created.get(total - 1)))
         .extracting(row -> row.path("id").asString())
         .containsExactly(created.get(0), created.get(total - 1));
+    rest.exchange(
+        "/store/customers/" + created.get(total - 1) + "/contact-preferences/PHONE",
+        HttpMethod.PUT,
+        new HttpEntity<>("{\"contact_id\":null}", managerHeaders(STORE_A)),
+        Void.class);
     assertThat(merge(STORE_A, created.get(0), created.get(total - 1)).getStatusCode())
         .isEqualTo(HttpStatus.OK);
   }
@@ -1077,7 +1090,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
 
   private Optional<JsonNode> findDuplicateGroup(long storeId, String phoneNumber) {
     for (JsonNode group : duplicateGroups(storeId)) {
-      if (phoneNumber.equals(group.path("phone_number").asString())) {
+      if (phoneNumber.equals(group.path("matched_value").asString())) {
         return Optional.of(group);
       }
     }
@@ -1175,8 +1188,10 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   private String createCustomerWithPhoneAt(long storeId, String name, String phoneNumber) {
-    return postCustomer(
-        storeId, "{\"name\": \"" + name + "\", \"phone_number\": \"" + phoneNumber + "\"}");
+    String id = createCustomerAt(storeId, name);
+    if (!phoneNumber.isBlank() && !phoneNumber.equals("\\t"))
+      addPreferredPhone(storeId, id, phoneNumber);
+    return id;
   }
 
   private String postCustomer(long storeId, String body) {
@@ -1197,9 +1212,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
         .toList();
   }
 
-  /** 実行ごと・用途ごとに異なる照合キー。列は VARCHAR(50)。 */
   private String phone(String label) {
-    return "090" + Math.abs((label + nonce).hashCode()) + nonce;
+    return "+8190" + (10000000 + Math.floorMod((label + nonce).hashCode(), 90000000));
   }
 
   private ResponseEntity<JsonNode> getCustomer(String customerId) {
@@ -1215,10 +1229,25 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   private void setPhoneNumber(String customerId, String phoneNumber) {
-    assertThat(
-            putCustomer(customerId, "{\"phone_number\": \"" + phoneNumber + "\"}").getStatusCode())
-        .as("前提: 電話番号を後から設定できること")
-        .isEqualTo(HttpStatus.OK);
+    addPreferredPhone(STORE_A, customerId, phoneNumber);
+  }
+
+  private void addPreferredPhone(long storeId, String customerId, String phone) {
+    var created =
+        rest.postForEntity(
+            "/store/customers/" + customerId + "/contacts",
+            new HttpEntity<>(Map.of("type", "PHONE", "value", phone), managerHeaders(storeId)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var selected =
+        rest.exchange(
+            "/store/customers/" + customerId + "/contact-preferences/PHONE",
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                Map.of("contact_id", created.getBody().path("id").asString()),
+                managerHeaders(storeId)),
+            Void.class);
+    assertThat(selected.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
   }
 
   private ResponseEntity<JsonNode> putCustomer(String customerId, String body) {

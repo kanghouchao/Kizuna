@@ -304,12 +304,11 @@ export async function registerMember(
 export async function createCustomer(
   request: APIRequestContext,
   token: string,
-  name: string,
-  phoneNumber: string
+  name: string
 ): Promise<string> {
   const res = await request.post('/api/store/customers', {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
-    data: { name, phone_number: phoneNumber },
+    data: { name },
   });
   if (!res.ok()) {
     throw new Error(`create customer failed: ${res.status()} ${await res.text()}`);

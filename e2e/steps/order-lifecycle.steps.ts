@@ -335,7 +335,7 @@ Given('3000ポイントを利用した請求7000円の完了受注がある', as
   const token = await loginAsStoreAdmin(request);
   const headers = { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` };
   const memberCode = await registerMember(request, `rollback-${Date.now()}@example.test`, crypto.randomUUID(), customerName);
-  const customerId = await createCustomer(request, token, customerName, `09${Date.now().toString().slice(-9)}`);
+  const customerId = await createCustomer(request, token, customerName);
   await linkMemberToCustomer(request, token, customerId, memberCode);
   const adjustment = await request.post(`/api/store/customers/${customerId}/point-adjustments`, {
     headers, data: { delta: 3000, reason: '利用取消の原資', idempotency_key: crypto.randomUUID() },
@@ -448,7 +448,7 @@ let selectedCustomerId: string | null = null;
 When('顧客の選択を {string} にして三種類の受付時連絡先を保存する', async ({ page, request }, mode: string) => {
   const token = await loginAsStoreAdmin(request);
   const ledgerName = `選択する顧客-${Date.now()}`;
-  selectedCustomerId = mode === '既存顧客' ? await createCustomer(request, token, ledgerName, '09012345678') : null;
+  selectedCustomerId = mode === '既存顧客' ? await createCustomer(request, token, ledgerName) : null;
   await registerPhoneOrder(page, async () => {
     await page.getByRole('combobox', { name: '顧客の選択' }).click();
     await page.getByRole('option', { name: mode, exact: true }).click();

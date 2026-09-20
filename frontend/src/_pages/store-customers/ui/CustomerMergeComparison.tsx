@@ -6,12 +6,21 @@ import { Button, Label, RadioGroup, RadioGroupItem } from '@/shared/ui';
 /** 見比べる項目。値の取り出しは行ごとに同じ関数を通し、左右で違う整形にならないようにする。 */
 const FIELDS: { label: string; value: (row: CustomerMergeComparisonResponse) => string }[] = [
   { label: '名前', value: row => row.name || '-' },
-  { label: '電話番号', value: row => row.phone_number || '-' },
-  { label: '電話番号2', value: row => row.phone_number2 || '-' },
+  {
+    label: '電話番号',
+    value: row => row.preferred_contacts.find(contact => contact.type === 'PHONE')?.value || '-',
+  },
+  {
+    label: 'メール',
+    value: row => row.preferred_contacts.find(contact => contact.type === 'EMAIL')?.value || '-',
+  },
   { label: '住所', value: row => row.address || '-' },
   { label: '建物名', value: row => row.building_name || '-' },
   { label: '区分', value: row => row.classification || '-' },
-  { label: 'LINE ID', value: row => row.line_id || '-' },
+  {
+    label: 'LINE ID',
+    value: row => row.preferred_contacts.find(contact => contact.type === 'LINE')?.value || '-',
+  },
   { label: '利用エリア', value: row => row.usage_areas || '-' },
   // 未設定は「なし」ではない。応答は non_null 直列化なので欄ごと欠けて届き、真偽値へ潰すと
   // 持っていない事実を断言することになる（別人を見分けるための画面で、それが一番やってはいけない）

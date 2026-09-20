@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,8 +18,7 @@ import lombok.NoArgsConstructor;
 public class CustomerSummaryResponse {
   private String id;
   private String name;
-  private String phoneNumber;
-  private String lineId;
+  private List<ContactSummary> preferredContacts;
   private String classification;
 
   /** 会員紐づけの有無。関連状態の投影であり、応答では必ず真偽値が入る（null にはならない）。 */
