@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+電話による受注照合と、未関連受注だけに受付時の連絡先を保存する条項は [ADR 0028](0028-customer-contacts-and-order-contact-snapshots.md) で置換（設計確定・未実装）。帰属の確定時点と不変性は維持する。
+
 ## 決定時の背景
 
 会員の来店可視性を関連（Customer–Member Link）経由の動的な解決で読むと、三つの未決が絡み合う。
