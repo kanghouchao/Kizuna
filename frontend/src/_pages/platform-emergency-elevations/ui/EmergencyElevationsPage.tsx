@@ -277,7 +277,7 @@ export default function EmergencyElevationsPage() {
                     {row.activated_by_name}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{row.store_name}</TableCell>
-                  <TableCell className="max-w-64 whitespace-pre-wrap break-words text-muted-foreground">
+                  <TableCell className="max-w-64 whitespace-pre-wrap wrap-break-word text-muted-foreground">
                     {row.reason}
                   </TableCell>
                   <TableCell className="text-muted-foreground">

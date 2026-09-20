@@ -16,6 +16,8 @@ docs/plans/
 !docs/agents/
 docs/agents/*
 !docs/agents/issue-tracker.md
+!docs/agents/domain.md
+!docs/agents/triage-labels.md
 docs/superpowers/
 docs/research/
 

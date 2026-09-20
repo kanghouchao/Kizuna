@@ -11,7 +11,7 @@
 
 ## コマンドと検証
 
-最終検証は Taskfile を使い、Docker によって CI と条件を揃える。省略可能な `service=frontend` / `service=backend` は対応するタスクで対象を限定する。全コマンドは `task help` を参照する。
+最終検証は Taskfile を使い、Docker によって CI と条件を揃える。`build`・`lint`・`test`・`format`・`clean` は `service=frontend` / `service=backend` で対象を限定できる。ルートの `test-unit`・`test-integration` は `service` を参照しない。単体テストを片側だけ実行する場合は `task -d frontend test` / `task -d backend test-unit` を使う。全コマンドは `task help` を参照する。
 
 | コマンド | 用途 |
 | --- | --- |
@@ -22,12 +22,12 @@
 | `task test-integration` | バックエンド統合テスト |
 | `task test` | 前後端単体テストとバックエンド統合テスト |
 | `task e2e` | 独立した使い捨てスタックで E2E |
-| `task format` | 自動整形（差分を確認する） |
+| `task format` | ホストの npm / Gradle による自動整形（差分を確認する） |
 | `task up` / `task down` | 開発スタックの起動／停止 |
 | `task logs service=backend` | 指定サービスのログ |
 | `task clean` | ビルド済みイメージの削除。DB ボリュームは対象外 |
 
-高速な反復では `frontend/` の npm scripts と `backend/` の Gradle wrapper を使える。バックエンドは **JDK 25** 必須（`.java-version` と daemon JVM 設定）。フロントエンド lint は `format:check`、`lint`、`lint:fsd`、`typecheck` の四つ。
+高速な反復では `frontend/` の npm scripts と `backend/` の Gradle wrapper を使える。バックエンドは **JDK 25** 必須（`.java-version` と daemon JVM 設定）。フロントエンドの Node.js は [Dockerfile](frontend/Dockerfile) の版に揃える。`task format` もホストの Node.js / JDK を使う。フロントエンド lint は `format:check`、`lint`、`lint:fsd`、`typecheck` の四つ。
 
 カバレッジの正本は [Jest 設定](frontend/jest.config.cjs)と [Gradle 設定](backend/build.gradle)。単体テストが測定対象で、Jest は行／文 70%、分岐 60%、関数 55%、Jacoco は行 70% を要求する。生成 DTO・設定等の除外範囲も設定を参照する。
 
@@ -36,6 +36,8 @@
 ## CI と PR
 
 [CI](.github/workflows/lint-and-test.yml) は `Lint and Test (frontend)`、`Lint and Test (backend)`、`Repo Lint` の三チェック。前後端はそれぞれ lint・単体テスト・本番 build を実行する。コード領域に触れない docs-only 差分では前後端の重いステップを省略するが、Repo Lint は常に走る。`frontend/`・`backend/` 等の配下の文書変更もコード領域判定に入る。
+
+別の [CodeQL](.github/workflows/codeql.yml) ワークフローが Java と JavaScript / TypeScript を解析する。master 向け PR、master・`releases/**` への push、週次スケジュールが対象で、docs-only のスキップはない。主 CI の三チェックだけで全ワークフローを表すわけではない。
 
 統合テストと E2E は CI で実行しない。PR 作成前は `task lint`、`task test`、`task build`、`task e2e` とローカルコードレビューを実施し、[PR テンプレート](.github/pull_request_template.md)の検証欄に結果を記す。E2E の実行・成果物・日本語 Gherkin は [E2E ガイド](e2e/README.md)を参照する。
 
