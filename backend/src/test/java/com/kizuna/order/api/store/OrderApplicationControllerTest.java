@@ -277,11 +277,9 @@ class OrderApplicationControllerTest {
             constraintName));
   }
 
-  // ==================== 公開店面のゲスト予約申請 ====================
-
   private static final String GUEST_BODY =
       "{\"business_date\": \"2026-08-20\", \"pax\": 2,"
-          + " \"contact_name\": \"ゲスト花子\", \"contact_phone_number\": \"09000000000\"}";
+          + " \"contact_snapshot\": {\"name\": \"ゲスト花子\", \"phone_number\": \"09012345678\"}}";
 
   @Test
   @DisplayName("ゲスト予約申請が受け付けられ、受付番号だけが 201 で返ること")
@@ -296,7 +294,7 @@ class OrderApplicationControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value("app-1"))
         // 申請の内容は返さない — 送った本人だけが読めることを保証する手立てがこの経路には無い
-        .andExpect(jsonPath("$.contact_phone_number").doesNotExist());
+        .andExpect(jsonPath("$.contact_snapshot").doesNotExist());
   }
 
   @Test
@@ -320,16 +318,16 @@ class OrderApplicationControllerTest {
     when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
 
     String overlongName =
-        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"contact_name\": \""
+        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"contact_snapshot\": {\"name\": \""
             + "あ".repeat(256)
-            + "\", \"contact_phone_number\": \"09000000000\"}";
+            + "\", \"phone_number\": \"09012345678\"}}";
     mockMvc.perform(guestPost(overlongName)).andExpect(status().isBadRequest());
 
     String overlongPhone =
-        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"contact_name\": \"ゲスト花子\","
-            + " \"contact_phone_number\": \""
+        "{\"business_date\": \"2026-08-20\", \"pax\": 2, \"contact_snapshot\": {\"name\": \"ゲスト花子\","
+            + " \"phone_number\": \""
             + "1".repeat(51)
-            + "\"}";
+            + "\"}}";
     mockMvc.perform(guestPost(overlongPhone)).andExpect(status().isBadRequest());
     verifyNoInteractions(guestOrderApplicationService);
   }

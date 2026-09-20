@@ -60,11 +60,15 @@ const confirmedOrder: Order = {
   version: 3,
 };
 
+function queueRow(order: Order): OrderWorkQueueRow {
+  return { ...order, customer_name: order.customer_name ?? undefined };
+}
+
 const renderModal = (onCompleted = jest.fn(), onClose = jest.fn(), onSuperseded = jest.fn()) =>
   render(
     <OrderCompletionModal
       open
-      order={confirmedOrder}
+      order={queueRow(confirmedOrder)}
       onClose={onClose}
       onCompleted={onCompleted}
       onSuperseded={onSuperseded}
@@ -269,7 +273,7 @@ describe('OrderCompletionModal', () => {
     rerender(
       <OrderCompletionModal
         open
-        order={confirmedOrder}
+        order={queueRow(confirmedOrder)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
@@ -325,12 +329,12 @@ describe('OrderCompletionModal', () => {
     const unlinked: Order = {
       ...confirmedOrder,
       customer_name: undefined,
-      contact_name: '重複照合の来客',
+      contact_snapshot: { name: '重複照合の来客' },
     };
     render(
       <OrderCompletionModal
         open
-        order={unlinked}
+        order={queueRow(unlinked)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
@@ -381,7 +385,7 @@ describe('OrderCompletionModal', () => {
     const { rerender } = render(
       <OrderCompletionModal
         open
-        order={confirmedOrder}
+        order={queueRow(confirmedOrder)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
@@ -402,7 +406,7 @@ describe('OrderCompletionModal', () => {
     rerender(
       <OrderCompletionModal
         open
-        order={otherOrder}
+        order={queueRow(otherOrder)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
@@ -428,7 +432,7 @@ describe('OrderCompletionModal', () => {
     const { rerender } = render(
       <OrderCompletionModal
         open
-        order={confirmedOrder}
+        order={queueRow(confirmedOrder)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
@@ -459,7 +463,7 @@ describe('OrderCompletionModal', () => {
     rerender(
       <OrderCompletionModal
         open
-        order={confirmedOrder}
+        order={queueRow(confirmedOrder)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
@@ -999,7 +1003,7 @@ describe('OrderCompletionModal', () => {
     const { rerender } = render(
       <OrderCompletionModal
         open
-        order={confirmedOrder}
+        order={queueRow(confirmedOrder)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
@@ -1011,7 +1015,7 @@ describe('OrderCompletionModal', () => {
     rerender(
       <OrderCompletionModal
         open={false}
-        order={confirmedOrder}
+        order={queueRow(confirmedOrder)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}
@@ -1021,7 +1025,7 @@ describe('OrderCompletionModal', () => {
     rerender(
       <OrderCompletionModal
         open
-        order={reopened}
+        order={queueRow(reopened)}
         onClose={jest.fn()}
         onCompleted={jest.fn()}
         onSuperseded={jest.fn()}

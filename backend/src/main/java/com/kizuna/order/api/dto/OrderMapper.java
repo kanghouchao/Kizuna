@@ -104,7 +104,8 @@ public interface OrderMapper {
   @Mapping(target = "totalFee", ignore = true)
   @Mapping(target = "feeLines", ignore = true)
   @Mapping(target = "autoGrantPoints", ignore = true)
-  // 連絡先の写しは顧客に着かなかった受注にだけ入る（判定はサービス層）
+  @Mapping(target = "contactEmail", ignore = true)
+  @Mapping(target = "contactLineId", ignore = true)
   @Mapping(target = "contactName", ignore = true)
   @Mapping(target = "contactPhoneNumber", ignore = true)
   // 関連 ID - サービス層で存在確認後に割り当て

@@ -3,7 +3,12 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { guestOrderApplicationApi } from '@/entities/order';
-import { getApiErrorMessage, integerRule } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  integerRule,
+  EMAIL_PATTERN,
+  EMAIL_PATTERN_MESSAGE,
+} from '@/shared/lib';
 
 interface GuestReservationFormValues {
   business_date: string;
@@ -11,6 +16,8 @@ interface GuestReservationFormValues {
   pax: number;
   contact_name: string;
   contact_phone_number: string;
+  contact_email: string;
+  contact_line_id: string;
   remarks: string;
 }
 
@@ -26,6 +33,7 @@ export default function GuestReservationSection() {
   const [failure, setFailure] = useState<string | null>(null);
   const {
     register,
+    getValues,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<GuestReservationFormValues>({
@@ -35,6 +43,8 @@ export default function GuestReservationSection() {
       pax: 1,
       contact_name: '',
       contact_phone_number: '',
+      contact_email: '',
+      contact_line_id: '',
       remarks: '',
     },
   });
@@ -46,8 +56,12 @@ export default function GuestReservationSection() {
         business_date: values.business_date,
         arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
         pax: Number(values.pax),
-        contact_name: values.contact_name,
-        contact_phone_number: values.contact_phone_number,
+        contact_snapshot: {
+          name: values.contact_name,
+          phone_number: values.contact_phone_number,
+          email: values.contact_email,
+          line_id: values.contact_line_id,
+        },
         remarks: values.remarks || undefined,
       });
       setAcceptedId(accepted.id);
@@ -86,7 +100,7 @@ export default function GuestReservationSection() {
           <p className="mt-5 text-sm leading-7 text-[color-mix(in_srgb,var(--storefront-fg)_65%,transparent)]">
             この時点ではまだ予約は確定しておりません。
             <br />
-            店舗よりお電話でご連絡のうえ、内容を確認して確定いたします。
+            店舗よりご連絡のうえ、内容を確認して確定いたします。
           </p>
           <p className="mt-5 text-xs tracking-wider text-[color-mix(in_srgb,var(--storefront-fg)_40%,transparent)]">
             受付番号: {acceptedId}
@@ -103,7 +117,7 @@ export default function GuestReservationSection() {
         style={{ borderColor: 'color-mix(in srgb, var(--storefront-accent) 25%, transparent)' }}
       >
         <p className="mb-8 text-sm leading-7 text-[color-mix(in_srgb,var(--storefront-fg)_60%,transparent)]">
-          ご希望の内容とご連絡先をお送りください。店舗よりお電話でご連絡のうえ、内容を確認して予約を確定いたします。
+          ご希望の内容とご連絡先をお送りください。店舗よりご連絡のうえ、内容を確認して予約を確定いたします。
         </p>
         {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
             我々の文言は永久に描かれない。人数の下限は下の min 規則が引き継ぐ */}
@@ -114,6 +128,8 @@ export default function GuestReservationSection() {
             </label>
             <input
               id="guest-contact-name"
+              aria-invalid={!!errors.contact_name}
+              aria-describedby={errors.contact_name ? 'guest-name-error' : undefined}
               type="text"
               className={fieldClass}
               style={fieldStyle}
@@ -122,7 +138,11 @@ export default function GuestReservationSection() {
                 maxLength: { value: 255, message: 'お名前は 255 文字以内です' },
               })}
             />
-            {errors.contact_name && <p className={errorClass}>{errors.contact_name.message}</p>}
+            {errors.contact_name && (
+              <p id="guest-name-error" className={errorClass}>
+                {errors.contact_name.message}
+              </p>
+            )}
           </div>
           <div>
             <label className={labelClass} htmlFor="guest-contact-phone">
@@ -130,18 +150,61 @@ export default function GuestReservationSection() {
             </label>
             <input
               id="guest-contact-phone"
+              aria-invalid={!!errors.contact_phone_number}
+              aria-describedby={errors.contact_phone_number ? 'guest-phone-error' : undefined}
               type="tel"
               className={fieldClass}
               style={fieldStyle}
               {...register('contact_phone_number', {
-                required: 'お電話番号をご入力ください',
                 maxLength: { value: 50, message: '電話番号は 50 文字以内です' },
+                validate: value =>
+                  [value, getValues('contact_email'), getValues('contact_line_id')].some(v =>
+                    v.trim()
+                  ) || '電話・メール・LINEのいずれかをご入力ください',
               })}
             />
             {errors.contact_phone_number && (
-              <p className={errorClass}>{errors.contact_phone_number.message}</p>
+              <p id="guest-phone-error" className={errorClass}>
+                {errors.contact_phone_number.message}
+              </p>
             )}
           </div>
+          <p className="text-sm text-[var(--storefront-fg)]">
+            電話・メール・LINEのいずれかをご入力ください。
+          </p>
+          {(
+            [
+              ['contact_email', 'メール', 'email', 254],
+              ['contact_line_id', 'LINE ID', 'text', 255],
+            ] as const
+          ).map(([key, label, type, maxLength]) => (
+            <div key={key}>
+              <label className={labelClass} htmlFor={key}>
+                {label}
+              </label>
+              <input
+                id={key}
+                type={type}
+                aria-invalid={!!errors[key]}
+                aria-describedby={errors[key] ? `${key}-error` : undefined}
+                className={fieldClass}
+                style={fieldStyle}
+                {...register(key, {
+                  maxLength: { value: maxLength, message: `${label}は${maxLength}文字以内です` },
+                  validate: value =>
+                    key !== 'contact_email' ||
+                    !value.trim() ||
+                    EMAIL_PATTERN.test(value.trim()) ||
+                    EMAIL_PATTERN_MESSAGE,
+                })}
+              />
+              {errors[key] && (
+                <p id={`${key}-error`} className={errorClass}>
+                  {errors[key]?.message}
+                </p>
+              )}
+            </div>
+          ))}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass} htmlFor="guest-business-date">

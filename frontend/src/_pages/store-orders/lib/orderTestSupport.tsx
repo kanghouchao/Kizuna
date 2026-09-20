@@ -26,6 +26,7 @@ export const preview: OrderPreview = {
 };
 export function courseApiMocks() {
   return {
+    customerCandidates: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
     specialServiceCandidates: jest
       .fn()
       .mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 }),

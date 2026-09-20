@@ -75,21 +75,6 @@ public class OrderUpdateRequest {
   private String remarks;
   private String castDriverMessage;
 
-  /**
-   * 受付で録入された連絡先の氏名。<b>顧客が着いていない受注の誤記の訂正のためだけ</b>にあり、顧客が着いた受注へ送ると 400 で撥ねられる（名乗りの正本は台帳の側にある）。
-   *
-   * <p>送っても台帳照合（0 件建档 / 1 件紐づけ / 複数断念）は再走しない。事後に受注を顧客へ着ける操作は別の口が担う。
-   *
-   * <p>上限は行き先の列と同じ（{@code t_orders.contact_name} = VARCHAR(255)）。契約で撥ねないと、溢れた値が更新時の SQLSTATE 22001
-   * になり、理由の分かる 400 ではなく 500 で返る。
-   */
-  @Size(max = 255, message = "お客様名は 255 文字以内です")
-  private String contactName;
-
-  /**
-   * 受付で録入された連絡先の電話番号。{@link #contactName} と同じ扱い（上限は {@code t_orders.contact_phone_number} =
-   * VARCHAR(50)）。
-   */
-  @Size(max = 50, message = "電話番号は 50 文字以内です")
-  private String contactPhoneNumber;
+  @Valid private CustomerSelectionRequest customerSelection;
+  @Valid private ContactSnapshotRequest contactSnapshot;
 }

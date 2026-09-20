@@ -208,25 +208,6 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("統合前は複数一致で顧客未設定に落ちていた番号が、統合後は存続行に着くこと")
-  void collapsesAMultipleMatchIntoTheSurvivingRow() {
-    String phoneNumber = phone("照合");
-    String surviving = createCustomerWithPhone("照合存続-" + nonce, phoneNumber);
-    String merged = createCustomerWithPhone("照合被統合-" + nonce, phoneNumber);
-
-    ResponseEntity<JsonNode> beforeMerge = orderByPhone(phoneNumber, "照合前");
-    assertThat(beforeMerge.getBody().hasNonNull("customer_id"))
-        .as("前提: 統合前は複数一致で自動照合を断念すること")
-        .isFalse();
-
-    assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
-
-    // 重複を畳んだ番号が 1 行へ収束する。これが果たされないと統合した意味が無い
-    ResponseEntity<JsonNode> afterMerge = orderByPhone(phoneNumber, "照合後");
-    assertThat(afterMerge.getBody().path("customer_id").asString()).isEqualTo(surviving);
-  }
-
-  @Test
   @DisplayName("第一電話番号が一致する 2 行が候補に出て、見比べる材料（受注件数・紐づけの有無）が並ぶこと")
   void listsDuplicateCandidatesWithTheMaterialNeededToCompareThem() {
     String phoneNumber = phone("候補");
@@ -477,15 +458,14 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("受注の顧客指定に旧 ID を渡すと、受注が存続行に着くこと")
-  void landsAnOrderOnTheSurvivingRowWhenGivenTheOldCustomerId() {
+  @DisplayName("受注では統合済みの旧 ID を拒否し、存続顧客の再選択を求めること")
+  void rejectsAnOrderSelectionOfAMergedCustomer() {
     String surviving = createCustomer("受注存続-" + nonce);
     String merged = createCustomer("受注被統合-" + nonce);
     assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
 
-    String orderId = orderFor(merged, "旧ID指定");
-
-    assertThat(customerOf(orderId)).isEqualTo(surviving);
+    assertThat(orderSelectingCustomer(merged, createCast("旧ID検証"), "旧ID指定").getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(ordersOn(merged)).as("墓標に着いた受注が無いこと").isZero();
   }
 
@@ -800,11 +780,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   // ==================== 並行 ====================
 
   @Test
-  @DisplayName("統合が墓標化を済ませて保持している間に走った受注録入は、待ってから存続行に着くこと")
-  void anOrderCreatedWhileAMergeHoldsTheRowLandsOnTheSurvivingRow() throws Exception {
-    // 統合と受注録入を HTTP 2 本の外から整列させる手段が無いので、断言面を配線へ下ろす。
-    // 「墓標化を済ませてまだコミットしていない統合」を別トランザクションで作り、電話照合が
-    // 統合前の行を掴んだ受注録入がそれを待ってから、統合先へ着くことを固定する。
+  @DisplayName("統合中の顧客選択は競合し、統合後は存続顧客を選び直すこと")
+  void anOrderSelectionConflictsWithMergeAndRequiresReselection() throws Exception {
     String phoneNumber = phone("並行照合");
     String surviving = createCustomer("並行照合存続-" + nonce);
     String tombstone = createCustomerWithPhone("並行照合被統合-" + nonce, phoneNumber);
@@ -818,17 +795,15 @@ class CustomerMergeIT extends CrossStoreTestSupport {
           pool.submit(() -> holdCustomerRow(tombstone, surviving, mergeHeld, releaseMerge));
       assertThat(mergeHeld.await(30, TimeUnit.SECONDS)).as("前提: 統合が墓標化を済ませて待つこと").isTrue();
 
-      Future<ResponseEntity<JsonNode>> concurrentOrder =
-          pool.submit(() -> orderByPhone(phoneNumber, castId, "並行照合"));
-      assertThatThrownBy(() -> concurrentOrder.get(3, TimeUnit.SECONDS))
-          .as("受注録入は統合の確定を待つこと")
-          .isInstanceOf(TimeoutException.class);
+      assertThat(orderSelectingCustomer(tombstone, castId, "並行選択").getStatusCode())
+          .isEqualTo(HttpStatus.CONFLICT);
 
       releaseMerge.countDown();
       inFlightMerge.get(30, TimeUnit.SECONDS);
 
-      ResponseEntity<JsonNode> created = concurrentOrder.get(30, TimeUnit.SECONDS);
-      // 押さえた実体から統合先を読むと、電話照合が先に載せた古い値（統合先なし）を見て墓標に着く
+      assertThat(orderSelectingCustomer(tombstone, castId, "統合済み").getStatusCode())
+          .isEqualTo(HttpStatus.NOT_FOUND);
+      ResponseEntity<JsonNode> created = orderSelectingCustomer(surviving, castId, "選び直し");
       assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
       assertThat(created.getBody().path("customer_id").asString()).isEqualTo(surviving);
     } finally {
@@ -842,7 +817,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   @DisplayName("統合が存続行のロックを待っている間に成立した受注は、統合の付替えが拾うこと")
   void anOrderCreatedWhileAMergeWaitsIsPickedUpByTheRepointing() throws Exception {
     // もう一方の順序。統合は顧客 ID の昇順で押さえるので、存続行を小さい方に選ぶと、統合は
-    // 被統合行に触れないまま待つ — その隙に電話照合が生きた被統合行を掴む形を決定的に作れる。
+    // 被統合行に触れないまま待つ。その間に明示選択された顧客へ受注を作る。
     List<String> pair = customerPairInIdOrder("並行受注先");
     String surviving = pair.get(0);
     String merged = pair.get(1);
@@ -865,7 +840,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
           .as("統合は存続行のロックを待つこと")
           .isInstanceOf(TimeoutException.class);
 
-      ResponseEntity<JsonNode> created = orderByPhone(phoneNumber, castId, "並行受注先");
+      ResponseEntity<JsonNode> created = orderSelectingCustomer(merged, castId, "並行受注先");
       orderId = created.getBody().path("id").asString();
       assertThat(created.getBody().path("customer_id").asString())
           .as("前提: 統合の前に成立した受注は、まだ生きている行に着くこと")
@@ -1285,9 +1260,9 @@ class CustomerMergeIT extends CrossStoreTestSupport {
             + LocalDate.now()
             + "\", \"cast_id\": \""
             + castId
-            + "\", \"pax\": 2, \"customer_id\": \""
+            + "\", \"pax\": 2, \"customer_selection\": {\"mode\":\"EXISTING\",\"customer_id\": \""
             + customerId
-            + "\", \"remarks\": \""
+            + "\"}, \"remarks\": \""
             + label
             + "\"}";
     ResponseEntity<JsonNode> created =
@@ -1297,30 +1272,26 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     return created.getBody().path("id").asString();
   }
 
-  /** 顧客 ID を指定せず電話番号だけで録入する受注。着地先は台帳の照合が決める。 */
-  private ResponseEntity<JsonNode> orderByPhone(String phoneNumber, String label) {
-    return orderByPhone(phoneNumber, createCast(label + "-" + nonce), label);
-  }
-
-  private ResponseEntity<JsonNode> orderByPhone(
-      String phoneNumber, String castId, String customerName) {
+  private ResponseEntity<JsonNode> orderSelectingCustomer(
+      String customerId, String castId, String name) {
     String body =
-        "{\"receptionist_id\": "
+        "{\"receptionist_id\":"
             + SEED_RECEPTIONIST_ID
-            + ", \"business_date\": \""
+            + ",\"business_date\":\""
             + LocalDate.now()
-            + "\", \"cast_id\": \""
+            + "\",\"cast_id\":\""
             + castId
-            + "\", \"customer_name\": \""
-            + customerName
-            + "\", \"phone_number\": \""
-            + phoneNumber
-            + "\"}";
-    ResponseEntity<JsonNode> created =
-        rest.postForEntity(
-            "/store/orders", orderFixtureRequest(body, managerHeaders(STORE_A)), JsonNode.class);
-    assertThat(created.getStatusCode()).as("前提: 電話番号での受注録入が成立すること").isEqualTo(HttpStatus.CREATED);
-    return created;
+            + "\",\"customer_selection\":{\"mode\":\"EXISTING\",\"customer_id\":\""
+            + customerId
+            + "\"},\"contact_snapshot\":{\"name\":\""
+            + name
+            + "\"}}";
+    return submitPreviewed(
+        "/store/orders",
+        HttpMethod.POST,
+        "/store/orders/preview",
+        withCourseFixture(body, managerHeaders(STORE_A)),
+        managerHeaders(STORE_A));
   }
 
   /** 店舗が起こす受注は確定で出生するため、作成だけで確定済みになる。 */

@@ -22,6 +22,7 @@ import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
+import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
@@ -365,7 +366,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void orderUpdateContractAcceptsAnOmittedCastAndReceptionist() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.update(any(), any())).thenReturn(OrderWorkQueueResponse.builder().build());
+    when(orderService.update(any(), any())).thenReturn(OrderResponse.builder().build());
 
     // 省略を契約で撥ねると、指名・受付担当が未設定のまま確定した受注が編集できなくなる。
     // 「既にある指名・受付担当は外せない」判定は受注の状態を見るサービス層が持つ（OrderServiceTest）。
@@ -387,13 +388,13 @@ class OrderControllerTest {
   void orderCreateRejectsContactLongerThanItsColumn() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
-    // 顧客が着かない受注では録入された連絡先が t_orders へ入る。契約で撥ねないと、溢れた値は
+    // 受付時の連絡先が t_orders へ入る。契約で撥ねないと、溢れた値は
     // 挿入時の SQLSTATE 22001 になり、理由の分かる 400 ではなく 500 で返る
     String body =
         "{\"receptionist_id\": 1, \"business_date\": \"2026-08-12\", \"cast_id\": \"cast-1\""
-            + ", \"customer_name\": \""
+            + ", \"customer_selection\":{\"mode\":\"NONE\"},\"contact_snapshot\": {\"name\": \""
             + "あ".repeat(256)
-            + "\"}";
+            + "\"}}";
 
     mockMvc.perform(storePost("/store/orders", body)).andExpect(status().isBadRequest());
     verifyNoInteractions(orderService);

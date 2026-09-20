@@ -718,7 +718,11 @@ class OrderAttributionInvalidationIT extends CrossStoreTestSupport {
             + "\", \"cast_id\": \""
             + castId
             + "\", \"pax\": 2"
-            + (customerId == null ? "" : ", \"customer_id\": \"" + customerId + "\"")
+            + (customerId == null
+                ? ""
+                : ", \"customer_selection\": {\"mode\":\"EXISTING\",\"customer_id\": \""
+                    + customerId
+                    + "\"}")
             + ", \"remarks\": \""
             + remarks
             + "\"}";

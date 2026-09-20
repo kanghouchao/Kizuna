@@ -68,13 +68,22 @@ public class OrderApplication extends StoreScopedEntity {
   @Column(name = "requester_declared_name")
   private String requesterDeclaredName;
 
-  /** ゲスト申請で本人が残した連絡先の氏名。会員申請では null（会員は名乗った名前を上の列が預かる）。 */
+  /** 顧客台帳とは独立した受付時の写し。 */
   @Column(name = "contact_name")
   private String contactName;
 
-  /** ゲスト申請で本人が残した折返し先の電話番号。確定＝店舗が折返し連絡で内容を詰める操作なので、ゲスト申請では必須になる。 */
   @Column(name = "contact_phone_number", length = 50)
   private String contactPhoneNumber;
+
+  @Column(name = "contact_email", length = 254)
+  private String contactEmail;
+
+  @Column(name = "contact_line_id", length = 255)
+  private String contactLineId;
+
+  public ContactSnapshot getContactSnapshot() {
+    return new ContactSnapshot(contactName, contactPhoneNumber, contactEmail, contactLineId);
+  }
 
   /** 謝絶の理由。謝絶の根拠そのものなので謝絶では必須で、謝絶していない申請では null。分類軸ではない（enum 化しない）。 */
   @Column(name = "declined_reason", length = 500)

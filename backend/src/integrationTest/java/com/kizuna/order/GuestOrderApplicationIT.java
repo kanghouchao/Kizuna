@@ -45,9 +45,9 @@ class GuestOrderApplicationIT extends CrossStoreTestSupport {
   private static String guestBody(String contactName) {
     return "{\"business_date\": \""
         + LocalDate.now().plusDays(1)
-        + "\", \"pax\": 2, \"contact_name\": \""
+        + "\", \"pax\": 2, \"contact_snapshot\": {\"name\": \""
         + contactName
-        + "\", \"contact_phone_number\": \"09000000000\"}";
+        + "\", \"phone_number\": \"09012345678\"}}";
   }
 
   private ResponseEntity<JsonNode> post(HttpHeaders headers, String body) {
@@ -100,7 +100,7 @@ class GuestOrderApplicationIT extends CrossStoreTestSupport {
     String body =
         "{\"business_date\": \""
             + LocalDate.now().minusDays(1)
-            + "\", \"pax\": 2, \"contact_name\": \"過去日\", \"contact_phone_number\": \"09000000000\"}";
+            + "\", \"pax\": 2, \"contact_snapshot\": {\"name\": \"過去日\", \"phone_number\": \"09012345678\"}}";
 
     assertThat(post(anonymousStoreHeaders(STORE_A), body).getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
@@ -132,7 +132,10 @@ class GuestOrderApplicationIT extends CrossStoreTestSupport {
     String applicationId = created.getBody().path("id").asString();
 
     var headers = storeHeaders(STORE_A);
-    String body = "{\"business_date\":\"" + LocalDate.now().plusDays(1) + "\",\"pax\":2}";
+    String body =
+        "{\"business_date\":\""
+            + LocalDate.now().plusDays(1)
+            + "\",\"pax\":2,\"customer_selection\":{\"mode\":\"NONE\"}}";
     ResponseEntity<JsonNode> confirmed =
         submitPreviewed(
             "/store/order-applications/" + applicationId + "/confirmation",

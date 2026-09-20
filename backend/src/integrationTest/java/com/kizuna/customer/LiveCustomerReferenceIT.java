@@ -107,8 +107,7 @@ class LiveCustomerReferenceIT extends CrossStoreTestSupport {
                 managerHeaders(STORE_A)),
             JsonNode.class);
     assertThat(created.getStatusCode()).as("端点からの無帰属受注も成立すること").isEqualTo(HttpStatus.CREATED);
-    // 顧客欄は non_null 直列化なので、顧客未設定は「欄が無い」として現れる
-    assertThat(created.getBody().has("customer_id")).isFalse();
+    assertThat(created.getBody().path("customer_id").isNull()).isTrue();
   }
 
   /** 違反が起きること自体と、その違反から制約名が取れることの両方を見る。 */

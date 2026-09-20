@@ -372,7 +372,7 @@ export async function getOrder(
   token: string,
   storeId: string,
   id: string
-): Promise<{ id: string; completed_at?: string; version: number; total_fee: number; fee_lines: { kind: string; amount: number; system_owned: boolean }[] }> {
+): Promise<{ id: string; customer_id: string | null; contact_snapshot: { name: string | null; phone_number: string | null; email: string | null; line_id: string | null }; completed_at?: string; version: number; total_fee: number; fee_lines: { kind: string; amount: number; system_owned: boolean }[] }> {
   const response = await request.get(`${PLATFORM_URL}/api/store/orders/${id}`, {
     headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
   });
@@ -508,7 +508,7 @@ export async function createAgreedOrder(
   request: APIRequestContext, token: string, castId: string, courseId: string, customerName: string,
 ): Promise<string> {
   const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
-  const data = { cast_id: castId, course_id: courseId, customer_name: customerName,
+  const data = { cast_id: castId, course_id: courseId, customer_selection: { mode: 'NONE' }, contact_snapshot: { name: customerName },
     business_date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date()) };
   const preview = await request.post('/api/store/orders/preview', { headers, data });
   expect(preview.ok()).toBeTruthy();

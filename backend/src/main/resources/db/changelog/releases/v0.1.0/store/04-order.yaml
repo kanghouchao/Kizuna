@@ -218,15 +218,20 @@ databaseChangeLog:
                   type: VARCHAR(255)
                   remarks: 申請時に本人が店舗へ名乗った名前（確定時の自動整備で台帳行の氏名になる）
               - column:
-                  # 電話番号が台帳で複数顧客に一致すると自動照合を断念して顧客未設定で成立させるため
-                  # （ADR 0009）、写しが無いと録入された連絡先がどこにも残らない。
+                  # 顧客台帳の変更・統合に左右されない受付時の写し。
                   name: contact_name
                   type: VARCHAR(255)
-                  remarks: 受付で録入された連絡先の氏名（顧客未設定の受注にのみ入る）
+                  remarks: 受付時の連絡先氏名
               - column:
                   name: contact_phone_number
                   type: VARCHAR(50)
-                  remarks: 受付で録入された連絡先の電話番号（顧客未設定の受注にのみ入る）
+              - column:
+                  name: contact_email
+                  type: VARCHAR(254)
+              - column:
+                  name: contact_line_id
+                  type: VARCHAR(255)
+                  remarks: 受付時のLINE ID
               - column:
                   # 確定後の取消の記録（ADR 0013）。理由は取消の根拠そのものなので取消では必須
                   # （分類軸ではないため enum 化しない）。
@@ -1160,15 +1165,20 @@ databaseChangeLog:
                   type: VARCHAR(255)
                   remarks: 申請時に本人が店舗へ名乗った名前（確定時の自動整備で台帳行の氏名になる）
               - column:
-                  # ゲスト申請の連絡先。確定は店舗が折返し連絡で内容を詰める操作なので、この 2 列が
-                  # 無いとゲスト申請は処理しようがない。会員申請では NULL（名乗りは上の列が預かる）。
+                  # ゲスト申請で受理した原入力は確認後も保持する。
                   name: contact_name
                   type: VARCHAR(255)
                   remarks: ゲスト申請の連絡先氏名。会員申請では NULL
               - column:
                   name: contact_phone_number
                   type: VARCHAR(50)
-                  remarks: ゲスト申請の折返し先電話番号。会員申請では NULL
+              - column:
+                  name: contact_email
+                  type: VARCHAR(254)
+              - column:
+                  name: contact_line_id
+                  type: VARCHAR(255)
+                  remarks: ゲスト申請のLINE ID原入力
               - column:
                   name: declined_reason
                   type: VARCHAR(500)

@@ -9,11 +9,13 @@ import { OrderServiceProgress } from './OrderServiceProgress';
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
-import { useRef } from 'react';
+import { OrderContactFields } from './OrderContactFields';
+import { OrderCustomerField } from './OrderCustomerField';
+import { ContactSnapshot, CustomerSelection } from '@/entities/order';
 import Link from 'next/link';
+import { useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
-import { ExternalLinkIcon } from 'lucide-react';
 import {
   Order,
   OrderFeeLineInput,
@@ -31,7 +33,7 @@ import {
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { formatDateTime } from '../lib/formatDateTime';
-import { UNLINKED_NOTE, customerHeadingText, customerLabel } from '../lib/customerLabel';
+import { customerHeadingText } from '../lib/customerLabel';
 // 日付・時刻・数値の空欄は「送らない」。この契約は null を「変更しない」と読むため空への書き換えを
 // 表現する形が無く、空にしたつもりの欄は元の値が残る（空文字を送ると型の変換に失敗して 400）。
 import { optionalDate, optionalNumber, optionalTime, toTimeInput } from '../lib/formValues';
@@ -69,8 +71,8 @@ interface OrderEditFormValues {
   media_name: string;
   remarks: string;
   cast_driver_message: string;
-  contact_name: string;
-  contact_phone_number: string;
+  contact_snapshot: ContactSnapshot;
+  customer_selection: CustomerSelection;
 }
 
 const EMPTY_VALUES: OrderEditFormValues = {
@@ -89,8 +91,8 @@ const EMPTY_VALUES: OrderEditFormValues = {
   media_name: '',
   remarks: '',
   cast_driver_message: '',
-  contact_name: '',
-  contact_phone_number: '',
+  contact_snapshot: {},
+  customer_selection: { mode: 'NONE' },
 };
 
 /** 播いた内訳から変わったか。行の集合には「触ったか」の真偽が付かないので、値そのものを突き合わせる。 */
@@ -116,19 +118,7 @@ function pickEdited(
   ) as Partial<OrderUpdateRequest>;
 }
 
-/**
- * 受注 1 件の編集ページ。欄が 17 あり、頁の縦スクロールだけで端から端まで辿れる高さが要る。
- *
- * <p>開くたびにサーバから 1 件を読み直す。一覧の行を種にすると、他の操作者が直した後の画面で 陳腐化した値をそのまま送り返してしまう。
- *
- * <p>送るのは<b>触った欄だけ</b>。全項目を毎回運ぶと、この画面を開いている間に別の操作者が同じ受注を直した場合、
- * 触ってもいない項目まで開いた時点の値で押し戻してしまう。文字列の項目は空欄を空文字で送るので「空にする」も
- * 表せるが、日付・時刻・数値にその形は無い（契約が「変更しない」を null で表すため）。
- *
- * <p>顧客区は<b>読み取りと遷移だけ</b>。顧客台帳の項目をここから直せると、受注 1 件を直したつもりの 変更が同じ顧客の他の受注へ波及する。訂正は顧客詳細で行う。
- *
- * <p>連絡先の 2 項目は顧客が着いていない受注にだけ出す。着いた受注では名乗りの正本が台帳の行にあり、 送ってもサーバが撥ねる。
- */
+/** 受注の入力は取得時の版と照合し、変更した項目だけを送る。 */
 export default function OrderEditPage() {
   const confirmation = useOrderConfirmation();
   const params = useParams();
@@ -170,15 +160,16 @@ export default function OrderEditPage() {
         media_name: current.media_name ?? '',
         remarks: current.remarks ?? '',
         cast_driver_message: current.cast_driver_message ?? '',
-        contact_name: current.contact_name ?? '',
-        contact_phone_number: current.contact_phone_number ?? '',
+        contact_snapshot: current.contact_snapshot ?? {},
+        customer_selection: current.customer_id
+          ? { mode: 'EXISTING', customer_id: current.customer_id }
+          : { mode: 'NONE' },
       },
       { keepDirtyValues: progressOrder.current === current }
     );
     progressOrder.current = null;
   });
   const seeded = current !== null && initialized && !isLoading;
-  const linked = current?.customer_id != null;
   const startScope = resource.capture();
 
   const submit = async (values: OrderEditFormValues) => {
@@ -199,13 +190,8 @@ export default function OrderEditPage() {
       media_name: values.media_name.trim(),
       remarks: values.remarks.trim(),
       cast_driver_message: values.cast_driver_message.trim(),
-      // 顧客が着いた受注へ送るとサーバが撥ねる。着いていない受注でだけ運ぶ
-      ...(linked
-        ? {}
-        : {
-            contact_name: values.contact_name.trim(),
-            contact_phone_number: values.contact_phone_number.trim(),
-          }),
+      contact_snapshot: values.contact_snapshot,
+      customer_selection: values.customer_selection,
     };
     const request: OrderUpdateRequest = {
       ...((values.cast_id || current.cast_id) !== current.cast_id
@@ -256,8 +242,6 @@ export default function OrderEditPage() {
       notify.error(getApiErrorMessage(error, '受注の更新に失敗しました'));
     }
   };
-
-  const label = current === null ? null : customerLabel(current);
 
   return (
     <>
@@ -426,57 +410,11 @@ export default function OrderEditPage() {
                 title="お客様・連絡先"
                 description="顧客台帳の情報は顧客詳細から確認できます。"
               >
-                {linked ? (
-                  // 台帳の項目はここから直せない。受注 1 件のつもりの訂正が同じ顧客の他の受注へ波及する
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <span className="text-foreground text-sm">{label?.name ?? 'お客様名なし'}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      render={
-                        <Link
-                          href={storePath(storeId, `/customers/${current.customer_id}`)}
-                          target="_blank"
-                        />
-                      }
-                    >
-                      顧客詳細を開く
-                      <ExternalLinkIcon aria-hidden="true" />
-                    </Button>
-                  </div>
-                ) : (
-                  // 顧客が着いていない受注では、録入された連絡先が唯一の名乗りなのでここでしか直せない
-                  <div className="grid grid-cols-2 gap-6">
-                    <p className="text-muted-foreground col-span-2 text-xs">
-                      台帳の顧客に着いていない受注です{UNLINKED_NOTE}
-                      。ここで直せるのは受付で録入した連絡先だけで、 台帳への登録は行われません。
-                    </p>
-                    <FormField
-                      control={control}
-                      name="contact_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>お客様名</FormLabel>
-                          <FormControl>
-                            <Input type="text" {...field} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={control}
-                      name="contact_phone_number"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>電話番号</FormLabel>
-                          <FormControl>
-                            <Input type="text" {...field} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                )}
+                <OrderCustomerField
+                  locked={!!current.requester_member_code}
+                  customerName={current.customer_name}
+                />
+                <OrderContactFields />
               </OrderEditorSection>
 
               <OrderEditorSection title="訪問先" description="この受注の訪問先を編集します。">

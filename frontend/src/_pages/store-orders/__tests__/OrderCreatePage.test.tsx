@@ -87,7 +87,8 @@ describe('新規オーダー登録の送信ペイロード', () => {
     await waitFor(() => expect(mockedOrderApi.create).toHaveBeenCalledTimes(1));
     const body = mockedOrderApi.create.mock.calls[0][0];
     expect(body).toMatchObject({
-      customer_name: '山田',
+      customer_selection: { mode: 'NONE' },
+      contact_snapshot: { name: '山田' },
       building_name: '第一ビル',
       business_date: '2026-09-12',
       arrival_scheduled_start_time: '19:30:00',

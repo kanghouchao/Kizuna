@@ -38,7 +38,7 @@ public class OrderWorkQueueResponse {
   private String requesterMemberCode;
   private String customerName;
 
-  // 受付で録入された連絡先。顧客が着かなかった受注にだけ入る（着いた受注では台帳の行が名乗りを持つ）
+  // 受注に記録した氏名・電話の写し。台帳の現在値とは独立する
   private String contactName;
   private String contactPhoneNumber;
 

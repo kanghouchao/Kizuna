@@ -62,8 +62,7 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
 
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.classification).toBe('ーー');
-    expect(body.has_pet).toBe(false);
+    expect(body.customer_selection).toEqual({ mode: 'NONE' });
     expect(body.course_id).toBe('course-1');
     expect(body).not.toHaveProperty('course_name');
     expect(body.fee_lines).toEqual([]);
@@ -90,25 +89,16 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     expect(body.receptionist_id).toBe('');
   });
 
-  it('区分の選択がそのままの文字列で送られること', async () => {
+  it('電話入力は顧客未設定を変えず、台帳へ転記しない', async () => {
     const { onSubmit } = renderForm();
-
-    await selectReceptionist();
-    await pickOption('区分', 'ラブホ');
+    fireEvent.change(screen.getByLabelText('電話番号'), { target: { value: '09012345678' } });
+    fireEvent.change(screen.getByLabelText('メール'), { target: { value: 'contact@example.com' } });
     const body = await submitAndGetBody(onSubmit);
-
-    expect(body.classification).toBe('ラブホ');
-  });
-
-  it('ペット有無が文字列ではなく真偽値へ復元されて送られること', async () => {
-    const { onSubmit } = renderForm();
-
-    await selectReceptionist();
-    await pickOption('ペット有無', 'あり');
-    const body = await submitAndGetBody(onSubmit);
-
-    expect(body.has_pet).toBe(true);
-    expect(typeof body.has_pet).toBe('boolean');
+    expect(body.customer_selection).toEqual({ mode: 'NONE' });
+    expect(body.contact_snapshot).toMatchObject({
+      phone_number: '09012345678',
+      email: 'contact@example.com',
+    });
   });
 
   it('コース分が文字列ではなく数値へ復元されて送られること', async () => {

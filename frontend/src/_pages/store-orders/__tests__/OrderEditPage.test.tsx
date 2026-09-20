@@ -80,6 +80,36 @@ beforeEach(() => {
 });
 
 describe('受注の編集ページ', () => {
+  it('選び直した顧客名は検索結果から消えても元の顧客名へ戻らない', async () => {
+    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+    mockedOrderApi.customerCandidates.mockResolvedValue({
+      rows: [{ id: 'c2', name: '別の顧客', phone_number: null }],
+      nextCursor: null,
+    });
+    mockedOrderApi.update.mockResolvedValue(confirmedOrder({ customer_id: 'c2' }));
+    render(<OrderEditPage />);
+    fireEvent.click(await screen.findByRole('combobox', { name: '既存顧客の検索' }));
+    const option = await screen.findByRole('option', { name: /別の顧客/ });
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    mockedOrderApi.customerCandidates.mockResolvedValue({ rows: [], nextCursor: null });
+    fireEvent.click(screen.getByRole('combobox', { name: '既存顧客の検索' }));
+    fireEvent.change(screen.getByLabelText('顧客検索（氏名・電話）'), {
+      target: { value: '候補なし' },
+    });
+    await screen.findByText('一致する顧客がいません');
+    fireEvent.keyDown(screen.getByLabelText('顧客検索（氏名・電話）'), { key: 'Escape' });
+    expect(screen.getByRole('combobox', { name: '既存顧客の検索' })).toHaveTextContent('別の顧客');
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
+    await waitFor(() =>
+      expect(mockedOrderApi.update).toHaveBeenCalledWith(
+        'o1',
+        expect.objectContaining({ customer_selection: { mode: 'EXISTING', customer_id: 'c2' } })
+      )
+    );
+  });
+
   it('取消済みの受注は予定報酬ではなく報酬発生なしと表示すること', async () => {
     mockedOrderApi.get.mockResolvedValue(
       confirmedOrder({
@@ -217,25 +247,34 @@ describe('受注の編集ページ', () => {
     );
   });
 
-  it('顧客の着いた受注では連絡先を編集させず、顧客詳細への導線を出すこと', async () => {
-    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+  it('顧客の着いた受注でも受付時の写しを編集できる', async () => {
+    mockedOrderApi.get.mockResolvedValue(
+      confirmedOrder({ contact_snapshot: { name: '今回の名乗り', email: 'once@example.com' } })
+    );
+    mockedOrderApi.update.mockResolvedValue(confirmedOrder());
     render(<OrderEditPage />);
-
-    // 受注 1 件を直したつもりの変更が同じ顧客の他の受注へ波及しないため、台帳の項目は読み取り
+    expect(await screen.findByLabelText('メール')).toHaveValue('once@example.com');
+    fireEvent.change(screen.getByLabelText('メール'), { target: { value: 'changed@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
     await waitFor(() =>
-      expect(screen.getByRole('link', { name: /顧客詳細を開く/ })).toHaveAttribute(
-        'href',
-        '/store/1/customers/c1'
+      expect(mockedOrderApi.update).toHaveBeenCalledWith(
+        'o1',
+        expect.objectContaining({
+          contact_snapshot: expect.objectContaining({
+            name: '今回の名乗り',
+            email: 'changed@example.com',
+          }),
+        })
       )
     );
-    expect(screen.queryByLabelText('電話番号')).not.toBeInTheDocument();
   });
 
   it('顧客の着いていない受注では連絡先を訂正でき、その 2 項目を送ること', async () => {
     const unlinked = confirmedOrder({
       customer_id: undefined,
       customer_name: undefined,
-      contact_name: '誤記の名前',
+      contact_snapshot: { name: '誤記の名前' },
     });
     mockedOrderApi.get.mockResolvedValue(unlinked);
     mockedOrderApi.update.mockResolvedValue(unlinked);
@@ -250,7 +289,9 @@ describe('受注の編集ページ', () => {
     await waitFor(() =>
       expect(mockedOrderApi.update).toHaveBeenCalledWith(
         'o1',
-        expect.objectContaining({ contact_name: '正しい名前' })
+        expect.objectContaining({
+          contact_snapshot: expect.objectContaining({ name: '正しい名前' }),
+        })
       )
     );
   });

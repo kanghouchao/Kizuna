@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.order.api.dto.ContactSnapshotRequest;
 import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
@@ -43,8 +44,7 @@ class GuestOrderApplicationServiceTest {
     GuestOrderApplicationCreateRequest request = new GuestOrderApplicationCreateRequest();
     request.setBusinessDate(VISIT_DATE);
     request.setPax(2);
-    request.setContactName("ゲスト花子");
-    request.setContactPhoneNumber("09000000000");
+    request.setContactSnapshot(new ContactSnapshotRequest("ゲスト花子", "09012345678", null, null));
     return request;
   }
 
@@ -66,7 +66,7 @@ class GuestOrderApplicationServiceTest {
     OrderApplication created = applicationCaptor.getValue();
     assertThat(created.getStatus()).isEqualTo(OrderApplicationStatus.PENDING);
     assertThat(created.getContactName()).isEqualTo("ゲスト花子");
-    assertThat(created.getContactPhoneNumber()).isEqualTo("09000000000");
+    assertThat(created.getContactPhoneNumber()).isEqualTo("09012345678");
     assertThat(created.isGuest()).as("会員コードを持たない申請がゲスト申請であること").isTrue();
     assertThat(created.getRequesterMemberId()).isNull();
   }

@@ -1,3 +1,19 @@
+export interface ContactSnapshot {
+  name?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
+  line_id?: string | null;
+}
+export type CustomerSelection =
+  | { mode: 'NONE' }
+  | { mode: 'EXISTING'; customer_id: string }
+  | { mode: 'NEW'; new_customer: { name: string } };
+export interface OrderCustomerCandidate {
+  id: string;
+  name: string | null;
+  phone_number: string | null;
+}
+
 // バックエンド API の JSON キーに一致（Jackson グローバル SNAKE_CASE）。
 // 応答の任意性は Java 側の可空性が正本。wrapper 型のフィールドは
 // default-property-inclusion: non_null によりキーごと応答から消えるため optional にする。
@@ -153,8 +169,8 @@ export interface Order {
   business_date?: string;
   arrival_scheduled_start_time?: string;
   arrival_scheduled_end_time?: string;
-  customer_id?: string;
-  customer_name?: string;
+  customer_id?: string | null;
+  customer_name?: string | null;
   cast_id?: string;
   cast_name?: string;
   pax?: number;
@@ -181,17 +197,13 @@ export interface Order {
   requester_member_code?: string;
   /**
    * 申請時に会員が店舗へ名乗った名前の写し（正本は申請行と、確定時の自動整備が起こした台帳行）。
-   * 会員行が消えた申請の確定では顧客が着かず、これが受注の唯一の名乗りになる。
+   * 受付時の連絡先を訂正しても、申請時の名乗りは変更しない。
    */
   requester_declared_name?: string;
   location_address?: string;
   location_building?: string;
-  /**
-   * 受付で録入された連絡先。台帳の顧客に着かなかった受注にだけ残る（顧客が着いた受注では
-   * 台帳の行が連絡先を持つため、応答から消える）。
-   */
-  contact_name?: string;
-  contact_phone_number?: string;
+  /** 顧客参照と独立した受付時の写し。台帳の変更では書き換わらない。 */
+  contact_snapshot?: ContactSnapshot;
   /**
    * 取消の記録（理由・実行者の表示名・時刻）。取消していない受注では応答から消える。
    *
@@ -234,7 +246,7 @@ export interface OrderWorkQueueRow {
   /** 申請した会員の会員コード。店舗が起こした受注では応答から消える。 */
   requester_member_code?: string;
   customer_name?: string;
-  /** 受付で録入された連絡先。台帳の顧客に着かなかった受注にだけ残る。 */
+  /** 受注の受付時に録入された氏名・電話の写し。 */
   contact_name?: string;
   contact_phone_number?: string;
   /** 申請時に会員が店舗へ名乗った名前。会員行が消えた申請由来の受注では唯一の名乗りになる。 */
@@ -370,12 +382,9 @@ export interface OrderUpdateRequest {
   media_name?: string;
   remarks?: string;
   cast_driver_message?: string;
-  /**
-   * 受付で録入された連絡先の訂正。顧客が着いていない受注でだけ送れる（着いた受注へ送ると 400）。
-   * 送っても台帳照合は再走しない。
-   */
-  contact_name?: string;
-  contact_phone_number?: string;
+  /** 省略は変更なし。指定したオブジェクトで写し全体を置換し、空オブジェクトなら消去する。 */
+  contact_snapshot?: ContactSnapshot;
+  customer_selection?: CustomerSelection;
 }
 
 /** 未完了（CONFIRMED / IN_SERVICE）の受注の取消（POST /store/orders/{id}/cancellation）。理由は必須（500 文字以内）。 */
@@ -461,8 +470,8 @@ export interface OrderCreateRequest {
   business_date: string;
   arrival_scheduled_start_time?: string;
   arrival_scheduled_end_time?: string;
-  customer_id?: string;
-  customer_name?: string;
+  customer_selection: CustomerSelection;
+  contact_snapshot?: ContactSnapshot;
   cast_id: string;
   pax?: number;
   /** 適用するコース名の写し。基本コース料金の明細を送るなら必須になる。 */
@@ -474,14 +483,8 @@ export interface OrderCreateRequest {
   media_name?: string;
   remarks?: string;
   cast_driver_message?: string;
-  phone_number?: string;
-  phone_number2?: string;
   address?: string;
   building_name?: string;
-  classification?: string;
-  landmark?: string;
-  has_pet?: boolean;
-  ng_type?: string;
   ng_content?: string;
 }
 
@@ -503,9 +506,8 @@ export interface OrderApplicationRow {
   requester_member_code?: string;
   /** 申請時に会員が店舗へ名乗った名前。確定まで台帳行は無いので、これが申請の唯一の名乗りになる。 */
   requester_declared_name?: string;
-  /** ゲスト申請の連絡先。折返し先であり、確定時の新規顧客フォームの予填値になる（会員申請では応答から消える）。 */
-  contact_name?: string;
-  contact_phone_number?: string;
+  /** ゲスト申請の連絡先原文。確認時に受注の写しへ予填し、台帳には転記しない。 */
+  contact_snapshot?: ContactSnapshot;
   /** 確定時に生成した受注の id。確定していない申請では応答から消える。 */
   order_id?: string;
   declined_reason?: string;
@@ -534,17 +536,8 @@ export interface OrderApplicationConfirmationRequest {
   pax?: number;
   /** 適用するコース名の写し。確定は受注の出生なので、快照はここで写る。 */
   remarks?: string;
-  /**
-   * ゲスト申請の受注を着ける既存の台帳行。new_customer との併用は 400。
-   * どちらも省略すると顧客未設定のまま成立し、申請の連絡先が受注側へ写る。
-   * 会員申請では受け付けられない（顧客は会員の紐づけが決める）。
-   */
-  customer_id?: string;
-  /** ゲスト申請の受注のために新しく起こす台帳行。 */
-  new_customer?: {
-    name: string;
-    phone_number?: string;
-  };
+  customer_selection?: CustomerSelection;
+  contact_snapshot?: ContactSnapshot;
 }
 
 /**
@@ -557,8 +550,7 @@ export interface GuestOrderApplicationCreateRequest {
   pax?: number;
   remarks?: string;
   /** 折返し先。確定は店舗が折返し連絡で内容を詰める操作なので必須。 */
-  contact_name: string;
-  contact_phone_number: string;
+  contact_snapshot: ContactSnapshot & { name: string };
 }
 
 /** ゲスト予約申請の受理応答。匿名の申請者に申請を読む口は無いため、受付番号だけが返る。 */

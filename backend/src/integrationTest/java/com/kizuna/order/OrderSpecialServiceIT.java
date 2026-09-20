@@ -451,6 +451,7 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
             .put("business_date", "2027-01-20")
             .put("cast_id", owner.cast())
             .put("course_id", course);
+    input.putObject("customer_selection").put("mode", "NONE");
     input.putArray("special_service_ids").add(service);
     var preview = call(HttpMethod.POST, "/store/orders/preview", input, manager);
     assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -975,6 +976,7 @@ class OrderSpecialServiceIT extends CrossStoreTestSupport {
             .put("business_date", "2027-01-20")
             .put("cast_id", cast)
             .put("course_id", course);
+    input.putObject("customer_selection").put("mode", "NONE");
     input.putArray("special_service_ids").add(service);
     return input;
   }

@@ -5,6 +5,7 @@ import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,11 @@ public class GuestOrderApplicationService {
   @StoreScoped
   @Transactional
   public GuestOrderApplicationResponse request(GuestOrderApplicationCreateRequest request) {
+    var contact = request.getContactSnapshot().normalized();
+    if (contact.name() == null
+        || (contact.phoneNumber() == null && contact.email() == null && contact.lineId() == null))
+      throw new ServiceException("お名前と電話・メール・LINEのいずれかを入力してください");
+    var original = request.getContactSnapshot().original();
     Long storeId = storeContext.getStoreId();
     // 指名はこの経路では受けないため常に指名なしで検める（会員の入口と同じ判定を通す）
     orderApplicationIntake.validateRequestedVisit(storeId, request.getBusinessDate(), null);
@@ -44,8 +50,10 @@ public class GuestOrderApplicationService {
             .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())
             .pax(request.getPax())
             .remarks(request.getRemarks())
-            .contactName(request.getContactName())
-            .contactPhoneNumber(request.getContactPhoneNumber())
+            .contactName(original.name())
+            .contactPhoneNumber(original.phoneNumber())
+            .contactEmail(original.email())
+            .contactLineId(original.lineId())
             .build();
 
     return new GuestOrderApplicationResponse(orderApplicationRepository.save(application).getId());

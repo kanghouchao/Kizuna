@@ -77,38 +77,8 @@ public interface CustomerRepository
   Optional<Customer> findByPhoneNumber(String phoneNumber);
 
   /**
-   * 店舗台帳のうち電話番号が一致する生きた顧客の ID。索引 {@code idx_t_customers_phone (phone_number, store_id)}
-   * は非一意で、同店同号の行は正規に起こりうる — 同伴者が連絡先を共有する場合や旧システムからの移行分がそれにあたる。
-   *
-   * <p>だから戻り値は複数行を許す形でなければならない。1 件に絞る形（{@code Optional}）で受けると、重複のある番号を引いた瞬間に {@code
-   * IncorrectResultSizeDataAccessException} で呼出側ごと落ちる。複数一致をどう扱うかは呼出側の判断で、 電話番号は台帳内の検索の手がかりに留まる（ADR
-   * 0009）。
-   *
-   * <p>墓標は照合の候補にならない（ADR 0010）。統合の目的そのものが、重複で複数一致に落ちていた番号を 1 行へ収束させることなので、
-   * 墓標が候補に残ると統合しても自動照合は断念のままになる。統合は値を合併しないため、被統合行にしかない番号は 統合後どの行にも一致しない — 残したい値の転記は人手である。
-   *
-   * <p>実体ではなく ID を返すのは、照合した行を永続化文脈へ載せないため。載せると {@link #findByIdForUpdate}
-   * のロック獲得が版の照合を伴い、照合と着地の間に統合や顧客更新が版を上げただけで、顧客行を書きもしない受注録入が 409 に落ちる。
-   */
-  @Query(
-      """
-      select c.id from com.kizuna.customer.domain.Customer c
-      where c.phoneNumber = :phoneNumber and c.storeId = :storeId and c.mergedIntoId is null
-      """)
-  List<String> findAliveIdsByPhoneNumberAndStoreId(
-      @Param("phoneNumber") String phoneNumber, @Param("storeId") Long storeId);
-
-  /**
-   * 重複候補の手がかりになる電話番号 — 当店の生きた行のうち、同じ第一電話番号を 2 行以上が持つもの。述語は {@link
-   * #findAliveIdsByPhoneNumberAndStoreId} と揃える（第一番号だけ・完全一致）— 重複が実害になるのは電話照合が引く番号だけだからである。
-   *
-   * <p>空白を除くのは、会員申請の確定時自動整備が起こす「氏名だけ・電話は空」の行が全部ひとつの偽グループに畳まれるため。
-   *
-   * <p>判定に {@code trim} を使ってはならない。PostgreSQL の 1 引数 {@code trim} が落とすのは半角空白だけで、タブ・改行・全角空白（U+3000）は
-   * 残るため素通りする（実測）。日本語の台帳では全角空白が現実に混ざるので、空白そのものが巨大な偽グループになる。 「空白以外の文字を 1 つ以上含む」を正規表現で直に問う。
-   *
-   * <p>店舗の絞り込みは {@code storeFilter} が担う（呼出側の {@code @StoreScoped} が前提）。native query にすると
-   * {@code @Filter} が掛からず店舗境界が黙って消えるので、HQL に留める。
+   * 同店の生きた顧客が共有する第一電話番号を重複候補として返す。 空白だけの番号は除く。PostgreSQL の trim は全角空白を残すため正規表現を使う。 店舗境界の
+   * storeFilter を保つため、問い合わせは HQL に留める。
    */
   String DUPLICATE_PHONE_SELECT =
       """

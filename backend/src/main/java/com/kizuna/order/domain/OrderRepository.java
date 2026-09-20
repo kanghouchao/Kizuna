@@ -91,6 +91,7 @@ public interface OrderRepository
              o.arrivalScheduledEndTime as arrivalScheduledEndTime,
              o.customerId as customerId, c.name as customerName,
              o.contactName as contactName, o.contactPhoneNumber as contactPhoneNumber,
+             o.contactEmail as contactEmail, o.contactLineId as contactLineId,
              o.castId as castId, k.name as castName,
              o.pax as pax,
              o.course as course,

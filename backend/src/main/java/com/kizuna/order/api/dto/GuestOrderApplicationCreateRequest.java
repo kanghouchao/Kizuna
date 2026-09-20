@@ -1,7 +1,6 @@
 package com.kizuna.order.api.dto;
 
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -33,11 +32,5 @@ public class GuestOrderApplicationCreateRequest {
   @Size(max = 500, message = "ご要望は 500 文字以内です")
   private String remarks;
 
-  @NotBlank(message = "お名前は必須です")
-  @Size(max = 255, message = "お名前は 255 文字以内です")
-  private String contactName;
-
-  @NotBlank(message = "電話番号は必須です")
-  @Size(max = 50, message = "電話番号は 50 文字以内です")
-  private String contactPhoneNumber;
+  @NotNull @jakarta.validation.Valid private ContactSnapshotRequest contactSnapshot;
 }
