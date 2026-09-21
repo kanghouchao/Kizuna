@@ -15,6 +15,29 @@ import tools.jackson.databind.JsonNode;
 
 class CustomerSearchIT extends CrossStoreTestSupport {
   @Test
+  void phoneFragmentsStartingWithZeroMatchInsideNumbers() {
+    var contacts = List.of(Map.of("type", "PHONE", "value", "09012340678"));
+    String first = create(STORE_A, "電話断片甲", contacts);
+    String second = create(STORE_A, "電話断片乙", contacts);
+
+    var rows = get("/store/customers?search=0678&size=2000", STORE_A).path("content");
+    var matchedIds = new ArrayList<String>();
+    for (var row : rows) {
+      if (!List.of(first, second).contains(row.path("id").asString())) continue;
+      matchedIds.add(row.path("id").asString());
+      assertThat(row.path("matched_contacts").get(0).path("type").asString()).isEqualTo("PHONE");
+      assertThat(row.path("matched_contacts").get(0).path("value").asString())
+          .isEqualTo("+819012340678");
+    }
+    assertThat(matchedIds).containsExactlyInAnyOrder(first, second);
+
+    var groups = get("/store/customers/duplicates?type=PHONE&search=0678", STORE_A).path("content");
+    assertThat(groups).hasSize(1);
+    assertThat(groups.get(0).path("matched_value").asString()).isEqualTo("+819012340678");
+    assertThat(groups.get(0).path("total").asInt()).isEqualTo(2);
+  }
+
+  @Test
   void searchReportsNonPreferredMatchesWithoutFoldingLineOrEmailLocalCase() {
     String marker = "Search" + System.nanoTime();
     String id =

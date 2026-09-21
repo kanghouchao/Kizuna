@@ -39,6 +39,7 @@ public final class CustomerContactSearch {
                       escape.getEscapeCharacter())));
     }
     return cb.or(
+        matchesType(contact, cb, ContactType.PHONE, term),
         matchesType(contact, cb, ContactType.PHONE, ContactValues.search(term)),
         emailMatch,
         matchesType(contact, cb, ContactType.LINE, term));
