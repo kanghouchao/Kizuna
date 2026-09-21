@@ -27,6 +27,7 @@ export interface CustomerResponse {
  * 紐づけの有無だけである。
  */
 export interface CustomerSummaryResponse {
+  matched_contacts: ContactSummary[];
   preferred_contacts: ContactSummary[];
   id?: string;
   name?: string;
@@ -63,13 +64,13 @@ export interface CustomerMergeComparisonResponse {
 }
 
 /**
- * 同じ優先電話番号を持つ生きた顧客のグループ。
+ * 同じ種類・値の有効連絡先を持つ未統合顧客のグループ。
  *
  * customers は全行か空のいずれかで、桁外れに大きいグループでは空になる。件数の表示には
  * 必ず total を使う（length を出すと 200 件のグループが 0 件と名乗る）。
  */
 export interface CustomerDuplicateGroupResponse {
-  matched_type: 'PHONE';
+  matched_type: ContactType;
   matched_value: string;
   /** その番号を持つ生きた行の総数。Java 側が primitive のため、キーは必ず応答に含まれる。 */
   total: number;

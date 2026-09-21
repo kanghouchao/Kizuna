@@ -317,6 +317,20 @@ export async function createCustomer(
   return body.id as string;
 }
 
+/** 顧客へ非優先の連絡先を追加する。 */
+export async function addCustomerContact(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  type: 'PHONE' | 'EMAIL' | 'LINE',
+  value: string
+): Promise<void> {
+  const response = await request.post(`/api/store/customers/${id}/contacts`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { type, value },
+  });
+  if (!response.ok()) throw new Error(`連絡先の追加に失敗しました: ${response.status()} ${await response.text()}`);
+}
+
 /** 顧客を削除する（DELETE /api/store/customers/{id}, hasAuthority('CUSTOMER_MANAGE')）。 */
 export async function deleteCustomer(
   request: APIRequestContext,

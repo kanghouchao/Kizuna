@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
-public interface CustomerContactRepository extends JpaRepository<CustomerContact, String> {
+public interface CustomerContactRepository
+    extends JpaRepository<CustomerContact, String>, JpaSpecificationExecutor<CustomerContact> {
   List<CustomerContact> findByCustomerIdAndDeletedFalseAndIdGreaterThanOrderByIdAsc(
       String customerId, String id, Limit limit);
 

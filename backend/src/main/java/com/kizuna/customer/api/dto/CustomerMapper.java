@@ -21,6 +21,7 @@ public interface CustomerMapper {
   // 同上。一覧は紐づけの有無だけを持ち、会員コードは載せない。
   @Mapping(target = "memberLinked", ignore = true)
   @Mapping(target = "preferredContacts", ignore = true)
+  @Mapping(target = "matchedContacts", ignore = true)
   CustomerSummaryResponse toSummaryResponse(Customer customer);
 
   // 受注件数と紐づけの有無は顧客行が持たない事実なので、application 層が引いた値を引数で受ける。

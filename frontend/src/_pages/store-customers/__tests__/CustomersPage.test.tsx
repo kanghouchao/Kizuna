@@ -47,6 +47,7 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
         {
           id: '1',
           name: '山田太郎',
+          matched_contacts: [{ id: 'other', type: 'EMAIL', value: 'NonPreferred@example.com' }],
           preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '090-1111-2222' }],
 
           classification: '常連',
@@ -62,6 +63,7 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
 
     expect(await screen.findByText('山田太郎')).toBeInTheDocument();
     expect(screen.getByText('090-1111-2222')).toBeInTheDocument();
+    expect(screen.getByText('一致: メール NonPreferred@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('-').length).toBeGreaterThan(0);
     // NG バッジは ng_type をそのまま表示する
     expect(screen.getByText('注意')).toBeInTheDocument();
@@ -140,13 +142,20 @@ describe('顧客一覧ページ固有の要素', () => {
     mockedCustomerApi.list.mockResolvedValue({
       rows: [
         {
+          matched_contacts: [],
           preferred_contacts: [],
           id: '1',
           name: '紐づけ太郎',
           member_linked: true,
           linked_member_code: '123456789012',
         },
-        { preferred_contacts: [], id: '2', name: '未紐づけ次郎', member_linked: false },
+        {
+          matched_contacts: [],
+          preferred_contacts: [],
+          id: '2',
+          name: '未紐づけ次郎',
+          member_linked: false,
+        },
       ],
       page: 0,
       pageCount: 1,
@@ -210,9 +219,27 @@ describe('顧客一覧ページ固有の要素', () => {
 describe('顧客一覧からの統合', () => {
   /** 一覧の行は「絞り込んで選ぶ」ための項目しか持たない（住所も受注件数も無い）。 */
   const listRows = [
-    { preferred_contacts: [], id: 'c1', name: '山田太郎', phone_number: '090-1111-2222' },
-    { preferred_contacts: [], id: 'c2', name: 'ヤマダタロウ', phone_number: '090-1111-2222' },
-    { preferred_contacts: [], id: 'c3', name: '別人三郎', phone_number: '090-3333-4444' },
+    {
+      matched_contacts: [],
+      preferred_contacts: [],
+      id: 'c1',
+      name: '山田太郎',
+      phone_number: '090-1111-2222',
+    },
+    {
+      matched_contacts: [],
+      preferred_contacts: [],
+      id: 'c2',
+      name: 'ヤマダタロウ',
+      phone_number: '090-1111-2222',
+    },
+    {
+      matched_contacts: [],
+      preferred_contacts: [],
+      id: 'c3',
+      name: '別人三郎',
+      phone_number: '090-3333-4444',
+    },
   ];
 
   /** 見比べの読み口が返す 2 行。一覧に無い材料（住所・受注件数・紐づけ）を持つ。 */
@@ -220,6 +247,7 @@ describe('顧客一覧からの統合', () => {
     {
       id: 'c1',
       name: '山田太郎',
+      matched_contacts: [],
       preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '090-1111-2222' }],
       address: '東京都渋谷区1-1',
       member_linked: false,
@@ -228,6 +256,7 @@ describe('顧客一覧からの統合', () => {
     {
       id: 'c2',
       name: 'ヤマダタロウ',
+      matched_contacts: [],
       preferred_contacts: [{ id: 'contact1', type: 'PHONE', value: '090-1111-2222' }],
       address: '東京都新宿区2-2',
       member_linked: true,
@@ -376,7 +405,7 @@ describe('顧客一覧からの統合', () => {
     mockedCustomerApi.list
       .mockResolvedValueOnce({ rows: listRows, page: 0, pageCount: 2, total: 21 } as never)
       .mockResolvedValueOnce({
-        rows: [{ preferred_contacts: [], id: 'c9', name: '次頁太郎' }],
+        rows: [{ matched_contacts: [], preferred_contacts: [], id: 'c9', name: '次頁太郎' }],
         page: 1,
         pageCount: 2,
         total: 21,
