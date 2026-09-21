@@ -86,12 +86,12 @@ async function openConfirmation(survivingName = '山田太郎') {
  */
 async function confirmMerge() {
   const dialog = await screen.findByRole('dialog');
-  fireEvent.click(within(dialog).getByRole('button', { name: '統合する' }));
+  await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: '統合する' })));
 }
 
 describe('CustomerDuplicatesPage', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     mockedDuplicates.mockResolvedValue(twoRowGroup);
     mockedMerge.mockResolvedValue({
       surviving_customer_id: 'c1',
@@ -161,7 +161,9 @@ describe('CustomerDuplicatesPage', () => {
   it('続きがあるときは、続きを辿る導線を出すこと', async () => {
     // 上限で黙って切ると、番号を共有する同伴者のような正当な偽陽性が先頭を占めたとき
     // 以降の真の重複が一生画面に出ない
-    mockedDuplicates.mockResolvedValueOnce({ ...twoRowGroup, nextCursor: 'MDkw' });
+    mockedDuplicates
+      .mockResolvedValueOnce({ ...twoRowGroup, nextCursor: 'MDkw' })
+      .mockResolvedValueOnce({ rows: [], nextCursor: null });
 
     render(<CustomerDuplicatesPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'さらに読み込む' }));
@@ -174,6 +176,75 @@ describe('CustomerDuplicatesPage', () => {
     await screen.findByText('山田太郎');
 
     expect(screen.queryByRole('button', { name: 'さらに読み込む' })).not.toBeInTheDocument();
+  });
+
+  it('候補群の追加取得中も展開済みの顧客ページと選択を保持する', async () => {
+    let finish!: (page: CursorPageResult<CustomerDuplicateGroupResponse>) => void;
+    mockedDuplicates
+      .mockResolvedValueOnce({
+        rows: [{ ...twoRowGroup.rows[0], total: 21, customers: [] }],
+        nextCursor: 'groups-next',
+      })
+      .mockReturnValueOnce(
+        new Promise(resolve => {
+          finish = resolve;
+        })
+      );
+    const members = customerApi.duplicateCustomers as jest.Mock;
+    members
+      .mockResolvedValueOnce({
+        rows: [twoRowGroup.rows[0].customers[0]],
+        nextCursor: 'members-next',
+      })
+      .mockResolvedValueOnce({ rows: [twoRowGroup.rows[0].customers[1]], nextCursor: null });
+    render(<CustomerDuplicatesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
+    fireEvent.click(await screen.findByRole('button', { name: '顧客をさらに読み込む' }));
+    await screen.findByLabelText('ヤマダタロウ を見比べる');
+    await selectBothRows();
+    fireEvent.click(screen.getByRole('button', { name: 'さらに読み込む' }));
+    expect(screen.getByRole('table', { name: '2 行の比較' })).toBeInTheDocument();
+    await act(async () => finish({ rows: [], nextCursor: null }));
+    expect(screen.getByLabelText('ヤマダタロウ を見比べる')).toBeChecked();
+    expect(screen.getByRole('table', { name: '2 行の比較' })).toBeInTheDocument();
+    expect(members).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([false, true])('再試行後の最新行から統合確認を作る（展開群: %s）', async expanded => {
+    const group = twoRowGroup.rows[0];
+    const fresh = group.customers.map(row => ({ ...row, name: `${row.name}更新`, order_count: 9 }));
+    const members = customerApi.duplicateCustomers as jest.Mock;
+    if (expanded) {
+      mockedDuplicates.mockResolvedValue({
+        rows: [{ ...group, total: 21, customers: [] }],
+        nextCursor: null,
+      });
+      members
+        .mockResolvedValueOnce({ rows: group.customers, nextCursor: 'next' })
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce({ rows: fresh, nextCursor: null });
+    } else {
+      mockedDuplicates
+        .mockResolvedValueOnce({ ...twoRowGroup, nextCursor: 'next' })
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce({ rows: [{ ...group, customers: fresh }], nextCursor: null });
+    }
+    render(<CustomerDuplicatesPage />);
+    if (expanded) fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
+    await selectBothRows();
+    fireEvent.click(screen.getByLabelText('山田太郎 を残す'));
+    fireEvent.click(
+      screen.getByRole('button', { name: expanded ? '顧客をさらに読み込む' : 'さらに読み込む' })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '再試行' }));
+    const comparison = await screen.findByRole('table', { name: '2 行の比較' });
+    expect(within(comparison).getAllByText('9 件')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: '統合する' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('ヤマダタロウ更新 を 山田太郎更新');
+    expect(dialog).toHaveTextContent('受注 9 件');
+    await confirmMerge();
+    await waitFor(() => expect(mockedMerge).toHaveBeenCalledWith('c1', 'c2'));
   });
 
   it('大きい組も続きを取得でき、失敗したら先頭から再試行できる', async () => {

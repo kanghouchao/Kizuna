@@ -48,7 +48,6 @@ const PAIR_SIZE = 2;
 interface Selection {
   groupKey: string;
   ids: string[];
-  rows: CustomerMergeComparisonResponse[];
 }
 
 export default function CustomerDuplicatesPage() {
@@ -70,6 +69,7 @@ function CustomerDuplicatesContent() {
   const {
     search,
     rows: groups,
+    setRows: setGroups,
     isLoading,
     failed,
     hasMore,
@@ -83,6 +83,8 @@ function CustomerDuplicatesContent() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [survivingId, setSurvivingId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
+    survivingId: string;
+    mergedId: string;
     survivingName: string;
     mergedName: string;
     movedOrderCount: number;
@@ -97,17 +99,16 @@ function CustomerDuplicatesContent() {
     setSurvivingId(null);
     setSelection(current => {
       if (current === null || current.groupKey !== groupKey) {
-        return { groupKey, ids: [customerId], rows: [row] };
+        return { groupKey, ids: [customerId] };
       }
       if (current.ids.includes(customerId)) {
         return {
           ...current,
           ids: current.ids.filter(id => id !== customerId),
-          rows: current.rows.filter(item => item.id !== customerId),
         };
       }
       if (current.ids.length >= PAIR_SIZE) return current;
-      return { ...current, ids: [...current.ids, customerId], rows: [...current.rows, row] };
+      return { ...current, ids: [...current.ids, customerId] };
     });
   };
 
@@ -122,21 +123,16 @@ function CustomerDuplicatesContent() {
     return selected.length === PAIR_SIZE ? [selected[0], selected[1]] : null;
   };
 
-  const findSelected = (customerId: string | null) =>
-    selection?.rows.find(row => customerId !== null && row.id === customerId);
-
-  const surviving = findSelected(survivingId);
-  const merged = findSelected(selection?.ids.find(id => id !== survivingId) ?? null);
-
   const handleMerge = async () => {
-    if (!isConfirming || !surviving?.id || !merged?.id || isSubmitting) return;
+    if (!isConfirming || !confirmation || isSubmitting) return;
     try {
       setIsSubmitting(true);
-      await customerApi.merge(surviving.id, merged.id);
+      await customerApi.merge(confirmation.survivingId, confirmation.mergedId);
       notify.success('顧客を統合しました');
       setIsConfirming(false);
       setSelection(null);
       setSurvivingId(null);
+      setGroups([]);
       reload();
     } catch (error) {
       // 両行が会員に認領されている 409 は「先に関連を解除する」と読める文言をサーバが返す。
@@ -224,8 +220,12 @@ function CustomerDuplicatesContent() {
             survivingId={survivingId}
             onSurvivingChange={setSurvivingId}
             onMerge={() => {
-              if (!surviving || !merged) return;
+              const surviving = pair.find(row => row.id === survivingId);
+              const merged = pair.find(row => row.id !== survivingId);
+              if (!surviving?.id || !merged?.id) return;
               setConfirmation({
+                survivingId: surviving.id,
+                mergedId: merged.id,
                 survivingName: surviving.name ?? '',
                 mergedName: merged.name ?? '',
                 movedOrderCount: merged.order_count ?? 0,
@@ -261,6 +261,7 @@ function CustomerDuplicatesContent() {
           setSelection(null);
           setSurvivingId(null);
           setIsConfirming(false);
+          setGroups([]);
           search({
             search: searchTerm.trim() || undefined,
             type: type === 'ALL' ? undefined : type,
@@ -298,7 +299,7 @@ function CustomerDuplicatesContent() {
         </Button>
       </form>
       <TableCard>
-        {isLoading ? (
+        {isLoading && groups.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">読み込み中...</div>
         ) : failed ? (
           // 読めなかった候補を空表示にすると「重複は無い」と嘘をつくことになる
@@ -336,10 +337,10 @@ function CustomerDuplicatesContent() {
             );
           })
         )}
-        {hasMore && !isLoading && (
+        {hasMore && (
           <div className="flex justify-center border-t p-4">
-            <Button variant="outline" onClick={loadMore}>
-              さらに読み込む
+            <Button variant="outline" onClick={loadMore} disabled={isLoading}>
+              {isLoading ? '読み込み中...' : 'さらに読み込む'}
             </Button>
           </div>
         )}

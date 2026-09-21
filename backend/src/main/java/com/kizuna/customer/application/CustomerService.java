@@ -82,8 +82,9 @@ public class CustomerService {
   private final CustomerMergeRepository customerMergeRepository;
   private final CustomerMapper customerMapper;
 
+  /** 検索結果と一致理由を同じ断面から読み、途中の連絡先変更による不一致を避ける。 */
   @StoreScoped
-  @Transactional(readOnly = true)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<CustomerSummaryResponse> list(
       String search, String classification, Pageable pageable) {
     Specification<Customer> spec = searchSpec(search, classification);
