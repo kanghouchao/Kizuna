@@ -18,6 +18,8 @@ import {
   CustomerDuplicateGroupResponse,
   CustomerMemberLinkHistoryResponse,
   CustomerMemberLinkResponse,
+  CustomerMemberLinkRequest,
+  CustomerMemberLinkReleaseRequest,
   CustomerMergeComparisonResponse,
   CustomerMergeHistoryResponse,
   CustomerMergeResponse,
@@ -175,16 +177,20 @@ export const customerApi = {
   /** 会員コードで会員を顧客へ紐づける（既に別の会員と紐づいていれば付け替える） */
   linkMember: async (
     id: string | undefined,
-    memberCode: string
+    request: CustomerMemberLinkRequest
   ): Promise<CustomerMemberLinkResponse> => {
-    const response = await apiClient.post(`/store/customers/${requireId(id, '顧客')}/member-link`, {
-      member_code: memberCode,
-    });
+    const response = await apiClient.post(
+      `/store/customers/${requireId(id, '顧客')}/member-link`,
+      request
+    );
     return response.data;
   },
   /** 会員の紐づけを解除する（履歴は残る） */
-  unlinkMember: async (id: string | undefined): Promise<void> => {
-    await apiClient.delete(`/store/customers/${requireId(id, '顧客')}/member-link`);
+  unlinkMember: async (
+    id: string | undefined,
+    request: CustomerMemberLinkReleaseRequest
+  ): Promise<void> => {
+    await apiClient.post(`/store/customers/${requireId(id, '顧客')}/member-link/releases`, request);
   },
   /**
    * 現に有効な会員紐づけを取得する。紐づいていない顧客では 404 で返る — 「紐づいていない」を

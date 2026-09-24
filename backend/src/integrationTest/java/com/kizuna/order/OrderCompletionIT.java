@@ -355,7 +355,7 @@ class OrderCompletionIT extends CrossStoreTestSupport {
             new HttpEntity<>(
                 "{\"member_code\": \"" + memberCode + "\"}", headersFor(storeId, bearerToken)),
             JsonNode.class);
-    assertThat(linked.getStatusCode()).as("前提: 会員の紐づけが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(linked.getStatusCode()).as("前提: 会員の紐づけが成功すること").isEqualTo(HttpStatus.CREATED);
   }
 
   private long memberIdOf(String memberCode) {

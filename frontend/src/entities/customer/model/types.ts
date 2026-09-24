@@ -125,13 +125,16 @@ export type CustomerMemberLinkStatus = 'ACTIVE' | 'RELEASED';
 /** 会員紐づけリクエスト。customer/api/dto/CustomerMemberLinkRequest.java に対応。 */
 export interface CustomerMemberLinkRequest {
   member_code: string;
+  expected_link_id?: string;
+  operation_reason?: string;
 }
 
 /** 会員紐づけ応答。customer/api/dto/CustomerMemberLinkResponse.java に対応。 */
 export interface CustomerMemberLinkResponse {
+  id: string;
   linked: boolean;
-  member_code?: string;
-  linked_at?: string;
+  member_code: string;
+  linked_at: string;
 }
 
 /** 会員ポイント残高。customer/api/dto/CustomerPointBalanceResponse.java に対応。 */
@@ -152,12 +155,22 @@ export interface CustomerPointAdjustmentRequest {
   idempotency_key: string;
 }
 
-/** 会員紐づけ履歴 1 件。customer/api/dto/CustomerMemberLinkHistoryResponse.java に対応。 */
+/** 確認済みの関連区間を理由付きで解除する。 */
+export interface CustomerMemberLinkReleaseRequest {
+  expected_link_id: string;
+  operation_reason: string;
+}
+
 export interface CustomerMemberLinkHistoryResponse {
-  id?: string;
-  member_code?: string;
-  status?: CustomerMemberLinkStatus;
-  linked_at?: string;
+  reason: 'MEMBER_CODE' | 'MEMBER_REQUEST' | 'MIGRATION';
+  operation_reason?: string;
+  release_reason?: string;
+  linked_by?: number;
+  released_by?: number;
+  id: string;
+  member_code: string;
+  status: CustomerMemberLinkStatus;
+  linked_at: string;
   linked_by_name?: string;
   released_at?: string;
   released_by_name?: string;

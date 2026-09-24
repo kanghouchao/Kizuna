@@ -57,6 +57,14 @@ databaseChangeLog:
                     nullable: false
                   remarks: 成立根拠（MEMBER_CODE=会員コード提示/MEMBER_REQUEST=会員申請の確定時自動整備/MIGRATION=旧システム移行由来）
               - column:
+                  name: operation_reason
+                  type: VARCHAR(500)
+                  remarks: 成立・変更時の入力理由
+              - column:
+                  name: release_reason
+                  type: VARCHAR(500)
+                  remarks: 解除の入力理由
+              - column:
                   name: linked_by
                   type: BIGINT
                   remarks: 紐づけの実行者

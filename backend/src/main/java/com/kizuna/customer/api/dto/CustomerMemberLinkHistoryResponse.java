@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import java.time.OffsetDateTime;
 
@@ -8,6 +9,11 @@ public record CustomerMemberLinkHistoryResponse(
     String id,
     String memberCode,
     LinkStatus status,
+    LinkReason reason,
+    String operationReason,
+    String releaseReason,
+    Long linkedBy,
+    Long releasedBy,
     OffsetDateTime linkedAt,
     String linkedByName,
     OffsetDateTime releasedAt,

@@ -467,13 +467,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
     var input = input(headers);
     input.put("customer_selection", Map.of("mode", "EXISTING", "customer_id", customer));
     var first = post("/store/orders/preview", input, headers).getBody();
-    assertThat(
-            rest.exchange(
-                    "/store/customers/" + customer + "/member-link",
-                    HttpMethod.DELETE,
-                    new HttpEntity<>(headers),
-                    Void.class)
-                .getStatusCode())
+    assertThat(releaseMemberLink(customer, headers).getStatusCode())
         .isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(save("/store/orders", input, first, headers).getStatusCode())
         .isEqualTo(HttpStatus.CONFLICT);
@@ -495,7 +489,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
                     Map.of("member_code", first.path("points").path("member_code").asString()),
                     headers)
                 .getStatusCode())
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
     assertThat(save(path + "/completion", completion, quote, headers).getStatusCode())
         .isEqualTo(HttpStatus.CONFLICT);
     var unchanged = get(path, headers).getBody();
@@ -599,7 +593,7 @@ class OrderExtrasIT extends CrossStoreTestSupport {
                     Map.of("member_code", member.getBody().path("member_code").asString()),
                     headers)
                 .getStatusCode())
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
     return customer;
   }
 

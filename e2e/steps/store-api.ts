@@ -350,11 +350,12 @@ export async function linkMemberToCustomer(
   request: APIRequestContext,
   token: string,
   customerId: string,
-  memberCode: string
+  memberCode: string,
+  operation?: { expected_link_id: string; operation_reason: string }
 ): Promise<void> {
   const res = await request.post(`/api/store/customers/${customerId}/member-link`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
-    data: { member_code: memberCode },
+    data: { member_code: memberCode, ...operation },
   });
   if (!res.ok()) {
     throw new Error(`link member failed: ${res.status()} ${await res.text()}`);
@@ -545,4 +546,22 @@ export async function invalidateOrder(request: APIRequestContext, token: string,
   const order = await getOrder(request, token, STORE1_ID, id);
   const result = await request.post(`/api/store/orders/${id}/completion-invalidation`, { headers, data: { expected_version: order.version, reason } });
   expect(result.status()).toBe(201);
+}
+
+/** 現在の会員関連を照会する。 */
+export async function currentCustomerMemberLink(request: APIRequestContext, token: string, customerId: string) {
+  const response = await request.get(`/api/store/customers/${customerId}/member-link`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok()) throw new Error(`関連照会に失敗しました: ${response.status()}`);
+  return response.json();
+}
+
+/** 会員関連の区間履歴の先頭ページを照会する。 */
+export async function customerMemberLinkHistory(request: APIRequestContext, token: string, customerId: string) {
+  const response = await request.get(`/api/store/customers/${customerId}/member-link/history`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok()) throw new Error(`関連履歴の照会に失敗しました: ${response.status()}`);
+  return response.json();
 }

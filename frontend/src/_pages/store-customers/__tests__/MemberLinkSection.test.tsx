@@ -43,6 +43,7 @@ const notLinked = { response: { status: 404 } };
 
 /** 現に有効な紐づけの応答。 */
 const currentLink = {
+  id: 'l2',
   linked: true,
   member_code: '123456789012',
   linked_at: '2026-08-01T10:00:00+09:00',
@@ -55,6 +56,7 @@ function historyPage(rows: unknown[]) {
 
 const activeRow = {
   id: 'l2',
+  reason: 'MEMBER_CODE',
   member_code: '123456789012',
   status: 'ACTIVE' as const,
   linked_at: '2026-08-01T10:00:00+09:00',
@@ -63,6 +65,7 @@ const activeRow = {
 
 const releasedRow = {
   id: 'l1',
+  reason: 'MEMBER_CODE',
   member_code: '999999999999',
   status: 'RELEASED' as const,
   linked_at: '2026-07-01T10:00:00+09:00',
@@ -78,6 +81,69 @@ describe('MemberLinkSection', () => {
     mockedApi.memberLinkHistory.mockResolvedValue(historyPage([]));
     mockedApi.memberPointBalance.mockResolvedValue({ linked: false });
     mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE']));
+  });
+
+  it('変更理由がなければ変更できず、確認した区間と理由を送ること', async () => {
+    mockedApi.memberLink.mockResolvedValue({ ...currentLink, id: 'l2' } as never);
+    render(<MemberLinkSection customerId="c1" />);
+    await screen.findByText('紐づけ済み');
+    fireEvent.change(screen.getByLabelText('会員コード'), { target: { value: '999999999999' } });
+    fireEvent.click(screen.getByRole('button', { name: '変更する' }));
+    expect(await screen.findByText('操作理由を入力してください')).toBeInTheDocument();
+    expect(mockedApi.linkMember).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('操作理由'), {
+      target: { value: '本人確認による変更' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '変更する' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/123456789012/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: '変更する' }));
+    await waitFor(() =>
+      expect(mockedApi.linkMember).toHaveBeenCalledWith('c1', {
+        member_code: '999999999999',
+        expected_link_id: 'l2',
+        operation_reason: '本人確認による変更',
+      })
+    );
+  });
+
+  it('権限がない場合は関連情報を照会せず操作を出さないこと', async () => {
+    mockedReadClaims.mockReturnValue(claimsWith(['POINT_ADJUST']));
+    render(<MemberLinkSection customerId="c1" />);
+    expect(screen.queryByText('会員紐づけ')).not.toBeInTheDocument();
+    expect(mockedApi.memberLink).not.toHaveBeenCalled();
+    expect(mockedApi.memberLinkHistory).not.toHaveBeenCalled();
+  });
+
+  it('競合後は理由を保持し、新しい区間を再確認してから送ること', async () => {
+    mockedApi.memberLink
+      .mockResolvedValueOnce(currentLink)
+      .mockResolvedValue({ ...currentLink, id: 'l3', member_code: '888888888888' });
+    mockedApi.linkMember
+      .mockRejectedValueOnce({ isAxiosError: true, response: { status: 409 } })
+      .mockResolvedValue(currentLink);
+    render(<MemberLinkSection customerId="c1" />);
+    await screen.findByText('紐づけ済み');
+    fireEvent.change(screen.getByLabelText('会員コード'), { target: { value: '999999999999' } });
+    fireEvent.change(screen.getByLabelText('操作理由'), { target: { value: '本人確認' } });
+    fireEvent.click(screen.getByRole('button', { name: '変更する' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: '変更する' })
+    );
+    await screen.findByText('888888888888');
+    expect(screen.getByLabelText('操作理由')).toHaveValue('本人確認');
+    expect(mockedApi.linkMember).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: '変更する' }));
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(within(confirmation).getByText(/888888888888/)).toBeInTheDocument();
+    fireEvent.click(within(confirmation).getByRole('button', { name: '変更する' }));
+    await waitFor(() =>
+      expect(mockedApi.linkMember).toHaveBeenLastCalledWith('c1', {
+        member_code: '999999999999',
+        expected_link_id: 'l3',
+        operation_reason: '本人確認',
+      })
+    );
   });
 
   it('紐づけが無ければ未紐づけを示し、履歴も空表示になること', async () => {
@@ -105,7 +171,7 @@ describe('MemberLinkSection', () => {
   });
 
   it('会員コードを入力して紐づけると API を呼び、履歴を取り直すこと', async () => {
-    mockedApi.linkMember.mockResolvedValue({ linked: true, member_code: '123456789012' });
+    mockedApi.linkMember.mockResolvedValue({ ...currentLink });
 
     render(<MemberLinkSection customerId="c1" />);
     await screen.findByText('紐づけ履歴がありません');
@@ -115,7 +181,13 @@ describe('MemberLinkSection', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '紐づける' }));
 
-    await waitFor(() => expect(mockedApi.linkMember).toHaveBeenCalledWith('c1', '123456789012'));
+    await waitFor(() =>
+      expect(mockedApi.linkMember).toHaveBeenCalledWith('c1', {
+        member_code: '123456789012',
+        expected_link_id: undefined,
+        operation_reason: undefined,
+      })
+    );
     // 初回ロード + 紐づけ後の取り直し
     await waitFor(() => expect(mockedApi.memberLinkHistory).toHaveBeenCalledTimes(2));
     // 現況も取り直す（紐づけ先が変わるのはこの読み口が答える事実）
@@ -127,6 +199,7 @@ describe('MemberLinkSection', () => {
 
   it('409 のサーバー文言をそのまま toast に出すこと', async () => {
     mockedApi.linkMember.mockRejectedValue({
+      isAxiosError: true,
       response: { status: 409, data: { error: 'この会員は既に他の顧客と紐づいています' } },
     });
 
@@ -224,14 +297,21 @@ describe('MemberLinkSection', () => {
 
     render(<MemberLinkSection customerId="c1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '解除' }));
+    await screen.findByRole('button', { name: '解除' });
+    fireEvent.change(screen.getByLabelText('操作理由'), { target: { value: '本人依頼' } });
+    fireEvent.click(screen.getByRole('button', { name: '解除' }));
     fireEvent.click(await screen.findByRole('button', { name: 'キャンセル' }));
     expect(mockedApi.unlinkMember).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: '解除' }));
     fireEvent.click(await screen.findByRole('button', { name: '解除する' }));
 
-    await waitFor(() => expect(mockedApi.unlinkMember).toHaveBeenCalledWith('c1'));
+    await waitFor(() =>
+      expect(mockedApi.unlinkMember).toHaveBeenCalledWith('c1', {
+        expected_link_id: 'l2',
+        operation_reason: '本人依頼',
+      })
+    );
     // 解除で残高の指す台帳が無くなる
     await waitFor(() => expect(mockedApi.memberPointBalance).toHaveBeenCalledTimes(2));
   });

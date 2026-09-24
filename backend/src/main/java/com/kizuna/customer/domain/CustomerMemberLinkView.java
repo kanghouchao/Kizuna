@@ -11,6 +11,16 @@ public interface CustomerMemberLinkView {
 
   LinkStatus getStatus();
 
+  LinkReason getReason();
+
+  String getOperationReason();
+
+  String getReleaseReason();
+
+  Long getLinkedBy();
+
+  Long getReleasedBy();
+
   OffsetDateTime getLinkedAt();
 
   String getLinkedByName();
