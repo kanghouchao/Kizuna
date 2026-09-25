@@ -144,3 +144,40 @@ it('選択欄は内部値ではなく日本語のラベルを表示する', asyn
     '指定なし'
   );
 });
+
+it('優先連絡先の競合は送信時に関連付けたエラーと最初の欄へのフォーカスで示す', async () => {
+  api.mergePreview.mockResolvedValueOnce({
+    ...preview,
+    preference_conflicts: ['PHONE', 'EMAIL'],
+    preview_token: undefined,
+  });
+  open();
+  fireEvent.change(await screen.findByLabelText('統合理由'), { target: { value: '確認済み' } });
+  const submit = screen.getByRole('button', { name: '確定資料でプレビュー' });
+  expect(submit).toBeEnabled();
+  fireEvent.click(submit);
+  const phone = screen.getByRole('combobox', { name: '電話の優先連絡先' });
+  await waitFor(() => expect(phone).toHaveFocus());
+  expect(phone).toHaveAttribute('aria-invalid', 'true');
+  expect(phone).toHaveAccessibleDescription('優先連絡先を一件、または指定なしを選択してください');
+  expect(screen.getByRole('combobox', { name: 'メールの優先連絡先' })).toHaveAttribute(
+    'aria-invalid',
+    'true'
+  );
+  expect(api.mergePreview).toHaveBeenCalledTimes(1);
+  for (const name of ['電話の優先連絡先', 'メールの優先連絡先']) {
+    fireEvent.click(screen.getByRole('combobox', { name }));
+    const option = await screen.findByRole('option', { name: '指定なし' });
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: '指定なし' })).not.toBeInTheDocument()
+    );
+  }
+  fireEvent.click(submit);
+  await waitFor(() => expect(api.mergePreview).toHaveBeenCalledTimes(2));
+  expect(api.mergePreview).toHaveBeenLastCalledWith(
+    'a',
+    expect.objectContaining({ preferred_contacts: { phone: null, email: null, line: null } })
+  );
+});

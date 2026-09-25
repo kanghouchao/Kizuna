@@ -12,6 +12,12 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
   Input,
   Label,
   RegionError,
@@ -92,7 +98,10 @@ function MergeEditor({
 }: Props & { initial: MergePreview }) {
   const [data, setData] = useState(initial);
   const [preview, setPreview] = useState<MergePreview | null>(null);
-  const [unresolved, setUnresolved] = useState(initial.preference_conflicts);
+  const initialPreferences = { ...initial.preferred_contacts };
+  for (const type of initial.preference_conflicts) {
+    initialPreferences[type.toLowerCase() as keyof MergePreferences] = 'unresolved';
+  }
   const [acknowledged, setAcknowledged] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setLocalBusy] = useState(false);
@@ -101,6 +110,13 @@ function MergeEditor({
     onBusyChange?.(value);
   };
   const [failure, setFailure] = useState<string | null>(null);
+  const form = useForm<Values>({
+    defaultValues: {
+      profile: initial.profile,
+      preferences: initialPreferences,
+      reason: '',
+    },
+  });
   const {
     register,
     control,
@@ -108,13 +124,7 @@ function MergeEditor({
     setValue,
     handleSubmit,
     formState: { errors },
-  } = useForm<Values>({
-    defaultValues: {
-      profile: initial.profile,
-      preferences: initial.preferred_contacts,
-      reason: '',
-    },
-  });
+  } = form;
   const invalidate = () => {
     setPreview(null);
     setAcknowledged(false);
@@ -133,7 +143,10 @@ function MergeEditor({
         const id = preferences[key];
         return id !== null && !contacts.some(c => c.id === id && c.type === type && !c.deleted);
       });
-      setUnresolved(invalid);
+      for (const type of invalid) {
+        const key = type.toLowerCase() as keyof MergePreferences;
+        setValue(`preferences.${key}`, 'unresolved', { shouldValidate: true });
+      }
     } catch (error) {
       setFailure(getApiErrorMessage(error, '最新資料の取得に失敗しました'));
     } finally {
@@ -141,7 +154,6 @@ function MergeEditor({
     }
   };
   const review = handleSubmit(async values => {
-    if (unresolved.length) return;
     setBusy(true);
     invalidate();
     setFailure(null);
@@ -186,138 +198,151 @@ function MergeEditor({
         <MergeSnapshotView title="存続側の原資料" snapshot={data.surviving} />
         <MergeSnapshotView title="被統合側の原資料" snapshot={data.merged} />
       </div>
-      <form onSubmit={review} className="space-y-6">
-        <fieldset disabled={busy} className="min-w-0 space-y-6">
-          <legend className="font-medium">統合後の資料</legend>
-          {profileFields.map(([key, label, max]) => (
-            <div key={key} className="space-y-2">
-              <Label htmlFor={`merge-${key}`}>{label}</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setValue(`profile.${key}`, data.surviving.profile[key]);
-                    invalidate();
-                  }}
-                >
-                  存続側の{label}を採用
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setValue(`profile.${key}`, data.merged.profile[key]);
-                    invalidate();
-                  }}
-                >
-                  被統合側の{label}を採用
-                </Button>
+      <Form {...form}>
+        <form onSubmit={review} className="space-y-6">
+          <fieldset disabled={busy} className="min-w-0 space-y-6">
+            <legend className="font-medium">統合後の資料</legend>
+            {profileFields.map(([key, label, max]) => (
+              <div key={key} className="space-y-2">
+                <Label htmlFor={`merge-${key}`}>{label}</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setValue(`profile.${key}`, data.surviving.profile[key]);
+                      invalidate();
+                    }}
+                  >
+                    存続側の{label}を採用
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setValue(`profile.${key}`, data.merged.profile[key]);
+                      invalidate();
+                    }}
+                  >
+                    被統合側の{label}を採用
+                  </Button>
+                </div>
+                <Textarea
+                  id={`merge-${key}`}
+                  maxLength={max}
+                  {...register(`profile.${key}`, {
+                    onChange: invalidate,
+                    setValueAs: value => (value === '' ? null : value),
+                  })}
+                />
               </div>
-              <Textarea
-                id={`merge-${key}`}
-                maxLength={max}
-                {...register(`profile.${key}`, {
-                  onChange: invalidate,
-                  setValueAs: value => (value === '' ? null : value),
+            ))}
+            <Controller
+              name="profile.has_pet"
+              control={control}
+              render={({ field }) => (
+                <div className="space-y-2">
+                  <Label htmlFor="merge-pet">ペットの有無</Label>
+                  <Select
+                    items={{ unknown: '未確認', true: 'あり', false: 'なし' }}
+                    value={field.value === null ? 'unknown' : String(field.value)}
+                    onValueChange={v => {
+                      field.onChange(v === 'unknown' ? null : v === 'true');
+                      invalidate();
+                    }}
+                  >
+                    <SelectTrigger id="merge-pet">
+                      <SelectValue className="min-w-0 flex-1 text-left" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unknown">未確認</SelectItem>
+                      <SelectItem value="true">あり</SelectItem>
+                      <SelectItem value="false">なし</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            />
+            {(['PHONE', 'EMAIL', 'LINE'] as const).map(type => {
+              const key = type.toLowerCase() as keyof MergePreferences;
+              const items = {
+                unresolved: '一件または指定なしを選択',
+                none: '指定なし',
+                ...Object.fromEntries(
+                  [...data.surviving.contacts, ...data.merged.contacts]
+                    .filter(c => c.type === type && !c.deleted)
+                    .map(c => [c.id, `${c.value}（ID: ${c.id} / 由来: ${c.origin_customer_id}）`])
+                ),
+              };
+              return (
+                <FormField
+                  key={type}
+                  name={`preferences.${key}`}
+                  control={control}
+                  rules={{
+                    validate: value =>
+                      value !== 'unresolved' ||
+                      '優先連絡先を一件、または指定なしを選択してください',
+                  }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {{ PHONE: '電話', EMAIL: 'メール', LINE: 'LINE' }[type]}の優先連絡先
+                      </FormLabel>
+                      <Select
+                        items={items}
+                        value={field.value ?? 'none'}
+                        onValueChange={v => {
+                          field.onChange(v === 'none' ? null : v);
+                          invalidate();
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            className="w-full min-w-0"
+                          >
+                            <SelectValue className="min-w-0 flex-1 text-left" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {Object.entries(items).map(([value, label]) => (
+                            <SelectItem key={value} value={value} disabled={value === 'unresolved'}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              );
+            })}
+            <div className="space-y-2">
+              <Label htmlFor="merge-reason">統合理由</Label>
+              <Input
+                id="merge-reason"
+                maxLength={500}
+                aria-invalid={!!errors.reason}
+                aria-describedby={errors.reason ? 'merge-reason-error' : undefined}
+                {...register('reason', {
+                  validate: value => value.trim().length > 0 || '統合理由を入力してください',
                 })}
               />
+              {errors.reason && (
+                <p id="merge-reason-error" className="text-sm text-destructive-strong">
+                  {errors.reason.message}
+                </p>
+              )}
             </div>
-          ))}
-          <Controller
-            name="profile.has_pet"
-            control={control}
-            render={({ field }) => (
-              <div className="space-y-2">
-                <Label htmlFor="merge-pet">ペットの有無</Label>
-                <Select
-                  items={{ unknown: '未確認', true: 'あり', false: 'なし' }}
-                  value={field.value === null ? 'unknown' : String(field.value)}
-                  onValueChange={v => {
-                    field.onChange(v === 'unknown' ? null : v === 'true');
-                    invalidate();
-                  }}
-                >
-                  <SelectTrigger id="merge-pet">
-                    <SelectValue className="min-w-0 flex-1 text-left" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unknown">未確認</SelectItem>
-                    <SelectItem value="true">あり</SelectItem>
-                    <SelectItem value="false">なし</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          />
-          {(['PHONE', 'EMAIL', 'LINE'] as const).map(type => {
-            const key = type.toLowerCase() as keyof MergePreferences;
-            const items = {
-              unresolved: '一件または指定なしを選択',
-              none: '指定なし',
-              ...Object.fromEntries(
-                [...data.surviving.contacts, ...data.merged.contacts]
-                  .filter(c => c.type === type && !c.deleted)
-                  .map(c => [c.id, `${c.value}（ID: ${c.id} / 由来: ${c.origin_customer_id}）`])
-              ),
-            };
-            return (
-              <Controller
-                key={type}
-                name={`preferences.${key}`}
-                control={control}
-                render={({ field }) => (
-                  <div className="space-y-2">
-                    <Label htmlFor={`preferred-${key}`}>
-                      {{ PHONE: '電話', EMAIL: 'メール', LINE: 'LINE' }[type]}の優先連絡先
-                    </Label>
-                    <Select
-                      items={items}
-                      value={unresolved.includes(type) ? 'unresolved' : (field.value ?? 'none')}
-                      onValueChange={v => {
-                        field.onChange(v === 'none' ? null : v);
-                        setUnresolved(current => current.filter(t => t !== type));
-                        invalidate();
-                      }}
-                    >
-                      <SelectTrigger id={`preferred-${key}`} className="w-full min-w-0">
-                        <SelectValue className="min-w-0 flex-1 text-left" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(items).map(([value, label]) => (
-                          <SelectItem key={value} value={value} disabled={value === 'unresolved'}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              />
-            );
-          })}
-          <div className="space-y-2">
-            <Label htmlFor="merge-reason">統合理由</Label>
-            <Input
-              id="merge-reason"
-              maxLength={500}
-              aria-invalid={!!errors.reason}
-              aria-describedby={errors.reason ? 'merge-reason-error' : undefined}
-              {...register('reason', {
-                validate: value => value.trim().length > 0 || '統合理由を入力してください',
-              })}
-            />
-            {errors.reason && (
-              <p id="merge-reason-error" className="text-sm text-destructive-strong">
-                {errors.reason.message}
-              </p>
-            )}
-          </div>
-          <Button type="submit" disabled={busy || unresolved.length > 0}>
-            確定資料でプレビュー
-          </Button>
-        </fieldset>
-      </form>
+            <Button type="submit" disabled={busy}>
+              確定資料でプレビュー
+            </Button>
+          </fieldset>
+        </form>
+      </Form>
       {failure && <RegionError message={failure} onRetry={() => void refresh()} />}
       <div className="space-y-2 rounded-lg border p-4 text-sm" aria-live="polite">
         <p>最終的な関連会員: {data.final_member_code ?? '未関連'}</p>

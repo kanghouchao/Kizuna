@@ -17,6 +17,10 @@ public record CustomerMergeRequest(
         MergePreferences preferredContacts,
     @NotNull @AssertTrue Boolean warningsAcknowledged,
     @NotBlank @Size(max = 500) String operationReason) {
+  public CustomerMergeRequest {
+    operationReason = operationReason == null ? null : operationReason.strip();
+  }
+
   public CustomerMergePreviewRequest preview() {
     return new CustomerMergePreviewRequest(mergedCustomerId, profile, preferredContacts);
   }

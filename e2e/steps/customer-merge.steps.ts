@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { addCustomerContact, createCustomer, loginAsStoreAdmin, loginViaUiAndEnterStore, STORE_HEADERS } from './store-api';
+import { addCustomerContact, preferCustomerContact, createCustomer, loginAsStoreAdmin, loginViaUiAndEnterStore, updateCustomer } from './store-api';
 import { PLATFORM_URL } from '../base-url';
 
 const { Given, When, Then } = createBdd();
@@ -17,9 +17,9 @@ Given('統合の比較用に長い注意事項と同値連絡先を持つ二顧�
   survivingId = await createCustomer(request, token, `${marker}甲`);
   mergedId = await createCustomer(request, token, `${marker}乙`);
   for (const id of [survivingId, mergedId]) {
-    await addCustomerContact(request, token, id, 'EMAIL', `${marker}@example.com`);
-    const updated = await request.put(`/api/store/customers/${id}`, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { ng_content: '連絡前に在宅状況を確認してください。'.repeat(20) } });
-    expect(updated.ok()).toBeTruthy();
+    const contactId = await addCustomerContact(request, token, id, 'EMAIL', `${marker}@example.com`);
+    await preferCustomerContact(request, token, id, 'EMAIL', contactId);
+    await updateCustomer(request, token, id, { ng_content: '連絡前に在宅状況を確認してください。'.repeat(20) });
   }
   storeId = await loginViaUiAndEnterStore(page);
 });
@@ -31,7 +31,13 @@ When('顧客一覧の二行から統合資料を選ぶ', async ({ page }) => {
   await page.getByRole('radio', { name: `${marker}甲 を残す` }).check();
   await page.getByRole('button', { name: '統合する', exact: true }).click();
   await page.getByRole('button', { name: '被統合側の氏名を採用' }).click();
-  await page.getByRole('combobox', { name: 'メールの優先連絡先' }).click();
+  await page.getByLabel('統合理由').fill(reason);
+  await page.getByRole('button', { name: '確定資料でプレビュー' }).click();
+  const preference = page.getByRole('combobox', { name: 'メールの優先連絡先' });
+  await expect(preference).toBeFocused();
+  await expect(preference).toHaveAttribute('aria-invalid', 'true');
+  await expect(preference).toHaveAccessibleDescription('優先連絡先を一件、または指定なしを選択してください');
+  await preference.click();
   await page.getByRole('option', { name: new RegExp(`由来: ${mergedId}`) }).click();
   await expect(page.getByRole('combobox', { name: 'メールの優先連絡先' })).toContainText(`${marker}@example.com`);
   await expect(page.getByRole('combobox', { name: 'ペットの有無' })).toContainText('未確認');
@@ -57,8 +63,7 @@ Then('統合資料を狭幅と両テーマでキーボード確認できる', as
   await expect(page.getByRole('checkbox', { name: '双方の注意事項・確定資料・優先指定・会員への影響を確認しました' })).toBeEnabled();
 });
 When('プレビュー後に原資料が変更される', async ({ request }) => {
-  const changed = await request.put(`/api/store/customers/${mergedId}`, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { ng_content: '新しい注意事項を確認してください' } });
-  expect(changed.ok()).toBeTruthy();
+  await updateCustomer(request, token, mergedId, { ng_content: '新しい注意事項を確認してください' });
 });
 Then('古いプレビューの実行は拒否され入力を保持する', async ({ page }) => {
   await page.getByRole('checkbox', { name: '双方の注意事項・確定資料・優先指定・会員への影響を確認しました' }).check();
