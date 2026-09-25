@@ -47,6 +47,12 @@ public class CustomerMemberLink extends StoreScopedEntity {
   @Column(name = "status", nullable = false, length = 20)
   private LinkStatus status;
 
+  @Column(name = "operation_reason", updatable = false, length = 500)
+  private String operationReason;
+
+  @Column(name = "release_reason", length = 500)
+  private String releaseReason;
+
   @Column(name = "linked_by", updatable = false)
   private Long linkedBy;
 
@@ -65,6 +71,7 @@ public class CustomerMemberLink extends StoreScopedEntity {
       Long memberId,
       String memberCode,
       LinkReason reason,
+      String operationReason,
       Long linkedBy,
       OffsetDateTime linkedAt) {
     if (customerId == null || customerId.isBlank()) {
@@ -89,22 +96,39 @@ public class CustomerMemberLink extends StoreScopedEntity {
     this.memberId = memberId;
     this.memberCode = memberCode;
     this.reason = reason;
+    this.operationReason = normalizeOperationReason(operationReason, false);
     this.linkedBy = linkedBy;
     this.linkedAt = linkedAt;
     this.status = LinkStatus.ACTIVE;
   }
 
   /** 紐づけを解除する。解除済みの区間は再度解除できない。 */
-  public void release(Long actorId) {
+  public void release(Long actorId, String operationReason, OffsetDateTime releasedAt) {
     if (status != LinkStatus.ACTIVE) {
       throw new InvalidCustomerMemberLinkException("この紐づけは既に解除されています");
     }
     if (actorId == null) {
       throw new InvalidCustomerMemberLinkException("解除の実行者は必須です");
     }
+    if (releasedAt == null) {
+      throw new InvalidCustomerMemberLinkException("解除の日時は必須です");
+    }
+    this.releaseReason = normalizeOperationReason(operationReason, true);
     this.status = LinkStatus.RELEASED;
     this.releasedBy = actorId;
-    this.releasedAt = OffsetDateTime.now();
+    this.releasedAt = releasedAt;
+  }
+
+  public static String normalizeOperationReason(String value, boolean required) {
+    if (value == null && !required) return null;
+    if (value == null || value.isBlank()) {
+      throw new InvalidCustomerMemberLinkException("操作理由は必須です");
+    }
+    String normalized = value.strip();
+    if (normalized.length() > 500) {
+      throw new InvalidCustomerMemberLinkException("操作理由は500文字以内で入力してください");
+    }
+    return normalized;
   }
 
   @Override

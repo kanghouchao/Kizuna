@@ -57,6 +57,8 @@ public interface CustomerMemberLinkRepository extends JpaRepository<CustomerMemb
   String HISTORY_SELECT =
       """
       select l.id as id, l.memberCode as memberCode, l.status as status,
+             l.reason as reason, l.operationReason as operationReason, l.releaseReason as releaseReason,
+             l.linkedBy as linkedBy, l.releasedBy as releasedBy,
              l.linkedAt as linkedAt, lu.displayName as linkedByName,
              l.releasedAt as releasedAt, ru.displayName as releasedByName
       from com.kizuna.customer.domain.CustomerMemberLink l

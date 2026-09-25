@@ -1,6 +1,7 @@
 package com.kizuna.customer.api.store;
 
 import com.kizuna.customer.api.dto.CustomerMemberLinkHistoryResponse;
+import com.kizuna.customer.api.dto.CustomerMemberLinkReleaseRequest;
 import com.kizuna.customer.api.dto.CustomerMemberLinkRequest;
 import com.kizuna.customer.api.dto.CustomerMemberLinkResponse;
 import com.kizuna.customer.application.CustomerMemberLinkService;
@@ -10,7 +11,6 @@ import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,14 +32,24 @@ public class CustomerMemberLinkController {
       @PathVariable String customerId,
       @Valid @RequestBody CustomerMemberLinkRequest request,
       Principal principal) {
-    return ResponseEntity.ok(
-        customerMemberLinkService.link(customerId, request.getMemberCode(), principal.getName()));
+    return ResponseEntity.status(201)
+        .body(
+            customerMemberLinkService.link(
+                customerId,
+                request.getMemberCode(),
+                request.getExpectedLinkId(),
+                request.getOperationReason(),
+                principal.getName()));
   }
 
-  @DeleteMapping
+  @PostMapping("/releases")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<Void> unlink(@PathVariable String customerId, Principal principal) {
-    customerMemberLinkService.unlink(customerId, principal.getName());
+  public ResponseEntity<Void> unlink(
+      @PathVariable String customerId,
+      @Valid @RequestBody CustomerMemberLinkReleaseRequest request,
+      Principal principal) {
+    customerMemberLinkService.unlink(
+        customerId, request.expectedLinkId(), request.operationReason(), principal.getName());
     return ResponseEntity.noContent().build();
   }
 

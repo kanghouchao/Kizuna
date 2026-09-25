@@ -7,8 +7,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -71,7 +71,7 @@ class CustomerMemberLinkControllerTest {
     when(customerMemberLinkService.current(anyString()))
         .thenReturn(
             new CustomerMemberLinkResponse(
-                true, "123456789012", OffsetDateTime.parse("2026-08-01T10:00:00+09:00")));
+                "l1", true, "123456789012", OffsetDateTime.parse("2026-08-01T10:00:00+09:00")));
 
     mockMvc
         .perform(storeGet("/store/customers/c1/member-link"))
@@ -127,14 +127,16 @@ class CustomerMemberLinkControllerTest {
 
     mockMvc
         .perform(
-            delete("/store/customers/c1/member-link")
+            post("/store/customers/c1/member-link/releases")
+                .contentType("application/json")
+                .content("{\"expected_link_id\":\"l1\",\"operation_reason\":\"本人依頼\"}")
                 .with(csrf())
                 .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .principal(() -> "tanaka.hanako@kizuna.test"))
         .andExpect(status().isNoContent());
 
-    verify(customerMemberLinkService).unlink("c1", "tanaka.hanako@kizuna.test");
+    verify(customerMemberLinkService).unlink("c1", "l1", "本人依頼", "tanaka.hanako@kizuna.test");
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {

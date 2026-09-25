@@ -122,7 +122,7 @@ class CustomerDeletionIT extends CrossStoreTestSupport {
             "/store/customers/" + customerId + "/member-link",
             new HttpEntity<>("{\"member_code\": \"" + memberCode + "\"}", managerHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(linked.getStatusCode()).as("前提: 会員の紐づけが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(linked.getStatusCode()).as("前提: 会員の紐づけが成功すること").isEqualTo(HttpStatus.CREATED);
   }
 
   private static HttpHeaders jsonHeaders() {

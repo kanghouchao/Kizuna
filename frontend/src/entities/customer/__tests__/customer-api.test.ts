@@ -98,7 +98,7 @@ describe('customerApi', () => {
     await expect(customerApi.delete('c1')).resolves.toBeUndefined();
   });
   it('linkMember は member-link を snake_case の本文で POST する', async () => {
-    expect(await customerApi.linkMember('c1', '123456789012')).toEqual({
+    expect(await customerApi.linkMember('c1', { member_code: '123456789012' })).toEqual({
       ok: true,
       url: '/store/customers/c1/member-link',
     });
@@ -106,8 +106,10 @@ describe('customerApi', () => {
       member_code: '123456789012',
     });
   });
-  it('unlinkMember は member-link を DELETE する', async () => {
-    await expect(customerApi.unlinkMember('c1')).resolves.toBeUndefined();
+  it('unlinkMember は理由付きで releases を POST する', async () => {
+    await expect(
+      customerApi.unlinkMember('c1', { expected_link_id: 'l1', operation_reason: '本人依頼' })
+    ).resolves.toBeUndefined();
   });
   it('memberLink は現に有効な紐づけを GET する', async () => {
     mockedGet.mockResolvedValueOnce({ data: { linked: true, member_code: '123456789012' } });
@@ -174,8 +176,16 @@ describe('識別子を欠いた customerApi', () => {
     ['merge（存続行）', () => customerApi.merge(undefined, 'c2'), '顧客'],
     ['merge（被統合行）', () => customerApi.merge('c1', undefined), '顧客'],
     ['mergeHistory', () => customerApi.mergeHistory(undefined), '顧客'],
-    ['linkMember', () => customerApi.linkMember(undefined, 'm1'), '顧客'],
-    ['unlinkMember', () => customerApi.unlinkMember(undefined), '顧客'],
+    ['linkMember', () => customerApi.linkMember(undefined, { member_code: 'm1' }), '顧客'],
+    [
+      'unlinkMember',
+      () =>
+        customerApi.unlinkMember(undefined, {
+          expected_link_id: 'l1',
+          operation_reason: '本人依頼',
+        }),
+      '顧客',
+    ],
     ['memberLink', () => customerApi.memberLink(undefined), '顧客'],
     ['memberLinkHistory', () => customerApi.memberLinkHistory(undefined), '顧客'],
     ['memberPointBalance', () => customerApi.memberPointBalance(undefined), '顧客'],

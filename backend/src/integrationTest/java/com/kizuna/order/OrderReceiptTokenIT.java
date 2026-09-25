@@ -121,12 +121,7 @@ class OrderReceiptTokenIT extends CrossStoreTestSupport {
         .as("前提: 会員へ帰属する完了ができること")
         .isEqualTo(HttpStatus.OK);
 
-    ResponseEntity<Void> unlinked =
-        rest.exchange(
-            "/store/customers/" + customerId + "/member-link",
-            HttpMethod.DELETE,
-            new HttpEntity<>(storeHeaders(STORE_A)),
-            Void.class);
+    ResponseEntity<JsonNode> unlinked = releaseMemberLink(customerId, storeHeaders(STORE_A));
     assertThat(unlinked.getStatusCode().is2xxSuccessful()).as("前提: 関連を解除できること").isTrue();
 
     assertThat(tokensOf(orderId)).isEmpty();
@@ -294,6 +289,6 @@ class OrderReceiptTokenIT extends CrossStoreTestSupport {
             HttpMethod.POST,
             new HttpEntity<>("{\"member_code\": \"" + memberCode + "\"}", storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(linked.getStatusCode()).as("前提: 会員の紐づけが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(linked.getStatusCode()).as("前提: 会員の紐づけが成功すること").isEqualTo(HttpStatus.CREATED);
   }
 }

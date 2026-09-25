@@ -11,4 +11,9 @@ public class CustomerMemberLinkRequest {
   @NotBlank(message = "会員コードは必須です")
   @Pattern(regexp = "\\d{12}", message = "会員コードは数字 12 桁で入力してください")
   private String memberCode;
+
+  @Pattern(regexp = "(?s).*\\S.*", message = "関連 ID は空にできません")
+  private String expectedLinkId;
+
+  private String operationReason;
 }

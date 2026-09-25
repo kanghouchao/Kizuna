@@ -19,6 +19,7 @@ import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
@@ -39,26 +40,32 @@ public class CustomerMemberLinkService {
 
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
-  private final CustomerReferenceResolver customerReferenceResolver;
   private final MemberLookupService memberLookupService;
   private final PlatformUserRepository platformUserRepository;
 
   @StoreScoped
   @Transactional
-  public CustomerMemberLinkResponse link(String customerId, String memberCode, String actorEmail) {
+  public CustomerMemberLinkResponse link(
+      String customerId,
+      String memberCode,
+      String expectedLinkId,
+      String operationReason,
+      String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    // 成立先の顧客は、顧客参照を書く他の経路と同じ口で解決する。行を押さえてから紐づけを読むことで、
-    // 記帳（受注完了・手動調整）と同じ直列化点に載る。以降の読み書きはすべて解決された ID を使う。
-    String targetId = customerReferenceResolver.resolveForWrite(customerId);
-    MemberLookup member =
-        memberLookupService
-            .findByMemberCode(memberCode)
-            .orElseThrow(() -> new NotFoundException("会員コードに該当する会員が見つかりません"));
-
+    lockEditableCustomer(customerId);
+    String targetId = customerId;
     CustomerMemberLink current =
         customerMemberLinkRepository
             .findByCustomerIdAndStatus(targetId, LinkStatus.ACTIVE)
             .orElse(null);
+    requireExpectedLink(current, expectedLinkId);
+    MemberLookup member =
+        memberLookupService
+            .findByMemberCode(memberCode)
+            .orElseThrow(() -> new NotFoundException("会員コードに該当する会員が見つかりません"));
+    String normalizedReason =
+        CustomerMemberLink.normalizeOperationReason(operationReason, current != null);
+    OffsetDateTime operatedAt = OffsetDateTime.now();
     if (current != null && member.memberId().equals(current.getMemberId())) {
       throw new ConflictException("この顧客は既にこの会員と紐づいています");
     }
@@ -71,7 +78,7 @@ public class CustomerMemberLinkService {
       // 紐づけ先の変更は解除と新規紐づけを同一トランザクションで行い、どちらでもない中間状態を外へ見せない。
       // 部分一意索引（customer_id WHERE status='ACTIVE'）は据置不可なので、新しい行の INSERT より先に
       // 旧行の UPDATE を DB へ流す — flush の既定順は INSERT が先で、そのままでは自分自身と衝突する。
-      current.release(actorId);
+      current.release(actorId, normalizedReason, operatedAt);
       customerMemberLinkRepository.saveAndFlush(current);
     }
 
@@ -82,33 +89,31 @@ public class CustomerMemberLinkService {
             .memberCode(member.memberCode())
             // この経路の成立根拠は会員コードの提示ただ一つ。他の根拠はそれぞれの機構の書き手が記録する。
             .reason(LinkReason.MEMBER_CODE)
+            .operationReason(normalizedReason)
             .linkedBy(actorId)
-            .linkedAt(OffsetDateTime.now())
+            .linkedAt(operatedAt)
             .build();
     // store_id は StoreScopeStampListener が @PrePersist で採番する。
     // 事前チェックをすり抜けた並行紐づけが部分一意索引に当たるレースはここで catch しない —
     // CommonExceptionHandler が SQLSTATE で一意違反だけを 409 へ写像し、FK 等の他の整合性違反は
     // 実装欠陥として 500 のまま大きく失敗させる分類を持っているため、そこへ委ねる。
     CustomerMemberLink saved = customerMemberLinkRepository.saveAndFlush(link);
-    return new CustomerMemberLinkResponse(true, saved.getMemberCode(), saved.getLinkedAt());
+    return new CustomerMemberLinkResponse(
+        saved.getId(), true, saved.getMemberCode(), saved.getLinkedAt());
   }
 
   @StoreScoped
   @Transactional
-  public void unlink(String customerId, String actorEmail) {
+  public void unlink(
+      String customerId, String expectedLinkId, String operationReason, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    // 解除も紐づけと同じく顧客行を押さえてから現在の紐づけを読む。
-    // 契約は CustomerRepository#findByIdForUpdate に記す。
-    lockCustomer(customerId);
-    // 墓標の判定を関連の照会より前に置く理由は CustomerPointService#adjust に記す。
-    if (customerRepository.isMerged(customerId)) {
-      throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
-    }
+    lockEditableCustomer(customerId);
     CustomerMemberLink current =
         customerMemberLinkRepository
             .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
-            .orElseThrow(() -> new NotFoundException("紐づけられている会員がいません"));
-    current.release(actorId);
+            .orElseThrow(() -> new ConflictException("関連状態が変わりました。再取得して確認してください"));
+    requireExpectedLink(current, expectedLinkId);
+    current.release(actorId, operationReason, OffsetDateTime.now());
     customerMemberLinkRepository.save(current);
   }
 
@@ -121,7 +126,10 @@ public class CustomerMemberLinkService {
     requireCustomer(customerId);
     return customerMemberLinkRepository
         .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
-        .map(link -> new CustomerMemberLinkResponse(true, link.getMemberCode(), link.getLinkedAt()))
+        .map(
+            link ->
+                new CustomerMemberLinkResponse(
+                    link.getId(), true, link.getMemberCode(), link.getLinkedAt()))
         .orElseThrow(() -> new NotFoundException("紐づけられている会員がいません"));
   }
 
@@ -129,9 +137,6 @@ public class CustomerMemberLinkService {
    * 顧客 1 件の紐づけ履歴。続きはカーソルで辿る。
    *
    * <p>履歴は解除・再紐づけのたびに増え続けるので、上限の無い一覧では返さない。
-   *
-   * @param cursor 続きの位置。null なら先頭から
-   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
   @StoreScoped
   @Transactional(readOnly = true)
@@ -166,16 +171,20 @@ public class CustomerMemberLinkService {
     }
   }
 
-  /**
-   * 解除の直列化点。取得できない顧客は他店舗の顧客も含めて 404。
-   *
-   * <p>書き込み先を解決する経路（{@link CustomerReferenceResolver}）とは分けている — 解除が対象にするのは名指された行そのもので、
-   * 別の行へ向け直してよい操作ではない。
-   */
-  private void lockCustomer(String customerId) {
+  /** 成立・変更・解除は名指された顧客行を直列化点とする。他店舗は 404、統合済みは 409 とし、 操作対象を暗黙に存続顧客へ向け直さない。 */
+  private void lockEditableCustomer(String customerId) {
     customerRepository
         .findByIdForUpdate(customerId)
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+    if (customerRepository.isMerged(customerId)) {
+      throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
+    }
+  }
+
+  private static void requireExpectedLink(CustomerMemberLink current, String expectedLinkId) {
+    if (!Objects.equals(current == null ? null : current.getId(), expectedLinkId)) {
+      throw new ConflictException("関連状態が変わりました。再取得して確認してください");
+    }
   }
 
   /** JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。 */
@@ -191,6 +200,11 @@ public class CustomerMemberLinkService {
         view.getId(),
         view.getMemberCode(),
         view.getStatus(),
+        view.getReason(),
+        view.getOperationReason(),
+        view.getReleaseReason(),
+        view.getLinkedBy(),
+        view.getReleasedBy(),
         view.getLinkedAt(),
         view.getLinkedByName(),
         view.getReleasedAt(),

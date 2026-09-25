@@ -91,7 +91,7 @@ class CustomerMemberLinkTest {
     CustomerMemberLink link = validLink().build();
     OffsetDateTime before = OffsetDateTime.now();
 
-    link.release(9L);
+    link.release(9L, "本人依頼", OffsetDateTime.now());
 
     assertThat(link.getStatus()).isEqualTo(LinkStatus.RELEASED);
     assertThat(link.getReleasedBy()).isEqualTo(9L);
@@ -106,9 +106,9 @@ class CustomerMemberLinkTest {
   @DisplayName("解除済みの区間は再度解除できないこと")
   void doubleReleaseIsRejected() {
     CustomerMemberLink link = validLink().build();
-    link.release(9L);
+    link.release(9L, "本人依頼", OffsetDateTime.now());
 
-    assertThatThrownBy(() -> link.release(9L))
+    assertThatThrownBy(() -> link.release(9L, "本人依頼", OffsetDateTime.now()))
         .isInstanceOf(InvalidCustomerMemberLinkException.class)
         .hasMessageContaining("既に解除されています");
   }
@@ -118,7 +118,7 @@ class CustomerMemberLinkTest {
   void releaseWithoutActorIsRejected() {
     CustomerMemberLink link = validLink().build();
 
-    assertThatThrownBy(() -> link.release(null))
+    assertThatThrownBy(() -> link.release(null, "本人依頼", OffsetDateTime.now()))
         .isInstanceOf(InvalidCustomerMemberLinkException.class)
         .hasMessageContaining("実行者");
 

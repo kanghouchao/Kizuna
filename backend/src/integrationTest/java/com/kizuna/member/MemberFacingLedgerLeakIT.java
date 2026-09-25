@@ -255,7 +255,7 @@ class MemberFacingLedgerLeakIT extends CrossStoreTestSupport {
             HttpMethod.POST,
             new HttpEntity<>("{\"member_code\": \"" + memberCode + "\"}", storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(linked.getStatusCode()).as("前提: 紐づけが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(linked.getStatusCode()).as("前提: 紐づけが成功すること").isEqualTo(HttpStatus.CREATED);
 
     // 残高は顧客ではなく会員の台帳が持つため、数値のカナリアは台帳の仕訳として積む。発生店舗と有効期限を
     // 埋めるのは、明細の store_name / expires_on が non_null 包含で消えたまま素通りしないようにするため。

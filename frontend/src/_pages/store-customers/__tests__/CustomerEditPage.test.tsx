@@ -209,7 +209,7 @@ describe('顧客編集ページを統合済みの旧 ID で開いたとき', () 
     mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
     mockedCustomerApi.mergeHistory.mockResolvedValue({ rows: [], nextCursor: null });
-    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MERGE']));
+    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE', 'CUSTOMER_MERGE']));
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
 

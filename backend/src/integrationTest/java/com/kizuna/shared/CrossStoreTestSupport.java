@@ -42,6 +42,21 @@ import tools.jackson.databind.node.ObjectNode;
 @AutoConfigureTestRestTemplate
 public abstract class CrossStoreTestSupport {
 
+  protected ResponseEntity<JsonNode> releaseMemberLink(String customerId, HttpHeaders headers) {
+    String path = "/store/customers/" + customerId + "/member-link";
+    var current = rest.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+    String expectedId =
+        current.getStatusCode().is2xxSuccessful()
+            ? current.getBody().path("id").asString()
+            : "absent";
+    return rest.exchange(
+        path + "/releases",
+        HttpMethod.POST,
+        new HttpEntity<>(
+            Map.of("expected_link_id", expectedId, "operation_reason", "本人依頼"), headers),
+        JsonNode.class);
+  }
+
   protected static final long STORE_A = 1L;
   protected static final long STORE_B = 2L;
 

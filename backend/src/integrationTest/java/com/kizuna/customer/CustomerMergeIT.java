@@ -483,17 +483,18 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("関連の成立先に旧 ID を渡すと、存続行に対して関連が成立すること")
-  void establishesTheLinkOnTheSurvivingRowWhenGivenTheOldCustomerId() {
+  @DisplayName("関連の成立先に統合済みの ID を渡すと 409 で拒否すること")
+  void rejectsLinkingAMergedCustomer() {
     String surviving = createCustomer("関連解決存続-" + nonce);
     String merged = createCustomer("関連解決被統合-" + nonce);
     assertThat(merge(STORE_A, surviving, merged).getStatusCode()).isEqualTo(HttpStatus.OK);
 
-    link(merged, registerMember("merge-resolve-link"));
+    assertThat(linkResponse(merged, registerMember("merge-resolve-link")).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
 
     assertThat(customerMemberLinkRepository.findByCustomerIdAndStatus(surviving, LinkStatus.ACTIVE))
-        .as("会員が死んだ行へ紐づかないこと")
-        .isPresent();
+        .as("統合先にも新しい関連を作らないこと")
+        .isEmpty();
     assertThat(linksOn(merged)).isZero();
   }
 
@@ -871,8 +872,8 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   @Test
-  @DisplayName("統合が墓標化を済ませて保持している間に走った関連の成立は、待ってから存続行に着くこと")
-  void aLinkEstablishedWhileAMergeHoldsTheRowLandsOnTheSurvivingRow() throws Exception {
+  @DisplayName("統合と並行した関連の成立は、確定後に統合済みとして拒否すること")
+  void rejectsALinkAfterConcurrentMergeCommits() throws Exception {
     String surviving = createCustomer("並行関連存続-" + nonce);
     String tombstone = createCustomer("並行関連被統合-" + nonce);
     String memberCode = registerMember("merge-race-link");
@@ -894,13 +895,14 @@ class CustomerMergeIT extends CrossStoreTestSupport {
       releaseMerge.countDown();
       inFlightMerge.get(30, TimeUnit.SECONDS);
 
-      assertThat(concurrentLink.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(concurrentLink.get(30, TimeUnit.SECONDS).getStatusCode())
+          .isEqualTo(HttpStatus.CONFLICT);
     } finally {
       releaseMerge.countDown();
       pool.shutdownNow();
     }
     assertThat(customerMemberLinkRepository.findByCustomerIdAndStatus(surviving, LinkStatus.ACTIVE))
-        .isPresent();
+        .isEmpty();
     assertThat(linksOn(tombstone)).as("墓標に着地した関連が 0 件であること").isZero();
   }
 
@@ -938,7 +940,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
       // 統合先はまだ押さえられたまま。ここで待たずに返ることが、待ちが環にならない根拠になる
       ResponseEntity<JsonNode> refused = blocked.get(30, TimeUnit.SECONDS);
       assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-      assertThat(refused.getBody().path("error").asString()).contains("統合中の顧客です");
+      assertThat(refused.getBody().path("error").asString()).contains("統合済みの顧客です");
       releaseSurviving.countDown();
       holdSurviving.get(30, TimeUnit.SECONDS);
     } finally {
@@ -1369,7 +1371,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   private void link(String customerId, String memberCode) {
     assertThat(linkResponse(customerId, memberCode).getStatusCode())
         .as("前提: 会員の紐づけが成功すること")
-        .isEqualTo(HttpStatus.OK);
+        .isEqualTo(HttpStatus.CREATED);
   }
 
   private ResponseEntity<JsonNode> linkResponse(String customerId, String memberCode) {
@@ -1387,11 +1389,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   }
 
   private ResponseEntity<JsonNode> unlinkResponse(String customerId) {
-    return rest.exchange(
-        "/store/customers/" + customerId + "/member-link",
-        HttpMethod.DELETE,
-        new HttpEntity<>(managerHeaders(STORE_A)),
-        JsonNode.class);
+    return releaseMemberLink(customerId, managerHeaders(STORE_A));
   }
 
   // ==================== 会員 ====================

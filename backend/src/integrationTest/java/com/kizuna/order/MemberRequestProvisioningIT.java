@@ -238,13 +238,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
     String applicationId = request(applicant, STORE_A, "付替えの名乗り-" + nonce);
 
     // 店舗が同じ台帳行を別の会員へ付け替える（解除 → 別会員で再成立）
-    assertThat(
-            rest.exchange(
-                    "/store/customers/" + shared + "/member-link",
-                    HttpMethod.DELETE,
-                    new HttpEntity<>(storeHeaders(STORE_A)),
-                    Void.class)
-                .getStatusCode())
+    assertThat(releaseMemberLink(shared, storeHeaders(STORE_A)).getStatusCode())
         .as("前提: 紐づけを解除できること")
         .isEqualTo(HttpStatus.NO_CONTENT);
     linkByMemberCode(shared, other.memberCode());
@@ -482,7 +476,7 @@ class MemberRequestProvisioningIT extends CrossStoreTestSupport {
             HttpMethod.POST,
             new HttpEntity<>("{\"member_code\": \"" + memberCode + "\"}", storeHeaders(STORE_A)),
             JsonNode.class);
-    assertThat(linked.getStatusCode()).as("前提: 会員コードでの紐づけが成功すること").isEqualTo(HttpStatus.OK);
+    assertThat(linked.getStatusCode()).as("前提: 会員コードでの紐づけが成功すること").isEqualTo(HttpStatus.CREATED);
   }
 
   /** その会員の有効な関連（店舗を跨いで全件）。店舗文脈の外なので storeFilter は働かない。 */
