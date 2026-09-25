@@ -54,16 +54,15 @@ public class CustomerMemberLinkService {
     Long actorId = resolveActorId(actorEmail);
     lockEditableCustomer(customerId);
     String targetId = customerId;
-    MemberLookup member =
-        memberLookupService
-            .findByMemberCode(memberCode)
-            .orElseThrow(() -> new NotFoundException("会員コードに該当する会員が見つかりません"));
-
     CustomerMemberLink current =
         customerMemberLinkRepository
             .findByCustomerIdAndStatus(targetId, LinkStatus.ACTIVE)
             .orElse(null);
     requireExpectedLink(current, expectedLinkId);
+    MemberLookup member =
+        memberLookupService
+            .findByMemberCode(memberCode)
+            .orElseThrow(() -> new NotFoundException("会員コードに該当する会員が見つかりません"));
     String normalizedReason =
         CustomerMemberLink.normalizeOperationReason(operationReason, current != null);
     OffsetDateTime operatedAt = OffsetDateTime.now();

@@ -388,6 +388,34 @@ class CustomerMemberLinkIT extends CrossStoreTestSupport {
   }
 
   @Test
+  @DisplayName("不明な会員コードでも区間の不一致を優先して 409 を返し、現況と履歴を保持すること")
+  void staleIntervalWithUnknownMemberCodeIsConflict() {
+    String customerId = createCustomer(STORE_A, "不明コード競合-" + nonce);
+    String firstCode = registerMember("stale-unknown-first");
+    String secondCode = registerMember("stale-unknown-second");
+    String firstId = link(STORE_A, customerId, firstCode, token).getBody().path("id").asString();
+    ResponseEntity<JsonNode> changed = change(customerId, secondCode, firstId);
+    assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String currentId = changed.getBody().path("id").asString();
+    JsonNode intervals = history(STORE_A, customerId, token).getBody().path("content");
+
+    assertThat(change(customerId, "000000000000", firstId).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+    assertThat(link(STORE_A, customerId, "000000000000", token).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+    assertThat(change(customerId, "000000000000", currentId).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(memberLink(STORE_A, customerId, token).getBody().path("id").asString())
+        .isEqualTo(currentId);
+    assertThat(history(STORE_A, customerId, token).getBody().path("content")).isEqualTo(intervals);
+
+    assertThat(release(customerId, currentId, "本人依頼").getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(change(customerId, "000000000000", currentId).getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+  }
+
+  @Test
   @DisplayName("変更先が競合した場合も理由なし・長すぎる理由の場合も現在の区間を保持すること")
   void failedChangesRetainTheActiveInterval() {
     String customer = createCustomer(STORE_A, "競合保持-" + nonce);

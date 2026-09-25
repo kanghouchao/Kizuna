@@ -149,6 +149,23 @@ class CustomerMemberLinkServiceTest {
   }
 
   @Test
+  @DisplayName("会員コードが解決できなくても古い区間からの変更は競合として拒否すること")
+  void staleIntervalTakesPrecedenceOverUnknownMemberCode() {
+    givenActor();
+    givenCustomerLocked();
+    CustomerMemberLink current = activeLink(7L, MEMBER_CODE);
+    current.setId("current-interval");
+    Mockito.when(
+            customerMemberLinkRepository.findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE))
+        .thenReturn(Optional.of(current));
+
+    assertThatThrownBy(
+            () -> service.link(CUSTOMER_ID, "000000000000", "old-interval", "本人確認", ACTOR_EMAIL))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("関連状態が変わりました");
+  }
+
+  @Test
   @DisplayName("既に紐づいている会員をもう一度紐づけると 409")
   void linkFailsWhenSameMemberAlreadyLinked() {
     givenActor();
