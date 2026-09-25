@@ -79,6 +79,7 @@ public class OrderUpdateRequest {
   @Valid private ContactSnapshotRequest contactSnapshot;
 
   @Valid
-  @Size(max = 3)
-  private List<@NotNull BusinessContactPermissionRequest> businessContactPermissions;
+  @Size(max = 3, message = "今回の連絡可否は3件以内で指定してください")
+  private List<@NotNull(message = "連絡可否の要素は必須です") BusinessContactPermissionRequest>
+      businessContactPermissions;
 }

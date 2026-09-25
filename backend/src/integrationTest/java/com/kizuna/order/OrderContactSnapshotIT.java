@@ -509,6 +509,45 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
         .isEqualTo("ALLOWED");
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void invalidPermissionArraysReturnJapaneseMessages(boolean updating) {
+    ObjectNode input = input("NONE");
+    input.putObject("contact_snapshot").put("email", "array@example.com");
+    String path = "/store/orders";
+    if (updating) {
+      JsonNode order = create(input.deepCopy());
+      path += "/" + order.path("id").asString();
+      input.put("expected_version", order.path("version").asLong());
+    }
+    for (boolean nullElement : List.of(false, true)) {
+      var entries = input.putArray("business_contact_permissions");
+      if (nullElement) {
+        entries.addNull();
+      } else {
+        for (int index = 0; index < 4; index++) {
+          entries
+              .addObject()
+              .put("type", "EMAIL")
+              .put("status", "ALLOWED")
+              .put("source", "本人申告")
+              .put("reason", "今回のみ");
+        }
+      }
+      var response =
+          rest.exchange(
+              path,
+              updating ? HttpMethod.PUT : HttpMethod.POST,
+              new HttpEntity<>(input.toString(), managerHeaders(STORE_A)),
+              JsonNode.class);
+      String message = nullElement ? "連絡可否の要素は必須です" : "今回の連絡可否は3件以内で指定してください";
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+      assertThat(response.getBody().path("error").asString()).isEqualTo(message);
+      assertThat(response.getBody().path("details").toString())
+          .contains("business_contact_permissions", message);
+    }
+  }
+
   @Test
   void invalidPermissionFieldsReturnJapaneseMessages() {
     ObjectNode input = input("NONE");
