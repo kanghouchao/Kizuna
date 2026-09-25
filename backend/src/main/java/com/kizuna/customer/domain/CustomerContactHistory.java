@@ -60,6 +60,29 @@ public class CustomerContactHistory extends StoreScopedEntity {
   @Column(updatable = false, length = 64)
   private String sourceContactId;
 
+  @Column(updatable = false, length = 64)
+  private String applicationId;
+
+  public static CustomerContactHistory guestConsent(
+      CustomerContact contact,
+      Long actorId,
+      ContactState before,
+      String applicationId,
+      String evidence,
+      String operationId) {
+    var history =
+        permission(
+            contact,
+            actorId,
+            before,
+            ContactPurpose.MARKETING,
+            "ゲスト申請 " + applicationId,
+            evidence,
+            operationId);
+    history.applicationId = applicationId;
+    return history;
+  }
+
   public static CustomerContactHistory permission(
       CustomerContact contact,
       Long actorId,

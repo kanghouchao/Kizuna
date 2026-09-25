@@ -5,6 +5,8 @@ import { useForm } from 'react-hook-form';
 import { guestOrderApplicationApi } from '@/entities/order';
 import {
   getApiErrorMessage,
+  useResource,
+  isConflict,
   integerRule,
   EMAIL_PATTERN,
   EMAIL_PATTERN_MESSAGE,
@@ -19,6 +21,8 @@ interface GuestReservationFormValues {
   contact_email: string;
   contact_line_id: string;
   remarks: string;
+  business_allowed: boolean;
+  marketing_allowed: boolean;
 }
 
 /**
@@ -29,10 +33,12 @@ interface GuestReservationFormValues {
  * 折返しを待つことだけを伝える（申請を読み返す口は匿名の来訪者には無い）。
  */
 export default function GuestReservationSection() {
+  const consent = useResource(guestOrderApplicationApi.consent);
   const [acceptedId, setAcceptedId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const {
     register,
+    setValue,
     getValues,
     handleSubmit,
     formState: { errors, isSubmitting },
@@ -46,13 +52,24 @@ export default function GuestReservationSection() {
       contact_email: '',
       contact_line_id: '',
       remarks: '',
+      business_allowed: false,
+      marketing_allowed: false,
     },
   });
 
   const submit = async (values: GuestReservationFormValues) => {
     setFailure(null);
+    if (!consent.data || consent.failure || consent.isLoading) {
+      setFailure('同意文面を取得してから送信してください');
+      return;
+    }
     try {
       const accepted = await guestOrderApplicationApi.request({
+        contact_consent: {
+          version: consent.data.version,
+          business_allowed: values.business_allowed,
+          marketing_allowed: values.marketing_allowed,
+        },
         business_date: values.business_date,
         arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
         pax: Number(values.pax),
@@ -66,6 +83,11 @@ export default function GuestReservationSection() {
       });
       setAcceptedId(accepted.id);
     } catch (error) {
+      if (isConflict(error)) {
+        setValue('business_allowed', false);
+        setValue('marketing_allowed', false);
+        await consent.reload();
+      }
       // 流量制限・希望日の範囲外など、サーバは対処の分かる文言を返す。汎用文言に潰さない
       setFailure(
         getApiErrorMessage(error, 'ご予約の送信に失敗しました。時間をおいてお試しください')
@@ -266,6 +288,48 @@ export default function GuestReservationSection() {
             />
             {errors.remarks && <p className={errorClass}>{errors.remarks.message}</p>}
           </div>
+          {consent.isLoading ? (
+            <p role="status">同意文面を読み込み中...</p>
+          ) : consent.failure ? (
+            <div role="alert">
+              <p>同意文面を取得できませんでした。</p>
+              <button type="button" onClick={() => void consent.reload()}>
+                再試行
+              </button>
+            </div>
+          ) : (
+            consent.data && (
+              <fieldset className="space-y-4 text-sm text-[var(--storefront-fg)]">
+                <legend className="mb-3">連絡への同意</legend>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    required
+                    className="mt-1 shrink-0"
+                    aria-invalid={!!errors.business_allowed}
+                    aria-describedby={errors.business_allowed ? 'guest-consent-error' : undefined}
+                    {...register('business_allowed', {
+                      validate: value => value || '今回の予約に関する業務連絡への同意が必要です',
+                    })}
+                  />
+                  <span>{consent.data.business_text}（必須）</span>
+                </label>
+                {errors.business_allowed && (
+                  <p id="guest-consent-error" className={errorClass}>
+                    {errors.business_allowed.message}
+                  </p>
+                )}
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 shrink-0"
+                    {...register('marketing_allowed')}
+                  />
+                  <span>{consent.data.marketing_text}</span>
+                </label>
+              </fieldset>
+            )
+          )}
           {failure && (
             <p role="alert" className={errorClass}>
               {failure}

@@ -516,16 +516,24 @@ Then('顧客の選択を保ったまま受付時連絡先だけを編集でき�
 });
 
 let guestApplicationId = '';
-When('公開サイトからメールとLINEだけで予約を希望する', async ({ page }) => {
+async function submitGuestApplication(page: Page, marketing: boolean) {
   await page.goto('/reservation');
   await page.getByRole('button', { name: 'はい' }).click();
   await expect(page.getByRole('button', { name: 'はい' })).toBeHidden();
   await page.getByLabel('お名前', { exact: true }).fill(customerName);
-  await page.getByLabel('メール', { exact: true }).fill('Guest@EXAMPLE.COM');
+  await page.getByLabel('メール', { exact: true }).fill(marketing ? `${'guest'.repeat(12)}@example.com` : 'Guest@EXAMPLE.COM');
   await page.getByLabel('LINE ID', { exact: true }).fill('guest-line');
   await page.getByLabel('ご希望日', { exact: true }).fill(todayInTokyo());
+  const business = page.getByRole('checkbox', { name: /この予約申請と成立した予約/ });
+  const promotion = page.getByRole('checkbox', { name: /キャンペーンやサービス/ });
+  await expect(promotion).not.toBeChecked();
+  await page.getByRole('button', { name: 'この内容で予約を希望する' }).click();
+  await expect(page.getByText('今回の予約に関する業務連絡への同意が必要です')).toBeVisible();
+  await business.focus();
+  await page.keyboard.press('Space');
+  if (marketing) await promotion.check();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByLabel('メール', { exact: true }).scrollIntoViewIfNeeded();
+  await business.scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/guest-contact-narrow.png' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   const [response] = await Promise.all([
@@ -534,6 +542,12 @@ When('公開サイトからメールとLINEだけで予約を希望する', asyn
   ]);
   expect(response.status()).toBe(201);
   guestApplicationId = (await response.json()).id;
+}
+When('公開サイトからメールとLINEだけで予約を希望する', async ({ page }) => {
+  await submitGuestApplication(page, false);
+});
+When('公開サイトで業務と販促に同意して申請する', async ({ page }) => {
+  await submitGuestApplication(page, true);
 });
 
 Then('受付箱で連絡先を補正して顧客未設定で確定でき原文が残る', async ({ page, request }) => {
@@ -644,4 +658,58 @@ Then('許可の保存に失敗しても入力を保持して再試行できる',
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
   await expect(page.getByText('電話で撤回：連絡を希望しないとの申出',{exact:true})).toBeVisible();
   await expect(page.getByText('現在の判定：業務連絡不可。',{exact:true})).toBeVisible();
+});
+
+Then('店舗で販促同意を明示取り込みし失敗後も入力を保って確定できる', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.getByRole('listitem').filter({ hasText: customerName }).getByRole('button', { name: '確定', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '予約申請を確定' });
+  await expect(dialog.getByText('販促同意：選択済み')).toBeVisible();
+  await dialog.getByRole('combobox', { name: '顧客の選択' }).click();
+  await page.getByRole('option', { name: '新規顧客', exact: true }).click();
+  await dialog.getByLabel('新規顧客名').fill(customerName);
+  await dialog.getByRole('checkbox', { name: 'メールを台帳へ取り込む', exact: true }).check();
+  const promotion = dialog.getByRole('checkbox', { name: 'メールの販促同意を取り込む', exact: true });
+  await expect(promotion).not.toBeChecked();
+  await promotion.focus();
+  await page.keyboard.press('Space');
+  await dialog.getByRole('combobox', { name: 'コース', exact: true }).click();
+  await page.getByLabel('コースを検索').fill(courseName);
+  await page.getByRole('option', { name: new RegExp(courseName) }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await promotion.scrollIntoViewIfNeeded();
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBeTruthy();
+    await page.screenshot({ path: `test-results/guest-consent-import-${colorScheme}.png` });
+  }
+  const endpoint = `**/order-applications/${guestApplicationId}/confirmation`;
+  await page.route(endpoint, route => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: '条件が更新されました。再試算してください' }) }), { times: 1 });
+  await dialog.getByRole('button', { name: '確定する', exact: true }).click();
+  await expect(page.getByText(/販促許可を記録/)).toBeVisible();
+  await page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click();
+  await expect(page.getByText('条件が更新されました。再試算してください')).toBeVisible();
+  await expect(promotion).toBeChecked();
+  await expect(dialog.getByLabel('新規顧客名')).toHaveValue(customerName);
+  await dialog.getByRole('button', { name: '確定する', exact: true }).click();
+  const [response] = await Promise.all([
+    page.waitForResponse(resp => resp.url().endsWith(`/order-applications/${guestApplicationId}/confirmation`) && resp.request().method() === 'POST'),
+    page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
+  ]);
+  expect(response.status()).toBe(201);
+  const order = await response.json();
+  createdOrderId = order.id;
+  const token = await loginAsStoreAdmin(request);
+  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
+  const contacts = await request.get(`/api/store/customers/${order.customer_id}/contacts`, { headers });
+  expect(contacts.status()).toBe(200);
+  const contact = (await contacts.json()).content[0];
+  expect(contact.business_status).toBe('UNKNOWN');
+  expect(contact.marketing_status).toBe('ALLOWED');
+  const detail = await request.get(`/api/store/order-applications/${guestApplicationId}`, { headers });
+  expect(detail.status()).toBe(200);
+  const application = await detail.json();
+  expect(application.contact_imports[0].contact_id).toBe(contact.id);
+  expect(application.contact_consent.marketing_allowed).toBe(true);
 });

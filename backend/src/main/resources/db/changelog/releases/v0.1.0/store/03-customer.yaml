@@ -413,6 +413,10 @@ databaseChangeLog:
                   name: source_contact_id
                   type: VARCHAR(64)
               - column:
+                  name: application_id
+                  type: VARCHAR(64)
+                  remarks: 同意取得元の申請識別子。原文・取得日時は根拠にも保持する
+              - column:
                   name: before_state
                   type: JSONB
               - column:

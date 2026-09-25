@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -14,6 +15,7 @@ import lombok.Data;
  */
 @Data
 public class GuestOrderApplicationCreateRequest {
+  @NotNull @Valid private GuestContactConsentRequest contactConsent;
 
   @NotNull(message = "希望日は必須です")
   private LocalDate businessDate;
@@ -32,5 +34,5 @@ public class GuestOrderApplicationCreateRequest {
   @Size(max = 500, message = "ご要望は 500 文字以内です")
   private String remarks;
 
-  @NotNull @jakarta.validation.Valid private ContactSnapshotRequest contactSnapshot;
+  @NotNull @Valid private ContactSnapshotRequest contactSnapshot;
 }

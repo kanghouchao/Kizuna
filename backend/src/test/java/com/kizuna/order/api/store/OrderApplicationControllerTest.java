@@ -278,7 +278,8 @@ class OrderApplicationControllerTest {
   }
 
   private static final String GUEST_BODY =
-      "{\"business_date\": \"2026-08-20\", \"pax\": 2,"
+      "{\"contact_consent\":{\"version\":\"1\",\"business_allowed\":true,\"marketing_allowed\":false},"
+          + "\"business_date\": \"2026-08-20\", \"pax\": 2,"
           + " \"contact_snapshot\": {\"name\": \"ゲスト花子\", \"phone_number\": \"09012345678\"}}";
 
   @Test

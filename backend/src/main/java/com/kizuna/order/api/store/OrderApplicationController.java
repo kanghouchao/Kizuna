@@ -1,10 +1,12 @@
 package com.kizuna.order.api.store;
 
 import com.kizuna.customer.application.MemberCustomerConflictException;
+import com.kizuna.order.api.dto.GuestContactConsentTextResponse;
 import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
 import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
+import com.kizuna.order.api.dto.OrderApplicationDetailResponse;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderResponse;
@@ -42,6 +44,12 @@ public class OrderApplicationController {
   private final GuestOrderApplicationService guestOrderApplicationService;
   private final GuestApplicationRateLimiter guestApplicationRateLimiter;
   private final StoreContext storeContext;
+
+  @GetMapping("/public/contact-consent")
+  @PermitAll
+  public GuestContactConsentTextResponse contactConsent() {
+    return GuestContactConsentTextResponse.current();
+  }
 
   /**
    * 公開店面からのゲスト予約申請を受け付ける。匿名で、店舗は店面 middleware が域名から解決してヘッダで運ぶ（{@code StoreIdInterceptor}）。
@@ -84,6 +92,12 @@ public class OrderApplicationController {
    * <p>続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。確定・謝絶で行が消えていく一覧なので、
    * 位置を「何件目か」で指すと処理の直後に境界の申請を飛ばす。
    */
+  @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public OrderApplicationDetailResponse detail(@PathVariable String id) {
+    return orderService.applicationDetail(id);
+  }
+
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<CursorPage<OrderApplicationResponse>> list(

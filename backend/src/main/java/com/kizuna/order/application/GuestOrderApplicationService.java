@@ -1,13 +1,17 @@
 package com.kizuna.order.application;
 
+import com.kizuna.order.api.dto.GuestContactConsentTextResponse;
 import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
 import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
+import com.kizuna.order.domain.GuestContactConsent;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
+import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +37,13 @@ public class GuestOrderApplicationService {
   @StoreScoped
   @Transactional
   public GuestOrderApplicationResponse request(GuestOrderApplicationCreateRequest request) {
+    var consent = request.getContactConsent();
+    if (consent == null
+        || !Boolean.TRUE.equals(consent.businessAllowed())
+        || consent.marketingAllowed() == null) throw new ServiceException("今回の予約に関する業務連絡への同意が必要です");
+    var text = GuestContactConsentTextResponse.current();
+    if (!text.version().equals(consent.version()))
+      throw new ConflictException("同意文面が更新されました。内容を確認して再度同意してください");
     var contact = request.getContactSnapshot().normalized();
     if (contact.name() == null
         || (contact.phoneNumber() == null && contact.email() == null && contact.lineId() == null))
@@ -45,6 +56,15 @@ public class GuestOrderApplicationService {
     // store_id は StoreScopeStampListener が @PrePersist で採番する
     OrderApplication application =
         OrderApplication.builder()
+            .contactConsent(
+                new GuestContactConsent(
+                    text.version(),
+                    text.businessText(),
+                    text.marketingText(),
+                    true,
+                    consent.marketingAllowed(),
+                    OffsetDateTime.now()))
+            .consentContact(contact)
             .status(OrderApplicationStatus.PENDING)
             .businessDate(request.getBusinessDate())
             .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())

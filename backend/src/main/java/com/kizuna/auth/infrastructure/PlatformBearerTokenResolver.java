@@ -39,6 +39,8 @@ public class PlatformBearerTokenResolver implements BearerTokenResolver {
     PathPatternRequestMatcher.withDefaults().matcher("/store/config/public"),
     PathPatternRequestMatcher.withDefaults().matcher("/store/casts/public"),
     PathPatternRequestMatcher.withDefaults().matcher("/store/shifts/public"),
+    PathPatternRequestMatcher.withDefaults()
+        .matcher(HttpMethod.GET, "/store/order-applications/public/contact-consent"),
     // 公開店面からの匿名 POST（ゲスト予約申請）。店面を見ている来訪者は会員・キャストの陳腐な
     // token cookie を持ちうるため、免除しないと申請そのものが 401 で通らなくなる。
     PathPatternRequestMatcher.withDefaults()

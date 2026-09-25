@@ -337,7 +337,7 @@ class OrderControllerTest {
     when(orderService.completionPreview(any(), any()))
         .thenReturn(
             new OrderPreviewResponse(
-                "token", null, List.of(), 0, 0, 0, 0, null, List.of(), false, 0));
+                "token", null, List.of(), 0, 0, 0, 0, null, List.of(), false, 0, List.of()));
 
     mockMvc
         .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))

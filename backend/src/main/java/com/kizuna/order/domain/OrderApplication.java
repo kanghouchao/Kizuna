@@ -1,5 +1,6 @@
 package com.kizuna.order.domain;
 
+import com.kizuna.customer.contact.GuestContactImport;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -9,11 +10,14 @@ import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 予約申請。受注（Order）とは別の付随記録で、店舗の確定時に CONFIRMED の Order を生成して {@code orderId} を回写する（ADR 0017）。
@@ -80,6 +84,25 @@ public class OrderApplication extends StoreScopedEntity {
 
   @Column(name = "contact_line_id", length = 255)
   private String contactLineId;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb", updatable = false)
+  private GuestContactConsent contactConsent;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb", updatable = false)
+  private ContactSnapshot consentContact;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(columnDefinition = "jsonb")
+  @Builder.Default
+  private List<GuestContactImport> contactImports = List.of();
+
+  public void recordContactImports(List<GuestContactImport> imports) {
+    if (status != OrderApplicationStatus.PENDING)
+      throw new InvalidOrderApplicationOperationException("処理済みの申請です");
+    contactImports = List.copyOf(imports);
+  }
 
   public ContactSnapshot getContactSnapshot() {
     return new ContactSnapshot(contactName, contactPhoneNumber, contactEmail, contactLineId);

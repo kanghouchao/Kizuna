@@ -18,4 +18,5 @@ public record ContactHistoryResponse(
     ContactPurpose purpose,
     String source,
     String reason,
-    String sourceContactId) {}
+    String sourceContactId,
+    String applicationId) {}

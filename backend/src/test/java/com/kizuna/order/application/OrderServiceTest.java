@@ -124,6 +124,7 @@ import org.springframework.transaction.annotation.Transactional;
 class OrderServiceTest {
 
   @Mock BusinessContactPermissions businessContactPermissions;
+  @Mock GuestApplicationConsent guestConsent;
   @Mock OrderRepository orderRepository;
   @Mock OrderApplicationRepository orderApplicationRepository;
   @Mock OrderSearchQuery orderSearchQuery;

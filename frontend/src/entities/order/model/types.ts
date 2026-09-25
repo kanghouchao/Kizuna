@@ -555,6 +555,7 @@ export interface OrderApplicationRow {
  * ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新で整える。
  */
 export interface OrderApplicationConfirmationRequest {
+  contact_imports?: GuestContactImportInput[];
   fee_lines?: OrderFeeLineRequest[];
   special_service_ids?: string[];
   course_id: string;
@@ -578,6 +579,7 @@ export interface OrderApplicationConfirmationRequest {
  * 店舗は訪問された域名から解決されるため、この本体では名乗らない。
  */
 export interface GuestOrderApplicationCreateRequest {
+  contact_consent: { version: string; business_allowed: boolean; marketing_allowed: boolean };
   business_date: string;
   arrival_scheduled_start_time?: string;
   pax?: number;
@@ -794,6 +796,7 @@ export interface OrderCourse extends CourseCandidate {
   adopted_at: string;
 }
 export interface OrderPreview {
+  contact_imports?: GuestContactImportResult[];
   point_basis_amount: number;
   total_duration_minutes: number;
   total_remuneration: number;
@@ -894,4 +897,38 @@ export interface PlatformOrder {
   total_remuneration: number;
   accrued_remuneration: number;
   completed_at?: string;
+}
+
+export interface GuestContactConsentText {
+  version: string;
+  business_text: string;
+  marketing_text: string;
+}
+export interface GuestContactConsent extends GuestContactConsentText {
+  business_allowed: boolean;
+  marketing_allowed: boolean;
+  acquired_at: string;
+}
+
+export interface OrderApplicationDetail extends OrderApplicationRow {
+  contact_consent?: GuestContactConsent;
+  business_contact_permissions: Pick<
+    BusinessContactPermission,
+    'type' | 'value' | 'status' | 'decision'
+  >[];
+  contact_imports: GuestContactImportResult[];
+}
+export interface GuestContactImportResult {
+  type: 'PHONE' | 'EMAIL' | 'LINE';
+  value: string;
+  marketing_result: 'NOT_REQUESTED' | 'ALLOWED' | 'DENIED_PRESERVED';
+  contact_id?: string;
+  recorded_by?: number;
+  recorded_at?: string;
+}
+
+export interface GuestContactImportInput {
+  type: 'PHONE' | 'EMAIL' | 'LINE';
+  contact_id?: string;
+  import_marketing_consent: boolean;
 }

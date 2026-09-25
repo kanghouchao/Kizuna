@@ -19,6 +19,7 @@ jest.mock('@/entities/order', () => ({
   orderApplicationApi: {
     ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     confirm: jest.fn(),
+    detail: jest.fn(),
   },
 }));
 
@@ -79,10 +80,94 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
     jest.clearAllMocks();
     jest.mocked(hasPermission).mockReturnValue(true);
     (orderApi.listReceptionists as jest.Mock).mockResolvedValue([]);
+    jest.mocked(orderApplicationApi.detail).mockResolvedValue({
+      ...guestApplication(),
+      business_contact_permissions: [],
+      contact_imports: [],
+    });
     mockedConfirm.mockResolvedValue({ id: 'o1' });
     jest
       .mocked(orderApi.specialServiceCandidates)
       .mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  });
+
+  it('申請が見つからない場合は保存と再試行を外し閉じると受付箱を更新する', async () => {
+    jest.mocked(orderApplicationApi.detail).mockRejectedValueOnce({ response: { status: 404 } });
+    const onMissing = jest.fn();
+    render(
+      <OrderApplicationConfirmModal
+        open
+        application={guestApplication()}
+        onClose={jest.fn()}
+        onConfirmed={jest.fn()}
+        onMissing={onMissing}
+      />
+    );
+    expect(
+      await screen.findByText('予約申請が見つかりません。受付箱を更新してください。')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '確定する' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(onMissing).toHaveBeenCalled();
+  });
+
+  it('新規顧客への連絡先と販促同意の取り込みをそれぞれ明示する', async () => {
+    jest.mocked(orderApplicationApi.detail).mockResolvedValue({
+      ...guestApplication(),
+      contact_consent: {
+        version: '1',
+        business_text: '業務',
+        marketing_text: '販促',
+        business_allowed: true,
+        marketing_allowed: true,
+        acquired_at: '2026-09-25T10:00:00Z',
+      },
+      business_contact_permissions: [
+        { type: 'PHONE', value: '+819000000000', status: 'ALLOWED', decision: 'ALLOWED' },
+      ],
+      contact_imports: [],
+    });
+    renderModal(guestApplication());
+    await pickCustomerMode('新規顧客');
+    fireEvent.change(await screen.findByLabelText('新規顧客名'), {
+      target: { value: '取り込み先' },
+    });
+    fireEvent.click(await screen.findByRole('checkbox', { name: '電話を台帳へ取り込む' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '電話の販促同意を取り込む' }));
+    await chooseCourse();
+    fireEvent.click(confirmButton());
+    await confirmPreview();
+    await waitFor(() =>
+      expect(mockedConfirm).toHaveBeenCalledWith(
+        'app-1',
+        expect.objectContaining({
+          contact_imports: [{ type: 'PHONE', import_marketing_consent: true }],
+        })
+      )
+    );
+  });
+
+  it('申請の同意原文と今回の拒否判定を表示する', async () => {
+    (orderApplicationApi as unknown as { detail: jest.Mock }).detail.mockResolvedValue({
+      ...guestApplication(),
+      contact_consent: {
+        version: '1',
+        business_text: '申請時の業務文面',
+        marketing_text: '申請時の販促文面',
+        business_allowed: true,
+        marketing_allowed: false,
+        acquired_at: '2026-09-25T10:00:00Z',
+      },
+      business_contact_permissions: [
+        { type: 'PHONE', value: '+819000000000', status: 'ALLOWED', decision: 'STORE_DENIED' },
+      ],
+      contact_imports: [],
+    });
+    renderModal(guestApplication());
+    expect(await screen.findByText('申請時の業務文面')).toBeInTheDocument();
+    expect(screen.getByText(/店舗内の拒否により連絡不可/)).toBeInTheDocument();
+    expect(screen.getByText(/販促同意：未選択/)).toBeInTheDocument();
   });
 
   it('空の新規顧客名は入力へ焦点を戻し、形式不正のメールは欄の傍で説明する', async () => {

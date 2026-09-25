@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -16,6 +17,10 @@ import lombok.Data;
  */
 @Data
 public class OrderApplicationConfirmationRequest {
+  @Valid
+  @Size(max = 3)
+  private List<@NotNull GuestContactImportRequest> contactImports;
+
   private List<String> specialServiceIds;
   private String confirmationToken;
 

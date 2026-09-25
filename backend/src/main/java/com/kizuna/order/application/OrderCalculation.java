@@ -1,5 +1,6 @@
 package com.kizuna.order.application;
 
+import com.kizuna.customer.contact.GuestContactImport;
 import com.kizuna.order.api.dto.OrderFeeLineRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
@@ -95,6 +96,16 @@ public class OrderCalculation {
       Object input,
       Order calculated,
       OrderPreviewResponse.Points points) {
+    return preview(operation, id, input, calculated, points, List.of());
+  }
+
+  public OrderPreviewResponse preview(
+      String operation,
+      String id,
+      Object input,
+      Order calculated,
+      OrderPreviewResponse.Points points,
+      List<GuestContactImport> contactImports) {
     var c = calculated.getCourse();
     var lines = mapper.toFeeLineResponses(calculated.getFeeLines());
     lines.stream()
@@ -123,7 +134,8 @@ public class OrderCalculation {
             points,
             specials,
             unresolved > 0,
-            unresolved);
+            unresolved,
+            contactImports);
     return new OrderPreviewResponse(
         confirmation.sign(operation, id, input, result),
         result.course(),
@@ -135,7 +147,8 @@ public class OrderCalculation {
         points,
         specials,
         unresolved > 0,
-        unresolved);
+        unresolved,
+        contactImports);
   }
 
   public void requirePreviewInput(String token) {
