@@ -94,6 +94,18 @@ public class Customer extends StoreScopedEntity {
     }
   }
 
+  public void adoptMergeProfile(MergeProfile profile) {
+    name = profile.name();
+    address = profile.address();
+    buildingName = profile.buildingName();
+    landmark = profile.landmark();
+    classification = profile.classification();
+    hasPet = profile.hasPet();
+    usageAreas = profile.usageAreas();
+    ngType = profile.ngType();
+    ngContent = profile.ngContent();
+  }
+
   @Override
   public String toString() {
     return "Customer(id=" + getId() + ", name=" + name + ", classification=" + classification + ")";

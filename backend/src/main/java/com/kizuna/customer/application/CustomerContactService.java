@@ -17,6 +17,7 @@ import com.kizuna.customer.domain.CustomerContactHistory;
 import com.kizuna.customer.domain.CustomerContactHistoryRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.MergePreferences;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -28,8 +29,10 @@ import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -210,23 +213,31 @@ public class CustomerContactService {
 
   @StoreScoped
   @Transactional
-  public void transfer(String survivingId, String mergedId, Long actorId) {
-    // 呼出元の統合処理が両顧客を ID 順にロック済み。連絡先も同じ排他境界に参加する。
-    var surviving =
-        contacts.findByCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(
-            List.of(survivingId));
-    var moving = contacts.findByCustomerIdOrderByIdAsc(mergedId);
-    for (var contact : moving) {
-      if (contact.isPreferred()
-          && surviving.stream().anyMatch(c -> c.getType() == contact.getType()))
-        throw new ConflictException("両方の顧客に同じ種類の優先連絡先があります。顧客編集で優先指定を解除してから統合してください");
-    }
+  public void transfer(
+      String survivingId, String mergedId, Long actorId, MergePreferences preferences) {
+    var rows =
+        Stream.concat(
+                contacts.findByCustomerIdOrderByIdAsc(survivingId).stream(),
+                contacts.findByCustomerIdOrderByIdAsc(mergedId).stream())
+            .toList();
+    var before =
+        rows.stream().collect(Collectors.toMap(CustomerContact::getId, CustomerContact::state));
     String operationId = UUID.randomUUID().toString();
-    for (var contact : moving) {
-      var before = contact.state();
-      contact.transfer(survivingId);
-      record(contact, ContactAction.TRANSFER, before, actorId, operationId);
+    // 付替えと優先指定の順に依存せず部分一意制約を満たすため、旧指定の解除を先に反映する。
+    rows.forEach(c -> c.prefer(false));
+    contacts.flush();
+    for (var c : rows) {
+      boolean moving = c.getCustomerId().equals(mergedId);
+      if (moving) c.transfer(survivingId);
+      c.prefer(!c.isDeleted() && Objects.equals(preferences.selected(c.getType()), c.getId()));
+      record(
+          c,
+          moving ? ContactAction.TRANSFER : ContactAction.PREFERENCE,
+          before.get(c.getId()),
+          actorId,
+          operationId);
     }
+    contacts.flush();
   }
 
   private void record(

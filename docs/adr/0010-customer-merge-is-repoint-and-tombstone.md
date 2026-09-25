@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-連絡先行の付替えとプレビューでの資料選択は [ADR 0028](0028-customer-contacts-and-order-contact-snapshots.md) で拡張（設計確定・未実装）。墓標・会員関連の衝突拒否・自動取消なし・台帳への非波及は維持する。
+連絡先行の付替えとプレビューでの資料選択は [ADR 0028](0028-customer-contacts-and-order-contact-snapshots.md) で拡張（実装済み）。墓標・会員関連の衝突拒否・自動取消なし・台帳への非波及は維持する。
 
 ## 決定時の背景
 

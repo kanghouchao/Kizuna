@@ -16,4 +16,6 @@ public record CustomerMergeHistoryResponse(
     String mergedByName,
     OffsetDateTime mergedAt,
     int movedOrderCount,
-    int movedLinkCount) {}
+    int movedLinkCount,
+    int movedContactCount,
+    String operationReason) {}

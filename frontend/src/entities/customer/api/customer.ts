@@ -1,4 +1,11 @@
-import type { ContactPurpose, ContactPermissionInput } from '../model/types';
+import type {
+  MergeRequest,
+  MergePreviewRequest,
+  MergePreview,
+  MergeAudit,
+  ContactPurpose,
+  ContactPermissionInput,
+} from '../model/types';
 import {
   CursorPageResult,
   CursorParams,
@@ -36,6 +43,15 @@ export type CustomerListParams = PaginationParams & {
 };
 
 export const customerApi = {
+  mergePreview: async (id: string, request: MergePreviewRequest): Promise<MergePreview> =>
+    (await apiClient.post(`/store/customers/${requireId(id, '顧客')}/merge-preview`, request)).data,
+  mergeAudit: async (id: string, mergeId: string): Promise<MergeAudit> =>
+    (
+      await apiClient.get(
+        `/store/customers/${requireId(id, '顧客')}/merges/${requireId(mergeId, '統合')}`
+      )
+    ).data,
+
   contacts: async (id: string, params?: CursorParams): Promise<CursorPageResult<ContactResponse>> =>
     fromCursorPage(
       (await apiClient.get(`/store/customers/${requireId(id, '顧客')}/contacts`, { params })).data
@@ -152,11 +168,11 @@ export const customerApi = {
    */
   merge: async (
     survivingCustomerId: string | undefined,
-    mergedCustomerId: string | undefined
+    request: MergeRequest
   ): Promise<CustomerMergeResponse> => {
     const response = await apiClient.post(
       `/store/customers/${requireId(survivingCustomerId, '顧客')}/merges`,
-      { merged_customer_id: requireId(mergedCustomerId, '顧客') }
+      { ...request, merged_customer_id: requireId(request.merged_customer_id, '顧客') }
     );
     return response.data;
   },

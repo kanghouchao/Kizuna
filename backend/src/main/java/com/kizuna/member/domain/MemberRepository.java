@@ -9,6 +9,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface MemberRepository extends JpaRepository<Member, Long> {
 
+  /** 台帳の新規仕訳が取る外部キーの KEY SHARE と競合させるため、NO KEY UPDATE ではなく FOR UPDATE を使う。 */
+  @Query(value = "select id from t_members where id = :id for update", nativeQuery = true)
+  Optional<Long> lockIdForBalanceConfirmation(Long id);
+
   Optional<Member> findByPlatformUserId(Long platformUserId);
 
   Optional<Member> findByMemberCode(String memberCode);

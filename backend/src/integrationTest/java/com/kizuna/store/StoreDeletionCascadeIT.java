@@ -434,9 +434,10 @@ class StoreDeletionCascadeIT {
   private void insertCustomerMerge(long storeId, String survivingId, String mergedId) {
     jdbcTemplate.update(
         "INSERT INTO t_customer_merges (id, store_id, surviving_customer_id, merged_customer_id,"
-            + " merged_at, moved_order_count, moved_link_count, created_at, updated_at, version)"
+            + " merged_at, moved_order_count, moved_link_count, created_at, updated_at, version,"
+            + " moved_contact_count, operation_reason, evidence)"
             + " VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,"
-            + " 0)",
+            + " 0, 0, '重複確認', '{}'::jsonb)",
         "merge-cascade-it-" + UUID.randomUUID(),
         storeId,
         survivingId,

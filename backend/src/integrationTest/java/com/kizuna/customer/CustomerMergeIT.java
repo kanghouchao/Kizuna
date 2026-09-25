@@ -2,6 +2,7 @@ package com.kizuna.customer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
@@ -21,6 +22,7 @@ import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Limit;
 import org.springframework.http.HttpEntity;
@@ -44,6 +48,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 顧客統合を本物の PostgreSQL で検証する統合テスト。
@@ -95,6 +100,336 @@ class CustomerMergeIT extends CrossStoreTestSupport {
   @PersistenceContext private EntityManager entityManager;
 
   private final long nonce = System.nanoTime();
+
+  @Test
+  @DisplayName("確認から確定の間は同じ会員への他店舗の残高変更を直列化する")
+  void serializesCrossStoreBalanceChangesUntilMergeCommits() throws Exception {
+    String surviving = createCustomer("残高先-" + nonce);
+    String merged = createCustomer("残高元-" + nonce);
+    String elsewhere = createCustomerAt(STORE_B, "他店舗-" + nonce);
+    String code = registerMember("balance-lock");
+    link(merged, code);
+    var linked =
+        rest.postForEntity(
+            "/store/customers/" + elsewhere + "/member-link",
+            new HttpEntity<>(Map.of("member_code", code), managerHeaders(STORE_B)),
+            JsonNode.class);
+    assertThat(linked.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var input = mergeInput(merged, preview(surviving, merged));
+    CountDownLatch held = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    try (var pool = Executors.newFixedThreadPool(3)) {
+      var blocker =
+          pool.submit(
+              () ->
+                  new TransactionTemplate(transactionManager)
+                      .executeWithoutResult(
+                          status -> {
+                            jdbcTemplate.execute("lock table t_customer_merges in share mode");
+                            held.countDown();
+                            try {
+                              if (!release.await(30, TimeUnit.SECONDS))
+                                throw new AssertionError("監査待機の解除が必要です");
+                            } catch (InterruptedException ex) {
+                              Thread.currentThread().interrupt();
+                              throw new AssertionError(ex);
+                            }
+                          }));
+      try {
+        assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+        var merging =
+            pool.submit(
+                () ->
+                    rest.postForEntity(
+                        mergePath(surviving),
+                        new HttpEntity<>(input, managerHeaders(STORE_A)),
+                        JsonNode.class));
+        await()
+            .atMost(10, TimeUnit.SECONDS)
+            .until(
+                () ->
+                    Boolean.TRUE.equals(
+                        jdbcTemplate.queryForObject(
+                            "select exists(select 1 from pg_stat_activity where wait_event_type = 'Lock' and query like 'insert into t_customer_merges%')",
+                            Boolean.class)));
+        var adjusting =
+            pool.submit(
+                () ->
+                    rest.postForEntity(
+                        "/store/customers/" + elsewhere + "/point-adjustments",
+                        new HttpEntity<>(
+                            Map.of(
+                                "delta",
+                                100,
+                                "reason",
+                                "他店舗の調整",
+                                "idempotency_key",
+                                "merge-lock-" + nonce),
+                            managerHeaders(STORE_B)),
+                        JsonNode.class));
+        assertThatThrownBy(() -> adjusting.get(1, TimeUnit.SECONDS))
+            .isInstanceOf(TimeoutException.class);
+        release.countDown();
+        assertThat(merging.get(15, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(adjusting.get(15, TimeUnit.SECONDS).getStatusCode().is2xxSuccessful()).isTrue();
+        blocker.get(10, TimeUnit.SECONDS);
+      } finally {
+        release.countDown();
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  @DisplayName("片側 ACTIVE は方向にかかわらず最終会員と区間 ID を維持する")
+  void preservesActiveMemberInBothDirections(boolean onSurviving) {
+    String surviving = createCustomer("方向先-" + nonce);
+    String merged = createCustomer("方向元-" + nonce);
+    String code = registerMember("direction");
+    String linked = onSurviving ? surviving : merged;
+    link(linked, code);
+    var before =
+        rest.exchange(
+                "/store/customers/" + linked + "/member-link",
+                HttpMethod.GET,
+                new HttpEntity<>(managerHeaders(STORE_A)),
+                JsonNode.class)
+            .getBody();
+    var preview = preview(surviving, merged);
+    assertThat(preview.path("final_member_code").asString()).isEqualTo(code);
+    assertThat(preview.path("point_balance").asLong()).isZero();
+    var result = merge(STORE_A, surviving, merged);
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var after =
+        rest.exchange(
+                "/store/customers/" + surviving + "/member-link",
+                HttpMethod.GET,
+                new HttpEntity<>(managerHeaders(STORE_A)),
+                JsonNode.class)
+            .getBody();
+    assertThat(after).isEqualTo(before);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"contact", "link", "order", "balance"})
+  @DisplayName("関連情報の変更は件数が変わらなくても古いプレビューを拒否する")
+  void rejectsChangedRelatedInformation(String change) {
+    String surviving = createCustomer("再確認先-" + nonce);
+    String merged = createCustomer("再確認元-" + nonce);
+    link(merged, registerMember("stale"));
+    var before = preview(surviving, merged);
+    switch (change) {
+      case "contact" -> setPhoneNumber(merged, phone("stale-contact"));
+      case "link" -> unlink(merged);
+      case "order" -> confirmedOrderFor(merged, "追加");
+      case "balance" -> assertThat(adjustPoints(merged).getStatusCode().is2xxSuccessful()).isTrue();
+      default -> throw new AssertionError(change);
+    }
+    var result =
+        rest.postForEntity(
+            mergePath(surviving),
+            new HttpEntity<>(mergeInput(merged, before), managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(historyPage(STORE_A, surviving, null, null).path("content").size()).isZero();
+  }
+
+  @Test
+  @DisplayName("資料の全項目と注意確認を要求し、選択値と空欄を監査へ保存する")
+  void adoptsCompleteProfileAndRejectsIncompleteConfirmation() {
+    String surviving = createCustomer("資料先-" + nonce);
+    String merged = createCustomer("資料元-" + nonce);
+    var initial = preview(surviving, merged);
+    var profile = ((ObjectNode) initial.path("profile")).deepCopy();
+    profile.put("name", "確定氏名").putNull("address").putNull("has_pet").put("landmark", "入口は北側");
+    var previewRequest = new HashMap<String, Object>();
+    previewRequest.put("merged_customer_id", merged);
+    previewRequest.put("profile", profile);
+    var response =
+        rest.postForEntity(
+            "/store/customers/" + surviving + "/merge-preview",
+            new HttpEntity<>(previewRequest, managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var input = mergeInput(merged, response.getBody());
+    input.put("profile", profile);
+    input.put("warnings_acknowledged", false);
+    assertThat(
+            rest.postForEntity(
+                    mergePath(surviving),
+                    new HttpEntity<>(input, managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    input.put("warnings_acknowledged", true);
+    var partial = profile.deepCopy();
+    partial.remove("has_pet");
+    previewRequest.put("profile", partial);
+    assertThat(
+            rest.postForEntity(
+                    "/store/customers/" + surviving + "/merge-preview",
+                    new HttpEntity<>(previewRequest, managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    var result =
+        rest.postForEntity(
+            mergePath(surviving), new HttpEntity<>(input, managerHeaders(STORE_A)), JsonNode.class);
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    String auditPath = mergePath(surviving) + "/" + result.getBody().path("merge_id").asString();
+    var audit =
+        rest.exchange(
+                auditPath,
+                HttpMethod.GET,
+                new HttpEntity<>(managerHeaders(STORE_A)),
+                JsonNode.class)
+            .getBody();
+    assertThat(audit.path("after_surviving").path("profile")).isEqualTo(profile);
+    assertThat(
+            rest.exchange(
+                    auditPath,
+                    HttpMethod.GET,
+                    new HttpEntity<>(managerHeaders(STORE_B)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    rest.exchange(
+        "/store/customers/" + surviving,
+        HttpMethod.PUT,
+        new HttpEntity<>(Map.of("name", "後日の編集"), managerHeaders(STORE_A)),
+        JsonNode.class);
+    assertThat(
+            rest.exchange(
+                    auditPath,
+                    HttpMethod.GET,
+                    new HttpEntity<>(managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getBody())
+        .isEqualTo(audit);
+  }
+
+  @Test
+  @DisplayName("監査保存の途中失敗でも資料・連絡先・関連・受注の付替えを全て巻き戻す")
+  void rollsBackWhenAuditCannotBeRecorded() {
+    String surviving = createCustomer("原子先-" + nonce);
+    String merged = createCustomer("原子元-" + nonce);
+    setPhoneNumber(merged, phone("rollback"));
+    confirmedOrderFor(merged, "原子性");
+    link(merged, registerMember("rollback"));
+    var before = preview(surviving, merged);
+    var input = mergeInput(merged, before);
+    jdbcTemplate.execute(
+        "create function reject_merge_audit_963() returns trigger language plpgsql as $$ begin raise exception 'audit unavailable'; end $$");
+    jdbcTemplate.execute(
+        "create trigger reject_merge_audit_963 before insert on t_customer_merges for each row execute function reject_merge_audit_963()");
+    try {
+      var failed =
+          rest.postForEntity(
+              mergePath(surviving),
+              new HttpEntity<>(input, managerHeaders(STORE_A)),
+              JsonNode.class);
+      assertThat(failed.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+      assertThat(failed.getBody().toString())
+          .doesNotContain("audit unavailable", "reject_merge_audit", "SQL");
+    } finally {
+      jdbcTemplate.execute("drop trigger reject_merge_audit_963 on t_customer_merges");
+      jdbcTemplate.execute("drop function reject_merge_audit_963()");
+    }
+    assertThat(preview(surviving, merged)).isEqualTo(before);
+    assertThat(historyPage(STORE_A, surviving, null, null).path("content").size()).isZero();
+  }
+
+  private JsonNode preview(String surviving, String merged) {
+    var result =
+        rest.postForEntity(
+            "/store/customers/" + surviving + "/merge-preview",
+            new HttpEntity<>(Map.of("merged_customer_id", merged), managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    return result.getBody();
+  }
+
+  private Map<String, Object> mergeInput(String merged, JsonNode preview) {
+    var input = new HashMap<String, Object>();
+    input.put("merged_customer_id", merged);
+    input.put("preview_token", preview.path("preview_token").asString());
+    input.put("preferred_contacts", preview.path("preferred_contacts"));
+    input.put("warnings_acknowledged", true);
+    input.put("operation_reason", "本人の資料を確認したため");
+    return input;
+  }
+
+  @Test
+  @DisplayName("選択した資料と全連絡先を統合し、原資料と移動 ID を監査で確認できる")
+  void preservesSelectedProfileAndAudit() {
+    String surviving = createCustomer("監査先-" + nonce);
+    String merged = createCustomer("監査元-" + nonce);
+    var preview =
+        rest.postForEntity(
+            "/store/customers/" + surviving + "/merge-preview",
+            new HttpEntity<>(Map.of("merged_customer_id", merged), managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    var input = new HashMap<String, Object>();
+    input.put("merged_customer_id", merged);
+    input.put("preview_token", preview.getBody().path("preview_token").asString());
+    input.put("preferred_contacts", preview.getBody().path("preferred_contacts"));
+    input.put("warnings_acknowledged", true);
+    input.put("operation_reason", "本人の資料を確認したため");
+    var result =
+        rest.postForEntity(
+            mergePath(surviving), new HttpEntity<>(input, managerHeaders(STORE_A)), JsonNode.class);
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(result.getBody().path("merge_id").asString()).isNotBlank();
+    var audit =
+        rest.exchange(
+            mergePath(surviving) + "/" + result.getBody().path("merge_id").asString(),
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(audit.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(audit.getBody().path("before_merged").path("profile").path("name").asString())
+        .isEqualTo("監査元-" + nonce);
+    assertThat(audit.getBody().path("operation_reason").asString()).isEqualTo("本人の資料を確認したため");
+  }
+
+  @Test
+  @DisplayName("プレビュー後の資料変更は再確認を要求し、統合を確定しない")
+  void rejectsProfileChangedAfterPreview() {
+    String surviving = createCustomer("確認先-" + nonce);
+    String merged = createCustomer("確認元-" + nonce);
+    var preview =
+        rest.postForEntity(
+            "/store/customers/" + surviving + "/merge-preview",
+            new HttpEntity<>(Map.of("merged_customer_id", merged), managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    rest.exchange(
+        "/store/customers/" + merged,
+        HttpMethod.PUT,
+        new HttpEntity<>(Map.of("name", "変更後"), managerHeaders(STORE_A)),
+        JsonNode.class);
+    var input = new HashMap<String, Object>();
+    input.put("merged_customer_id", merged);
+    input.put("preview_token", preview.getBody().path("preview_token").asString());
+    input.put("preferred_contacts", preview.getBody().path("preferred_contacts"));
+    input.put("warnings_acknowledged", true);
+    input.put("operation_reason", "重複を確認したため");
+    var result =
+        rest.postForEntity(
+            "/store/customers/" + surviving + "/merges",
+            new HttpEntity<>(input, managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    var source =
+        rest.exchange(
+            "/store/customers/" + merged,
+            HttpMethod.GET,
+            new HttpEntity<>(managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(source.getBody().path("id").asString()).isEqualTo(merged);
+    assertThat(source.getBody().path("name").asString()).isEqualTo("変更後");
+  }
 
   // ==================== 付替え ====================
 
@@ -740,7 +1075,7 @@ class CustomerMergeIT extends CrossStoreTestSupport {
         rest.exchange(
             mergePath(surviving),
             HttpMethod.POST,
-            new HttpEntity<>(mergeBody(merged), storeHeaders(STORE_A)),
+            mergeFixtureRequest(surviving, merged, storeHeaders(STORE_A)),
             JsonNode.class);
 
     assertThat(asStaff.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -988,16 +1323,12 @@ class CustomerMergeIT extends CrossStoreTestSupport {
     return "/store/customers/" + survivingCustomerId + "/merges";
   }
 
-  private static String mergeBody(String mergedCustomerId) {
-    return "{\"merged_customer_id\": \"" + mergedCustomerId + "\"}";
-  }
-
   private ResponseEntity<JsonNode> merge(
       long storeId, String survivingCustomerId, String mergedCustomerId) {
     return rest.exchange(
         mergePath(survivingCustomerId),
         HttpMethod.POST,
-        new HttpEntity<>(mergeBody(mergedCustomerId), managerHeaders(storeId)),
+        mergeFixtureRequest(survivingCustomerId, mergedCustomerId, managerHeaders(storeId)),
         JsonNode.class);
   }
 

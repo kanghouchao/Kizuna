@@ -454,12 +454,31 @@ class CustomerContactsIT extends CrossStoreTestSupport {
         "{\"contact_id\":\"" + second + "\"}");
     permission(pathA, first, "BUSINESS", "ALLOWED");
     permission(pathB, second, "BUSINESS", "DENIED");
-    String merge = "{\"merged_customer_id\":\"" + b + "\"}";
+
     assertThat(request(HttpMethod.PUT, pathB + "/contact-preferences/EMAIL", "{}").getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(request(HttpMethod.POST, pathA + "/merges", merge).getStatusCode())
+    assertThat(
+            rest.postForEntity(
+                    pathA + "/merges",
+                    mergeFixtureRequest(a, b, managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
         .isEqualTo(HttpStatus.CONFLICT);
-    request(HttpMethod.PUT, pathB + "/contact-preferences/EMAIL", "{\"contact_id\":null}");
+    String preference = "{\"phone\":null,\"email\":\"" + first + "\",\"line\":null}";
+    var preview =
+        request(
+            HttpMethod.POST,
+            pathA + "/merge-preview",
+            "{\"merged_customer_id\":\"" + b + "\",\"preferred_contacts\":" + preference + "}");
+    assertThat(preview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    String merge =
+        "{\"merged_customer_id\":\""
+            + b
+            + "\",\"preferred_contacts\":"
+            + preference
+            + ",\"preview_token\":\""
+            + preview.getBody().path("preview_token").asString()
+            + "\",\"warnings_acknowledged\":true,\"operation_reason\":\"本人確認済み\"}";
     assertThat(request(HttpMethod.POST, pathA + "/merges", merge).getStatusCode())
         .isEqualTo(HttpStatus.OK);
     var contacts = request(HttpMethod.GET, pathA + "/contacts", null).getBody().path("content");
@@ -469,12 +488,13 @@ class CustomerContactsIT extends CrossStoreTestSupport {
     assertThat(contacts.get(1).path("id").asString()).isEqualTo(second);
     assertThat(contacts.get(1).path("origin_customer_id").asString()).isEqualTo(b);
     assertThat(contacts.get(1).path("value").asString()).isEqualTo("A+tag@example.com");
-    assertThat(
-            request(HttpMethod.GET, pathA + "/contact-history", null)
-                .getBody()
-                .path("content")
-                .size())
-        .isEqualTo(8);
+    assertThat(contacts.get(0).path("preferred").asBoolean()).isTrue();
+    assertThat(contacts.get(1).path("preferred").asBoolean()).isFalse();
+    assertThat(request(HttpMethod.DELETE, pathA + "/contacts/" + second, null).getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    var remaining = request(HttpMethod.GET, pathA + "/contacts", null).getBody().path("content");
+    assertThat(remaining.size()).isEqualTo(1);
+    assertThat(remaining.get(0).path("business_status").asString()).isEqualTo("DENIED");
   }
 
   @Test
@@ -726,10 +746,26 @@ class CustomerContactsIT extends CrossStoreTestSupport {
                     ? HttpStatus.OK
                     : HttpStatus.FORBIDDEN);
       }
+      var preview =
+          rest.postForEntity(
+              path + "/merge-preview",
+              new HttpEntity<>(Map.of("merged_customer_id", "missing"), headers),
+              JsonNode.class);
+      assertThat(preview.getStatusCode())
+          .isEqualTo(
+              granted.containsAll(Set.of("CUSTOMER_MANAGE", "CUSTOMER_MERGE"))
+                  ? HttpStatus.NOT_FOUND
+                  : HttpStatus.FORBIDDEN);
+      var audit =
+          rest.exchange(
+              path + "/merges/missing", HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+      assertThat(audit.getStatusCode())
+          .isEqualTo(
+              granted.contains("CUSTOMER_MERGE") ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN);
       var merge =
           rest.postForEntity(
               path + "/merges",
-              new HttpEntity<>(Map.of("merged_customer_id", "missing"), headers),
+              mergeFixtureRequest(path.substring("/store/customers/".length()), "missing", headers),
               JsonNode.class);
       assertThat(merge.getStatusCode())
           .isEqualTo(

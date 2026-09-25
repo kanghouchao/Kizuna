@@ -79,7 +79,9 @@ class CustomerMergeControllerTest {
                         "田中花子",
                         OffsetDateTime.parse("2026-08-10T10:00:00+09:00"),
                         3,
-                        1)),
+                        1,
+                        0,
+                        "重複を確認")),
                 null));
 
     mockMvc

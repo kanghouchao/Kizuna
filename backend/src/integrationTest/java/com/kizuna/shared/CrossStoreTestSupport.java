@@ -193,6 +193,22 @@ public abstract class CrossStoreTestSupport {
         OffsetDateTime.now());
   }
 
+  protected HttpEntity<String> mergeFixtureRequest(
+      String survivingId, String mergedId, HttpHeaders headers) {
+    var input = fixtureJson.createObjectNode().put("merged_customer_id", mergedId);
+    var preview =
+        rest.postForEntity(
+            "/store/customers/" + survivingId + "/merge-preview",
+            new HttpEntity<>(input.toString(), headers),
+            JsonNode.class);
+    input.put("preview_token", preview.getBody().path("preview_token").asString("A".repeat(43)));
+    if (preview.getBody().has("preferred_contacts"))
+      input.set("preferred_contacts", preview.getBody().get("preferred_contacts"));
+    else input.putObject("preferred_contacts").putNull("phone").putNull("email").putNull("line");
+    input.put("warnings_acknowledged", true).put("operation_reason", "重複を確認したため");
+    return new HttpEntity<>(input.toString(), headers);
+  }
+
   @Autowired private ObjectMapper fixtureJson;
 
   protected HttpEntity<String> confirmedRequest(

@@ -12,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface CustomerMemberLinkRepository extends JpaRepository<CustomerMemberLink, String> {
 
+  List<CustomerMemberLink> findByCustomerIdOrderByIdAsc(String customerId);
+
   /**
    * 顧客に紐づく会員（ロックなし）。書き換える経路も同じ問い合わせを使い、直列化は先に取る顧客行のロックが担う（{@code
    * CustomerRepository#findByIdForUpdate}）。

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
+import com.kizuna.customer.api.dto.CustomerMergePreviewResponse;
+import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.CustomerMergeResponse;
 import com.kizuna.customer.api.dto.MergeDirection;
 import com.kizuna.customer.domain.Customer;
@@ -13,6 +15,9 @@ import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerMergeView;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.customer.domain.MergePreferences;
+import com.kizuna.customer.domain.MergeProfile;
+import com.kizuna.customer.domain.MergeSnapshot;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -23,6 +28,7 @@ import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -64,12 +70,21 @@ class CustomerMergeServiceTest {
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private StoreContext storeContext;
 
+  @Mock private MergePreparation preparation;
+  @Mock private MergeConfirmation confirmation;
+  @Mock private EntityManager entityManager;
+
+  private CustomerMergeRequest input(String id) {
+    return new CustomerMergeRequest(
+        id, "proof", null, new MergePreferences(null, null, null), true, "重複を確認");
+  }
+
   @InjectMocks private CustomerMergeService service;
 
   @Test
   @DisplayName("同じ顧客同士の統合は 400 系で拒まれ、行を一切押さえないこと")
   void rejectsSelfMerge() {
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, SURVIVING_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(SURVIVING_ID), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class);
 
     Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(Mockito.anyString());
@@ -81,7 +96,7 @@ class CustomerMergeServiceTest {
     givenActor();
     Mockito.when(customerRepository.findByIdForUpdate(MERGED_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -94,7 +109,7 @@ class CustomerMergeServiceTest {
     givenNoActiveLinks();
     givenStore();
 
-    service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL);
+    service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
 
     InOrder inOrder = Mockito.inOrder(customerRepository);
     inOrder.verify(customerRepository).findByIdForUpdate(MERGED_ID);
@@ -108,7 +123,7 @@ class CustomerMergeServiceTest {
     givenFirstRowLocked();
     Mockito.when(customerRepository.isMerged(SURVIVING_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済み");
 
@@ -126,7 +141,7 @@ class CustomerMergeServiceTest {
     Mockito.when(customerRepository.isMerged(SURVIVING_ID)).thenReturn(false);
     Mockito.when(customerRepository.isMerged(MERGED_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済み");
 
@@ -148,7 +163,7 @@ class CustomerMergeServiceTest {
             customerMemberLinkRepository.existsByCustomerIdAndStatus(MERGED_ID, LinkStatus.ACTIVE))
         .thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("先に関連を解除");
 
@@ -170,7 +185,7 @@ class CustomerMergeServiceTest {
         .thenReturn(false);
     givenStore();
 
-    assertThat(service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL).survivingCustomerId())
+    assertThat(service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL).survivingCustomerId())
         .isEqualTo(SURVIVING_ID);
   }
 
@@ -187,7 +202,7 @@ class CustomerMergeServiceTest {
     Mockito.when(customerMemberLinkRepository.repointCustomer(SURVIVING_ID, MERGED_ID, STORE_ID))
         .thenReturn(3);
 
-    CustomerMergeResponse response = service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL);
+    CustomerMergeResponse response = service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
 
     assertThat(response.movedOrderCount()).isEqualTo(7);
     assertThat(response.movedLinkCount()).isEqualTo(3);
@@ -210,7 +225,7 @@ class CustomerMergeServiceTest {
     givenNoActiveLinks();
     givenStore();
 
-    service.merge(SURVIVING_ID, MERGED_ID, ACTOR_EMAIL);
+    service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
 
     InOrder inOrder = Mockito.inOrder(customerRepository);
     inOrder.verify(customerRepository).flattenMergedInto(SURVIVING_ID, MERGED_ID, STORE_ID);
@@ -314,6 +329,16 @@ class CustomerMergeServiceTest {
       implements CustomerMergeView {
 
     @Override
+    public int getMovedContactCount() {
+      return 0;
+    }
+
+    @Override
+    public String getOperationReason() {
+      return "重複を確認";
+    }
+
+    @Override
     public String getId() {
       return id;
     }
@@ -408,6 +433,31 @@ class CustomerMergeServiceTest {
 
   private void givenStore() {
     Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
+    var profile = new MergeProfile(null, null, null, null, null, null, null, null, null);
+    var survivor = new MergeSnapshot(SURVIVING_ID, profile, List.of(), List.of());
+    var merged = new MergeSnapshot(MERGED_ID, profile, List.of(), List.of());
+    var preview =
+        new CustomerMergePreviewResponse(
+            survivor,
+            merged,
+            profile,
+            new MergePreferences(null, null, null),
+            List.of(),
+            false,
+            null,
+            null,
+            0,
+            0,
+            0,
+            0,
+            "proof");
+    Mockito.when(preparation.prepare(Mockito.eq(SURVIVING_ID), Mockito.any()))
+        .thenReturn(new MergePreparation.Prepared(preview, List.of()));
+    Mockito.when(preparation.snapshot(SURVIVING_ID)).thenReturn(survivor);
+    Mockito.when(customerRepository.findById(SURVIVING_ID))
+        .thenReturn(Optional.of(Customer.builder().build()));
+    Mockito.when(customerMergeRepository.save(Mockito.any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
   }
 
   private void verifyNothingWasMoved() {

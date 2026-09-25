@@ -1,3 +1,4 @@
+import { mergePreviewFixture, confirmReviewedMerge } from '../testing/merge-test-support';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import CustomerDuplicatesPage from '../ui/CustomerDuplicatesPage';
@@ -14,7 +15,12 @@ jest.mock('@/shared/lib', () => ({
 }));
 
 jest.mock('@/entities/customer', () => ({
-  customerApi: { duplicates: jest.fn(), duplicateCustomers: jest.fn(), merge: jest.fn() },
+  customerApi: {
+    duplicates: jest.fn(),
+    duplicateCustomers: jest.fn(),
+    mergePreview: jest.fn(),
+    merge: jest.fn(),
+  },
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -85,13 +91,13 @@ async function openConfirmation(survivingName = '山田太郎') {
  * （画面の外から名前だけで取ると、確認を開くだけのボタンを押して緑になる）。
  */
 async function confirmMerge() {
-  const dialog = await screen.findByRole('dialog');
-  await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: '統合する' })));
+  await confirmReviewedMerge();
 }
 
 describe('CustomerDuplicatesPage', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    (customerApi.mergePreview as jest.Mock).mockImplementation(mergePreviewFixture);
     mockedDuplicates.mockResolvedValue(twoRowGroup);
     mockedMerge.mockResolvedValue({
       surviving_customer_id: 'c1',
@@ -144,6 +150,7 @@ describe('CustomerDuplicatesPage', () => {
 
     // 空表示に落とすと「重複は無い」と嘘をつくことになる
     expect(await screen.findByText('重複候補の取得に失敗しました')).toBeInTheDocument();
+    (customerApi.mergePreview as jest.Mock).mockImplementation(mergePreviewFixture);
     mockedDuplicates.mockResolvedValue(twoRowGroup);
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
     expect(await screen.findByText('山田太郎')).toBeInTheDocument();
@@ -241,10 +248,17 @@ describe('CustomerDuplicatesPage', () => {
     expect(within(comparison).getAllByText('9 件')).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: '統合する' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('ヤマダタロウ更新 を 山田太郎更新');
-    expect(dialog).toHaveTextContent('受注 9 件');
+    await waitFor(() =>
+      expect(customerApi.mergePreview).toHaveBeenCalledWith('c1', { merged_customer_id: 'c2' })
+    );
+    expect(await within(dialog).findByText(/移動する受注 9 件/)).toBeInTheDocument();
     await confirmMerge();
-    await waitFor(() => expect(mockedMerge).toHaveBeenCalledWith('c1', 'c2'));
+    await waitFor(() =>
+      expect(mockedMerge).toHaveBeenCalledWith(
+        'c1',
+        expect.objectContaining({ merged_customer_id: 'c2', preview_token: 'proof' })
+      )
+    );
   });
 
   it('大きい組も続きを取得でき、失敗したら先頭から再試行できる', async () => {
@@ -360,7 +374,7 @@ describe('CustomerDuplicatesPage', () => {
     await openConfirmation();
 
     // 「統合する」は確認を開くだけ。ここで走ってしまうと取り返しがつかない
-    expect(await screen.findByText('顧客を統合しますか？')).toBeInTheDocument();
+    expect(await screen.findByText('顧客統合の資料と影響を確認')).toBeInTheDocument();
     expect(mockedMerge).not.toHaveBeenCalled();
   });
 
@@ -371,23 +385,16 @@ describe('CustomerDuplicatesPage', () => {
     expect(await screen.findByText(/統合は取り消せません/)).toBeInTheDocument();
     // 転記の期限は「今」。統合後は被統合行にしかない値を読む経路が無い（一覧からも候補からも
     // 外れ、旧 ID の詳細は統合先の行を返す）ので、「後で転記できる」と読ませてはならない
-    expect(screen.getByText(/統合後どこからも読めなくなります/)).toBeInTheDocument();
-    expect(screen.getByText(/キャンセルして先に転記/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '被統合側の氏名を採用' })).toBeInTheDocument();
   });
 
-  it('確認は ESC でも背景押下でも閉じないこと', async () => {
+  it('資料確認は ESC で中断しても実行しないこと', async () => {
     render(<CustomerDuplicatesPage />);
     await openConfirmation();
-    const title = await screen.findByText('顧客を統合しますか？');
-
+    await screen.findByLabelText('統合理由');
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape', code: 'Escape' });
-    await waitFor(() => expect(title).toBeInTheDocument());
-    const backdrop = document.querySelector('[data-slot="dialog-overlay"]');
-    fireEvent.pointerDown(backdrop!);
-    fireEvent.click(backdrop!);
-
-    // 取り返しのつかない確認が「うっかり触れた」で消えない
-    await waitFor(() => expect(screen.getByText('顧客を統合しますか？')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockedMerge).not.toHaveBeenCalled();
   });
 
   it('確認を承けて、存続行と被統合行を指して統合すること', async () => {
@@ -395,7 +402,12 @@ describe('CustomerDuplicatesPage', () => {
     await openConfirmation();
     await confirmMerge();
 
-    await waitFor(() => expect(mockedMerge).toHaveBeenCalledWith('c1', 'c2'));
+    await waitFor(() =>
+      expect(mockedMerge).toHaveBeenCalledWith(
+        'c1',
+        expect.objectContaining({ merged_customer_id: 'c2', preview_token: 'proof' })
+      )
+    );
     expect(notify.success).toHaveBeenCalledWith('顧客を統合しました');
   });
 
@@ -431,7 +443,7 @@ describe('CustomerDuplicatesPage', () => {
     await confirmMerge();
 
     // サーバの案内を汎用文言へ潰すと、次の一手が画面から判らなくなる
-    await waitFor(() => expect(notify.error).toHaveBeenCalledWith(guidance));
+    expect(await screen.findByText(guidance)).toBeInTheDocument();
   });
 
   it('フィールド値を合併する UI・一括統合の導線を持たないこと', async () => {

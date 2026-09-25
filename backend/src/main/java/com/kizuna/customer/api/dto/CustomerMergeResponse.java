@@ -6,4 +6,8 @@ package com.kizuna.customer.api.dto;
  * <p>件数は統合が実際に移した数で、統合履歴に残る値と同一である。
  */
 public record CustomerMergeResponse(
-    String survivingCustomerId, int movedOrderCount, int movedLinkCount) {}
+    String survivingCustomerId,
+    int movedOrderCount,
+    int movedLinkCount,
+    String mergeId,
+    int movedContactCount) {}

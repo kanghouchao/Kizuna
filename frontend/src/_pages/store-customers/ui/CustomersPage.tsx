@@ -12,7 +12,6 @@ import {
   customerApi,
 } from '@/entities/customer';
 import {
-  getApiErrorMessage,
   hasPermission,
   readTokenClaims,
   storePath,
@@ -22,7 +21,6 @@ import {
 import { ListPage } from '@/widgets/list-page';
 import { CustomerMergePanel } from './CustomerMergePanel';
 import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
-import { notify } from '@/shared/notify';
 import {
   Badge,
   Button,
@@ -92,7 +90,6 @@ export default function CustomersPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // 統合の実行中は選択を変えさせない。変えると見比べる区画ごと消え、取り返しのつかない操作の
   // 確認が在途のまま画面から失せる
-  const [isMerging, setIsMerging] = useState(false);
   const pair =
     selectedIds.length === PAIR_SIZE ? ([selectedIds[0], selectedIds[1]] as const) : null;
 
@@ -101,21 +98,12 @@ export default function CustomersPage() {
     merged: CustomerMergeComparisonResponse;
   } | null>(null);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const isMerging = mergeOpen;
 
-  const handleMerge = async () => {
-    if (!mergeOpen || !mergeTarget?.surviving.id || !mergeTarget.merged.id || isMerging) return;
-    setIsMerging(true);
-    try {
-      await customerApi.merge(mergeTarget.surviving.id, mergeTarget.merged.id);
-      notify.success('顧客を統合しました');
-      setMergeOpen(false);
-      setSelectedIds([]);
-      list.reload();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '顧客の統合に失敗しました'));
-    } finally {
-      setIsMerging(false);
-    }
+  const handleMerged = () => {
+    setMergeOpen(false);
+    setSelectedIds([]);
+    list.reload();
   };
 
   const toggleSelected = (customerId: string) =>
@@ -327,11 +315,9 @@ export default function CustomersPage() {
       {/* ダイアログは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
       <CustomerMergeConfirmDialog
         open={mergeOpen}
-        survivingName={mergeTarget?.surviving.name ?? ''}
-        mergedName={mergeTarget?.merged.name ?? ''}
-        movedOrderCount={mergeTarget?.merged.order_count ?? 0}
-        isSubmitting={isMerging}
-        onConfirm={() => void handleMerge()}
+        survivingId={mergeTarget?.surviving.id ?? ''}
+        mergedId={mergeTarget?.merged.id ?? ''}
+        onMerged={handleMerged}
         onClose={() => setMergeOpen(false)}
       />
       <ConfirmDialog

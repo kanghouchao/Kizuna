@@ -131,7 +131,7 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
     var merged =
         rest.postForEntity(
             "/store/customers/" + survivor + "/merges",
-            new HttpEntity<>(Map.of("merged_customer_id", source), managerHeaders(STORE_A)),
+            mergeFixtureRequest(survivor, source, managerHeaders(STORE_A)),
             JsonNode.class);
     assertThat(merged.getStatusCode()).as("%s", merged.getBody()).isEqualTo(HttpStatus.OK);
     assertThat(detail(order).path("customer_id").asString()).isEqualTo(survivor);
