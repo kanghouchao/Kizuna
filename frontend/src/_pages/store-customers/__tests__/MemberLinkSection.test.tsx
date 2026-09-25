@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { MemberLinkSection } from '../ui/MemberLinkSection';
 import { customerApi } from '@/entities/customer';
@@ -115,10 +115,14 @@ describe('MemberLinkSection', () => {
     expect(mockedApi.memberLinkHistory).not.toHaveBeenCalled();
   });
 
-  it('競合後は理由を保持し、新しい区間を再確認してから送ること', async () => {
+  it('競合後の履歴再取得に失敗したら、再試行して新しい区間を再確認してから送ること', async () => {
     mockedApi.memberLink
       .mockResolvedValueOnce(currentLink)
       .mockResolvedValue({ ...currentLink, id: 'l3', member_code: '888888888888' });
+    mockedApi.memberLinkHistory
+      .mockResolvedValueOnce(historyPage([]))
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValue(historyPage([{ ...activeRow, operation_reason: '別担当者の確認' }]));
     mockedApi.linkMember
       .mockRejectedValueOnce({ isAxiosError: true, response: { status: 409 } })
       .mockResolvedValue(currentLink);
@@ -133,6 +137,12 @@ describe('MemberLinkSection', () => {
     await screen.findByText('888888888888');
     expect(screen.getByLabelText('操作理由')).toHaveValue('本人確認');
     expect(mockedApi.linkMember).toHaveBeenCalledTimes(1);
+    const failure = await screen.findByRole('alert');
+    expect(screen.getByRole('button', { name: '変更する' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '解除' })).toBeDisabled();
+    fireEvent.click(within(failure).getByRole('button', { name: '再試行' }));
+    await screen.findByText('成立・変更理由: 別担当者の確認');
+    expect(screen.getByLabelText('操作理由')).toHaveValue('本人確認');
     fireEvent.click(screen.getByRole('button', { name: '変更する' }));
     const confirmation = await screen.findByRole('alertdialog');
     expect(within(confirmation).getByText(/888888888888/)).toBeInTheDocument();
@@ -257,21 +267,46 @@ describe('MemberLinkSection', () => {
     expect(screen.getByRole('button', { name: '紐づける' })).toBeDisabled();
   });
 
-  it('履歴の取得に失敗しても、現況が読めていれば操作は解放されること', async () => {
-    // 履歴と現況は別の読み口。履歴が読めないことは紐づけ操作を止める理由にならない
-    mockedApi.memberLinkHistory.mockRejectedValue(new Error('network'));
+  it.each([false, true])(
+    '履歴の初回読込・失敗・再試行中は操作を止め、成功後に解放すること（関連あり: %s）',
+    async linked => {
+      if (linked) mockedApi.memberLink.mockResolvedValue(currentLink);
+      let rejectHistory!: (reason: Error) => void;
+      let resolveHistory!: (value: ReturnType<typeof historyPage>) => void;
+      mockedApi.memberLinkHistory
+        .mockReturnValueOnce(
+          new Promise((_, reject) => {
+            rejectHistory = reject;
+          })
+        )
+        .mockReturnValueOnce(
+          new Promise(resolve => {
+            resolveHistory = resolve;
+          })
+        );
+      render(<MemberLinkSection customerId="c1" />);
+      await screen.findByText(linked ? '紐づけ済み' : '未紐づけ');
+      const action = screen.getByRole('button', { name: linked ? '変更する' : '紐づける' });
+      expect(action).toBeDisabled();
+      if (linked) expect(screen.getByRole('button', { name: '解除' })).toBeDisabled();
 
-    render(<MemberLinkSection customerId="c1" />);
+      await act(async () => rejectHistory(new Error('network')));
+      const region = await screen.findByRole('alert');
+      expect(within(region).getByText('会員紐づけの履歴取得に失敗しました')).toBeInTheDocument();
+      expect(action).toBeDisabled();
+      if (linked) expect(screen.getByRole('button', { name: '解除' })).toBeDisabled();
+      fireEvent.click(action);
+      expect(mockedApi.linkMember).not.toHaveBeenCalled();
+      expect(mockedApi.unlinkMember).not.toHaveBeenCalled();
 
-    const region = await screen.findByRole('alert');
-    expect(within(region).getByText('会員紐づけの履歴取得に失敗しました')).toBeInTheDocument();
-    expect(screen.queryByText('紐づけ履歴がありません')).not.toBeInTheDocument();
-    expect(await screen.findByText('未紐づけ')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('会員コード'), {
-      target: { value: '123456789012' },
-    });
-    expect(screen.getByRole('button', { name: '紐づける' })).toBeEnabled();
-  });
+      fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+      expect(action).toBeDisabled();
+      if (linked) expect(screen.getByRole('button', { name: '解除' })).toBeDisabled();
+      await act(async () => resolveHistory(historyPage(linked ? [activeRow] : [])));
+      await waitFor(() => expect(action).toBeEnabled());
+      if (linked) expect(screen.getByRole('button', { name: '解除' })).toBeEnabled();
+    }
+  );
 
   it('続きがあれば追加読み込みで履歴を継ぎ足すこと', async () => {
     mockedApi.memberLinkHistory

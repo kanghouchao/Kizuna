@@ -97,9 +97,9 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
     setCanAdjust(hasPermission(readTokenClaims(), 'POINT_ADJUST'));
   }, []);
 
-  // 紐づけ POST は既存の有効区間を置き換えるため、現況が不明なまま操作させると
-  // 読み取り失敗が誤解除に化ける。404（未紐づけ）は現況が判った状態なので操作を許す。
+  // 現況と履歴の理由を確認できるまで書き込みを止める。現況の 404 は未紐づけを表す。
   const isLinkReady = !isLinkLoading && (linkFailure === null || linkFailure === 'notFound');
+  const canWriteLink = isLinkReady && !isLoading && !failed && !isSubmitting;
 
   const handleLink = async () => {
     try {
@@ -277,7 +277,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
                 if (activeLink || needsReconfirmation) setIsConfirmingLink(true);
                 else void handleLink();
               }}
-              disabled={isSubmitting || !isLinkReady}
+              disabled={!canWriteLink}
             >
               {activeLink ? '変更する' : history.length > 0 ? '再関連する' : '紐づける'}
             </Button>
@@ -288,7 +288,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
                   if (await form.trigger('operation_reason', { shouldFocus: true }))
                     setIsConfirmingUnlink(true);
                 }}
-                disabled={isSubmitting || !isLinkReady}
+                disabled={!canWriteLink}
               >
                 解除
               </Button>
