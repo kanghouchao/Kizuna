@@ -12,6 +12,7 @@ jest.mock('@/entities/order', () => ({
   orderApi: {
     ...jest.requireActual('../lib/orderTestSupport').courseApiMocks(),
     get: jest.fn(),
+    businessContactHistory: jest.fn(),
     start: jest.fn(),
     update: jest.fn(),
     listReceptionists: jest.fn(),
@@ -33,6 +34,7 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 /** 確定済みの受注 1 件。fixture は手書きで、Order 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<Order> = {}): Order {
   return {
+    business_contact_permissions: [],
     completion_invalidated: false,
     accrued_remuneration: 0,
     requires_attention: false,
@@ -80,6 +82,82 @@ beforeEach(() => {
 });
 
 describe('受注の編集ページ', () => {
+  it('同店の拒否を明示し履歴の取得失敗から再試行できる', async () => {
+    mockedOrderApi.get.mockResolvedValue(
+      confirmedOrder({
+        business_contact_permissions: [
+          {
+            type: 'EMAIL',
+            value: 'once@example.com',
+            status: 'ALLOWED',
+            source: '電話',
+            reason: '希望',
+            recorded_by: 1,
+            recorded_at: '2026-09-25T10:00:00+09:00',
+            decision: 'STORE_DENIED',
+          },
+        ],
+      })
+    );
+    mockedOrderApi.businessContactHistory
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ rows: [], nextCursor: null });
+    render(<OrderEditPage />);
+    expect(
+      await screen.findByText(/同店の顧客台帳に拒否があるため連絡できません/)
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '連絡可否の履歴を表示' }));
+    expect(await screen.findByText('連絡可否の履歴を取得できませんでした。')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    expect(await screen.findByText('履歴はありません。')).toBeInTheDocument();
+  });
+
+  it('根拠なしの許可を送らず宛先変更で編集中の許可も取り消す', async () => {
+    mockedOrderApi.get.mockResolvedValue(
+      confirmedOrder({ contact_snapshot: { email: 'old@example.com' } })
+    );
+    render(<OrderEditPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'メールの連絡可否を記録' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(await screen.findByText('出所を入力してください')).toBeInTheDocument();
+    expect(screen.getByText('根拠を入力してください')).toBeInTheDocument();
+    expect(mockedOrderApi.update).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('メール'), { target: { value: 'new@example.com' } });
+    expect(
+      await screen.findByRole('button', { name: 'メールの連絡可否を記録' })
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('メールの根拠')).not.toBeInTheDocument();
+  });
+
+  it('台帳未登録のメールに今回だけの許可と根拠を明示保存する', async () => {
+    mockedOrderApi.get.mockResolvedValue(
+      confirmedOrder({ customer_id: null, contact_snapshot: { email: 'once@example.com' } })
+    );
+    mockedOrderApi.update.mockResolvedValue(confirmedOrder());
+    render(<OrderEditPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'メールの連絡可否を記録' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'メールの今回の連絡可否' }));
+    const allow = await screen.findByRole('option', { name: '許可' });
+    fireEvent.pointerDown(allow);
+    fireEvent.click(allow);
+    fireEvent.change(screen.getByLabelText('メールの出所'), { target: { value: '電話受付' } });
+    fireEvent.change(screen.getByLabelText('メールの根拠'), {
+      target: { value: '今回の連絡を希望' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
+    await waitFor(() =>
+      expect(mockedOrderApi.update).toHaveBeenCalledWith(
+        'o1',
+        expect.objectContaining({
+          business_contact_permissions: [
+            { type: 'EMAIL', status: 'ALLOWED', source: '電話受付', reason: '今回の連絡を希望' },
+          ],
+        })
+      )
+    );
+  });
+
   it('選び直した顧客名は検索結果から消えても元の顧客名へ戻らない', async () => {
     mockedOrderApi.get.mockResolvedValue(confirmedOrder());
     mockedOrderApi.customerCandidates.mockResolvedValue({

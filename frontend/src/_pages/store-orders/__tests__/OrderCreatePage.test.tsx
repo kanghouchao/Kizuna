@@ -48,6 +48,7 @@ describe('新規オーダー登録の送信ペイロード', () => {
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
     mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
     mockedOrderApi.create.mockResolvedValue({
+      business_contact_permissions: [],
       completion_invalidated: false,
       accrued_remuneration: 0,
       total_duration_minutes: 60,

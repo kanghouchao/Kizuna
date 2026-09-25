@@ -77,4 +77,8 @@ public class OrderUpdateRequest {
 
   @Valid private CustomerSelectionRequest customerSelection;
   @Valid private ContactSnapshotRequest contactSnapshot;
+
+  @Valid
+  @Size(max = 3)
+  private List<@NotNull BusinessContactPermissionRequest> businessContactPermissions;
 }

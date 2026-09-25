@@ -1284,3 +1284,115 @@ databaseChangeLog:
             columns:
               - column:
                   name: order_id
+
+        - createTable:
+            tableName: t_order_business_contact_history
+            remarks: 今回限りの業務連絡許可と宛先変更の履歴
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_order_business_contact_history
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: order_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: type
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: action
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: before_state
+                  type: JSONB
+              - column:
+                  name: after_state
+                  type: JSONB
+              - column:
+                  name: recorded_by
+                  type: BIGINT
+              - column:
+                  name: recorded_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_business_contact_history_store
+            baseTableName: t_order_business_contact_history
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_business_contact_history_order
+            baseTableName: t_order_business_contact_history
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            constraintName: fk_t_order_business_contact_history_actor
+            baseTableName: t_order_business_contact_history
+            baseColumnNames: recorded_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL
+        - createIndex:
+            indexName: idx_t_order_business_contact_history_latest
+            tableName: t_order_business_contact_history
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: order_id
+              - column:
+                  name: type
+              - column:
+                  name: id
+                  descending: true
+        - createIndex:
+            indexName: idx_t_order_business_contact_history_page
+            tableName: t_order_business_contact_history
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: order_id
+              - column:
+                  name: id
+                  descending: true
+        - sql:
+            sql: |
+              ALTER TABLE t_order_business_contact_history
+                ADD CONSTRAINT ck_t_order_business_contact_history_type CHECK (type IN ('PHONE','EMAIL','LINE')),
+                ADD CONSTRAINT ck_t_order_business_contact_history_action CHECK (action IN ('RECORDED','CONTACT_CHANGED'));

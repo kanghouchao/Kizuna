@@ -9,6 +9,9 @@ import { OrderServiceProgress } from './OrderServiceProgress';
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
+import { OrderBusinessContactFields } from './OrderBusinessContactFields';
+import { OrderBusinessContactSummary } from './OrderBusinessContactSummary';
+import { BusinessContactPermissionInput } from '@/entities/order';
 import { OrderContactFields } from './OrderContactFields';
 import { OrderCustomerField } from './OrderCustomerField';
 import { ContactSnapshot, CustomerSelection } from '@/entities/order';
@@ -47,6 +50,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
   Input,
   RegionError,
   Textarea,
@@ -72,6 +76,7 @@ interface OrderEditFormValues {
   remarks: string;
   cast_driver_message: string;
   contact_snapshot: ContactSnapshot;
+  business_contact_permissions: BusinessContactPermissionInput[];
   customer_selection: CustomerSelection;
 }
 
@@ -92,6 +97,7 @@ const EMPTY_VALUES: OrderEditFormValues = {
   remarks: '',
   cast_driver_message: '',
   contact_snapshot: {},
+  business_contact_permissions: [],
   customer_selection: { mode: 'NONE' },
 };
 
@@ -161,6 +167,7 @@ export default function OrderEditPage() {
         remarks: current.remarks ?? '',
         cast_driver_message: current.cast_driver_message ?? '',
         contact_snapshot: current.contact_snapshot ?? {},
+        business_contact_permissions: [],
         customer_selection: current.customer_id
           ? { mode: 'EXISTING', customer_id: current.customer_id }
           : { mode: 'NONE' },
@@ -191,6 +198,7 @@ export default function OrderEditPage() {
       remarks: values.remarks.trim(),
       cast_driver_message: values.cast_driver_message.trim(),
       contact_snapshot: values.contact_snapshot,
+      business_contact_permissions: values.business_contact_permissions,
       customer_selection: values.customer_selection,
     };
     const request: OrderUpdateRequest = {
@@ -268,6 +276,13 @@ export default function OrderEditPage() {
           )}
         </div>
 
+        {current && !failure && !isLoading && (
+          <OrderBusinessContactSummary
+            key={`${storeId}:${orderId}:${current.version}`}
+            permissions={current.business_contact_permissions}
+            orderId={orderId}
+          />
+        )}
         {current?.status === 'COMPLETED' && (
           <div className="space-y-2">
             {current.completion_invalidated && (
@@ -327,6 +342,7 @@ export default function OrderEditPage() {
         {seeded && (
           <Form {...form}>
             <form
+              noValidate
               onSubmit={handleSubmit(submit)}
               className="rounded-xl border bg-card text-card-foreground shadow-sm"
             >
@@ -415,6 +431,7 @@ export default function OrderEditPage() {
                   customerName={current.customer_name}
                 />
                 <OrderContactFields />
+                <OrderBusinessContactFields />
               </OrderEditorSection>
 
               <OrderEditorSection title="訪問先" description="この受注の訪問先を編集します。">
@@ -454,12 +471,19 @@ export default function OrderEditPage() {
                   <FormField
                     control={control}
                     name="pax"
+                    rules={{
+                      validate: value =>
+                        value === '' ||
+                        (Number.isInteger(Number(value)) && Number(value) >= 1) ||
+                        '人数は1以上の整数で入力してください',
+                    }}
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>人数</FormLabel>
                         <FormControl>
                           <Input type="number" min={1} {...field} />
                         </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />

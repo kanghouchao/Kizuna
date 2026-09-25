@@ -25,6 +25,7 @@ import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
+import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderCorrectionHistory;
@@ -64,6 +65,18 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @Import({OrderControllerTest.MethodSecurityConfig.class, StoreContext.class})
 class OrderControllerTest {
 
+  @Test
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void customerPermissionDoesNotExposeOrderContactHistory() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    mockMvc
+        .perform(
+            get("/store/orders/o1/business-contact-permission-history")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isForbidden());
+  }
+
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
   @EnableMethodSecurity
@@ -84,6 +97,7 @@ class OrderControllerTest {
 
   @MockitoBean private OrderCorrectionHistory correctionHistory;
   @MockitoBean private OrderService orderService;
+  @MockitoBean private BusinessContactPermissions businessContactPermissions;
   @MockitoBean private OrderAttributionService orderAttributionService;
   @MockitoBean private OrderAttributionCorrectionService orderAttributionCorrectionService;
   @MockitoBean private OrderCorrectionService orderCorrectionService;
@@ -366,7 +380,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void orderUpdateContractAcceptsAnOmittedCastAndReceptionist() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.update(any(), any())).thenReturn(OrderResponse.builder().build());
+    when(orderService.update(any(), any(), any())).thenReturn(OrderResponse.builder().build());
 
     // 省略を契約で撥ねると、指名・受付担当が未設定のまま確定した受注が編集できなくなる。
     // 「既にある指名・受付担当は外せない」判定は受注の状態を見るサービス層が持つ（OrderServiceTest）。

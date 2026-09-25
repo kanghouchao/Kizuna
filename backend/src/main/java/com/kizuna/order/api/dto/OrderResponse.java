@@ -40,6 +40,7 @@ public class OrderResponse {
   private String customerName;
 
   private ContactSnapshot contactSnapshot;
+  private List<BusinessContactPermissionResponse> businessContactPermissions;
 
   private String castId;
   private String castName;

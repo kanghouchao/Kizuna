@@ -17,6 +17,7 @@ import org.mapstruct.Mapping;
 public interface OrderMapper {
 
   /** 読み側 projection をレスポンスDTOに変換します。明細は集約から別に載せます。 */
+  @Mapping(target = "businessContactPermissions", ignore = true)
   @Mapping(target = "feeLines", ignore = true)
   @Mapping(target = "totalDurationMinutes", ignore = true)
   @Mapping(target = "totalRemuneration", ignore = true)

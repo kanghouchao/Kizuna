@@ -31,6 +31,7 @@ const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
 const confirmedOrder: Order = {
+  business_contact_permissions: [],
   completion_invalidated: false,
   accrued_remuneration: 0,
   total_duration_minutes: 60,

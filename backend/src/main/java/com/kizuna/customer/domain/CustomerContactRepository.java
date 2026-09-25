@@ -10,6 +10,16 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface CustomerContactRepository
     extends JpaRepository<CustomerContact, String>, JpaSpecificationExecutor<CustomerContact> {
+  @Query(
+      """
+      select count(c) > 0 from com.kizuna.customer.domain.CustomerContact c
+      join com.kizuna.customer.domain.Customer customer on customer.id = c.customerId
+      where c.type = :type and c.value = :value and c.deleted = false
+        and c.businessStatus = com.kizuna.customer.domain.ContactPermissionStatus.DENIED
+        and customer.mergedIntoId is null
+      """)
+  boolean hasBusinessDenial(ContactType type, String value);
+
   List<CustomerContact> findByCustomerIdAndDeletedFalseAndIdGreaterThanOrderByIdAsc(
       String customerId, String id, Limit limit);
 

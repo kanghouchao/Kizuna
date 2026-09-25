@@ -1,3 +1,33 @@
+export type BusinessContactType = 'PHONE' | 'EMAIL' | 'LINE';
+export type BusinessContactStatus = 'UNKNOWN' | 'ALLOWED' | 'DENIED';
+export interface BusinessContactPermissionInput {
+  type: BusinessContactType;
+  status: BusinessContactStatus;
+  source: string;
+  reason: string;
+}
+export interface BusinessContactState {
+  value: string;
+  status: BusinessContactStatus;
+  source: string | null;
+  reason: string | null;
+}
+export interface BusinessContactPermission extends BusinessContactState {
+  type: BusinessContactType;
+  recorded_by: number | null;
+  recorded_at: string | null;
+  decision: 'ALLOWED' | 'STORE_DENIED' | 'NOT_ALLOWED';
+}
+export interface BusinessContactHistory {
+  id: string;
+  type: BusinessContactType;
+  action: 'RECORDED' | 'CONTACT_CHANGED';
+  before: BusinessContactState | null;
+  after: BusinessContactState | null;
+  recorded_by: number | null;
+  recorded_at: string;
+}
+
 export interface ContactSnapshot {
   name?: string | null;
   phone_number?: string | null;
@@ -152,6 +182,7 @@ export interface SurchargeCandidate {
 }
 
 export interface Order {
+  business_contact_permissions: BusinessContactPermission[];
   completion_invalidated: boolean;
   replacement_for_order_id?: string;
   accrued_remuneration: number;
@@ -360,6 +391,7 @@ export type OrderListCriteria = Omit<OrderQueryParams, 'statuses'>;
  * 店舗が起こした受注は出生時に両方が埋まっているので、編集画面は毎回この 2 つを運ぶ必要がある。
  */
 export interface OrderUpdateRequest {
+  business_contact_permissions?: BusinessContactPermissionInput[];
   special_service_ids?: string[];
   expected_version: number;
   course_id?: string;
@@ -457,6 +489,7 @@ export interface OrderCastCandidate {
 }
 
 export interface OrderCreateRequest {
+  business_contact_permissions?: BusinessContactPermissionInput[];
   replacement_for_order_id?: string;
   special_service_ids?: string[];
   course_id: string;

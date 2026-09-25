@@ -114,6 +114,7 @@ public class OrderService {
   private final PointLedgerService pointLedgerService;
   private final AttributionMaterializer materializer;
   private final ActorIdentityService actorIdentityService;
+  private final BusinessContactPermissions businessContactPermissions;
   private final ReceptionistEligibilityService receptionistEligibilityService;
   private final StoreContext storeContext;
   private final BusinessDateService businessDateService;
@@ -280,6 +281,10 @@ public class OrderService {
     order.assignReceptionist(resolveReceptionist(request.getReceptionistId(), actorEmail));
 
     Order saved = orderRepository.save(order);
+    orderRepository.flush();
+    businessContactPermissions.record(
+        saved, ContactSnapshot.empty(), request.getBusinessContactPermissions(), actorEmail);
+    orderRepository.flush();
     return toResponse(saved);
   }
 
@@ -309,7 +314,7 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public OrderResponse update(String id, OrderUpdateRequest request) {
+  public OrderResponse update(String id, OrderUpdateRequest request, String actorEmail) {
     specialServices.lock();
     Order order =
         orderRepository
@@ -339,6 +344,7 @@ public class OrderService {
     validateEditableCustomer(order, request.getCustomerSelection());
     if (request.getCustomerSelection() != null)
       order.linkCustomer(selectCustomer(request.getCustomerSelection(), true));
+    var previousContact = order.getContactSnapshot();
     if (request.getContactSnapshot() != null)
       order.replaceContact(snapshot(request.getContactSnapshot()));
 
@@ -377,6 +383,9 @@ public class OrderService {
     }
 
     specialServices.resolve(order, previousSpecials, previousTotal, previousCast);
+    businessContactPermissions.record(
+        order, previousContact, request.getBusinessContactPermissions(), actorEmail);
+
     Order saved = orderRepository.save(order);
     orderRepository.flush();
     return toResponse(saved);
@@ -688,7 +697,8 @@ public class OrderService {
         .findForUpdate(storeContext.getStoreId(), request.getCastId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
     resolveReceptionist(request.getReceptionistId(), actor);
-    snapshot(request.getContactSnapshot());
+    businessContactPermissions.validate(
+        snapshot(request.getContactSnapshot()), request.getBusinessContactPermissions());
     var course = calculation.current(request.getCourseId(), false);
     var calculated =
         calculation.calculate(
@@ -799,7 +809,11 @@ public class OrderService {
         request.getCastId() == null || request.getCastId().isBlank() ? null : request.getCastId();
     validateUpdateAssignments(order, castId, request.getReceptionistId(), false);
     validateEditableCustomer(order, request.getCustomerSelection());
-    if (request.getContactSnapshot() != null) snapshot(request.getContactSnapshot());
+    businessContactPermissions.validate(
+        request.getContactSnapshot() == null
+            ? order.getContactSnapshot()
+            : snapshot(request.getContactSnapshot()),
+        request.getBusinessContactPermissions());
     var course =
         request.getCourseId() == null
             ? order.getCourse()
@@ -1090,6 +1104,7 @@ public class OrderService {
             .findViewById(order.getId())
             .map(orderMapper::toResponse)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + order.getId()));
+    response.setBusinessContactPermissions(businessContactPermissions.describe(order));
     response.setSpecialServices(specialServices.describe(order));
     response.setFeeLines(orderMapper.toFeeLineResponses(order.getFeeLines()));
     response.setTotalRemuneration(order.getTotalRemuneration());

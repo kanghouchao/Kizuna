@@ -32,6 +32,7 @@ const mockedPreview = orderApi.pointRollbackPreview as jest.Mock;
 const mockedRollback = orderApi.pointRollback as jest.Mock;
 
 const completedOrder: Order = {
+  business_contact_permissions: [],
   completion_invalidated: false,
   accrued_remuneration: 0,
   total_duration_minutes: 60,

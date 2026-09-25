@@ -38,6 +38,10 @@ public class OrderCreateRequest {
   @NotNull @Valid private CustomerSelectionRequest customerSelection;
   @Valid private ContactSnapshotRequest contactSnapshot;
 
+  @Valid
+  @Size(max = 3)
+  private List<@NotNull BusinessContactPermissionRequest> businessContactPermissions;
+
   @Size(max = 500, message = "住所は 500 文字以内です")
   private String address;
 
