@@ -83,6 +83,8 @@ export interface CustomerDuplicateGroupResponse {
  * 件数は統合が実際に移した数で、統合履歴に残る値と同一である。取り消す端点は無い（ADR 0010）。
  */
 export interface CustomerMergeResponse {
+  merge_id: string;
+  moved_contact_count: number;
   surviving_customer_id: string;
   moved_order_count: number;
   moved_link_count: number;
@@ -105,6 +107,8 @@ export type CustomerMergeDirection = 'SURVIVING' | 'MERGED';
  * する人手作業である（ADR 0010）。相手の行は id と表示名の両方を持つ。
  */
 export interface CustomerMergeHistoryResponse {
+  moved_contact_count: number;
+  operation_reason: string;
   id: string;
   direction: CustomerMergeDirection;
   counterpart_customer_id: string;
@@ -255,4 +259,68 @@ export interface ContactHistoryResponse {
   occurred_at: string;
   before?: ContactState;
   after: ContactState;
+}
+
+export interface MergeProfile {
+  name: string | null;
+  address: string | null;
+  building_name: string | null;
+  landmark: string | null;
+  classification: string | null;
+  has_pet: boolean | null;
+  usage_areas: string | null;
+  ng_type: string | null;
+  ng_content: string | null;
+}
+export interface MergePreferences {
+  phone: string | null;
+  email: string | null;
+  line: string | null;
+}
+export interface MergeSnapshot {
+  id: string;
+  profile: MergeProfile;
+  contacts: (ContactResponse & { deleted: boolean })[];
+  member_links: (CustomerMemberLinkHistoryResponse & { customer_id: string })[];
+}
+export interface MergePreviewRequest {
+  merged_customer_id: string;
+  profile?: MergeProfile;
+  preferred_contacts?: MergePreferences;
+}
+export interface MergeRequest extends MergePreviewRequest {
+  preview_token: string;
+  preferred_contacts: MergePreferences;
+  warnings_acknowledged: boolean;
+  operation_reason: string;
+}
+export interface MergePreview {
+  surviving: MergeSnapshot;
+  merged: MergeSnapshot;
+  profile: MergeProfile;
+  preferred_contacts: MergePreferences;
+  preference_conflicts: ContactType[];
+  member_linked: boolean;
+  final_member_code?: string;
+  point_balance?: number;
+  unfinished_order_count: number;
+  moved_order_count: number;
+  moved_contact_count: number;
+  moved_link_count: number;
+  preview_token?: string;
+}
+export interface MergeAudit {
+  id: string;
+  surviving_customer_id: string;
+  merged_customer_id: string;
+  before_surviving: MergeSnapshot;
+  before_merged: MergeSnapshot;
+  after_surviving: MergeSnapshot;
+  moved_order_ids: string[];
+  moved_contact_ids: string[];
+  moved_link_ids: string[];
+  operation_reason: string;
+  merged_by: number;
+  merged_by_name?: string;
+  merged_at: string;
 }

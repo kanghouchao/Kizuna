@@ -1,15 +1,32 @@
 package com.kizuna.customer.domain;
 
+import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, String> {
+
+  interface OrderState {
+    String getId();
+
+    String getCustomerId();
+
+    String getStatus();
+
+    Long getVersion();
+  }
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select o.id as id, o.customerId as customerId, o.status as status, o.version as version from com.kizuna.order.domain.Order o where o.storeId = :storeId and o.customerId in :ids order by o.id")
+  List<OrderState> lockOrders(Long storeId, Collection<String> ids);
 
   /**
    * 統合の付替えで、被統合行に着いていた受注を存続行へ移す。状態（予約中・確定・完了・取消）では絞らない — 移らなかった受注は台帳から辿れない受注になる。
@@ -66,18 +83,16 @@ public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, St
   /** ある行が被統合となった統合。統合履歴を両方向で読むうちの片側で、もう一方は存続行として受けた統合。 */
   List<CustomerMerge> findByMergedCustomerId(String mergedCustomerId);
 
-  // 実行者と両行の表示名は ID 参照のため JPQL join で取得する。PlatformUser は FQCN で参照する
-  // （HQL の予約語衝突を避ける既存規約）。実行者が削除されると merged_by は NULL になるため
-  // join は left。相手の行の名前まで引くのは、誤統合の修復が「どの行をどの行へ」を根拠にする
-  // 人手作業だからで（ADR 0010）、id だけでは読み手が相手を思い出せない。統合は値を合併しないので
-  // 墓標にも名前は残る。
+  // 一覧は現在の表示名を参照する。実行者削除後も履歴を返すため left join にする。
+  // 統合時点の表示名と原資料は変更不能な evidence に保持する。
   String HISTORY_SELECT =
       """
       select m.id as id,
              m.survivingCustomerId as survivingCustomerId, sc.name as survivingCustomerName,
              m.mergedCustomerId as mergedCustomerId, mc.name as mergedCustomerName,
              mu.displayName as mergedByName, m.mergedAt as mergedAt,
-             m.movedOrderCount as movedOrderCount, m.movedLinkCount as movedLinkCount
+             m.movedOrderCount as movedOrderCount, m.movedLinkCount as movedLinkCount,
+             m.movedContactCount as movedContactCount, m.operationReason as operationReason
       from com.kizuna.customer.domain.CustomerMerge m
         left join com.kizuna.customer.domain.Customer sc on sc.id = m.survivingCustomerId
         left join com.kizuna.customer.domain.Customer mc on mc.id = m.mergedCustomerId

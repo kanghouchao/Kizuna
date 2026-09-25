@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { MergeAuditDialog } from './MergeAuditDialog';
 import { customerApi } from '@/entities/customer';
 import { useCursorList } from '@/shared/lib';
 import {
@@ -25,6 +27,7 @@ interface MergeHistorySectionProps {
  * 出すためだけにあり、統合を取り消す導線は持たない。
  */
 export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
+  const [mergeId, setMergeId] = useState<string | null>(null);
   const { rows, isLoading, failed, hasMore, reload, loadMore } = useCursorList(cursor =>
     customerApi.mergeHistory(customerId, { cursor })
   );
@@ -55,6 +58,7 @@ export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
               <TableHead>実行者・日時</TableHead>
               <TableHead>移した受注</TableHead>
               <TableHead>移した関連</TableHead>
+              <TableHead>理由・監査</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -83,6 +87,13 @@ export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{row.moved_order_count} 件</TableCell>
                 <TableCell className="text-muted-foreground">{row.moved_link_count} 件</TableCell>
+                <TableCell>
+                  <p className="max-w-64 whitespace-pre-wrap break-words">{row.operation_reason}</p>
+                  <p>連絡先 {row.moved_contact_count} 件</p>
+                  <Button variant="outline" onClick={() => setMergeId(row.id)}>
+                    監査記録を確認
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -96,6 +107,11 @@ export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
           </Button>
         </div>
       )}
+      <MergeAuditDialog
+        customerId={customerId}
+        mergeId={mergeId}
+        onClose={() => setMergeId(null)}
+      />
     </TableCard>
   );
 }

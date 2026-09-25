@@ -2,6 +2,8 @@ package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.customer.api.dto.CustomerMergePreviewRequest;
+import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.application.CustomerMergeService;
 import com.kizuna.order.result.OrderCompletionResults;
 import com.kizuna.shared.CrossStoreTestSupport;
@@ -96,7 +98,19 @@ class OrderExtrasIT extends CrossStoreTestSupport {
                   } catch (Exception ex) {
                     throw new AssertionError("顧客ロックを待たずに競合を返すこと", ex);
                   }
-                  customerMergeService.merge(survivor, customer, "tanaka.hanako@kizuna.test");
+                  var preview =
+                      customerMergeService.preview(
+                          survivor, new CustomerMergePreviewRequest(customer, null, null));
+                  customerMergeService.merge(
+                      survivor,
+                      new CustomerMergeRequest(
+                          customer,
+                          preview.previewToken(),
+                          null,
+                          preview.preferredContacts(),
+                          true,
+                          "重複を確認"),
+                      "tanaka.hanako@kizuna.test");
                 });
       } finally {
         storeContext.clear();

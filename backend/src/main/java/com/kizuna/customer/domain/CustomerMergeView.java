@@ -11,6 +11,10 @@ public interface CustomerMergeView {
 
   String getId();
 
+  int getMovedContactCount();
+
+  String getOperationReason();
+
   String getSurvivingCustomerId();
 
   String getMergedCustomerId();

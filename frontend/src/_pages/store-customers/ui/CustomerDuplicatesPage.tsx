@@ -6,15 +6,8 @@ import Link from 'next/link';
 import { ChevronLeftIcon } from 'lucide-react';
 import { ReactNode, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { notify } from '@/shared/notify';
 import { ContactType, CustomerMergeComparisonResponse, customerApi } from '@/entities/customer';
-import {
-  getApiErrorMessage,
-  storePath,
-  useCursorList,
-  hasPermission,
-  readTokenClaims,
-} from '@/shared/lib';
+import { storePath, useCursorList, hasPermission, readTokenClaims } from '@/shared/lib';
 import { CustomerMergeComparison } from './CustomerMergeComparison';
 import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
 import {
@@ -90,7 +83,7 @@ function CustomerDuplicatesContent() {
     movedOrderCount: number;
   } | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmitting = isConfirming;
 
   const toggle = (groupKey: string, row: CustomerMergeComparisonResponse) => {
     const customerId = row.id ?? '';
@@ -123,24 +116,12 @@ function CustomerDuplicatesContent() {
     return selected.length === PAIR_SIZE ? [selected[0], selected[1]] : null;
   };
 
-  const handleMerge = async () => {
-    if (!isConfirming || !confirmation || isSubmitting) return;
-    try {
-      setIsSubmitting(true);
-      await customerApi.merge(confirmation.survivingId, confirmation.mergedId);
-      notify.success('顧客を統合しました');
-      setIsConfirming(false);
-      setSelection(null);
-      setSurvivingId(null);
-      setGroups([]);
-      reload();
-    } catch (error) {
-      // 両行が会員に認領されている 409 は「先に関連を解除する」と読める文言をサーバが返す。
-      // 汎用文言に潰すと、次の一手が画面から判らなくなる
-      notify.error(getApiErrorMessage(error, '顧客の統合に失敗しました'));
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleMerged = () => {
+    setIsConfirming(false);
+    setSelection(null);
+    setSurvivingId(null);
+    setGroups([]);
+    reload();
   };
 
   const renderRows = (groupKey: string, rows: CustomerMergeComparisonResponse[]) => {
@@ -349,11 +330,9 @@ function CustomerDuplicatesContent() {
       {/* 確認は候補の取り直しで消えないよう外殻の外に置く */}
       <CustomerMergeConfirmDialog
         open={isConfirming}
-        survivingName={confirmation?.survivingName ?? ''}
-        mergedName={confirmation?.mergedName ?? ''}
-        movedOrderCount={confirmation?.movedOrderCount ?? 0}
-        isSubmitting={isSubmitting}
-        onConfirm={() => void handleMerge()}
+        survivingId={confirmation?.survivingId ?? ''}
+        mergedId={confirmation?.mergedId ?? ''}
+        onMerged={handleMerged}
         onClose={() => setIsConfirming(false)}
       />
     </div>

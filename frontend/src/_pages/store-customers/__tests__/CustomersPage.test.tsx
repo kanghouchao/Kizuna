@@ -1,3 +1,4 @@
+import { mergePreviewFixture, confirmReviewedMerge } from '../testing/merge-test-support';
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CustomersPage from '../ui/CustomersPage';
 import CustomerCreatePage from '../ui/CustomerCreatePage';
@@ -19,6 +20,7 @@ jest.mock('@/entities/customer', () => ({
     unlinkMember: jest.fn(),
     memberLinkHistory: jest.fn(),
     mergeComparison: jest.fn(),
+    mergePreview: jest.fn(),
     merge: jest.fn(),
   },
 }));
@@ -277,6 +279,7 @@ describe('顧客一覧からの統合', () => {
       pageCount: 1,
       total: listRows.length,
     } as never);
+    mockedCustomerApi.mergePreview.mockImplementation(mergePreviewFixture);
     mockedCustomerApi.mergeComparison.mockResolvedValue(comparisonPair as never);
     mockedCustomerApi.merge.mockResolvedValue({
       surviving_customer_id: 'c1',
@@ -345,10 +348,10 @@ describe('顧客一覧からの統合', () => {
     fireEvent.click(screen.getByRole('button', { name: '統合する' }));
 
     // 「統合する」は確認を開くだけ。ここで走ってしまうと取り返しがつかない
-    expect(await screen.findByText('顧客を統合しますか？')).toBeInTheDocument();
-    expect(screen.getByText(/統合は取り消せません/)).toBeInTheDocument();
+    expect(await screen.findByText('顧客統合の資料と影響を確認')).toBeInTheDocument();
+    expect(await screen.findByText(/統合は取り消せません/)).toBeInTheDocument();
     // 転記の期限は「今」。統合後は被統合行にしかない値を読む経路が無い
-    expect(screen.getByText(/統合後どこからも読めなくなります/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '被統合側の氏名を採用' })).toBeInTheDocument();
     expect(mockedCustomerApi.merge).not.toHaveBeenCalled();
 
     const dialog = screen.getByRole('dialog');
@@ -357,9 +360,14 @@ describe('顧客一覧からの統合', () => {
       finish = resolve;
     });
     Object.defineProperty(dialog, 'getAnimations', { value: () => [{ finished }] });
-    fireEvent.click(within(dialog).getByRole('button', { name: '統合する' }));
+    await confirmReviewedMerge();
 
-    await waitFor(() => expect(mockedCustomerApi.merge).toHaveBeenCalledWith('c1', 'c2'));
+    await waitFor(() =>
+      expect(mockedCustomerApi.merge).toHaveBeenCalledWith(
+        'c1',
+        expect.objectContaining({ merged_customer_id: 'c2', preview_token: 'proof' })
+      )
+    );
     // 畳んだ行が選ばれたままだと、次の操作が既に墓標の行を指す
     await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument());
     expect(mockedCustomerApi.list).toHaveBeenCalledTimes(2);
@@ -386,8 +394,8 @@ describe('顧客一覧からの統合', () => {
     await selectPair();
     fireEvent.click(screen.getByLabelText('山田太郎 を残す'));
     fireEvent.click(screen.getByRole('button', { name: '統合する' }));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: '統合する' }));
+    await screen.findByRole('dialog');
+    await confirmReviewedMerge();
     await waitFor(() => expect(mockedCustomerApi.merge).toHaveBeenCalled());
 
     const selected = screen.getByLabelText('ヤマダタロウ を見比べる');

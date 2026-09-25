@@ -317,6 +317,28 @@ export async function createCustomer(
   return body.id as string;
 }
 
+export async function updateCustomer(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  data: {
+    name?: string;
+    address?: string;
+    building_name?: string;
+    classification?: string;
+    has_pet?: boolean;
+    usage_areas?: string;
+    ng_type?: string;
+    ng_content?: string;
+  }
+): Promise<void> {
+  const response = await request.put(`/api/store/customers/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data,
+  });
+  if (!response.ok()) throw new Error(`顧客の更新に失敗しました: ${response.status()} ${await response.text()}`);
+}
+
 /** 顧客へ非優先の連絡先を追加する。 */
 export async function addCustomerContact(
   request: APIRequestContext,
@@ -324,11 +346,26 @@ export async function addCustomerContact(
   id: string,
   type: 'PHONE' | 'EMAIL' | 'LINE',
   value: string
-): Promise<void> {
+): Promise<string> {
   const response = await request.post(`/api/store/customers/${id}/contacts`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { type, value },
   });
   if (!response.ok()) throw new Error(`連絡先の追加に失敗しました: ${response.status()} ${await response.text()}`);
+  return (await response.json()).id as string;
+}
+
+export async function preferCustomerContact(
+  request: APIRequestContext,
+  token: string,
+  customerId: string,
+  type: 'PHONE' | 'EMAIL' | 'LINE',
+  contactId: string | null
+): Promise<void> {
+  const response = await request.put(`/api/store/customers/${customerId}/contact-preferences/${type}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { contact_id: contactId },
+  });
+  if (!response.ok()) throw new Error(`優先連絡先の更新に失敗しました: ${response.status()} ${await response.text()}`);
 }
 
 /** 顧客を削除する（DELETE /api/store/customers/{id}, hasAuthority('CUSTOMER_MANAGE')）。 */

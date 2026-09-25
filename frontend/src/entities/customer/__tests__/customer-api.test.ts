@@ -1,3 +1,10 @@
+const mergeInput = {
+  merged_customer_id: 'c2',
+  preview_token: 'proof',
+  preferred_contacts: { phone: null, email: null, line: null },
+  warnings_acknowledged: true,
+  operation_reason: '重複を確認',
+};
 import { customerApi } from '@/entities/customer';
 import { apiClient } from '@/shared/api';
 import { ClientDataError } from '@/shared/lib';
@@ -61,14 +68,9 @@ describe('customerApi', () => {
 
     expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/merge-comparison?ids=c1&ids=c2');
   });
-  it('merge は存続行の配下へ被統合行の ID を snake_case で POST する', async () => {
-    expect(await customerApi.merge('c1', 'c2')).toEqual({
-      ok: true,
-      url: '/store/customers/c1/merges',
-    });
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/customers/c1/merges', {
-      merged_customer_id: 'c2',
-    });
+  it('merge は確認済み資料と理由を送信する', async () => {
+    await customerApi.merge('c1', mergeInput);
+    expect(mockedPost).toHaveBeenLastCalledWith('/store/customers/c1/merges', mergeInput);
   });
   it('mergeHistory は同じ merges を GET し、カーソルページを正規化する', async () => {
     // 実行（POST）と読み（GET）が同じパスに載る。GET は両方向の統合を返すので、
@@ -173,8 +175,12 @@ describe('識別子を欠いた customerApi', () => {
     ['get', () => customerApi.get(undefined), '顧客'],
     ['update', () => customerApi.update(undefined, {}), '顧客'],
     ['delete', () => customerApi.delete(undefined), '顧客'],
-    ['merge（存続行）', () => customerApi.merge(undefined, 'c2'), '顧客'],
-    ['merge（被統合行）', () => customerApi.merge('c1', undefined), '顧客'],
+    ['merge（存続行）', () => customerApi.merge(undefined, mergeInput), '顧客'],
+    [
+      'merge（被統合行）',
+      () => customerApi.merge('c1', { ...mergeInput, merged_customer_id: '' }),
+      '顧客',
+    ],
     ['mergeHistory', () => customerApi.mergeHistory(undefined), '顧客'],
     ['linkMember', () => customerApi.linkMember(undefined, { member_code: 'm1' }), '顧客'],
     [

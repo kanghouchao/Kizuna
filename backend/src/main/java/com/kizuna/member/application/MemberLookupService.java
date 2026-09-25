@@ -2,6 +2,7 @@ package com.kizuna.member.application;
 
 import com.kizuna.member.domain.MemberIdentityView;
 import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,14 @@ public class MemberLookupService {
     return memberRepository
         .findIdentityByPlatformUserId(platformUserId)
         .map(MemberLookupService::toLookup);
+  }
+
+  /** 顧客統合の残高確認から確定まで、新規仕訳の挿入と会員削除を直列化する。 */
+  @Transactional
+  public void lockForBalanceConfirmation(long memberId) {
+    memberRepository
+        .lockIdForBalanceConfirmation(memberId)
+        .orElseThrow(() -> new NotFoundException("会員が見つかりません"));
   }
 
   private static MemberLookup toLookup(MemberIdentityView view) {

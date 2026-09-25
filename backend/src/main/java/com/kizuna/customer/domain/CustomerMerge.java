@@ -8,6 +8,8 @@ import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 顧客統合が 1 回実行された事実。統合に取消（undo）は無く、誤統合の修復は「誰が・いつ・どの行をどの行へ・何を移したか」を
@@ -44,19 +46,35 @@ public class CustomerMerge extends StoreScopedEntity {
   @Column(name = "moved_link_count", nullable = false, updatable = false)
   private int movedLinkCount;
 
+  @Column(nullable = false, updatable = false)
+  private int movedContactCount;
+
+  @Column(nullable = false, updatable = false, length = 500)
+  private String operationReason;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(nullable = false, updatable = false, columnDefinition = "jsonb")
+  private MergeEvidence evidence;
+
   private CustomerMerge(
       String survivingCustomerId,
       String mergedCustomerId,
       Long mergedBy,
       OffsetDateTime mergedAt,
       int movedOrderCount,
-      int movedLinkCount) {
+      int movedLinkCount,
+      int movedContactCount,
+      String operationReason,
+      MergeEvidence evidence) {
     this.survivingCustomerId = survivingCustomerId;
     this.mergedCustomerId = mergedCustomerId;
     this.mergedBy = mergedBy;
     this.mergedAt = mergedAt;
     this.movedOrderCount = movedOrderCount;
     this.movedLinkCount = movedLinkCount;
+    this.movedContactCount = movedContactCount;
+    this.operationReason = operationReason;
+    this.evidence = evidence;
   }
 
   /**
@@ -69,9 +87,20 @@ public class CustomerMerge extends StoreScopedEntity {
       Long mergedBy,
       OffsetDateTime mergedAt,
       int movedOrderCount,
-      int movedLinkCount) {
+      int movedLinkCount,
+      int movedContactCount,
+      String operationReason,
+      MergeEvidence evidence) {
     return new CustomerMerge(
-        survivingCustomerId, mergedCustomerId, mergedBy, mergedAt, movedOrderCount, movedLinkCount);
+        survivingCustomerId,
+        mergedCustomerId,
+        mergedBy,
+        mergedAt,
+        movedOrderCount,
+        movedLinkCount,
+        movedContactCount,
+        operationReason,
+        evidence);
   }
 
   @Override

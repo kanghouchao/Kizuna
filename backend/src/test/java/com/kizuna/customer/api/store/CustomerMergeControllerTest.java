@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.store;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -7,11 +8,14 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
+import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.MergeDirection;
 import com.kizuna.customer.application.CustomerMergeService;
 import com.kizuna.settings.application.SystemConfigService;
@@ -24,15 +28,21 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 統合履歴の読み口の授権と契約の単体テスト。
@@ -79,7 +89,9 @@ class CustomerMergeControllerTest {
                         "田中花子",
                         OffsetDateTime.parse("2026-08-10T10:00:00+09:00"),
                         3,
-                        1)),
+                        1,
+                        0,
+                        "重複を確認")),
                 null));
 
     mockMvc
@@ -120,6 +132,48 @@ class CustomerMergeControllerTest {
 
     // 履歴は誰がどの顧客を畳んだかを明かす。拒否は読み取りの手前で成立していること
     verify(customerMergeService, never()).history(anyString(), any(), anyInt());
+  }
+
+  @Autowired private ObjectMapper json;
+
+  @Test
+  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"})
+  void acceptsFiveHundredCharactersAfterStrippingReason() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    String reason = "理由".repeat(250);
+    mockMvc.perform(mergeRequest(" \t" + reason + "\n　")).andExpect(status().isOk());
+    var captured = ArgumentCaptor.forClass(CustomerMergeRequest.class);
+    verify(customerMergeService).merge(anyString(), captured.capture(), anyString());
+    assertThat(captured.getValue().operationReason()).isEqualTo(reason);
+  }
+
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {" \t\n　", "too-long"})
+  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"})
+  void rejectsEmptyOrOversizedNormalizedReason(String reason) throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    mockMvc
+        .perform(mergeRequest("too-long".equals(reason) ? "理".repeat(501) : reason))
+        .andExpect(status().isBadRequest());
+    verify(customerMergeService, never()).merge(anyString(), any(), anyString());
+  }
+
+  private MockHttpServletRequestBuilder mergeRequest(String reason) {
+    var body =
+        json.createObjectNode()
+            .put("merged_customer_id", "c2")
+            .put("preview_token", "proof")
+            .put("warnings_acknowledged", true)
+            .put("operation_reason", reason);
+    body.putObject("preferred_contacts").putNull("phone").putNull("email").putNull("line");
+    return post("/store/customers/c1/merges")
+        .principal(() -> "tanaka.hanako@kizuna.test")
+        .with(csrf())
+        .header("X-Role", "store")
+        .header("X-Store-ID", "1")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(body.toString());
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {

@@ -145,7 +145,7 @@ class CustomerSearchIT extends CrossStoreTestSupport {
     assertThat(
             rest.postForEntity(
                     "/store/customers/" + a + "/merges",
-                    new HttpEntity<>(Map.of("merged_customer_id", b), managerHeaders(STORE_A)),
+                    mergeFixtureRequest(a, b, managerHeaders(STORE_A)),
                     JsonNode.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);

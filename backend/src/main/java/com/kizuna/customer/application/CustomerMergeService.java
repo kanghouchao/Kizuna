@@ -1,6 +1,10 @@
 package com.kizuna.customer.application;
 
+import com.kizuna.customer.api.dto.CustomerMergeAuditResponse;
 import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
+import com.kizuna.customer.api.dto.CustomerMergePreviewRequest;
+import com.kizuna.customer.api.dto.CustomerMergePreviewResponse;
+import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.CustomerMergeResponse;
 import com.kizuna.customer.api.dto.MergeDirection;
 import com.kizuna.customer.domain.Customer;
@@ -10,6 +14,8 @@ import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerMergeView;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.customer.domain.MergeEvidence;
+import com.kizuna.customer.domain.MergeSnapshot;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
@@ -21,6 +27,7 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.PlatformUserRepository;
+import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -31,15 +38,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 同一店舗内で重複した顧客行を一つへまとめるユースケース。形は付替え＋墓標＋統合履歴で、行は削除しない（ADR 0010）。
- *
- * <p>存続行へ被統合行の受注（全状態）と関連（ACTIVE・RELEASED の全区間）を付け替え、被統合行は統合先参照を持つ墓標として残す。 連鎖統合は圧平する — B を C
- * へ統合するとき、B を指していた既存の墓標もすべて C へ付け替え、旧 ID の解決が常に一跳で届くようにする。
- *
- * <p>統合はポイント台帳・受注帰属記録・会員の来店履歴に一切波及しない。これは偶然ではなく構造的である — 仕訳も帰属記録も受注と会員を 参照し、顧客を参照しないため（ADR 0006 /
- * 0009）、受注の顧客参照を書き換えてもそれらの行は読まれも書かれもしない。
- *
- * <p>統合に取消（undo）は無い。誤統合の修復は統合履歴を根拠とする人手作業であり、この操作が店長権限（{@code CUSTOMER_MERGE}）に限られるのはそのためである。
+ * 同一店舗の顧客資料を確定し、全受注・連絡先・会員関連を付け替えて原資料と確定資料を監査に残す。 被統合行は墓標として残し、連鎖統合は旧 ID が常に一跳で解決できるよう圧平する。
+ * ポイント残高は確認のために読むだけで、台帳・受注帰属記録・会員の来店履歴は書き換えない。 統合は取消不能であり、誤統合の修復は監査記録を根拠とする人手作業になる。
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +48,10 @@ public class CustomerMergeService {
   /** 両行が認領されているときの案内。事前判定と、それをすり抜けた競合が部分一意索引に当たる場合とで同じ文言を返す。 */
   private static final String RELEASE_THE_LINK_FIRST = "両方の顧客に会員が紐づいています。先に関連を解除してから統合してください";
 
+  private final EntityManager entityManager;
+  private final MergePreparation preparation;
+  private final MergeConfirmation confirmation;
+
   private final CustomerRepository customerRepository;
   private final CustomerContactService customerContactService;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
@@ -55,20 +59,12 @@ public class CustomerMergeService {
   private final PlatformUserRepository platformUserRepository;
   private final StoreContext storeContext;
 
-  /**
-   * 統合を実行する。
-   *
-   * <p>顧客参照を書く他の経路（{@link CustomerReferenceResolver}）は通さない。あちらは「既にある行を指す参照の書き込み先」を解決する口で、
-   * 墓標を渡されれば統合先へ 向け直す。統合が対象にするのは名指された 2 行そのもので、別の行へ向け直してよい操作ではない（解除 {@code
-   * CustomerMemberLinkService#unlink} と同じ理由）。
-   *
-   * @param survivingCustomerId 統合後に台帳へ残る行
-   * @param mergedCustomerId 墓標になる行
-   */
+  /** 墓標は別の顧客へ読み替えず拒否する。確認した二行と原資料の一致が不可逆な統合の前提になる。 */
   @StoreScoped
   @Transactional
   public CustomerMergeResponse merge(
-      String survivingCustomerId, String mergedCustomerId, String actorEmail) {
+      String survivingCustomerId, CustomerMergeRequest request, String actorEmail) {
+    String mergedCustomerId = request.mergedCustomerId();
     if (survivingCustomerId.equals(mergedCustomerId)) {
       throw new ServiceException("同じ顧客を統合することはできません");
     }
@@ -83,7 +79,16 @@ public class CustomerMergeService {
       throw new ConflictException(RELEASE_THE_LINK_FIRST);
     }
 
-    customerContactService.transfer(survivingCustomerId, mergedCustomerId, actorId);
+    var prepared = preparation.prepare(survivingCustomerId, request.preview());
+    confirmation.verify(request.previewToken(), prepared.response().previewToken());
+
+    var preview = prepared.response();
+    customerRepository
+        .findById(survivingCustomerId)
+        .orElseThrow()
+        .adoptMergeProfile(preview.profile());
+    customerContactService.transfer(
+        survivingCustomerId, mergedCustomerId, actorId, preview.preferredContacts());
     Long storeId = storeContext.getStoreId();
     int movedOrderCount =
         customerMergeRepository.repointOrders(survivingCustomerId, mergedCustomerId, storeId);
@@ -92,16 +97,51 @@ public class CustomerMergeService {
 
     merged.mergeInto(survivingCustomerId);
     customerRepository.save(merged);
-    customerMergeRepository.save(
-        CustomerMerge.record(
-            survivingCustomerId,
-            mergedCustomerId,
+    entityManager.flush();
+    // 一括付替え後の関連を第一次キャッシュから読むと旧顧客 ID が残るため、監査は再読する。
+    entityManager.clear();
+    var evidence =
+        new MergeEvidence(
+            preview.surviving(),
+            preview.merged(),
+            preparation.snapshot(survivingCustomerId),
+            prepared.movedOrderIds(),
+            preview.merged().contacts().stream().map(MergeSnapshot.Contact::id).toList(),
+            preview.merged().memberLinks().stream().map(MergeSnapshot.Link::id).toList(),
             actorId,
-            OffsetDateTime.now(),
-            movedOrderCount,
-            movedLinkCount));
+            platformUserRepository
+                .findById(actorId)
+                .map(user -> user.getDisplayName())
+                .orElse(null));
+    var recorded =
+        customerMergeRepository.save(
+            CustomerMerge.record(
+                survivingCustomerId,
+                mergedCustomerId,
+                actorId,
+                OffsetDateTime.now(),
+                movedOrderCount,
+                movedLinkCount,
+                preview.movedContactCount(),
+                request.operationReason().strip(),
+                evidence));
+    return new CustomerMergeResponse(
+        survivingCustomerId,
+        movedOrderCount,
+        movedLinkCount,
+        recorded.getId(),
+        preview.movedContactCount());
+  }
 
-    return new CustomerMergeResponse(survivingCustomerId, movedOrderCount, movedLinkCount);
+  @StoreScoped
+  @Transactional
+  public CustomerMergePreviewResponse preview(
+      String survivingId, CustomerMergePreviewRequest input) {
+    if (survivingId.equals(input.mergedCustomerId()))
+      throw new ServiceException("同じ顧客を統合することはできません");
+    lockBothInIdOrder(survivingId, input.mergedCustomerId());
+    rejectTombstones(survivingId, input.mergedCustomerId());
+    return preparation.prepare(survivingId, input).response();
   }
 
   /**
@@ -132,6 +172,20 @@ public class CustomerMergeService {
         .map(view -> toHistoryResponse(customerId, view));
   }
 
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public CustomerMergeAuditResponse audit(String customerId, String mergeId) {
+    var merge =
+        customerMergeRepository
+            .findById(mergeId)
+            .filter(
+                m ->
+                    m.getSurvivingCustomerId().equals(customerId)
+                        || m.getMergedCustomerId().equals(customerId))
+            .orElseThrow(() -> new NotFoundException("統合履歴が見つかりません"));
+    return CustomerMergeAuditResponse.from(merge);
+  }
+
   private List<CustomerMergeView> fetchHistoryAfter(
       String customerId, PageCursor cursor, Limit limit) {
     return customerMergeRepository.findHistoryAfter(
@@ -155,7 +209,9 @@ public class CustomerMergeService {
         view.getMergedByName(),
         view.getMergedAt(),
         view.getMovedOrderCount(),
-        view.getMovedLinkCount());
+        view.getMovedLinkCount(),
+        view.getMovedContactCount(),
+        view.getOperationReason());
   }
 
   /**

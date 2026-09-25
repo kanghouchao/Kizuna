@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.store;
 
+import com.kizuna.customer.api.dto.CustomerMergeAuditResponse;
 import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
 import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.CustomerMergeResponse;
@@ -30,6 +31,13 @@ public class CustomerMergeController {
 
   private final CustomerMergeService customerMergeService;
 
+  @GetMapping("/{mergeId}")
+  @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
+  public CustomerMergeAuditResponse audit(
+      @PathVariable String customerId, @PathVariable String mergeId) {
+    return customerMergeService.audit(customerId, mergeId);
+  }
+
   /** 統合を実行する。パスが名指すのが存続行で、本文が被統合行を指す。 */
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
@@ -37,8 +45,7 @@ public class CustomerMergeController {
       @PathVariable String customerId,
       @Valid @RequestBody CustomerMergeRequest request,
       Principal principal) {
-    return ResponseEntity.ok(
-        customerMergeService.merge(customerId, request.getMergedCustomerId(), principal.getName()));
+    return ResponseEntity.ok(customerMergeService.merge(customerId, request, principal.getName()));
   }
 
   /**

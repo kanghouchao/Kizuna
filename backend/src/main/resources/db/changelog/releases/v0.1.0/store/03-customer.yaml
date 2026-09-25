@@ -183,6 +183,21 @@ databaseChangeLog:
                     nullable: false
                   remarks: 存続行へ付け替えた関連の件数（ACTIVE・RELEASED の全区間）
               - column:
+                  name: moved_contact_count
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: operation_reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: evidence
+                  type: JSONB
+                  constraints:
+                    nullable: false
+              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   defaultValueComputed: CURRENT_TIMESTAMP
