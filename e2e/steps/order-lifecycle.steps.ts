@@ -573,3 +573,75 @@ Then('受付箱で連絡先を補正して顧客未設定で確定でき原文�
   const original = (await applications.json()).content.find((row: { id: string }) => row.id === guestApplicationId);
   expect(original.contact_snapshot.email).toBe('Guest@EXAMPLE.COM');
 });
+
+const oneTimeEmail = `${'long-contact.'.repeat(4)}once@example.com`;
+When('メールの今回限りの許可と根拠を記録して受注を登録する', async ({ page }) => {
+  await registerPhoneOrder(page, async () => {
+    await page.getByLabel('メール', { exact: true }).fill(oneTimeEmail);
+    await page.getByRole('button', { name: 'メールの連絡可否を記録', exact: true }).click();
+    await page.getByRole('combobox', { name: 'メールの今回の連絡可否' }).click();
+    await page.getByRole('option', { name: '許可', exact: true }).click();
+    await page.getByLabel('メールの出所', { exact: true }).fill('電話受付');
+    await page.getByLabel('メールの根拠', { exact: true }).fill('今回の予約についてメール連絡を希望');
+  });
+});
+
+Then('受注の許可と根拠を狭幅と両テーマで確認し履歴を開ける', async ({ page }) => {
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await expect(page.getByText('電話受付：今回の予約についてメール連絡を希望', { exact: true })).toBeVisible();
+  await expect(page.getByText('現在の判定：業務連絡可。送信・再送直前に再判定します。')).toBeVisible();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => { localStorage.setItem('theme',value); document.documentElement.classList.toggle('dark',value === 'dark'); }, theme);
+    for (const width of [390,1280]) {
+      await page.setViewportSize({width,height:900});
+      const history = page.getByRole('button', {name: '連絡可否の履歴を表示',exact:true});
+      await history.scrollIntoViewIfNeeded();
+      await history.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByText(/変更後：.*今回の予約についてメール連絡を希望/)).toBeVisible();
+      await page.screenshot({path:`test-results/order-contact-permission-${theme}-${width}.png`,fullPage:true});
+      if (width === 390) {
+        const consoleScroll = page.locator('div.overflow-x-auto').filter({ has: page.locator('main') });
+        const scrollBounds = await consoleScroll.evaluate(element => {
+          element.scrollLeft = element.scrollWidth;
+          return { left: element.scrollLeft, width: element.clientWidth, total: element.scrollWidth };
+        });
+        expect(scrollBounds.left).toBeGreaterThan(0);
+        expect(scrollBounds.left + scrollBounds.width).toBeGreaterThanOrEqual(scrollBounds.total - 1);
+        await page.screenshot({path:`test-results/order-contact-permission-${theme}-${width}-right.png`,fullPage:true});
+        await consoleScroll.evaluate(element => { element.scrollLeft = 0; });
+      }
+      await page.getByRole('button',{name:'連絡可否の履歴を閉じる',exact:true}).click();
+    }
+  }
+  await page.setViewportSize({width:1280,height:900});
+});
+
+Then('許可の保存に失敗しても入力を保持して再試行できる', async ({ page }) => {
+  await page.getByRole('button',{name:'メールの連絡可否を記録',exact:true}).click();
+  await page.getByRole('combobox',{name:'メールの今回の連絡可否'}).click();
+  await page.getByRole('option',{name:'拒否',exact:true}).click();
+  await page.getByRole('button',{name:'保存',exact:true}).click();
+  await expect(page.getByText('出所を入力してください',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('メールの出所',{exact:true})).toBeFocused();
+  await page.getByLabel('メールの出所',{exact:true}).fill('電話で撤回');
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('メールの根拠',{exact:true})).toBeFocused();
+  await page.getByLabel('メールの根拠',{exact:true}).fill('連絡を希望しないとの申出');
+  const path = `**/api/store/orders/${createdOrderId}`;
+  await page.route(path, route => route.request().method() === 'PUT' ? route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'一時的な障害です。再試行してください'})}) : route.continue());
+  await page.getByRole('button',{name:'保存',exact:true}).click();
+  await page.getByRole('button',{name:'この内容を確認して保存',exact:true}).click();
+  await expect(page.getByText('一時的な障害です。再試行してください',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('メールの根拠',{exact:true})).toHaveValue('連絡を希望しないとの申出');
+  await expect(page.getByRole('dialog', {name:'採用条件の確認',exact:true})).toBeHidden();
+  await page.getByLabel('メールの根拠',{exact:true}).scrollIntoViewIfNeeded();
+  await page.screenshot({path:'test-results/order-contact-permission-retry.png',fullPage:true});
+  await page.unroute(path);
+  await page.getByRole('button',{name:'保存',exact:true}).click();
+  await page.getByRole('button',{name:'この内容を確認して保存',exact:true}).click();
+  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`));
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await expect(page.getByText('電話で撤回：連絡を希望しないとの申出',{exact:true})).toBeVisible();
+  await expect(page.getByText('現在の判定：業務連絡不可。',{exact:true})).toBeVisible();
+});

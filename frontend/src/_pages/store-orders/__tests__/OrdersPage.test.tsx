@@ -224,6 +224,7 @@ describe('作業キューの描画', () => {
   it('確定は申請内容を予填したモーダルで行い、申請が受付箱から外れて作業キューを取り直すこと', async () => {
     stubInbox(pendingApplication());
     mockedApplicationApi.confirm.mockResolvedValue({
+      business_contact_permissions: [],
       special_services: [],
       ...confirmedOrder({ id: 'order-9' }),
       total_duration_minutes: 60,
@@ -591,6 +592,7 @@ describe('新規オーダー登録', () => {
 
   it('受付担当を選ばなければ項目ごと送らないこと（サーバが実行者本人に解決する）', async () => {
     mockedOrderApi.create.mockResolvedValue({
+      business_contact_permissions: [],
       ...confirmedOrder(),
       total_duration_minutes: 60,
       total_remuneration: 7000,

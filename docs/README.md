@@ -37,7 +37,7 @@
 | 0025 | [サービスID は資格情報を持たない PlatformUser として `t_users` に同居させる](adr/0025-service-identity-lives-in-t-users-without-credentials.md) | 採用 |
 | 0026 | [キャストの正本を本人・店舗在籍・公開プロフィールに分離する](adr/0026-cast-person-enrollment-and-public-profile.md) | 採用 |
 | 0027 | [店舗サービスの条件と歴史版本をサービスモジュールに保存する](adr/0027-store-service-settings-and-revisions.md) | 採用。本人受諾とコース・加算の受注接続を含む |
-| 0028 | [顧客連絡先と受注の受付時の写しを分離する](adr/0028-customer-contacts-and-order-contact-snapshots.md) | 顧客選択・受付時の写し・複数連絡先・用途別連絡可否を実装。統合プレビュー拡張・今回だけの許可・ゲスト同意取り込みは未実装 |
+| 0028 | [顧客連絡先と受注の受付時の写しを分離する](adr/0028-customer-contacts-and-order-contact-snapshots.md) | 顧客選択・受付時の写し・複数連絡先・用途別連絡可否を実装。今回だけの許可と同店拒否判定を実装。統合プレビュー拡張・ゲスト同意取り込みは未実装 |
 
 ## 旧システム調査資料
 

@@ -1,10 +1,18 @@
 package com.kizuna.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.customer.domain.ContactPermissionStatus;
+import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.order.contact.BusinessContactDecision;
+import com.kizuna.order.contact.BusinessContactPolicy;
+import com.kizuna.order.contact.OrderBusinessContact;
 import com.kizuna.shared.CrossStoreTestSupport;
+import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.PlatformUser;
@@ -35,6 +43,9 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class OrderContactSnapshotIT extends CrossStoreTestSupport {
+  @Autowired BusinessContactPolicy businessContactPolicy;
+  @Autowired OrderBusinessContact orderBusinessContact;
+  @Autowired StoreContext storeContext;
   @Autowired ObjectMapper json;
   @Autowired CustomerRepository customers;
   @Autowired RoleRepository roles;
@@ -299,6 +310,14 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
                 .getStatusCode())
         .isEqualTo(HttpStatus.NOT_FOUND);
     ((ObjectNode) input.get("customer_selection")).put("customer_id", first);
+    input.putObject("contact_snapshot").put("line_id", "order-only");
+    input
+        .putArray("business_contact_permissions")
+        .addObject()
+        .put("type", "LINE")
+        .put("status", "ALLOWED")
+        .put("source", "対面")
+        .put("reason", "今回だけ連絡可");
     var saved =
         submitPreviewed(
             "/store/orders", HttpMethod.POST, "/store/orders/preview", input.toString(), headers);
@@ -344,6 +363,384 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
         .isEqualTo(HttpStatus.CONFLICT);
     assertThat(get("/store/orders/customer-candidates?search=" + name).path("content").size())
         .isZero();
+  }
+
+  @Test
+  void oneTimePermissionKeepsEvidenceWithoutCustomerAndExpiresOnContactChange() {
+    ObjectNode input = input("NONE");
+    input.putObject("contact_snapshot").put("email", "once@EXAMPLE.COM");
+    input
+        .putArray("business_contact_permissions")
+        .addObject()
+        .put("type", "EMAIL")
+        .put("status", "ALLOWED")
+        .put("source", "電話受付")
+        .put("reason", "今回の予約連絡を希望");
+    JsonNode order = create(input);
+    JsonNode permission = detail(order).path("business_contact_permissions").path(0);
+    assertThat(permission.path("status").asString()).isEqualTo("ALLOWED");
+    assertThat(permission.path("decision").asString()).isEqualTo("ALLOWED");
+    assertThat(permission.path("reason").asString()).isEqualTo("今回の予約連絡を希望");
+    assertThat(permission.path("recorded_by").isNumber()).isTrue();
+    String path = "/store/orders/" + order.path("id").asString();
+    ObjectNode update = json.createObjectNode();
+    update.put("expected_version", order.path("version").asLong());
+    update.put("cast_id", order.path("cast_id").asString());
+    update.put("receptionist_id", order.path("receptionist_id").asLong());
+    update.putObject("contact_snapshot").put("email", "other@example.com");
+    var changed =
+        submitPreviewed(
+            path, HttpMethod.PUT, path + "/preview", update.toString(), managerHeaders(STORE_A));
+    assertThat(changed.getStatusCode()).as("%s", changed.getBody()).isEqualTo(HttpStatus.OK);
+    assertThat(
+            changed
+                .getBody()
+                .path("business_contact_permissions")
+                .path(0)
+                .path("status")
+                .asString())
+        .isEqualTo("UNKNOWN");
+    JsonNode history = get(path + "/business-contact-permission-history?size=1");
+    assertThat(history.path("content").path(0).path("before").path("reason").asString())
+        .isEqualTo("今回の予約連絡を希望");
+    assertThat(history.path("content").path(0).path("action").asString())
+        .isEqualTo("CONTACT_CHANGED");
+    assertThat(history.hasNonNull("next_cursor")).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"PHONE", "EMAIL", "LINE"})
+  void storeWideDenialCannotBeBypassedAndEveryDecisionReadsLatestState(String kind) {
+    ContactType type = ContactType.valueOf(kind);
+    String raw =
+        switch (type) {
+          case PHONE -> "090-2468-1357";
+          case EMAIL -> "case-" + UUID.randomUUID() + "@EXAMPLE.COM";
+          case LINE -> " line-" + UUID.randomUUID() + " ";
+        };
+    String field =
+        switch (type) {
+          case PHONE -> "phone_number";
+          case EMAIL -> "email";
+          case LINE -> "line_id";
+        };
+    String blockedCustomer = customer("拒否元");
+    String otherCustomer = customer("別顧客");
+    var contact =
+        rest.postForEntity(
+            "/store/customers/" + blockedCustomer + "/contacts",
+            new HttpEntity<>(Map.of("type", kind, "value", raw), managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(contact.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String contactPath =
+        "/store/customers/"
+            + blockedCustomer
+            + "/contacts/"
+            + contact.getBody().path("id").asString();
+    ObjectNode input = input("EXISTING");
+    ((ObjectNode) input.get("customer_selection")).put("customer_id", otherCustomer);
+    input.putObject("contact_snapshot").put(field, raw);
+    input
+        .putArray("business_contact_permissions")
+        .addObject()
+        .put("type", kind)
+        .put("status", "ALLOWED")
+        .put("source", "本人申告")
+        .put("reason", "今回だけ連絡可");
+    JsonNode order = create(input);
+    assertThat(
+            detail(order).path("business_contact_permissions").path(0).path("decision").asString())
+        .isEqualTo("ALLOWED");
+    changeBusinessPermission(contactPath, "DENIED");
+    assertThat(
+            detail(order).path("business_contact_permissions").path(0).path("decision").asString())
+        .isEqualTo("STORE_DENIED");
+    input.putObject("customer_selection").put("mode", "NONE");
+    JsonNode unlinked = create(input);
+    assertThat(
+            detail(unlinked)
+                .path("business_contact_permissions")
+                .path(0)
+                .path("decision")
+                .asString())
+        .isEqualTo("STORE_DENIED");
+    storeContext.setStoreId(STORE_A);
+    try {
+      assertThat(orderBusinessContact.decide(order.path("id").asString(), type).decision())
+          .isEqualTo(BusinessContactDecision.STORE_DENIED);
+      // 確認前申請の呼び出し元も、顧客や受注を指定せず同じ公開規則で判定する。
+      assertThat(businessContactPolicy.evaluate(type, raw, ContactPermissionStatus.ALLOWED))
+          .isEqualTo(BusinessContactDecision.STORE_DENIED);
+    } finally {
+      storeContext.clear();
+    }
+    changeBusinessPermission(contactPath, "ALLOWED");
+    storeContext.setStoreId(STORE_A);
+    try {
+      assertThat(orderBusinessContact.decide(order.path("id").asString(), type).decision())
+          .isEqualTo(BusinessContactDecision.ALLOWED);
+      assertThat(businessContactPolicy.evaluate(type, raw, ContactPermissionStatus.ALLOWED))
+          .isEqualTo(BusinessContactDecision.ALLOWED);
+      assertThat(businessContactPolicy.evaluate(type, raw, ContactPermissionStatus.UNKNOWN))
+          .isEqualTo(BusinessContactDecision.NOT_ALLOWED);
+      assertThat(businessContactPolicy.evaluate(type, raw, ContactPermissionStatus.DENIED))
+          .isEqualTo(BusinessContactDecision.NOT_ALLOWED);
+    } finally {
+      storeContext.clear();
+    }
+    changeBusinessPermission(contactPath, "DENIED");
+    storeContext.setStoreId(STORE_B);
+    try {
+      assertThat(businessContactPolicy.evaluate(type, raw, ContactPermissionStatus.ALLOWED))
+          .isEqualTo(BusinessContactDecision.ALLOWED);
+    } finally {
+      storeContext.clear();
+    }
+    assertThat(
+            rest.exchange(
+                    contactPath,
+                    HttpMethod.DELETE,
+                    new HttpEntity<>(managerHeaders(STORE_A)),
+                    Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(
+            detail(order).path("business_contact_permissions").path(0).path("decision").asString())
+        .isEqualTo("ALLOWED");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void invalidPermissionArraysReturnJapaneseMessages(boolean updating) {
+    ObjectNode input = input("NONE");
+    input.putObject("contact_snapshot").put("email", "array@example.com");
+    String path = "/store/orders";
+    if (updating) {
+      JsonNode order = create(input.deepCopy());
+      path += "/" + order.path("id").asString();
+      input.put("expected_version", order.path("version").asLong());
+    }
+    for (boolean nullElement : List.of(false, true)) {
+      var entries = input.putArray("business_contact_permissions");
+      if (nullElement) {
+        entries.addNull();
+      } else {
+        for (int index = 0; index < 4; index++) {
+          entries
+              .addObject()
+              .put("type", "EMAIL")
+              .put("status", "ALLOWED")
+              .put("source", "本人申告")
+              .put("reason", "今回のみ");
+        }
+      }
+      var response =
+          rest.exchange(
+              path,
+              updating ? HttpMethod.PUT : HttpMethod.POST,
+              new HttpEntity<>(input.toString(), managerHeaders(STORE_A)),
+              JsonNode.class);
+      String message = nullElement ? "連絡可否の要素は必須です" : "今回の連絡可否は3件以内で指定してください";
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+      assertThat(response.getBody().path("error").asString()).isEqualTo(message);
+      assertThat(response.getBody().path("details").toString())
+          .contains("business_contact_permissions", message);
+    }
+  }
+
+  @Test
+  void invalidPermissionFieldsReturnJapaneseMessages() {
+    ObjectNode input = input("NONE");
+    input.putObject("contact_snapshot").put("email", "validation@example.com");
+    input
+        .putArray("business_contact_permissions")
+        .addObject()
+        .put("type", "EMAIL")
+        .put("status", "ALLOWED")
+        .put("source", "本人申告")
+        .put("reason", "今回のみ");
+    record InvalidField(String field, String value, String message) {}
+    for (var invalid :
+        List.of(
+            new InvalidField("type", null, "連絡先の種類を選択してください"),
+            new InvalidField("status", null, "今回の連絡可否を選択してください"),
+            new InvalidField("source", " ", "出所を入力してください"),
+            new InvalidField("source", "あ".repeat(201), "出所は200文字以内で入力してください"),
+            new InvalidField("reason", " ", "根拠を入力してください"),
+            new InvalidField("reason", "あ".repeat(2001), "根拠は2000文字以内で入力してください"))) {
+      var invalidInput = input.deepCopy();
+      ((ObjectNode) invalidInput.path("business_contact_permissions").path(0))
+          .put(invalid.field(), invalid.value());
+      var response = preview(invalidInput);
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+      assertThat(
+              response
+                  .getBody()
+                  .path("details")
+                  .path("business_contact_permissions[0]." + invalid.field())
+                  .asString())
+          .isEqualTo(invalid.message());
+      assertThat(response.getBody().path("error").asString()).contains(invalid.message());
+    }
+  }
+
+  @Test
+  void invalidPermissionEvidenceAndConcurrentEditsLeaveHistoryUnchanged() {
+    ObjectNode input = input("NONE");
+    input.putObject("contact_snapshot").put("email", "evidence@example.com");
+    var permission =
+        input
+            .putArray("business_contact_permissions")
+            .addObject()
+            .put("type", "EMAIL")
+            .put("status", "ALLOWED")
+            .put("source", "本人申告")
+            .put("reason", " ");
+    assertThat(preview(input).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    permission.put("reason", "業務のみ").put("type", "PHONE");
+    assertThat(preview(input).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    permission.put("type", "EMAIL");
+    JsonNode order = create(input);
+    String path = "/store/orders/" + order.path("id").asString();
+    String historyPath = path + "/business-contact-permission-history";
+    ObjectNode update = json.createObjectNode();
+    update.put("expected_version", order.path("version").asLong());
+    update.put("cast_id", order.path("cast_id").asString());
+    update.put("receptionist_id", order.path("receptionist_id").asLong());
+    update
+        .putArray("business_contact_permissions")
+        .addObject()
+        .put("type", "EMAIL")
+        .put("status", "DENIED")
+        .put("source", "電話")
+        .put("reason", "撤回の申出");
+    var changed =
+        submitPreviewed(
+            path, HttpMethod.PUT, path + "/preview", update.toString(), managerHeaders(STORE_A));
+    assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(changed.getBody().path("version").asLong())
+        .isGreaterThan(order.path("version").asLong());
+    assertThat(
+            rest.postForEntity(
+                    path + "/preview",
+                    new HttpEntity<>(update.toString(), managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+    assertThat(
+            rest.exchange(
+                    path,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(update.toString(), managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+    var beforeFailure = detail(order);
+    update.put("expected_version", changed.getBody().path("version").asLong());
+    var validPreview =
+        rest.postForEntity(
+            path + "/preview",
+            new HttpEntity<>(update.toString(), managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(validPreview.getStatusCode()).isEqualTo(HttpStatus.OK);
+    update.put("confirmation_token", validPreview.getBody().path("confirmation_token").asString());
+    update.putObject("contact_snapshot").put("email", "tampered@example.com");
+    assertThat(
+            rest.exchange(
+                    path,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(update.toString(), managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.CONFLICT);
+    assertThat(detail(order)).isEqualTo(beforeFailure);
+    ((ObjectNode) update.path("business_contact_permissions").path(0)).put("reason", " ");
+    assertThat(
+            rest.exchange(
+                    path,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(update.toString(), managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(detail(order)).isEqualTo(beforeFailure);
+    assertThat(get(historyPath).path("content").size()).isEqualTo(2);
+    assertThat(
+            rest.exchange(
+                    historyPath,
+                    HttpMethod.GET,
+                    new HttpEntity<>(managerHeaders(STORE_B)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(
+            rest.exchange(
+                    historyPath,
+                    HttpMethod.GET,
+                    new HttpEntity<>(storeHeaders(STORE_B)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isIn(HttpStatus.FORBIDDEN, HttpStatus.NOT_FOUND);
+    HttpHeaders anonymous = new HttpHeaders();
+    anonymous.set("X-Role", "store");
+    anonymous.set("X-Store-ID", Long.toString(STORE_A));
+    assertThat(
+            rest.exchange(historyPath, HttpMethod.GET, new HttpEntity<>(anonymous), JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(
+            rest.exchange(
+                    historyPath + "?cursor=%%%",
+                    HttpMethod.GET,
+                    new HttpEntity<>(managerHeaders(STORE_A)),
+                    JsonNode.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  void mergedTombstoneDoesNotBlockAndMissingStoreFailsClosed() {
+    String customerId = customer("墓標元");
+    String survivor = customer("存続先");
+    String value = "tombstone-" + UUID.randomUUID();
+    var response =
+        rest.postForEntity(
+            "/store/customers/" + customerId + "/contacts",
+            new HttpEntity<>(Map.of("type", "LINE", "value", value), managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    changeBusinessPermission(
+        "/store/customers/" + customerId + "/contacts/" + response.getBody().path("id").asString(),
+        "DENIED");
+    var tombstone = customers.findById(customerId).orElseThrow();
+    tombstone.mergeInto(survivor);
+    customers.save(tombstone);
+    storeContext.setStoreId(STORE_A);
+    try {
+      assertThat(
+              businessContactPolicy.evaluate(
+                  ContactType.LINE, value, ContactPermissionStatus.ALLOWED))
+          .isEqualTo(BusinessContactDecision.ALLOWED);
+    } finally {
+      storeContext.clear();
+    }
+    assertThatThrownBy(
+            () ->
+                businessContactPolicy.evaluate(
+                    ContactType.LINE, value, ContactPermissionStatus.ALLOWED))
+        .isInstanceOf(ServiceException.class);
+  }
+
+  private void changeBusinessPermission(String path, String status) {
+    var response =
+        rest.exchange(
+            path + "/permissions/BUSINESS",
+            HttpMethod.PUT,
+            new HttpEntity<>(
+                Map.of("status", status, "source", "本人申告", "reason", "最新の明示変更"),
+                managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
   }
 
   private ObjectNode input(String mode) {

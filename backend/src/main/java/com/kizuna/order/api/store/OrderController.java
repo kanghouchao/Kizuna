@@ -1,5 +1,6 @@
 package com.kizuna.order.api.store;
 
+import com.kizuna.order.api.dto.BusinessContactHistoryResponse;
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderAttributionCorrectionRequest;
 import com.kizuna.order.api.dto.OrderAttributionCorrectionResponse;
@@ -24,6 +25,7 @@ import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
+import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderCorrectionHistory;
@@ -70,6 +72,7 @@ public class OrderController {
   private final OrderCorrectionHistory correctionHistory;
 
   private final OrderService orderService;
+  private final BusinessContactPermissions businessContactPermissions;
   private final OrderAttributionService orderAttributionService;
   private final OrderAttributionCorrectionService orderAttributionCorrectionService;
   private final OrderCorrectionService orderCorrectionService;
@@ -155,6 +158,15 @@ public class OrderController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> get(@PathVariable String id) {
     return ResponseEntity.ok(orderService.get(id));
+  }
+
+  @GetMapping("/{id}/business-contact-permission-history")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
+  public CursorPage<BusinessContactHistoryResponse> businessContactHistory(
+      @PathVariable String id,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    return businessContactPermissions.history(id, cursor, size);
   }
 
   @GetMapping("/receptionists")
@@ -369,8 +381,10 @@ public class OrderController {
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> update(
-      @PathVariable String id, @Valid @RequestBody OrderUpdateRequest request) {
-    return ResponseEntity.ok(orderService.update(id, request));
+      @PathVariable String id,
+      @Valid @RequestBody OrderUpdateRequest request,
+      Principal principal) {
+    return ResponseEntity.ok(orderService.update(id, request, principal.getName()));
   }
 
   @PostMapping("/preview")

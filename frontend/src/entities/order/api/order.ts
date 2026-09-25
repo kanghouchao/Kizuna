@@ -20,6 +20,7 @@ import {
 } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import {
+  BusinessContactHistory,
   GuestOrderApplicationCreateRequest,
   GuestOrderApplicationResponse,
   MemberOrderApplication,
@@ -72,6 +73,14 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 }
 
 export const orderApi = {
+  businessContactHistory: async (id: string, cursor?: string) => {
+    const response = await apiClient.get(
+      `/store/orders/${requireId(id, '受注')}/business-contact-permission-history`,
+      { params: { cursor, size: 20 } }
+    );
+    return fromCursorPage<BusinessContactHistory>(response.data);
+  },
+
   customerCandidates: async (search: string, cursor?: string) => {
     const response = await apiClient.get('/store/orders/customer-candidates', {
       params: { search, cursor, size: 20 },

@@ -123,6 +123,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
 
+  @Mock BusinessContactPermissions businessContactPermissions;
   @Mock OrderRepository orderRepository;
   @Mock OrderApplicationRepository orderApplicationRepository;
   @Mock OrderSearchQuery orderSearchQuery;
@@ -703,7 +704,7 @@ class OrderServiceTest {
     req.setCastId("g2");
     req.setReceptionistId(2L);
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(existing.getCastId()).isEqualTo("g2");
     assertThat(existing.getReceptionistId()).isEqualTo(2L);
@@ -726,7 +727,7 @@ class OrderServiceTest {
       OrderUpdateRequest req = new OrderUpdateRequest();
       req.setPax(9);
 
-      assertThatThrownBy(() -> service.update("o1", req))
+      assertThatThrownBy(() -> service.update("o1", req, ACTOR_EMAIL))
           .as("状態 %s の受注が編集を撥ねること", terminal)
           .isInstanceOf(ServiceException.class)
           .hasMessageContaining("完了・取消済み");
@@ -759,7 +760,7 @@ class OrderServiceTest {
     req.setCastId("g2");
     req.setReceptionistId(2L);
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(existing.getPax()).isEqualTo(3);
   }
@@ -856,7 +857,7 @@ class OrderServiceTest {
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setContactSnapshot(new ContactSnapshotRequest("正しい名前", "09099998888", null, null));
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(existing.getContactName()).isEqualTo("正しい名前");
     assertThat(existing.getContactPhoneNumber()).isEqualTo("+819099998888");
@@ -884,7 +885,7 @@ class OrderServiceTest {
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setPax(9);
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(linked.getPax()).isEqualTo(9);
   }
@@ -908,7 +909,7 @@ class OrderServiceTest {
     req.setCastId("none");
     req.setReceptionistId(2L);
 
-    assertThatThrownBy(() -> service.update("o1", req))
+    assertThatThrownBy(() -> service.update("o1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .isNotInstanceOf(NotFoundException.class)
         .hasMessageContaining("在籍中のキャスト");
@@ -940,7 +941,7 @@ class OrderServiceTest {
     req.setReceptionistId(3L);
     req.setPax(5);
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(confirmed.getPax()).isEqualTo(5);
     assertThat(confirmed.getCastId()).isEqualTo("g1");
@@ -969,7 +970,7 @@ class OrderServiceTest {
     req.setReceptionistId(3L);
     req.setPax(5);
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(confirmed.getPax()).isEqualTo(5);
     assertThat(confirmed.getReceptionistId()).isEqualTo(3L);
@@ -997,7 +998,7 @@ class OrderServiceTest {
     req.setCastId("g2");
     req.setReceptionistId(2L);
 
-    assertThatThrownBy(() -> service.update("o1", req))
+    assertThatThrownBy(() -> service.update("o1", req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
@@ -1021,7 +1022,7 @@ class OrderServiceTest {
     req.setCastId("g2");
     req.setReceptionistId(2L);
 
-    assertThatThrownBy(() -> service.update("o1", req))
+    assertThatThrownBy(() -> service.update("o1", req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
@@ -1055,7 +1056,7 @@ class OrderServiceTest {
     req.setPax(5);
     req.setRemarks("人数を直した");
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(confirmed.getPax()).isEqualTo(5);
     assertThat(confirmed.getRemarks()).isEqualTo("人数を直した");
@@ -1083,7 +1084,7 @@ class OrderServiceTest {
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setPax(4);
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(confirmed.getPax()).isEqualTo(4);
     assertThat(confirmed.getReceptionistId()).as("未設定のままであること").isNull();
@@ -1117,7 +1118,7 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
     req.setFeeLines(List.of());
 
-    service.update("o1", req);
+    service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(storeOrder.editableFeeLines()).isEmpty();
     assertThat(storeOrder.getTotalFee()).as("内訳が空なら合計も 0 であること").isZero();
@@ -1139,7 +1140,7 @@ class OrderServiceTest {
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setPax(9);
 
-    assertThatThrownBy(() -> service.update("o1", req))
+    assertThatThrownBy(() -> service.update("o1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("指名を外すことはできません");
     // 撥ねる要求は集約を触る前に止める（拒否の健全さをトランザクションの巻き戻しだけに委ねない）
@@ -1164,7 +1165,7 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setPax(9);
 
-    assertThatThrownBy(() -> service.update("o1", req))
+    assertThatThrownBy(() -> service.update("o1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("受付担当を外すことはできません");
     assertThat(storeOrder.getReceptionistId()).isEqualTo(3L);
@@ -1188,7 +1189,7 @@ class OrderServiceTest {
     req.setCastId("");
     req.setPax(9);
 
-    assertThatThrownBy(() -> service.update("o1", req))
+    assertThatThrownBy(() -> service.update("o1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("指名を外すことはできません");
     verify(nominatableCast, never()).findForUpdate(any(), anyString());

@@ -347,6 +347,10 @@ databaseChangeLog:
               - column:
                   name: customer_id
 
+        - sql:
+            sql: |
+              CREATE INDEX idx_t_customer_contacts_business_denial ON t_customer_contacts(store_id, type, value) INCLUDE (customer_id) WHERE NOT deleted AND business_status = 'DENIED';
+
   - changeSet:
       id: store-v0100-003-t_customer_contact_history
       author: kizuna

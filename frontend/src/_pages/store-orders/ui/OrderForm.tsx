@@ -1,5 +1,7 @@
 'use client';
 
+import { OrderBusinessContactFields } from './OrderBusinessContactFields';
+import { BusinessContactPermissionInput } from '@/entities/order';
 import { OrderContactFields } from './OrderContactFields';
 import { OrderCustomerField } from './OrderCustomerField';
 import { ContactSnapshot, CustomerSelection } from '@/entities/order';
@@ -42,6 +44,7 @@ export interface OrderFormData {
   arrival_scheduled_end_time: string;
   customer_selection: CustomerSelection;
   contact_snapshot: ContactSnapshot;
+  business_contact_permissions: BusinessContactPermissionInput[];
   address: string;
   building_name: string;
   cast_id: string;
@@ -67,6 +70,7 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
   const router = useRouter();
   const form = useForm<OrderFormData>({
     defaultValues: {
+      business_contact_permissions: [],
       receptionist_id: '',
       business_date: new Date().toISOString().split('T')[0],
       customer_selection: { mode: 'NONE' },
@@ -83,6 +87,7 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
   return (
     <Form {...form}>
       <form
+        noValidate
         onSubmit={handleSubmit(onSubmit)}
         className="rounded-xl border bg-card text-card-foreground shadow-sm"
       >
@@ -121,6 +126,7 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
         >
           <OrderCustomerField />
           <OrderContactFields />
+          <OrderBusinessContactFields />
           <div className="grid grid-cols-2 gap-6">
             <div className="grid gap-2">
               <Label htmlFor="address">住所</Label>
@@ -159,10 +165,26 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
                 </FormItem>
               )}
             />
-            <div className="grid gap-2">
-              <Label htmlFor="pax">人数</Label>
-              <Input id="pax" type="number" min={1} {...register('pax')} />
-            </div>
+            <FormField
+              control={control}
+              name="pax"
+              rules={{
+                validate: value =>
+                  value == null ||
+                  String(value) === '' ||
+                  (Number.isInteger(Number(value)) && Number(value) >= 1) ||
+                  '人数は1以上の整数で入力してください',
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>人数</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={1} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={control}
               name="reception_route"
