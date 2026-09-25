@@ -82,6 +82,32 @@ beforeEach(() => {
 });
 
 describe('受注の編集ページ', () => {
+  it('同じ値の履歴でも連絡先の種類を区別できる', async () => {
+    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+    mockedOrderApi.businessContactHistory.mockResolvedValue({
+      rows: (['EMAIL', 'LINE'] as const).map((type, index) => ({
+        id: String(index),
+        type,
+        action: 'RECORDED' as const,
+        before: null,
+        after: {
+          value: 'same@example.com',
+          status: 'ALLOWED' as const,
+          source: '本人申告',
+          reason: '今回のみ',
+        },
+        recorded_by: 1,
+        recorded_at: '2026-09-25T10:00:00+09:00',
+      })),
+      nextCursor: null,
+    });
+    render(<OrderEditPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '連絡可否の履歴を表示' }));
+    expect(await screen.findByText(/^メール ／.*明示記録/)).toBeInTheDocument();
+    expect(screen.getByText(/^LINE ／.*明示記録/)).toBeInTheDocument();
+    expect(screen.getAllByText(/変更後：same@example.com/)).toHaveLength(2);
+  });
+
   it('同店の拒否を明示し履歴の取得失敗から再試行できる', async () => {
     mockedOrderApi.get.mockResolvedValue(
       confirmedOrder({

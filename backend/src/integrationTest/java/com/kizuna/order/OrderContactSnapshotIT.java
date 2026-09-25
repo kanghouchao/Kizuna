@@ -510,6 +510,42 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
   }
 
   @Test
+  void invalidPermissionFieldsReturnJapaneseMessages() {
+    ObjectNode input = input("NONE");
+    input.putObject("contact_snapshot").put("email", "validation@example.com");
+    input
+        .putArray("business_contact_permissions")
+        .addObject()
+        .put("type", "EMAIL")
+        .put("status", "ALLOWED")
+        .put("source", "本人申告")
+        .put("reason", "今回のみ");
+    record InvalidField(String field, String value, String message) {}
+    for (var invalid :
+        List.of(
+            new InvalidField("type", null, "連絡先の種類を選択してください"),
+            new InvalidField("status", null, "今回の連絡可否を選択してください"),
+            new InvalidField("source", " ", "出所を入力してください"),
+            new InvalidField("source", "あ".repeat(201), "出所は200文字以内で入力してください"),
+            new InvalidField("reason", " ", "根拠を入力してください"),
+            new InvalidField("reason", "あ".repeat(2001), "根拠は2000文字以内で入力してください"))) {
+      var invalidInput = input.deepCopy();
+      ((ObjectNode) invalidInput.path("business_contact_permissions").path(0))
+          .put(invalid.field(), invalid.value());
+      var response = preview(invalidInput);
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+      assertThat(
+              response
+                  .getBody()
+                  .path("details")
+                  .path("business_contact_permissions[0]." + invalid.field())
+                  .asString())
+          .isEqualTo(invalid.message());
+      assertThat(response.getBody().path("error").asString()).contains(invalid.message());
+    }
+  }
+
+  @Test
   void invalidPermissionEvidenceAndConcurrentEditsLeaveHistoryUnchanged() {
     ObjectNode input = input("NONE");
     input.putObject("contact_snapshot").put("email", "evidence@example.com");

@@ -60,6 +60,7 @@ function History({ orderId }: { orderId: string }) {
       {list.rows.map(row => (
         <div key={row.id} className="space-y-1 break-words rounded-lg border p-4">
           <p>
+            {CONTACT_CHANNELS.find(channel => channel.type === row.type)?.label} ／{' '}
             {new Date(row.recorded_at).toLocaleString('ja-JP')} ／{' '}
             {row.action === 'RECORDED' ? '明示記録' : '宛先変更'} ／ 操作者：
             {row.recorded_by ?? '削除済み'}
