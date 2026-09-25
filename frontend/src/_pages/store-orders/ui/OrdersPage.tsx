@@ -359,6 +359,7 @@ export default function OrderListPage() {
         application={confirming}
         onClose={() => setConfirmingDialog(previous => previous && { ...previous, open: false })}
         onConfirmed={() => settleConfirmed(confirming)}
+        onMissing={inbox.reload}
       />
       <OrderCompletionModal
         key={`completing-${completingDialog?.key}`}

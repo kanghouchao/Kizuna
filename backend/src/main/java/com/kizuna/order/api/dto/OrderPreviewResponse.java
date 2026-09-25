@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.customer.contact.GuestContactImport;
 import java.util.List;
 
 public record OrderPreviewResponse(
@@ -13,7 +14,8 @@ public record OrderPreviewResponse(
     Points points,
     List<OrderSpecialServiceResponse> specialServices,
     boolean requiresAttention,
-    int unresolvedSpecialServiceCount) {
+    int unresolvedSpecialServiceCount,
+    List<GuestContactImport> contactImports) {
   public record CourseCondition(
       String serviceId,
       String revisionId,

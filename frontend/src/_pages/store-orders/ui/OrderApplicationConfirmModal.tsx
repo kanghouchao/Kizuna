@@ -1,5 +1,7 @@
 'use client';
 
+import { GuestApplicationConsentSection } from './GuestApplicationConsentSection';
+
 import { useOrderConfirmation } from './useOrderConfirmation';
 
 import { OrderFeeLinesField } from './OrderFeeLinesField';
@@ -8,8 +10,8 @@ import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import { OrderCustomerField } from './OrderCustomerField';
 import { OrderContactFields } from './OrderContactFields';
-import { CustomerSelection, ContactSnapshot } from '@/entities/order';
-import { useEffect } from 'react';
+import { CustomerSelection, ContactSnapshot, GuestContactImportInput } from '@/entities/order';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
@@ -44,6 +46,7 @@ import {
 } from '@/shared/ui';
 
 interface ConfirmFormValues {
+  contact_imports: GuestContactImportInput[];
   fee_lines: OrderFeeLineInput[];
   /** '' は受付担当なし（実行者本人が候補の条件を満たせばサーバが補う）。 */
   receptionist_id: string;
@@ -68,6 +71,7 @@ interface OrderApplicationConfirmModalProps {
   open: boolean;
   application: OrderApplicationRow | null;
   onClose: () => void;
+  onMissing?: () => void;
   /** 確定の成功後に、生成された受注を伴って呼ばれる（受付箱からの行の除去と作業キューの取り直し用）。 */
   onConfirmed: (created: Order) => void;
 }
@@ -84,10 +88,18 @@ export function OrderApplicationConfirmModal({
   application,
   onClose,
   onConfirmed,
+  onMissing,
 }: OrderApplicationConfirmModalProps) {
+  const [missingId, setMissingId] = useState<string | null>(null);
+  const missing = !!application?.id && missingId === application.id;
+  const close = () => {
+    onClose();
+    if (missing) onMissing?.();
+  };
   const confirmation = useOrderConfirmation(application?.id);
   const form = useForm<ConfirmFormValues>({
     defaultValues: {
+      contact_imports: [],
       receptionist_id: '',
       business_date: '',
       arrival_scheduled_start_time: '',
@@ -117,6 +129,7 @@ export function OrderApplicationConfirmModal({
     if (!application) return;
     // 申請内容を予填する。ここで直した値は受注にだけ現れ、申請原文は動かない
     reset({
+      contact_imports: [],
       receptionist_id: '',
       business_date: application.business_date ?? '',
       arrival_scheduled_start_time: application.arrival_scheduled_start_time?.slice(0, 5) ?? '',
@@ -151,6 +164,7 @@ export function OrderApplicationConfirmModal({
         course_id: values.course_id,
         fee_lines: toFeeLineInputs(values.fee_lines),
         remarks: values.remarks ? values.remarks : undefined,
+        contact_imports: isGuest ? values.contact_imports : undefined,
         customer_selection: isGuest ? values.customer_selection : undefined,
         contact_snapshot: values.contact_snapshot,
       };
@@ -182,7 +196,7 @@ export function OrderApplicationConfirmModal({
         open={open}
         onOpenChange={next => {
           // 確定中に閉じると、結果が分からないまま古い一覧が残る
-          if (!next && !isSubmitting) onClose();
+          if (!next && !isSubmitting) close();
         }}
       >
         <DialogContent
@@ -191,142 +205,162 @@ export function OrderApplicationConfirmModal({
           className="max-h-[90dvh] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-md"
         >
           <DialogTitle className="border-b px-6 py-4">予約申請を確定</DialogTitle>
-          <Form {...form}>
-            {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          {missing ? (
+            <div className="space-y-4 px-6 py-5">
+              <p role="alert">予約申請が見つかりません。受付箱を更新してください。</p>
+              <Button type="button" onClick={close}>
+                閉じる
+              </Button>
+            </div>
+          ) : (
+            <Form {...form}>
+              {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
               我々の文言は永久に描かれない。人数の min={1} は下の min 規則が引き継ぐ */}
-            <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-              {application !== null && (
-                <OrderReceptionistField key={application.id} scene="confirm" />
-              )}
-              <FormField
-                control={control}
-                name="business_date"
-                rules={{ required: '営業日を選択してください' }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>営業日</FormLabel>
-                    <FormControl>
-                      <Input type="date" required {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <form
+                onSubmit={handleSubmit(submit)}
+                className="min-w-0 space-y-4 px-6 py-5"
+                noValidate
+              >
+                {application !== null && (
+                  <OrderReceptionistField key={application.id} scene="confirm" />
                 )}
-              />
-              <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={control}
-                  name="arrival_scheduled_start_time"
+                  name="business_date"
+                  rules={{ required: '営業日を選択してください' }}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>開始時刻</FormLabel>
+                      <FormLabel>営業日</FormLabel>
                       <FormControl>
-                        <Input type="time" {...field} />
+                        <Input type="date" required {...field} />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={control}
-                  name="arrival_scheduled_end_time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>終了時刻</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-              {/* 人数はサーバ側が @Min(1)。検証の結果を出さないと、空欄のまま押した確定が無反応に見える */}
-              <FormField
-                control={control}
-                name="pax"
-                rules={{
-                  required: '人数を入力してください',
-                  min: { value: 1, message: '人数は 1 以上です' },
-                  // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
-                  // Integer の pax へ届く
-                  validate: integerRule('人数'),
-                }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>人数</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={1} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <OrderCourseField required />
-              <OrderFeeLinesField />
-              {clearCast ? (
-                <p role="status">指名を外すため、特殊サービスは選択できません。</p>
-              ) : (
-                <OrderSpecialServicesField />
-              )}
-              <div className="grid gap-2">
-                <CastSearchCombobox
-                  id="application-confirm-cast"
-                  label="指名"
-                  castName={castName}
-                  onChange={castId => setValue('cast_id', castId, { shouldDirty: true })}
-                  disabled={clearCast}
-                />
-                {/* 解除は明示操作。無効になった指名（在籍停止・シフト取消）を外して確定する導線 */}
-                {selectedCastId && (
+                <div className="grid grid-cols-2 gap-3">
                   <FormField
                     control={control}
-                    name="clear_cast"
+                    name="arrival_scheduled_start_time"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center gap-2">
+                      <FormItem>
+                        <FormLabel>開始時刻</FormLabel>
                         <FormControl>
-                          <Checkbox
-                            id="confirm_clear_cast"
-                            checked={field.value}
-                            onCheckedChange={value => {
-                              field.onChange(value === true);
-                              if (value === true) {
-                                setValue('special_service_ids', [], { shouldDirty: true });
-                              }
-                            }}
-                          />
+                          <Input type="time" {...field} />
                         </FormControl>
-                        <FormLabel htmlFor="confirm_clear_cast" className="font-medium">
-                          指名を外して確定する
-                        </FormLabel>
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={control}
+                    name="arrival_scheduled_end_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>終了時刻</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                {/* 人数はサーバ側が @Min(1)。検証の結果を出さないと、空欄のまま押した確定が無反応に見える */}
+                <FormField
+                  control={control}
+                  name="pax"
+                  rules={{
+                    required: '人数を入力してください',
+                    min: { value: 1, message: '人数は 1 以上です' },
+                    // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
+                    // Integer の pax へ届く
+                    validate: integerRule('人数'),
+                  }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>人数</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <OrderCourseField required />
+                <OrderFeeLinesField />
+                {clearCast ? (
+                  <p role="status">指名を外すため、特殊サービスは選択できません。</p>
+                ) : (
+                  <OrderSpecialServicesField />
                 )}
-              </div>
-              {isGuest ? <OrderCustomerField /> : <p>顧客は会員本人の関連から決まります。</p>}
-              <OrderContactFields />
-              <FormField
-                control={control}
-                name="remarks"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>備考</FormLabel>
-                    <FormControl>
-                      <Textarea rows={3} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                <div className="grid gap-2">
+                  <CastSearchCombobox
+                    id="application-confirm-cast"
+                    label="指名"
+                    castName={castName}
+                    onChange={castId => setValue('cast_id', castId, { shouldDirty: true })}
+                    disabled={clearCast}
+                  />
+                  {/* 解除は明示操作。無効になった指名（在籍停止・シフト取消）を外して確定する導線 */}
+                  {selectedCastId && (
+                    <FormField
+                      control={control}
+                      name="clear_cast"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center gap-2">
+                          <FormControl>
+                            <Checkbox
+                              id="confirm_clear_cast"
+                              checked={field.value}
+                              onCheckedChange={value => {
+                                field.onChange(value === true);
+                                if (value === true) {
+                                  setValue('special_service_ids', [], { shouldDirty: true });
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <FormLabel htmlFor="confirm_clear_cast" className="font-medium">
+                            指名を外して確定する
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+                {isGuest ? <OrderCustomerField /> : <p>顧客は会員本人の関連から決まります。</p>}
+                {isGuest && application?.id && (
+                  <GuestApplicationConsentSection
+                    key={`consent-${application.id}`}
+                    id={application.id}
+                    onMissing={() => setMissingId(application.id ?? null)}
+                  />
                 )}
-              />
-              <div className="flex justify-end gap-3 border-t pt-4">
-                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-                  キャンセル
-                </Button>
-                {/* 検証では塞がない — 灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? '確定中...' : '確定する'}
-                </Button>
-              </div>
-            </form>
-          </Form>
+                <OrderContactFields />
+                <FormField
+                  control={control}
+                  name="remarks"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>備考</FormLabel>
+                      <FormControl>
+                        <Textarea rows={3} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end gap-3 border-t pt-4">
+                  <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                    キャンセル
+                  </Button>
+                  {/* 検証では塞がない — 灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? '確定中...' : '確定する'}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          )}
         </DialogContent>
       </Dialog>
     </>

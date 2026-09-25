@@ -10,6 +10,8 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.order.api.dto.CustomerSelectionRequest;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.application.OrderService;
+import com.kizuna.order.domain.ContactSnapshot;
+import com.kizuna.order.domain.GuestContactConsent;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
@@ -22,7 +24,9 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -323,6 +327,7 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
               castId, "/store/orders/" + orderId, HttpMethod.PUT, body, orderId, originalCastId));
     }
     if (operation.equals("CONFIRM")) {
+      body.put("contact_imports", List.of());
       Shift shift =
           Shift.builder()
               .castId(castId)
@@ -339,6 +344,10 @@ class OrderNominationConcurrencyIT extends CrossStoreTestSupport {
               .businessDate(date)
               .pax(2)
               .castId(castId)
+              .contactConsent(
+                  new GuestContactConsent(
+                      "1", "今回の連絡に同意", "販促に同意", true, false, OffsetDateTime.now()))
+              .consentContact(ContactSnapshot.normalize("指名競合検証", "09012345678", null, null))
               .contactName("指名競合検証")
               .contactPhoneNumber("09012345678")
               .build();

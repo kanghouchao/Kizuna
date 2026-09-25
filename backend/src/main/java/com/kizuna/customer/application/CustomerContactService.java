@@ -191,7 +191,8 @@ public class CustomerContactService {
                     h.getPurpose(),
                     h.getSource(),
                     h.getReason(),
-                    h.getSourceContactId()));
+                    h.getSourceContactId(),
+                    h.getApplicationId()));
   }
 
   @StoreScoped

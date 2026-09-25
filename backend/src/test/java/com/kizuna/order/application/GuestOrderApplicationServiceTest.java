@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.order.api.dto.ContactSnapshotRequest;
+import com.kizuna.order.api.dto.GuestContactConsentRequest;
 import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
@@ -43,6 +44,7 @@ class GuestOrderApplicationServiceTest {
   private static GuestOrderApplicationCreateRequest request() {
     GuestOrderApplicationCreateRequest request = new GuestOrderApplicationCreateRequest();
     request.setBusinessDate(VISIT_DATE);
+    request.setContactConsent(new GuestContactConsentRequest("1", true, false));
     request.setPax(2);
     request.setContactSnapshot(new ContactSnapshotRequest("ゲスト花子", "09012345678", null, null));
     return request;

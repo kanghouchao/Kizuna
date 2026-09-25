@@ -1180,6 +1180,18 @@ databaseChangeLog:
                   type: VARCHAR(255)
                   remarks: ゲスト申請のLINE ID原入力
               - column:
+                  name: contact_consent
+                  type: JSONB
+              - column:
+                  name: consent_contact
+                  type: JSONB
+              - column:
+                  name: contact_imports
+                  type: JSONB
+                  defaultValueComputed: "'[]'::jsonb"
+                  constraints:
+                    nullable: false
+              - column:
                   name: declined_reason
                   type: VARCHAR(500)
                   remarks: 謝絶の理由。謝絶していない申請では NULL

@@ -1,3 +1,4 @@
+import type { GuestContactConsentText, OrderApplicationDetail } from '../model/types';
 import type {
   CourseCandidate,
   OrderCustomerCandidate,
@@ -386,6 +387,8 @@ export const orderApi = {
 
 /** 店舗の予約受付箱 API。申請（OrderApplication）の一覧・確定・謝絶を受け持つ。 */
 export const orderApplicationApi = {
+  detail: async (id: string): Promise<OrderApplicationDetail> =>
+    (await apiClient.get(`/store/order-applications/${requireId(id, '予約申請')}`)).data,
   previewConfirmation: async (
     id: string | undefined,
     data: OrderApplicationConfirmationRequest
@@ -436,6 +439,8 @@ export const orderApplicationApi = {
  * 店舗文脈ヘッダで決まるため、申請本体では名乗らない。
  */
 export const guestOrderApplicationApi = {
+  consent: async (): Promise<GuestContactConsentText> =>
+    (await apiClient.get('/store/order-applications/public/contact-consent')).data,
   request: async (
     data: GuestOrderApplicationCreateRequest
   ): Promise<GuestOrderApplicationResponse> => {

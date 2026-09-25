@@ -36,6 +36,9 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
         left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
       """;
 
+  @Query(VIEW_SELECT + " where a.id = :id")
+  Optional<OrderApplicationView> findView(String id);
+
   String VIEW_WHERE = " where a.status in :statuses ";
 
   // 受付箱は希望日の早い順（近い来店から処理する）。一意な副キー id を重ねて全順序にし、カーソルの比較

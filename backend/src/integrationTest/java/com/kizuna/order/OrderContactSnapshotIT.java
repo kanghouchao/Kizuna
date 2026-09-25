@@ -185,6 +185,8 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
             "/store/order-applications/public",
             new HttpEntity<>(
                 Map.of(
+                    "contact_consent",
+                    Map.of("version", "1", "business_allowed", true, "marketing_allowed", false),
                     "business_date",
                     LocalDate.now().plusDays(1).toString(),
                     "contact_snapshot",
@@ -197,6 +199,7 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
     assertThat(application.getBody().size()).isEqualTo(1);
     String appId = application.getBody().path("id").asString();
     ObjectNode confirmation = json.createObjectNode();
+    confirmation.putArray("contact_imports");
     confirmation.put("business_date", LocalDate.now().plusDays(1).toString());
     confirmation.put("course_id", courseFixture(STORE_A, 100).serviceId());
     confirmation

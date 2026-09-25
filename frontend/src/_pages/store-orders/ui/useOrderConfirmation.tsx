@@ -123,6 +123,25 @@ export function useOrderConfirmation(target?: string) {
         ) : (
           preview && (
             <div className="space-y-3">
+              {preview.contact_imports && (
+                <section className="space-y-2 rounded-lg border p-4 text-sm break-words">
+                  <h3 className="font-semibold">連絡先の取り込み</h3>
+                  {preview.contact_imports.length === 0 ? (
+                    <p>台帳へ取り込まない</p>
+                  ) : (
+                    preview.contact_imports.map(item => (
+                      <p key={item.type}>
+                        {item.value}：
+                        {item.marketing_result === 'ALLOWED'
+                          ? '販促許可を記録（同値行の共同制約を適用）'
+                          : item.marketing_result === 'DENIED_PRESERVED'
+                            ? '既存の販促拒否を維持'
+                            : '販促状態を変更しない'}
+                      </p>
+                    ))
+                  )}
+                </section>
+              )}
               <p>
                 {preview.course.name} / {preview.course.duration_minutes}分 / 版
                 {preview.course.revision_number}

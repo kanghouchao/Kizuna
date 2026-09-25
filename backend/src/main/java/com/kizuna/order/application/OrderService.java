@@ -13,8 +13,10 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.order.api.dto.ContactSnapshotRequest;
 import com.kizuna.order.api.dto.CustomerSelectionRequest;
+import com.kizuna.order.api.dto.GuestContactImportResponse;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
+import com.kizuna.order.api.dto.OrderApplicationDetailResponse;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
@@ -115,6 +117,7 @@ public class OrderService {
   private final AttributionMaterializer materializer;
   private final ActorIdentityService actorIdentityService;
   private final BusinessContactPermissions businessContactPermissions;
+  private final GuestApplicationConsent guestConsent;
   private final ReceptionistEligibilityService receptionistEligibilityService;
   private final StoreContext storeContext;
   private final BusinessDateService businessDateService;
@@ -425,6 +428,29 @@ public class OrderService {
     return new PageCursor(view.getBusinessDate().toString(), view.getId()).encode();
   }
 
+  @StoreScoped
+  @Transactional(readOnly = true)
+  public OrderApplicationDetailResponse applicationDetail(String id) {
+    var application =
+        orderApplicationRepository
+            .findById(id)
+            .orElseThrow(() -> new NotFoundException("予約申請が見つかりません"));
+    var view =
+        orderApplicationRepository
+            .findView(id)
+            .orElseThrow(() -> new NotFoundException("予約申請が見つかりません"));
+    return new OrderApplicationDetailResponse(
+        toApplicationResponse(view, businessDateService.currentBusinessDate()),
+        application.getContactConsent(),
+        guestConsent.describe(application),
+        application.getContactImports().stream()
+            .map(
+                c ->
+                    new GuestContactImportResponse(
+                        c, application.getProcessedBy(), application.getProcessedAt()))
+            .toList());
+  }
+
   private OrderApplicationResponse toApplicationResponse(
       OrderApplicationView view, LocalDate currentBusinessDate) {
     return OrderApplicationResponse.builder()
@@ -494,6 +520,7 @@ public class OrderService {
       validateReceptionist(request.getReceptionistId());
     }
     validateCustomerChoice(application, request);
+    var contactImports = guestConsent.previewImports(application, request);
     Long actorId = actorIdentityService.requireUserId(actorEmail);
 
     var course = calculation.current(request.getCourseId(), true);
@@ -561,8 +588,15 @@ public class OrderService {
     calculated.linkCustomer(order.getCustomerId());
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview("CONFIRM", id, request, calculated, completionPoints(calculated, 0)));
+        calculation.preview(
+            "CONFIRM", id, request, calculated, completionPoints(calculated, 0), contactImports));
     Order saved = orderRepository.save(order);
+    businessContactPermissions.record(
+        saved,
+        ContactSnapshot.empty(),
+        guestConsent.forOrder(application, saved.getContactSnapshot()),
+        actorEmail);
+    guestConsent.importContacts(application, saved.getCustomerId(), contactImports, actorId);
     application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
     orderApplicationRepository.save(application);
     return toResponse(saved);
@@ -758,7 +792,13 @@ public class OrderService {
           application.isGuest() ? selectCustomer(request.getCustomerSelection(), false) : null);
       points = completionPoints(calculated, 0);
     }
-    return calculation.preview("CONFIRM", id, request, calculated, points);
+    return calculation.preview(
+        "CONFIRM",
+        id,
+        request,
+        calculated,
+        points,
+        guestConsent.previewImports(application, request));
   }
 
   private void validateUpdateAssignments(

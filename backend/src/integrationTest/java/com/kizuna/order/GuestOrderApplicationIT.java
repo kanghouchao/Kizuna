@@ -43,6 +43,13 @@ class GuestOrderApplicationIT extends CrossStoreTestSupport {
 
   /** 流量制限の窓は「店舗 × 発信元」で数えるため、テストごとに別の連絡先を使っても窓は共有される点に注意。 */
   private static String guestBody(String contactName) {
+    return guestBodyWithoutConsent(contactName)
+        .replaceFirst(
+            "\\{",
+            "{\"contact_consent\":{\"version\":\"1\",\"business_allowed\":true,\"marketing_allowed\":false},");
+  }
+
+  private static String guestBodyWithoutConsent(String contactName) {
     return "{\"business_date\": \""
         + LocalDate.now().plusDays(1)
         + "\", \"pax\": 2, \"contact_snapshot\": {\"name\": \""
@@ -52,6 +59,15 @@ class GuestOrderApplicationIT extends CrossStoreTestSupport {
 
   private ResponseEntity<JsonNode> post(HttpHeaders headers, String body) {
     return rest.postForEntity(PATH, new HttpEntity<>(body, headers), JsonNode.class);
+  }
+
+  @Test
+  @DisplayName("業務同意がない公開申請を拒否する")
+  void requiresBusinessConsent() {
+    var headers = anonymousStoreHeaders(STORE_A);
+    headers.set("X-Forwarded-For", UUID.randomUUID().toString());
+    assertThat(post(headers, guestBodyWithoutConsent("同意なし")).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   @Test
@@ -135,7 +151,7 @@ class GuestOrderApplicationIT extends CrossStoreTestSupport {
     String body =
         "{\"business_date\":\""
             + LocalDate.now().plusDays(1)
-            + "\",\"pax\":2,\"customer_selection\":{\"mode\":\"NONE\"}}";
+            + "\",\"pax\":2,\"contact_imports\":[],\"customer_selection\":{\"mode\":\"NONE\"}}";
     ResponseEntity<JsonNode> confirmed =
         submitPreviewed(
             "/store/order-applications/" + applicationId + "/confirmation",
