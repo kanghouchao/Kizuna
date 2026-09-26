@@ -7,6 +7,7 @@ import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactRepository;
+import com.kizuna.customer.domain.CustomerContactSearch;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
@@ -56,7 +57,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.shared.validation.ContactValues;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
@@ -67,7 +67,6 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -905,13 +904,6 @@ public class OrderService {
           predicates.add(cb.isNull(root.get("mergedIntoId")));
           if (cursor != null) predicates.add(cb.greaterThan(root.get("id"), cursor));
           if (search != null && !search.isBlank()) {
-            String term =
-                "%"
-                    + ContactValues.search(search)
-                        .replace("!", "!!")
-                        .replace("%", "!%")
-                        .replace("_", "!_")
-                    + "%";
             String literalTerm =
                 "%" + search.strip().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
             var names = cb.like(root.get("name"), literalTerm, '!');
@@ -923,15 +915,7 @@ public class OrderService {
                       cb.equal(contact.get("customerId"), root.get("id")),
                       cb.equal(contact.get("storeId"), root.get("storeId")),
                       cb.isFalse(contact.get("deleted")),
-                      cb.or(
-                          cb.like(contact.get("value"), literalTerm, '!'),
-                          cb.like(contact.get("value"), term, '!'),
-                          cb.and(
-                              cb.equal(contact.get("type"), ContactType.LINE),
-                              cb.like(
-                                  cb.lower(contact.get("value")),
-                                  literalTerm.toLowerCase(Locale.ROOT),
-                                  '!'))));
+                      CustomerContactSearch.matches(contact, cb, search));
               predicates.add(cb.or(names, cb.exists(sq)));
             } else predicates.add(names);
           }

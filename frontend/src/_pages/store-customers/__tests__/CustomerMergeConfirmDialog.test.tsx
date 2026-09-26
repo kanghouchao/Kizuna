@@ -35,17 +35,106 @@ beforeEach(() => {
   jest.clearAllMocks();
   api.mergePreview.mockResolvedValue(preview);
 });
-function open() {
+function open(onMissingClose = jest.fn(), onClose = jest.fn()) {
   render(
     <CustomerMergeConfirmDialog
       open
       survivingId="a"
       mergedId="b"
       onMerged={jest.fn()}
-      onClose={jest.fn()}
+      onClose={onClose}
+      onMissingClose={onMissingClose}
     />
   );
 }
+it('対象が削除されていた場合は再試行や保存を出さず閉じる', async () => {
+  api.mergePreview.mockRejectedValueOnce({ response: { status: 404 } });
+  const close = jest.fn();
+  const cancel = jest.fn();
+  open(close, cancel);
+  expect(await screen.findByRole('alert')).toHaveTextContent('顧客が見つかりません');
+  expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '統合する' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '一覧を更新して閉じる' }));
+  expect(close).toHaveBeenCalledTimes(1);
+  expect(cancel).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['initial', 'close'],
+  ['initial', 'escape'],
+  ['review', 'close'],
+  ['review', 'escape'],
+])('404 後は汎用の閉じる操作も一覧更新へ接続する: %s / %s', async (stage, action) => {
+  const missingClose = jest.fn();
+  const cancel = jest.fn();
+  if (stage === 'initial') api.mergePreview.mockRejectedValueOnce({ response: { status: 404 } });
+  open(missingClose, cancel);
+  if (stage === 'review') {
+    fireEvent.change(await screen.findByLabelText('統合理由'), { target: { value: '重複確認' } });
+    api.mergePreview.mockRejectedValueOnce({ response: { status: 404 } });
+    fireEvent.click(screen.getByRole('button', { name: '確定資料でプレビュー' }));
+  }
+  await screen.findByRole('alert');
+  if (action === 'close') fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  else
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape', code: 'Escape' });
+  await waitFor(() => expect(missingClose).toHaveBeenCalledTimes(1));
+  expect(cancel).not.toHaveBeenCalled();
+});
+
+it('404 の案内を閉じて再取得に成功した後は通常の閉じる操作へ戻る', async () => {
+  api.mergePreview.mockRejectedValueOnce({ response: { status: 404 } });
+  const props = {
+    survivingId: 'a',
+    mergedId: 'b',
+    onMerged: jest.fn(),
+    onClose: jest.fn(),
+    onMissingClose: jest.fn(),
+  };
+  const view = render(<CustomerMergeConfirmDialog {...props} open />);
+  await screen.findByRole('alert');
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(props.onMissingClose).toHaveBeenCalledTimes(1);
+  view.rerender(<CustomerMergeConfirmDialog {...props} open={false} />);
+  view.rerender(<CustomerMergeConfirmDialog {...props} open />);
+  await screen.findByLabelText('統合理由');
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(props.onClose).toHaveBeenCalledTimes(1);
+  expect(props.onMissingClose).toHaveBeenCalledTimes(1);
+});
+
+it('再確認と再取得の失敗では旧資料を隠し、入力を保って再試行できる', async () => {
+  open();
+  fireEvent.change(await screen.findByLabelText('統合理由'), { target: { value: '重複確認' } });
+  fireEvent.change(screen.getByLabelText('氏名'), { target: { value: '編集中の氏名' } });
+  api.mergePreview.mockRejectedValueOnce(new Error('offline'));
+  fireEvent.click(screen.getByRole('button', { name: '確定資料でプレビュー' }));
+  await screen.findByRole('alert');
+  expect(screen.queryByText('存続側の原資料')).not.toBeInTheDocument();
+  expect(screen.queryByText(/現在のプラットフォーム全体残高/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText('氏名')).toHaveValue('編集中の氏名');
+  expect(screen.getByLabelText('統合理由')).toHaveValue('重複確認');
+  expect(screen.getByRole('button', { name: '統合する' })).toBeDisabled();
+  api.mergePreview.mockRejectedValueOnce(new Error('offline'));
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+  await screen.findByRole('alert');
+  expect(screen.queryByText('存続側の原資料')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+  expect(await screen.findByText('存続側の原資料')).toBeInTheDocument();
+  expect(screen.getByLabelText('氏名')).toHaveValue('編集中の氏名');
+  expect(screen.getByRole('button', { name: '統合する' })).toBeDisabled();
+});
+
+it('再確認時の404も編集フォームを閉じる案内に置き換える', async () => {
+  open();
+  fireEvent.change(await screen.findByLabelText('統合理由'), { target: { value: '重複確認' } });
+  api.mergePreview.mockRejectedValueOnce({ response: { status: 404 } });
+  fireEvent.click(screen.getByRole('button', { name: '確定資料でプレビュー' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('顧客が見つかりません');
+  expect(screen.queryByLabelText('統合理由')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+});
 it('資料と注意事項の確認前は統合を実行できない', async () => {
   open();
   expect(await screen.findByRole('button', { name: '統合する' })).toBeDisabled();

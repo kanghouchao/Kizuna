@@ -185,6 +185,29 @@ describe('CustomerDuplicatesPage', () => {
     expect(screen.queryByRole('button', { name: 'さらに読み込む' })).not.toBeInTheDocument();
   });
 
+  it.each(['close', 'escape'])('確認を中断しても展開済み候補と選択を保持する: %s', async action => {
+    mockedDuplicates.mockResolvedValue({
+      rows: [{ ...twoRowGroup.rows[0], total: 21, customers: [] }],
+      nextCursor: null,
+    });
+    const members = customerApi.duplicateCustomers as jest.Mock;
+    members.mockResolvedValue({ rows: twoRowGroup.rows[0].customers, nextCursor: null });
+    render(<CustomerDuplicatesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
+    await selectBothRows();
+    fireEvent.click(screen.getByLabelText('山田太郎 を残す'));
+    fireEvent.click(screen.getByRole('button', { name: '統合する' }));
+    await screen.findByLabelText('統合理由');
+    if (action === 'close') fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    else
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByLabelText('山田太郎 を見比べる')).toBeChecked();
+    expect(screen.getByLabelText('ヤマダタロウ を見比べる')).toBeChecked();
+    expect(mockedDuplicates).toHaveBeenCalledTimes(1);
+    expect(members).toHaveBeenCalledTimes(1);
+  });
+
   it('候補群の追加取得中も展開済みの顧客ページと選択を保持する', async () => {
     let finish!: (page: CursorPageResult<CustomerDuplicateGroupResponse>) => void;
     mockedDuplicates
