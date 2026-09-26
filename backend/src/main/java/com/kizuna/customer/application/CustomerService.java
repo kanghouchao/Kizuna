@@ -103,7 +103,7 @@ public class CustomerService {
                             root.get("customerId").in(ids),
                             cb.isFalse(root.get("deleted")),
                             CustomerContactSearch.matches(root, cb, search)),
-                    Sort.by("id"))
+                    Sort.by(CustomerContact::getId))
                 .stream()
                 .collect(
                     Collectors.groupingBy(

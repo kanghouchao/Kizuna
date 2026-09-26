@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { customerApi, MergePreferences, MergePreview, MergeProfile } from '@/entities/customer';
 import { getApiErrorMessage, isNotFound, useResource } from '@/shared/lib';
@@ -42,11 +42,18 @@ interface Props {
 
 export function CustomerMergeConfirmDialog(props: Props) {
   const [busy, setBusy] = useState(false);
+  const missing = useRef(false);
+  const setMissing = useCallback((value: boolean) => {
+    missing.current = value;
+  }, []);
   return (
     <Dialog
       open={props.open}
       onOpenChange={open => {
-        if (!open && !busy) props.onClose();
+        if (!open && !busy) {
+          if (missing.current) props.onMissingClose();
+          else props.onClose();
+        }
       }}
     >
       <DialogContent
@@ -60,6 +67,7 @@ export function CustomerMergeConfirmDialog(props: Props) {
             key={`${props.survivingId}:${props.mergedId}`}
             {...props}
             onBusyChange={setBusy}
+            onMissingChange={setMissing}
           />
         )}
       </DialogContent>
@@ -67,7 +75,9 @@ export function CustomerMergeConfirmDialog(props: Props) {
   );
 }
 
-function MergeLoader(props: Props) {
+type ContentProps = Props & { onMissingChange: (missing: boolean) => void };
+
+function MergeLoader(props: ContentProps) {
   const resource = useResource(
     props.open
       ? () => customerApi.mergePreview(props.survivingId, { merged_customer_id: props.mergedId })
@@ -75,7 +85,10 @@ function MergeLoader(props: Props) {
     [props.survivingId, props.mergedId, props.open]
   );
   if (resource.isLoading) return <p>読み込み中...</p>;
-  if (resource.failure === 'notFound') return <MissingCustomer onClose={props.onMissingClose} />;
+  if (resource.failure === 'notFound')
+    return (
+      <MissingCustomer onClose={props.onMissingClose} onMissingChange={props.onMissingChange} />
+    );
   if (resource.failure !== null)
     return (
       <RegionError
@@ -86,7 +99,17 @@ function MergeLoader(props: Props) {
   return resource.data && <MergeEditor {...props} initial={resource.data} />;
 }
 
-function MissingCustomer({ onClose }: { onClose: () => void }) {
+function MissingCustomer({
+  onClose,
+  onMissingChange,
+}: {
+  onClose: () => void;
+  onMissingChange: (missing: boolean) => void;
+}) {
+  useEffect(() => {
+    onMissingChange(true);
+    return () => onMissingChange(false);
+  }, [onMissingChange]);
   return (
     <div role="alert" className="space-y-3">
       <p className="text-sm text-destructive-strong">
@@ -110,8 +133,9 @@ function MergeEditor({
   mergedId,
   onMerged,
   onMissingClose,
+  onMissingChange,
   onBusyChange,
-}: Props & { initial: MergePreview }) {
+}: ContentProps & { initial: MergePreview }) {
   const [data, setData] = useState<MergePreview | null>(initial);
   const [gone, setGone] = useState(false);
   const [preview, setPreview] = useState<MergePreview | null>(null);
@@ -214,7 +238,7 @@ function MergeEditor({
       setBusy(false);
     }
   });
-  if (gone) return <MissingCustomer onClose={onMissingClose} />;
+  if (gone) return <MissingCustomer onClose={onMissingClose} onMissingChange={onMissingChange} />;
   return (
     <div className="min-w-0 space-y-6">
       {data && (

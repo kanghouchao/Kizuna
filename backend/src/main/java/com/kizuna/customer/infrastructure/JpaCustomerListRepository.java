@@ -63,7 +63,7 @@ public class JpaCustomerListRepository implements CustomerListRepository {
     var link = (Expression<?>) selections.get(3);
     var orders = new ArrayList<Order>();
     Sort sort = pageable.getSort();
-    if (sort.getOrderFor("id") == null) sort = sort.and(Sort.by("id"));
+    if (sort.getOrderFor("id") == null) sort = sort.and(Sort.by(Customer::getId));
     for (var order : sort) {
       Expression<?> value;
       switch (order.getProperty()) {
