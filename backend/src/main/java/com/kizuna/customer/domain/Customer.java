@@ -77,6 +77,9 @@ public class Customer extends StoreScopedEntity {
     if (patch.buildingName() != null) {
       this.buildingName = patch.buildingName();
     }
+    if (patch.landmark() != null) {
+      this.landmark = patch.landmark();
+    }
     if (patch.classification() != null) {
       this.classification = patch.classification();
     }

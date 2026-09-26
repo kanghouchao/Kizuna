@@ -16,6 +16,7 @@ public class CustomerResponse {
   private List<ContactSummary> preferredContacts;
   private String address;
   private String buildingName;
+  private String landmark;
   private String classification;
   private Boolean hasPet;
   private String usageAreas;

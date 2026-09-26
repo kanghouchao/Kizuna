@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
-import { STORE_HEADERS, createCustomer, registerMember, linkMemberToCustomer, cancelOrder, createCast, createCourse, getOrder, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
+import { adjustCustomerPoints, STORE_HEADERS, createCustomer, registerMember, linkMemberToCustomer, cancelOrder, createCast, createCourse, getOrder, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -337,10 +337,7 @@ Given('3000ポイントを利用した請求7000円の完了受注がある', as
   const memberCode = await registerMember(request, `rollback-${Date.now()}@example.test`, crypto.randomUUID(), customerName);
   const customerId = await createCustomer(request, token, customerName);
   await linkMemberToCustomer(request, token, customerId, memberCode);
-  const adjustment = await request.post(`/api/store/customers/${customerId}/point-adjustments`, {
-    headers, data: { delta: 3000, reason: '利用取消の原資', idempotency_key: crypto.randomUUID() },
-  });
-  expect(adjustment.status()).toBe(200);
+  await adjustCustomerPoints(request, token, customerId, 3000, '利用取消の原資', storeId);
   const input = { customer_selection: { mode: 'EXISTING', customer_id: customerId }, cast_id: createdCastId, course_id: courseId,
     business_date: todayInTokyo(), pax: 1, fee_lines: [{ kind: 'DISCOUNT', name: '割引', amount: 2000 }] };
   const preview = await request.post('/api/store/orders/preview', { headers, data: input });

@@ -16,6 +16,7 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerCandidateRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
+import com.kizuna.customer.domain.CustomerListRepository;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
@@ -48,6 +49,7 @@ class CustomerServiceTest {
   @Mock private CustomerContactService customerContactService;
   @Mock private CustomerContactRepository customerContactRepository;
   @Mock private CustomerRepository customerRepository;
+  @Mock private CustomerListRepository customerListRepository;
   @Mock private CustomerCandidateRepository candidateRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;
@@ -59,12 +61,13 @@ class CustomerServiceTest {
   void list_returnsPage() {
     Customer c = Customer.builder().name("Test").build();
     c.setId("1");
-    Page<Customer> page = new PageImpl<>(List.of(c));
+    Page<CustomerListRepository.Row> page =
+        new PageImpl<>(List.of(new CustomerListRepository.Row(c, null, null, false)));
 
     CustomerSummaryResponse resp = new CustomerSummaryResponse();
     resp.setName("Test");
 
-    when(customerRepository.findAll(
+    when(customerListRepository.findAll(
             ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
     when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
@@ -79,12 +82,13 @@ class CustomerServiceTest {
   void list_withoutFilters_returnsAll() {
     Customer c = Customer.builder().name("All").build();
     c.setId("1");
-    Page<Customer> page = new PageImpl<>(List.of(c));
+    Page<CustomerListRepository.Row> page =
+        new PageImpl<>(List.of(new CustomerListRepository.Row(c, null, null, false)));
 
     CustomerSummaryResponse resp = new CustomerSummaryResponse();
     resp.setName("All");
 
-    when(customerRepository.findAll(
+    when(customerListRepository.findAll(
             ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
     when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
@@ -156,7 +160,7 @@ class CustomerServiceTest {
     req.setName("Updated");
 
     when(customerMapper.toPatch(req))
-        .thenReturn(new CustomerPatch("Updated", null, null, null, null, null, null, null));
+        .thenReturn(new CustomerPatch("Updated", null, null, null, null, null, null, null, null));
 
     CustomerResponse resp = new CustomerResponse();
     resp.setName("Updated");
@@ -177,34 +181,34 @@ class CustomerServiceTest {
   }
 
   @Test
-  @DisplayName("一覧は本ページ分の紐づけを 1 回で引き、行ごとに有無を載せること")
+  @DisplayName("一覧は行ごとに会員関連の有無を載せること")
   void list_decoratesMemberLink() {
     Customer linked = new Customer();
     linked.setId("c1");
     Customer unlinked = new Customer();
     unlinked.setId("c2");
-    Page<Customer> page = new PageImpl<>(List.of(linked, unlinked));
+    Page<CustomerListRepository.Row> page =
+        new PageImpl<>(
+            List.of(
+                new CustomerListRepository.Row(linked, null, 0L, true),
+                new CustomerListRepository.Row(unlinked, null, null, false)));
 
     CustomerSummaryResponse linkedResponse = new CustomerSummaryResponse();
     linkedResponse.setId("c1");
     CustomerSummaryResponse unlinkedResponse = new CustomerSummaryResponse();
     unlinkedResponse.setId("c2");
 
-    when(customerRepository.findAll(
+    when(customerListRepository.findAll(
             ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
     when(customerMapper.toSummaryResponse(linked)).thenReturn(linkedResponse);
     when(customerMapper.toSummaryResponse(unlinked)).thenReturn(unlinkedResponse);
-    when(customerMemberLinkRepository.findByCustomerIdInAndStatus(
-            List.of("c1", "c2"), LinkStatus.ACTIVE))
-        .thenReturn(List.of(activeLink("c1", "123456789012")));
 
     List<CustomerSummaryResponse> result =
         customerService.list(null, null, PageRequest.of(0, 10)).getContent();
 
     assertThat(result.get(0).getMemberLinked()).isTrue();
     assertThat(result.get(1).getMemberLinked()).isFalse();
-    verify(customerMemberLinkRepository).findByCustomerIdInAndStatus(any(), any());
   }
 
   @Test

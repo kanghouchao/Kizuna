@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import java.time.LocalDate;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,4 +27,6 @@ public class CustomerSummaryResponse {
   private Boolean memberLinked;
 
   private String ngType;
+  private LocalDate lastVisitDate;
+  private Long pointBalance;
 }

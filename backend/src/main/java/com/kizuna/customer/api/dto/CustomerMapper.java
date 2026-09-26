@@ -22,6 +22,8 @@ public interface CustomerMapper {
   @Mapping(target = "memberLinked", ignore = true)
   @Mapping(target = "preferredContacts", ignore = true)
   @Mapping(target = "matchedContacts", ignore = true)
+  @Mapping(target = "lastVisitDate", ignore = true)
+  @Mapping(target = "pointBalance", ignore = true)
   CustomerSummaryResponse toSummaryResponse(Customer customer);
 
   // 受注件数と紐づけの有無は顧客行が持たない事実なので、application 層が引いた値を引数で受ける。
@@ -33,7 +35,6 @@ public interface CustomerMapper {
       long orderCount,
       List<ContactSummary> preferredContacts);
 
-  @Mapping(target = "landmark", ignore = true)
   // 起こしたばかりの行は定義上まだ生きている。統合先参照は統合だけが立てる。
   @Mapping(target = "mergedIntoId", ignore = true)
   Customer toEntity(CustomerCreateRequest request);
