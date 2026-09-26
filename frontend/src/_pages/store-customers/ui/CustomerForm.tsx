@@ -33,6 +33,7 @@ export interface CustomerFormData {
   contacts: ContactInput[];
   address: string;
   building_name: string;
+  landmark: string;
   classification: string;
   has_pet: boolean;
   usage_areas: string;
@@ -40,7 +41,7 @@ export interface CustomerFormData {
   ng_content: string;
 }
 
-/** フォーム値を API リクエスト形式へ変換する（空文字のフィールドは undefined に落とす） */
+/** 目印の空文字は明示的な消去として送る。 */
 export function toCustomerRequest(data: CustomerFormData): CustomerCreateRequest {
   return {
     name: data.name,
@@ -48,6 +49,7 @@ export function toCustomerRequest(data: CustomerFormData): CustomerCreateRequest
 
     address: data.address || undefined,
     building_name: data.building_name || undefined,
+    landmark: data.landmark,
     classification: data.classification || undefined,
     has_pet: data.has_pet,
 
@@ -82,6 +84,7 @@ export function CustomerForm({
 
       address: '',
       building_name: '',
+      landmark: '',
       classification: '',
       has_pet: false,
 
@@ -232,6 +235,22 @@ export function CustomerForm({
                 <Label htmlFor="address">住所</Label>
                 <Input id="address" type="text" {...register('address')} />
               </div>
+              <FormField
+                control={control}
+                name="landmark"
+                rules={{
+                  maxLength: { value: 255, message: '目印は255文字以内で入力してください' },
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>目印</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div className="grid gap-2">
                 <Label htmlFor="building_name">建物名</Label>
                 <Input id="building_name" type="text" {...register('building_name')} />

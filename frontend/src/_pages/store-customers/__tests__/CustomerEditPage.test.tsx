@@ -78,6 +78,22 @@ describe('顧客編集ページの取得失敗', () => {
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
 
+  it('保存済みの目印を表示し、空欄への更新を送信できること', async () => {
+    mockedCustomerApi.get.mockResolvedValue({ ...customer, landmark: '駅の北口' });
+    mockedCustomerApi.update.mockResolvedValue({ ...customer, landmark: '' });
+    render(<CustomerEditPage />);
+    const input = await screen.findByRole('textbox', { name: '目印' });
+    expect(input).toHaveValue('駅の北口');
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    await waitFor(() =>
+      expect(mockedCustomerApi.update).toHaveBeenCalledWith(
+        'cus-1',
+        expect.objectContaining({ landmark: '' })
+      )
+    );
+  });
+
   it('取得に失敗しても一覧へ離脱せず、頁自身が失敗を名乗って再試行できること', async () => {
     mockedCustomerApi.get.mockRejectedValueOnce({ response: { status: 500 } });
 

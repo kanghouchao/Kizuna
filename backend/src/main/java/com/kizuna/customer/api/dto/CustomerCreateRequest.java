@@ -20,6 +20,10 @@ public class CustomerCreateRequest {
 
   private String address;
   private String buildingName;
+
+  @Size(max = 255)
+  private String landmark;
+
   private String classification;
   private Boolean hasPet;
   private String usageAreas;

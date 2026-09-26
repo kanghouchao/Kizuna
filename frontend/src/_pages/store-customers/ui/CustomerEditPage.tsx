@@ -116,6 +116,7 @@ export default function CustomerEditPage() {
 
           address: customer.address || '',
           building_name: customer.building_name || '',
+          landmark: customer.landmark || '',
           classification: customer.classification || '',
           has_pet: customer.has_pet ?? false,
 

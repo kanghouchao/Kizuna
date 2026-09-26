@@ -5,6 +5,7 @@ export interface CustomerResponse {
   name?: string;
   address?: string;
   building_name?: string;
+  landmark?: string;
   classification?: string;
   has_pet?: boolean;
   usage_areas?: string;
@@ -35,6 +36,8 @@ export interface CustomerSummaryResponse {
   /** 会員紐づけの有無。一覧の応答では常に真偽値が入る。 */
   member_linked?: boolean;
   ng_type?: string;
+  last_visit_date?: string;
+  point_balance?: number;
 }
 
 /**
@@ -186,6 +189,7 @@ export interface CustomerCreateRequest {
   name: string;
   address?: string;
   building_name?: string;
+  landmark?: string;
   classification?: string;
   has_pet?: boolean;
   usage_areas?: string;
@@ -198,6 +202,7 @@ export interface CustomerUpdateRequest {
   name?: string;
   address?: string;
   building_name?: string;
+  landmark?: string;
   classification?: string;
   has_pet?: boolean;
   usage_areas?: string;

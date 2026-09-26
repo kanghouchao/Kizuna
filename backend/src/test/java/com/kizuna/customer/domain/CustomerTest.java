@@ -20,7 +20,7 @@ class CustomerTest {
             .ngContent("旧NG")
             .build();
 
-    customer.apply(new CustomerPatch("新名", "新住所", "新ビル", "新区分", true, "新エリア", "禁止", "新NG"));
+    customer.apply(new CustomerPatch("新名", "新住所", "新ビル", null, "新区分", true, "新エリア", "禁止", "新NG"));
 
     assertThat(customer.getName()).isEqualTo("新名");
     assertThat(customer.getAddress()).isEqualTo("新住所");
@@ -36,7 +36,7 @@ class CustomerTest {
   void apply_nullFieldsKeepCurrentValues() {
     Customer customer = Customer.builder().name("名前").hasPet(true).build();
 
-    customer.apply(new CustomerPatch(null, null, null, null, null, null, null, null));
+    customer.apply(new CustomerPatch(null, null, null, null, null, null, null, null, null));
 
     assertThat(customer.getName()).isEqualTo("名前");
     assertThat(customer.getHasPet()).isTrue();

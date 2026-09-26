@@ -14,6 +14,7 @@ import com.kizuna.customer.domain.CustomerCandidateRepository;
 import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerContactSearch;
+import com.kizuna.customer.domain.CustomerListRepository;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
@@ -75,6 +76,7 @@ public class CustomerService {
   private static final String MERGED_CUSTOMER_NOT_EDITABLE = "統合済みの顧客です。統合先の顧客を編集してください";
 
   private final CustomerRepository customerRepository;
+  private final CustomerListRepository customerListRepository;
   private final CustomerCandidateRepository candidateRepository;
   private final CustomerContactService customerContactService;
   private final CustomerContactRepository customerContactRepository;
@@ -88,18 +90,8 @@ public class CustomerService {
   public Page<CustomerSummaryResponse> list(
       String search, String classification, Pageable pageable) {
     Specification<Customer> spec = searchSpec(search, classification);
-    Page<Customer> page = customerRepository.findAll(spec, pageable);
-    // 会員紐づけは本ページ分だけを 1 回で引く（行ごとの追加問い合わせを作らない）。
-    List<String> ids = page.getContent().stream().map(Customer::getId).toList();
-    Map<String, String> activeCodes =
-        ids.isEmpty()
-            ? Map.of()
-            : customerMemberLinkRepository
-                .findByCustomerIdInAndStatus(ids, LinkStatus.ACTIVE)
-                .stream()
-                .collect(
-                    Collectors.toMap(
-                        CustomerMemberLink::getCustomerId, CustomerMemberLink::getMemberCode));
+    Page<CustomerListRepository.Row> page = customerListRepository.findAll(spec, pageable);
+    List<String> ids = page.getContent().stream().map(row -> row.customer().getId()).toList();
     var preferred = customerContactService.preferred(ids);
     Map<String, List<ContactSummary>> matched =
         ids.isEmpty() || search == null || search.isBlank()
@@ -118,11 +110,14 @@ public class CustomerService {
                         CustomerContact::getCustomerId,
                         Collectors.mapping(ContactSummary::from, Collectors.toList())));
     return page.map(
-        customer -> {
+        entry -> {
+          Customer customer = entry.customer();
           CustomerSummaryResponse row = customerMapper.toSummaryResponse(customer);
           row.setPreferredContacts(preferred.getOrDefault(customer.getId(), List.of()));
           row.setMatchedContacts(matched.getOrDefault(customer.getId(), List.of()));
-          row.setMemberLinked(activeCodes.containsKey(customer.getId()));
+          row.setMemberLinked(entry.memberLinked());
+          row.setLastVisitDate(entry.lastVisitDate());
+          row.setPointBalance(entry.pointBalance());
           return row;
         });
   }

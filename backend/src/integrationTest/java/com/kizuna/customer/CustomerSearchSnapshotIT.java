@@ -6,7 +6,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mockingDetails;
 
 import com.kizuna.customer.domain.Customer;
-import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.domain.CustomerListRepository;
 import com.kizuna.shared.CrossStoreTestSupport;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -23,7 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import tools.jackson.databind.JsonNode;
 
 class CustomerSearchSnapshotIT extends CrossStoreTestSupport {
-  @MockitoSpyBean CustomerRepository customers;
+  @MockitoSpyBean CustomerListRepository customers;
 
   @Test
   void searchEvidenceKeepsTheSnapshotWhenAContactIsDeletedConcurrently() throws Exception {

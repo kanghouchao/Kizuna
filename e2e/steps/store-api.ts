@@ -317,6 +317,21 @@ export async function createCustomer(
   return body.id as string;
 }
 
+export async function adjustCustomerPoints(
+  request: APIRequestContext,
+  token: string,
+  customerId: string,
+  delta: number,
+  reason: string,
+  storeId: string = STORE1_ID,
+): Promise<void> {
+  const response = await request.post(`/api/store/customers/${customerId}/point-adjustments`, {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { delta, reason, idempotency_key: crypto.randomUUID() },
+  });
+  expect(response.status()).toBe(200);
+}
+
 export async function updateCustomer(
   request: APIRequestContext,
   token: string,
@@ -325,6 +340,7 @@ export async function updateCustomer(
     name?: string;
     address?: string;
     building_name?: string;
+    landmark?: string;
     classification?: string;
     has_pet?: boolean;
     usage_areas?: string;

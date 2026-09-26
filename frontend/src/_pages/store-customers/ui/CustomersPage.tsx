@@ -27,6 +27,11 @@ import {
   Checkbox,
   ConfirmDialog,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -45,7 +50,16 @@ const PAIR_SIZE = 2;
 interface CustomerCriteria {
   search: string;
   classification: string;
+  sort: string;
 }
+
+const SORT_OPTIONS = [
+  { value: 'createdAt,id,desc', label: '登録日時（新しい順）' },
+  { value: 'lastVisitDate,desc', label: '最終来店日（新しい順）' },
+  { value: 'lastVisitDate,asc', label: '最終来店日（古い順）' },
+  { value: 'pointBalance,desc', label: '会員ポイント（多い順）' },
+  { value: 'pointBalance,asc', label: '会員ポイント（少ない順）' },
+];
 
 /** 顧客一覧ページ */
 export default function CustomersPage() {
@@ -53,6 +67,7 @@ export default function CustomersPage() {
   const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
   const [classification, setClassification] = useState('');
+  const [sort, setSort] = useState(SORT_OPTIONS[0].value);
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
   // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
   const [canMerge, setCanMerge] = useState(false);
@@ -68,13 +83,11 @@ export default function CustomersPage() {
       customerApi.list({
         page,
         size: PAGE_SIZE,
-        // created_at は一意でない可能性があるため、offset ページングの境界を確定させる
-        // 一意な副キーを添える（sort=prop1,prop2,direction は Spring Data の複数キー形式）
-        sort: 'createdAt,id,desc',
+        sort: criteria.sort,
         search: criteria.search || undefined,
         classification: criteria.classification || undefined,
       }),
-    { search: '', classification: '' }
+    { search: '', classification: '', sort: SORT_OPTIONS[0].value }
   );
   const customers = list.rows;
 
@@ -138,7 +151,7 @@ export default function CustomersPage() {
           </>
         }
         search={{
-          onSearch: () => void list.search({ search, classification }),
+          onSearch: () => void list.search({ search, classification, sort }),
           content: (
             <>
               <div className="flex-1 relative">
@@ -160,6 +173,26 @@ export default function CustomersPage() {
                 className="w-full md:w-32"
                 placeholder="区分"
               />
+              <Select
+                items={SORT_OPTIONS}
+                value={sort}
+                onValueChange={value => {
+                  if (!value) return;
+                  setSort(value);
+                  void list.search(previous => ({ ...previous, sort: value }));
+                }}
+              >
+                <SelectTrigger aria-label="並び順" className="w-full md:w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button type="submit" variant="outline">
                 検索
               </Button>
@@ -181,6 +214,8 @@ export default function CustomersPage() {
               <TableHead>LINE ID</TableHead>
               <TableHead>区分</TableHead>
               <TableHead>会員</TableHead>
+              <TableHead>最終来店日</TableHead>
+              <TableHead className="text-right">会員ポイント</TableHead>
               <TableHead>NG</TableHead>
               <TableHead className="text-right">アクション</TableHead>
             </TableRow>
@@ -246,6 +281,14 @@ export default function CustomersPage() {
                   ) : (
                     <span className="text-muted-foreground">未紐づけ</span>
                   )}
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {customer.last_visit_date ?? '来店なし'}
+                </TableCell>
+                <TableCell className="text-right tabular-nums whitespace-nowrap">
+                  {customer.point_balance === undefined
+                    ? '未関連'
+                    : `${customer.point_balance.toLocaleString('ja-JP')} pt`}
                 </TableCell>
                 <TableCell>
                   {customer.ng_type ? (

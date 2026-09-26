@@ -18,6 +18,7 @@ import com.kizuna.customer.domain.CustomerCandidateRepository;
 import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactHistoryRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
+import com.kizuna.customer.domain.CustomerListRepository;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerRepository;
@@ -64,6 +65,7 @@ class CustomerSearchControllerTest {
   @Autowired ObjectMapper json;
   @MockitoBean PlatformTransactionManager transactions;
   @MockitoBean CustomerRepository customers;
+  @MockitoBean CustomerListRepository customerList;
   @MockitoBean CustomerCandidateRepository candidates;
   @MockitoBean CustomerContactRepository contacts;
   @MockitoBean CustomerContactHistoryRepository histories;
@@ -171,8 +173,9 @@ class CustomerSearchControllerTest {
     var customer = customer("1", "候補甲");
     var contact = CustomerContact.create("1", ContactType.EMAIL, "Case@EXAMPLE.COM");
     contact.setId("10");
-    when(customers.findAll(ArgumentMatchers.<Specification<Customer>>any(), any(Pageable.class)))
-        .thenReturn(new PageImpl<>(List.of(customer)));
+    when(customerList.findAll(ArgumentMatchers.<Specification<Customer>>any(), any(Pageable.class)))
+        .thenReturn(
+            new PageImpl<>(List.of(new CustomerListRepository.Row(customer, null, null, false))));
     when(contacts.findAll(ArgumentMatchers.<Specification<CustomerContact>>any(), any(Sort.class)))
         .thenReturn(List.of(contact));
     mvc.perform(

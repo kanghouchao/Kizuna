@@ -5,6 +5,7 @@ public record CustomerPatch(
     String name,
     String address,
     String buildingName,
+    String landmark,
     String classification,
     Boolean hasPet,
     String usageAreas,

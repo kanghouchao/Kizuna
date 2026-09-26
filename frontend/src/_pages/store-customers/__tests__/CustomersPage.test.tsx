@@ -71,6 +71,88 @@ describe('店側顧客画面と API JSON（snake_case）の整合', () => {
     expect(screen.getByText('注意')).toBeInTheDocument();
   });
 
+  it('来店なし・未関連・零残高を区別し、来店日の並び替えを送信すること', async () => {
+    mockedCustomerApi.list.mockResolvedValue({
+      rows: [
+        {
+          id: '1',
+          name: '来店済み',
+          preferred_contacts: [],
+          matched_contacts: [],
+          member_linked: true,
+          last_visit_date: '2026-09-20',
+          point_balance: 0,
+        },
+        {
+          id: '2',
+          name: '来店前',
+          preferred_contacts: [],
+          matched_contacts: [],
+          member_linked: false,
+        },
+      ],
+      page: 0,
+      pageCount: 1,
+      total: 2,
+    });
+    render(<CustomersPage />);
+    expect(await screen.findByText('2026-09-20')).toBeInTheDocument();
+    expect(screen.getByText('来店なし')).toBeInTheDocument();
+    expect(screen.getByText('0 pt')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('combobox', { name: '並び順' }));
+    const option = screen.getByRole('option', { name: '最終来店日（古い順）' });
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    await waitFor(() =>
+      expect(mockedCustomerApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 0, sort: 'lastVisitDate,asc' })
+      )
+    );
+  });
+
+  it.each([
+    ['最終来店日（新しい順）', 'lastVisitDate,desc'],
+    ['最終来店日（古い順）', 'lastVisitDate,asc'],
+    ['会員ポイント（多い順）', 'pointBalance,desc'],
+    ['会員ポイント（少ない順）', 'pointBalance,asc'],
+  ])('%s の切替で先頭に戻りページ送りと再試行にも並び順を保つこと', async (label, sort) => {
+    mockedCustomerApi.list.mockImplementation(async params => ({
+      rows: [{ id: '1', name: '並び替え対象', preferred_contacts: [], matched_contacts: [] }],
+      page: params?.page ?? 0,
+      pageCount: 2,
+      total: 21,
+    }));
+    render(<CustomersPage />);
+    await screen.findByText('並び替え対象');
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    await waitFor(() =>
+      expect(mockedCustomerApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
+    );
+    await screen.findByText('並び替え対象');
+    fireEvent.change(screen.getByPlaceholderText('名前・電話・メール・LINE ID で検索...'), {
+      target: { value: '未送信' },
+    });
+    fireEvent.click(screen.getByRole('combobox', { name: '並び順' }));
+    const option = screen.getByRole('option', { name: label });
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    await waitFor(() =>
+      expect(mockedCustomerApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 0, sort, search: undefined })
+      )
+    );
+    await screen.findByText('並び替え対象');
+    mockedCustomerApi.list.mockRejectedValueOnce(new Error('一覧取得失敗'));
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('顧客一覧の取得に失敗しました');
+    expect(screen.queryByText('並び替え対象')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    await screen.findByText('並び替え対象');
+    expect(mockedCustomerApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 0, sort, search: undefined })
+    );
+  });
+
   it('新規登録はバックエンドの DTO に合わせ snake_case キーで POST すること', async () => {
     mockedCustomerApi.create.mockResolvedValue({} as never);
 
