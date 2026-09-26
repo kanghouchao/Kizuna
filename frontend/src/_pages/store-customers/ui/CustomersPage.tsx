@@ -361,7 +361,8 @@ export default function CustomersPage() {
         survivingId={mergeTarget?.surviving.id ?? ''}
         mergedId={mergeTarget?.merged.id ?? ''}
         onMerged={closeMergeAndReload}
-        onClose={closeMergeAndReload}
+        onClose={() => setMergeOpen(false)}
+        onMissingClose={closeMergeAndReload}
       />
       <ConfirmDialog
         open={deletion.open}

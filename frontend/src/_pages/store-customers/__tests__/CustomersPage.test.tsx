@@ -423,6 +423,21 @@ describe('顧客一覧からの統合', () => {
     expect(screen.getByRole('button', { name: '統合する' })).toBeDisabled();
   });
 
+  it.each(['close', 'escape'])('確認を中断しても選択を保持し再取得しない: %s', async action => {
+    render(<CustomersPage />);
+    await selectPair();
+    fireEvent.click(screen.getByLabelText('山田太郎 を残す'));
+    fireEvent.click(screen.getByRole('button', { name: '統合する' }));
+    await screen.findByLabelText('統合理由');
+    if (action === 'close') fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    else
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByLabelText('山田太郎 を見比べる')).toBeChecked();
+    expect(screen.getByLabelText('ヤマダタロウ を見比べる')).toBeChecked();
+    expect(mockedCustomerApi.list).toHaveBeenCalledTimes(1);
+  });
+
   it('確認対象が削除されていたら閉じる際に選択を解除して一覧を更新する', async () => {
     mockedCustomerApi.mergePreview.mockRejectedValueOnce({ response: { status: 404 } });
     render(<CustomersPage />);

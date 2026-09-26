@@ -333,7 +333,8 @@ function CustomerDuplicatesContent() {
         survivingId={confirmation?.survivingId ?? ''}
         mergedId={confirmation?.mergedId ?? ''}
         onMerged={closeMergeAndReload}
-        onClose={closeMergeAndReload}
+        onClose={() => setIsConfirming(false)}
+        onMissingClose={closeMergeAndReload}
       />
     </div>
   );

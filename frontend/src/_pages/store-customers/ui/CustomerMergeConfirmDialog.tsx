@@ -36,6 +36,7 @@ interface Props {
   mergedId: string;
   onMerged: () => void;
   onClose: () => void;
+  onMissingClose: () => void;
   onBusyChange?: (busy: boolean) => void;
 }
 
@@ -74,7 +75,7 @@ function MergeLoader(props: Props) {
     [props.survivingId, props.mergedId, props.open]
   );
   if (resource.isLoading) return <p>読み込み中...</p>;
-  if (resource.failure === 'notFound') return <MissingCustomer onClose={props.onClose} />;
+  if (resource.failure === 'notFound') return <MissingCustomer onClose={props.onMissingClose} />;
   if (resource.failure !== null)
     return (
       <RegionError
@@ -108,7 +109,7 @@ function MergeEditor({
   survivingId,
   mergedId,
   onMerged,
-  onClose,
+  onMissingClose,
   onBusyChange,
 }: Props & { initial: MergePreview }) {
   const [data, setData] = useState<MergePreview | null>(initial);
@@ -213,7 +214,7 @@ function MergeEditor({
       setBusy(false);
     }
   });
-  if (gone) return <MissingCustomer onClose={onClose} />;
+  if (gone) return <MissingCustomer onClose={onMissingClose} />;
   return (
     <div className="min-w-0 space-y-6">
       {data && (

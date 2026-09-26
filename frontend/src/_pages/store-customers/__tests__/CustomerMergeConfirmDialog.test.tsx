@@ -35,7 +35,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   api.mergePreview.mockResolvedValue(preview);
 });
-function open(onClose = jest.fn()) {
+function open(onMissingClose = jest.fn(), onClose = jest.fn()) {
   render(
     <CustomerMergeConfirmDialog
       open
@@ -43,18 +43,21 @@ function open(onClose = jest.fn()) {
       mergedId="b"
       onMerged={jest.fn()}
       onClose={onClose}
+      onMissingClose={onMissingClose}
     />
   );
 }
 it('対象が削除されていた場合は再試行や保存を出さず閉じる', async () => {
   api.mergePreview.mockRejectedValueOnce({ response: { status: 404 } });
   const close = jest.fn();
-  open(close);
+  const cancel = jest.fn();
+  open(close, cancel);
   expect(await screen.findByRole('alert')).toHaveTextContent('顧客が見つかりません');
   expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '統合する' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '一覧を更新して閉じる' }));
   expect(close).toHaveBeenCalledTimes(1);
+  expect(cancel).not.toHaveBeenCalled();
 });
 
 it('再確認と再取得の失敗では旧資料を隠し、入力を保って再試行できる', async () => {
