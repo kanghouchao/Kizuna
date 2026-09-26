@@ -113,7 +113,7 @@ export default function CustomersPage() {
   const [mergeOpen, setMergeOpen] = useState(false);
   const isMerging = mergeOpen;
 
-  const handleMerged = () => {
+  const closeMergeAndReload = () => {
     setMergeOpen(false);
     setSelectedIds([]);
     list.reload();
@@ -360,8 +360,8 @@ export default function CustomersPage() {
         open={mergeOpen}
         survivingId={mergeTarget?.surviving.id ?? ''}
         mergedId={mergeTarget?.merged.id ?? ''}
-        onMerged={handleMerged}
-        onClose={() => setMergeOpen(false)}
+        onMerged={closeMergeAndReload}
+        onClose={closeMergeAndReload}
       />
       <ConfirmDialog
         open={deletion.open}

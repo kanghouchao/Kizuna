@@ -116,7 +116,7 @@ function CustomerDuplicatesContent() {
     return selected.length === PAIR_SIZE ? [selected[0], selected[1]] : null;
   };
 
-  const handleMerged = () => {
+  const closeMergeAndReload = () => {
     setIsConfirming(false);
     setSelection(null);
     setSurvivingId(null);
@@ -332,8 +332,8 @@ function CustomerDuplicatesContent() {
         open={isConfirming}
         survivingId={confirmation?.survivingId ?? ''}
         mergedId={confirmation?.mergedId ?? ''}
-        onMerged={handleMerged}
-        onClose={() => setIsConfirming(false)}
+        onMerged={closeMergeAndReload}
+        onClose={closeMergeAndReload}
       />
     </div>
   );

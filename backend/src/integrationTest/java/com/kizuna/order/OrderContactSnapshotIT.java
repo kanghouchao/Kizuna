@@ -29,6 +29,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
@@ -52,6 +53,37 @@ class OrderContactSnapshotIT extends CrossStoreTestSupport {
   @Autowired PermissionRepository permissions;
   @Autowired PlatformUserRepository users;
   @Autowired PasswordEncoder passwords;
+
+  @ParameterizedTest
+  @CsvSource({
+    "LINE, CaseCandidate, casecandidate, false",
+    "LINE, CaseCandidate, CaseCandidate, true",
+    "LINE, Local@EXAMPLE.COM, Local@example.com, false",
+    "EMAIL, Local@example.com, EXAMPLE.COM, true",
+    "EMAIL, Local@example.com, local@example.com, false",
+    "EMAIL, Local@example.com, Local@EXAMPLE.COM, true"
+  })
+  void candidatesUseTheSameContactComparisonAsCustomerSearch(
+      String type, String value, String search, boolean expected) {
+    var created =
+        rest.postForEntity(
+            "/store/customers",
+            new HttpEntity<>(
+                Map.of(
+                    "name", UUID.randomUUID().toString(),
+                    "contacts", List.of(Map.of("type", type, "value", value))),
+                managerHeaders(STORE_A)),
+            JsonNode.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    String id = created.getBody().path("id").asString();
+    for (String path : List.of("/store/orders/customer-candidates", "/store/customers")) {
+      boolean found = false;
+      for (var row : get(path + "?search=" + search).path("content")) {
+        if (row.path("id").asString().equals(id)) found = true;
+      }
+      assertThat(found).as("%s: %s", path, search).isEqualTo(expected);
+    }
+  }
 
   @ParameterizedTest
   @ValueSource(ints = {0, 1, 2})
