@@ -1,5 +1,4 @@
 # language: ja
-# バックエンド integrationTest（#225）の API 断言と相補のブラウザ視点。
 # 店舗 scoped 一覧に無い id（他店舗/不存在）は公開詳細で 404 になる。
 機能: 公開キャスト詳細のクロス店舗越権 404
   @cast-detail-404

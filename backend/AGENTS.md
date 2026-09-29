@@ -29,7 +29,6 @@ Each module under `com.kizuna` follows the DDD four layers — `domain/` / `appl
 - **Modulith docs**: `ModularityTests` generates them under `backend/docs/modulith/` (committed). The Documenter's Rel-line ordering is unstable, so unless there is a structural change, revert the diff with checkout.
 - **Optional filter queries**: the JPQL `(:param is null or ...)` pattern can cause a runtime 500 due to PostgreSQL parameter type inference (see `CustomerService.searchSpec`). Build variable filter conditions with a `Specification` instead.
 - **Manual API verification**: when hitting a store-scoped endpoint directly with curl, the `X-Role: store` and `X-Store-ID: <id>` headers are required (see `StoreIdInterceptor`). Without them the request is treated as having no store context — endpoints without `@StoreOptional` return 403.
-- **Integration tests**: `integrationTest` runs against the compose-provided DB (`backend/docker-compose.test.yml`'s ephemeral stack), not Testcontainers.
 
 ## API contract
 

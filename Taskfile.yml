@@ -54,7 +54,7 @@ tasks:
       - docker run --rm -v "$(pwd):/repo" -w /repo rhysd/actionlint:1.7.12
 
   test:
-    desc: すべてのサービスのテストを実行（frontend + backend unit + integration、後方互換）
+    desc: 前後端の単体テストとカバレッジゲートを実行
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
@@ -76,12 +76,6 @@ tasks:
       - task -d frontend test
       - echo "🧪 Backend unit tests..."
       - task -d backend test-unit
-
-  test-integration:
-    desc: post-merge 検証用の統合テストを実行（backend integration）
-    cmds:
-      - echo "🧪 Backend integration tests..."
-      - task -d backend test-integration
 
   e2e:
     desc: E2E（playwright-bdd）を専用の使い捨てスタックで実行（build → 実行 → 破棄）

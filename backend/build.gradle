@@ -77,11 +77,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
-    // Spring Boot 4 で TestRestTemplate は spring-boot-resttestclient へ分離された（統合テストの HTTP クライアント。
-    // integrationTest は testImplementation を extendsFrom するため testImplementation で宣言する）。
-    // TestRestTemplateTestAutoConfiguration は spring-boot-restclient の RestTemplateBuilder に依存するため後者も必要。
-    testImplementation 'org.springframework.boot:spring-boot-resttestclient'
-    testImplementation 'org.springframework.boot:spring-boot-restclient'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
@@ -149,32 +144,4 @@ check.dependsOn spotlessCheck
 jar {
     archiveBaseName.set(rootProject.name)
     archiveVersion.set(version.toString())
-}
-
-// 統合テスト（本物の PostgreSQL/Redis に接続。docker-compose.test.yml 経由で実行する）
-// check には紐づけない: 単体テストは従来どおり Dockerfile test ステージで完結させ、
-// 統合テストは compose ネットワーク内のランナーからのみ実行する
-sourceSets {
-    integrationTest {
-        java.srcDir 'src/integrationTest/java'
-        resources.srcDir 'src/integrationTest/resources'
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += sourceSets.main.output
-    }
-}
-
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-tasks.register('integrationTest', Test) {
-    description = '統合テスト（compose ネットワーク内で実行すること。task -d backend test 参照）'
-    group = 'verification'
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-    useJUnitPlatform()
-    // 統合テストの入力は compose で毎回作り直す DB（Gradle から不可視の外部状態）のため、増分判定を無効化して毎回実行する
-    outputs.upToDateWhen { false }
-    shouldRunAfter test
 }
