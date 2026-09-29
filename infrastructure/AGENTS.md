@@ -14,4 +14,4 @@
 Six services: `database`, `cache`, `backend`, `storage` (SeaweedFS, serves `/static`), `frontend`, `gateway`. Images and ports live in the compose files — read them there rather than trusting a copy here. Two things the compose files do not make obvious:
 
 - **Service name ≠ container name** for `cache` (container `redis`) and `gateway` (container `traefik`): `task logs service=cache` takes the service name, raw `docker` commands take the container name.
-- **Only the gateway reaches the host.** Storage is accessed through `/static` on the gateway; its S3 and management ports are internal. SeaweedFS runs in single-node mode with the Admin UI and WebDAV disabled.
+- **Storage access**: S3 is exposed through `/static` on the gateway. Development and the example template enable the Admin UI at `http://localhost:23646`, bound to host loopback only. Release and E2E keep the Admin UI disabled with no storage host ports. WebDAV is disabled in all environments.
