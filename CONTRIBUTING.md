@@ -4,7 +4,7 @@
 
 ## 実装前
 
-- 用語は [CONTEXT.md](CONTEXT.md)、既存の設計判断は [ADR](docs/README.md) を確認する。
+- 用語は [CONTEXT.md](CONTEXT.md) を確認する。設計判断を見直す前に、対象の実装・テスト・Git 履歴を確認する。
 - API の追加・変更は [API 契約規約](backend/AGENTS.md#api-contract)に従う。前後端にまたがる変更では、端点・メソッド・成功／失敗コード・要求／応答の型と省略可否・授権・ページングを実装前に提示して承認を得る。
 - UI は [デザインシステム](frontend/DESIGN.md)、スキーマは [DB 規約](backend/src/main/resources/db/AGENTS.md)を確認する。
 - 人向け文書、コメント、issue、PR、コミットメッセージは日本語。AI 指令は英語。識別子とコマンドは翻訳しない。
