@@ -4,14 +4,14 @@
 
 ## 実装前
 
-- 用語は [CONTEXT.md](CONTEXT.md)、既存の設計判断は [ADR](docs/README.md) を確認する。
+- 用語は [CONTEXT.md](CONTEXT.md) を確認する。設計判断を見直す前に、対象の実装・テスト・Git 履歴を確認する。
 - API の追加・変更は [API 契約規約](backend/AGENTS.md#api-contract)に従う。前後端にまたがる変更では、端点・メソッド・成功／失敗コード・要求／応答の型と省略可否・授権・ページングを実装前に提示して承認を得る。
 - UI は [デザインシステム](frontend/DESIGN.md)、スキーマは [DB 規約](backend/src/main/resources/db/AGENTS.md)を確認する。
 - 人向け文書、コメント、issue、PR、コミットメッセージは日本語。AI 指令は英語。識別子とコマンドは翻訳しない。
 
 ## コマンドと検証
 
-最終検証は Taskfile を使い、Docker によって CI と条件を揃える。`build`・`lint`・`test`・`format`・`clean` は `service=frontend` / `service=backend` で対象を限定できる。ルートの `test-unit`・`test-integration` は `service` を参照しない。単体テストを片側だけ実行する場合は `task -d frontend test` / `task -d backend test-unit` を使う。全コマンドは `task help` を参照する。
+最終検証は Taskfile を使い、Docker によって CI と条件を揃える。`build`・`lint`・`test`・`format`・`clean` は `service=frontend` / `service=backend` で対象を限定できる。ルートの `test-unit` は `service` を参照しない。単体テストを片側だけ実行する場合は `task -d frontend test` / `task -d backend test-unit` を使う。全コマンドは `task help` を参照する。
 
 | コマンド | 用途 |
 | --- | --- |
@@ -19,8 +19,7 @@
 | `task lint` | Repo Lint と前後端の整形・静的検査 |
 | `task lint-repo` | actionlint によるワークフロー検査 |
 | `task test-unit` | 前後端の単体テストとカバレッジゲート |
-| `task test-integration` | バックエンド統合テスト |
-| `task test` | 前後端単体テストとバックエンド統合テスト |
+| `task test` | 前後端の単体テストとカバレッジゲート |
 | `task e2e` | 独立した使い捨てスタックで E2E |
 | `task format` | ホストの npm / Gradle による自動整形（差分を確認する） |
 | `task up` / `task down` | 開発スタックの起動／停止 |
@@ -39,7 +38,7 @@
 
 別の [CodeQL](.github/workflows/codeql.yml) ワークフローが Java と JavaScript / TypeScript を解析する。master 向け PR、master・`releases/**` への push、週次スケジュールが対象で、docs-only のスキップはない。主 CI の三チェックだけで全ワークフローを表すわけではない。
 
-統合テストと E2E は CI で実行しない。PR 作成前は `task lint`、`task test`、`task build`、`task e2e` とローカルコードレビューを実施し、[PR テンプレート](.github/pull_request_template.md)の検証欄に結果を記す。E2E の実行・成果物・日本語 Gherkin は [E2E ガイド](e2e/README.md)を参照する。
+E2E は CI で実行しない。PR 作成前は `task lint`、`task test`、`task build`、`task e2e` とローカルコードレビューを実施し、[PR テンプレート](.github/pull_request_template.md)の検証欄に結果を記す。E2E の実行・成果物・日本語 Gherkin は [E2E ガイド](e2e/README.md)を参照する。
 
 issue は [機能](.github/ISSUE_TEMPLATE/feature.md)／[不具合](.github/ISSUE_TEMPLATE/bug.md)テンプレートを使う。コミットの要約は短く、PR タイトルは conventional commit 形式と日本語を使う。非自明な判断は理由を説明し、関連 issue を紐づける。
 

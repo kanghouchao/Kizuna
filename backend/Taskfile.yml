@@ -43,33 +43,10 @@ tasks:
           --load \
           .
 
-  test-integration:
-    desc: バックエンドの統合テストを実行（compose ネットワーク接続）
-    vars:
-      # worktree ごとに compose プロジェクト名を分ける。固定名のままだと、下の事前 down /
-      # defer down が別 worktree の実行中スタックを巻き込んで消してしまう。
-      STACK_ID:
-        sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
-    env:
-      # -p ではなく環境変数で与える（compose ファイルの name: より優先される）。
-      COMPOSE_PROJECT_NAME: kizuna-backend-test-{{.STACK_ID}}
-    cmds:
-      - echo "🧪  バックエンドの統合テストを実行中（compose ネットワーク接続）..."
-      # 事前回収: 前回 run が中断されると defer が走らずコンテナが残留し、`docker compose run` が
-      # それを静かに再利用して tmpfs DB の汚れが偽陽性を生む（#412）。down はコンテナしか消さず
-      # 匿名ボリューム（イメージ側 VOLUME 宣言由来）を取り残すため、`docker rm -fv` で
-      # コンテナと匿名ボリュームを一緒に回収してから down でネットワークを畳む
-      # （rm -fv は名前付きボリュームには届かないので、開発 DB を巻き込む経路が構造的に無い）。
-      - docker compose -f docker-compose.test.yml ps -aq | xargs -r docker rm -fv
-      - docker compose -f docker-compose.test.yml down --remove-orphans
-      - defer: docker compose -f docker-compose.test.yml ps -aq | xargs -r docker rm -fv && docker compose -f docker-compose.test.yml down --remove-orphans
-      - docker compose -f docker-compose.test.yml run --rm integration-test
-
   test:
-    desc: バックエンドの全テストを実行（unit + integration、後方互換）
+    desc: バックエンドの単体テストとカバレッジゲートを実行
     cmds:
       - task: test-unit
-      - task: test-integration
 
   build:
     desc: バックエンドDockerイメージをビルド

@@ -1,8 +1,0 @@
-[%autowidth.stretch, cols="h,a"]
-|===
-|Base package
-|`com.kizuna.storage`
-|Bean references
-|* `c.k.s.storescope.StoreContext` (in Shared)
-* `c.k.s.config.AppProperties` (in Shared)
-|===
