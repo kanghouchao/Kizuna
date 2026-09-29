@@ -126,12 +126,14 @@ services:
   storage:
     image: chrislusf/seaweedfs:4.48
     container_name: storage
-    command: mini -dir=/data -admin.ui=false -webdav=false
+    command: mini -dir=/data -admin.ui=true -webdav=false
     environment:
       AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-kizuna-storage}
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-changeme}
     volumes:
       - seaweedfs-data:/data
+    ports:
+      - "127.0.0.1:23646:23646"
     networks:
       - network
     labels:
