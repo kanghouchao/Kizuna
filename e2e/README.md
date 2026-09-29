@@ -36,7 +36,7 @@ E2E は**開発スタック（project `kizuna`）を使いません**。専用�
 - プロジェクト名・イメージタグは worktree ディレクトリの basename を小文字にし、英数字以外を
   `-` に置換して導出します。この結果が異なる worktree 同士は並行実行できます。同じ basename や
   正規化後の名前が一致する checkout、同じ worktree 内の複数実行は互いのスタックを回収するため並行実行できません
-- DB / Redis / MinIO は tmpfs なので、毎回シードからやり直した状態で始まります
+- DB / Redis / SeaweedFS は tmpfs なので、毎回シードからやり直した状態で始まります
 
 ## 構成
 
@@ -44,7 +44,7 @@ E2E は**開発スタック（project `kizuna`）を使いません**。専用�
 - `steps/**/*.ts` — ステップ定義
 - `base-url.ts` — 店舗の `BASE_URL` とプラットフォームの `PLATFORM_URL` の既定値
 - `playwright.config.ts` — `defineBddConfig` と Playwright 設定
-- `docker-compose.e2e.yml` — E2E 専用の使い捨てフルスタック（DB / Redis / MinIO /
+- `docker-compose.e2e.yml` — E2E 専用の使い捨てフルスタック（DB / Redis / SeaweedFS /
   backend / frontend / gateway ＋ テストランナー）
 
 ブラウザの `baseURL` は環境変数 `BASE_URL`（既定 `http://store1.kizuna.test`）で

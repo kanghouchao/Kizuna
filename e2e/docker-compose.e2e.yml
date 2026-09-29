@@ -47,13 +47,13 @@ services:
       retries: 10
 
   storage:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: server /data --console-address ":9001"
+    image: chrislusf/seaweedfs:4.48
+    command: mini -dir=/data -admin.ui=false -webdav=false
     tmpfs:
       - /data
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-kizuna-storage}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-storage-test-secret}
     networks:
       - network
     labels:
@@ -62,10 +62,10 @@ services:
       - "traefik.http.routers.storage.entrypoints=web"
       - "traefik.http.routers.storage.middlewares=storage-strip@docker"
       - "traefik.http.routers.storage.service=storage"
-      - "traefik.http.services.storage.loadbalancer.server.port=9000"
+      - "traefik.http.services.storage.loadbalancer.server.port=8333"
       - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -85,10 +85,10 @@ services:
       REDIS_HOST: cache
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
-      MINIO_ENDPOINT: http://storage:9000
-      MINIO_BUCKET: uploads
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      S3_ENDPOINT: http://storage:8333
+      S3_BUCKET: uploads
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-kizuna-storage}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-storage-test-secret}
       # E2E はデモデータ（店舗 1/2 と店長・スタッフ）に依存する。application.yml の既定は
       # production＝デモデータ無しなので、ここを外すと全シナリオがログインで落ちる。
       LIQUIBASE_CONTEXTS: demo

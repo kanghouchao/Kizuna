@@ -38,7 +38,7 @@ public class AppProperties {
   @Getter
   @Setter
   public static class Upload {
-    private String endpoint = "http://localhost:9000";
+    private String endpoint = "http://localhost:8333";
     private String bucket = "uploads";
     private String accessKey;
     private String secretKey;

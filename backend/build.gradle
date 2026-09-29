@@ -68,7 +68,7 @@ dependencies {
     implementation 'io.hypersistence:hypersistence-utils-hibernate-73:3.15.5'
     implementation 'org.mapstruct:mapstruct:1.6.3'
     implementation 'org.springframework.modulith:spring-modulith-starter-jdbc'
-    // S3 互換オブジェクトストレージ（MinIO）連携。s3 モジュールは HTTP クライアント実装を test スコープでしか
+    // S3 互換オブジェクトストレージ（SeaweedFS）連携。s3 モジュールは HTTP クライアント実装を test スコープでしか
     // 宣言しないため、同期クライアント用に url-connection-client を明示的に追加する（version は BOM で解決）。
     implementation 'software.amazon.awssdk:s3'
     implementation 'software.amazon.awssdk:url-connection-client'
