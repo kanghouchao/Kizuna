@@ -439,7 +439,7 @@ export async function getOrder(
   token: string,
   storeId: string,
   id: string
-): Promise<{ id: string; customer_id: string | null; contact_snapshot: { name: string | null; phone_number: string | null; email: string | null; line_id: string | null }; completed_at?: string; version: number; total_fee: number; fee_lines: { kind: string; amount: number; system_owned: boolean }[] }> {
+): Promise<{ id: string; customer_id: string | null; contact_snapshot: { name: string | null; phone_number: string | null; email: string | null; line_id: string | null }; completed_at?: string; version: number; total_fee: number; accrued_remuneration: number; fee_lines: { kind: string; amount: number; system_owned: boolean }[] }> {
   const response = await request.get(`${PLATFORM_URL}/api/store/orders/${id}`, {
     headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
   });
