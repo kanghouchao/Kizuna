@@ -19,9 +19,8 @@ public class S3Config {
         .credentialsProvider(
             StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(upload.getAccessKey(), upload.getSecretKey())))
-        // MinIO は region を無視するが AWS SDK v2 のクライアント生成に必須のためハードコードする。
         .region(Region.US_EAST_1)
-        // MinIO はパススタイル（endpoint/bucket/key）でのみ解決できるため仮想ホスト形式を無効化する。
+        // 内部サービス名で接続するため、バケット名をホスト名に含めない。
         .forcePathStyle(true)
         .build();
   }

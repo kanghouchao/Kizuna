@@ -11,7 +11,7 @@
 
 ## Services (compose project `kizuna`)
 
-Six services: `database`, `cache`, `backend`, `storage` (MinIO, serves `/static`), `frontend`, `gateway`. Images and ports live in the compose files — read them there rather than trusting a copy here. Two things the compose files do not make obvious:
+Six services: `database`, `cache`, `backend`, `storage` (SeaweedFS, serves `/static`), `frontend`, `gateway`. Images and ports live in the compose files — read them there rather than trusting a copy here. Two things the compose files do not make obvious:
 
 - **Service name ≠ container name** for `cache` (container `redis`) and `gateway` (container `traefik`): `task logs service=cache` takes the service name, raw `docker` commands take the container name.
-- **Only the gateway and MinIO's console reach the host.** `development/` publishes `80` + `8080` (dashboard, `api.insecure: true`) and `9001`; `release/` publishes `80` / `443` / `8080` / `9001` but sets `api.insecure: false`, so nothing serves its `8080` — note that MinIO's console stays host-exposed in release too. `backend` / `frontend` / `database` / `cache` never get a host port — reach them through the gateway (`http://localhost/api/...`) or `task exec`. In particular `localhost:8080` is Traefik, not the backend.
+- **Only the gateway reaches the host.** Storage is accessed through `/static` on the gateway; its S3 and management ports are internal. SeaweedFS runs in single-node mode with the Admin UI and WebDAV disabled.

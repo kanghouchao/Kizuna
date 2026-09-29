@@ -16,7 +16,7 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.PutBucketPolicyRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-/** MinIO(S3互換オブジェクトストレージ)を使用したファイルストレージサービスの実装 */
+/** SeaweedFS(S3互換オブジェクトストレージ)を使用したファイルストレージサービスの実装 */
 @Service
 @RequiredArgsConstructor
 public class S3FileStorage implements FileStorageService, ApplicationRunner {
