@@ -32,7 +32,7 @@ tasks:
       - echo "✍️  Spotless で自動整形を実行中..."
       - ./gradlew --no-daemon --warning-mode=all spotlessApply
 
-  test-unit:
+  test:
     desc: バックエンドの単体テストを実行（Docker test ステージ経由・coverage gate 込み）
     cmds:
       - echo "🧪  バックエンドの単体テストを実行中..."
@@ -42,11 +42,6 @@ tasks:
           -t {{.DOCKER_IMAGE}}-test:{{.DOCKER_TAG}} \
           --load \
           .
-
-  test:
-    desc: バックエンドの単体テストとカバレッジゲートを実行
-    cmds:
-      - task: test-unit
 
   build:
     desc: バックエンドDockerイメージをビルド

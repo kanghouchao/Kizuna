@@ -1,0 +1,11 @@
+version: "3"
+
+silent: true
+
+tasks:
+  lint:
+    desc: actionlint による GitHub Actions ワークフロー検査
+    dir: ..
+    cmds:
+      - echo "🧹 Workflows lint (actionlint)..."
+      - docker run --rm -v "$(pwd):/repo" -w /repo rhysd/actionlint:1.7.12

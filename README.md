@@ -53,7 +53,7 @@ task up
 
 開発環境は `LIQUIBASE_CONTEXTS=demo` でサンプル店舗とスタッフを投入する。HQ の `admin@kizuna.test` は baseline、店長 `tanaka.hanako@kizuna.test` とスタッフ `yamada.jiro@kizuna.test` は demo データである。初期パスワードのハッシュは `INITIAL_ADMIN_PASSWORD_HASH` / `DEMO_USER_PASSWORD_HASH` の設定を参照する。初回適用後の変更は Liquibase のチェックサムに影響するため、パスワード更新はアプリから行う。
 
-起動しない場合は `task ps` と `task logs service=backend` で確認する。`localhost:8080` はバックエンドではなく Traefik。baseline の適用済みチェックサムが変わった開発 DB は、[DB 再作成手順](backend/src/main/resources/db/AGENTS.md#after-editing-the-baseline-the-dev-db-must-be-recreated)に従う。Docker ボリュームは削除しない。
+起動しない場合は `task -d infrastructure/development ps` と `task -d infrastructure/development logs service=backend` で確認する。`localhost:8080` はバックエンドではなく Traefik。baseline の適用済みチェックサムが変わった開発 DB は、[DB 再作成手順](backend/src/main/resources/db/AGENTS.md#after-editing-the-baseline-the-dev-db-must-be-recreated)に従う。Docker ボリュームは削除しない。
 
 ## 文書案内
 
