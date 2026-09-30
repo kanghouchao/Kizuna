@@ -1,5 +1,7 @@
 version: "3"
 
+silent: true
+
 # ルートの運用タスクを Taskfile に集約
 vars:
   env: '{{default "development" .env}}'
@@ -30,15 +32,13 @@ tasks:
         fi
 
   lint:
-    desc: すべてのサービスのLintを実行（service=frontend|backend で個別指定可）
+    desc: 前後端のLintを実行（service=frontend|backend|.github で個別指定可）
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
           echo "🧹 {{.service}} の Lint を実行中..."
           task -d "{{.service}}" lint
         else
-          echo "🧹 Repo lint..."
-          task lint-repo
           echo "🧹 すべてのサービスの Lint を実行中..."
           echo "🧹 Frontend lint..."
           task -d frontend lint
@@ -47,14 +47,8 @@ tasks:
           echo "✅ Lint 完了"
         fi
 
-  lint-repo:
-    desc: リポジトリ横断の Lint（GitHub Actions workflows）
-    cmds:
-      - echo "🧹 Workflows lint (actionlint)..."
-      - docker run --rm -v "$(pwd):/repo" -w /repo rhysd/actionlint:1.7.12
-
   test:
-    desc: 前後端の単体テストとカバレッジゲートを実行
+    desc: 単体テストを実行
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
@@ -69,50 +63,30 @@ tasks:
           echo "✅テスト完了"
         fi
 
-  test-unit:
-    desc: PR ゲート用の単体テストを実行（frontend jest + backend unit + coverage gate）
-    cmds:
-      - echo "🧪 Frontend unit tests..."
-      - task -d frontend test
-      - echo "🧪 Backend unit tests..."
-      - task -d backend test-unit
-
   e2e:
     desc: E2E（playwright-bdd）を専用の使い捨てスタックで実行（build → 実行 → 破棄）
     vars:
-      # worktree ごとに compose プロジェクト名とイメージタグを分ける。開発スタック（kizuna）とも、
-      # 並行して走る別 worktree の e2e とも、コンテナ・ネットワーク・イメージを一切共有しない。
       STACK_ID:
         sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
     env:
-      # gateway の docker provider 制約は解決後のプロジェクト名に追随するため、ここで
-      # 与えるだけでスタックの隔離と traefik の対象範囲が揃う。
       COMPOSE_PROJECT_NAME: kizuna-e2e-{{.STACK_ID}}
       E2E_IMAGE_TAG: e2e-{{.STACK_ID}}
     cmds:
-      # Playwright 版数抽出に jq を使うため、重いビルド前に存在を確認して fail fast する。
       - |
         command -v jq >/dev/null 2>&1 || { echo "❌ jq が必要です（e2e の Playwright 版数抽出に使用）"; exit 1; }
       - echo "🏗️  E2E 用にイメージをビルド（tag=e2e-{{.STACK_ID}}）..."
       - task -d backend build DOCKER_TAG=e2e-{{.STACK_ID}}
       - task -d frontend build DOCKER_TAG=e2e-{{.STACK_ID}}
-      # 事前回収: 前回 run が中断されると defer が走らず依存コンテナが残留し、`docker compose run`
-      # がそれを静かに再利用して前回のデータが残った DB に対して走る。down はコンテナしか消さず
-      # 匿名ボリューム（e2e の node_modules 等）を取り残すため、`docker rm -fv` でコンテナと
-      # 匿名ボリュームを一緒に回収してから down でネットワークを畳む
-      # （rm -fv は名前付きボリュームには届かないので、開発 DB を巻き込む経路が構造的に無い）。
+      # 中断時の残留コンテナが次回に再利用されないよう、実行前後に匿名ボリュームごと回収する。
+      # docker rm -fv は名前付きボリュームを削除せず、開発 DB のデータを保持する。
       - docker compose -f e2e/docker-compose.e2e.yml ps -aq | xargs -r docker rm -fv
       - docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans
-      # 成否・途中クラッシュを問わずスタックを必ず破棄する（起動失敗時の残骸も回収）。
       - defer: docker compose -f e2e/docker-compose.e2e.yml ps -aq | xargs -r docker rm -fv && docker compose -f e2e/docker-compose.e2e.yml down --remove-orphans
       - |
         set -e
         echo "🎭 E2E（playwright-bdd）を実行..."
-        # Playwright イメージタグを package.json 単一真源から派生（版数ドリフト防止）。
-        # ^1.62.0 / ~1.60.0 等の範囲表記でも先頭の semver 数字列のみ取り出す。
         PLAYWRIGHT_VERSION=$(jq -r '.devDependencies["@playwright/test"]' e2e/package.json | grep -oE '[0-9]+(\.[0-9]+)+' | head -1)
         export PLAYWRIGHT_VERSION
-        # 依存サービスは compose の depends_on（gateway が healthy になるまで）が待つ。
         docker compose -f e2e/docker-compose.e2e.yml run --rm e2e
 
   format:
@@ -143,33 +117,6 @@ tasks:
       - echo "🛑 サービスを停止中..."
       - task -d "infrastructure/{{.env}}" down
 
-  ps:
-    desc: サービスの状態を表示
-    cmds:
-      - task -d "infrastructure/{{.env}}" ps
-
-  logs:
-    desc: すべてのサービスのログを表示
-    cmds:
-      - |
-        if [ -n "{{.service}}" ]; then
-          echo "📜 {{.service}}サービスのログを表示中..."
-          task -d "infrastructure/{{.env}}" logs service="{{.service}}"
-        else
-          task -d "infrastructure/{{.env}}" logs
-        fi
-
-  exec:
-    desc: サービスコンテナに入る
-    cmds:
-      - |
-        if [ -n "{{.service}}" ]; then
-          task -d "infrastructure/{{.env}}" exec service="{{.service}}"
-        else
-          echo "❗ service を指定してください。例: task exec service=backend"
-          exit 1
-        fi
-
   clean:
     desc: ビルド済み Docker イメージを削除（service=frontend|backend で個別指定可）
     cmds:
@@ -179,16 +126,4 @@ tasks:
         else
           task -d backend clean
           task -d frontend clean
-        fi
-
-  restart:
-    desc: サービスを再起動
-    cmds:
-      - |
-        if [ -n "{{.service}}" ]; then
-          echo "🔄 {{.service}}サービスを再起動中..."
-          task -d "infrastructure/{{.env}}" restart service="{{.service}}"
-        else
-          echo "🔄 すべてのサービスを再起動中..."
-          task -d "infrastructure/{{.env}}" restart
         fi

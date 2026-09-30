@@ -11,19 +11,18 @@
 
 ## コマンドと検証
 
-最終検証は Taskfile を使い、Docker によって CI と条件を揃える。`build`・`lint`・`test`・`format`・`clean` は `service=frontend` / `service=backend` で対象を限定できる。ルートの `test-unit` は `service` を参照しない。単体テストを片側だけ実行する場合は `task -d frontend test` / `task -d backend test-unit` を使う。全コマンドは `task help` を参照する。
+最終検証は Taskfile を使い、Docker によって CI と条件を揃える。`build`・`lint`・`test`・`format`・`clean` は `service=frontend` / `service=backend` で対象を限定できる。単体テストを片側だけ実行する場合は `task test service=frontend` / `task test service=backend` を使う。全コマンドは `task help` を参照する。
 
 | コマンド | 用途 |
 | --- | --- |
 | `task build` | 前後端の本番イメージをビルド |
-| `task lint` | Repo Lint と前後端の整形・静的検査 |
-| `task lint-repo` | actionlint によるワークフロー検査 |
-| `task test-unit` | 前後端の単体テストとカバレッジゲート |
+| `task lint` | 前後端の整形・静的検査 |
+| `task lint service=.github` | actionlint によるワークフロー検査（明示指定時のみ。`task -d .github lint` でも実行可） |
 | `task test` | 前後端の単体テストとカバレッジゲート |
 | `task e2e` | 独立した使い捨てスタックで E2E |
 | `task format` | ホストの npm / Gradle による自動整形（差分を確認する） |
 | `task up` / `task down` | 開発スタックの起動／停止 |
-| `task logs service=backend` | 指定サービスのログ |
+| `task -d infrastructure/development logs service=backend` | 開発環境の指定サービスのログ |
 | `task clean` | ビルド済みイメージの削除。DB ボリュームは対象外 |
 
 高速な反復では `frontend/` の npm scripts と `backend/` の Gradle wrapper を使える。バックエンドは **JDK 25** 必須（`.java-version` と daemon JVM 設定）。フロントエンドの Node.js は [Dockerfile](frontend/Dockerfile) の版に揃える。`task format` もホストの Node.js / JDK を使う。フロントエンド lint は `format:check`、`lint`、`lint:fsd`、`typecheck` の四つ。

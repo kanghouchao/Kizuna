@@ -18,14 +18,14 @@ databaseChangeLog:
         - insert:
             tableName: t_stores
             columns:
-              - column: { name: name, value: Sample Tenant }
+              - column: { name: name, value: Sample }
               - column: { name: domain, value: store1.kizuna.test }
               - column: { name: email, value: admin@store1.kizuna.com }
               - column: { name: status, value: ACTIVE }
         - insert:
             tableName: t_stores
             columns:
-              - column: { name: name, value: Sample Tenant 2 }
+              - column: { name: name, value: Sample 2 }
               - column: { name: domain, value: store2.kizuna.test }
               - column: { name: email, value: admin@store2.kizuna.com }
               - column: { name: status, value: ACTIVE }
@@ -55,48 +55,97 @@ databaseChangeLog:
         - insert:
             tableName: t_user_roles
             columns:
-              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')" }
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column:
+                  {
+                    name: platform_user_id,
+                    valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
+                  }
+              - column:
+                  {
+                    name: role_id,
+                    valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')",
+                  }
         - insert:
             tableName: t_user_roles
             columns:
-              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')" }
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column:
+                  {
+                    name: platform_user_id,
+                    valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')",
+                  }
+              - column:
+                  {
+                    name: role_id,
+                    valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')",
+                  }
 
         - insert:
             tableName: t_user_stores
             columns:
-              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')" }
-              - column: { name: store_id, valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')" }
+              - column:
+                  {
+                    name: platform_user_id,
+                    valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
+                  }
+              - column:
+                  {
+                    name: store_id,
+                    valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')",
+                  }
         - insert:
             tableName: t_user_stores
             columns:
-              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')" }
-              - column: { name: store_id, valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store2.kizuna.test')" }
+              - column:
+                  {
+                    name: platform_user_id,
+                    valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
+                  }
+              - column:
+                  {
+                    name: store_id,
+                    valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store2.kizuna.test')",
+                  }
         - insert:
             tableName: t_user_stores
             columns:
-              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')" }
-              - column: { name: store_id, valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')" }
+              - column:
+                  {
+                    name: platform_user_id,
+                    valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')",
+                  }
+              - column:
+                  {
+                    name: store_id,
+                    valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')",
+                  }
 
         # t_store_profiles.id はアプリ側採番（Snowflake）のため、seed だけは固定 id を明示する。
         - insert:
             tableName: t_store_profiles
             columns:
               - column: { name: id, value: "1" }
-              - column: { name: store_id, valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')" }
+              - column:
+                  {
+                    name: store_id,
+                    valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')",
+                  }
               - column: { name: template_key, value: default }
               - column: { name: mv_type, value: image }
-              - column: { name: description, value: Sample Tenant のサイトへようこそ }
+              - column: { name: description, value: Sample のサイトへようこそ }
               - column: { name: sns_links, valueComputed: "'[]'::jsonb" }
               - column: { name: partner_links, valueComputed: "'[]'::jsonb" }
         - insert:
             tableName: t_store_profiles
             columns:
               - column: { name: id, value: "2" }
-              - column: { name: store_id, valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store2.kizuna.test')" }
+              - column:
+                  {
+                    name: store_id,
+                    valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store2.kizuna.test')",
+                  }
               - column: { name: template_key, value: default }
               - column: { name: mv_type, value: image }
-              - column: { name: description, value: Sample Tenant 2 のサイトへようこそ }
+              - column:
+                  { name: description, value: Sample 2 のサイトへようこそ }
               - column: { name: sns_links, valueComputed: "'[]'::jsonb" }
               - column: { name: partner_links, valueComputed: "'[]'::jsonb" }
