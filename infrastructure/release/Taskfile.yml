@@ -39,7 +39,7 @@ tasks:
         if [ -n "{{.service}}" ]; then
           docker compose -p {{.PROJECT_NAME}} exec {{.service}} sh
         else
-          echo "❗ serviceを指定してください。例: task exec service=backend"
+          echo "❗ serviceを指定してください。リポジトリルートからの実行例: task -d infrastructure/release exec service=backend"
           exit 1
         fi
 
