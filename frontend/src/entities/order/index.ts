@@ -15,3 +15,6 @@ export { selfMonthlyRemunerationApi } from './api/self-monthly-remuneration';
 
 export * from './model/monthlyRemuneration';
 export { monthlyRemunerationApi } from './api/monthly-remuneration';
+
+export * from './model/platformMonthlyRemuneration';
+export { platformMonthlyRemunerationApi } from './api/platform-monthly-remuneration';
