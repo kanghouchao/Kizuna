@@ -4,3 +4,4 @@ export { CastRequestsPage } from './ui/CastRequestsPage';
 export { CastAccountPage } from './ui/CastAccountPage';
 export { CastServiceConditionsPage } from './ui/CastServiceConditionsPage';
 export { CastRemunerationsPage } from './ui/CastRemunerationsPage';
+export { CastMonthlyRemunerationsPage } from './ui/CastMonthlyRemunerationsPage';

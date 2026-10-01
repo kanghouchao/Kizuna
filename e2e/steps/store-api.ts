@@ -629,6 +629,41 @@ export async function withdrawCast(
   expect(response.ok()).toBeTruthy();
 }
 
+export async function suspendCast(
+  request: APIRequestContext,
+  token: string,
+  castId: string,
+  storeId: string = STORE1_ID,
+): Promise<void> {
+  const response = await request.post(`/api/store/casts/${castId}/suspension`, {
+    headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
+  });
+  expect(response.status()).toBe(200);
+}
+
+export async function correctOrderExtension(
+  request: APIRequestContext,
+  token: string,
+  orderId: string,
+  reason: string,
+  storeId: string = STORE1_ID,
+): Promise<void> {
+  const order = await getOrder(request, token, storeId, orderId);
+  const headers = { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` };
+  const data = {
+    expected_version: order.version,
+    reason,
+    fee_lines: [{ kind: "EXTENSION", name: "追加延長", duration_minutes: 30, amount: 4000, remuneration: 2000 }],
+  };
+  const preview = await request.post(`/api/store/orders/${orderId}/correction-preview`, { headers, data });
+  expect(preview.status(), await preview.text()).toBe(200);
+  const response = await request.post(`/api/store/orders/${orderId}/corrections`, {
+    headers,
+    data: { ...data, confirmation_token: (await preview.json()).confirmation_token },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+}
+
 export async function createSpecialService(
   request: APIRequestContext,
   token: string,
