@@ -10,8 +10,8 @@ export {
 } from './api/order';
 export * from './model/selfRemuneration';
 export { selfRemunerationApi } from './api/self-remuneration';
+export * from './model/selfMonthlyRemuneration';
+export { selfMonthlyRemunerationApi } from './api/self-monthly-remuneration';
 
 export * from './model/monthlyRemuneration';
 export { monthlyRemunerationApi } from './api/monthly-remuneration';
-export * from './model/selfMonthlyRemuneration';
-export { selfMonthlyRemunerationApi } from './api/self-monthly-remuneration';
