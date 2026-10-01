@@ -50,6 +50,12 @@ export function CastMonthlyRemunerationsPage() {
     [query]
   );
   const result = !statement.isLoading && statement.failure === null ? statement.data : null;
+  const pdfResult =
+    statement.failure === null &&
+    statement.data?.store_id === query?.storeId &&
+    statement.data?.month === query?.month
+      ? statement.data
+      : null;
   const paging = result
     ? fromSpringPage(result.orders)
     : { rows: [], page: 0, pageCount: 0, total: 0 };
@@ -122,9 +128,13 @@ export function CastMonthlyRemunerationsPage() {
                   <p className="text-sm text-muted-foreground">
                     退店・再入店を含む同じ店舗の報酬をまとめます。支払済み額ではありません。
                   </p>
-                  {result && (
+                  {pdfResult && (
                     <MonthlyPdfActions
-                      criteria={{ scope: 'self', storeId: result.store_id, month: result.month }}
+                      criteria={{
+                        scope: 'self',
+                        storeId: pdfResult.store_id,
+                        month: pdfResult.month,
+                      }}
                     />
                   )}
                   {result && (
