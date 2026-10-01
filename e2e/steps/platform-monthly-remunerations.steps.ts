@@ -3,9 +3,9 @@ import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
 import {
   acceptCastInvitation, acceptExistingCastInvitation, cancelOrder,
-  completeAgreedOrder, createAgreedOrder, createCast, createCourse,
+  completeAgreedOrder, correctOrderExtension, createAgreedOrder, createCast, createCourse,
   getAuthorizedStores, getOrder, invalidateOrder, issueCastInvitation,
-  loginAsStoreAdmin, loginPlatformUser, STORE1_ID, STORE_HEADERS, withdrawCast,
+  loginAsStoreAdmin, loginPlatformUser, STORE1_ID, STORE_HEADERS, suspendCast, withdrawCast,
 } from './store-api';
 
 const { Given, When, Then } = createBdd();
@@ -80,10 +80,7 @@ Given('月次平台照会用の本人と異なる授権集合の参照者がい�
   const foreignCourse = await createCourse(request, manager, '他店月次コース', secondStore);
   foreignOrder = await createAgreedOrder(request, manager, foreign, foreignCourse, '他店', { storeId: secondStore, businessDate: originalDate });
   await completeAgreedOrder(request, manager, foreignOrder, secondStore);
-  const suspended = await request.post('/api/store/casts/' + foreign + '/suspension', {
-    headers: { ...STORE_HEADERS, 'X-Store-ID': secondStore, ...headers(manager) },
-  });
-  expect(suspended.status()).toBe(200);
+  await suspendCast(request, manager, foreign, secondStore);
   const onlyForeign = await createCast(request, manager, name + '-他店限定', secondStore);
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, onlyForeign, secondStore),
     'platform-monthly-foreign-' + suffix + '@kizuna.test', password, '他店限定本人');
@@ -157,15 +154,7 @@ Then('平台の月次合計は同店の再入店を含み他店と未完了と�
 });
 
 When('平台照会の原月受注を訂正して無効化する', async ({ request }) => {
-  const order = await getOrder(request, manager, STORE1_ID, originalOrder);
-  const auth = { ...STORE_HEADERS, ...headers(manager) };
-  const data = { expected_version: order.version, reason: '原月の延長報酬を訂正',
-    fee_lines: [{ kind: 'EXTENSION', name: '延長', duration_minutes: 30, amount: 4000, remuneration: 2000 }] };
-  const preview = await request.post('/api/store/orders/' + originalOrder + '/correction-preview', { headers: auth, data });
-  expect(preview.status(), await preview.text()).toBe(200);
-  const corrected = await request.post('/api/store/orders/' + originalOrder + '/corrections',
-    { headers: auth, data: { ...data, confirmation_token: (await preview.json()).confirmation_token } });
-  expect(corrected.status(), await corrected.text()).toBe(201);
+  await correctOrderExtension(request, manager, originalOrder, '原月の延長報酬を訂正');
   expect((await monthly(request)).total_remuneration).toBe(16000);
   await invalidateOrder(request, manager, originalOrder, '未提供の原月受注を無効化');
 });

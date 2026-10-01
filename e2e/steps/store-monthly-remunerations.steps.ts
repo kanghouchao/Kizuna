@@ -5,6 +5,7 @@ import {
   acceptCastInvitation,
   createAgreedOrder,
   completeAgreedOrder,
+  correctOrderExtension,
   createCast,
   createCourse,
   issueCastInvitation,
@@ -300,42 +301,7 @@ Then(
 When("原月の受注を翌月に完了し訂正して無効化する", async ({ request }) => {
   await completeAgreedOrder(request, managerToken, pendingId);
   expect((await monthly(request)).total_remuneration).toBe(154000);
-  const order = await getOrder(
-    request,
-    managerToken,
-    STORE1_ID,
-    originalOrderId,
-  );
-  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` };
-  const data = {
-    expected_version: order.version,
-    reason: "原月の延長記録を訂正",
-    fee_lines: [
-      {
-        kind: "EXTENSION",
-        name: "追加延長",
-        duration_minutes: 30,
-        amount: 4000,
-        remuneration: 2000,
-      },
-    ],
-  };
-  const preview = await request.post(
-    `/api/store/orders/${originalOrderId}/correction-preview`,
-    { headers, data },
-  );
-  expect(preview.status(), await preview.text()).toBe(200);
-  const corrected = await request.post(
-    `/api/store/orders/${originalOrderId}/corrections`,
-    {
-      headers,
-      data: {
-        ...data,
-        confirmation_token: (await preview.json()).confirmation_token,
-      },
-    },
-  );
-  expect(corrected.status(), await corrected.text()).toBe(201);
+  await correctOrderExtension(request, managerToken, originalOrderId, "原月の延長記録を訂正");
   expect((await monthly(request)).total_remuneration).toBe(156000);
   await invalidateOrder(
     request,
