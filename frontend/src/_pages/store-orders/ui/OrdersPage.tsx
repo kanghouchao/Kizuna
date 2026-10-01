@@ -176,10 +176,18 @@ export default function OrderListPage() {
         title="オーダー一覧"
         description="対応が要る受注を前面に、完了・取消はアーカイブにまとめています。"
         actions={
-          <Button render={<Link href={storePath(storeId, '/orders/create')} />}>
-            <PlusIcon aria-hidden="true" />
-            新規オーダー登録
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              render={<Link href={storePath(storeId, '/orders/monthly-remunerations')} />}
+            >
+              月次給与明細
+            </Button>
+            <Button render={<Link href={storePath(storeId, '/orders/create')} />}>
+              <PlusIcon aria-hidden="true" />
+              新規オーダー登録
+            </Button>
+          </>
         }
       />
 
