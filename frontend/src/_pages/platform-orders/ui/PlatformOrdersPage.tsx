@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { orderApi, ORDER_STATUS_LABELS, type PlatformOrder } from '@/entities/order';
 import { hasPermission, readTokenClaims, useListPage } from '@/shared/lib';
@@ -39,6 +40,11 @@ function OrderList() {
     <>
       <ListPage
         title="受注照会"
+        actions={
+          <Button variant="outline" render={<Link href="/platform/orders/monthly-remunerations" />}>
+            月次給与明細
+          </Button>
+        }
         description="授権された店舗の受注と訂正履歴を閲覧できます。報酬は支払済み額ではありません。"
         state={list}
         emptyMessage="受注はありません。"
