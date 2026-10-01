@@ -171,7 +171,7 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
               円 → 0 円
             </p>
             <p>
-              会員帰属・ポイント付与・実返金・支払は変更しません。それぞれの担当者が専用の操作で処置してください。
+              会員帰属・ポイント付与は変更しません。必要な変更はそれぞれの専用操作で行ってください。実際の入出金・返金・給与支払いは管理対象外です。
             </p>
           </section>
           {changeId && <p>変更 ID：{changeId}</p>}

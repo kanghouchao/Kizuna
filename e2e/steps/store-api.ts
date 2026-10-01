@@ -535,6 +535,7 @@ export async function getOrder(
     email: string | null;
     line_id: string | null;
   };
+  business_date: string;
   completed_at?: string;
   version: number;
   total_fee: number;
@@ -696,16 +697,23 @@ export async function createAgreedOrder(
   castId: string,
   courseId: string,
   customerName: string,
+  options: { storeId?: string; businessDate?: string } = {},
 ): Promise<string> {
-  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
+  const headers = {
+    ...STORE_HEADERS,
+    "X-Store-ID": options.storeId ?? STORE1_ID,
+    Authorization: `Bearer ${token}`,
+  };
   const data = {
     cast_id: castId,
     course_id: courseId,
     customer_selection: { mode: "NONE" },
     contact_snapshot: { name: customerName },
-    business_date: new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Tokyo",
-    }).format(new Date()),
+    business_date:
+      options.businessDate ??
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Tokyo",
+      }).format(new Date()),
   };
   const preview = await request.post("/api/store/orders/preview", {
     headers,
@@ -727,9 +735,14 @@ export async function completeAgreedOrder(
   request: APIRequestContext,
   token: string,
   id: string,
+  storeId: string = STORE1_ID,
 ): Promise<void> {
-  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
-  const order = await getOrder(request, token, STORE1_ID, id);
+  const headers = {
+    ...STORE_HEADERS,
+    "X-Store-ID": storeId,
+    Authorization: `Bearer ${token}`,
+  };
+  const order = await getOrder(request, token, storeId, id);
   const data = { expected_version: order.version, fee_lines: [] };
   const preview = await request.post(
     `/api/store/orders/${id}/completion-preview`,
