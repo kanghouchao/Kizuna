@@ -18,3 +18,4 @@ export { monthlyRemunerationApi } from './api/monthly-remuneration';
 
 export * from './model/platformMonthlyRemuneration';
 export { platformMonthlyRemunerationApi } from './api/platform-monthly-remuneration';
+export { fetchMonthlyPdf, type MonthlyPdfCriteria } from './api/monthly-pdf';

@@ -442,7 +442,7 @@ Then(
       params,
     });
     expect(foreign.status()).toBe(404);
-    for (const path of ["", "/casts"]) {
+    for (const path of ["", "/casts", "/pdf"]) {
       const forged = await request.get(
         `/api/store/monthly-remunerations${path}`,
         { headers: { ...headers, "X-Store-ID": otherStoreId }, params },
@@ -460,7 +460,7 @@ Then(
 Then(
   "未認証と権限のない本人の照会および不正な月指定は拒否される",
   async ({ request }) => {
-    for (const path of ["", "/casts"]) {
+    for (const path of ["", "/casts", "/pdf"]) {
       const params = { person_id: foreignPersonId, month: "2026-09" };
       const anonymous = await request.get(
         `/api/store/monthly-remunerations${path}`,

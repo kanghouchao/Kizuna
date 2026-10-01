@@ -192,6 +192,11 @@ services:
     environment:
       # gateway alias 経由で store ドメインへ到達する baseURL。
       BASE_URL: http://store1.kizuna.test
+      # PDF の全件快照検証だけが、専用 DB のテストデータと読取待機を制御する。
+      PGHOST: database
+      PGDATABASE: kizuna
+      PGUSER: kizuna
+      PGPASSWORD: ${POSTGRES_PASSWORD:-password}
     # gateway の healthcheck は traefik の ping しか見ないため、プロセスが生きていることしか
     # 保証しない。docker provider が router を登録したかどうかは別問題で、制約とプロジェクト名が
     # ずれていれば router はゼロのまま healthy になる。実際に router を通る経路で疎通を確かめ、

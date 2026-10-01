@@ -387,6 +387,10 @@ Then(
   "本人の月次照会は不正入力と他人の識別子による越権を拒否する",
   async ({ request }) => {
     const headers = { Authorization: `Bearer ${token}` };
+    const pdfParams = { store_id: STORE1_ID, month };
+    expect((await request.get(`${base}/pdf`, { params: pdfParams })).status()).toBe(401);
+    expect((await request.get(`${base}/pdf`, { params: pdfParams, headers: { Authorization: `Bearer ${manager}` } })).status()).toBe(403);
+    expect((await request.get(`${base}/pdf`, { params: { store_id: secondStore, month }, headers: { Authorization: `Bearer ${otherToken}` } })).status()).toBe(404);
     for (const suffix of ["", "/stores"]) {
       const params = { store_id: STORE1_ID, month };
       expect((await request.get(`${base}${suffix}`, { params })).status()).toBe(
@@ -415,7 +419,7 @@ Then(
       { month: "2026-9" },
       { store_id: 0 },
       { page: -1 },
-    ]) {
+    ] as Record<string, string | number>[]) {
       expect(
         (
           await request.get(base, {

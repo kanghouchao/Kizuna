@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { MonthlyRemunerationCast, monthlyRemunerationApi } from '@/entities/order';
+import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { fromSpringPage } from '@/shared/api';
 import { storePath, useResource } from '@/shared/lib';
 import {
@@ -125,6 +126,11 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
               <p className="text-sm text-muted-foreground">
                 退店・再入店を含め同じ本人の本店の報酬を集計します。支払済み額ではありません。実際の入出金・返金・給与支払いは管理対象外です。
               </p>
+              {result && (
+                <MonthlyPdfActions
+                  criteria={{ scope: 'store', personId: result.person_id, month: result.month }}
+                />
+              )}
               {result && (
                 <section className="space-y-2" aria-label="集計結果">
                   <p className="text-sm break-words">

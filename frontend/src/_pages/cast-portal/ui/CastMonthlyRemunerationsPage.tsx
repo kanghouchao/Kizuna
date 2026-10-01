@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { selfMonthlyRemunerationApi, SelfMonthlyRemunerationStore } from '@/entities/order';
+import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { fromSpringPage } from '@/shared/api';
 import { useResource } from '@/shared/lib';
 import {
@@ -121,6 +122,11 @@ export function CastMonthlyRemunerationsPage() {
                   <p className="text-sm text-muted-foreground">
                     退店・再入店を含む同じ店舗の報酬をまとめます。支払済み額ではありません。
                   </p>
+                  {result && (
+                    <MonthlyPdfActions
+                      criteria={{ scope: 'self', storeId: result.store_id, month: result.month }}
+                    />
+                  )}
                   {result && (
                     <section aria-label="集計結果" className="space-y-2">
                       <p className="break-words">

@@ -12,6 +12,19 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
 
+  private MonthlyPdf monthlyPdf = new MonthlyPdf();
+
+  @Getter
+  @Setter
+  public static class MonthlyPdf {
+    private int timeoutSeconds = 25;
+    private int readTimeoutSeconds = 10;
+    private long scratchMemoryBytes = 8L * 1024 * 1024;
+    private long maxScratchBytes = 64L * 1024 * 1024;
+    private long maxCharacters = 4_000_000;
+    private long maxBytes = 16L * 1024 * 1024;
+  }
+
   private Scheme scheme = Scheme.HTTP;
 
   private String domain;
