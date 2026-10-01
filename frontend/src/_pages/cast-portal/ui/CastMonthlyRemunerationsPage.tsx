@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { selfMonthlyRemunerationApi, SelfMonthlyRemunerationStore } from '@/entities/order';
+import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { fromSpringPage } from '@/shared/api';
 import { useResource } from '@/shared/lib';
 import {
@@ -49,6 +50,12 @@ export function CastMonthlyRemunerationsPage() {
     [query]
   );
   const result = !statement.isLoading && statement.failure === null ? statement.data : null;
+  const pdfResult =
+    statement.failure === null &&
+    statement.data?.store_id === query?.storeId &&
+    statement.data?.month === query?.month
+      ? statement.data
+      : null;
   const paging = result
     ? fromSpringPage(result.orders)
     : { rows: [], page: 0, pageCount: 0, total: 0 };
@@ -121,6 +128,15 @@ export function CastMonthlyRemunerationsPage() {
                   <p className="text-sm text-muted-foreground">
                     退店・再入店を含む同じ店舗の報酬をまとめます。支払済み額ではありません。
                   </p>
+                  {pdfResult && (
+                    <MonthlyPdfActions
+                      criteria={{
+                        scope: 'self',
+                        storeId: pdfResult.store_id,
+                        month: pdfResult.month,
+                      }}
+                    />
+                  )}
                   {result && (
                     <section aria-label="集計結果" className="space-y-2">
                       <p className="break-words">

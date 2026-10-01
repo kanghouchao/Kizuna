@@ -11,6 +11,9 @@
   "devDependencies": {
     "@playwright/test": "1.61.1",
     "@types/node": "26.1.0",
+    "@types/pg": "8.23.1",
+    "pdfjs-dist": "6.3.289",
+    "pg": "8.23.1",
     "playwright-bdd": "9.2.0"
   }
 }

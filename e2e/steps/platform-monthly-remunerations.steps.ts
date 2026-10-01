@@ -192,7 +192,7 @@ Then('月次平台照会は異なる授権集合と直接HTTP要求を検証す�
     const result = await response.json();
     expect(result.total_elements).toBe(search.trim() === storeName.toUpperCase() ? 1 : 0);
   }
-  for (const suffix of ['', '/casts']) {
+  for (const suffix of ['', '/casts', '/pdf']) {
     for (const storeId of [secondStore, '9223372036854775807']) {
       const denied = await request.get(base + suffix, { headers: { ...STORE_HEADERS, ...headers(firstReader) },
         params: { store_id: storeId, person_id: personId, month: originalMonth } });
@@ -205,7 +205,7 @@ Then('月次平台照会は異なる授権集合と直接HTTP要求を検証す�
   const missing = await request.get(base + '/casts', { headers: headers(allReader),
     params: { store_id: '9223372036854775807' } });
   expect(missing.status()).toBe(404);
-  for (const suffix of ['', '/casts', '/stores']) {
+  for (const suffix of ['', '/casts', '/stores', '/pdf']) {
     const params = { store_id: STORE1_ID, person_id: personId, month: originalMonth };
     expect((await request.get(base + suffix, { params })).status()).toBe(401);
     for (const token of [storeOnlyReader, castToken]) {

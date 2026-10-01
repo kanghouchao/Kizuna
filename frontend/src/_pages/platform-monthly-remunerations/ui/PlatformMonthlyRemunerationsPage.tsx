@@ -8,6 +8,7 @@ import {
   type PlatformMonthlyRemunerationStore,
   platformMonthlyRemunerationApi,
 } from '@/entities/order';
+import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { fromSpringPage } from '@/shared/api';
 import { hasPermission, readTokenClaims, useResource } from '@/shared/lib';
 import {
@@ -87,6 +88,13 @@ function MonthlyStatement({
     [query, store]
   );
   const result = !statement.isLoading && statement.failure === null ? statement.data : null;
+  const pdfResult =
+    statement.failure === null &&
+    statement.data?.store_id === store?.store_id &&
+    statement.data?.person_id === query?.personId &&
+    statement.data?.month === query?.month
+      ? statement.data
+      : null;
   const paging = result
     ? fromSpringPage(result.orders)
     : { rows: [], page: 0, pageCount: 0, total: 0 };
@@ -188,6 +196,16 @@ function MonthlyStatement({
               <p className="text-sm text-muted-foreground">
                 退店・再入店を含め同じ本人の選択店舗の報酬を集計します。支払済み額ではありません。実際の入出金・返金・給与支払いは管理対象外です。
               </p>
+              {pdfResult && (
+                <MonthlyPdfActions
+                  criteria={{
+                    scope: 'platform',
+                    storeId: pdfResult.store_id,
+                    personId: pdfResult.person_id,
+                    month: pdfResult.month,
+                  }}
+                />
+              )}
               {result && (
                 <section className="space-y-2" aria-label="集計結果">
                   <p className="text-sm break-words">
