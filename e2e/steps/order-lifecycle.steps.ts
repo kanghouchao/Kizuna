@@ -159,6 +159,8 @@ Then('完了した受注が「対応が要る」群から消える', async ({ pa
 });
 
 Then('完了アーカイブに請求 {string} の行が現れる', async ({ page }, amount: string) => {
+  await page.getByLabel('お客様名', { exact: true }).fill(customerName);
+  await page.getByRole('button', { name: '検索', exact: true }).click();
   await page.getByRole('button', { name: /^完了 \d+ 件$/ }).click();
   await expect(page.getByText(`請求 ${amount}`, { exact: false })).toBeVisible({ timeout: 15000 });
 });
@@ -355,6 +357,8 @@ Given('3000ポイントを利用した請求7000円の完了受注がある', as
 
 When('専用入口で理由 {string} を確認して巻き戻す', async ({ page }, reason: string) => {
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.getByLabel('お客様名', { exact: true }).fill(customerName);
+  await page.getByRole('button', { name: '検索', exact: true }).click();
   await page.getByRole('button', { name: /^完了 \d+ 件$/ }).click();
   await page.locator(`a[href$="/${createdOrderId}/point-rollback"]`).click();
   await expect(page.getByText('7,000 円', { exact: true })).toBeVisible();
