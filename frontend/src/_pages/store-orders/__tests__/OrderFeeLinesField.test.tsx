@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 import { Form } from '@/shared/ui';
-import { orderApi, OrderFeeLineInput, toFeeLineInputs } from '@/entities/order';
+import { orderApi, OrderFeeLine, OrderFeeLineInput, toFeeLineInputs } from '@/entities/order';
 import { OrderFeeLinesField } from '../ui/OrderFeeLinesField';
 
 jest.mock('@/entities/order', () => ({
@@ -56,4 +56,36 @@ test('加算の権限不足と取得失敗を空一覧と区別し、再試行�
   expect(await screen.findByRole('alert')).toHaveTextContent('加算を取得できませんでした');
   fireEvent.click(screen.getByText('再試行'));
   expect(await screen.findByText('選択できる加算がありません。')).toBeInTheDocument();
+});
+
+test('採用済みコース・特殊サービスとポイント控除を小計に含める', () => {
+  const systemLines: OrderFeeLine[] = [
+    { kind: 'BASE_COURSE', name: '基本', amount: 12000, remuneration: 7000, system_owned: false },
+    {
+      kind: 'SPECIAL_SERVICE',
+      name: '特殊',
+      amount: 2000,
+      remuneration: 1000,
+      system_owned: false,
+    },
+    {
+      kind: 'POINT_REDEMPTION',
+      name: 'ポイント利用',
+      amount: 500,
+      remuneration: 0,
+      system_owned: true,
+    },
+  ];
+  function ExistingOrder() {
+    const form = useForm({
+      defaultValues: { fee_lines: [{ kind: 'DISCOUNT', name: '割引', amount: 1000 }] },
+    });
+    return (
+      <Form {...form}>
+        <OrderFeeLinesField systemLines={systemLines} />
+      </Form>
+    );
+  }
+  render(<ExistingOrder />);
+  expect(screen.getByText('小計 ¥12,500')).toBeInTheDocument();
 });

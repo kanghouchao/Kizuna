@@ -20,6 +20,7 @@ import {
   ComboboxList,
   ComboboxTrigger,
 } from '@/shared/ui';
+import { FeePreviewValues } from '../lib/feePreview';
 import { isAxiosError } from 'axios';
 
 export function OrderCourseField({
@@ -31,14 +32,21 @@ export function OrderCourseField({
   historicalOrderId?: string;
   required?: boolean;
 }) {
-  const { control } = useFormContext<{ course_id: string; course_revision_id: string }>();
+  const { control, setValue } = useFormContext<
+    FeePreviewValues & { course_id: string; course_revision_id: string }
+  >();
   const storeId = useParams()?.storeId as string;
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const cursor = cursors[page];
-  const [selected, setSelected] = useState<{ scope: string; value: string; label: string }>();
+  const [selected, setSelected] = useState<{
+    scope: string;
+    value: string;
+    label: string;
+    price: number;
+  }>();
   const scope = `${storeId}:${historicalOrderId ?? ''}`;
   const result = useKeyedResource(
     ['course-options', storeId, historicalOrderId, search, page, cursor],
@@ -69,9 +77,14 @@ export function OrderCourseField({
   );
   const rows = result.data?.rows ?? [];
   const items = [
-    { value: '', label: required ? 'コースを選択' : '採用済み条件を保持' },
+    {
+      value: '',
+      label: required ? 'コースを選択' : '採用済み条件を保持',
+      price: current?.price ?? 0,
+    },
     ...rows.map(row => ({
       value: historicalOrderId ? row.revision_id : row.service_id,
+      price: row.price,
       label: `${row.name} / ${row.duration_minutes}分 / 料金 ¥${row.price.toLocaleString()} / 固定報酬 ¥${row.remuneration.toLocaleString()} / 版${row.revision_number}${row.service_deleted ? '（削除済み）' : ''}`,
     })),
   ];
@@ -105,10 +118,11 @@ export function OrderCourseField({
                 setPage(0);
                 setCursors([undefined]);
               }}
-              itemToStringLabel={(item: { value: string; label: string }) => item.label}
+              itemToStringLabel={(item: (typeof items)[number]) => item.label}
               onValueChange={item => {
                 if (!item) return;
                 field.onChange(item.value);
+                setValue('fee_preview.course', item.price, { shouldDirty: true });
                 setSelected({ ...item, scope });
                 setOpen(false);
               }}
@@ -143,7 +157,7 @@ export function OrderCourseField({
                 ) : (
                   <>
                     <ComboboxList>
-                      {(item: { value: string; label: string }) => (
+                      {(item: (typeof items)[number]) => (
                         <ComboboxItem key={item.value} value={item}>
                           {item.label}
                         </ComboboxItem>

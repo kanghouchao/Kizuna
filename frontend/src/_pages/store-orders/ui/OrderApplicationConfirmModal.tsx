@@ -4,6 +4,7 @@ import { GuestApplicationConsentSection } from './GuestApplicationConsentSection
 
 import { useOrderConfirmation } from './useOrderConfirmation';
 
+import { FeePreviewValues } from '../lib/feePreview';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
@@ -97,7 +98,7 @@ export function OrderApplicationConfirmModal({
     if (missing) onMissing?.();
   };
   const confirmation = useOrderConfirmation(application?.id);
-  const form = useForm<ConfirmFormValues>({
+  const form = useForm<ConfirmFormValues & FeePreviewValues>({
     defaultValues: {
       contact_imports: [],
       receptionist_id: '',
@@ -315,6 +316,9 @@ export function OrderApplicationConfirmModal({
                                 field.onChange(value === true);
                                 if (value === true) {
                                   setValue('special_service_ids', [], { shouldDirty: true });
+                                  setValue('fee_preview.special_services', 0, {
+                                    shouldDirty: true,
+                                  });
                                 }
                               }}
                             />
