@@ -22,9 +22,10 @@ import {
   Input,
   Label,
 } from '@/shared/ui';
+import { FeePreviewValues } from '../lib/feePreview';
 import { OrderSurchargePicker } from './OrderSurchargePicker';
 
-export interface OrderFeeLinesFormValues {
+export interface OrderFeeLinesFormValues extends FeePreviewValues {
   fee_lines: OrderFeeLineInput[];
 }
 
@@ -40,6 +41,15 @@ export function OrderFeeLinesField({
   const { fields, append, remove, update } = useFieldArray({ control, name: 'fee_lines' });
   const [selection, setSelection] = useState<{ storeId: string; index: number | null }>();
   const lines = watch('fee_lines') ?? [];
+  const preview = watch('fee_preview');
+  const subtotal =
+    feeLinesTotal(lines) +
+    (preview?.course ?? feeLinesTotal(systemLines.filter(line => line.kind === 'BASE_COURSE'))) +
+    (preview?.special_services ??
+      feeLinesTotal(systemLines.filter(line => line.kind === 'SPECIAL_SERVICE'))) +
+    feeLinesTotal(
+      systemLines.filter(line => line.kind !== 'BASE_COURSE' && line.kind !== 'SPECIAL_SERVICE')
+    );
   const changed = (index: number) => setValue(`fee_lines.${index}.line_id`, undefined);
   const add = (kind: 'EXTENSION' | 'DISCOUNT' | 'CREDIT_SURCHARGE') =>
     append({
@@ -277,9 +287,7 @@ export function OrderFeeLinesField({
           ¥{line.amount.toLocaleString()} / 固定報酬 ¥{line.remuneration.toLocaleString()}
         </p>
       ))}
-      <p className="text-right text-sm font-medium">
-        小計 ¥{feeLinesTotal(lines).toLocaleString()}
-      </p>
+      <p className="text-right text-sm font-medium">小計 ¥{subtotal.toLocaleString()}</p>
     </div>
   );
 }

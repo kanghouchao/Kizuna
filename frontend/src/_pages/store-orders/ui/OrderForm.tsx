@@ -9,6 +9,7 @@ import { OrderEditorSection } from './OrderEditorSection';
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
+import { FeePreviewValues } from '../lib/feePreview';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { OrderFeeLineInput, ReceptionRoute, WebApplicationReceptionRoute } from '@/entities/order';
@@ -68,7 +69,7 @@ interface OrderFormProps {
 
 export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
   const router = useRouter();
-  const form = useForm<OrderFormData>({
+  const form = useForm<OrderFormData & FeePreviewValues>({
     defaultValues: {
       business_contact_permissions: [],
       receptionist_id: '',
@@ -88,7 +89,7 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
     <Form {...form}>
       <form
         noValidate
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(({ fee_preview: _preview, ...data }) => onSubmit(data))}
         className="rounded-xl border bg-card text-card-foreground shadow-sm"
       >
         <OrderEditorSection title="受付・日時" description="受付担当と訪問する日時を設定します。">

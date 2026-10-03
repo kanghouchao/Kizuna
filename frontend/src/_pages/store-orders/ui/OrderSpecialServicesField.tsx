@@ -6,6 +6,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 import { isAxiosError } from 'axios';
 import { OrderSpecialService, orderApi } from '@/entities/order';
 import { useKeyedResource } from '@/shared/lib';
+import { FeePreviewValues } from '../lib/feePreview';
 import { Button, Checkbox, Input, Label, RegionError } from '@/shared/ui';
 
 export function OrderSpecialServicesField({
@@ -17,11 +18,13 @@ export function OrderSpecialServicesField({
   originalCast?: string;
   historicalOrderId?: string;
 }) {
-  const { control, setValue } = useFormContext<{
-    cast_id: string;
-    special_service_ids: string[];
-    special_service_revision_ids: string[];
-  }>();
+  const { control, setValue } = useFormContext<
+    FeePreviewValues & {
+      cast_id: string;
+      special_service_ids: string[];
+      special_service_revision_ids: string[];
+    }
+  >();
   const cast = useWatch({ control, name: 'cast_id' });
   const field = historicalOrderId ? 'special_service_revision_ids' : 'special_service_ids';
   const selected = useWatch({ control, name: field }) ?? [];
@@ -29,6 +32,7 @@ export function OrderSpecialServicesField({
   useEffect(() => {
     if (lastCast.current !== cast && !historicalOrderId) {
       setValue('special_service_ids', [], { shouldDirty: true });
+      setValue('fee_preview.special_services', 0, { shouldDirty: true });
       lastCast.current = cast;
     }
   }, [cast, historicalOrderId, setValue]);
@@ -42,7 +46,10 @@ export function OrderSpecialServicesField({
       changedCast={changedCast}
       historicalOrderId={historicalOrderId}
       selected={selected}
-      onChange={ids => setValue(field, ids, { shouldDirty: true })}
+      onChange={(ids, price) => {
+        setValue(field, ids, { shouldDirty: true });
+        setValue('fee_preview.special_services', price, { shouldDirty: true });
+      }}
     />
   );
 }
@@ -60,7 +67,7 @@ function SpecialServiceOptions({
   changedCast: boolean;
   historicalOrderId?: string;
   selected: string[];
-  onChange: (ids: string[]) => void;
+  onChange: (ids: string[], price: number) => void;
 }) {
   const store = useParams()?.storeId as string;
   const [search, setSearch] = useState('');
@@ -155,22 +162,25 @@ function SpecialServiceOptions({
                       checked={selected.includes(value)}
                       disabled={!selected.includes(value) && !available}
                       onCheckedChange={checked => {
-                        onChange(
-                          checked
-                            ? [
-                                ...selected.filter(
-                                  id =>
-                                    !historicalOrderId ||
-                                    !rows.some(
-                                      item =>
-                                        item.service_id === row.service_id &&
-                                        item.revision_id === id
-                                    )
-                                ),
-                                value,
-                              ]
-                            : selected.filter(id => id !== value)
-                        );
+                        const ids = checked
+                          ? [
+                              ...selected.filter(
+                                id =>
+                                  !historicalOrderId ||
+                                  !rows.some(
+                                    item =>
+                                      item.service_id === row.service_id && item.revision_id === id
+                                  )
+                              ),
+                              value,
+                            ]
+                          : selected.filter(id => id !== value);
+                        const price = rows
+                          .filter(item =>
+                            ids.includes(historicalOrderId ? item.revision_id : item.service_id)
+                          )
+                          .reduce((sum, item) => sum + item.price, 0);
+                        onChange(ids, price);
                         if (checked)
                           setChosen(previous => [...previous, row as OrderSpecialService]);
                       }}

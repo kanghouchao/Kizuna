@@ -65,6 +65,8 @@ describe('オーダーフォームのセレクト配線と送信ペイロード'
     expect(body.customer_selection).toEqual({ mode: 'NONE' });
     expect(body.course_id).toBe('course-1');
     expect(body).not.toHaveProperty('course_name');
+    expect(body).not.toHaveProperty('fee_preview');
+    expect(screen.getByText('小計 ¥12,000')).toBeInTheDocument();
     expect(body.fee_lines).toEqual([]);
   });
 

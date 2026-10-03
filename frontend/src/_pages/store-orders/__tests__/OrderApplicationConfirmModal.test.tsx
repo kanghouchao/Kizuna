@@ -238,11 +238,13 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
       const option = await screen.findByRole('checkbox', { name: /受諾済み追加/ });
       fireEvent.click(option);
       expect(option).toBeChecked();
+      expect(screen.getByText('小計 ¥14,000')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('checkbox', { name: '指名を外して確定する' }));
       expect(screen.queryByRole('checkbox', { name: /受諾済み追加/ })).not.toBeInTheDocument();
       expect(
         screen.getByText('指名を外すため、特殊サービスは選択できません。')
       ).toBeInTheDocument();
+      expect(screen.getByText('小計 ¥12,000')).toBeInTheDocument();
       if (restore) {
         fireEvent.click(screen.getByRole('checkbox', { name: '指名を外して確定する' }));
         expect(await screen.findByRole('checkbox', { name: /受諾済み追加/ })).not.toBeChecked();
