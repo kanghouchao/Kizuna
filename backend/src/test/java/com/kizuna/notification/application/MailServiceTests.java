@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.notification.transport.EmailTransport;
 import com.kizuna.settings.application.SmtpSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
@@ -38,13 +41,46 @@ class MailServiceTests {
   }
 
   @Test
-  @DisplayName("SMTP 設定もフォールバック送信クライアントもない場合はログのみで例外を投げないこと")
+  void unavailableTransportNeverReportsSent() {
+    when(systemConfigService.smtpSettings()).thenReturn(NOT_CONFIGURED);
+
+    assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
+        .isEqualTo(EmailTransport.Result.UNAVAILABLE);
+    verifyNoInteractions(mailSender);
+  }
+
+  @Test
+  void providerAcknowledgementIsDistinctFromUnknownAndDefiniteFailure() {
+    when(systemConfigService.smtpSettings()).thenReturn(NOT_CONFIGURED);
+    when(mailSenderProvider.getIfAvailable()).thenReturn(mailSender);
+    assertThat(service.available()).isTrue();
+    assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
+        .isEqualTo(EmailTransport.Result.SENT);
+    doThrow(new MailSendException("機密な提供方応答")).when(mailSender).send(any(SimpleMailMessage.class));
+    assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
+        .isEqualTo(EmailTransport.Result.UNKNOWN);
+    doThrow(new MailAuthenticationException("認証拒否"))
+        .when(mailSender)
+        .send(any(SimpleMailMessage.class));
+    assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
+        .isEqualTo(EmailTransport.Result.FAILED);
+  }
+
+  @Test
+  void configurationFailureIsUnavailable() {
+    when(systemConfigService.smtpSettings()).thenThrow(new IllegalStateException("機密情報"));
+    assertThat(service.available()).isFalse();
+    assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
+        .isEqualTo(EmailTransport.Result.UNAVAILABLE);
+    verifyNoInteractions(mailSender);
+  }
+
+  @Test
+  @DisplayName("SMTP が未設定でも既存呼び出し元へ例外を伝播しないこと")
   void send_noConfigNoFallback() {
     when(systemConfigService.smtpSettings()).thenReturn(NOT_CONFIGURED);
-    // mailSenderProvider.getIfAvailable() は既定で null（Bean 不在相当）
 
     service.send("to@example.com", "件名", "本文");
-    // 例外が出なければ成功
   }
 
   @Test
@@ -121,6 +157,5 @@ class MailServiceTests {
     doThrow(new RuntimeException("接続失敗")).when(mailSender).send(any(SimpleMailMessage.class));
 
     service.send("to@example.com", "件名", "本文");
-    // 例外が伝播しなければ成功
   }
 }

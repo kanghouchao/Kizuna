@@ -4,4 +4,6 @@ export type {
   ExecutionResponse,
   ExecutionRequest,
   ServiceCandidate,
+  TaskType,
+  TaskStoreOption,
 } from './model/types';

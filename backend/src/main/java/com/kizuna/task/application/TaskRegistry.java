@@ -3,6 +3,7 @@ package com.kizuna.task.application;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskHandler;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -18,6 +19,10 @@ public class TaskRegistry {
         handlers.stream()
             .collect(Collectors.toUnmodifiableMap(TaskHandler::name, Function.identity()));
     if (this.handlers.size() > 32) throw new IllegalStateException("登録処理数の上限を超えています");
+  }
+
+  public List<TaskHandler> registered() {
+    return handlers.values().stream().sorted(Comparator.comparing(TaskHandler::name)).toList();
   }
 
   public TaskHandler requireName(String name) {

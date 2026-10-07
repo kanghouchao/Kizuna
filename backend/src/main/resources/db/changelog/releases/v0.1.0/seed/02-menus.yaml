@@ -278,3 +278,13 @@ databaseChangeLog:
               - column: { name: icon, value: UsersIcon }
               - column: { name: permission, value: RECRUITMENT_VIEW }
               - column: { name: sort_order, valueNumeric: 4 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-notification-deliveries }
+              - column: { name: parent_id, value: store-crm }
+              - column: { name: label, value: 業務通知 }
+              - column: { name: path, value: /store/notification-deliveries }
+              - column: { name: icon, value: MegaphoneIcon }
+              - column: { name: permission, value: NOTIFICATION_VIEW }
+              - column: { name: sort_order, valueNumeric: 2 }

@@ -77,6 +77,9 @@ databaseChangeLog:
       file: store/15-recruitment.yaml
       relativeToChangelogFile: true
   - include:
+      file: store/10-notification-delivery.yaml
+      relativeToChangelogFile: true
+  - include:
       file: seed/01-roles.yaml
       relativeToChangelogFile: true
   - include:

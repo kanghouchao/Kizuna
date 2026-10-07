@@ -4,6 +4,7 @@ silent: true
 
 # ルートの運用タスクを Taskfile に集約
 vars:
+  DOCKER_TAG: '{{default "latest" .DOCKER_TAG}}'
   env: '{{default "development" .env}}'
   service: '{{default "" .service}}'
 
@@ -25,10 +26,10 @@ tasks:
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
-          task -d "{{.service}}" build
+          task -d "{{.service}}" build DOCKER_TAG="{{.DOCKER_TAG}}"
         else
-          task -d backend build
-          task -d frontend build
+          task -d backend build DOCKER_TAG="{{.DOCKER_TAG}}"
+          task -d frontend build DOCKER_TAG="{{.DOCKER_TAG}}"
         fi
 
   lint:
@@ -53,13 +54,13 @@ tasks:
       - |
         if [ -n "{{.service}}" ]; then
           echo "🔍 {{.service}}サービスのテストを実行中..."
-          task -d "{{.service}}" test
+          task -d "{{.service}}" test DOCKER_TAG="{{.DOCKER_TAG}}"
         else
           echo "🔍 すべてのサービスのテストを実行中..."
           echo "🧪 Frontend tests..."
-          task -d frontend test
+          task -d frontend test DOCKER_TAG="{{.DOCKER_TAG}}"
           echo "🧪 Backend tests..."
-          task -d backend test
+          task -d backend test DOCKER_TAG="{{.DOCKER_TAG}}"
           echo "✅テスト完了"
         fi
 
@@ -122,8 +123,8 @@ tasks:
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
-          task -d "{{.service}}" clean
+          task -d "{{.service}}" clean DOCKER_TAG="{{.DOCKER_TAG}}"
         else
-          task -d backend clean
-          task -d frontend clean
+          task -d backend clean DOCKER_TAG="{{.DOCKER_TAG}}"
+          task -d frontend clean DOCKER_TAG="{{.DOCKER_TAG}}"
         fi

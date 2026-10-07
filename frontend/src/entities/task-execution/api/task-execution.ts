@@ -10,9 +10,14 @@ import {
   ExecutionResponse,
   ExecutionRequest,
   ServiceCandidate,
+  TaskType,
+  TaskStoreOption,
 } from '../model/types';
 const path = '/platform/task-executions';
 export const taskExecutionApi = {
+  taskTypes: async (): Promise<TaskType[]> => (await apiClient.get(`${path}/task-types`)).data,
+  stores: async (page: number): Promise<PageResult<TaskStoreOption>> =>
+    fromSpringPage((await apiClient.get(`${path}/stores`, { params: { page, size: 20 } })).data),
   list: async (cursor?: string): Promise<CursorPageResult<ExecutionSummary>> =>
     fromCursorPage((await apiClient.get(path, { params: { cursor } })).data),
   get: async (id: number): Promise<ExecutionResponse> =>
@@ -25,12 +30,13 @@ export const taskExecutionApi = {
     (await apiClient.post(`${path}/${id}/interruption`, { reason })).data,
   candidates: async (
     page: number,
-    taskName = 'SERVICE_IDENTITY_CHECK'
+    taskName = 'SERVICE_IDENTITY_CHECK',
+    storeId?: string
   ): Promise<PageResult<ServiceCandidate>> =>
     fromSpringPage(
       (
         await apiClient.get(`${path}/service-identities`, {
-          params: { page, size: 20, task_name: taskName },
+          params: { page, size: 20, task_name: taskName, store_id: storeId },
         })
       ).data
     ),

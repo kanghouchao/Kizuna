@@ -6,6 +6,8 @@ import { auditEventApi } from '@/entities/audit-event';
 import { notify } from '@/shared/notify';
 jest.mock('@/entities/task-execution', () => ({
   taskExecutionApi: {
+    taskTypes: jest.fn(),
+    stores: jest.fn(),
     list: jest.fn(),
     get: jest.fn(),
     candidates: jest.fn(),
@@ -38,6 +40,11 @@ const row: ExecutionSummary = {
 };
 beforeEach(() => {
   jest.resetAllMocks();
+  tasks.taskTypes.mockResolvedValue([
+    { name: 'SERVICE_IDENTITY_CHECK', scope: 'PLATFORM', manual_allowed: true },
+    { name: 'POINT_EXPIRY', scope: 'PLATFORM', manual_allowed: true },
+  ]);
+  tasks.stores.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
   tasks.candidates.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 });
 test('実行要求の応答を受け取れなくても同じ入力の再送には同じ実行キーを使う', async () => {
@@ -177,7 +184,9 @@ test('処理を変更すると旧主体を消し、新しい処理の候補だ�
   const expiry = await screen.findByRole('option', { name: '期限切れポイントの記帳' });
   fireEvent.pointerDown(expiry);
   fireEvent.click(expiry);
-  await waitFor(() => expect(tasks.candidates).toHaveBeenLastCalledWith(0, 'POINT_EXPIRY'));
+  await waitFor(() =>
+    expect(tasks.candidates).toHaveBeenLastCalledWith(0, 'POINT_EXPIRY', undefined)
+  );
   expect(await screen.findByRole('combobox', { name: '実行主体' })).not.toHaveTextContent(
     '確認サービス'
   );
@@ -196,4 +205,65 @@ test('処理を変更すると旧主体を消し、新しい処理の候補だ�
       expect.objectContaining({ task_name: 'POINT_EXPIRY', service_user_id: 20 })
     )
   );
+});
+
+test('店舗単位の登録処理は店舗選択後に候補を取得し文字列IDを保つ', async () => {
+  tasks.taskTypes.mockResolvedValue([
+    { name: 'SERVICE_IDENTITY_CHECK', scope: 'PLATFORM', manual_allowed: true },
+    { name: 'NOTIFICATION_DELIVER', scope: 'STORE', manual_allowed: true },
+  ]);
+  tasks.stores.mockResolvedValue({
+    rows: [{ id: '9007199254740993', name: '通知店舗' }],
+    page: 0,
+    pageCount: 1,
+    total: 1,
+  });
+  tasks.list.mockResolvedValue({ rows: [], nextCursor: null });
+  tasks.candidates.mockImplementation(async (_page, name, store) => ({
+    rows: store ? [{ id: 10, display_name: '通知主体' }] : [],
+    page: 0,
+    pageCount: 1,
+    total: store ? 1 : 0,
+  }));
+  render(<TaskExecutionsPage />);
+  const selector = await screen.findByRole('combobox', { name: '処理' });
+  await waitFor(() => expect(selector).not.toBeDisabled());
+  fireEvent.click(selector);
+  const type = await screen.findByRole('option', { name: '業務通知の送信' });
+  fireEvent.pointerDown(type);
+  fireEvent.click(type);
+  expect(await screen.findByText('対象店舗を選択してください。')).toBeVisible();
+  fireEvent.click(await screen.findByRole('combobox', { name: '対象店舗' }));
+  const store = await screen.findByRole('option', { name: '通知店舗' });
+  fireEvent.pointerDown(store);
+  fireEvent.click(store);
+  await waitFor(() =>
+    expect(tasks.candidates).toHaveBeenLastCalledWith(0, 'NOTIFICATION_DELIVER', '9007199254740993')
+  );
+  fireEvent.click(await screen.findByRole('combobox', { name: '実行主体' }));
+  const service = await screen.findByRole('option', { name: '通知主体' });
+  fireEvent.pointerDown(service);
+  fireEvent.click(service);
+  fireEvent.change(screen.getByLabelText('対象日'), { target: { value: '2026-10-07' } });
+  tasks.create.mockRejectedValue(new Error('network'));
+  fireEvent.click(screen.getByRole('button', { name: '通知を送信器へ引き渡す' }));
+  await waitFor(() => expect(tasks.create).toHaveBeenCalled());
+  expect(tasks.create.mock.calls[0][0].store_id).toBe('9007199254740993');
+});
+
+test('登録処理の手動権限がなければ実行操作を送らない', async () => {
+  tasks.taskTypes.mockResolvedValue([
+    { name: 'SERVICE_IDENTITY_CHECK', scope: 'PLATFORM', manual_allowed: false },
+  ]);
+  tasks.list.mockResolvedValue({ rows: [], nextCursor: null });
+  tasks.candidates.mockResolvedValue({
+    rows: [{ id: 10, display_name: '確認主体' }],
+    page: 0,
+    pageCount: 1,
+    total: 1,
+  });
+  render(<TaskExecutionsPage />);
+  expect(await screen.findByText('この処理の手動実行権限がありません。')).toBeVisible();
+  expect(await screen.findByRole('button', { name: '実行確認を記録' })).toBeDisabled();
+  expect(tasks.create).not.toHaveBeenCalled();
 });

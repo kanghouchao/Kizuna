@@ -69,6 +69,10 @@ public class ServiceExecutionIdentityService {
   public record Candidate(Long id, String displayName) {}
 
   public Page<Candidate> candidates(int page, int size, PermissionCode permission) {
+    return candidates(page, size, permission, null);
+  }
+
+  public Page<Candidate> candidates(int page, int size, PermissionCode permission, Long storeId) {
     if (page < 0 || size < 1 || size > 100) throw new ServiceException("ページ指定が不正です");
     var pageable = PageRequest.of(page, size, Sort.by("displayName", "id"));
     var roleIds = roles.findIdsByPermissionCode(PermissionCode.TASK_EXECUTE.name());
@@ -81,7 +85,11 @@ public class ServiceExecutionIdentityService {
               return cb.and(
                   cb.equal(root.get("userType"), UserType.SERVICE),
                   cb.isTrue(root.get("enabled")),
-                  cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
+                  storeId == null
+                      ? cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES)
+                      : cb.or(
+                          cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
+                          cb.isMember(storeId, root.get("storeIds"))),
                   root.join("roleIds").in(roleIds),
                   root.join("roleIds").in(taskRoleIds));
             },

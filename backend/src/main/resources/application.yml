@@ -1,4 +1,7 @@
 spring:
+  modulith:
+    events:
+      republish-outstanding-events-on-restart: ${REPUBLISH_OUTSTANDING_EVENTS:false}
   profiles:
     active:
     - ${SPRING_PROFILE:dev}
