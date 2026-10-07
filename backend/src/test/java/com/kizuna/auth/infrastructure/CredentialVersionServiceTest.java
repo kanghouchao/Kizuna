@@ -64,13 +64,70 @@ class CredentialVersionServiceTest {
   }
 
   @Test
-  @DisplayName("キャッシュ一致なら DB を見ずに通す（定常経路は Redis のみ）")
-  void cacheHitWithMatchingVersionAcceptsWithoutDb() {
+  @SuppressWarnings("unchecked")
+  @DisplayName("キャッシュ一致でも DB の確定版を照合し、一致時はキャッシュを書き直さない")
+  void cacheHitWithMatchingVersionChecksDbWithoutRewritingCache() {
     cached("3");
+    when(userRepository.findCredentialVersionByEmail(EMAIL)).thenReturn(Optional.of(3L));
 
     assertThat(service.isCurrent(EMAIL, 3L)).isTrue();
 
-    verifyNoInteractions(userRepository);
+    verify(userRepository).findCredentialVersionByEmail(EMAIL);
+    verify(redisTemplate, never()).execute(any(RedisScript.class), anyList(), any(), any());
+  }
+
+  @Test
+  @DisplayName("失効反映が失われてキャッシュと旧 claim が一致しても DB の確定版で拒否する")
+  void staleMatchingCacheRejectsCommittedRevocation() {
+    cached("3");
+    when(userRepository.findCredentialVersionByEmail(EMAIL)).thenReturn(Optional.of(4L));
+
+    assertThat(service.isCurrent(EMAIL, 3L)).isFalse();
+  }
+
+  @Test
+  @DisplayName("キャッシュ一致でも正本の利用者が存在しなければ拒否する")
+  void matchingCacheWithMissingUserIsRejected() {
+    cached("3");
+    when(userRepository.findCredentialVersionByEmail(EMAIL)).thenReturn(Optional.empty());
+
+    assertThat(service.isCurrent(EMAIL, 3L)).isFalse();
+  }
+
+  @Test
+  @DisplayName("キャッシュ一致でも DB 障害を通過させず検証を失敗させる")
+  void databaseFailureWithMatchingCachePropagates() {
+    cached("3");
+    when(userRepository.findCredentialVersionByEmail(EMAIL))
+        .thenThrow(new IllegalStateException("正本を照合できません"));
+
+    assertThatThrownBy(() -> service.isCurrent(EMAIL, 3L))
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  @DisplayName("キャッシュと claim が DB より新しくても受理せず、キャッシュを巻き戻さない")
+  void cacheAndClaimAheadOfDatabaseAreRejected() {
+    cached("4");
+    when(userRepository.findCredentialVersionByEmail(EMAIL)).thenReturn(Optional.of(3L));
+
+    assertThat(service.isCurrent(EMAIL, 4L)).isFalse();
+
+    verify(redisTemplate, never()).execute(any(RedisScript.class), anyList(), any(), any());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  @DisplayName("正本と一致してもキャッシュ補写の失敗は通過させない")
+  void cacheBackfillFailurePropagates() {
+    cached(null);
+    when(userRepository.findCredentialVersionByEmail(EMAIL)).thenReturn(Optional.of(3L));
+    when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any()))
+        .thenThrow(new IllegalStateException("キャッシュへ反映できません"));
+
+    assertThatThrownBy(() -> service.isCurrent(EMAIL, 3L))
+        .isInstanceOf(IllegalStateException.class);
   }
 
   @Test

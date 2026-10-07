@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
@@ -91,6 +93,17 @@ class JwtDecoderConfigTest {
     Jwt jwt = decoder.decode(token);
 
     assertThat(jwt.getSubject()).isEqualTo("user@kizuna.test");
+    verify(credentialVersionService).isCurrent("user@kizuna.test", 0L);
+  }
+
+  @Test
+  @DisplayName("有効な token でも資格情報の正本を照合できなければ検証を失敗させる")
+  void credentialValidationFailurePropagates() {
+    when(credentialVersionService.isCurrent("user@kizuna.test", 0L))
+        .thenThrow(new IllegalStateException("正本を照合できません"));
+    String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L);
+
+    assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -99,6 +112,7 @@ class JwtDecoderConfigTest {
     String token = issueToken("OtherIssuer", 3_600_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
+    verifyNoInteractions(tokenBlacklistService, credentialVersionService);
   }
 
   @Test
@@ -107,6 +121,7 @@ class JwtDecoderConfigTest {
     String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, -1_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
+    verifyNoInteractions(tokenBlacklistService, credentialVersionService);
   }
 
   @Test
@@ -116,6 +131,7 @@ class JwtDecoderConfigTest {
     String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
+    verifyNoInteractions(credentialVersionService);
   }
 
   @Test
