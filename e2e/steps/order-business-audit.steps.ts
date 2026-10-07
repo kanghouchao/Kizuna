@@ -1,6 +1,10 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import {
+  activateEmergencyElevation,
+  revokeEmergencyElevation,
+  listAuditEvents,
+  getAuditEvent,
   createCast,
   createCourse,
   createPermissionRole,
@@ -76,19 +80,13 @@ Given(
       [role],
     );
     auditor = await loginPlatformUser(request, email, privatePassword);
-    const activation = await request.post(
-      "/api/platform/emergency-elevations",
-      {
-        headers: bearer(auditor),
-        data: {
-          store_id: Number(STORE1_ID),
-          reason: "受注監査の検証",
-          password: privatePassword,
-        },
-      },
+    const session = await activateEmergencyElevation(
+      request,
+      auditor,
+      STORE1_ID,
+      "受注監査の検証",
+      privatePassword,
     );
-    expect(activation.status(), await activation.text()).toBe(201);
-    const session = await activation.json();
     elevated = session.token;
     elevationId = session.id;
     castId = await createCast(request, staff, "監査対象-" + suffix);
@@ -313,12 +311,8 @@ Then(
   "成功した受注変更だけが前後値と主体を伴い秘密なしで監査に残る",
   async ({ request }) => {
     for (const item of expected) {
-      const listing = await request.get("/api/platform/audit-events", {
-        headers: bearer(auditor),
-        params: { action: item.action, size: 100 },
-      });
-      expect(listing.status()).toBe(200);
-      const events = (await listing.json()).content.filter(
+      const listing = await listAuditEvents(request, auditor, item.action);
+      const events = listing.content.filter(
         (event: { target_id: string }) => event.target_id === item.target,
       );
       expect(events).toHaveLength(1);
@@ -331,12 +325,7 @@ Then(
         expect(event.source_type).toBe("ORDER_APPLICATION");
         expect(event.source_id).toBe(item.source);
       }
-      const response = await request.get(
-        `/api/platform/audit-events/${event.id}`,
-        { headers: bearer(auditor) },
-      );
-      expect(response.status()).toBe(200);
-      const detail = await response.json();
+      const detail = await getAuditEvent(request, auditor, event.id);
       if (item.before === null) expect(detail.before_values).toEqual({});
       else expect(detail.before_values.status).toBe(item.before);
       expect(detail.after_values.status).toBe(item.after);
@@ -373,13 +362,6 @@ Then(
       ])
         expect(serialized).not.toContain(secret);
     }
-    expect(
-      (
-        await request.post(
-          `/api/platform/emergency-elevations/${elevationId}/revocation`,
-          { headers: bearer(auditor) },
-        )
-      ).status(),
-    ).toBe(204);
+    await revokeEmergencyElevation(request, auditor, elevationId);
   },
 );

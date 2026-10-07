@@ -25,6 +25,7 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.Collection;
 import java.util.List;
@@ -47,6 +48,7 @@ public class CustomerContactService {
   private final CustomerContactRepository contacts;
   private final CustomerContactHistoryRepository histories;
   private final PlatformUserRepository users;
+  private final BusinessAudit businessAudit;
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -79,7 +81,9 @@ public class CustomerContactService {
     lock(customerId);
     CustomerContact contact =
         contacts.saveAndFlush(CustomerContact.create(customerId, input.type(), input.value()));
-    record(contact, ContactAction.CREATE, null, actorId(), UUID.randomUUID().toString());
+    var history =
+        record(contact, ContactAction.CREATE, null, actorId(), UUID.randomUUID().toString());
+    audit(contact, null, history);
     return response(contact);
   }
 
@@ -89,6 +93,7 @@ public class CustomerContactService {
     lock(customerId);
     var contact = active(customerId, id);
     var before = contact.state();
+    var auditBefore = ContactAuditSnapshot.of(contact);
     if (contact.isPreferred()) {
       contacts
           .findPreferred(customerId, input.type())
@@ -103,7 +108,8 @@ public class CustomerContactService {
     Long actorId = actorId();
     if (before.type() != contact.getType() || !before.value().equals(contact.getValue()))
       inheritBeforeRemoval(contact, before, operationId, actorId);
-    record(contact, ContactAction.UPDATE, before, actorId, operationId);
+    var history = record(contact, ContactAction.UPDATE, before, actorId, operationId);
+    audit(contact, auditBefore, history);
     contacts.flush();
     return response(contact);
   }
@@ -115,16 +121,19 @@ public class CustomerContactService {
     lock(customerId);
     var contact = active(customerId, id);
     var before = contact.state();
+    var auditBefore = ContactAuditSnapshot.of(contact);
     contact.changePermission(purpose, input.status());
-    histories.save(
-        CustomerContactHistory.permission(
-            contact,
-            actorId(),
-            before,
-            purpose,
-            input.source(),
-            input.reason(),
-            UUID.randomUUID().toString()));
+    var history =
+        histories.save(
+            CustomerContactHistory.permission(
+                contact,
+                actorId(),
+                before,
+                purpose,
+                input.source(),
+                input.reason(),
+                UUID.randomUUID().toString()));
+    audit(contact, auditBefore, history);
     contacts.flush();
     return response(contact);
   }
@@ -135,11 +144,13 @@ public class CustomerContactService {
     lock(customerId);
     var contact = active(customerId, id);
     var before = contact.state();
+    var auditBefore = ContactAuditSnapshot.of(contact);
     String operationId = UUID.randomUUID().toString();
     Long actorId = actorId();
     inheritBeforeRemoval(contact, before, operationId, actorId);
     contact.delete();
-    record(contact, ContactAction.DELETE, before, actorId, operationId);
+    var history = record(contact, ContactAction.DELETE, before, actorId, operationId);
+    audit(contact, auditBefore, history);
   }
 
   @StoreScoped
@@ -154,15 +165,19 @@ public class CustomerContactService {
     String operationId = UUID.randomUUID().toString();
     if (previous != null) {
       var before = previous.state();
+      var auditBefore = ContactAuditSnapshot.of(previous);
       previous.prefer(false);
-      record(previous, ContactAction.PREFERENCE, before, actorId, operationId);
+      var history = record(previous, ContactAction.PREFERENCE, before, actorId, operationId);
+      audit(previous, auditBefore, history);
       // 部分一意索引を満たしたまま指定先を切り替えるため、解除を先に確定させる。
       contacts.flush();
     }
     if (chosen != null) {
       var before = chosen.state();
+      var auditBefore = ContactAuditSnapshot.of(chosen);
       chosen.prefer(true);
-      record(chosen, ContactAction.PREFERENCE, before, actorId, operationId);
+      var history = record(chosen, ContactAction.PREFERENCE, before, actorId, operationId);
+      audit(chosen, auditBefore, history);
     }
   }
 
@@ -240,14 +255,42 @@ public class CustomerContactService {
     contacts.flush();
   }
 
-  private void record(
+  private CustomerContactHistory record(
       CustomerContact contact,
       ContactAction action,
       ContactState before,
       Long actorId,
       String operationId) {
     if (!contact.state().equals(before))
-      histories.save(CustomerContactHistory.record(contact, action, actorId, before, operationId));
+      return histories.save(
+          CustomerContactHistory.record(contact, action, actorId, before, operationId));
+    return null;
+  }
+
+  private void audit(
+      CustomerContact contact, ContactAuditSnapshot before, CustomerContactHistory history) {
+    if (history == null) return;
+    contacts.flush();
+    histories.flush();
+    var after = ContactAuditSnapshot.of(contact).after(before, history);
+    businessAudit.recordById(
+        history.getActorId(),
+        contact.getStoreId(),
+        switch (history.getAction()) {
+          case CREATE -> "CUSTOMER_CONTACT_CREATED";
+          case UPDATE -> "CUSTOMER_CONTACT_UPDATED";
+          case DELETE -> "CUSTOMER_CONTACT_DELETED";
+          case RESTRICTION_INHERITANCE -> "CUSTOMER_CONTACT_RESTRICTION_INHERITED";
+          case PREFERENCE -> "CUSTOMER_CONTACT_PREFERENCE_CHANGED";
+          case PERMISSION_CHANGE -> "CUSTOMER_CONTACT_PERMISSION_RECORDED";
+          default -> throw new IllegalArgumentException("対象外の連絡先監査操作です");
+        },
+        "CUSTOMER_CONTACT",
+        contact.getId(),
+        "CUSTOMER_CONTACT_HISTORY",
+        history.getId(),
+        before == null ? Map.of() : before.values(),
+        after);
   }
 
   private record ContactKey(ContactType type, String value) {}
@@ -282,9 +325,13 @@ public class CustomerContactService {
     for (var target : group) {
       if (target.getId().equals(source.getId())) continue;
       var before = target.state();
+      var auditBefore = ContactAuditSnapshot.of(target);
       target.inheritRestriction(restriction);
-      histories.save(
-          CustomerContactHistory.inheritance(target, actorId, before, operationId, source.getId()));
+      var history =
+          histories.save(
+              CustomerContactHistory.inheritance(
+                  target, actorId, before, operationId, source.getId()));
+      if (!target.state().equals(before)) audit(target, auditBefore, history);
     }
   }
 
