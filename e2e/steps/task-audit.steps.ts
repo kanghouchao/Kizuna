@@ -7,12 +7,15 @@ let admin = '';
 let operator = '';
 let restricted = '';
 let email = '';
+let limitedEmail = '';
 let password = '';
 let serviceId = 0;
 let serviceName = '';
 let roleId = 0;
 let serviceRoleId = 0;
 const headers = (token: string) => ({ Authorization: `Bearer ${token}` });
+type MenuNode = { path: string | null; items: MenuNode[] };
+const menuPaths = (menus: MenuNode[]): (string | null)[] => menus.flatMap(menu => [menu.path, ...menuPaths(menu.items)]);
 
 Given('専用の処理実行者とサービスIDが用意されている', async ({ request, $testInfo }) => {
   $testInfo.setTimeout(120000);
@@ -25,7 +28,7 @@ Given('専用の処理実行者とサービスIDが用意されている', async
   roleId = await createPermissionRole(request, admin, '実行監査-' + suffix, ['TASK_MANAGE', 'AUDIT_VIEW', 'PLATFORM_MENU_VIEW']);
   await createPlatformStaffFixture(request, admin, email, password, [roleId]);
   operator = await loginPlatformUser(request, email, password);
-  const limitedEmail = 'audit-limited-' + suffix + '@kizuna.test';
+  limitedEmail = 'audit-limited-' + suffix + '@kizuna.test';
   await createPlatformStaffFixture(request, admin, limitedEmail, password, [roleId], [Number(STORE1_ID)]);
   restricted = await loginPlatformUser(request, limitedEmail, password);
   serviceRoleId = await createPermissionRole(request, admin, '実行確認-' + suffix, ['TASK_EXECUTE']);
@@ -35,7 +38,27 @@ Given('専用の処理実行者とサービスIDが用意されている', async
   serviceId = (await service.json()).id;
 });
 
-When('処理を再送し主体の権限と対象範囲を検証する', async ({ request }) => {
+When('処理を再送し主体の権限と対象範囲を検証する', async ({ request, browser }) => {
+  for (const [token, visible] of [[operator, true], [restricted, false], [admin, false]] as const) {
+    const menus = await request.get('/api/platform/menus/me', { headers: headers(token) });
+    expect(menus.status()).toBe(200);
+    const paths = menuPaths(await menus.json());
+    expect(paths.includes('/platform/task-executions')).toBe(visible);
+    expect(paths.includes('/platform/audit-events')).toBe(visible);
+  }
+  const restrictedPage = await browser.newPage();
+  try {
+    await restrictedPage.goto(`${PLATFORM_URL}/platform/login`);
+    await restrictedPage.getByLabel('メールアドレス', { exact: true }).fill(limitedEmail);
+    await restrictedPage.getByLabel('パスワード', { exact: true }).fill(password);
+    await restrictedPage.getByRole('button', { name: 'ログイン', exact: true }).click();
+    await expect(restrictedPage).toHaveURL(/\/platform\/dashboard/, { timeout: 15000 });
+    await expect(restrictedPage.locator('aside').locator('a[href="/platform/dashboard"]')).toBeVisible();
+    await expect(restrictedPage.locator('aside').locator('a[href="/platform/task-executions"]')).toHaveCount(0);
+    await expect(restrictedPage.locator('aside').locator('a[href="/platform/audit-events"]')).toHaveCount(0);
+  } finally {
+    await restrictedPage.close();
+  }
   const body = { task_name: 'SERVICE_IDENTITY_CHECK', logical_key: crypto.randomUUID(), service_user_id: serviceId, store_id: null, period_start: '2026-10-07', period_end: '2026-10-07' };
   expect((await request.get('/api/platform/task-executions', { headers: headers(restricted) })).status()).toBe(403);
   expect((await request.get('/api/platform/audit-events', { headers: headers(restricted) })).status()).toBe(403);
@@ -95,7 +118,8 @@ Then('実行履歴と変更前後の監査を画面で確認できる', async ({
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).toHaveURL(/\/platform\/dashboard/, { timeout: 15000 });
-  await page.goto(`${PLATFORM_URL}/platform/task-executions`);
+  await expect(page.locator('aside').locator('a[href="/platform/audit-events"]')).toBeVisible();
+  await page.locator('aside').locator('a[href="/platform/task-executions"]').click();
   await expect(page.getByRole('heading', { name: '処理の実行履歴' })).toBeVisible();
   await page.getByRole('combobox', { name: '実行主体' }).click();
   await page.getByRole('option', { name: serviceName }).click();
