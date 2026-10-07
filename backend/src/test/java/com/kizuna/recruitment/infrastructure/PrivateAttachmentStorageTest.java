@@ -37,11 +37,46 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 class PrivateAttachmentStorageTest {
   @TempDir Path temporary;
+
+  @Test
+  void lowerNewUploadLimitDoesNotInvalidateStoredDownloadsOrHead() throws Exception {
+    var properties = configured();
+    properties.getPrivateAttachments().setMaxFileBytes(2);
+    properties.getPrivateAttachments().setTemporaryDirectory(temporary.toString());
+    var client = mock(S3Client.class);
+    byte[] bytes = {1, 2, 3};
+    var object = descriptor(bytes);
+    when(client.getObject(any(GetObjectRequest.class))).thenReturn(response(bytes));
+    when(client.headObject(any(HeadObjectRequest.class)))
+        .thenReturn(
+            HeadObjectResponse.builder().contentLength(3L).contentType("image/png").build());
+    try (var storage = new PrivateAttachmentStorage(properties, () -> client)) {
+      storage.verifyMetadata(object);
+      try (var downloaded = storage.readVerified(object)) {
+        assertThat(Files.readAllBytes(downloaded.path())).containsExactly(bytes);
+      }
+    }
+  }
+
+  @Test
+  void storedDescriptorAboveAbsoluteSafetyLimitNeverReachesStorage() {
+    var client = mock(S3Client.class);
+    var object =
+        new AttachmentObject(UUID.randomUUID(), "image/png", 10L * 1024 * 1024 + 1, "a".repeat(64));
+    try (var storage = new PrivateAttachmentStorage(configured(), () -> client)) {
+      assertThatThrownBy(() -> storage.verifyMetadata(object))
+          .isInstanceOf(ConflictException.class);
+      assertThatThrownBy(() -> storage.readVerified(object)).isInstanceOf(ConflictException.class);
+      verifyNoInteractions(client);
+    }
+  }
 
   @Test
   void realHttpTrickleCannotOutliveWholeDownloadDeadline() throws Exception {

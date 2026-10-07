@@ -78,7 +78,7 @@ public class RasterImageNormalizer {
           PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
       if (Files.isSymbolicLink(directory)
           || !Files.getPosixFilePermissions(directory)
-              .equals(PosixFilePermissions.fromString("rwx------"))) throw invalid();
+              .equals(PosixFilePermissions.fromString("rwx------"))) throw unavailable();
       Path raster = source;
       if (format.equals("png")) {
         filtered = temporary(directory);
@@ -94,9 +94,13 @@ public class RasterImageNormalizer {
             deadline);
         raster = filtered;
       }
-      try (FileImageInputStream input = new FileImageInputStream(raster.toFile())) {
+      BufferedImage image;
+      try (LocalImageInputStream input = new LocalImageInputStream(raster)) {
         Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
-        if (!readers.hasNext()) throw invalid();
+        if (!readers.hasNext()) {
+          if (input.failed) throw unavailable();
+          throw invalid();
+        }
         ImageReader reader = readers.next();
         try {
           if (!reader.getFormatName().equalsIgnoreCase(format)) throw invalid();
@@ -159,16 +163,19 @@ public class RasterImageNormalizer {
                   throw invalid();
                 }
               });
-          BufferedImage image = reader.read(0);
-          try {
-            output = temporary(directory);
-            encode(image, format, output, settings.getMaxFileBytes(), deadline);
-          } finally {
-            image.flush();
-          }
+          image = reader.read(0);
+        } catch (IOException exception) {
+          if (input.failed) throw unavailable();
+          throw invalid();
         } finally {
           reader.dispose();
         }
+      }
+      try {
+        output = temporary(directory);
+        encode(image, format, output, settings.getMaxFileBytes(), deadline);
+      } finally {
+        image.flush();
       }
       requireTime(deadline);
       if (Files.size(output) > settings.getMaxFileBytes()) throw limit();
@@ -183,7 +190,7 @@ public class RasterImageNormalizer {
       transferred = true;
       return result;
     } catch (IOException exception) {
-      throw invalid();
+      throw unavailable();
     } finally {
       try {
         if (filtered != null) Files.deleteIfExists(filtered);
@@ -277,6 +284,49 @@ public class RasterImageNormalizer {
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("画像の整合性検証が利用できません");
     }
+  }
+
+  // ImageIOが解析失敗とファイルI/O失敗を同じ例外で包むため、実読取の障害を保持する。
+  private static final class LocalImageInputStream extends FileImageInputStream {
+    private boolean failed;
+
+    private LocalImageInputStream(Path source) throws IOException {
+      super(source.toFile());
+    }
+
+    @Override
+    public int read() throws IOException {
+      try {
+        return super.read();
+      } catch (IOException exception) {
+        failed = true;
+        throw exception;
+      }
+    }
+
+    @Override
+    public int read(byte[] bytes, int offset, int length) throws IOException {
+      try {
+        return super.read(bytes, offset, length);
+      } catch (IOException exception) {
+        failed = true;
+        throw exception;
+      }
+    }
+
+    @Override
+    public void seek(long position) throws IOException {
+      try {
+        super.seek(position);
+      } catch (IOException exception) {
+        failed = true;
+        throw exception;
+      }
+    }
+  }
+
+  private static ServiceUnavailableException unavailable() {
+    return new ServiceUnavailableException("画像の一時領域を利用できません");
   }
 
   private static UploadInputException invalid() {

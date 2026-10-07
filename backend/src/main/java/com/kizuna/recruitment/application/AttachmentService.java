@@ -90,6 +90,7 @@ public class AttachmentService {
       String actorEmail) {
     storage.requireConfigured();
     AttachmentUpload reserved = null;
+    boolean normalizing = false;
     try {
       reserved = transactions.lookup(id, uploadId, key, originalHash, mediaType).orElse(null);
       if (reserved != null) {
@@ -101,9 +102,11 @@ public class AttachmentService {
                 id, reserved.getId(), key, originalHash, mediaType, null, actorEmail);
         if (completed != null) return completed;
         if (!reserved.getNormalizerVersion().equals(RasterImageNormalizer.VERSION))
-          throw new ConflictException("元の画像変換方式を利用できません。回復を待ってください");
+          throw new AttachmentNormalizationException("元の画像変換方式を利用できません。回復を待ってください");
       }
+      normalizing = true;
       try (NormalizedImage content = normalizer.normalize(original, mediaType)) {
+        normalizing = false;
         if (!originalHash.equals(content.originalSha256()))
           throw new ConflictException("受信画像の一致を確認できません。再選択してください");
         if (reserved == null) reserved = transactions.reserve(id, key, content, actorEmail);
@@ -119,9 +122,11 @@ public class AttachmentService {
         markFailure(
             id,
             reserved.getId(),
-            exception instanceof ConflictException
-                ? AttachmentUpload.Failure.CONTENT_MISMATCH
-                : AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
+            exception instanceof AttachmentNormalizationException || normalizing
+                ? AttachmentUpload.Failure.NORMALIZER_UNAVAILABLE
+                : exception instanceof ConflictException
+                    ? AttachmentUpload.Failure.CONTENT_MISMATCH
+                    : AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
       if (exception instanceof ServiceException
           || exception instanceof ConflictException
           || exception instanceof NotFoundException

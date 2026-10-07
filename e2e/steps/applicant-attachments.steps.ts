@@ -141,6 +141,15 @@ Then("添付画面は両テーマと狭幅で操作でき認証失効後は再�
       }
     }
   }
+  const applicant = await request.get(path(), { headers: headers() });
+  expect(applicant.status()).toBe(200);
+  const withdrawn = await request.post(`${path()}/transitions`, { headers: headers(), data: { version: (await applicant.json()).version, status: 'WITHDRAWN', reason: '合成検証による本人辞退' } });
+  expect(withdrawn.status(), await withdrawn.text()).toBe(200);
+  const rejectedBeforeAdmission = await request.post(`${path()}/attachments`, { headers: { ...headers(), 'Content-Type': 'image/svg+xml', 'Idempotency-Key': randomUUID() }, data: 'synthetic' });
+  expect(rejectedBeforeAdmission.status()).toBe(400);
+  expect((await rejectedBeforeAdmission.json()).error).toContain('選考が終了');
+  expect((await upload(request, key)).status()).toBe(200);
+  expect((await request.put(`${path()}/attachment-uploads/${recoveryId}/content`, { headers: uploadHeaders(recoveryKey), data: image })).status()).toBe(200);
   const client = await database();
   try { await client.query('update t_users set enabled=false, credential_version=credential_version+1 where email=$1', [email]); }
   finally { await client.end(); }

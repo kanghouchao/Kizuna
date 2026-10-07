@@ -19,6 +19,7 @@ import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ResourceBusyException;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeExecutor;
@@ -42,6 +43,28 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @WebMvcTest(AttachmentController.class)
 @Import({AttachmentControllerTest.MethodSecurity.class, StoreContext.class, AppProperties.class})
 class AttachmentControllerTest {
+  @Test
+  void terminalPreflightFailureDoesNotAcquireOrReadBody() throws Exception {
+    String key = "b61c89c9-9272-4ff5-a30a-e8f27f11c27c";
+    when(service.preflight("a", null, key))
+        .thenThrow(new ServiceException("選考が終了した応募者には画像を追加できません"));
+    mvc.perform(
+            post("/store/applicants/a/attachments")
+                .with(csrf())
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .header("Idempotency-Key", key)
+                .contentType("image/svg+xml")
+                .content("synthetic")
+                .with(
+                    actor(
+                        new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                        new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"),
+                        new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
+        .andExpect(status().isBadRequest());
+    verifyNoInteractions(receiver);
+  }
+
   @Test
   void privateFailuresKeepCacheBoundaryAndBusyRetryHint() throws Exception {
     when(service.policy()).thenThrow(new ResourceBusyException("画像処理が混み合っています"));

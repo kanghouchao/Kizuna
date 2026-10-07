@@ -3,6 +3,7 @@ package com.kizuna.recruitment.infrastructure;
 import com.kizuna.shared.exception.UploadInputException;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -15,6 +16,7 @@ import java.util.Set;
 import java.util.zip.CRC32;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
+import java.util.zip.ZipException;
 
 final class PngRasterSource {
   private static final byte[] SIGNATURE = {(byte) 137, 80, 78, 71, 13, 10, 26, 10};
@@ -88,6 +90,8 @@ final class PngRasterSource {
           break;
         }
       }
+    } catch (EOFException exception) {
+      throw invalid();
     }
     verifyInflatedSize(compressed, expandedBytes, deadline);
   }
@@ -155,6 +159,8 @@ final class PngRasterSource {
           || !inflater.finished()
           || inflater.getRemaining() != 0
           || source.read() != -1) throw invalid();
+    } catch (EOFException | ZipException exception) {
+      throw invalid();
     } finally {
       inflater.end();
     }

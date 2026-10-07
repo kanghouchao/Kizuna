@@ -51,10 +51,15 @@ public class AttachmentTransactions {
   @StoreScoped
   @Transactional(readOnly = true)
   public void preflight(String applicantId, String uploadId, UUID key) {
-    requireApplicant(applicantId);
-    if (uploadId != null) {
-      AttachmentUpload upload = requireUpload(applicantId, uploadId);
-      upload.requireReplay(key, upload.getOriginalSha256(), upload.getMediaType());
+    Applicant applicant = requireApplicant(applicantId);
+    Optional<AttachmentUpload> existing =
+        uploadId == null
+            ? uploads.findByApplicantIdAndIdempotencyKey(applicantId, key)
+            : Optional.of(requireUpload(applicantId, uploadId));
+    existing.ifPresent(
+        upload -> upload.requireReplay(key, upload.getOriginalSha256(), upload.getMediaType()));
+    if (existing.isEmpty() || existing.get().getStatus() != AttachmentUpload.Status.READY) {
+      requireEditable(applicant);
     }
   }
 
@@ -137,7 +142,7 @@ public class AttachmentTransactions {
       if (!upload.getNormalizerVersion().equals(content.normalizerVersion())
           || !upload.getCanonicalSha256().equals(content.canonicalSha256())
           || upload.getSizeBytes() != content.sizeBytes()) {
-        throw new ConflictException("元の画像変換を再現できません。保存済み資料を上書きせず回復を待ちます");
+        throw new AttachmentNormalizationException("元の画像変換を再現できません。保存済み資料を上書きせず回復を待ちます");
       }
       storage.ensureStored(object, content.path());
     }

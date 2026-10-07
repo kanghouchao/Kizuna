@@ -39,7 +39,7 @@ AppProperties の独立設定は既定で enabled=false。enabled=true でも必
 - W: R + `RECRUITMENT_ATTACHMENT_MANAGE`。
 - 全経路で認証、X-Role: store、X-Store-ID、授権店舗集合と @StoreScoped を確認する。
 - CAST_MANAGE / RECRUITMENT_MANAGE / RECRUITMENT_DECIDE は代替権限にしない。
-- 取得・既存成功の再送は選考状態に依存しない。新規登録は RECEIVED / SCREENING / INTERVIEWED のみ。未完了操作の回復時にも現在状態を再確認する。
+- 取得・既存成功の再送は選考状態に依存しない。新規登録は RECEIVED / SCREENING / INTERVIEWED のみ。新規登録と未完了操作の回復は本文受信前にも現在状態を確認し、最終確定時にも再確認する。
 
 ### HTTP 契約
 
@@ -91,7 +91,7 @@ DBとS3の原子コミットは存在しない。操作記録は汎用監査の�
 
 ### ダウンロードと監査
 
-権限と所属をトランザクション内で検査し、READYの不変な保存先情報だけを内部へ渡す。DBトランザクションとStoreContextを切り離し、上限付きで専用一時ファイルへ読み、容量とcanonical SHA-256を検証してからファイルストリームを応答する。非同期スレッドで残存StoreContextに依存しない。異常サイズ・同サイズの内容不一致・欠損・ストレージ不通は本文開始前に503。取得用permitも読取前に最大2件とし、画像登録と合わせて一時領域の上限を守る。応答中の切断は転送中断でありJSON成功に変換しない。取得一時ファイルとpermitは切断を含む終了時に解放する。
+権限と所属をトランザクション内で検査し、READYの不変な保存先情報だけを内部へ渡す。DBトランザクションとStoreContextを切り離し、上限付きで専用一時ファイルへ読み、容量とcanonical SHA-256を検証してからファイルストリームを応答する。非同期スレッドで残存StoreContextに依存しない。保存済み画像は予約時に確定した容量と固定の10MiB安全上限で検証し、現在の新規アップロード上限を下げても取得を妨げない。異常サイズ・同サイズの内容不一致・欠損・ストレージ不通は本文開始前に503。取得用permitも読取前に最大2件とし、画像登録と合わせて一時領域の上限を守る。応答中の切断は転送中断でありJSON成功に変換しない。取得一時ファイルとpermitは切断を含む終了時に解放する。
 
 Content-Typeは検証済み形式、Content-Lengthは確定容量。`Content-Disposition: attachment; filename="attachment-{id}.ext"`、`X-Content-Type-Options: nosniff`、`Cache-Control: private, no-store`、`Accept-Ranges: none`。HEADにも同一認可とヘッダを適用し、画像本文を取得しない。公開URL・署名URL・inlineプレビューは提供しない。ブラウザは既存axiosでblobを受け取り、一時object URLをダウンロード直後に破棄する。
 
@@ -140,8 +140,12 @@ focused検証を先行し、重いTaskfile検証は主タスクが調整する39
 
 ## 検証境界
 
-実装票は #997。権限は39→41件で、既定ロールへの追加はない。schemaは既存store/15-recruitment.yamlを使用し、総include・メニュー順は変更しない。口コミ片のstore/16-review-intake.yamlおよびCRM sort3は使用しない。
+実装票は #997。#1003同期後の権限は42→44件（STOREは23→25件）で、既定ロールへの追加はない。schemaは既存store/15-recruitment.yamlを使用し、総include・メニュー順は変更しない。口コミ片のstore/16-review-intake.yamlおよびCRM sort3は使用しない。
 
 2026-10-07、独立した使い捨てPostgreSQLで5件の取引テストを実行した。予約の先行確定、監査失敗によるREADYの巻戻し、同一操作のNOWAIT、店外隔離、リモート保存中の辞退、親の物理削除制限を確認した。独立SeaweedFSでは署名PUT200・同キー条件PUT412・署名GET200、匿名GET/HEAD/LIST/PUT403を確認した。いずれも合成データだけを使用した。
 
 実HTTPの低速応答に対して全体期限を検証した。非公開S3はSDKのApache transportでソケットを中断し、既存公開S3はURLConnection transportに明示固定する。UIには19件のfocused回帰検証があり、ファイル再選択時の操作キー維持、回復成功後のキー解放、失敗時の入力保持、画面離脱後のダウンロード抑止を含む。ローカル二軸レビューの仕様・規範の指摘を修正済み。これはTaskfile、CI、Codexの承認を代替しない。
+
+Codex初回指摘の回帰では、一時領域のI/O障害を503、画像の解析失敗を400として区別する。正規化方式の不一致・処理枠不足・期限超過・再現失敗はNORMALIZER_UNAVAILABLEを保存し、既存画像での回復成功後は分類を消去する。実PostgreSQLの6件（skipなし）とHTTP境界・実HTTP低速転送を含むfocused検証で確認した。
+
+#1003の口コミ片を含むmaster `4a426636ba67db894bbe7a309dae62e228d464c7` への同期では、REVIEWの3権限と添付の2権限を両方保持する。口コミのschema・include・CRMメニューと応募者のschema・HRMメニューを維持し、競合は権限件数の断言だけを再計算した。

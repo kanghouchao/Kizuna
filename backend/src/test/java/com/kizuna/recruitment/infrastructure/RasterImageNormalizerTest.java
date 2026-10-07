@@ -2,23 +2,88 @@ package com.kizuna.recruitment.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.ServiceUnavailableException;
+import com.kizuna.shared.exception.UploadInputException;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.zip.CRC32;
 import java.util.zip.DeflaterOutputStream;
+import javax.imageio.IIOException;
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class RasterImageNormalizerTest {
   @TempDir Path temporary;
+
+  @Test
+  void outputIoFailureIsUnavailableButTruncatedJpegRemainsInvalidInput() throws Exception {
+    Path source = temporary.resolve("source");
+    ImageIO.write(new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "jpeg", source.toFile());
+    var settings = new AppProperties.PrivateAttachments();
+    settings.setTemporaryDirectory(temporary.toString());
+    settings.setMaxConcurrentUploads(1);
+    var normalizer = new RasterImageNormalizer(settings);
+    var writer = mock(ImageWriter.class);
+    doThrow(new IIOException("合成された出力I/O障害"))
+        .when(writer)
+        .write(isNull(), any(IIOImage.class), isNull());
+    try (var imageIo = mockStatic(ImageIO.class, CALLS_REAL_METHODS)) {
+      imageIo
+          .when(() -> ImageIO.getImageWritersByFormatName("jpeg"))
+          .thenReturn(List.of(writer).iterator());
+      assertThatThrownBy(() -> normalizer.normalize(source, "image/jpeg"))
+          .isInstanceOf(ServiceUnavailableException.class)
+          .hasNoCause();
+    }
+    try (var normalized = normalizer.normalize(source, "image/jpeg")) {
+      assertThat(normalized.sizeBytes()).isPositive();
+    }
+    Files.write(source, Arrays.copyOf(Files.readAllBytes(source), 20));
+    assertThatThrownBy(() -> normalizer.normalize(source, "image/jpeg"))
+        .isInstanceOf(UploadInputException.class);
+    try (var files = Files.list(temporary)) {
+      assertThat(files.toList()).containsExactly(source);
+    }
+  }
+
+  @Test
+  void temporaryFilesystemFailuresAreUnavailableAndReleaseProcessingSlots() throws Exception {
+    Path source = temporary.resolve("source");
+    ImageIO.write(new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "jpeg", source.toFile());
+    Path blockedDirectory = Files.writeString(temporary.resolve("not-a-directory"), "synthetic");
+    var settings = new AppProperties.PrivateAttachments();
+    settings.setMaxConcurrentUploads(1);
+    settings.setTemporaryDirectory(blockedDirectory.toString());
+    var normalizer = new RasterImageNormalizer(settings);
+    assertThatThrownBy(() -> normalizer.normalize(source, "image/jpeg"))
+        .isInstanceOf(ServiceUnavailableException.class)
+        .hasNoCause();
+    settings.setTemporaryDirectory(temporary.toString());
+    try (var normalized = normalizer.normalize(source, "image/jpeg")) {
+      assertThat(normalized.sizeBytes()).isPositive();
+    }
+    assertThatThrownBy(() -> normalizer.normalize(temporary.resolve("missing"), "image/jpeg"))
+        .isInstanceOf(ServiceUnavailableException.class)
+        .hasNoCause();
+  }
 
   @Test
   void ordinaryPngIsReadableAndOriginalAndCanonicalDigestsAreIndependent() throws Exception {

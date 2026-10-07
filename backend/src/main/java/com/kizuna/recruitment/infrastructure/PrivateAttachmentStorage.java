@@ -43,7 +43,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 public class PrivateAttachmentStorage implements AutoCloseable {
   private final S3Client client;
   private final String bucket;
-  private final long maxFileBytes;
+  private static final long MAX_STORED_FILE_BYTES = 10L * 1024 * 1024;
   private final Path temporaryDirectory;
   private final Semaphore downloadPermits;
   private final int storageTimeoutSeconds;
@@ -60,7 +60,6 @@ public class PrivateAttachmentStorage implements AutoCloseable {
     storageTimeoutSeconds = properties.getPrivateAttachments().getStorageTimeoutSeconds();
     client = configured ? Objects.requireNonNull(factory.get()) : null;
     bucket = configured ? properties.getPrivateAttachments().getBucket() : null;
-    maxFileBytes = properties.getPrivateAttachments().getMaxFileBytes();
     temporaryDirectory =
         configured ? Path.of(properties.getPrivateAttachments().getTemporaryDirectory()) : null;
     downloadPermits =
@@ -192,7 +191,7 @@ public class PrivateAttachmentStorage implements AutoCloseable {
   }
 
   private void validateSize(AttachmentObject object) {
-    if (object.sizeBytes() > maxFileBytes) throw mismatch();
+    if (object.sizeBytes() > MAX_STORED_FILE_BYTES) throw mismatch();
   }
 
   private static void verifyContent(InputStream input, OutputStream output, AttachmentObject object)

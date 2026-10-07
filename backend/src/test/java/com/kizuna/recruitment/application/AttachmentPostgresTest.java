@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
@@ -16,13 +18,16 @@ import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
 import com.kizuna.recruitment.domain.AttachmentUpload;
 import com.kizuna.recruitment.domain.ReceptionChannel;
+import com.kizuna.recruitment.infrastructure.AttachmentStorageMissingException;
 import com.kizuna.recruitment.infrastructure.NormalizedImage;
 import com.kizuna.recruitment.infrastructure.PrivateAttachmentFile;
 import com.kizuna.recruitment.infrastructure.PrivateAttachmentStorage;
 import com.kizuna.recruitment.infrastructure.RasterImageNormalizer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreFilterEnable;
@@ -184,6 +189,85 @@ class AttachmentPostgresTest {
   private long auditCount(String id) {
     return jdbc.queryForObject(
         "select count(*) from t_audit_events where target_id=?", Long.class, id);
+  }
+
+  @Test
+  void normalizerFailuresPersistTheirOriginAndExistingObjectRecoveryClearsIt() throws Exception {
+    for (String failure : List.of("version", "busy", "timeout", "reproduction")) {
+      var applicant = applicant();
+      var normalizer = mock(RasterImageNormalizer.class);
+      var orchestration = new AttachmentService(service, storage, normalizer, new AppProperties());
+      try (var source = content()) {
+        var reservedContent =
+            new NormalizedImage(
+                source.file(),
+                source.originalSha256(),
+                source.canonicalSha256(),
+                source.mediaType(),
+                source.sizeBytes(),
+                failure.equals("version") ? "historical-version" : source.normalizerVersion());
+        var upload =
+            service.reserve(applicant, UUID.randomUUID(), reservedContent, "operator@example.test");
+        doThrow(new AttachmentStorageMissingException()).when(storage).readVerified(any());
+        if (failure.equals("busy")) {
+          when(normalizer.normalize(source.path(), source.mediaType()))
+              .thenThrow(new ResourceBusyException("画像処理が混み合っています"));
+        } else if (failure.equals("timeout")) {
+          when(normalizer.normalize(source.path(), source.mediaType()))
+              .thenThrow(new ServiceUnavailableException("画像処理が制限時間を超えました"));
+        } else if (failure.equals("reproduction")) {
+          when(normalizer.normalize(source.path(), source.mediaType()))
+              .thenReturn(
+                  new NormalizedImage(
+                      source.file(),
+                      source.originalSha256(),
+                      "c".repeat(64),
+                      source.mediaType(),
+                      source.sizeBytes(),
+                      source.normalizerVersion()));
+        }
+        assertThatThrownBy(
+                () ->
+                    orchestration.upload(
+                        applicant,
+                        upload.getId(),
+                        upload.getIdempotencyKey(),
+                        source.path(),
+                        source.originalSha256(),
+                        source.mediaType(),
+                        "operator@example.test"))
+            .isInstanceOf(RuntimeException.class);
+        assertThat(status(upload.getId())).isEqualTo("RECOVERY_REQUIRED");
+        assertThat(
+                jdbc.queryForObject(
+                    "select failure from t_applicant_attachment_uploads where id=?",
+                    String.class,
+                    upload.getId()))
+            .isEqualTo("NORMALIZER_UNAVAILABLE");
+        assertThat(auditCount(upload.getId())).isZero();
+        doReturn(mock(PrivateAttachmentFile.class)).when(storage).readVerified(any());
+        assertThat(
+                orchestration
+                    .upload(
+                        applicant,
+                        upload.getId(),
+                        upload.getIdempotencyKey(),
+                        source.path(),
+                        source.originalSha256(),
+                        source.mediaType(),
+                        "operator@example.test")
+                    .created())
+            .isTrue();
+        assertThat(status(upload.getId())).isEqualTo("READY");
+        assertThat(
+                jdbc.queryForObject(
+                    "select failure from t_applicant_attachment_uploads where id=?",
+                    String.class,
+                    upload.getId()))
+            .isNull();
+        assertThat(auditCount(upload.getId())).isEqualTo(1);
+      }
+    }
   }
 
   @Test
