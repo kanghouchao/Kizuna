@@ -2,7 +2,7 @@
 
 ## 基点と接続単位
 
-現在の合流基点は `9351275ea034fedd96d35f5968f2d335196cc6cd`（認証失効修正#999、通常受注監査#996を含む）。実行・監査基盤の仕様は [0395-task-execution-audit.md](0395-task-execution-audit.md) に従う。手動実行の個別権限と SERVICE の現在授権、招聘機能、通知基盤、入力ログの機微情報除外を含む合流済みの実装は維持する。#395 全体の完了とは分けて、各業務の書込サービス単位で実装・検証する。
+現在の合流基点は `662f5506058e7352cdead3501b72fb21285ed221`（連絡先監査#1001を含む）。実行・監査基盤の仕様は [0395-task-execution-audit.md](0395-task-execution-audit.md) に従う。手動実行の個別権限と SERVICE の現在授権、招聘機能、通知基盤、入力ログの機微情報除外を含む合流済みの実装は維持する。#395 全体の完了とは分けて、各業務の書込サービス単位で実装・検証する。
 
 認証主体・対象店舗・操作名・対象 ID・結果・日時は公共 sink に渡し、緊急昇格では検証済みセッションの昇格 ID を関連付ける。業務と成功監査を同じ取引に保存する。拒否・競合・rollback を成功履歴にしない。読み取り、変更しない preview、同じ確定済み結果を返す replay は新たな成功変更を作らない。
 
@@ -19,8 +19,8 @@
 | 顧客と会員の関連付け・解除 | 後続 | 関連区間 ID、顧客・会員 ID、状態、既存理由の参照 |
 | キャスト作成/編集/削除・公開・在籍、招待、カスタム項目 | 後続 | 在籍/状態履歴/設定 ID、状態、公開区分、版。招待秘密・個人情報・任意入力値は複写しない |
 | シフト作成/編集/削除・公開、申請決定、出勤実績 | 後続 | 班次・申請・実績・在籍 ID、日時、状態、版。自由記述は必要性を個別に確認 |
-| 顧客作成/編集/削除 | 後続 | 顧客 ID、状態・変更項目名。会員関連付け/解除とは別に扱う |
-| 連絡先、用途許諾、優先関係 | #1000で実装・検証中 | 連絡先/既存履歴 ID、種類・許諾状態・優先関係・変更項目名。[5入口の契約](0395-contact-audit.md)。値・許諾根拠原文は複写しない |
+| 顧客作成/編集/削除 | #1002で実装・検証中 | 顧客 ID、状態・変更項目名。会員関連付け/解除とは別に扱う |
+| 連絡先、用途許諾、優先関係 | #1001合流済み、#1000完了 | 連絡先/既存履歴 ID、種類・許諾状態・優先関係・変更項目名。[5入口の契約](0395-contact-audit.md)。値・許諾根拠原文は複写しない |
 | 店舗プロフィール・サービス設定・ファイル登録 | 後続 | 設定/版本 ID、価格・時間・報酬、公開状態、必要なファイルメタデータ。外部ストレージの確定順序は別途検証 |
 | 招聘・通知・定期ポイント等の新機能 | 各機能の担当 | 公共 sink に接続。#396 / #394 / #820 の所有ファイルをこのバッチで変更しない |
 
@@ -53,3 +53,9 @@
 PR [#996](https://github.com/kanghouchao/Kizuna/pull/996) は2026-10-07に `ba32afe7f7d6237b9000a67984ee26a7592615b7` へ合流した。検証対象HEADは `b0f05ab127a3f6d271116ca8751f555be56a1f03`。Task lint/test/build/e2e はすべてexit 0、全量E2E79件、関連単体119件、専用PostgreSQL3件が成功した。ローカルStandards/Specレビューは残指摘なし。
 
 CI [37609155073](https://github.com/kanghouchao/Kizuna/actions/runs/37609155073) とCodeQL [37609155063](https://github.com/kanghouchao/Kizuna/actions/runs/37609155063) を含む7チェックが成功した。[Codex summary](https://github.com/kanghouchao/Kizuna/pull/996#issuecomment-6036636447) は同HEADを11:10:28 UTCにCompleted、公式botの新規👍は11:10:32 UTC、review threadは0。専用E2Eコンテナとネットワークは撤収済み。#395はOPENを継続する。
+
+## 顧客連絡先バッチの完了証跡
+
+#1000 / PR [#1001](https://github.com/kanghouchao/Kizuna/pull/1001) は master `662f5506058e7352cdead3501b72fb21285ed221` へ合流した。検証HEADは `43540abaa5762f70d4b1ce5a3b340349361ab1de`。単体7件・実PG7件・Task lint/test/buildがexit 0、focused E2E2/2成功。全量Task e2eはexit 0、79 passed + 1 flaky（retry成功）。既存注文場面の名前入力locator重複を同一コード・新しい専用スタックでretries0/repeat3として再確認し3/3成功。連絡先監査と注文監査は初回成功。専用栈撤収済み。
+
+CI/CodeQL等7チェック全SUCCESS、[Codex](https://github.com/kanghouchao/Kizuna/pull/1001#issuecomment-6037709546)は同一HEADで12:22:28 UTCにCompleted、公式botの新規👍は12:22:31 UTC、未解決thread0。#1000はCLOSED/COMPLETED、#395はOPENを継続する。
