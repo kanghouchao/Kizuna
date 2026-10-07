@@ -66,9 +66,12 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -88,7 +91,7 @@ class ReviewPostgresTest {
       JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build();
   private Long storeId, otherStore, actorId, roleId;
   private String email;
-  private UsernamePasswordAuthenticationToken auth;
+  private Authentication auth;
 
   @BeforeAll
   void connect() {
@@ -174,6 +177,88 @@ class ReviewPostgresTest {
                     new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
     SecurityContextHolder.getContext().setAuthentication(auth);
     store.setStoreId(storeId);
+  }
+
+  @Test
+  void activeElevationRechecksActorStoreExpiryAndRevocationBeforeReplay() throws Exception {
+    jdbc.update("delete from t_user_roles where platform_user_id=?", actorId);
+    jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", actorId);
+    read("", 403);
+    Long elevation =
+        jdbc.queryForObject(
+            "insert into t_emergency_elevations(activated_by,target_store_id,reason,activated_at,expires_at,status) values (?,?,'緊急調査の機密理由',now()-interval '1 minute',now()+interval '20 minutes','ACTIVE') returning id",
+            Long.class,
+            actorId,
+            storeId);
+    var jwt =
+        Jwt.withTokenValue("isolated-test")
+            .header("alg", "none")
+            .subject(email)
+            .claim("elevationId", elevation)
+            .build();
+    auth = new JwtAuthenticationToken(jwt, auth.getAuthorities());
+    SecurityContextHolder.getContext().setAuthentication(auth);
+    String input =
+        """
+        {"body":"昇格で受け付けた原文","received_via":"PAPER","received_at":"2026-01-01T00:00:00Z","dedupe_key":"elevated-receipt"}
+        """;
+    var receipt = send("", input, 201);
+    String id = receipt.get("review").get("id").asString();
+    read("", 200);
+    read("/" + id, 200);
+    read("/" + id + "/history", 200);
+    send(
+        "/" + id + "/decisions",
+        """
+        {"version":0,"decision":"APPROVE","reason":"内容確認","dedupe_key":"elevated-approve"}
+        """,
+        200);
+    assertThat(send("", input, 200).get("operation").get("replayed").asBoolean()).isTrue();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_audit_events where store_id=? and target_id=? and actor_id=? and actor_type='STAFF' and after_values->>'emergency_elevation_id'=?",
+                Integer.class,
+                storeId,
+                id,
+                actorId,
+                elevation.toString()))
+        .isEqualTo(2);
+    assertThat(
+            jdbc.queryForObject(
+                "select string_agg(before_values::text || after_values::text, ' ') from t_audit_events where store_id=?",
+                String.class,
+                storeId))
+        .doesNotContain("昇格で受け付けた原文", "緊急調査の機密理由", "内容確認");
+    store.setStoreId(otherStore);
+    read("", 403);
+    send("", input, 403);
+    store.setStoreId(storeId);
+    jdbc.update(
+        "update t_emergency_elevations set expires_at=now()-interval '1 second' where id=?",
+        elevation);
+    read("/" + id, 403);
+    send("", input, 403);
+    jdbc.update(
+        "update t_emergency_elevations set expires_at=now()+interval '20 minutes',status='REVOKED',revoked_by=?,revoked_at=now() where id=?",
+        actorId,
+        elevation);
+    read("", 403);
+    send("", input, 403);
+    jdbc.update(
+        "update t_emergency_elevations set status='ACTIVE',revoked_by=null,revoked_at=null where id=?",
+        elevation);
+    Long another =
+        jdbc.queryForObject(
+            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'別担当','STAFF','ALL_STORES') returning id",
+            Long.class,
+            UUID.randomUUID() + "@example.invalid");
+    jdbc.update("update t_emergency_elevations set activated_by=? where id=?", another, elevation);
+    read("", 403);
+    send("", input, 403);
+    jdbc.update("update t_emergency_elevations set activated_by=? where id=?", actorId, elevation);
+    jdbc.update("update t_users set enabled=false where id=?", actorId);
+    read("", 403);
+    send("", input, 403);
   }
 
   @Test
@@ -395,6 +480,12 @@ class ReviewPostgresTest {
     assertThat(old.get("body").asString()).isEqualTo("元の本文");
     assertThat(old.get("status").asString()).isEqualTo("WITHDRAWN");
     assertThat(old.get("permission_status").asString()).isEqualTo("GRANTED");
+    assertThat(
+            jdbc.queryForObject(
+                "select after_values->>'permission_status' from t_audit_events where target_id=? and action='REVIEW_CORRECTION_LINKED'",
+                String.class,
+                id))
+        .isEqualTo("GRANTED");
     assertThat(old.get("superseded_by_id").asString()).isEqualTo(next);
     assertThat(context.getBean(ReviewPublication.class).current(storeId, Set.of(id, next)))
         .isEmpty();

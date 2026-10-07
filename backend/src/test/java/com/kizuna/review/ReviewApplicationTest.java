@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.recording.AuditActor;
@@ -213,6 +215,17 @@ class ReviewApplicationTest {
     String id = create();
     var correction = new ReviewCorrection(id, 0L, "訂正", input(), "correct");
     var result = service.correct("actor", correction);
+    verify(audit)
+        .record(
+            eq("actor"),
+            eq(1L),
+            eq("REVIEW_CORRECTION_LINKED"),
+            eq("REVIEW"),
+            eq(id),
+            eq(null),
+            eq(null),
+            any(),
+            eq(Map.of("status", "WITHDRAWN", "permission_status", "NOT_GRANTED", "version", "0")));
     assertThat(result.review().supersedesId()).isEqualTo(id);
     assertThat(result.review().permissionStatus()).isEqualTo(PermissionStatus.NOT_GRANTED);
     assertThat(service.detail("actor", id).supersededById()).isEqualTo(result.review().id());

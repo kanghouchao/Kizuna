@@ -469,3 +469,157 @@ test('操作404の詳細を閉じた後、別の有効な口コミを表示で�
   expect(await screen.findByText('別の口コミ本文')).toBeVisible();
   expect(await screen.findByRole('button', { name: '内部承認' })).toBeEnabled();
 });
+
+async function receiptEditor(kind: 'CREATE' | 'CORRECT') {
+  if (kind === 'CREATE')
+    fireEvent.click(await screen.findByRole('button', { name: '口コミを受付' }));
+  else {
+    fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
+    fireEvent.click(await screen.findByRole('button', { name: '訂正再受付' }));
+  }
+  const editor = await screen.findByRole('dialog', {
+    name: kind === 'CREATE' ? '口コミを受付' : '訂正再受付',
+  });
+  fireEvent.change(within(editor).getByLabelText('口コミ本文'), {
+    target: { value: '失ってはいけない入力本文' },
+  });
+  fireEvent.change(within(editor).getByLabelText('受け取った日時（この端末の時刻）'), {
+    target: { value: '2026-01-01T09:00' },
+  });
+  fireEvent.change(within(editor).getByLabelText('関連受注ID（任意）'), {
+    target: { value: '999' },
+  });
+  if (kind === 'CORRECT')
+    fireEvent.change(within(editor).getByLabelText('判断・変更の理由'), {
+      target: { value: '保持する訂正理由' },
+    });
+  return editor;
+}
+async function submitReceipt(editor: HTMLElement, kind: 'CREATE' | 'CORRECT') {
+  fireEvent.click(
+    within(editor).getByRole('button', { name: kind === 'CREATE' ? '受付を記録' : '確認へ' })
+  );
+  if (kind === 'CORRECT')
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: '確定する' })
+    );
+}
+
+test.each(['CREATE', 'CORRECT'] as const)(
+  '%sの関連受注404は入力を保持し、修正後は新しい要求キーで送れる',
+  async kind => {
+    permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
+    api.write
+      .mockRejectedValueOnce({
+        response: { status: 404, data: { error: '関連受注が見つかりません' } },
+      })
+      .mockResolvedValueOnce({
+        review: row,
+        operation: {
+          id: '20',
+          type: 'RECEIVED',
+          review_id: row.id,
+          committed_version: 0,
+          replayed: false,
+        },
+      });
+    render(<ReviewsPage />);
+    let editor = await receiptEditor(kind);
+    await submitReceipt(editor, kind);
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith('関連受注が見つかりません'));
+    editor = screen.getByRole('dialog', {
+      name: kind === 'CREATE' ? '口コミを受付' : '訂正再受付',
+    });
+    expect(within(editor).getByLabelText('口コミ本文')).toHaveValue('失ってはいけない入力本文');
+    expect(screen.queryByText('口コミが見つかりません')).not.toBeInTheDocument();
+    fireEvent.change(within(editor).getByLabelText('関連受注ID（任意）'), {
+      target: { value: '' },
+    });
+    await submitReceipt(editor, kind);
+    await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
+    expect(api.write.mock.calls[1][0].input.dedupe_key).not.toEqual(
+      api.write.mock.calls[0][0].input.dedupe_key
+    );
+    expect(api.write.mock.calls[1][0].input).toMatchObject({
+      body: '失ってはいけない入力本文',
+      origin_order_id: null,
+    });
+  }
+);
+
+test.each(['CREATE', 'CORRECT'] as const)(
+  '%sの不明結果は同キーで照会し、確定した関連受注404から入力を復元する',
+  async kind => {
+    permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
+    api.write
+      .mockRejectedValueOnce(new Error('network'))
+      .mockRejectedValueOnce({
+        response: { status: 404, data: { error: '関連受注が見つかりません' } },
+      })
+      .mockResolvedValueOnce({
+        review: row,
+        operation: {
+          id: '20',
+          type: 'RECEIVED',
+          review_id: row.id,
+          committed_version: 0,
+          replayed: false,
+        },
+      });
+    render(<ReviewsPage />);
+    const editor = await receiptEditor(kind);
+    await submitReceipt(editor, kind);
+    await within(editor).findByText(/結果が確認できません/);
+    fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape' });
+    fireEvent.click(await screen.findByRole('button', { name: '同じ要求で結果を確認' }));
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith('関連受注が見つかりません'));
+    expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
+    const restored = screen.getByRole('dialog', {
+      name: kind === 'CREATE' ? '口コミを受付' : '訂正再受付',
+    });
+    expect(within(restored).getByLabelText('口コミ本文')).toHaveValue('失ってはいけない入力本文');
+    expect(within(restored).getByLabelText('関連受注ID（任意）')).toHaveValue('999');
+    if (kind === 'CORRECT')
+      expect(within(restored).getByLabelText('判断・変更の理由')).toHaveValue('保持する訂正理由');
+    fireEvent.change(within(restored).getByLabelText('関連受注ID（任意）'), {
+      target: { value: '' },
+    });
+    await submitReceipt(restored, kind);
+    await waitFor(() => expect(api.write).toHaveBeenCalledTimes(3));
+    expect(api.write.mock.calls[2][0].input.dedupe_key).not.toEqual(
+      api.write.mock.calls[0][0].input.dedupe_key
+    );
+  }
+);
+
+test('訂正404で元口コミの照会も404なら入力を閉じ、失効を表示する', async () => {
+  permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
+  api.get.mockResolvedValueOnce(row).mockRejectedValueOnce({ response: { status: 404 } });
+  api.write.mockRejectedValueOnce({ response: { status: 404 } });
+  render(<ReviewsPage />);
+  await submitReceipt(await receiptEditor('CORRECT'), 'CORRECT');
+  expect(await screen.findByText('口コミが見つかりません')).toBeVisible();
+  expect(screen.queryByRole('dialog', { name: '訂正再受付' })).not.toBeInTheDocument();
+});
+
+test('訂正404の対象確認が旧店舗から遅れて戻っても新店舗にフォームを開かない', async () => {
+  permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
+  let resolveLookup!: (value: Review) => void;
+  api.get.mockResolvedValueOnce(row).mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        resolveLookup = resolve;
+      })
+  );
+  api.write.mockRejectedValueOnce({ response: { status: 404 } });
+  const view = render(<ReviewsPage />);
+  await submitReceipt(await receiptEditor('CORRECT'), 'CORRECT');
+  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+  api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  mockStoreId = '2';
+  view.rerender(<ReviewsPage />);
+  await screen.findByText('口コミはありません');
+  await act(async () => resolveLookup(row));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(notify.error).not.toHaveBeenCalled();
+});

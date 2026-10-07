@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
-import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, createPlatformStaffFixture, loginPlatformUser, loginViaUiAndEnterStore } from './store-api';
+import { ADMIN_PASSWORD, STORE_HEADERS, STORE1_ID, activateEmergencyElevation, revokeEmergencyElevation, listAuditEvents, getAuditEvent, getAuthorizedStores, loginAsStoreAdmin, createPermissionRole, createPlatformStaffFixture, loginPlatformUser, loginViaUiAndEnterStore } from './store-api';
 const { Given, When, Then } = createBdd();
 let email = '';
 let password = '';
@@ -18,7 +18,7 @@ Given('既定権限を持たない口コミ担当者が用意されている', a
   const suffix = Date.now().toString();
   email = `review-${suffix}@kizuna.test`;
   password = `Review-${suffix}-fixture`;
-  const role = await createPermissionRole(request, admin, `口コミ担当-${suffix}`, ['REVIEW_VIEW', 'REVIEW_MANAGE', 'REVIEW_MODERATE', 'PLATFORM_MENU_VIEW', 'STORE_MENU_VIEW']);
+  const role = await createPermissionRole(request, admin, `口コミ担当-${suffix}`, ['REVIEW_VIEW', 'REVIEW_MANAGE', 'REVIEW_MODERATE', 'ORDER_MANAGE', 'PLATFORM_MENU_VIEW', 'STORE_MENU_VIEW']);
   await createPlatformStaffFixture(request, admin, email, password, [role]);
   token = await loginPlatformUser(request, email, password);
   expect((await request.get('/api/store/reviews', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(403);
@@ -45,6 +45,15 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   await intake.getByLabel('口コミ本文').fill('  受付時の原文をそのまま保存します。\n二行目の長い本文です。  ');
   await intake.getByLabel('表示名（空欄は匿名）').fill('表示名');
   await intake.getByLabel('受け取った日時（この端末の時刻）').fill('2026-01-01T09:00');
+  await intake.getByLabel('関連受注ID（任意）').fill('999');
+  const [missingOrigin] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/store/reviews') && response.request().method() === 'POST'),
+    intake.getByRole('button', { name: '受付を記録', exact: true }).click(),
+  ]);
+  expect(missingOrigin.status()).toBe(404);
+  await expect(intake).toBeVisible();
+  await expect(intake.getByLabel('口コミ本文')).toHaveValue('  受付時の原文をそのまま保存します。\n二行目の長い本文です。  ');
+  await intake.getByLabel('関連受注ID（任意）').fill('');
   const [created] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/store/reviews') && response.request().method() === 'POST'),
     intake.getByRole('button', { name: '受付を記録', exact: true }).click(),
@@ -117,6 +126,18 @@ Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が�
   await expect(correction.getByText(/公開許可は引き継ぎません/)).toBeVisible();
   await correction.getByLabel('口コミ本文').fill('訂正後の新しい文面');
   await correction.getByLabel('判断・変更の理由').fill('原文の誤記を訂正');
+  await correction.getByLabel('関連受注ID（任意）').fill('999');
+  await correction.getByRole('button', { name: '確認へ', exact: true }).click();
+  const [missingOrigin] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith(`/${reviewId}/corrections`) && response.request().method() === 'POST'),
+    confirm(page),
+  ]);
+  expect(missingOrigin.status()).toBe(404);
+  await expect(correction).toBeVisible();
+  await expect(correction.getByLabel('口コミ本文')).toHaveValue('訂正後の新しい文面');
+  await expect(correction.getByLabel('判断・変更の理由')).toHaveValue('原文の誤記を訂正');
+  await expect(page.getByText('口コミが見つかりません', { exact: true })).toHaveCount(0);
+  await correction.getByLabel('関連受注ID（任意）').fill('');
   await correction.getByRole('button', { name: '確認へ', exact: true }).click();
   await confirm(page);
   await expect(detail.getByText('訂正後の新しい文面', { exact: true })).toBeVisible();
@@ -140,4 +161,62 @@ Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が�
   expect(list.content[0]).not.toHaveProperty('permission');
   await expect(page.getByText('口コミの操作を記録しました', { exact: true })).toHaveCount(0, { timeout: 10000 });
   await page.screenshot({ path: $testInfo.outputPath('review-correction.png'), fullPage: true, animations: 'disabled' });
+});
+
+let elevationActor = 0, reviewElevationId = 0;
+let auditorToken = '', elevationOperatorToken = '', elevatedToken = '', elevatedReviewId = '';
+const elevatedInput = { body: '緊急調査中の口コミ', received_via: 'PAPER', received_at: '2026-01-01T00:00:00Z', dedupe_key: 'elevated-review' };
+Given('通常の口コミ権限を持たない緊急昇格担当者を用意する', async ({ request }) => {
+  const owner = await loginPlatformUser(request, 'admin@kizuna.test', ADMIN_PASSWORD);
+  const suffix = Date.now().toString();
+  const login = `review-elevation-${suffix}@kizuna.test`;
+  const secret = `Review-elevation-${suffix}-fixture`;
+  const role = await createPermissionRole(request, owner, `口コミ緊急調査-${suffix}`, ['AUDIT_VIEW', 'EMERGENCY_ELEVATE', 'PLATFORM_MENU_VIEW']);
+  const stores = await getAuthorizedStores(request, await loginAsStoreAdmin(request));
+  const otherStore = stores.find((store: { id: number }) => String(store.id) !== STORE1_ID)!.id;
+  elevationActor = await createPlatformStaffFixture(request, owner, login, secret, [role], [otherStore]);
+  elevationOperatorToken = await loginPlatformUser(request, login, secret);
+  expect((await request.get('/api/store/reviews', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${elevationOperatorToken}` } })).status()).toBe(403);
+  const activated = await activateEmergencyElevation(request, elevationOperatorToken, STORE1_ID, '口コミの緊急調査', secret);
+  const readerLogin = `review-auditor-${suffix}@kizuna.test`;
+  await createPlatformStaffFixture(request, owner, readerLogin, secret, [role]);
+  auditorToken = await loginPlatformUser(request, readerLogin, secret);
+  reviewElevationId = activated.id;
+  elevatedToken = activated.token;
+  expect((await request.get('/api/store/reviews', { headers: { ...STORE_HEADERS, 'X-Store-ID': String(otherStore), Authorization: `Bearer ${elevatedToken}` } })).status()).toBe(403);
+});
+When('昇格した対象店舗で口コミの受付と審査と許可撤回と訂正を行う', async ({ request }) => {
+  const auth = { ...STORE_HEADERS, Authorization: `Bearer ${elevatedToken}` };
+  const created = await request.post('/api/store/reviews', { headers: auth, data: elevatedInput });
+  expect(created.status()).toBe(201);
+  elevatedReviewId = (await created.json()).review.id;
+  expect((await request.get(`/api/store/reviews/${elevatedReviewId}`, { headers: auth })).status()).toBe(200);
+  expect((await request.get(`/api/store/reviews/${elevatedReviewId}/history`, { headers: auth })).status()).toBe(200);
+  expect((await request.post(`/api/store/reviews/${elevatedReviewId}/decisions`, { headers: auth, data: { version: 0, decision: 'APPROVE', reason: '内部審査', dedupe_key: 'elevated-approve' } })).status()).toBe(200);
+  expect((await request.post(`/api/store/reviews/${elevatedReviewId}/permissions`, { headers: auth, data: { version: 1, basis_type: 'WRITTEN', granted_at: '2026-01-01T00:00:00Z', evidence_note: '許可書の記録', dedupe_key: 'elevated-grant' } })).status()).toBe(201);
+  expect((await request.post(`/api/store/reviews/${elevatedReviewId}/permission-revocations`, { headers: auth, data: { version: 2, withdrawal_received_at: '2026-01-02T00:00:00Z', reason: '撤回を確認', dedupe_key: 'elevated-revoke' } })).status()).toBe(200);
+  expect((await request.post(`/api/store/reviews/${elevatedReviewId}/corrections`, { headers: auth, data: { ...elevatedInput, body: '訂正版', version: 3, reason: '原文の訂正', dedupe_key: 'elevated-correction' } })).status()).toBe(201);
+  const replay = await request.post('/api/store/reviews', { headers: auth, data: elevatedInput });
+  expect(replay.status()).toBe(200);
+  expect((await replay.json()).operation.replayed).toBe(true);
+});
+Then('口コミ監査が昇格主体と許可状態を保持し昇格撤回後は再生も拒否する', async ({ request }) => {
+  for (const action of ['REVIEW_RECEIVED', 'REVIEW_APPROVED', 'REVIEW_PERMISSION_GRANTED', 'REVIEW_PERMISSION_REVOKED', 'REVIEW_CORRECTION_LINKED']) {
+    const events = (await listAuditEvents(request, auditorToken, action)).content.filter(event => event.target_id === elevatedReviewId);
+    expect(events).toHaveLength(1);
+    expect(events[0].actor_id).toBe(elevationActor);
+    expect(events[0].actor_type).toBe('STAFF');
+    const detail = await getAuditEvent(request, auditorToken, events[0].id);
+    expect(detail.after_values.emergency_elevation_id).toBe(String(reviewElevationId));
+    expect(JSON.stringify(detail)).not.toContain('緊急調査中の口コミ');
+    expect(JSON.stringify(detail)).not.toContain('許可書の記録');
+    if (action === 'REVIEW_CORRECTION_LINKED') {
+      expect(detail.before_values.permission_status).toBe('REVOKED');
+      expect(detail.after_values.permission_status).toBe('REVOKED');
+    }
+  }
+  await revokeEmergencyElevation(request, elevationOperatorToken, reviewElevationId);
+  const auth = { ...STORE_HEADERS, Authorization: `Bearer ${elevatedToken}` };
+  expect((await request.get('/api/store/reviews', { headers: auth })).status()).toBe(401);
+  expect((await request.post('/api/store/reviews', { headers: auth, data: elevatedInput })).status()).toBe(401);
 });

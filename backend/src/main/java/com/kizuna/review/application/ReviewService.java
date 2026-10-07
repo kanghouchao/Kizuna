@@ -258,7 +258,13 @@ public class ReviewService {
             before.permissionStatus().name(),
             "version",
             before.version().toString()),
-        Map.of("status", old.getStatus().name(), "version", old.getVersion().toString()));
+        Map.of(
+            "status",
+            old.getStatus().name(),
+            "permission_status",
+            old.getPermissionStatus().name(),
+            "version",
+            old.getVersion().toString()));
     audit.record(
         email,
         row.getStoreId(),

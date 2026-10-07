@@ -105,6 +105,8 @@ function Reviews({
     lock.current = true;
     setBusy(true);
     setPending(command);
+    if (command.kind === 'CREATE' || command.kind === 'CORRECT')
+      setEditor(current => (current ? { ...current, draft: command.input } : current));
     try {
       const result = await reviewApi.write(command);
       if (!active.current) return;
@@ -136,13 +138,27 @@ function Reviews({
           setEditOpen(false);
           setLatest(undefined);
         }
+        let deniedReason = accessError(error);
         if (isNotFound(error)) {
-          setMissing(true);
-          setEditOpen(false);
-          void list.reload();
+          let reviewMissing = command.kind !== 'CREATE';
+          if (command.kind === 'CORRECT') {
+            try {
+              await reviewApi.get(command.id);
+              reviewMissing = false;
+            } catch (lookupError) {
+              reviewMissing = isNotFound(lookupError);
+              deniedReason = accessError(lookupError);
+            }
+            if (!active.current) return;
+          }
+          if (reviewMissing) {
+            setMissing(true);
+            setEditOpen(false);
+            void list.reload();
+          } else setEditOpen(true);
         }
-        if (accessError(error) !== null) {
-          setDenied(accessError(error));
+        if (deniedReason !== null) {
+          setDenied(deniedReason);
           setOpen(false);
           void list.reload();
           setEditOpen(false);

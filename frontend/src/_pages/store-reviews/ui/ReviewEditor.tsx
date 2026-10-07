@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Review, ReviewCommand, ReceivedVia, Basis } from '@/entities/review';
+import { Review, ReviewCommand, ReviewInput, ReceivedVia, Basis } from '@/entities/review';
 import {
   Button,
   ConfirmDialog,
@@ -18,9 +18,10 @@ import {
   SelectItem,
   SelectValue,
 } from '@/shared/ui';
-export type Editor =
+export type Editor = (
   | { action: 'CREATE'; row?: undefined }
-  | { action: 'APPROVE' | 'REJECT' | 'GRANT' | 'REVOKE' | 'WITHDRAW' | 'CORRECT'; row: Review };
+  | { action: 'APPROVE' | 'REJECT' | 'GRANT' | 'REVOKE' | 'WITHDRAW' | 'CORRECT'; row: Review }
+) & { draft?: ReviewInput & { reason?: string } };
 export function editorTitle(editor: Editor) {
   return {
     CREATE: '口コミを受付',
@@ -55,14 +56,14 @@ export function ReviewEditor({
   canOrder: boolean;
   onSubmit: (command: ReviewCommand) => Promise<void>;
 }) {
-  const seed = editor.action === 'CORRECT' ? editor.row : undefined;
+  const seed = editor.draft ?? (editor.action === 'CORRECT' ? editor.row : undefined);
   const received = seed ? new Date(seed.received_at) : null;
   const localReceived = received
     ? new Date(received.getTime() - received.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
     : '';
   const form = useForm({
     defaultValues: {
-      reason: '',
+      reason: editor.draft?.reason ?? '',
       body: seed?.body ?? '',
       display_name: seed?.display_name ?? '',
       received_via: seed?.received_via ?? ('PAPER' as ReceivedVia),
