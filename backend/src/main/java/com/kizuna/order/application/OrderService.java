@@ -61,6 +61,7 @@ import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ReceptionistEligibilityService;
 import jakarta.persistence.criteria.Predicate;
 import java.time.LocalDate;
@@ -95,6 +96,7 @@ public class OrderService {
   private static final String NOT_NOMINATABLE_MESSAGE = "指名できるキャストではありません。在籍中のキャストを選んでください";
 
   private final OrderRepository orderRepository;
+  private final BusinessAudit businessAudit;
   private final OrderApplicationRepository orderApplicationRepository;
   private final OrderSearchQuery orderSearchQuery;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
@@ -246,7 +248,6 @@ public class OrderService {
       throw new ServiceException("受付経路に Web 申請は指定できません。予約申請の確定だけが MEMBER_WEB / GUEST_WEB を名乗ります");
     }
 
-    // MapStructを使用して基本的なフィールドをマッピング（store_id は StoreScopeStampListener が @PrePersist で採番）
     Order order = orderMapper.toEntity(request);
 
     // 指名は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
@@ -286,7 +287,7 @@ public class OrderService {
     orderRepository.flush();
     businessContactPermissions.record(
         saved, ContactSnapshot.empty(), request.getBusinessContactPermissions(), actorEmail);
-    orderRepository.flush();
+    auditOrder(saved, "ORDER_CREATED", actorEmail, null, null, null);
     return toResponse(saved);
   }
 
@@ -309,11 +310,7 @@ public class OrderService {
         .orElseThrow(() -> new ServiceException("受付担当を指定してください"));
   }
 
-  /**
-   * 受注の内容を部分更新する。状態は動かさない — 完了は完了処理が、取消は取消操作が独占する（ADR 0013）。
-   *
-   * <p>終端状態（完了・取消）の受注はこの口では書き換えられない。受注には変更履歴が無いため、ここを開けておくことは 「誰が・いつ・何を」のどれも残さずに確定した記録を動かす裏口になる。
-   */
+  /** 未完了の受注だけを部分更新する。状態遷移と完了後の訂正は、それぞれの専用操作で検証する。 */
   @StoreScoped
   @Transactional
   public OrderResponse update(String id, OrderUpdateRequest request, String actorEmail) {
@@ -330,6 +327,8 @@ public class OrderService {
     if (order.getStatus() != null && order.getStatus().isTerminal()) {
       throw new ServiceException("完了・取消済みの受注は編集できません");
     }
+
+    var before = OrderAuditSnapshot.of(order);
 
     // 空文字は「送っていない」と同じに扱う。編集画面の未選択がそのまま乗ってくる形なので、存在しない
     // キャストとして扱って 404 を返すより、指名なしの要求として同じ判定に載せる方が呼び手に意味が通る。
@@ -350,7 +349,6 @@ public class OrderService {
     if (request.getContactSnapshot() != null)
       order.replaceContact(snapshot(request.getContactSnapshot()));
 
-    // 非nullフィールドのみをドメインの部分更新コマンドとして適用
     var course =
         request.getCourseId() == null
             ? order.getCourse()
@@ -376,7 +374,6 @@ public class OrderService {
     order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
     order.apply(orderMapper.toPatch(request));
 
-    // 関連 ID の更新（存在確認は上で済ませている）
     if (castId != null) {
       order.assignCast(castId);
     }
@@ -389,7 +386,7 @@ public class OrderService {
         order, previousContact, request.getBusinessContactPermissions(), actorEmail);
 
     Order saved = orderRepository.save(order);
-    orderRepository.flush();
+    auditOrder(saved, "ORDER_UPDATED", actorEmail, before, null, null);
     return toResponse(saved);
   }
 
@@ -497,6 +494,7 @@ public class OrderService {
 
     // 検証は書き換えより先にすべて済ませる。撥ねる要求が集約や台帳を触った後だと、拒否の健全さが
     // トランザクションの巻き戻しだけに掛かる。
+    var before = OrderAuditSnapshot.application(application);
     LocalDate today = businessDateService.currentBusinessDate();
     application.ensureDecidable(today);
     if (request.getCastId() != null) {
@@ -598,6 +596,8 @@ public class OrderService {
     guestConsent.importContacts(application, saved.getCustomerId(), contactImports, actorId);
     application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
     orderApplicationRepository.save(application);
+    auditOrder(saved, "ORDER_CREATED", actorEmail, null, "ORDER_APPLICATION", application.getId());
+    auditApplication(application, "ORDER_APPLICATION_CONFIRMED", actorEmail, before);
     return toResponse(saved);
   }
 
@@ -635,6 +635,7 @@ public class OrderService {
       throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
     }
 
+    var before = OrderAuditSnapshot.of(order);
     specialServices.requireProgress(order);
     var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), true);
     order.replaceStoreFeeLines(calculated.editableFeeLines());
@@ -695,6 +696,7 @@ public class OrderService {
     // ポイント利用は減算の明細行として内訳へ入る（台帳の減算仕訳と対になる記録）。合計はそのぶん下がる。
     order.completeWith(usePoints, granted);
     orderRepository.save(order);
+    auditOrder(order, "ORDER_COMPLETED", actorEmail, before, null, null);
     // 生値がこの応答の外へ出る経路は無い（保存されるのはダイジェストだけ）。会員へ帰属した完了では null。
     return new OrderCompletionResponse(receiptToken);
   }
@@ -1057,9 +1059,11 @@ public class OrderService {
         orderRepository
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    var before = OrderAuditSnapshot.of(order);
     order.cancelWith(
         request.getReason(), actorIdentityService.requireUserId(actorEmail), OffsetDateTime.now());
     orderRepository.save(order);
+    auditOrder(order, "ORDER_CANCELLED", actorEmail, before, null, null);
   }
 
   /** 予約申請を謝絶する。理由は必須で、実行者と時刻を記録に残す（取消 ADR 0013 の先例）。確定後の取り消しは理由必須の取消操作（{@link #cancel}）に委ねる。 */
@@ -1071,12 +1075,14 @@ public class OrderService {
         orderApplicationRepository
             .findById(id)
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
+    var before = OrderAuditSnapshot.application(application);
     application.decline(
         request.getReason(),
         actorIdentityService.requireUserId(actorEmail),
         OffsetDateTime.now(),
         businessDateService.currentBusinessDate());
     orderApplicationRepository.save(application);
+    auditApplication(application, "ORDER_APPLICATION_DECLINED", actorEmail, before);
   }
 
   /**
@@ -1108,10 +1114,48 @@ public class OrderService {
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     calculation.requireVersion(order, expectedVersion);
+    var before = OrderAuditSnapshot.of(order);
     order.start(reason, actorIdentityService.requireUserId(actor), OffsetDateTime.now());
     specialServices.requireProgress(order);
     orderRepository.saveAndFlush(order);
+    auditOrder(order, "ORDER_STARTED", actor, before, null, null);
     return toResponse(order);
+  }
+
+  private void auditOrder(
+      Order order,
+      String action,
+      String actor,
+      OrderAuditSnapshot before,
+      String sourceType,
+      String sourceId) {
+    orderRepository.flush();
+    var after = OrderAuditSnapshot.of(order);
+    businessAudit.record(
+        actor,
+        order.getStoreId(),
+        action,
+        "ORDER",
+        order.getId(),
+        sourceType,
+        sourceId,
+        before == null ? Map.of() : before.values(),
+        after.after(before));
+  }
+
+  private void auditApplication(
+      OrderApplication application, String action, String actor, Map<String, String> before) {
+    orderApplicationRepository.flush();
+    businessAudit.record(
+        actor,
+        application.getStoreId(),
+        action,
+        "ORDER_APPLICATION",
+        application.getId(),
+        null,
+        null,
+        before,
+        OrderAuditSnapshot.application(application));
   }
 
   private Optional<Long> eligibleReceptionistId(String actorEmail) {

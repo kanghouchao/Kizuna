@@ -82,6 +82,7 @@ import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ReceptionistEligibilityService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PlatformUser;
@@ -93,6 +94,7 @@ import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
@@ -123,6 +125,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
 
+  @Mock BusinessAudit businessAudit;
   @Mock BusinessContactPermissions businessContactPermissions;
   @Mock GuestApplicationConsent guestConsent;
   @Mock OrderRepository orderRepository;
@@ -198,6 +201,8 @@ class OrderServiceTest {
     Mockito.lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
   }
 
+  @Captor ArgumentCaptor<Map<String, String>> beforeAudit;
+  @Captor ArgumentCaptor<Map<String, String>> afterAudit;
   @Captor ArgumentCaptor<Order> orderCaptor;
   @Captor ArgumentCaptor<Customer> customerCaptor;
   @Captor ArgumentCaptor<CustomerMemberLink> linkCaptor;
@@ -363,6 +368,12 @@ class OrderServiceTest {
     assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo("c1");
     assertThat(orderCaptor.getValue().getCastId()).isEqualTo("g1");
     assertThat(orderCaptor.getValue().getReceptionistId()).isEqualTo(1L);
+    captureAudit("ORDER_CREATED");
+    assertThat(beforeAudit.getValue()).isEmpty();
+    assertThat(afterAudit.getValue())
+        .containsEntry("status", "CONFIRMED")
+        .containsEntry("customer_id", "c1")
+        .containsEntry("cast_enrollment_id", "g1");
   }
 
   @Test
@@ -735,6 +746,7 @@ class OrderServiceTest {
       assertThat(order.getPax()).as("撥ねた要求が内容を書き換えないこと").isEqualTo(2);
     }
     verify(orderRepository, never()).save(any(Order.class));
+    verifyNoInteractions(businessAudit);
   }
 
   @Test
@@ -764,6 +776,9 @@ class OrderServiceTest {
     service.update("o1", req, ACTOR_EMAIL);
 
     assertThat(existing.getPax()).isEqualTo(3);
+    captureAudit("ORDER_UPDATED");
+    assertThat(beforeAudit.getValue()).containsEntry("pax", "");
+    assertThat(afterAudit.getValue()).containsEntry("pax", "3");
   }
 
   private OrderCancellationRequest cancellationRequest(String reason) {
@@ -774,7 +789,6 @@ class OrderServiceTest {
 
   @Test
   void cancelRecordsTheReasonActorAndTime() {
-    // 汎用更新から状態を動かす裏口を閉じた代わりの専用の口。「取消できること」はここへ移設した
     Order confirmed =
         Order.builder()
             .status(OrderStatus.CONFIRMED)
@@ -793,11 +807,16 @@ class OrderServiceTest {
     assertThat(confirmed.getCancelledReason()).isEqualTo("客都合。当日夕方に体調不良の連絡あり");
     assertThat(confirmed.getCancelledBy()).isEqualTo(7L);
     assertThat(confirmed.getCancelledAt()).isNotNull();
+    captureAudit("ORDER_CANCELLED");
+    assertThat(beforeAudit.getValue()).containsEntry("status", "CONFIRMED");
+    assertThat(afterAudit.getValue())
+        .containsEntry("status", "CANCELLED")
+        .containsEntry("redacted_fields_changed", "cancelled_reason");
+    assertThat(afterAudit.getValue().toString()).doesNotContain(confirmed.getCancelledReason());
   }
 
   @Test
   void cancelRejectsAnOrderThatIsNotConfirmed() {
-    // 「不正な遷移が撥ねられること」の移設先。未処理の予約申請は申請側の謝絶が、誤完了の救済は別の経路が受け持つ
     for (OrderStatus status : List.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED)) {
       Order order =
           Order.builder()
@@ -818,6 +837,7 @@ class OrderServiceTest {
       assertThat(order.getStatus()).isEqualTo(status);
     }
     verify(orderRepository, never()).save(any(Order.class));
+    verifyNoInteractions(businessAudit);
   }
 
   @Test
@@ -1491,6 +1511,17 @@ class OrderServiceTest {
     assertThat(application.getProcessedBy()).isEqualTo(7L);
     assertThat(application.getCastId()).as("申請原文は確定で書き換わらないこと").isEqualTo("cast-希望");
     assertThat(application.getRemarks()).isEqualTo("窓際の席を希望");
+    captureAudit("ORDER_CREATED");
+    assertThat(beforeAudit.getValue()).isEmpty();
+    assertThat(afterAudit.getValue()).containsEntry("requester_member_id", "100");
+    captureAudit("ORDER_APPLICATION_CONFIRMED");
+    assertThat(beforeAudit.getValue())
+        .containsEntry("status", "PENDING")
+        .containsEntry("order_id", "");
+    assertThat(afterAudit.getValue())
+        .containsEntry("status", "CONFIRMED")
+        .containsEntry("order_id", "order-1");
+    assertThat(afterAudit.getValue().toString()).doesNotContain("名乗り太郎", "窓際の席を希望");
   }
 
   @Test
@@ -1907,6 +1938,12 @@ class OrderServiceTest {
     assertThat(application.getDeclinedReason()).isEqualTo("満席のためお受けできません");
     assertThat(application.getProcessedBy()).isEqualTo(7L);
     assertThat(application.getProcessedAt()).isNotNull();
+    captureAudit("ORDER_APPLICATION_DECLINED");
+    assertThat(beforeAudit.getValue()).containsEntry("status", "PENDING");
+    assertThat(afterAudit.getValue())
+        .containsEntry("status", "DECLINED")
+        .containsEntry("processed_by", "7");
+    assertThat(afterAudit.getValue().toString()).doesNotContain(application.getDeclinedReason());
   }
 
   @Test
@@ -2156,6 +2193,14 @@ class OrderServiceTest {
     assertThat(usedPointsOf(order)).isEqualTo(300);
     // 実際に付与された数を受注へ書く。要求された金額から再計算すると、設定変更で台帳とずれる
     assertThat(order.getAutoGrantPoints()).isEqualTo(120);
+    captureAudit("ORDER_COMPLETED");
+    assertThat(beforeAudit.getValue()).containsEntry("status", "CONFIRMED");
+    assertThat(afterAudit.getValue())
+        .containsEntry("status", "COMPLETED")
+        .containsEntry("total_fee", "11700")
+        .containsEntry("auto_grant_points", "120");
+    assertThat(afterAudit.getValue().get("fee_lines"))
+        .contains("kind=POINT_REDEMPTION,amount=-300");
   }
 
   @Test
@@ -2887,5 +2932,39 @@ class OrderServiceTest {
         .thenReturn(List.of(noPermission));
 
     assertThat(service.listReceptionists()).isEmpty();
+  }
+
+  @Test
+  void startRecordsTheBeforeStateAndCurrentVersion() {
+    var order = atCurrentVersion(Order.builder().status(OrderStatus.CONFIRMED).build());
+    order.setId("o1");
+    order.setStoreId(STORE_ID);
+    when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    stubActor();
+    stubRowResponses();
+    when(orderRepository.findViewById("o1")).thenReturn(Optional.of(mock(OrderView.class)));
+
+    service.start("o1", CURRENT_VERSION, "開始判断の原文", ACTOR_EMAIL);
+
+    captureAudit("ORDER_STARTED");
+    assertThat(beforeAudit.getValue()).containsEntry("status", "CONFIRMED");
+    assertThat(afterAudit.getValue())
+        .containsEntry("status", "IN_SERVICE")
+        .containsEntry("redacted_fields_changed", "start_reason");
+    assertThat(afterAudit.getValue().toString()).doesNotContain("開始判断の原文");
+  }
+
+  private void captureAudit(String action) {
+    verify(businessAudit)
+        .record(
+            anyString(),
+            nullable(Long.class),
+            eq(action),
+            anyString(),
+            nullable(String.class),
+            nullable(String.class),
+            nullable(String.class),
+            beforeAudit.capture(),
+            afterAudit.capture());
   }
 }
