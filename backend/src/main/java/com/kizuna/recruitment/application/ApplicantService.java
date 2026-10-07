@@ -21,10 +21,12 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
@@ -42,6 +44,7 @@ public class ApplicantService {
   private final ApplicantStatusHistoryRepository histories;
   private final PlatformUserRepository users;
   private final ApplicantMapper mapper;
+  private final BusinessAudit audit;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -88,6 +91,7 @@ public class ApplicantService {
     applicant.recordEditor(actorId);
     applicants.saveAndFlush(applicant);
     record(applicant, null, actorId, "応募受付");
+    recordAudit(applicant, "APPLICANT_RECEIVED", Map.of());
     return mapper.toResponse(applicant);
   }
 
@@ -95,9 +99,11 @@ public class ApplicantService {
   @Transactional
   public ApplicantResponse update(String id, ApplicantUpdateRequest request, String actorEmail) {
     Applicant applicant = locked(id, request.version());
+    var before = auditValues(applicant);
     applicant.replaceIntake(request.intake().toIntake());
     applicant.recordEditor(actorId(actorEmail));
     applicants.flush();
+    recordAudit(applicant, "APPLICANT_INTAKE_UPDATED", before);
     return mapper.toResponse(applicant);
   }
 
@@ -106,9 +112,11 @@ public class ApplicantService {
   public ApplicantResponse interview(
       String id, ApplicantInterviewRequest request, String actorEmail) {
     Applicant applicant = locked(id, request.version());
+    var before = auditValues(applicant);
     applicant.recordInterview(request.toInterview());
     applicant.recordEditor(actorId(actorEmail));
     applicants.flush();
+    recordAudit(applicant, "APPLICANT_INTERVIEW_UPDATED", before);
     return mapper.toResponse(applicant);
   }
 
@@ -117,12 +125,14 @@ public class ApplicantService {
   public ApplicantResponse transition(
       String id, ApplicantTransitionRequest request, String actorEmail) {
     Applicant applicant = locked(id, request.version());
+    var before = auditValues(applicant);
     ApplicantStatus previous = applicant.getStatus();
     applicant.transition(request.status(), request.reason());
     Long actorId = actorId(actorEmail);
     applicant.recordEditor(actorId);
     record(applicant, previous, actorId, request.reason().strip());
     applicants.flush();
+    recordAudit(applicant, "APPLICANT_STATUS_CHANGED", before);
     return mapper.toResponse(applicant);
   }
 
@@ -149,6 +159,22 @@ public class ApplicantService {
     return CursorPage.of(
             rows, size, row -> new PageCursor(row.getCreatedAt().toString(), row.getId()).encode())
         .map(mapper::toHistory);
+  }
+
+  private void recordAudit(Applicant applicant, String action, Map<String, String> before) {
+    audit.recordCurrent(
+        applicant.getStoreId(),
+        action,
+        "APPLICANT",
+        applicant.getId(),
+        before,
+        auditValues(applicant));
+  }
+
+  // 非公開の連絡先・面接内容・理由を、別の閲覧権限を持つ汎用監査へ複製しない。
+  private static Map<String, String> auditValues(Applicant applicant) {
+    return Map.of(
+        "status", applicant.getStatus().name(), "version", String.valueOf(applicant.getVersion()));
   }
 
   private Applicant require(String id) {

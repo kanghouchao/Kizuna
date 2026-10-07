@@ -3,8 +3,11 @@ package com.kizuna.recruitment.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
@@ -23,6 +26,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
@@ -44,6 +48,7 @@ class ApplicantServiceTest {
   @Mock ApplicantRepository applicants;
   @Mock ApplicantStatusHistoryRepository histories;
   @Mock PlatformUserRepository users;
+  @Mock BusinessAudit audit;
   ApplicantService service;
   Applicant applicant;
   ApplicantIntakeRequest intake =
@@ -64,9 +69,10 @@ class ApplicantServiceTest {
   void setup() {
     service =
         new ApplicantService(
-            applicants, histories, users, Mappers.getMapper(ApplicantMapper.class));
+            applicants, histories, users, Mappers.getMapper(ApplicantMapper.class), audit);
     applicant = Applicant.receive(intake.toIntake());
     applicant.setId("a");
+    applicant.setStoreId(1L);
     ReflectionTestUtils.setField(applicant, "version", 0L);
   }
 
@@ -88,12 +94,22 @@ class ApplicantServiceTest {
             call -> {
               Applicant value = call.getArgument(0);
               value.setId("a");
+              value.setStoreId(1L);
+              ReflectionTestUtils.setField(value, "version", 0L);
               return value;
             });
     var response = service.create(intake, "actor");
     assertThat(response.status()).isEqualTo(ApplicantStatus.RECEIVED);
     assertThat(response.address()).isEqualTo("住所");
     assertThat(response.modifiedBy()).isEqualTo(9L);
+    verify(audit)
+        .recordCurrent(
+            1L,
+            "APPLICANT_RECEIVED",
+            "APPLICANT",
+            "a",
+            Map.of(),
+            Map.of("status", "RECEIVED", "version", "0"));
     var captor = ArgumentCaptor.forClass(ApplicantStatusHistory.class);
     verify(histories).save(captor.capture());
     assertThat(captor.getValue().getPreviousStatus()).isNull();
@@ -111,6 +127,9 @@ class ApplicantServiceTest {
         "actor");
     assertThat(applicant.getEditSequence()).isEqualTo(2);
     assertThat(applicant.getInterview().notes()).isEqualTo("私用メモ");
+    var safe = Map.of("status", "RECEIVED", "version", "0");
+    verify(audit).recordCurrent(1L, "APPLICANT_INTAKE_UPDATED", "APPLICANT", "a", safe, safe);
+    verify(audit).recordCurrent(1L, "APPLICANT_INTERVIEW_UPDATED", "APPLICANT", "a", safe, safe);
   }
 
   @Test
@@ -126,6 +145,14 @@ class ApplicantServiceTest {
     assertThat(history.getNewStatus()).isEqualTo(ApplicantStatus.SCREENING);
     assertThat(history.getReason()).isEqualTo("選考開始");
     assertThat(history.getActorId()).isEqualTo(9L);
+    verify(audit)
+        .recordCurrent(
+            1L,
+            "APPLICANT_STATUS_CHANGED",
+            "APPLICANT",
+            "a",
+            Map.of("status", "RECEIVED", "version", "0"),
+            Map.of("status", "SCREENING", "version", "0"));
   }
 
   @Test
@@ -134,6 +161,7 @@ class ApplicantServiceTest {
     assertThatThrownBy(() -> service.update("a", new ApplicantUpdateRequest(3L, intake), "actor"))
         .isInstanceOf(ConflictException.class);
     assertThat(applicant.getEditSequence()).isZero();
+    verifyNoInteractions(audit);
     verify(applicants, never()).flush();
     verify(histories, never()).save(any());
   }
@@ -174,6 +202,18 @@ class ApplicantServiceTest {
     assertThatThrownBy(() -> service.create(intake, "missing"))
         .isInstanceOf(StaleSessionException.class);
     verify(applicants, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void auditFailurePropagatesToTheBusinessTransaction() {
+    actor();
+    lock();
+    doThrow(new IllegalStateException("監査を保存できません"))
+        .when(audit)
+        .recordCurrent(eq(1L), any(), any(), any(), any(), any());
+    assertThatThrownBy(() -> service.update("a", new ApplicantUpdateRequest(0L, intake), "actor"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("監査を保存できません");
   }
 
   @Test

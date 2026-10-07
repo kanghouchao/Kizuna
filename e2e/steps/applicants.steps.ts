@@ -122,6 +122,9 @@ When("応募者の受付と面接を画面で登録する", async ({ page }) => 
   await page.getByLabel("確認項目1の名前").fill("希望条件を確認");
   await page.getByLabel("確認項目1の確認済み").check();
   await page.getByRole("button", { name: "面接記録を保存" }).click();
+  await expect(
+    page.getByRole("button", { name: "面接記録を編集" }),
+  ).toBeEnabled();
   await expect(page.getByText("非公開面接メモ", { exact: true })).toBeVisible();
 });
 
@@ -154,6 +157,15 @@ Then(
         document.documentElement.classList.toggle("dark", value === "dark");
       }, theme);
       await page.setViewportSize({ width: 1280, height: 960 });
+      await expect(
+        page.getByRole("heading", { name: applicantName, exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "面接記録を編集" }),
+      ).toBeEnabled();
+      await page.getByRole("main").evaluate((element) => {
+        element.scrollTop = 0;
+      });
       await page.screenshot({
         path: $testInfo.outputPath(`applicant-detail-${theme}.png`),
         fullPage: true,
@@ -161,6 +173,9 @@ Then(
       await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants`);
       await expect(
         page.getByRole("heading", { name: "応募者管理", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("cell", { name: applicantName, exact: true }),
       ).toBeVisible();
       await expect(page.getByText("非公開住所")).toHaveCount(0);
       await page.screenshot({
@@ -178,8 +193,26 @@ Then(
     await page.getByRole("button", { name: "受付情報を編集" }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByLabel("氏名", { exact: true })).toBeVisible();
+    await page.getByLabel("氏名", { exact: true }).scrollIntoViewIfNeeded();
+    await expect(page.getByLabel("氏名", { exact: true })).toBeInViewport();
     await page.screenshot({
       path: $testInfo.outputPath("applicant-narrow.png"),
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "受付情報を保存" })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      page.getByRole("button", { name: "受付情報を保存" }),
+    ).toBeInViewport();
+    await page
+      .getByRole("button", { name: "編集を閉じる" })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      page.getByRole("button", { name: "編集を閉じる" }),
+    ).toBeInViewport();
+    await page.screenshot({
+      path: $testInfo.outputPath("applicant-narrow-actions.png"),
       fullPage: true,
     });
     await page.getByRole("button", { name: "編集を閉じる" }).click();
@@ -387,6 +420,117 @@ Then(
         "DROP TRIGGER IF EXISTS recruitment_test_failure ON t_applicant_status_histories",
       );
       await db.query("DROP FUNCTION IF EXISTS recruitment_test_failure()");
+      await db.end();
+    }
+  },
+);
+
+Then("応募者の監査には操作主体と状態だけが記録される", async () => {
+  const db = new Client();
+  await db.connect();
+  try {
+    const { rows } = await db.query(
+      "SELECT * FROM t_audit_events WHERE target_type=$1 AND target_id=$2 ORDER BY id",
+      ["APPLICANT", applicantId],
+    );
+    expect(rows.map((row) => row.action)).toEqual([
+      "APPLICANT_RECEIVED",
+      "APPLICANT_INTAKE_UPDATED",
+      "APPLICANT_INTERVIEW_UPDATED",
+      "APPLICANT_STATUS_CHANGED",
+      "APPLICANT_STATUS_CHANGED",
+      "APPLICANT_STATUS_CHANGED",
+    ]);
+    expect(rows.map((row) => row.after_values.version)).toEqual([
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+    ]);
+    for (const row of rows) {
+      expect(row.store_id).toBe(storeId);
+      expect(row.actor_id).toBeTruthy();
+      expect(row.actor_type).toBe("STAFF");
+      expect(row.result).toBe("SUCCEEDED");
+      expect(Object.keys(row.after_values).sort()).toEqual([
+        "status",
+        "version",
+      ]);
+      expect(Object.keys(row.before_values).sort()).toEqual(
+        row.action === "APPLICANT_RECEIVED" ? [] : ["status", "version"],
+      );
+      expect(JSON.stringify(row)).not.toContain(applicantName);
+      expect(JSON.stringify(row)).not.toContain("非公開");
+    }
+  } finally {
+    await db.end();
+  }
+});
+
+Then(
+  "汎用監査の保存が失敗すると応募者と履歴もロールバックされる",
+  async ({ request }) => {
+    const db = new Client();
+    await db.connect();
+    const name = `audit-rollback-${randomUUID()}`;
+    const original = await current(request);
+    const histories = (
+      await db.query("SELECT count(*) FROM t_applicant_status_histories")
+    ).rows[0].count;
+    const audits = (
+      await db.query(
+        "SELECT count(*) FROM t_audit_events WHERE target_type='APPLICANT'",
+      )
+    ).rows[0].count;
+    try {
+      await db.query(
+        "CREATE FUNCTION recruitment_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.target_type = 'APPLICANT' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$",
+      );
+      await db.query(
+        "CREATE TRIGGER recruitment_audit_failure BEFORE INSERT ON t_audit_events FOR EACH ROW EXECUTE FUNCTION recruitment_audit_failure()",
+      );
+      const create = await request.post("/api/store/applicants", {
+        headers: headers(),
+        data: { ...intake(), name },
+      });
+      expect(create.status()).toBe(500);
+      expect(
+        (
+          await db.query("SELECT count(*) FROM t_applicants WHERE name=$1", [
+            name,
+          ])
+        ).rows[0].count,
+      ).toBe("0");
+      const transition = await request.post(`${path()}/transitions`, {
+        headers: headers(),
+        data: {
+          version: original.version,
+          status: "WITHDRAWN",
+          reason: "監査失敗の検証",
+        },
+      });
+      expect(transition.status()).toBe(500);
+      const unchanged = await current(request);
+      expect(unchanged.version).toBe(original.version);
+      expect(unchanged.status).toBe(original.status);
+      expect(
+        (await db.query("SELECT count(*) FROM t_applicant_status_histories"))
+          .rows[0].count,
+      ).toBe(histories);
+      expect(
+        (
+          await db.query(
+            "SELECT count(*) FROM t_audit_events WHERE target_type='APPLICANT'",
+          )
+        ).rows[0].count,
+      ).toBe(audits);
+    } finally {
+      await db.query(
+        "DROP TRIGGER IF EXISTS recruitment_audit_failure ON t_audit_events",
+      );
+      await db.query("DROP FUNCTION IF EXISTS recruitment_audit_failure()");
       await db.end();
     }
   },
