@@ -26,6 +26,7 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +73,7 @@ class CustomerSearchControllerTest {
   @MockitoBean CustomerMemberLinkRepository links;
   @MockitoBean CustomerMergeRepository merges;
   @MockitoBean PlatformUserRepository users;
+  @MockitoBean BusinessAudit businessAudit;
   @MockitoBean SystemConfigService config;
   @MockitoBean StoreExistenceCheck stores;
   @MockitoBean StoreActivationService activation;

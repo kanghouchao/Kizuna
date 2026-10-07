@@ -365,10 +365,11 @@ export async function createCustomer(
   request: APIRequestContext,
   token: string,
   name: string,
+  contacts: { type: "PHONE" | "EMAIL" | "LINE"; value: string }[] = [],
 ): Promise<string> {
   const res = await request.post("/api/store/customers", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
-    data: { name },
+    data: { name, contacts },
   });
   if (!res.ok()) {
     throw new Error(
@@ -890,4 +891,153 @@ export async function createConsentingGuestApplication(
   });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
+}
+
+export async function updateCustomerContact(
+  request: APIRequestContext,
+  token: string,
+  customerId: string,
+  contactId: string,
+  type: "PHONE" | "EMAIL" | "LINE",
+  value: string,
+): Promise<void> {
+  const response = await request.put(
+    `/api/store/customers/${customerId}/contacts/${contactId}`,
+    {
+      headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+      data: { type, value },
+    },
+  );
+  expect(response.status()).toBe(200);
+}
+
+export async function changeCustomerContactPermission(
+  request: APIRequestContext,
+  token: string,
+  customerId: string,
+  contactId: string,
+  purpose: "BUSINESS" | "MARKETING",
+  status: "UNKNOWN" | "ALLOWED" | "DENIED",
+  source: string,
+  reason: string,
+): Promise<void> {
+  const response = await request.put(
+    `/api/store/customers/${customerId}/contacts/${contactId}/permissions/${purpose}`,
+    {
+      headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+      data: { status, source, reason },
+    },
+  );
+  expect(response.status()).toBe(200);
+}
+
+export async function deleteCustomerContact(
+  request: APIRequestContext,
+  token: string,
+  customerId: string,
+  contactId: string,
+): Promise<void> {
+  const response = await request.delete(
+    `/api/store/customers/${customerId}/contacts/${contactId}`,
+    { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` } },
+  );
+  expect(response.status()).toBe(204);
+}
+
+export async function activateEmergencyElevation(
+  request: APIRequestContext,
+  token: string,
+  storeId: string,
+  reason: string,
+  password: string,
+): Promise<{ id: number; token: string }> {
+  const response = await request.post("/api/platform/emergency-elevations", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { store_id: Number(storeId), reason, password },
+  });
+  expect(response.status()).toBe(201);
+  return response.json();
+}
+
+export async function revokeEmergencyElevation(
+  request: APIRequestContext,
+  token: string,
+  id: number,
+): Promise<void> {
+  const response = await request.post(
+    `/api/platform/emergency-elevations/${id}/revocation`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  expect(response.status()).toBe(204);
+}
+
+export type AuditEventSummary = {
+  id: number;
+  actor_id: number;
+  actor_type: string;
+  store_id: number | null;
+  target_id: string;
+  result: string;
+  source_type: string | null;
+  source_id: string | null;
+};
+
+export async function listAuditEvents(
+  request: APIRequestContext,
+  token: string,
+  action: string,
+): Promise<{ content: AuditEventSummary[]; next_cursor?: string | null }> {
+  const response = await request.get("/api/platform/audit-events", {
+    headers: { Authorization: `Bearer ${token}` },
+    params: { action, size: 100 },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+export async function getAuditEvent(
+  request: APIRequestContext,
+  token: string,
+  id: number,
+): Promise<{
+  event: AuditEventSummary;
+  before_values: Record<string, string>;
+  after_values: Record<string, string>;
+}> {
+  const response = await request.get(`/api/platform/audit-events/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+export async function mergeCustomers(
+  request: APIRequestContext,
+  token: string,
+  survivingId: string,
+  mergedId: string,
+  reason: string,
+): Promise<void> {
+  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
+  const preview = await request.post(
+    `/api/store/customers/${survivingId}/merge-preview`,
+    { headers, data: { merged_customer_id: mergedId } },
+  );
+  expect(preview.status()).toBe(200);
+  const selected = await preview.json();
+  const response = await request.post(
+    `/api/store/customers/${survivingId}/merges`,
+    {
+      headers,
+      data: {
+        merged_customer_id: mergedId,
+        preview_token: selected.preview_token,
+        profile: selected.profile,
+        preferred_contacts: selected.preferred_contacts,
+        warnings_acknowledged: true,
+        operation_reason: reason,
+      },
+    },
+  );
+  expect(response.status()).toBe(200);
 }
