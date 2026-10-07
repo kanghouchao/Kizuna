@@ -87,6 +87,7 @@ class StoreStaffServiceTest {
   /** 作成要求へ載せる素の値。符号化して保存する経路を通すためだけの固定値で、意味は持たない。 */
   private static final String RAW_CREDENTIAL = "rawpass";
 
+  @Mock private BusinessAudit businessAudit;
   @Mock private PlatformUserRepository repository;
   @Mock private RoleRepository roleRepository;
   @Mock private PasswordEncoder encoder;

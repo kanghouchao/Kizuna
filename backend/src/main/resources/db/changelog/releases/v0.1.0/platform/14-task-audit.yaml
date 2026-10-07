@@ -1,0 +1,291 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-014-task-audit-schema
+      author: kanghouchao
+      changes:
+        - createTable:
+            tableName: t_execution_requests
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_execution_requests
+              - column:
+                  name: task_name
+                  type: VARCHAR(60)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: logical_key
+                  type: VARCHAR(120)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: store_id
+                  type: BIGINT
+              - column:
+                  name: period_start
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: period_end
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: t_execution_attempts
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_execution_attempts
+              - column:
+                  name: request_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: store_name
+                  type: VARCHAR(255)
+              - column:
+                  name: attempt_number
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: retry_of
+                  type: BIGINT
+              - column:
+                  name: origin
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: initiated_by
+                  type: BIGINT
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: started_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: finished_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: processed_count
+                  type: BIGINT
+              - column:
+                  name: failure_code
+                  type: VARCHAR(40)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: t_audit_events
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_audit_events
+              - column:
+                  name: occurred_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: store_id
+                  type: BIGINT
+              - column:
+                  name: action
+                  type: VARCHAR(80)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: result
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: target_type
+                  type: VARCHAR(80)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: target_id
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: source_type
+                  type: VARCHAR(80)
+              - column:
+                  name: source_id
+                  type: VARCHAR(100)
+              - column:
+                  name: before_values
+                  type: JSONB
+                  constraints:
+                    nullable: false
+              - column:
+                  name: after_values
+                  type: JSONB
+                  constraints:
+                    nullable: false
+        # 主体・店舗は記録時の ID と表示名を保持し、元行の削除で証跡を変更・消去しない。
+        - addUniqueConstraint:
+            tableName: t_execution_requests
+            columnNames: task_name, logical_key
+            constraintName: uq_t_execution_requests_key
+        - addUniqueConstraint:
+            tableName: t_execution_attempts
+            columnNames: request_id, attempt_number
+            constraintName: uq_t_execution_attempts_number
+        - addForeignKeyConstraint:
+            baseTableName: t_execution_attempts
+            baseColumnNames: request_id
+            referencedTableName: t_execution_requests
+            referencedColumnNames: id
+            constraintName: fk_t_execution_attempts_request
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_execution_attempts
+            baseColumnNames: retry_of
+            referencedTableName: t_execution_attempts
+            referencedColumnNames: id
+            constraintName: fk_t_execution_attempts_retry
+            onDelete: NO ACTION
+        - createIndex:
+            tableName: t_execution_attempts
+            indexName: idx_t_execution_attempts_started
+            columns:
+              - column:
+                  name: started_at
+                  descending: true
+              - column:
+                  name: id
+                  descending: true
+        - createIndex:
+            tableName: t_audit_events
+            indexName: idx_t_audit_events_occurred
+            columns:
+              - column:
+                  name: occurred_at
+                  descending: true
+              - column:
+                  name: id
+                  descending: true
+        - createIndex:
+            tableName: t_audit_events
+            indexName: idx_t_audit_events_action
+            columns:
+              - column:
+                  name: action
+              - column:
+                  name: occurred_at
+                  descending: true
+              - column:
+                  name: id
+                  descending: true
+        - sql:
+            sql: >-
+              ALTER TABLE t_execution_requests ADD CONSTRAINT ck_t_execution_requests_period
+              CHECK (period_end >= period_start AND period_end - period_start <= 366);
+              ALTER TABLE t_execution_attempts ADD CONSTRAINT ck_t_execution_attempts_status
+              CHECK (status IN ('RUNNING','SUCCEEDED','FAILED','INTERRUPTED'));
+              ALTER TABLE t_execution_attempts ADD CONSTRAINT ck_t_execution_attempts_result
+              CHECK (attempt_number > 0 AND (processed_count IS NULL OR processed_count >= 0)
+              AND ((status = 'RUNNING' AND finished_at IS NULL) OR (status <> 'RUNNING' AND finished_at IS NOT NULL)));
+        - sql:
+            splitStatements: false
+            sql: |-
+              CREATE FUNCTION reject_audit_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+              BEGIN
+                RAISE EXCEPTION '監査履歴は変更できません' USING ERRCODE = '55000';
+              END;
+              $$;
+        - sql:
+            sql: >-
+              CREATE TRIGGER tr_t_audit_events_immutable
+              BEFORE UPDATE OR DELETE OR TRUNCATE ON t_audit_events
+              FOR EACH STATEMENT EXECUTE FUNCTION reject_audit_mutation();

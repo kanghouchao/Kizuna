@@ -26,6 +26,7 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
@@ -48,6 +49,7 @@ public class CustomerMergeService {
   /** 両行が認領されているときの案内。事前判定と、それをすり抜けた競合が部分一意索引に当たる場合とで同じ文言を返す。 */
   private static final String RELEASE_THE_LINK_FIRST = "両方の顧客に会員が紐づいています。先に関連を解除してから統合してください";
 
+  private final BusinessAudit businessAudit;
   private final EntityManager entityManager;
   private final MergePreparation preparation;
   private final MergeConfirmation confirmation;
@@ -125,6 +127,24 @@ public class CustomerMergeService {
                 preview.movedContactCount(),
                 request.operationReason().strip(),
                 evidence));
+    businessAudit.recordById(
+        actorId,
+        storeId,
+        "CUSTOMER_MERGED",
+        "CUSTOMER",
+        survivingCustomerId,
+        "CUSTOMER_MERGE",
+        recorded.getId(),
+        Map.of("merged_customer_id", mergedCustomerId),
+        Map.of(
+            "surviving_customer_id",
+            survivingCustomerId,
+            "moved_orders",
+            Integer.toString(movedOrderCount),
+            "moved_contacts",
+            Integer.toString(preview.movedContactCount()),
+            "reason",
+            request.operationReason().strip()));
     return new CustomerMergeResponse(
         survivingCustomerId,
         movedOrderCount,

@@ -66,6 +66,7 @@ public class StoreStaffService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
+  private final BusinessAudit businessAudit;
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
@@ -145,7 +146,15 @@ public class StoreStaffService {
             .storeScopeType(req.getStoreScopeType())
             .storeIds(req.getStoreIds())
             .build();
-    return toResponse(save(user), roleNames, delegationRoleIds, scope);
+    user = save(user);
+    businessAudit.recordCurrent(
+        null,
+        "STORE_STAFF_CREATED",
+        "USER_GRANTS",
+        user.getId().toString(),
+        Map.of(),
+        BusinessAudit.grants(user));
+    return toResponse(user, roleNames, delegationRoleIds, scope);
   }
 
   @Transactional
@@ -168,6 +177,7 @@ public class StoreStaffService {
     requireStoreConsoleReach(req.getRoleIds(), roleRepository.findStoreConsoleRoleIds());
     requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), scope);
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
+    var before = BusinessAudit.grants(user);
     user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
     if (Boolean.FALSE.equals(req.getEnabled())) {
       credentialOperations.stop(user);
@@ -175,7 +185,16 @@ public class StoreStaffService {
     if (Boolean.TRUE.equals(req.getEnabled()) && !user.getEnabled()) {
       user.resume();
     }
-    return toResponse(save(user), roleNames, delegationRoleIds, scope);
+    user = save(user);
+    if (!before.equals(BusinessAudit.grants(user)))
+      businessAudit.recordCurrent(
+          null,
+          "STORE_STAFF_GRANTS_CHANGED",
+          "USER_GRANTS",
+          user.getId().toString(),
+          before,
+          BusinessAudit.grants(user));
+    return toResponse(user, roleNames, delegationRoleIds, scope);
   }
 
   /** 行使者が付与できるロールの目録。防提権述語（店舗側ロールであること・委譲権限を含まないこと）をサーバ側の単源に置き、 前端に判定を複製させないための読み口である。 */

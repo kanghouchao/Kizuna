@@ -26,6 +26,15 @@ public enum PermissionCode {
   /** 授権範囲内の運営集計の出力。閲覧権限と併用し、既定授与はしない。 */
   OPERATIONAL_REPORT_EXPORT(Console.SHARED),
 
+  /** 登録済み処理の実行・再試行・中断記録と全体履歴の閲覧。既定授与はしない。 */
+  TASK_MANAGE(Console.PLATFORM),
+
+  /** サービス ID による実行基盤の検証処理。業務処理固有の権限を代替しない。 */
+  TASK_EXECUTE(Console.PLATFORM),
+
+  /** 全店舗の変更不可な業務監査の閲覧。既定授与はしない。 */
+  AUDIT_VIEW(Console.PLATFORM),
+
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 

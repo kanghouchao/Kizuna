@@ -49,6 +49,7 @@ public class PlatformStaffAccountService {
   /** 仮パスワードの生成源。予測可能な乱数だと発行直後の乗っ取りを許すため暗号論的乱数に限る。 */
   private final SecureRandom random = new SecureRandom();
 
+  private final BusinessAudit businessAudit;
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
@@ -133,6 +134,16 @@ public class PlatformStaffAccountService {
     credentialOperations.stop(target);
     if (wasEnabled) {
       repository.saveAndFlush(target);
+      businessAudit.record(
+          actorEmail,
+          null,
+          "STAFF_ACCOUNT_SUSPENDED",
+          "USER_GRANTS",
+          id.toString(),
+          null,
+          null,
+          Map.of("enabled", "true"),
+          Map.of("enabled", "false"));
     }
   }
 
@@ -158,6 +169,16 @@ public class PlatformStaffAccountService {
     String temporaryPassword = temporaryPassword();
     credentialOperations.changePassword(target, passwordEncoder.encode(temporaryPassword));
     repository.saveAndFlush(target);
+    businessAudit.record(
+        actorEmail,
+        null,
+        "STAFF_PASSWORD_RESET",
+        "USER_GRANTS",
+        id.toString(),
+        null,
+        null,
+        Map.of(),
+        Map.of("sessions_revoked", "true"));
     return temporaryPassword;
   }
 
@@ -175,6 +196,13 @@ public class PlatformStaffAccountService {
     if (!target.getEnabled()) {
       target.resume();
       repository.saveAndFlush(target);
+      businessAudit.recordCurrent(
+          null,
+          "STAFF_ACCOUNT_RESUMED",
+          "USER_GRANTS",
+          id.toString(),
+          Map.of("enabled", "false"),
+          Map.of("enabled", "true"));
     }
   }
 

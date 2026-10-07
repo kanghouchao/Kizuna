@@ -53,6 +53,7 @@ class RoleServiceTest {
 
   private static final long OTHER_ROLE_MANAGE_ROLE = 8L;
 
+  @Mock private BusinessAudit businessAudit;
   @Mock private RoleRepository roleRepository;
   @Mock private PermissionRepository permissionRepository;
   @Mock private PlatformUserRepository platformUserRepository;

@@ -17,6 +17,7 @@ import com.kizuna.auth.infrastructure.PlatformUserDetails;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
@@ -51,6 +52,7 @@ class EmergencyElevationServiceTest {
 
   private static final String REASON = "決済障害の一次対応";
 
+  @Mock private BusinessAudit businessAudit;
   @Mock private EmergencyElevationRepository elevationRepository;
   @Mock private PlatformUserRepository userRepository;
   @Mock private PlatformAuthService authService;

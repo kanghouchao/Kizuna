@@ -17,6 +17,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.application.BusinessAudit;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -45,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PointLedgerService {
 
+  private final BusinessAudit businessAudit;
   private final PointEntryRepository pointEntryRepository;
   private final PointAllocationRepository pointAllocationRepository;
   private final PointRollbackRepository pointRollbackRepository;
@@ -209,7 +211,7 @@ public class PointLedgerService {
       if (expiresOn != null && expiresOn.isBefore(businessToday())) {
         throw new ServiceException("有効期限に過去の日付は指定できません");
       }
-      pointEntryRepository.save(
+      saveAdjustment(
           PointEntry.manualAdjust(
               memberId, storeId, delta, reason, expiresOn, List.of(), actorUserId, idempotencyKey));
       return;
@@ -218,7 +220,7 @@ public class PointLedgerService {
       throw new ServiceException("減算の調整に有効期限は指定できません");
     }
     List<PlannedAllocation> plan = lockedLedgerOf(memberId).planConsumption(-delta);
-    pointEntryRepository.save(
+    saveAdjustment(
         PointEntry.manualAdjust(
             memberId,
             storeId,
@@ -228,6 +230,20 @@ public class PointLedgerService {
             allocationsOf(plan),
             actorUserId,
             idempotencyKey));
+  }
+
+  private void saveAdjustment(PointEntry entry) {
+    pointEntryRepository.save(entry);
+    businessAudit.recordById(
+        entry.getActorUserId(),
+        entry.getOriginatingStoreId(),
+        "POINT_MANUALLY_ADJUSTED",
+        "MEMBER",
+        entry.getMemberId().toString(),
+        "POINT_ENTRY",
+        String.valueOf(entry.getId()),
+        Map.of(),
+        Map.of("amount", Integer.toString(entry.getAmount()), "reason", entry.getReason()));
   }
 
   /** 同一キーの再送は、初回と内容が一致するときだけ再送と認める。実行者は比較しない — 操作の同一性はキーが表す。 */

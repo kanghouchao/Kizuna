@@ -10,6 +10,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class EmergencyElevationService {
 
+  private final BusinessAudit businessAudit;
   private final EmergencyElevationRepository elevationRepository;
   private final PlatformUserRepository userRepository;
   private final PlatformAuthService authService;
@@ -59,6 +61,7 @@ public class EmergencyElevationService {
         persist(
             EmergencyElevation.activate(
                 operator.getId(), targetStoreId, reason, OffsetDateTime.now()));
+    recordElevation(operator.getId(), elevation, "EMERGENCY_ELEVATION_ACTIVATED", Map.of());
     Token token = authService.issueElevatedTokenFor(operator, elevation);
     return new EmergencyElevationActivationResponse(
         elevation.getId(), token.token(), token.expiresAt());
@@ -81,6 +84,8 @@ public class EmergencyElevationService {
     OffsetDateTime at = OffsetDateTime.now();
     elevation.revoke(revoker.getId(), at);
     elevationRepository.save(elevation);
+    recordElevation(
+        revoker.getId(), elevation, "EMERGENCY_ELEVATION_REVOKED", Map.of("status", "ACTIVE"));
 
     // 版の増分は発動者の昇格トークンを全て失効させる。まだ有効な他の発動記録を開けたまま残すと
     // 監査の復元区間が実際に効いていた区間より長くなるため、道連れになる記録も同時に閉じる。
@@ -94,6 +99,8 @@ public class EmergencyElevationService {
             s -> {
               s.revoke(revoker.getId(), at);
               elevationRepository.save(s);
+              recordElevation(
+                  revoker.getId(), s, "EMERGENCY_ELEVATION_REVOKED", Map.of("status", "ACTIVE"));
             });
 
     // 発動者の行は外部キー（NO ACTION）が存在を保証する。引けないのは実装欠陥なので大きく失敗させる。
@@ -128,6 +135,40 @@ public class EmergencyElevationService {
     OffsetDateTime now = OffsetDateTime.now();
     return CursorPage.of(fetched, size, EmergencyElevationService::cursorOf)
         .map(view -> toSummary(view, now));
+  }
+
+  private void recordElevation(
+      Long actorId, EmergencyElevation elevation, String action, Map<String, String> before) {
+    var after =
+        Map.of(
+            "status",
+            elevation.getStatus().name(),
+            "activated_by",
+            elevation.getActivatedBy().toString(),
+            "reason",
+            elevation.getReason(),
+            "expires_at",
+            elevation.getExpiresAt().toString());
+    businessAudit.recordById(
+        actorId,
+        elevation.getTargetStoreId(),
+        action,
+        "EMERGENCY_ELEVATION",
+        elevation.getId().toString(),
+        "EMERGENCY_ELEVATION",
+        elevation.getId().toString(),
+        before,
+        after);
+    businessAudit.recordById(
+        actorId,
+        elevation.getTargetStoreId(),
+        "EMERGENCY_NOTIFICATION_REQUESTED",
+        "EMERGENCY_ELEVATION",
+        elevation.getId().toString(),
+        "EMERGENCY_ELEVATION",
+        elevation.getId().toString(),
+        Map.of(),
+        Map.of("event", action, "delivery_state", "PENDING"));
   }
 
   private List<EmergencyElevationView> fetchAfter(PageCursor cursor, Limit limit) {

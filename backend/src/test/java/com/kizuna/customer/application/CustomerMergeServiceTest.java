@@ -24,6 +24,7 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -63,6 +64,7 @@ class CustomerMergeServiceTest {
 
   private static final OffsetDateTime MERGED_AT = OffsetDateTime.parse("2026-08-10T10:00:00+09:00");
 
+  @Mock private BusinessAudit businessAudit;
   @Mock private CustomerContactService customerContactService;
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
