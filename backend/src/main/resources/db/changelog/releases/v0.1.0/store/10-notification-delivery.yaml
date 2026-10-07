@@ -1,0 +1,240 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-010-notification-delivery
+      author: kanghouchao
+      changes:
+        - createTable:
+            tableName: t_notification_deliveries
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_notification_deliveries
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: source_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: order_id
+                  type: VARCHAR(32)
+              - column:
+                  name: application_id
+                  type: VARCHAR(32)
+              - column:
+                  name: channel
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: purpose
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: subject
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: body
+                  type: VARCHAR(10000)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: scheduled_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: dedupe_key
+                  type: VARCHAR(120)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: attempt_count
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+        - createTable:
+            tableName: t_notification_attempts
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_notification_attempts
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: delivery_id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: attempt_number
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: task_execution_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: started_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: finished_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: failure_code
+                  type: VARCHAR(40)
+        # 店舗削除は所属通知を連鎖削除し、通知が参照する業務起点と実行主体は履歴のため保護する。
+        - addForeignKeyConstraint:
+            baseTableName: t_notification_deliveries
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_notification_deliveries_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_notification_attempts
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_notification_attempts_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_notification_deliveries
+            baseColumnNames: order_id
+            referencedTableName: t_orders
+            referencedColumnNames: id
+            constraintName: fk_t_notification_deliveries_order_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_notification_deliveries
+            baseColumnNames: application_id
+            referencedTableName: t_order_applications
+            referencedColumnNames: id
+            constraintName: fk_t_notification_deliveries_application_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_notification_attempts
+            baseColumnNames: delivery_id
+            referencedTableName: t_notification_deliveries
+            referencedColumnNames: id
+            constraintName: fk_t_notification_attempts_delivery_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_notification_attempts
+            baseColumnNames: task_execution_id
+            referencedTableName: t_execution_attempts
+            referencedColumnNames: id
+            constraintName: fk_t_notification_attempts_task_execution_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_notification_attempts
+            baseColumnNames: service_user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_notification_attempts_service_user_id
+            onDelete: NO ACTION
+        - addUniqueConstraint:
+            tableName: t_notification_deliveries
+            columnNames: store_id,dedupe_key
+            constraintName: uq_t_notification_deliveries_key
+        - addUniqueConstraint:
+            tableName: t_notification_attempts
+            columnNames: delivery_id,attempt_number
+            constraintName: uq_t_notification_attempts_number
+        - sql:
+            sql: |
+              ALTER TABLE t_notification_deliveries ADD CONSTRAINT ck_t_notification_deliveries_source CHECK
+                ((source_type = 'ORDER' AND order_id IS NOT NULL AND application_id IS NULL) OR
+                 (source_type = 'APPLICATION' AND application_id IS NOT NULL AND order_id IS NULL));
+              ALTER TABLE t_notification_deliveries ADD CONSTRAINT ck_t_notification_deliveries_channel CHECK (channel = 'EMAIL' AND purpose = 'BUSINESS');
+              ALTER TABLE t_notification_deliveries ADD CONSTRAINT ck_t_notification_deliveries_status CHECK (status IN ('DRAFT','QUEUED','DISPATCHED','SENDING','SENT','FAILED','BLOCKED','UNKNOWN'));
+              ALTER TABLE t_notification_attempts ADD CONSTRAINT ck_t_notification_attempts_status CHECK (status IN ('DISPATCHED','SENDING','SENT','FAILED','BLOCKED','UNKNOWN'));
+              CREATE INDEX idx_t_notification_deliveries_due ON t_notification_deliveries (store_id,scheduled_at,id) WHERE status = 'QUEUED';
+              CREATE INDEX idx_t_notification_deliveries_history ON t_notification_deliveries (store_id,id DESC);
+              CREATE INDEX idx_t_notification_attempts_history ON t_notification_attempts (store_id,delivery_id,id DESC);

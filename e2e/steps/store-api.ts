@@ -856,3 +856,23 @@ export async function createPlatformStaffFixture(request: APIRequestContext, tok
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
+
+/** 現行同意文面で業務連絡を許可したゲスト申請を隔離テスト用に作る。 */
+export async function createConsentingGuestApplication(
+  request: APIRequestContext,
+  email: string,
+): Promise<string> {
+  const consent = await request.get('/api/store/order-applications/public/contact-consent', { headers: STORE_HEADERS });
+  expect(consent.status()).toBe(200);
+  const response = await request.post('/api/store/order-applications/public', {
+    headers: STORE_HEADERS,
+    data: {
+      business_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+      pax: 1,
+      contact_snapshot: { name: '通知検証ゲスト', email },
+      contact_consent: { version: (await consent.json()).version, business_allowed: true, marketing_allowed: false },
+    },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).id;
+}

@@ -8,12 +8,13 @@ import com.kizuna.task.api.dto.ExecutionSummary;
 import com.kizuna.task.api.dto.TaskExecutionRequest;
 import com.kizuna.task.api.dto.TaskExecutionResponse;
 import com.kizuna.task.application.TaskLifecycle;
+import com.kizuna.task.application.TaskOptions;
 import com.kizuna.task.application.TaskQuery;
-import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -34,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TaskExecutionController {
   private final TaskExecutor executor;
-  private final TaskRegistry registry;
+  private final TaskOptions options;
   private final TaskLifecycle lifecycle;
   private final TaskQuery query;
   private final ServiceExecutionIdentityService identities;
@@ -56,9 +57,27 @@ public class TaskExecutionController {
       Authentication auth,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
-      @RequestParam(name = "task_name", defaultValue = "SERVICE_IDENTITY_CHECK") String taskName) {
+      @RequestParam(name = "task_name", defaultValue = "SERVICE_IDENTITY_CHECK") String taskName,
+      @RequestParam(name = "store_id", required = false) Long storeId) {
     identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
-    return identities.candidates(page, size, registry.requireName(taskName).permission());
+    return options.candidates(taskName, storeId, page, size);
+  }
+
+  @GetMapping("/task-types")
+  @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
+  public List<TaskOptions.TaskType> taskTypes(Authentication auth) {
+    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
+    return options.taskTypes(auth.getName());
+  }
+
+  @GetMapping("/stores")
+  @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
+  public Page<TaskOptions.StoreOption> stores(
+      Authentication auth,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
+    return options.stores(page, size);
   }
 
   @GetMapping("/{id}")

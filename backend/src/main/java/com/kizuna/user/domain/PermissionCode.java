@@ -19,6 +19,14 @@ import lombok.Getter;
  */
 @Getter
 public enum PermissionCode {
+  /** 業務通知の内容・状態・履歴の閲覧。 */
+  NOTIFICATION_VIEW(Console.STORE),
+  /** 業務通知の作成。閲覧権限と併用する。 */
+  NOTIFICATION_MANAGE(Console.STORE),
+  /** 業務通知の送信待ち登録と明示再試行。閲覧権限と併用する。 */
+  NOTIFICATION_SEND(Console.STORE),
+  /** SERVICE による業務通知の配送と平台からの手工実行。既定授与はしない。 */
+  NOTIFICATION_DELIVER(Console.SHARED),
 
   /** 授権範囲内の運営集計の閲覧。既定授与はしない。 */
   OPERATIONAL_REPORT_VIEW(Console.SHARED),

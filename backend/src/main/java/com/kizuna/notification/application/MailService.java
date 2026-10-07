@@ -1,10 +1,13 @@
 package com.kizuna.notification.application;
 
+import com.kizuna.notification.transport.EmailTransport;
 import com.kizuna.settings.application.SmtpSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailParseException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
@@ -14,40 +17,50 @@ import org.springframework.stereotype.Service;
 @Log4j2
 @Service
 @RequiredArgsConstructor
-public class MailService {
+public class MailService implements EmailTransport {
 
   private final SystemConfigService systemConfigService;
   // required=false 相当: JavaMailSender Bean（spring.mail.host 未設定時は不在）が無くても起動できるようにする
   private final ObjectProvider<JavaMailSender> mailSenderProvider;
 
   public void send(String to, String subject, String body) {
-    // 送信は呼び出し元の業務を止めない（例外を外へ出さない）。ただし「設定が読めない」と「送信に失敗した」は
-    // 別の故障であり、握り潰すと SMTP を設定してもメールが出ない静かな故障になるため、ログで区別する。
+    var result = deliver(to, subject, body);
+    if (result != Result.SENT) log.warn("メール送信が完了しませんでした result={}", result);
+  }
+
+  @Override
+  public boolean available() {
+    try {
+      return resolveSender(systemConfigService.smtpSettings()) != null;
+    } catch (RuntimeException failure) {
+      return false;
+    }
+  }
+
+  @Override
+  public Result deliver(String to, String subject, String body) {
     SmtpSettings smtp;
     JavaMailSender sender;
     try {
       smtp = systemConfigService.smtpSettings();
       sender = resolveSender(smtp);
-    } catch (Exception e) {
-      log.error("SMTP 設定の読み取りに失敗したためメールを送信できません to={}", to, e);
-      return;
+    } catch (RuntimeException failure) {
+      return Result.UNAVAILABLE;
     }
-    if (sender == null) {
-      // フォールバック: メール設定がなくてもシステムが動作するようログ出力のみ行う
-      log.info("[MAIL-FALLBACK] to={} subject={} body={} ", to, subject, body);
-      return;
-    }
+    if (sender == null) return Result.UNAVAILABLE;
     try {
       SimpleMailMessage msg = new SimpleMailMessage();
-      if (smtp.hasFrom()) {
-        msg.setFrom(smtp.from());
-      }
+      if (smtp.hasFrom()) msg.setFrom(smtp.from());
       msg.setTo(to);
       msg.setSubject(subject);
       msg.setText(body);
       sender.send(msg);
-    } catch (Exception e) {
-      log.error("メール送信に失敗しました to={}", to, e);
+      return Result.SENT;
+    } catch (MailAuthenticationException | MailParseException rejected) {
+      return Result.FAILED;
+    } catch (RuntimeException uncertain) {
+      // 提供方の受理後にも通信が切れるため、例外だけでは未送信と断定しない。
+      return Result.UNKNOWN;
     }
   }
 
