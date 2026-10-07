@@ -123,7 +123,6 @@ When(
         .toISOString()
         .slice(0, 10);
       const slot = {
-        store_id: Number(STORE1_ID),
         work_date: date,
         start_time: "10:00",
         end_time: "18:00",
@@ -144,7 +143,10 @@ When(
           ...extra,
         });
       const submit = async () => {
-        const r = await submitCastShiftRequest(request, own, slot);
+        const r = await submitCastShiftRequest(request, own, {
+          ...slot,
+          store_id: Number(STORE1_ID),
+        });
         track("SHIFT_REQUEST_SUBMITTED", r.id, "SHIFT_REQUEST", {
           actor: "CAST",
           elevated: false,
