@@ -268,3 +268,13 @@ databaseChangeLog:
               - column: { name: icon, value: ShieldAlertIcon }
               - column: { name: permission, value: AUDIT_VIEW }
               - column: { name: sort_order, valueNumeric: 12 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-applicants }
+              - column: { name: parent_id, value: store-hrm }
+              - column: { name: label, value: 採用管理 }
+              - column: { name: path, value: /store/applicants }
+              - column: { name: icon, value: UsersIcon }
+              - column: { name: permission, value: RECRUITMENT_VIEW }
+              - column: { name: sort_order, valueNumeric: 4 }

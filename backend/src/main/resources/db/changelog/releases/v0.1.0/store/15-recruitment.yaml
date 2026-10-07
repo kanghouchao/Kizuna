@@ -1,0 +1,239 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-015-recruitment
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_applicants
+            columns:
+              - column:
+                  name: id
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_applicants
+              - column:
+                  name: store_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: channel
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: source_type
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: source_media
+                  type: varchar(200)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: referrer
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: assignee
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: phone
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: email
+                  type: varchar(254)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: address
+                  type: varchar(500)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: experience
+                  type: varchar(3000)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: desired_conditions
+                  type: varchar(3000)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: status
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: interview
+                  type: jsonb
+                  constraints:
+                    nullable: true
+              - column:
+                  name: modified_by
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: edit_sequence
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_applicants
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_applicants_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_applicants
+            baseColumnNames: modified_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_applicants_modified_by
+            onDelete: NO ACTION
+        - createIndex:
+            tableName: t_applicants
+            indexName: idx_t_applicants_store_created
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: created_at
+              - column:
+                  name: id
+        - createTable:
+            tableName: t_applicant_status_histories
+            columns:
+              - column:
+                  name: id
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_applicant_status_histories
+              - column:
+                  name: store_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: applicant_id
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: previous_status
+                  type: varchar(30)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: new_status
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: varchar(1000)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_applicant_status_histories
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_applicant_status_histories_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_applicant_status_histories
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_applicant_status_histories_actor_id
+            onDelete: NO ACTION
+        - createIndex:
+            tableName: t_applicant_status_histories
+            indexName: idx_t_applicant_status_histories_store_created
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: applicant_id
+              - column:
+                  name: created_at
+              - column:
+                  name: id
+        - addUniqueConstraint:
+            tableName: t_applicants
+            columnNames: id, store_id
+            constraintName: uq_t_applicants_id_store
+        - addForeignKeyConstraint:
+            baseTableName: t_applicant_status_histories
+            baseColumnNames: applicant_id, store_id
+            referencedTableName: t_applicants
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_applicant_histories_applicant_store
+            onDelete: CASCADE
+        - sql:
+            sql: |
+              ALTER TABLE t_applicants ADD CONSTRAINT ck_t_applicants_status
+                CHECK (status IN ('RECEIVED', 'SCREENING', 'INTERVIEWED', 'HIRED', 'REJECTED', 'WITHDRAWN'));
+              ALTER TABLE t_applicants ADD CONSTRAINT ck_t_applicants_channel
+                CHECK (channel IN ('PHONE', 'WEB', 'MEDIA', 'OTHER'));
+              ALTER TABLE t_applicants ADD CONSTRAINT ck_t_applicants_source
+                CHECK ((source_type = 'MEDIA' AND source_media IS NOT NULL AND referrer IS NULL)
+                  OR (source_type IN ('REFERRAL', 'SCOUT') AND source_media IS NULL AND referrer IS NOT NULL)
+                  OR (source_type = 'DIRECT' AND source_media IS NULL AND referrer IS NULL));

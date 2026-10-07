@@ -38,6 +38,15 @@ public enum PermissionCode {
   /** 全店舗の変更不可な業務監査の閲覧。既定授与はしない。 */
   AUDIT_VIEW(Console.PLATFORM),
 
+  /** 応募者一覧・非公開詳細の閲覧。既定授与はしない。 */
+  RECRUITMENT_VIEW(Console.STORE),
+
+  /** 応募者情報と面接状態の登録・更新。既定授与はしない。 */
+  RECRUITMENT_MANAGE(Console.STORE),
+
+  /** 採用判断の記録。既定授与はしない。 */
+  RECRUITMENT_DECIDE(Console.STORE),
+
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 

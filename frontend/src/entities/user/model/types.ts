@@ -49,6 +49,9 @@ export type PlatformPermission =
   | 'CAST_FIELD_DEF_VIEW'
   | 'CAST_FIELD_DEF_MANAGE'
   | 'STORE_PROFILE_MANAGE'
+  | 'RECRUITMENT_VIEW'
+  | 'RECRUITMENT_MANAGE'
+  | 'RECRUITMENT_DECIDE'
   | 'STORE_MENU_VIEW';
 
 // ログイン後の着地先（サーバ側が権限目録から導出する — /me の console）。
