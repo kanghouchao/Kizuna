@@ -17,6 +17,7 @@ import com.kizuna.task.execution.TaskCommand;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -136,12 +137,18 @@ public class TaskLifecycle {
 
   @Transactional(readOnly = true)
   public ExecutionResult replay(TaskCommand command) {
-    var request =
-        requests
-            .findByTaskNameAndLogicalKey(command.taskName(), command.logicalKey())
-            .orElseThrow(() -> new ConflictException("実行要求が競合しました。再取得してください"));
-    request.requireSame(command);
-    return result(request, latest(request.getId()));
+    return findReplay(command).orElseThrow(() -> new ConflictException("実行要求が競合しました。再取得してください"));
+  }
+
+  @Transactional(readOnly = true)
+  public Optional<ExecutionResult> findReplay(TaskCommand command) {
+    return requests
+        .findByTaskNameAndLogicalKey(command.taskName(), command.logicalKey())
+        .map(
+            request -> {
+              request.requireSame(command);
+              return result(request, latest(request.getId()));
+            });
   }
 
   public ExecutionAttempt requireAttempt(Long id) {

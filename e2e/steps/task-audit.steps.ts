@@ -11,6 +11,7 @@ let password = '';
 let serviceId = 0;
 let serviceName = '';
 let roleId = 0;
+let serviceRoleId = 0;
 const headers = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 Given('専用の処理実行者とサービスIDが用意されている', async ({ request, $testInfo }) => {
@@ -27,9 +28,9 @@ Given('専用の処理実行者とサービスIDが用意されている', async
   const limitedEmail = 'audit-limited-' + suffix + '@kizuna.test';
   await createPlatformStaffFixture(request, admin, limitedEmail, password, [roleId], [Number(STORE1_ID)]);
   restricted = await loginPlatformUser(request, limitedEmail, password);
-  const serviceRole = await createPermissionRole(request, admin, '実行確認-' + suffix, ['TASK_EXECUTE']);
+  serviceRoleId = await createPermissionRole(request, admin, '実行確認-' + suffix, ['TASK_EXECUTE']);
   serviceName = '履歴に残るサービス-' + suffix;
-  const service = await request.post('/api/platform/service-identities', { headers: headers(admin), data: { display_name: serviceName, role_ids: [serviceRole], store_scope_type: 'ALL_STORES', store_ids: [] } });
+  const service = await request.post('/api/platform/service-identities', { headers: headers(admin), data: { display_name: serviceName, role_ids: [serviceRoleId], store_scope_type: 'ALL_STORES', store_ids: [] } });
   expect(service.status(), await service.text()).toBe(201);
   serviceId = (await service.json()).id;
 });
@@ -50,8 +51,32 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   expect((await request.post(`/api/platform/task-executions/${execution.id}/retries`, { headers: headers(operator), data: { reason: '完了済みの再試行' } })).status()).toBe(409);
   expect((await request.post('/api/platform/task-executions', { headers: headers(operator), data: { ...body, task_name: 'UNREGISTERED' } })).status()).toBe(400);
   expect((await request.post(`/api/platform/service-identities/${serviceId}/suspension`, { headers: headers(admin) })).status()).toBe(204);
+  const replayAfterSuspension = await request.post('/api/platform/task-executions', { headers: headers(operator), data: body });
+  expect(replayAfterSuspension.status(), await replayAfterSuspension.text()).toBe(200);
+  expect((await replayAfterSuspension.json()).execution.id).toBe(execution.id);
+  expect((await request.post('/api/platform/task-executions', { headers: headers(operator), data: { ...body, period_end: '2026-10-08' } })).status()).toBe(409);
+  expect((await request.post('/api/platform/task-executions', { headers: headers(admin), data: body })).status()).toBe(403);
+  expect((await request.post('/api/platform/task-executions', { headers: headers(restricted), data: body })).status()).toBe(403);
   expect((await request.post('/api/platform/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
   expect((await request.post(`/api/platform/service-identities/${serviceId}/resumption`, { headers: headers(admin) })).status()).toBe(204);
+  for (const [id, replacement, callerRevoked] of [
+    [serviceRoleId, ['PLATFORM_MENU_VIEW'], false],
+    [roleId, ['AUDIT_VIEW', 'PLATFORM_MENU_VIEW'], true],
+  ] as const) {
+    const current = await request.get(`/api/platform/roles/${id}`, { headers: headers(admin) });
+    expect(current.status()).toBe(200);
+    const original = await current.json();
+    const changed = await request.put(`/api/platform/roles/${id}`, { headers: headers(admin), data: { name: original.name, permissions: replacement, version: original.version } });
+    expect(changed.status(), await changed.text()).toBe(200);
+    const replayWithRevocation = await request.post('/api/platform/task-executions', { headers: headers(operator), data: body });
+    expect(replayWithRevocation.status()).toBe(callerRevoked ? 403 : 200);
+    if (!callerRevoked) {
+      expect((await replayWithRevocation.json()).execution.id).toBe(execution.id);
+      expect((await request.post('/api/platform/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
+    }
+    const restored = await request.put(`/api/platform/roles/${id}`, { headers: headers(admin), data: { name: original.name, permissions: original.permissions, version: (await changed.json()).version } });
+    expect(restored.status(), await restored.text()).toBe(200);
+  }
   const audit = await request.get('/api/platform/audit-events', { headers: headers(operator), params: { action: 'SERVICE_ID_SUSPENDED' } });
   expect(audit.status()).toBe(200);
   const event = (await audit.json()).content.find((row: { target_id: string }) => row.target_id === String(serviceId));
@@ -64,7 +89,7 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   expect((await request.put(`/api/platform/audit-events/${event.id}`, { headers: headers(operator), data: snapshot })).status()).toBe(405);
 });
 
-Then('実行履歴と変更前後の監査を画面で確認できる', async ({ page, $testInfo }) => {
+Then('実行履歴と変更前後の監査を画面で確認できる', async ({ page, request, $testInfo }) => {
   await page.goto(`${PLATFORM_URL}/platform/login`);
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
@@ -75,7 +100,30 @@ Then('実行履歴と変更前後の監査を画面で確認できる', async ({
   await page.getByRole('combobox', { name: '実行主体' }).click();
   await page.getByRole('option', { name: serviceName }).click();
   await page.getByLabel('対象日', { exact: true }).fill('2026-10-07');
+  let lostExecutionId: number | undefined;
+  let originalRequest: unknown;
+  await page.route('**/api/platform/task-executions', async route => {
+    if (route.request().method() === 'POST' && lostExecutionId === undefined) {
+      originalRequest = route.request().postDataJSON();
+      const committed = await route.fetch();
+      expect(committed.status()).toBe(201);
+      lostExecutionId = (await committed.json()).execution.id;
+      await route.abort('failed');
+    } else {
+      if (route.request().method() === 'POST') expect(route.request().postDataJSON()).toEqual(originalRequest);
+      await route.continue();
+    }
+  });
   await page.getByRole('button', { name: '実行確認を記録', exact: true }).click();
+  await expect(page.getByText('実行に失敗しました', { exact: true })).toBeVisible();
+  expect(lostExecutionId).toBeDefined();
+  expect((await request.post(`/api/platform/service-identities/${serviceId}/suspension`, { headers: headers(admin) })).status()).toBe(204);
+  const replayResponse = page.waitForResponse(response => response.url().endsWith('/api/platform/task-executions') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '実行確認を記録', exact: true }).click();
+  const recovered = await replayResponse;
+  expect(recovered.status()).toBe(200);
+  expect((await recovered.json()).execution.id).toBe(lostExecutionId);
+  await page.unroute('**/api/platform/task-executions');
   const execution = page.getByRole('dialog', { name: '実行の詳細' });
   await expect(execution.getByText('成功', { exact: true })).toBeVisible();
   await execution.press('Escape');

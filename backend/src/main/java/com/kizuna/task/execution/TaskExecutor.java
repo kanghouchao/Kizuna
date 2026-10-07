@@ -63,6 +63,8 @@ public class TaskExecutor {
 
   private Submission submit(TaskCommand command, AuditActor operator, String origin) {
     requireCleanBoundary();
+    var existing = lifecycle.findReplay(command);
+    if (existing.isPresent()) return new Submission(existing.get(), false);
     var handler = registry.require(command);
     var service =
         identities.requireService(command.serviceUserId(), handler.permission(), command.storeId());

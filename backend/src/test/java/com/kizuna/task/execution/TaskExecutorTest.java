@@ -168,6 +168,53 @@ class TaskExecutorTest {
   }
 
   @Test
+  void committedRequestReplaysAfterServiceAuthorizationIsRevoked() {
+    when(handler.execute(any())).thenReturn(4L);
+    var first = executor.execute(command("replay-after-revocation"), operator);
+    when(identities.requireService(anyLong(), any(), nullable(Long.class)))
+        .thenThrow(new AccessDeniedException("停止または権限取消"));
+
+    var replay = executor.execute(command("replay-after-revocation"), operator);
+
+    assertThat(replay.created()).isFalse();
+    assertThat(replay.execution()).isEqualTo(first.execution());
+    verify(handler).execute(any());
+    verify(audit, times(2)).append(any());
+    assertThatThrownBy(() -> executor.execute(command("new-after-revocation"), operator))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(
+            () ->
+                executor.execute(
+                    new TaskCommand(
+                        "CHECK",
+                        "replay-after-revocation",
+                        11L,
+                        null,
+                        LocalDate.of(2026, 10, 7),
+                        LocalDate.of(2026, 10, 7)),
+                    operator))
+        .isInstanceOf(ConflictException.class);
+    assertThat(attempts).hasSize(1);
+  }
+
+  @Test
+  void failedRequestReplaysAfterRevocationButCannotStartANewRetry() {
+    when(handler.execute(any())).thenThrow(new IllegalStateException("処理失敗"));
+    var failed = executor.executeScheduled(command("failed-replay")).execution();
+    when(identities.requireService(anyLong(), any(), nullable(Long.class)))
+        .thenThrow(new AccessDeniedException("停止または権限取消"));
+
+    var replay = executor.executeScheduled(command("failed-replay"));
+
+    assertThat(replay.created()).isFalse();
+    assertThat(replay.execution()).isEqualTo(failed);
+    assertThatThrownBy(() -> executor.retry(failed.id(), "再試行", operator))
+        .isInstanceOf(AccessDeniedException.class);
+    verify(handler).execute(any());
+    assertThat(attempts).hasSize(1);
+  }
+
+  @Test
   void failureKeepsReasonCodeAndRetryUsesCurrentNameWithoutRewritingHistory() {
     when(handler.execute(any())).thenThrow(new IllegalStateException("private payload"));
     var failed = executor.executeScheduled(command("failure")).execution();
