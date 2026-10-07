@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
@@ -15,6 +16,7 @@ public class S3Config {
   public S3Client s3Client(AppProperties appProperties) {
     AppProperties.Upload upload = appProperties.getUpload();
     return S3Client.builder()
+        .httpClientBuilder(UrlConnectionHttpClient.builder())
         .endpointOverride(URI.create(upload.getEndpoint()))
         .credentialsProvider(
             StaticCredentialsProvider.create(

@@ -237,3 +237,160 @@ databaseChangeLog:
                 CHECK ((source_type = 'MEDIA' AND source_media IS NOT NULL AND referrer IS NULL)
                   OR (source_type IN ('REFERRAL', 'SCOUT') AND source_media IS NULL AND referrer IS NOT NULL)
                   OR (source_type = 'DIRECT' AND source_media IS NULL AND referrer IS NULL));
+        - createTable:
+            tableName: t_applicant_attachment_uploads
+            columns:
+              - column:
+                  name: id
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_applicant_attachment_uploads
+              - column:
+                  name: store_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: applicant_id
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: idempotency_key
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: object_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: original_sha256
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: canonical_sha256
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: media_type
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: normalizer_version
+                  type: varchar(40)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: completed_by
+                  type: bigint
+                  constraints:
+                    nullable: true
+              - column:
+                  name: completed_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+              - column:
+                  name: status
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: failure
+                  type: varchar(40)
+                  constraints:
+                    nullable: true
+        - addForeignKeyConstraint:
+            baseTableName: t_applicant_attachment_uploads
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_applicant_uploads_store
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_applicant_attachment_uploads
+            baseColumnNames: applicant_id, store_id
+            referencedTableName: t_applicants
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_applicant_uploads_applicant_store
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_applicant_attachment_uploads
+            baseColumnNames: created_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_applicant_uploads_created_by
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_applicant_attachment_uploads
+            baseColumnNames: completed_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_applicant_uploads_completed_by
+            onDelete: NO ACTION
+        - addUniqueConstraint:
+            tableName: t_applicant_attachment_uploads
+            columnNames: store_id, applicant_id, idempotency_key
+            constraintName: uq_t_applicant_uploads_operation
+        - addUniqueConstraint:
+            tableName: t_applicant_attachment_uploads
+            columnNames: object_id
+            constraintName: uq_t_applicant_uploads_object
+        - createIndex:
+            tableName: t_applicant_attachment_uploads
+            indexName: idx_t_applicant_uploads_store_applicant_status_created
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: applicant_id
+              - column:
+                  name: status
+              - column:
+                  name: created_at
+              - column:
+                  name: id
+        - sql:
+            sql: |
+              ALTER TABLE t_applicant_attachment_uploads ADD CONSTRAINT ck_t_applicant_uploads_payload
+                CHECK (size_bytes > 0 AND size_bytes <= 10485760
+                  AND media_type IN ('image/png', 'image/jpeg')
+                  AND original_sha256 ~ '^[a-f0-9]{64}$' AND canonical_sha256 ~ '^[a-f0-9]{64}$');
+              ALTER TABLE t_applicant_attachment_uploads ADD CONSTRAINT ck_t_applicant_uploads_state
+                CHECK ((status = 'READY' AND completed_by IS NOT NULL AND completed_at IS NOT NULL AND failure IS NULL)
+                  OR (status = 'PENDING' AND completed_by IS NULL AND completed_at IS NULL AND failure IS NULL)
+                  OR (status = 'RECOVERY_REQUIRED' AND completed_by IS NULL AND completed_at IS NULL
+                    AND failure IS NOT NULL AND failure IN ('STORAGE_UNAVAILABLE', 'CONTENT_MISMATCH', 'NORMALIZER_UNAVAILABLE')));

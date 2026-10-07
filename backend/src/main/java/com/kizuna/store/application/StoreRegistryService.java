@@ -1,6 +1,7 @@
 package com.kizuna.store.application;
 
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
@@ -47,6 +48,10 @@ public class StoreRegistryService {
   /** 削除を止める側の外部キーの写像。監査記録とサービス設定は誤登録の撤回にも従わせない。 */
   private static final Map<DbConstraint, Supplier<RuntimeException>> DELETION_VIOLATIONS =
       Map.of(
+          DbConstraint.FK_T_APPLICANT_UPLOADS_STORE,
+          () -> new ConflictException("非公開添付の記録が存在する店舗は削除できません"),
+          DbConstraint.FK_T_APPLICANT_UPLOADS_APPLICANT_STORE,
+          () -> new ConflictException("非公開添付の記録が存在する店舗は削除できません"),
           DbConstraint.FK_T_EMERGENCY_ELEVATIONS_STORE,
           () -> new ServiceException("緊急昇格の記録が存在する店舗は削除できません"),
           DbConstraint.FK_T_SERVICES_STORE,

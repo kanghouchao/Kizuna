@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { applicantApi } from '@/entities/applicant';
+import { applicantApi, applicantAttachmentApi } from '@/entities/applicant';
 import ApplicantDetailPage from '../ui/ApplicantDetailPage';
 jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1', id: 'a' }) }));
 jest.mock('@/entities/applicant', () => ({
   ...jest.requireActual('@/entities/applicant'),
+  applicantAttachmentApi: { policy: jest.fn() },
   applicantApi: {
     get: jest.fn(),
     policy: jest.fn(),
@@ -31,6 +32,7 @@ const detail = {
 };
 beforeEach(() => {
   jest.clearAllMocks();
+  (applicantAttachmentApi.policy as jest.Mock).mockResolvedValue({ configured: false });
   (applicantApi.get as jest.Mock).mockResolvedValue(detail);
   (applicantApi.policy as jest.Mock).mockResolvedValue({
     final_decision_configured: false,
