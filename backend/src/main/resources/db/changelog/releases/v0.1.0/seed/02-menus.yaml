@@ -298,3 +298,13 @@ databaseChangeLog:
               - column: { name: icon, value: ClipboardListIcon }
               - column: { name: permission, value: REVIEW_VIEW }
               - column: { name: sort_order, valueNumeric: 3 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-surveys }
+              - column: { name: parent_id, value: store-crm }
+              - column: { name: label, value: アンケート管理 }
+              - column: { name: path, value: /store/surveys }
+              - column: { name: icon, value: ClipboardListIcon }
+              - column: { name: permission, value: SURVEY_VIEW }
+              - column: { name: sort_order, valueNumeric: 4 }
