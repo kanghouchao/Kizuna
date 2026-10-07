@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -175,7 +176,7 @@ class CustomerContactAuditPostgresTest {
                 transactions.executeWithoutResult(
                     transaction -> {
                       customers.create(request);
-                      assertThat(count("t_audit_events")).isEqualTo(auditsBefore + 1);
+                      assertThat(count("t_audit_events")).isEqualTo(auditsBefore + 2);
                       throw new IllegalStateException("親取引の後続失敗");
                     }))
         .isInstanceOf(IllegalStateException.class);
@@ -434,6 +435,28 @@ class CustomerContactAuditPostgresTest {
                   Optional.ofNullable(
                       em.find(
                           Customer.class, call.getArgument(0), LockModeType.PESSIMISTIC_WRITE)));
+      when(repository.findById(anyString()))
+          .thenAnswer(call -> Optional.ofNullable(em.find(Customer.class, call.getArgument(0))));
+      when(repository.save(any(Customer.class)))
+          .thenAnswer(
+              call -> {
+                Customer customer = call.getArgument(0);
+                return em.contains(customer) ? customer : em.merge(customer);
+              });
+      doAnswer(
+              call -> {
+                em.flush();
+                return null;
+              })
+          .when(repository)
+          .flush();
+      doAnswer(
+              call -> {
+                em.remove(em.find(Customer.class, call.getArgument(0)));
+                return null;
+              })
+          .when(repository)
+          .deleteById(anyString());
       when(repository.saveAndFlush(any(Customer.class)))
           .thenAnswer(
               call -> {
@@ -468,7 +491,8 @@ class CustomerContactAuditPostgresTest {
     CustomerService customerService(
         CustomerRepository repository,
         CustomerContactService contacts,
-        CustomerContactRepository contactRepository) {
+        CustomerContactRepository contactRepository,
+        BusinessAudit audit) {
       return new CustomerService(
           repository,
           mock(CustomerListRepository.class),
@@ -477,7 +501,8 @@ class CustomerContactAuditPostgresTest {
           contactRepository,
           mock(CustomerMemberLinkRepository.class),
           mock(CustomerMergeRepository.class),
-          new CustomerMapperImpl());
+          new CustomerMapperImpl(),
+          audit);
     }
   }
 }

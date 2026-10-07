@@ -11,6 +11,7 @@ import {
   createPlatformStaffFixture,
   getAuthorizedStores,
   getOrder,
+  getOrderReceptionists,
   loginAsStoreAdmin,
   loginPlatformUser,
   registerMember,
@@ -91,11 +92,7 @@ Given(
     elevationId = session.id;
     castId = await createCast(request, staff, "監査対象-" + suffix);
     courseId = await createCourse(request, staff, "監査コース-" + suffix);
-    const receptionists = await request.get("/api/store/orders/receptionists", {
-      headers: storeHeaders(staff),
-    });
-    expect(receptionists.status()).toBe(200);
-    receptionistId = (await receptionists.json())[0].id;
+    receptionistId = (await getOrderReceptionists(request, staff))[0].id;
     const stores = await getAuthorizedStores(request, staff);
     otherStoreId = String(
       stores.find((store: { id: number }) => String(store.id) !== STORE1_ID)!

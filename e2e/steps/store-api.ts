@@ -759,6 +759,17 @@ export async function submitConfirmedStoreRequest(
   return response;
 }
 
+export async function getOrderReceptionists(
+  request: APIRequestContext,
+  token: string,
+): Promise<{ id: number }[]> {
+  const response = await request.get("/api/store/orders/receptionists", {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
 export async function createAgreedOrder(
   request: APIRequestContext,
   token: string,
@@ -977,6 +988,7 @@ export type AuditEventSummary = {
   actor_type: string;
   store_id: number | null;
   target_id: string;
+  target_type: string;
   result: string;
   source_type: string | null;
   source_id: string | null;

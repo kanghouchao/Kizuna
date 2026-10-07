@@ -30,6 +30,7 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.validation.ContactValues;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -83,6 +84,7 @@ public class CustomerService {
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
   private final CustomerMapper customerMapper;
+  private final BusinessAudit audit;
 
   /** 検索結果と一致理由を同じ断面から読み、途中の連絡先変更による不一致を避ける。 */
   @StoreScoped
@@ -342,12 +344,17 @@ public class CustomerService {
   @StoreScoped
   @Transactional
   public CustomerResponse create(CustomerCreateRequest request) {
-    // store_id は StoreScopeStampListener が @PrePersist で採番する
     Customer customer = customerMapper.toEntity(request);
-    // 作成直後の顧客は定義上まだ会員と紐づいていない
     customerRepository.saveAndFlush(customer);
     for (var contact : request.getContacts())
       customerContactService.create(customer.getId(), contact);
+    audit.recordCurrent(
+        customer.getStoreId(),
+        "CUSTOMER_CREATED",
+        "CUSTOMER",
+        customer.getId(),
+        Map.of(),
+        CustomerAuditSnapshot.of(customer).after(null));
     var response = customerMapper.toResponse(customer);
     response.setPreferredContacts(List.of());
     return withMemberLink(response, null);
@@ -362,9 +369,21 @@ public class CustomerService {
       throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
     }
 
+    var before = CustomerAuditSnapshot.of(customer);
     customer.apply(customerMapper.toPatch(request));
+    customerRepository.save(customer);
+    customerRepository.flush();
+    var after = CustomerAuditSnapshot.of(customer).after(before);
+    if (after.containsKey("redacted_fields_changed"))
+      audit.recordCurrent(
+          customer.getStoreId(),
+          "CUSTOMER_UPDATED",
+          "CUSTOMER",
+          customer.getId(),
+          before.values(),
+          after);
 
-    var response = customerMapper.toResponse(customerRepository.save(customer));
+    var response = customerMapper.toResponse(customer);
     response.setPreferredContacts(
         customerContactService.preferred(List.of(id)).getOrDefault(id, List.of()));
     return withMemberLink(response, activeMemberCodeOf(id));
@@ -377,9 +396,10 @@ public class CustomerService {
   @StoreScoped
   @Transactional
   public void delete(String id) {
-    if (customerRepository.findByIdForUpdate(id).isEmpty()) {
-      throw new NotFoundException("顧客が見つかりません");
-    }
+    var customer =
+        customerRepository
+            .findByIdForUpdate(id)
+            .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
     // 墓標も「統合に関与した行」なので下の判定でも撥ねられるが、次の一手が違う — 墓標を消したい人が
     // 求めているのは統合先の編集である。先に判定して案内を分ける。
     if (customerRepository.isMerged(id)) {
@@ -391,6 +411,7 @@ public class CustomerService {
     if (customerMergeRepository.existsInvolving(id)) {
       throw new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
     }
+    var before = CustomerAuditSnapshot.of(customer);
     try {
       customerRepository.deleteById(id);
       // DELETE を今この場へ流す。トランザクション境界の commit まで遅れると、外部キー違反が
@@ -419,6 +440,13 @@ public class CustomerService {
               DbConstraint.FK_T_ORDERS_CUSTOMER_ALIVE,
                   () -> new ConflictException(ORDERED_CUSTOMER_UNDELETABLE)));
     }
+    audit.recordCurrent(
+        customer.getStoreId(),
+        "CUSTOMER_DELETED",
+        "CUSTOMER",
+        customer.getId(),
+        before.values(),
+        Map.of("exists", "false"));
   }
 
   private String activeMemberCodeOf(String customerId) {

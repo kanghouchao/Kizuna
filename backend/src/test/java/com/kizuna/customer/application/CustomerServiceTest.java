@@ -28,6 +28,7 @@ import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.application.BusinessAudit;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -54,6 +55,7 @@ class CustomerServiceTest {
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;
   @Mock private CustomerMapper customerMapper;
+  @Mock private BusinessAudit audit;
 
   @InjectMocks private CustomerService customerService;
 
