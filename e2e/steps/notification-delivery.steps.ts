@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
 import { createConsentingGuestApplication, createPermissionRole, createPlatformStaffFixture, loginPlatformUser, loginViaUiAndEnterStore, STORE_HEADERS } from './store-api';
@@ -16,6 +16,7 @@ const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${operator}` }
 Given('業務通知の担当者とサービス主体と同意済みゲスト申請がある', async ({ request, page }) => {
   storeId = await loginViaUiAndEnterStore(page);
   const admin = await loginPlatformUser(request, 'admin@kizuna.test', 'pass');
+  expect((await request.get('/api/store/notification-deliveries', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${admin}` } })).status()).toBe(403);
   const suffix = Date.now().toString();
   email = 'notification-' + suffix + '@kizuna.test';
   password = 'Notification-' + suffix + '-fixture';
@@ -63,20 +64,31 @@ When('担当者が通知を作成して内容を確認し送信待ちにする',
   expect(JSON.stringify(row)).not.toContain('@example.invalid');
   const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
   await expect(detail.getByText('業務連絡が許可されています', { exact: true })).toBeVisible();
-  await detail.getByLabel('内容を確認した理由・再試行の理由').fill('内容と業務連絡の許可を確認');
+  await detail.getByLabel('内容を確認した理由・再試行の理由').fill('内容確認');
+  await page.route(`**/notification-deliveries/${deliveryId}/queue`, route => route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: '通知が見つかりません' }) }), { times: 1 });
   await detail.getByRole('button', { name: '確認して送信待ちにする' }).click();
+  await expect(detail.getByRole('button', { name: '一覧へ戻る' })).toBeVisible();
+  await expect(detail.getByRole('button', { name: '確認して送信待ちにする' })).toHaveCount(0);
+  await detail.getByRole('button', { name: '一覧へ戻る' }).click();
+  await expect(detail).toBeHidden();
+  await page.getByRole('button', { name: '内容・履歴' }).first().click();
+  await detail.getByLabel('内容を確認した理由・再試行の理由').fill('内容と業務連絡の許可を確認');
+  await detail.getByLabel('内容を確認した理由・再試行の理由').press('Tab');
+  await expect(detail.getByRole('button', { name: '確認して送信待ちにする' })).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(detail.getByText('送信待ち', { exact: true })).toBeVisible();
   expect((await request.post(`/api/store/notification-deliveries/${deliveryId}/queue`, { headers: headers(), data: { version: row.version, reason: '同一操作' } })).status()).toBe(409);
+  await expect(page.getByText('通知を送信待ちに登録しました', { exact: true })).toBeHidden({ timeout: 10000 });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await detail.evaluate(element => element.scrollWidth <= element.clientWidth)).toBeTruthy();
-  await page.screenshot({ path: $testInfo.outputPath('notification-light-mobile.png'), fullPage: true });
+  await page.screenshot({ path: $testInfo.outputPath('notification-light-mobile.png'), fullPage: true, animations: 'disabled' });
   await page.evaluate(() => document.documentElement.classList.add('dark'));
-  await page.screenshot({ path: $testInfo.outputPath('notification-dark-mobile.png'), fullPage: true });
+  await page.screenshot({ path: $testInfo.outputPath('notification-dark-mobile.png'), fullPage: true, animations: 'disabled' });
   await detail.press('Escape');
   await page.setViewportSize({ width: 1280, height: 900 });
 });
 
-When('管理画面で店舗の業務通知を実行する', async ({ page }) => {
+async function executeNotifications(page: Page) {
   await page.goto(`${PLATFORM_URL}/platform/task-executions`);
   await page.getByRole('combobox', { name: '処理', exact: true }).click();
   await page.getByRole('option', { name: '業務通知の送信', exact: true }).click();
@@ -87,6 +99,10 @@ When('管理画面で店舗の業務通知を実行する', async ({ page }) => 
   await page.getByLabel('対象日', { exact: true }).fill(new Date().toISOString().slice(0, 10));
   await page.getByRole('button', { name: '通知を送信器へ引き渡す', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '実行の詳細' }).getByText('成功', { exact: true })).toBeVisible();
+}
+
+When('管理画面で店舗の業務通知を実行する', async ({ page }) => {
+  await executeNotifications(page);
 });
 
 Then('未設定の通知を成功扱いせず履歴から明示的に再試行できる', async ({ page, request, $testInfo }) => {
@@ -109,5 +125,21 @@ Then('未設定の通知を成功扱いせず履歴から明示的に再試行�
   expect(attempts).toHaveLength(1);
   expect(attempts[0].failure_code).toBe('UNAVAILABLE');
   expect(attempts[0].reason).toBe('内容と業務連絡の許可を確認');
-  await page.screenshot({ path: $testInfo.outputPath('notification-retry-history.png'), fullPage: true });
+  await detail.press('Escape');
+  await executeNotifications(page);
+  await expect.poll(async () => {
+    const response = await request.get(`/api/store/notification-deliveries/${deliveryId}`, { headers: headers() });
+    return (await response.json()).status;
+  }).toBe('FAILED');
+  const retried = await request.get(`/api/store/notification-deliveries/${deliveryId}/attempts`, { headers: headers() });
+  const retryHistory = (await retried.json()).content;
+  expect(retryHistory).toHaveLength(2);
+  expect(retryHistory[0].attempt_number).toBe(2);
+  expect(retryHistory[0].failure_code).toBe('UNAVAILABLE');
+  expect(retryHistory[0].reason).toBe('未送信の結果を確認して再試行');
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/notification-deliveries`);
+  await page.getByRole('button', { name: '内容・履歴' }).first().click();
+  await expect(detail.getByText('第2回', { exact: false })).toBeVisible();
+  await detail.getByText('第1回', { exact: false }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: $testInfo.outputPath('notification-retry-history.png'), fullPage: true, animations: 'disabled' });
 });

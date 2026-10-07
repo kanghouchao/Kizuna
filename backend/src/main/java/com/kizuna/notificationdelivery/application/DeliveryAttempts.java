@@ -43,8 +43,9 @@ public class DeliveryAttempts {
       return false;
     }
     if (locked.attempt().getStatus() != DeliveryStatus.DISPATCHED) return false;
-    if (!allowed(locked, event)) return false;
-    locked.attempt().sending();
+    var actor = allowed(locked, event);
+    if (actor == null) return false;
+    locked.attempt().sending(actor.name());
     locked.delivery().sending();
     audit.append(locked.delivery(), actor(locked), "NOTIFICATION_SENDING");
     return true;
@@ -54,7 +55,7 @@ public class DeliveryAttempts {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public Envelope prepare(DeliveryDispatch event) {
     var locked = lock(event);
-    if (locked.attempt().getStatus() != DeliveryStatus.SENDING || !allowed(locked, event))
+    if (locked.attempt().getStatus() != DeliveryStatus.SENDING || allowed(locked, event) == null)
       return null;
     var decision = contacts.decide(locked.delivery().content());
     if (decision.decision() != BusinessContactDecision.ALLOWED) {
@@ -79,21 +80,21 @@ public class DeliveryAttempts {
     finish(locked, event, status, result == EmailTransport.Result.SENT ? null : result.name());
   }
 
-  private boolean allowed(Locked locked, DeliveryDispatch event) {
+  private AuditActor allowed(Locked locked, DeliveryDispatch event) {
     try {
-      authorization.require(event.serviceUserId(), event.storeId());
+      var actor = authorization.require(event.serviceUserId(), event.storeId());
       if (contacts.decide(locked.delivery().content()).decision()
           != BusinessContactDecision.ALLOWED) {
         finish(locked, event, DeliveryStatus.BLOCKED, "CONTACT_NOT_ALLOWED");
-        return false;
+        return null;
       }
-      return true;
+      return actor;
     } catch (AccessDeniedException denied) {
       finish(locked, event, DeliveryStatus.BLOCKED, "AUTHORIZATION_DENIED");
-      return false;
+      return null;
     } catch (NotFoundException missing) {
       finish(locked, event, DeliveryStatus.BLOCKED, "SOURCE_UNAVAILABLE");
-      return false;
+      return null;
     }
   }
 

@@ -32,7 +32,7 @@ public class DeliveryAttempt extends StoreScopedEntity {
   @Column(nullable = false, updatable = false)
   private Long serviceUserId;
 
-  @Column(nullable = false, updatable = false, length = 255)
+  @Column(nullable = false, length = 255)
   private String serviceName;
 
   @Column(nullable = false, updatable = false, length = 500)
@@ -68,8 +68,9 @@ public class DeliveryAttempt extends StoreScopedEntity {
     return attempt;
   }
 
-  public void sending() {
+  public void sending(String serviceName) {
     if (status != DeliveryStatus.DISPATCHED) throw new ConflictException("この試行は開始できません");
+    this.serviceName = serviceName;
     status = DeliveryStatus.SENDING;
   }
 

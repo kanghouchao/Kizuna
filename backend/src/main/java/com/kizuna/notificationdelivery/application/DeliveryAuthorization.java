@@ -1,5 +1,6 @@
 package com.kizuna.notificationdelivery.application;
 
+import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
 import lombok.RequiredArgsConstructor;
@@ -10,8 +11,8 @@ import org.springframework.stereotype.Service;
 public class DeliveryAuthorization {
   private final ServiceExecutionIdentityService identities;
 
-  public void require(Long serviceId, Long storeId) {
+  public AuditActor require(Long serviceId, Long storeId) {
     identities.requireService(serviceId, PermissionCode.TASK_EXECUTE, storeId);
-    identities.requireService(serviceId, PermissionCode.NOTIFICATION_DELIVER, storeId);
+    return identities.requireService(serviceId, PermissionCode.NOTIFICATION_DELIVER, storeId);
   }
 }

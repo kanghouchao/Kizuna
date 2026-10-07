@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import { NotificationDeliveriesPage } from '../ui/NotificationDeliveriesPage';
 import { Delivery, notificationApi } from '@/entities/notification-delivery';
 import { readTokenClaims } from '@/shared/lib';
@@ -49,6 +50,7 @@ const permission = (...names: string[]) =>
 beforeEach(() => {
   jest.resetAllMocks();
   mockStoreId = '1';
+  Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: undefined });
   permission('NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND');
   api.list.mockResolvedValue({ rows: [row], nextCursor: null });
   api.get.mockResolvedValue(row);
@@ -147,10 +149,6 @@ async function fillDraft() {
   return dialog;
 }
 test('作成応答が不明なら同じ内容と要求キーで再確認する', async () => {
-  Object.defineProperty(globalThis.crypto, 'randomUUID', {
-    configurable: true,
-    value: jest.fn(() => 'draft-request'),
-  });
   api.create.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(row);
   render(<NotificationDeliveriesPage />);
   const dialog = await fillDraft();
@@ -205,4 +203,26 @@ test('不明な作成結果の再照会が拒否されても元のキーを保�
   fireEvent.click(retry);
   await waitFor(() => expect(api.create).toHaveBeenCalledTimes(3));
   expect(api.create.mock.calls[2][0]).toEqual(api.create.mock.calls[0][0]);
+});
+
+test('サーバー描画ではブラウザーの認証情報に依存した本文を返さない', () => {
+  const html = renderToString(<NotificationDeliveriesPage />);
+  expect(html).toContain('読み込み中');
+  expect(html).not.toContain('業務通知はありません');
+  expect(api.list).not.toHaveBeenCalled();
+});
+
+test('確認操作の404では保存を外して一覧へ戻れる', async () => {
+  api.queue.mockRejectedValue({ response: { status: 404 } });
+  render(<NotificationDeliveriesPage />);
+  const dialog = await detail();
+  fireEvent.change(await within(dialog).findByLabelText('内容を確認した理由・再試行の理由'), {
+    target: { value: '内容確認' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: '確認して送信待ちにする' }));
+  expect(await within(dialog).findByRole('button', { name: '一覧へ戻る' })).toBeVisible();
+  expect(
+    within(dialog).queryByRole('button', { name: '確認して送信待ちにする' })
+  ).not.toBeInTheDocument();
+  await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
 });

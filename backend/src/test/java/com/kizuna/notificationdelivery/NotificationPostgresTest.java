@@ -414,7 +414,9 @@ class NotificationPostgresTest {
         () ->
             jdbc.update(
                 "update t_users set enabled=false,display_name='停止済み' where id=?", serviceId);
-    runTask();
+    submitTask();
+    jdbc.update("update t_users set display_name='送信前SERVICE' where id=?", serviceId);
+    drain();
     await(first.id(), "SENT");
     await(second.id(), "BLOCKED");
     assertThat(transport.results).hasSize(1);
@@ -423,7 +425,7 @@ class NotificationPostgresTest {
                 "select actor_name from t_audit_events where target_id=? and action='NOTIFICATION_RESULT'",
                 String.class,
                 first.id()))
-        .containsExactly("通知SERVICE");
+        .containsExactly("送信前SERVICE");
     var sent = get(first.id());
     assertThatThrownBy(
             () ->

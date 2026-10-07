@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import {
@@ -157,6 +157,10 @@ function Detail({
   const active = useActive();
   const busy = useRef(false);
   const [historyKey, setHistoryKey] = useState(0);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    if (missing || detail.failure === 'notFound') onChanged();
+  }, [missing, detail.failure, onChanged]);
   const act = async ({ reason }: { reason: string }) => {
     if (busy.current || !detail.data) return;
     busy.current = true;
@@ -175,14 +179,15 @@ function Detail({
       notify.success('通知を送信待ちに登録しました');
     } catch (error) {
       if (active.current) {
-        notify.error(getApiErrorMessage(error, '送信待ちに登録できませんでした'));
+        if (isNotFound(error)) setMissing(true);
+        else notify.error(getApiErrorMessage(error, '送信待ちに登録できませんでした'));
       }
     } finally {
       busy.current = false;
     }
   };
   if (detail.isLoading) return <p>読み込み中...</p>;
-  if (detail.failure === 'notFound')
+  if (missing || detail.failure === 'notFound')
     return (
       <div role="alert">
         <p>通知が見つかりません</p>
@@ -301,7 +306,10 @@ function Create({
   const save = async (values: Draft) => {
     if (busy.current) return;
     busy.current = true;
-    if (!key.current) key.current = crypto.randomUUID();
+    if (!key.current)
+      key.current = Array.from(crypto.getRandomValues(new Uint8Array(16)), value =>
+        value.toString(16).padStart(2, '0')
+      ).join('');
     const input = submitted.current ?? {
       ...values,
       scheduled_at: new Date(values.scheduled_at).toISOString(),
@@ -590,7 +598,13 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
 }
 export function NotificationDeliveriesPage() {
   const params = useParams();
-  const claims = readTokenClaims();
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const claims = hydrated ? readTokenClaims() : null;
+  if (!hydrated) return <p>読み込み中...</p>;
   if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'NOTIFICATION_VIEW'))
     return <p role="alert">業務通知の閲覧権限がありません</p>;
   const manage = hasPermission(claims, 'NOTIFICATION_MANAGE'),
