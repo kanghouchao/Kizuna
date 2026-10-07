@@ -35,7 +35,7 @@ public class JwtDecoderConfig {
             // 発行は PlatformAuth の 1 箇所のみ。/files 等ドメイン外パスも含め全リクエスト単一 issuer で揃える。
             new JwtIssuerValidator(PlatformJwtIssuer.ISSUER_PLATFORM),
             tokenBlacklistValidator,
-            // 版の照合は miss 時に DB へ届く最も重い検証のため、連鎖の最後に置く。
+            // 受理候補の版を DB で照合する検証は、連鎖の最後に置く。
             credentialVersionValidator));
     return decoder;
   }

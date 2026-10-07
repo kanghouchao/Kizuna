@@ -9,9 +9,8 @@ import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 /**
- * 資格情報の版の照合（ADR 0022）。DB が正本、Redis は read-through キャッシュ（TTL = JWT 有効期間）。 書き込みは増分の反映（{@link
- * #reflect}）も miss の埋め戻しも単調 — キャッシュが DB を超えることは無い。 DEL 方式は採らない: 増分前に DB から読んだ旧版が DEL
- * の後に埋め戻される競合で、旧版が TTL まで居座る。 Redis 断連の例外はそのまま伝播し 500 になる（fail-closed）。
+ * 資格情報の版は DB を正本とし、Redis は確定版を単調に保存する（TTL = JWT 有効期間）。コミット後の反映が失敗しても旧 JWT を許可しないよう、受理する版は毎回 DB
+ * で照合する。キャッシュより旧い版は DB を読まず拒否できる。DB・Redis 障害はそのまま伝播する。
  */
 @Component
 @RequiredArgsConstructor
@@ -35,29 +34,20 @@ public class CredentialVersionService {
   private final AppProperties appProperties;
   private final PlatformUserRepository userRepository;
 
-  /**
-   * claim が運んできた版が現在の版と一致するかを返す。主体不在は不一致（fail-closed）。
-   *
-   * <p>キャッシュ不一致のうち claim &lt; キャッシュだけを即拒否できる（単調書込みによりキャッシュ ≤ DB が常に成り立ち、 claim の旧さが確定するため）。claim
-   * &gt; キャッシュは「増分は確定したが commit 後の反映が失われた」直後の正当な 新トークンでありうるので、miss と同様に正本へ問い合わせて埋め戻して、DB
-   * の現在値と相等比較する。
-   */
+  /** claim が運ぶ版を確定済みの版と照合する。主体不在は拒否し、キャッシュの遅れだけを単調書込みで埋め戻す。 */
   public boolean isCurrent(String email, long claimedVersion) {
     Object cached = redisTemplate.opsForValue().get(KEY_PREFIX + email);
-    if (cached != null) {
-      long cachedVersion = Long.parseLong(cached.toString());
-      if (claimedVersion == cachedVersion) {
-        return true;
-      }
-      if (claimedVersion < cachedVersion) {
-        return false;
-      }
+    Long cachedVersion = cached == null ? null : Long.parseLong(cached.toString());
+    if (cachedVersion != null && claimedVersion < cachedVersion) {
+      return false;
     }
     return userRepository
         .findCredentialVersionByEmail(email)
         .map(
             current -> {
-              reflect(email, current);
+              if (cachedVersion == null || cachedVersion < current) {
+                reflect(email, current);
+              }
               return claimedVersion == current;
             })
         .orElse(false);
