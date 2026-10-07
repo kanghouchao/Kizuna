@@ -1,9 +1,14 @@
 package com.kizuna.reporting;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.order.reporting.OperationalFacts;
@@ -17,14 +22,23 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.util.TempFile;
+import org.apache.poi.util.TempFileCreationStrategy;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class OperationalReportTest {
   final OperationalReportReader reader = mock(OperationalReportReader.class);
@@ -171,6 +185,74 @@ class OperationalReportTest {
     facts(List.of(new OperationalFacts.Order("a", 1L, LocalDate.of(2026, 9, 30), 1, false, -1, 0)));
     assertThatThrownBy(() -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20))
         .isInstanceOf(ServiceUnavailableException.class);
+  }
+
+  @Test
+  void xlsxDeletesActualTemporaryFilesOnSuccessAndFailures(@TempDir Path directory) {
+    rows(2001);
+    var created = new ArrayList<Path>();
+    var strategy =
+        new TempFileCreationStrategy() {
+          @Override
+          public File createTempFile(String prefix, String suffix) throws IOException {
+            var path = Files.createTempFile(directory, prefix, suffix);
+            created.add(path);
+            return path.toFile();
+          }
+
+          @Override
+          public File createTempDirectory(String prefix) throws IOException {
+            return Files.createTempDirectory(directory, prefix).toFile();
+          }
+        };
+    for (String outcome : List.of("success", "characters", "bytes", "write")) {
+      created.clear();
+      properties
+          .getOperationalReport()
+          .setMaxCharacters(outcome.equals("characters") ? 20_000 : 4_000_000);
+      properties
+          .getOperationalReport()
+          .setMaxBytes(outcome.equals("bytes") ? 8 : 16L * 1024 * 1024);
+      TempFile.withStrategy(
+          strategy,
+          () -> {
+            if (outcome.equals("success")) {
+              assertThatCode(
+                      () ->
+                          assertThat(
+                                  service.export(
+                                      false, null, "2026-09-01", "2026-09-30", "day", "xlsx"))
+                              .isNotEmpty())
+                  .doesNotThrowAnyException();
+            } else if (outcome.equals("write")) {
+              var output = mock(ByteArrayOutputStream.class);
+              doAnswer(
+                      invocation -> {
+                        throw new IOException("出力先の書き込み失敗");
+                      })
+                  .when(output)
+                  .write(any(byte[].class), anyInt(), anyInt());
+              var budget = spy(new ReportBudget(properties.getOperationalReport()));
+              doReturn(output).when(budget).output();
+              var criteria = ReportCriteria.parse("2026-09-01", "2026-09-30", "day");
+              var report =
+                  OperationalReport.aggregate(
+                      criteria, reader.store(criteria.from(), criteria.to()));
+              assertThatThrownBy(() -> new ReportRenderer().render(report, "xlsx", budget))
+                  .isInstanceOf(IOException.class);
+            } else {
+              assertThatThrownBy(
+                      () -> service.export(false, null, "2026-09-01", "2026-09-30", "day", "xlsx"))
+                  .isInstanceOf(ServiceUnavailableException.class);
+            }
+            return null;
+          });
+      assertThat(created)
+          .as(outcome)
+          .anyMatch(path -> path.getFileName().toString().startsWith("poi-sxssf-sheet"));
+      assertThat(created).allSatisfy(path -> assertThat(path).doesNotExist());
+      assertThat(directory).isEmptyDirectory();
+    }
   }
 
   @Test

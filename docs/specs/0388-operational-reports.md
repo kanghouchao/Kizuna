@@ -68,9 +68,11 @@ HTTP境界を中心に権限と最小限のDTO、実データE2Eで店舗フィ�
 
 実装した切片は単店照会、単店全件出力、授権店舗集合の照会・出力。個別の受け入れ項目は [01](0388-tickets/01.md)、[02](0388-tickets/02.md)、[03](0388-tickets/03.md) に対応する。
 
-- Docker Taskfile の `lint`、`test`、`build` は exit 0。単体テストは backend 1,654件、frontend 168 suite / 1,576件。
+- Docker Taskfile の `lint`、`test`、`build` は exit 0。単体テストは backend 1,655件、frontend 168 suite / 1,576件。
 - 専用 E2E の帳票シナリオは exit 0。2,001件の全件 CSV/XLSX、JWT改竄・授権外店舗・出力権限不足の拒否、無注文店、DBロック下の同一時点読み取り、原期訂正・無効化を検証。
 - 全量 `task e2e` は exit 0、73シナリオすべて成功（12.1分）。明暗テーマの1024px画面とキーボード移動、CSV/XLSXを成果物として記録。
 - 規約と仕様の独立したコードレビューを行い、修正後の再確認で阻害指摘なし。
 
 期間保証・賞与は #387、広告費・費用は #389 の仕様確定後に検討する。これらを零の金額項目として先行追加しない。旧精算台帳・実収未収・精算範囲は廃棄済み前提であり、残存実装課題として扱わない。
+
+一時ファイルは POI 5.5.1 の `close()` が破棄する。正常出力・生成中の文字数超過・出力容量超過・書き込み IOException の後に、実際に作成したファイルの消滅と専用ディレクトリが空であることを回帰テストで確認する。根拠は [5.5.1 の close 実装](https://github.com/apache/poi/blob/REL_5_5_1/poi-ooxml/src/main/java/org/apache/poi/xssf/streaming/SXSSFWorkbook.java#L858-L884)。

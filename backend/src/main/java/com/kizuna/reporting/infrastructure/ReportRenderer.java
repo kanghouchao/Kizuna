@@ -41,9 +41,9 @@ public class ReportRenderer {
       writeCsv(output, HEADER, budget);
       rows(report, row -> writeCsv(output, row, budget));
     } else {
-      var workbook = new SXSSFWorkbook(100);
-      workbook.setCompressTempFiles(true);
-      try (workbook) {
+      // POI 5.5.1 の close は一時ファイルも破棄するため、例外経路も同じ寿命に閉じる。
+      try (var workbook = new SXSSFWorkbook(100)) {
+        workbook.setCompressTempFiles(true);
         var sheets = new HashMap<String, Sheet>();
         for (String name : List.of("metadata", "summary", "order")) {
           var sheet =
