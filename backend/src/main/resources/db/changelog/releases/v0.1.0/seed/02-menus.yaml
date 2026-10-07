@@ -248,3 +248,23 @@ databaseChangeLog:
               - column: { name: icon, value: SettingsIcon }
               - column: { name: permission, value: SERVICE_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-task-executions }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: 処理の実行履歴 }
+              - column: { name: path, value: /platform/task-executions }
+              - column: { name: icon, value: ClockIcon }
+              - column: { name: permission, value: TASK_MANAGE }
+              - column: { name: sort_order, valueNumeric: 11 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-audit-events }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: 監査履歴 }
+              - column: { name: path, value: /platform/audit-events }
+              - column: { name: icon, value: ShieldAlertIcon }
+              - column: { name: permission, value: AUDIT_VIEW }
+              - column: { name: sort_order, valueNumeric: 12 }

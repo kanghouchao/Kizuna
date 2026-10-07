@@ -66,6 +66,8 @@ class PlatformStaffAccountServiceTest {
 
   @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
 
+  @Mock private BusinessAudit businessAudit;
+
   @InjectMocks private PlatformStaffAccountService service;
 
   private Role role(long id, String name) {

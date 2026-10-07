@@ -31,6 +31,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import jakarta.persistence.EntityManager;
@@ -68,6 +69,7 @@ class CustomerMergePreviewTest {
             customers, contacts, links, merges, users, points, members, store, confirmation);
     service =
         new CustomerMergeService(
+            mock(BusinessAudit.class),
             mock(EntityManager.class),
             preparation,
             confirmation,

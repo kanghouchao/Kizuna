@@ -49,6 +49,7 @@ public class ServiceIdentityService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
+  private final BusinessAudit businessAudit;
   private final CredentialOperations credentialOperations;
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
@@ -110,7 +111,15 @@ public class ServiceIdentityService {
             .storeScopeType(req.getStoreScopeType())
             .storeIds(req.getStoreIds())
             .build();
-    return toResponse(save(user), roleNames);
+    user = save(user);
+    businessAudit.recordCurrent(
+        null,
+        "SERVICE_ID_CREATED",
+        "SERVICE_ID",
+        user.getId().toString(),
+        Map.of(),
+        BusinessAudit.grants(user));
+    return toResponse(user, roleNames);
   }
 
   /** 授権（ロール×店舗集合）だけを更新する。停止・再開は専用端点の領分で、この面は enabled を受け取らない。 */
@@ -123,8 +132,18 @@ public class ServiceIdentityService {
     if (!user.getVersion().equals(req.getVersion())) {
       throw new StaleServiceIdentityUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
+    var before = BusinessAudit.grants(user);
     user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
-    return toResponse(save(user), roleNames);
+    user = save(user);
+    if (!before.equals(BusinessAudit.grants(user)))
+      businessAudit.recordCurrent(
+          null,
+          "SERVICE_ID_GRANTS_CHANGED",
+          "SERVICE_ID",
+          user.getId().toString(),
+          before,
+          BusinessAudit.grants(user));
+    return toResponse(user, roleNames);
   }
 
   /**
@@ -134,10 +153,18 @@ public class ServiceIdentityService {
   @Transactional
   public void suspend(Long id) {
     PlatformUser user = requireServiceIdentityForUpdate(id);
+    var before = BusinessAudit.grants(user);
     boolean wasEnabled = user.getEnabled();
     credentialOperations.stop(user);
     if (wasEnabled) {
       repository.saveAndFlush(user);
+      businessAudit.recordCurrent(
+          null,
+          "SERVICE_ID_SUSPENDED",
+          "SERVICE_ID",
+          user.getId().toString(),
+          before,
+          BusinessAudit.grants(user));
     }
   }
 
@@ -145,9 +172,17 @@ public class ServiceIdentityService {
   @Transactional
   public void resume(Long id) {
     PlatformUser user = requireServiceIdentityForUpdate(id);
+    var before = BusinessAudit.grants(user);
     if (!user.getEnabled()) {
       user.resume();
       repository.saveAndFlush(user);
+      businessAudit.recordCurrent(
+          null,
+          "SERVICE_ID_RESUMED",
+          "SERVICE_ID",
+          user.getId().toString(),
+          before,
+          BusinessAudit.grants(user));
     }
   }
 

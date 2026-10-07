@@ -2,7 +2,9 @@ package com.kizuna.menu.application;
 
 import com.kizuna.menu.api.dto.MenuVO;
 import com.kizuna.menu.domain.Menu;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.user.domain.Authorities;
+import com.kizuna.user.domain.PermissionCode;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -58,8 +60,15 @@ final class MenuTreeAssembler {
     if (auth == null) {
       return Collections.emptySet();
     }
-    return auth.getAuthorities().stream()
-        .map(GrantedAuthority::getAuthority)
-        .collect(Collectors.toSet());
+    Set<String> authorities =
+        auth.getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority)
+            .collect(Collectors.toSet());
+    var scope = StoreScope.fromAuthentication(auth);
+    if (scope == null || !scope.allStores()) {
+      authorities.remove(PermissionCode.TASK_MANAGE.authority());
+      authorities.remove(PermissionCode.AUDIT_VIEW.authority());
+    }
+    return authorities;
   }
 }

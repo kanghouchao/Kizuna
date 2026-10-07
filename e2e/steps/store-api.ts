@@ -842,3 +842,17 @@ export async function customerMemberLinkHistory(
     throw new Error(`関連履歴の照会に失敗しました: ${response.status()}`);
   return response.json();
 }
+
+/** 使い捨てスタックで、既定ロールを変更せず検証用の権限集合を作る。 */
+export async function createPermissionRole(request: APIRequestContext, token: string, name: string, permissions: string[]): Promise<number> {
+  const response = await request.post('/api/platform/roles', { headers: { Authorization: `Bearer ${token}` }, data: { name, permissions } });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).id;
+}
+
+/** 検証専用スタッフを作り、既存アカウントの授権に影響を与えない。 */
+export async function createPlatformStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds?: number[]): Promise<number> {
+  const response = await request.post('/api/platform/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: storeIds ? 'SPECIFIC_STORES' : 'ALL_STORES', store_ids: storeIds ?? [] } });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).id;
+}

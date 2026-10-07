@@ -71,6 +71,9 @@ databaseChangeLog:
       file: platform/11-member-rank-history.yaml
       relativeToChangelogFile: true
   - include:
+      file: platform/14-task-audit.yaml
+      relativeToChangelogFile: true
+  - include:
       file: seed/01-roles.yaml
       relativeToChangelogFile: true
   - include:

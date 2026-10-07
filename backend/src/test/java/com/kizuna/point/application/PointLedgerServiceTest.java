@@ -26,6 +26,7 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.application.BusinessAudit;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -52,6 +53,7 @@ class PointLedgerServiceTest {
   private static final LocalDate FAR_FUTURE = LocalDate.of(2099, 12, 31);
   private static final String TIMEZONE = "Asia/Tokyo";
 
+  @Mock private BusinessAudit businessAudit;
   @Mock private PointEntryRepository pointEntryRepository;
   @Mock private PointAllocationRepository pointAllocationRepository;
   @Mock private PointRollbackRepository pointRollbackRepository;

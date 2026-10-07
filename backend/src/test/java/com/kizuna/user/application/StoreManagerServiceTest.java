@@ -63,6 +63,7 @@ class StoreManagerServiceTest {
   /** 作成要求へ載せる素の値。符号化して保存する経路を通すためだけの固定値で、意味は持たない。 */
   private static final String RAW_CREDENTIAL = "rawpass";
 
+  @Mock private BusinessAudit businessAudit;
   @Mock private PlatformUserRepository repository;
   @Mock private RoleRepository roleRepository;
   @Mock private PasswordEncoder encoder;
@@ -124,7 +125,12 @@ class StoreManagerServiceTest {
 
   private void givenSaveEchoes() {
     when(repository.saveAndFlush(ArgumentMatchers.any(PlatformUser.class)))
-        .thenAnswer(invocation -> invocation.getArgument(0));
+        .thenAnswer(
+            invocation -> {
+              PlatformUser saved = invocation.getArgument(0);
+              if (saved.getId() == null) ReflectionTestUtils.setField(saved, "id", 100L);
+              return saved;
+            });
   }
 
   private static StoreManagerAppointRequest appointExisting(long userId) {

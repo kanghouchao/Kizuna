@@ -39,6 +39,7 @@ public class RoleService {
   /** 不減零の母集団を定める権限コード。目録行そのものが守衛の直列化点でもある。 */
   private static final String ROLE_MANAGE = PermissionCode.ROLE_MANAGE.name();
 
+  private final BusinessAudit businessAudit;
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
   private final PlatformUserRepository platformUserRepository;
@@ -73,7 +74,10 @@ public class RoleService {
             .systemRole(false)
             .permissionIds(codesById.keySet())
             .build();
-    return toResponse(save(role), codesById);
+    save(role);
+    businessAudit.recordCurrent(
+        null, "ROLE_CREATED", "ROLE", role.getId().toString(), Map.of(), snapshot(role));
+    return toResponse(role, codesById);
   }
 
   @Transactional
@@ -91,9 +95,14 @@ public class RoleService {
         && roleRepository.findIdsByPermissionCode(ROLE_MANAGE).contains(role.getId())) {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
     }
+    var before = snapshot(role);
     role.rename(req.getName());
     role.replacePermissions(codesById.keySet());
-    return toResponse(save(role), codesById);
+    save(role);
+    if (!before.equals(snapshot(role)))
+      businessAudit.recordCurrent(
+          null, "ROLE_CHANGED", "ROLE", role.getId().toString(), before, snapshot(role));
+    return toResponse(role, codesById);
   }
 
   @Transactional
@@ -110,6 +119,8 @@ public class RoleService {
       // 遅らせると 500 になるため、ここで flush して事前検証と同じ 409 へ揃える。
       roleRepository.delete(role);
       roleRepository.flush();
+      businessAudit.recordCurrent(
+          null, "ROLE_DELETED", "ROLE", role.getId().toString(), snapshot(role), Map.of());
     } catch (DataIntegrityViolationException ex) {
       // 授与 FK 違反は全域ハンドラでは 409 にならない（一意違反のみが兜底の対象）ため、ここで写像する。
       // 授与 FK 以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
@@ -118,6 +129,11 @@ public class RoleService {
           Map.of(
               DbConstraint.FK_T_USER_ROLES_ROLE, () -> new RoleInUseException("授与中のロールは削除できません")));
     }
+  }
+
+  private static Map<String, String> snapshot(Role role) {
+    return Map.of(
+        "name", role.getName(), "permission_ids", BusinessAudit.ids(role.getPermissionIds()));
   }
 
   private static NotFoundException notFound(Long id) {

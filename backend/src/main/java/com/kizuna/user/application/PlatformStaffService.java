@@ -46,6 +46,7 @@ public class PlatformStaffService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
+  private final BusinessAudit businessAudit;
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
@@ -114,7 +115,15 @@ public class PlatformStaffService {
             .storeScopeType(req.getStoreScopeType())
             .storeIds(req.getStoreIds())
             .build();
-    return toResponse(save(user), roleNames);
+    user = save(user);
+    businessAudit.recordCurrent(
+        null,
+        "PLATFORM_STAFF_CREATED",
+        "USER_GRANTS",
+        user.getId().toString(),
+        Map.of(),
+        BusinessAudit.grants(user));
+    return toResponse(user, roleNames);
   }
 
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
@@ -143,8 +152,18 @@ public class PlatformStaffService {
     if (user.getEnabled() && !req.getRoleIds().containsAll(user.getRoleIds())) {
       roleManageHolderGuard.requireAfterGrantChange(user, req.getRoleIds());
     }
+    var before = BusinessAudit.grants(user);
     user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
-    return toResponse(save(user), roleNames);
+    user = save(user);
+    if (!before.equals(BusinessAudit.grants(user)))
+      businessAudit.recordCurrent(
+          null,
+          "PLATFORM_STAFF_GRANTS_CHANGED",
+          "USER_GRANTS",
+          user.getId().toString(),
+          before,
+          BusinessAudit.grants(user));
+    return toResponse(user, roleNames);
   }
 
   /**

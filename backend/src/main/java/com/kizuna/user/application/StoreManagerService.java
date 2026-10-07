@@ -61,6 +61,7 @@ public class StoreManagerService {
   /** 解任が撥ねられたときに残る出口。降格はこの面に、停止はアカウント管理にあり、どちらも実在する操作を指す。 */
   private static final String DISMISSAL_ALTERNATIVES = "降格で店舗スタッフにするか、退職の場合はアカウント管理で停止してください";
 
+  private final BusinessAudit businessAudit;
   private final PlatformUserRepository repository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
@@ -138,12 +139,21 @@ public class StoreManagerService {
     if (!isCandidate(user, roleRepository.findHqRoleIds())) {
       throw new ServiceException("このアカウントは店長に任命できません");
     }
+    var before = BusinessAudit.grants(user);
     Set<Long> roleIds = new HashSet<>(user.getRoleIds());
     roleIds.add(managerRoleId);
     Set<Long> storeIds = new HashSet<>(user.getStoreIds());
     storeIds.add(storeId);
     user.reassignGrants(roleIds, StoreScopeType.SPECIFIC_STORES, storeIds);
-    return toResponse(save(user));
+    user = save(user);
+    businessAudit.recordCurrent(
+        storeId,
+        "STORE_MANAGER_APPOINTED",
+        "USER_GRANTS",
+        user.getId().toString(),
+        before,
+        BusinessAudit.grants(user));
+    return toResponse(user);
   }
 
   private StoreManagerResponse createAndAppoint(
@@ -165,7 +175,15 @@ public class StoreManagerService {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(storeId))
             .build();
-    return toResponse(save(user));
+    user = save(user);
+    businessAudit.recordCurrent(
+        storeId,
+        "STORE_MANAGER_CREATED",
+        "USER_GRANTS",
+        user.getId().toString(),
+        Map.of(),
+        BusinessAudit.grants(user));
+    return toResponse(user);
   }
 
   /**
@@ -183,10 +201,18 @@ public class StoreManagerService {
     if (user.getStoreIds().size() == 1) {
       throw new InvalidStoreScopeException("最後の担当店舗のため解任できません。" + DISMISSAL_ALTERNATIVES);
     }
+    var before = BusinessAudit.grants(user);
     Set<Long> storeIds = new HashSet<>(user.getStoreIds());
     storeIds.remove(storeId);
     user.reassignGrants(user.getRoleIds(), StoreScopeType.SPECIFIC_STORES, storeIds);
-    save(user);
+    user = save(user);
+    businessAudit.recordCurrent(
+        storeId,
+        "STORE_MANAGER_DISMISSED",
+        "USER_GRANTS",
+        user.getId().toString(),
+        before,
+        BusinessAudit.grants(user));
   }
 
   /**
@@ -205,11 +231,19 @@ public class StoreManagerService {
         && user.getStoreIds().size() > 1) {
       throw new InvalidStoreScopeException("複数の店舗を担当しているため降格できません。この店舗の店長から外すには解任してください");
     }
+    var before = BusinessAudit.grants(user);
     Set<Long> roleIds = new HashSet<>(user.getRoleIds());
     roleIds.remove(managerRoleId);
     roleIds.add(requireStoreStaffRole().getId());
     user.reassignGrants(roleIds, user.getStoreScopeType(), user.getStoreIds());
-    save(user);
+    user = save(user);
+    businessAudit.recordCurrent(
+        storeId,
+        "STORE_MANAGER_DEMOTED",
+        "USER_GRANTS",
+        user.getId().toString(),
+        before,
+        BusinessAudit.grants(user));
   }
 
   /** 解任・降格が指す対象。両者で同一の述語・同一の例外にするのは、片方だけ緩むと「この店舗の店長か」を隠している 述語から他人のアカウントの在否が漏れるためである。 */

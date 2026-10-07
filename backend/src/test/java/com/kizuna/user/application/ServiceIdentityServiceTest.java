@@ -44,6 +44,7 @@ class ServiceIdentityServiceTest {
   private static final long CUSTOM_ROLE = 20L;
   private static final long SYSTEM_ROLE = 21L;
 
+  @Mock private BusinessAudit businessAudit;
   @Mock private PlatformUserRepository repository;
 
   @Mock private RoleRepository roleRepository;
@@ -104,6 +105,7 @@ class ServiceIdentityServiceTest {
               PlatformUser saved = invocation.getArgument(0);
               // 永続化で version 列が初期化される実挙動を模す。
               ReflectionTestUtils.setField(saved, "version", 0L);
+              ReflectionTestUtils.setField(saved, "id", 100L);
               return saved;
             });
 

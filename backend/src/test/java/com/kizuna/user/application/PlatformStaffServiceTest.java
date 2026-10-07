@@ -64,6 +64,7 @@ class PlatformStaffServiceTest {
 
   private static final Pageable PAGEABLE = PageRequest.of(0, 20);
 
+  @Mock private BusinessAudit businessAudit;
   @Mock private PlatformUserRepository repository;
 
   @Mock private RoleRepository roleRepository;

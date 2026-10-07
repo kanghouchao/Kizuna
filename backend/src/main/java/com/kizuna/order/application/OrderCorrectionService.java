@@ -20,6 +20,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
@@ -38,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderCorrectionService {
 
+  private final BusinessAudit businessAudit;
   private final EntityManager entityManager;
   private final OrderRepository orderRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
@@ -110,6 +112,31 @@ public class OrderCorrectionService {
                 actorIdentityService.requireUserId(actorEmail),
                 OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS)));
 
+    businessAudit.record(
+        actorEmail,
+        order.getStoreId(),
+        "ORDER_CORRECTED",
+        "ORDER",
+        order.getId(),
+        "ORDER_CORRECTION",
+        correction.getId(),
+        Map.of(
+            "version",
+            Long.toString(beforeVersion),
+            "total_fee",
+            Integer.toString(previousTotalFee),
+            "remuneration",
+            Integer.toString(previousRemuneration)),
+        Map.of(
+            "version",
+            order.getVersion().toString(),
+            "total_fee",
+            Integer.toString(order.getTotalFee()),
+            "remuneration",
+            Integer.toString(order.getTotalRemuneration()),
+            "reason",
+            request.getReason()));
+
     return new OrderCorrectionResponse(
         correction.getId(),
         previousTotalFee,
@@ -158,7 +185,7 @@ public class OrderCorrectionService {
     order.invalidateCompletion();
     orderRepository.saveAndFlush(order);
     entityManager.refresh(order);
-    return OrderCorrectionHistory.result(
+    var correction =
         orderCorrectionRepository.saveAndFlush(
             OrderCorrection.recorded(
                 order,
@@ -166,7 +193,24 @@ public class OrderCorrectionService {
                 before,
                 request.reason().trim(),
                 actorIdentityService.requireUserId(actorEmail),
-                OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS))));
+                OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS)));
+    businessAudit.record(
+        actorEmail,
+        order.getStoreId(),
+        "ORDER_COMPLETION_INVALIDATED",
+        "ORDER",
+        order.getId(),
+        "ORDER_CORRECTION",
+        correction.getId(),
+        Map.of("version", Long.toString(beforeVersion), "invalidated", "false"),
+        Map.of(
+            "version",
+            order.getVersion().toString(),
+            "invalidated",
+            "true",
+            "reason",
+            request.reason()));
+    return OrderCorrectionHistory.result(correction);
   }
 
   @StoreScoped

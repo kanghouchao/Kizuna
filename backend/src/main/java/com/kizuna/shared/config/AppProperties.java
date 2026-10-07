@@ -25,6 +25,15 @@ public class AppProperties {
     private long maxBytes = 16L * 1024 * 1024;
   }
 
+  private Tasks tasks = new Tasks();
+
+  @Getter
+  @Setter
+  public static class Tasks {
+    private int timeoutSeconds = 60;
+    private int interruptionMinimumAgeSeconds = 300;
+  }
+
   private MonthlyPdf monthlyPdf = new MonthlyPdf();
 
   @Getter

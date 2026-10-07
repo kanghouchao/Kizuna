@@ -19,6 +19,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 @ExtendWith(MockitoExtension.class)
 class MenuServiceTest {
@@ -156,5 +158,82 @@ class MenuServiceTest {
     List<MenuVO> result = menuService.getMyMenus();
 
     assertThat(result).isEmpty();
+  }
+
+  @Test
+  void getMyMenus_hidesAllStoreOperationsFromRestrictedStaff() {
+    authenticateTaskOperator("SPECIFIC_STORES");
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
+
+    assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
+  }
+
+  @Test
+  void getMyMenus_keepsAllStoreOperationsForAllStoreStaff() {
+    authenticateTaskOperator("ALL_STORES");
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
+
+    var result = menuService.getMyMenus();
+    assertThat(result).extracting(MenuVO::getName).containsExactly("Dashboard", "Operations");
+    assertThat(result.get(1).getItems())
+        .extracting(MenuVO::getName)
+        .containsExactly("Executions", "Audit");
+  }
+
+  @Test
+  void getMyMenus_hidesAllStoreOperationsWhenScopeCannotBeResolved() {
+    authenticateTaskOperator(null);
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
+
+    assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
+  }
+
+  @Test
+  void getMyMenus_hidesAllStoreOperationsForNonJwtAuthentication() {
+    SecurityContextHolder.setContext(securityContext);
+    when(securityContext.getAuthentication()).thenReturn(authentication);
+    doReturn(
+            List.of(
+                new SimpleGrantedAuthority("PERM_TASK_MANAGE"),
+                new SimpleGrantedAuthority("PERM_AUDIT_VIEW")))
+        .when(authentication)
+        .getAuthorities();
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
+
+    assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
+  }
+
+  @Test
+  void getMyMenus_hidesAllStoreOperationsWithoutTheirPermissions() {
+    authenticateTaskOperator("ALL_STORES");
+    var auth = (JwtAuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
+    SecurityContextHolder.getContext()
+        .setAuthentication(new JwtAuthenticationToken(auth.getToken(), List.of()));
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
+
+    assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
+  }
+
+  private void authenticateTaskOperator(String scopeType) {
+    var builder =
+        Jwt.withTokenValue("menu-fixture")
+            .header("alg", "none")
+            .subject("operator@kizuna.test")
+            .claim("storeIds", List.of(1L));
+    if (scopeType != null) builder.claim("storeScopeType", scopeType);
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new JwtAuthenticationToken(
+                builder.build(),
+                List.of(
+                    new SimpleGrantedAuthority("PERM_TASK_MANAGE"),
+                    new SimpleGrantedAuthority("PERM_AUDIT_VIEW"))));
+  }
+
+  private List<Menu> taskMenus() {
+    var group = new Menu();
+    group.setLabel("Operations");
+    group.setChildren(List.of(menu("Executions", "TASK_MANAGE"), menu("Audit", "AUDIT_VIEW")));
+    return List.of(menu("Dashboard", null), group);
   }
 }
