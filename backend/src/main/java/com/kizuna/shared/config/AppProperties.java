@@ -25,6 +25,17 @@ public class AppProperties {
     private long maxBytes = 16L * 1024 * 1024;
   }
 
+  private PointsExpiry pointsExpiry = new PointsExpiry();
+
+  @Getter
+  @Setter
+  public static class PointsExpiry {
+    private String cron = "0 5 0 * * *";
+    private boolean enabled = false;
+    private Long serviceUserId;
+    private int maxLots = 10_000;
+  }
+
   private Tasks tasks = new Tasks();
 
   @Getter

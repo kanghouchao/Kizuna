@@ -73,9 +73,13 @@ public class PointEntry extends BaseEntity {
   @Column(name = "reason", updatable = false, length = 500)
   private String reason;
 
-  /** 手動調整の冪等キー（クライアント生成）。一意制約により応答喪失後の再送が二重記帳になるのを遮断する（ADR 0007）。 手動調整以外の種別は持たない。 */
+  /** 手動調整の要求キー。一意制約により同じ操作の二重記帳を遮断する。 */
   @Column(name = "idempotency_key", updatable = false, length = 64)
   private String idempotencyKey;
+
+  /** 失効の実行試行と会員の識別子。手動調整の外部指定キーと名前空間を分ける。 */
+  @Column(name = "expiry_key", updatable = false, length = 64)
+  private String expiryKey;
 
   /**
    * 誤帰属の訂正で、どの帰属記録を訂正したか（ADR 0012）。訂正の手動調整だけが持ち、顧客経路の通常の調整は null。
@@ -439,21 +443,28 @@ public class PointEntry extends BaseEntity {
    * <p>発生店舗も持たない — 失効は複数店舗発生の lot に跨る系統イベントのため単一の発生店舗を持たない。店舗帰属は充当行から源 lot を辿って照会する（取消は打ち消す対象が 1
    * つなので元の仕訳の発生店舗を引き継ぐ）。
    */
-  public static PointEntry expire(Long memberId, int points, List<PointAllocation> allocations) {
-    return new PointEntry(
-        PointEntryType.EXPIRE,
-        memberId,
-        -points,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        allocations);
+  public static PointEntry expire(
+      Long memberId, int points, List<PointAllocation> allocations, String expiryKey) {
+    if (expiryKey == null || expiryKey.isBlank() || expiryKey.length() > 64) {
+      throw new InvalidPointEntryException("失効処理の識別キーは必須です");
+    }
+    var entry =
+        new PointEntry(
+            PointEntryType.EXPIRE,
+            memberId,
+            -points,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            allocations);
+    entry.expiryKey = expiryKey;
+    return entry;
   }
 
   /** 退会に伴う残高消去。 */

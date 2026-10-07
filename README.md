@@ -55,6 +55,26 @@ task up
 
 起動しない場合は `task -d infrastructure/development ps` と `task -d infrastructure/development logs service=backend` で確認する。`localhost:8080` はバックエンドではなく Traefik。baseline の適用済みチェックサムが変わった開発 DB は、[DB 再作成手順](backend/src/main/resources/db/AGENTS.md#after-editing-the-baseline-the-dev-db-must-be-recreated)に従う。Docker ボリュームは削除しない。
 
+## ポイント失効の運用
+
+期限切れポイントの記帳は既定で停止している。明示的に `app.points-expiry.enabled=true` と
+`app.points-expiry.service-user-id` を設定した環境だけで、アプリケーションの暦日・時区に従い
+日次に実行する。手動の新規実行・再試行には運用者の `TASK_MANAGE`・`POINT_EXPIRE` と `ALL_STORES` が必要となる。
+サービス ID には `TASK_EXECUTE`・`POINT_EXPIRE` と `ALL_STORES` を明示授与する。
+既存の人・サービスへの自動授与はない。
+
+`app.points-expiry.cron` の既定は `0 5 0 * * *`、`app.points-expiry.max-lots` は 10,000。
+上限・共通実行時間制限・監査の失敗では仕訳全体を取り消し、処理の実行履歴に失敗を残す。
+運用者は原因を直して失敗試行を再試行する。必要な上限変更は DB 負荷と実行時間を確認して行う。
+補実行は処理画面で「期限切れポイントの記帳」と本日以前の一日を選ぶ。
+その日より前に期限を過ぎた未消費ロットをまとめて拾うので、停止期間の日数分を個別に実行する必要はない。
+成功後に利用取消で返った期限切れ量は、後続の実行で記帳する。
+
+記帳は会員ごとに一仕訳で、利用可能残高は変わらない。源ロットの期限と仕訳の日時に加え、
+監査の `POINT_EXPIRED` から仕訳 ID・実行試行 ID・サービス ID を辿れる。
+授権は実行開始と確定前の検証点ごとに、別の短い読み取り専用取引で確定済みの状態を読み直す。
+最後の検証後に確定した権限の取り消しは、次の検証点から有効になる。
+
 ## 文書案内
 
 | 目的 | 文書 |

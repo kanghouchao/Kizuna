@@ -11,6 +11,7 @@ import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.domain.ExecutionStatus;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
+import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -66,8 +67,8 @@ public class TaskExecutor {
     var existing = lifecycle.findReplay(command);
     if (existing.isPresent()) return new Submission(existing.get(), false);
     var handler = registry.require(command);
-    var service =
-        identities.requireService(command.serviceUserId(), handler.permission(), command.storeId());
+    requireManualPermission(handler, operator);
+    var service = requireService(command, handler);
     TaskLifecycle.Started started;
     try {
       started = lifecycle.begin(command, service, operator, origin);
@@ -92,8 +93,8 @@ public class TaskExecutor {
             original.periodStart(),
             original.periodEnd());
     var handler = registry.require(command);
-    var service =
-        identities.requireService(command.serviceUserId(), handler.permission(), command.storeId());
+    requireManualPermission(handler, operator);
+    var service = requireService(command, handler);
     return run(lifecycle.retry(id, reason, operator, service).id());
   }
 
@@ -109,9 +110,7 @@ public class TaskExecutor {
               throw new ConflictException("この実行試行は開始できません");
             }
             var handler = registry.require(request.command());
-            var service =
-                identities.requireService(
-                    request.getServiceUserId(), handler.permission(), request.getStoreId());
+            var service = requireService(request.command(), handler);
             if (request.getStoreId() != null) storeContext.setStoreId(request.getStoreId());
             try {
               long count =
@@ -135,6 +134,24 @@ public class TaskExecutor {
           id,
           failure instanceof AccessDeniedException ? "AUTHORIZATION_DENIED" : "EXECUTION_FAILED");
     }
+  }
+
+  private void requireManualPermission(TaskHandler handler, AuditActor operator) {
+    if (operator != null) {
+      handler
+          .manualPermission()
+          .ifPresent(permission -> identities.requireOperator(operator.id(), permission));
+    }
+  }
+
+  private AuditActor requireService(TaskCommand command, TaskHandler handler) {
+    var service =
+        identities.requireService(
+            command.serviceUserId(), PermissionCode.TASK_EXECUTE, command.storeId());
+    return handler.permission() == PermissionCode.TASK_EXECUTE
+        ? service
+        : identities.requireService(
+            command.serviceUserId(), handler.permission(), command.storeId());
   }
 
   private void requireCleanBoundary() {

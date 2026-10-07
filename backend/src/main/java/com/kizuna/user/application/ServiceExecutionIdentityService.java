@@ -16,6 +16,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -26,6 +28,11 @@ public class ServiceExecutionIdentityService {
   private final PlatformUserRepository users;
   private final RoleRepository roles;
 
+  // 呼出側の分離レベルや一次キャッシュに依存せず、確定済みの授権を読み直す。
+  @Transactional(
+      readOnly = true,
+      propagation = Propagation.REQUIRES_NEW,
+      isolation = Isolation.READ_COMMITTED)
   public AuditActor requireService(Long id, PermissionCode permission, Long storeId) {
     var user = users.findById(id).orElseThrow(ServiceExecutionIdentityService::denied);
     if (user.getUserType() != UserType.SERVICE
@@ -39,8 +46,17 @@ public class ServiceExecutionIdentityService {
     return actor(user);
   }
 
+  public AuditActor requireOperator(Long id, PermissionCode permission) {
+    return requireOperator(
+        users.findById(id).orElseThrow(ServiceExecutionIdentityService::denied), permission);
+  }
+
   public AuditActor requireOperator(String email, PermissionCode permission) {
     var user = users.findByEmail(email).orElseThrow(ServiceExecutionIdentityService::denied);
+    return requireOperator(user, permission);
+  }
+
+  private AuditActor requireOperator(PlatformUser user, PermissionCode permission) {
     if (user.getUserType() != UserType.STAFF
         || !Boolean.TRUE.equals(user.getEnabled())
         || user.getStoreScopeType() != StoreScopeType.ALL_STORES
@@ -52,11 +68,12 @@ public class ServiceExecutionIdentityService {
 
   public record Candidate(Long id, String displayName) {}
 
-  public Page<Candidate> candidates(int page, int size) {
+  public Page<Candidate> candidates(int page, int size, PermissionCode permission) {
     if (page < 0 || size < 1 || size > 100) throw new ServiceException("ページ指定が不正です");
     var pageable = PageRequest.of(page, size, Sort.by("displayName", "id"));
     var roleIds = roles.findIdsByPermissionCode(PermissionCode.TASK_EXECUTE.name());
-    if (roleIds.isEmpty()) return Page.empty(pageable);
+    var taskRoleIds = roles.findIdsByPermissionCode(permission.name());
+    if (roleIds.isEmpty() || taskRoleIds.isEmpty()) return Page.empty(pageable);
     return users
         .findAll(
             (root, query, cb) -> {
@@ -65,7 +82,8 @@ public class ServiceExecutionIdentityService {
                   cb.equal(root.get("userType"), UserType.SERVICE),
                   cb.isTrue(root.get("enabled")),
                   cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
-                  root.join("roleIds").in(roleIds));
+                  root.join("roleIds").in(roleIds),
+                  root.join("roleIds").in(taskRoleIds));
             },
             pageable)
         .map(user -> new Candidate(user.getId(), user.getDisplayName()));

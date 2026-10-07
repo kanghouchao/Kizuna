@@ -30,6 +30,7 @@ export type PlatformPermission =
   | 'SERVICE_ID_MANAGE'
   | 'TASK_MANAGE'
   | 'TASK_EXECUTE'
+  | 'POINT_EXPIRE'
   | 'AUDIT_VIEW'
   | 'OPERATIONAL_REPORT_VIEW'
   | 'OPERATIONAL_REPORT_EXPORT'

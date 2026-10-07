@@ -81,7 +81,14 @@ databaseChangeLog:
                   constraints:
                     unique: true
                     uniqueConstraintName: uq_t_point_entries_idempotency_key
-                  remarks: 手動調整の冪等キー（クライアント生成。手動調整以外は NULL。値を持つ行は一意）
+                  remarks: 手動調整の冪等キー（クライアント生成。値を持つ行は一意）
+              - column:
+                  name: expiry_key
+                  type: VARCHAR(64)
+                  constraints:
+                    unique: true
+                    uniqueConstraintName: uq_t_point_entries_expiry_key
+                  remarks: 失効の実行試行と会員の識別キー
               - column:
                   # 誤帰属の訂正として積んだ手動調整が、どの帰属記録を訂正したのかを指し返す（ADR 0012）。
                   # 減算は期限の早いロットから引く引き当てで誤付与ロットを狙い撃ちにしないため、この列が
@@ -260,6 +267,11 @@ databaseChangeLog:
             sql: >-
               ALTER TABLE t_point_usage_allocations
               ADD CONSTRAINT ck_t_point_usage_allocations_amount_positive CHECK (amount > 0)
+        - sql:
+            sql: >-
+              ALTER TABLE t_point_entries ADD CONSTRAINT ck_t_point_entries_expiry_shape CHECK (
+                (entry_type = 'EXPIRE' AND expiry_key IS NOT NULL AND actor_user_id IS NULL)
+                OR (entry_type <> 'EXPIRE' AND expiry_key IS NULL))
         - createIndex:
             indexName: idx_t_point_entries_member_expires
             tableName: t_point_entries

@@ -1,6 +1,7 @@
 package com.kizuna.point.domain;
 
 import jakarta.persistence.LockModeType;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -31,8 +32,28 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
    * つの消費が同じ残りを二重に引き当てるのを防ぐ。読むだけの経路は {@link #findCredits} を使う。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select e from com.kizuna.point.domain.PointEntry e" + LOT_WHERE)
+  @Query("select e from com.kizuna.point.domain.PointEntry e" + LOT_WHERE + " order by e.id")
   List<PointEntry> findCreditsForUpdate(@Param("memberId") Long memberId);
+
+  @Query(
+      """
+      select e.id from com.kizuna.point.domain.PointEntry e
+      where e.amount > 0 and e.expiresOn < :asOf
+        and e.entryType <> com.kizuna.point.domain.PointEntryType.USE_CANCEL
+        and e.amount > (select coalesce(sum(case
+          when debit.entryType = com.kizuna.point.domain.PointEntryType.USE_CANCEL
+          then -a.amount else a.amount end), 0)
+          from com.kizuna.point.domain.PointEntry debit join debit.allocations a
+          where a.sourceEntryId = e.id)
+      order by e.memberId, e.id
+      """)
+  List<Long> findExpiryCandidates(@Param("asOf") LocalDate asOf, Limit limit);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select e from com.kizuna.point.domain.PointEntry e where e.id in :ids"
+          + " order by e.memberId, e.id")
+  List<PointEntry> lockExpiryCandidates(@Param("ids") Collection<Long> ids);
 
   /** 受注を根拠とする加算ロット。受注からその付与を辿って取り消す経路の入口。 */
   @Query(

@@ -53,6 +53,15 @@ public final class PointLedger {
     return plan;
   }
 
+  /** 期限切れロットの未消費量だけを記帳し、利用可能残高には触れない。 */
+  public List<PlannedAllocation> planExpiry() {
+    return lots.stream()
+        .filter(lot -> !usable(lot) && remaining(lot) > 0)
+        .sorted(Comparator.comparing(PointLot::entryId))
+        .map(lot -> new PlannedAllocation(lot.entryId(), remaining(lot)))
+        .toList();
+  }
+
   /** 消費順に並べた利用可能ロット。{@link #balance} と同じ「利用できる」判定を使う。 */
   private List<PointLot> consumptionOrder() {
     return lots.stream()

@@ -159,6 +159,32 @@ class PointLedgerTest {
     assertThat(new PointLedger(List.of(used, cancelled, old), TODAY).balance()).isEqualTo(300);
   }
 
+  @Test
+  void expiryMaterializesOnlyRemaindersWithoutChangingUsableBalance() {
+    var lots =
+        List.of(
+            new PointLot(1L, 100, TODAY.minusDays(1), 30),
+            new PointLot(2L, 100, TODAY, 0),
+            new PointLot(3L, 200, null, 20),
+            new PointLot(4L, 100, TODAY.minusDays(2), 100));
+    var before = new PointLedger(lots, TODAY);
+    assertThat(before.planExpiry()).containsExactly(new PlannedAllocation(1L, 70));
+    var after =
+        new PointLedger(
+            List.of(
+                new PointLot(1L, 100, TODAY.minusDays(1), 100),
+                lots.get(1),
+                lots.get(2),
+                lots.get(3)),
+            TODAY);
+    assertThat(after.balance()).isEqualTo(before.balance());
+    assertThat(after.planExpiry()).isEmpty();
+    assertThat(
+            new PointLedger(List.of(new PointLot(1L, 100, TODAY.minusDays(1), 60)), TODAY)
+                .planExpiry())
+        .containsExactly(new PlannedAllocation(1L, 40));
+  }
+
   private static PointLedger ledger(PointLot... lots) {
     return new PointLedger(List.of(lots), TODAY);
   }
