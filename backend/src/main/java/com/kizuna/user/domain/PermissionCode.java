@@ -25,7 +25,7 @@ public enum PermissionCode {
   NOTIFICATION_MANAGE(Console.STORE),
   /** 業務通知の送信待ち登録と明示再試行。閲覧権限と併用する。 */
   NOTIFICATION_SEND(Console.STORE),
-  /** SERVICE による業務通知の配送と平台からの手工実行。既定授与はしない。 */
+  /** SERVICE による業務通知の配送と運営側からの手動実行。既定授与はしない。 */
   NOTIFICATION_DELIVER(Console.SHARED),
 
   /** 授権範囲内の運営集計の閲覧。既定授与はしない。 */
