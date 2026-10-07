@@ -9,6 +9,7 @@ import com.kizuna.task.api.dto.TaskExecutionRequest;
 import com.kizuna.task.api.dto.TaskExecutionResponse;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskQuery;
+import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TaskExecutionController {
   private final TaskExecutor executor;
+  private final TaskRegistry registry;
   private final TaskLifecycle lifecycle;
   private final TaskQuery query;
   private final ServiceExecutionIdentityService identities;
@@ -53,9 +55,10 @@ public class TaskExecutionController {
   public Page<ServiceExecutionIdentityService.Candidate> candidates(
       Authentication auth,
       @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(name = "task_name", defaultValue = "SERVICE_IDENTITY_CHECK") String taskName) {
     identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
-    return identities.candidates(page, size);
+    return identities.candidates(page, size, registry.requireName(taskName).permission());
   }
 
   @GetMapping("/{id}")

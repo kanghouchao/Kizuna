@@ -23,8 +23,15 @@ export const taskExecutionApi = {
     (await apiClient.post(`${path}/${id}/retries`, { reason })).data,
   interrupt: async (id: number, reason: string): Promise<ExecutionResponse> =>
     (await apiClient.post(`${path}/${id}/interruption`, { reason })).data,
-  candidates: async (page: number): Promise<PageResult<ServiceCandidate>> =>
+  candidates: async (
+    page: number,
+    taskName = 'SERVICE_IDENTITY_CHECK'
+  ): Promise<PageResult<ServiceCandidate>> =>
     fromSpringPage(
-      (await apiClient.get(`${path}/service-identities`, { params: { page, size: 20 } })).data
+      (
+        await apiClient.get(`${path}/service-identities`, {
+          params: { page, size: 20, task_name: taskName },
+        })
+      ).data
     ),
 };

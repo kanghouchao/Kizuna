@@ -223,7 +223,8 @@ class PointEntryTest {
   @Test
   @DisplayName("失効と退会消去は引き当てを伴う減算になること")
   void expireAndWithdrawalClearAreDebits() {
-    PointEntry expired = PointEntry.expire(7L, 200, List.of(PointAllocation.of(11L, 200)));
+    PointEntry expired =
+        PointEntry.expire(7L, 200, List.of(PointAllocation.of(11L, 200)), "fixture");
     PointEntry cleared =
         PointEntry.withdrawalClear(7L, 200, List.of(PointAllocation.of(11L, 200)), 9L);
 
@@ -240,7 +241,7 @@ class PointEntryTest {
   void systemDebitsRequireMatchingAllocations() {
     List<PointAllocation> allocations = List.of(PointAllocation.of(11L, 100));
 
-    assertThatThrownBy(() -> PointEntry.expire(7L, 200, allocations))
+    assertThatThrownBy(() -> PointEntry.expire(7L, 200, allocations, "fixture"))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("引き当ての合計");
     assertThatThrownBy(() -> PointEntry.withdrawalClear(7L, 200, allocations, 9L))

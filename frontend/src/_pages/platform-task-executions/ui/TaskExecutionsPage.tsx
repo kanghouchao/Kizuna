@@ -21,6 +21,7 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  Label,
   RegionError,
   Select,
   SelectContent,
@@ -178,8 +179,12 @@ function ExecutionDetail({ id, onChanged }: { id: number; onChanged: (id: number
 
 export default function TaskExecutionsPage() {
   const list = useCursorList(cursor => taskExecutionApi.list(cursor));
+  const [taskName, setTaskName] = useState('SERVICE_IDENTITY_CHECK');
   const [candidatePage, setCandidatePage] = useState(0);
-  const candidates = useResource(() => taskExecutionApi.candidates(candidatePage), [candidatePage]);
+  const candidates = useResource(
+    () => taskExecutionApi.candidates(candidatePage, taskName),
+    [candidatePage, taskName]
+  );
   const [selected, setSelected] = useState<number | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const form = useForm<{ service: string; date: string }>({
@@ -187,7 +192,7 @@ export default function TaskExecutionsPage() {
   });
   const pending = useRef<{ signature: string; key: string } | null>(null);
   const submit = async (values: { service: string; date: string }) => {
-    const signature = JSON.stringify(values);
+    const signature = JSON.stringify({ ...values, taskName });
     if (pending.current?.signature !== signature)
       pending.current = {
         signature,
@@ -197,7 +202,7 @@ export default function TaskExecutionsPage() {
       };
     try {
       const result = await taskExecutionApi.create({
-        task_name: 'SERVICE_IDENTITY_CHECK',
+        task_name: taskName,
         logical_key: pending.current.key,
         service_user_id: Number(values.service),
         store_id: null,
@@ -219,9 +224,37 @@ export default function TaskExecutionsPage() {
         description="サービスIDによる処理結果を確認し、失敗した処理を理由付きで再試行できます。"
       />
       <Card className="p-6 space-y-6">
-        <h2 className="text-lg font-medium">サービスIDの実行確認</h2>
+        <h2 className="text-lg font-medium">処理を実行</h2>
+        <div className="max-w-lg space-y-2">
+          <Label htmlFor="task-name">処理</Label>
+          <Select
+            value={taskName}
+            items={[
+              { value: 'SERVICE_IDENTITY_CHECK', label: 'サービスIDの実行確認' },
+              { value: 'POINT_EXPIRY', label: '期限切れポイントの記帳' },
+            ]}
+            onValueChange={value => {
+              if (!value) return;
+              form.setValue('service', '');
+              setCandidatePage(0);
+              candidates.setData(null);
+              pending.current = null;
+              setTaskName(value);
+            }}
+          >
+            <SelectTrigger id="task-name" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="SERVICE_IDENTITY_CHECK">サービスIDの実行確認</SelectItem>
+              <SelectItem value="POINT_EXPIRY">期限切れポイントの記帳</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <p className="text-sm text-muted-foreground">
-          選択したサービスIDの現在の権限を確認し、実行履歴に記録します。対象日は確認記録の対象日です。
+          {taskName === 'POINT_EXPIRY'
+            ? '対象日より前に期限を過ぎた未消費ポイントを記帳します。利用可能な残高は変わりません。本日以前の日付を指定してください。'
+            : '選択したサービスIDの現在の権限を確認し、実行履歴に記録します。対象日は確認記録の対象日です。'}
         </p>
         {candidates.isLoading ? (
           <p>読み込み中...</p>
@@ -271,7 +304,7 @@ export default function TaskExecutionsPage() {
               />
               {candidates.data?.total === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  実行確認権限と全店舗の対象範囲を持つ、有効なサービスIDがありません。
+                  選択した処理の権限と実行権限、全店舗の対象範囲を持つ、有効なサービスIDがありません。
                 </p>
               )}
               {(candidates.data?.pageCount ?? 0) > 1 && (
@@ -321,7 +354,11 @@ export default function TaskExecutionsPage() {
                 type="submit"
                 disabled={form.formState.isSubmitting || !candidates.data?.rows.length}
               >
-                {form.formState.isSubmitting ? '実行中...' : '実行確認を記録'}
+                {form.formState.isSubmitting
+                  ? '実行中...'
+                  : taskName === 'POINT_EXPIRY'
+                    ? '期限切れポイントを記帳'
+                    : '実行確認を記録'}
               </Button>
             </form>
           </Form>
@@ -357,7 +394,9 @@ export default function TaskExecutionsPage() {
                     <span className="block max-w-64 wrap-anywhere">
                       {row.task_name === 'SERVICE_IDENTITY_CHECK'
                         ? 'サービスIDの実行確認'
-                        : row.task_name}
+                        : row.task_name === 'POINT_EXPIRY'
+                          ? '期限切れポイントの記帳'
+                          : row.task_name}
                     </span>
                     <span className="text-muted-foreground">{row.service_name}</span>
                   </TableCell>

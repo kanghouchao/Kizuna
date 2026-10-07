@@ -154,3 +154,46 @@ test('監査詳細の取得失敗は一覧の値で埋めず領域内で再取�
   fireEvent.click(within(error).getByRole('button'));
   expect(await within(modal).findByRole('cell', { name: '2' })).toBeVisible();
 });
+
+test('処理を変更すると旧主体を消し、新しい処理の候補だけを使う', async () => {
+  tasks.list.mockResolvedValue({ rows: [], nextCursor: null });
+  tasks.candidates.mockImplementation(async (_page, taskName) => ({
+    rows: [
+      {
+        id: taskName === 'POINT_EXPIRY' ? 20 : 10,
+        display_name: taskName === 'POINT_EXPIRY' ? '失効サービス' : '確認サービス',
+      },
+    ],
+    page: 0,
+    pageCount: 1,
+    total: 1,
+  }));
+  render(<TaskExecutionsPage />);
+  fireEvent.click(await screen.findByRole('combobox', { name: '実行主体' }));
+  const original = await screen.findByRole('option', { name: '確認サービス' });
+  fireEvent.pointerDown(original);
+  fireEvent.click(original);
+  fireEvent.click(screen.getByRole('combobox', { name: '処理' }));
+  const expiry = await screen.findByRole('option', { name: '期限切れポイントの記帳' });
+  fireEvent.pointerDown(expiry);
+  fireEvent.click(expiry);
+  await waitFor(() => expect(tasks.candidates).toHaveBeenLastCalledWith(0, 'POINT_EXPIRY'));
+  expect(await screen.findByRole('combobox', { name: '実行主体' })).not.toHaveTextContent(
+    '確認サービス'
+  );
+  fireEvent.change(screen.getByLabelText('対象日'), { target: { value: '2026-10-07' } });
+  fireEvent.click(screen.getByRole('button', { name: '期限切れポイントを記帳' }));
+  expect(await screen.findByText('実行主体を選択してください')).toBeVisible();
+  expect(tasks.create).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('combobox', { name: '実行主体' }));
+  const service = await screen.findByRole('option', { name: '失効サービス' });
+  fireEvent.pointerDown(service);
+  fireEvent.click(service);
+  tasks.create.mockRejectedValueOnce(new Error('network'));
+  fireEvent.click(screen.getByRole('button', { name: '期限切れポイントを記帳' }));
+  await waitFor(() =>
+    expect(tasks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ task_name: 'POINT_EXPIRY', service_user_id: 20 })
+    )
+  );
+});

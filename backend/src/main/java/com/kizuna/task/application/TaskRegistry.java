@@ -20,9 +20,15 @@ public class TaskRegistry {
     if (this.handlers.size() > 32) throw new IllegalStateException("登録処理数の上限を超えています");
   }
 
+  public TaskHandler requireName(String name) {
+    var handler = handlers.get(name);
+    if (handler == null) throw new ServiceException("登録済み処理を指定してください");
+    return handler;
+  }
+
   public TaskHandler require(TaskCommand command) {
-    var handler = handlers.get(command.taskName());
-    if (handler == null || handler.platformWide() != (command.storeId() == null)) {
+    var handler = requireName(command.taskName());
+    if (handler.platformWide() != (command.storeId() == null)) {
       throw new ServiceException("登録済み処理とその対象範囲を指定してください");
     }
     return handler;

@@ -32,6 +32,9 @@ public enum PermissionCode {
   /** サービス ID による実行基盤の検証処理。業務処理固有の権限を代替しない。 */
   TASK_EXECUTE(Console.PLATFORM),
 
+  /** 全会員の期限切れポイントの記帳。既定授与はしない。 */
+  POINT_EXPIRE(Console.PLATFORM),
+
   /** 全店舗の変更不可な業務監査の閲覧。既定授与はしない。 */
   AUDIT_VIEW(Console.PLATFORM),
 
