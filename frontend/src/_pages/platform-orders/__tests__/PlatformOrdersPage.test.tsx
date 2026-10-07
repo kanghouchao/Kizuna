@@ -66,3 +66,15 @@ it('権限のない利用者には一覧を取得せず拒否を示す', async (
   expect(await screen.findByRole('alert')).toHaveTextContent('受注を閲覧する権限がありません');
   expect(orderApi.platformList).not.toHaveBeenCalled();
 });
+
+it('帳票閲覧権限のない注文参照者には帳票入口を表示しない', async () => {
+  jest
+    .mocked(hasPermission)
+    .mockImplementation((_claims, permission) => permission === 'ORDER_SET_MANAGE');
+  jest
+    .mocked(orderApi.platformList)
+    .mockResolvedValue({ rows: [], total: 0, page: 0, pageCount: 0 });
+  render(<PlatformOrdersPage />);
+  await screen.findByText('受注はありません。');
+  expect(screen.queryByRole('link', { name: '運営金額集計' })).not.toBeInTheDocument();
+});

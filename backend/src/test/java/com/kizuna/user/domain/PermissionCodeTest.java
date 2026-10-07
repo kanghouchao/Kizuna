@@ -36,10 +36,14 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("SHARED コンソールの権限は跨店参照系の 2 個")
+  @DisplayName("SHARED コンソールの権限は跨店参照系の 4 個")
   void sharedPermissions() {
     assertThat(byConsole(PermissionCode.Console.SHARED))
-        .containsExactlyInAnyOrder(PermissionCode.STORE_VIEW, PermissionCode.ORDER_SET_MANAGE);
+        .containsExactlyInAnyOrder(
+            PermissionCode.STORE_VIEW,
+            PermissionCode.ORDER_SET_MANAGE,
+            PermissionCode.OPERATIONAL_REPORT_VIEW,
+            PermissionCode.OPERATIONAL_REPORT_EXPORT);
   }
 
   @Test
@@ -81,9 +85,9 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("権限目録は 26 個で全てコンソール分類を持つ")
+  @DisplayName("権限目録は 28 個で全てコンソール分類を持つ")
   void catalogIsComplete() {
-    assertThat(PermissionCode.values()).hasSize(26);
+    assertThat(PermissionCode.values()).hasSize(28);
     assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getConsole))
         .doesNotContainNull();
   }
