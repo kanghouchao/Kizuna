@@ -12,6 +12,19 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
 
+  private OperationalReport operationalReport = new OperationalReport();
+
+  @Getter
+  @Setter
+  public static class OperationalReport {
+    private int maxOrders = 20_000;
+    private int maxStores = 1_000;
+    private int timeoutSeconds = 25;
+    private int readTimeoutSeconds = 10;
+    private long maxCharacters = 4_000_000;
+    private long maxBytes = 16L * 1024 * 1024;
+  }
+
   private MonthlyPdf monthlyPdf = new MonthlyPdf();
 
   @Getter

@@ -20,6 +20,12 @@ import lombok.Getter;
 @Getter
 public enum PermissionCode {
 
+  /** 授権範囲内の運営集計の閲覧。既定授与はしない。 */
+  OPERATIONAL_REPORT_VIEW(Console.SHARED),
+
+  /** 授権範囲内の運営集計の出力。閲覧権限と併用し、既定授与はしない。 */
+  OPERATIONAL_REPORT_EXPORT(Console.SHARED),
+
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 

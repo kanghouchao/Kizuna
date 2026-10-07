@@ -32,6 +32,8 @@ export default function PlatformOrdersPage() {
 
 function OrderList() {
   const list = useListPage(orderApi.platformList);
+  const [canReport, setCanReport] = useState(false);
+  useEffect(() => setCanReport(hasPermission(readTokenClaims(), 'OPERATIONAL_REPORT_VIEW')), []);
   const [details, setDetails] = useState<PlatformOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -41,9 +43,19 @@ function OrderList() {
       <ListPage
         title="受注照会"
         actions={
-          <Button variant="outline" render={<Link href="/platform/orders/monthly-remunerations" />}>
-            月次給与明細
-          </Button>
+          <>
+            {canReport && (
+              <Button variant="outline" render={<Link href="/platform/operational-reports" />}>
+                運営金額集計
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              render={<Link href="/platform/orders/monthly-remunerations" />}
+            >
+              月次給与明細
+            </Button>
+          </>
         }
         description="授権された店舗の受注と訂正履歴を閲覧できます。報酬は支払済み額ではありません。"
         state={list}

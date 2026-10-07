@@ -641,3 +641,23 @@ it('受注確定の退出中は入力を保ち、同じ申請を開き直すと�
   fireEvent.click(screen.getByRole('button', { name: '確定' }));
   await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
 });
+
+describe('運営帳票の入口', () => {
+  it.each([['ORDER_MANAGE'], ['OPERATIONAL_REPORT_VIEW']])(
+    '片方の権限だけでは入口を表示しない: %s',
+    async permission => {
+      mockedReadClaims.mockReturnValue(claimsWith([permission]));
+      render(<OrderListPage />);
+      await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
+      expect(screen.queryByRole('link', { name: '運営金額集計' })).not.toBeInTheDocument();
+    }
+  );
+  it('両方の権限で現在店舗の入口を表示する', async () => {
+    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW']));
+    render(<OrderListPage />);
+    expect(await screen.findByRole('link', { name: '運営金額集計' })).toHaveAttribute(
+      'href',
+      '/store/1/operational-reports'
+    );
+  });
+});

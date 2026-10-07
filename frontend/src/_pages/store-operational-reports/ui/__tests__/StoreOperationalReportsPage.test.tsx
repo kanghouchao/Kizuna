@@ -1,0 +1,96 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fetchReport, type OperationalReport } from '@/entities/operational-report';
+import { readTokenClaims } from '@/shared/lib';
+import StoreOperationalReportsPage from '../StoreOperationalReportsPage';
+
+jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1' }) }));
+jest.mock('@/entities/operational-report', () => ({
+  ...jest.requireActual('@/entities/operational-report'),
+  fetchReport: jest.fn(),
+}));
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
+}));
+jest.mock('@/features/operational-report-export', () => ({
+  ReportExport: () => <button>CSV 全件出力</button>,
+}));
+const fetch = jest.mocked(fetchReport);
+function report(total: number): OperationalReport {
+  return {
+    from: '2026-09-01',
+    to: '2026-09-30',
+    group_by: 'day',
+    generated_at: '2026-10-01T12:00:00+09:00',
+    basis: 'completed-orders-current-v1',
+    stores: [{ store_id: 1, store_name: '日本語店舗' }],
+    total_order_count: 1,
+    invalidated_order_count: 0,
+    total_fee: total,
+    total_remuneration: 7000,
+    rows: {
+      content: [],
+      total_elements: 0,
+      total_pages: 0,
+      size: 20,
+      number: 0,
+      first: true,
+      last: true,
+      number_of_elements: 0,
+      empty: true,
+    },
+  } as OperationalReport;
+}
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.mocked(readTokenClaims).mockReturnValue({
+    authorities: ['PERM_ORDER_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
+    userType: 'STAFF',
+    storeBridge: false,
+  });
+});
+test('view permission does not show export and failures clear totals before retry', async () => {
+  fetch
+    .mockResolvedValueOnce(report(12000))
+    .mockRejectedValueOnce(new Error('failed'))
+    .mockResolvedValueOnce(report(16000));
+  render(<StoreOperationalReportsPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '照会' }));
+  expect(await screen.findByLabelText('請求額（円）')).toHaveTextContent('12,000');
+  expect(screen.queryByRole('button', { name: 'CSV 全件出力' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('集計を取得できませんでした');
+  expect(screen.queryByLabelText('請求額（円）')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+  expect(await screen.findByLabelText('請求額（円）')).toHaveTextContent('16,000');
+});
+test('late response for previous criteria is discarded', async () => {
+  let previous!: (value: OperationalReport) => void;
+  fetch
+    .mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          previous = resolve;
+        })
+    )
+    .mockResolvedValueOnce(report(16000));
+  render(<StoreOperationalReportsPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '照会' }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  fireEvent.change(screen.getByLabelText('開始営業日'), { target: { value: '2026-09-01' } });
+  fireEvent.change(screen.getByLabelText('終了営業日'), { target: { value: '2026-09-30' } });
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  expect(await screen.findByLabelText('請求額（円）')).toHaveTextContent('16,000');
+  await act(async () => previous(report(999)));
+  expect(screen.getByLabelText('請求額（円）')).toHaveTextContent('16,000');
+});
+test('invalid period is shown next to fields without sending request', async () => {
+  render(<StoreOperationalReportsPage />);
+  fireEvent.change(await screen.findByLabelText('開始営業日'), { target: { value: '2026-02-30' } });
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  expect(
+    (await screen.findAllByText('正しい営業日を開始から終了の順で366日以内に入力してください'))
+      .length
+  ).toBeGreaterThan(0);
+  expect(fetch).not.toHaveBeenCalled();
+});
