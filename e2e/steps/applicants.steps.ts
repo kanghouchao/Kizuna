@@ -156,6 +156,9 @@ Then(
         localStorage.setItem("theme", value);
         document.documentElement.classList.toggle("dark", value === "dark");
       }, theme);
+      await page.goto(
+        `${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`,
+      );
       await page.setViewportSize({ width: 1280, height: 960 });
       await expect(
         page.getByRole("heading", { name: applicantName, exact: true }),
@@ -195,6 +198,11 @@ Then(
     await expect(page.getByLabel("氏名", { exact: true })).toBeVisible();
     await page.getByLabel("氏名", { exact: true }).scrollIntoViewIfNeeded();
     await expect(page.getByLabel("氏名", { exact: true })).toBeInViewport();
+    await page.getByRole("main").evaluate((element) => {
+      const shell = element.closest<HTMLElement>(".overflow-x-auto");
+      if (shell) shell.scrollLeft = 0;
+    });
+    await expect(page.getByText("氏名", { exact: true })).toBeInViewport();
     await page.screenshot({
       path: $testInfo.outputPath("applicant-narrow.png"),
       fullPage: true,
