@@ -70,7 +70,8 @@ public class CommonExceptionHandler {
    */
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<Map<String, Object>> handle(MethodArgumentNotValidException ex) {
-    log.warn(ex.getMessage());
+    // フレームワークの例外文には連絡先・面接内容などの入力値が含まれるため、固定分類だけを記録する。
+    log.warn("入力検証エラー");
     Map<String, Object> body = new HashMap<>();
     body.put(
         "error", Objects.requireNonNull(ex.getBindingResult().getFieldError()).getDefaultMessage());
@@ -106,7 +107,7 @@ public class CommonExceptionHandler {
    */
   @ExceptionHandler(MissingServletRequestParameterException.class)
   public ResponseEntity<Map<String, Object>> handle(MissingServletRequestParameterException ex) {
-    log.warn(ex.getMessage());
+    log.warn("必須パラメータ不足");
     Map<String, Object> body = new HashMap<>();
     body.put("error", "必須パラメータが不足しています");
     Map<String, String> details = new HashMap<>();
@@ -118,7 +119,7 @@ public class CommonExceptionHandler {
   /** パスやクエリの値が宣言された型に変換できない（{@code /roles/abc} 等）ことを、クライアント誤りとして 400 へ映射する。 */
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
   public ResponseEntity<Map<String, Object>> handle(MethodArgumentTypeMismatchException ex) {
-    log.warn(ex.getMessage());
+    log.warn("パラメータ型変換エラー");
     Map<String, Object> body = new HashMap<>();
     body.put("error", "リクエストの形式が正しくありません");
     Map<String, String> details = new HashMap<>();
@@ -135,7 +136,7 @@ public class CommonExceptionHandler {
    */
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<Map<String, Object>> handle(HttpMessageNotReadableException ex) {
-    log.warn(ex.getMessage());
+    log.warn("リクエスト本文解析エラー");
     Map<String, Object> body = new HashMap<>();
     body.put("error", "リクエストの形式が正しくありません");
     String field = wireFieldOf(ex);
