@@ -288,3 +288,13 @@ databaseChangeLog:
               - column: { name: icon, value: MegaphoneIcon }
               - column: { name: permission, value: NOTIFICATION_VIEW }
               - column: { name: sort_order, valueNumeric: 2 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-reviews }
+              - column: { name: parent_id, value: store-crm }
+              - column: { name: label, value: 口コミ管理 }
+              - column: { name: path, value: /store/reviews }
+              - column: { name: icon, value: ClipboardListIcon }
+              - column: { name: permission, value: REVIEW_VIEW }
+              - column: { name: sort_order, valueNumeric: 3 }
