@@ -14,6 +14,8 @@
 
 ## 判定と性能境界
 
+署名検証の後、期限・issuer・token 単位 blacklist・資格情報の版の順に照合し、最初の拒否で後続の検証を止める。`DelegatingOAuth2TokenValidator` は `failOnError=true` とし、既に期限切れ・issuer 不一致・ログアウト済みと判定された token では資格情報の DB 照会を実行しない。
+
 DB が正本、Redis は確定版の単調キャッシュとする。`claim < cache` は旧さが確定しているため DB を読まず拒否する。それ以外は既存の `findCredentialVersionByEmail` で DB のスカラー値を読み、claim と相等比較する。DB に主体がなければ拒否する。
 
 キャッシュ miss・遅延時は既存 Lua で現在版を単調に反映する。一致時は Redis を書き直さない。反映・照合の例外は従来どおり伝播させ、障害中に通すフォールバックは追加しない。
@@ -26,7 +28,7 @@ DB が正本、Redis は確定版の単調キャッシュとする。`claim < ca
 
 ## 検証
 
-- 単体: 一致、miss、古い cache、新しい cache、DB からの主体消失、DB / Redis 例外。
+- 単体: 一致、miss、古い cache、新しい cache、DB からの主体消失、DB / Redis 例外。実署名・解読を通し、期限・issuer・blacklist の拒否後は資格情報照合に到達せず、有効な token は照合を省略しないことも固定する。
 - 実 PostgreSQL / Redis: `CredentialOperations` と実トランザクション、実 afterCommit listener、実 Lua、標準 JwtDecoder、標準 Bearer filter、実 `/platform/me` controller / service を接続する。
 - 専用 Redis の EVAL / EVALSHA を ACL で一時拒否し、反映が失敗しても DB は更新済み、cache は旧版という条件を確認する。ACL を回復してから旧 JWT の `/platform/me` が 401 となることを検証する。
 - 合成 STAFF / CAST / MEMBER、停止・再開、パスワード変更、rollback、古い版の遅着通知を検証する。token・口令は出力しない。

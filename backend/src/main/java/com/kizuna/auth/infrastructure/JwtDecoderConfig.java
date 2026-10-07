@@ -27,7 +27,7 @@ public class JwtDecoderConfig {
     SecretKey secretKey = HmacSecretKeyFactory.create(appProperties);
     NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withSecretKey(secretKey).macAlgorithm(MacAlgorithm.HS256).build();
-    decoder.setJwtValidator(
+    var validators =
         new DelegatingOAuth2TokenValidator<>(
             // 既定の 60 秒スキューを明示的に 0 へ。ブラックリスト TTL は exp までのため、
             // スキューがあるとその秒数ぶん「失効済みだが exp 未到来」の token が fail-open する窓ができる。
@@ -36,7 +36,9 @@ public class JwtDecoderConfig {
             new JwtIssuerValidator(PlatformJwtIssuer.ISSUER_PLATFORM),
             tokenBlacklistValidator,
             // 受理候補の版を DB で照合する検証は、連鎖の最後に置く。
-            credentialVersionValidator));
+            credentialVersionValidator);
+    validators.setFailOnError(true);
+    decoder.setJwtValidator(validators);
     return decoder;
   }
 }
