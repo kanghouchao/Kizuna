@@ -170,6 +170,8 @@ When(
       const initial = await getOrder(request, token, STORE1_ID, created.id);
       const update = {
         expected_version: initial.version,
+        cast_id: castId,
+        receptionist_id: receptionistId,
         pax: 3,
         remarks: privateText + "-変更",
       };
@@ -346,6 +348,10 @@ Then(
       if (item.action === "ORDER_UPDATED") {
         expect(detail.before_values.pax).toBe("2");
         expect(detail.after_values.pax).toBe("3");
+        expect(detail.after_values.cast_enrollment_id).toBe(castId);
+        expect(detail.after_values.receptionist_id).toBe(
+          String(receptionistId),
+        );
         expect(detail.after_values.redacted_fields_changed).toContain(
           "remarks",
         );
