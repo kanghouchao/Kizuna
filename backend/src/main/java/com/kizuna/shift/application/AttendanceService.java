@@ -21,6 +21,7 @@ import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -61,6 +62,7 @@ public class AttendanceService {
   private final CastService castService;
   private final PlatformUserRepository platformUserRepository;
   private final BusinessDateService businessDateService;
+  private final BusinessAudit audit;
 
   /** （キャスト・店舗・営業日）での照会。店舗は文脈から、取消済みは常に除外される。 */
   @StoreScoped
@@ -94,7 +96,18 @@ public class AttendanceService {
             request.getActualEndAt(),
             request.getWaitingPlace(),
             actorId);
-    return attendanceMapper.toResponse(saveWithinUniqueness(attendance));
+    saveWithinUniqueness(attendance);
+    audit.recordById(
+        actorId,
+        attendance.getStoreId(),
+        "ATTENDANCE_RECORDED",
+        "ATTENDANCE",
+        attendance.getId(),
+        null,
+        null,
+        Map.of(),
+        ShiftAuditSnapshot.of(attendance).after(null));
+    return attendanceMapper.toResponse(attendance);
   }
 
   /** 記入の誤りを訂正し、同一トランザクションで編集前の姿を訂正履歴へ残す。 */
@@ -106,15 +119,28 @@ public class AttendanceService {
     Attendance attendance = findAttendance(id);
     requireInheritedBusinessDate(attendance, request.getBusinessDate());
 
-    correctionRepository.save(
-        AttendanceCorrection.snapshotOf(attendance, actorId, OffsetDateTime.now()));
+    var before = ShiftAuditSnapshot.of(attendance);
+    var correction =
+        correctionRepository.save(
+            AttendanceCorrection.snapshotOf(attendance, actorId, OffsetDateTime.now()));
     attendance.correct(
         request.getBusinessDate(),
         request.getActualStartAt(),
         request.getActualEndAt(),
         request.getWaitingPlace(),
         actorId);
-    return attendanceMapper.toResponse(saveWithinUniqueness(attendance));
+    saveWithinUniqueness(attendance);
+    audit.recordById(
+        actorId,
+        attendance.getStoreId(),
+        "ATTENDANCE_CORRECTED",
+        "ATTENDANCE",
+        attendance.getId(),
+        "ATTENDANCE_CORRECTION",
+        correction.getId(),
+        before.values(),
+        ShiftAuditSnapshot.of(attendance).after(before));
+    return attendanceMapper.toResponse(attendance);
   }
 
   /** 誤建の実績に取消標記を付ける。行は残り、導出・照会から外れるだけである。 */
@@ -123,8 +149,20 @@ public class AttendanceService {
   public void cancel(String id, AttendanceCancellationRequest request, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
     Attendance attendance = findAttendance(id);
+    var before = ShiftAuditSnapshot.of(attendance);
     attendance.cancel(request.getReason(), actorId, OffsetDateTime.now());
     attendanceRepository.save(attendance);
+    attendanceRepository.flush();
+    audit.recordById(
+        actorId,
+        attendance.getStoreId(),
+        "ATTENDANCE_CANCELLED",
+        "ATTENDANCE",
+        attendance.getId(),
+        null,
+        null,
+        before.values(),
+        ShiftAuditSnapshot.of(attendance).after(before));
   }
 
   /** 帰属営業日を決める。優先順があり、シフトに紐づく実績はシフトの勤務日を継承する — 実開始が日付変更時刻を跨いでも 予実は同じ営業日に居る。飛び込みだけが実開始時刻から判定される。 */

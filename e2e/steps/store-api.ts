@@ -237,7 +237,7 @@ export interface CreateShiftParams {
   status: string;
 }
 
-/** シフトを作成し id を返す（POST /api/store/shifts, hasAuthority('CAST_MANAGE')）。 */
+/** シフトを作成し id を返す（POST /api/store/shifts, hasAuthority('PERM_SHIFT_MANAGE')）。 */
 export async function createShift(
   request: APIRequestContext,
   token: string,
@@ -260,7 +260,7 @@ export async function createShift(
   return body.id as string;
 }
 
-/** シフトを削除する（DELETE /api/store/shifts/{id}, hasAuthority('CAST_MANAGE')）。 */
+/** シフトを削除する（DELETE /api/store/shifts/{id}, hasAuthority('PERM_SHIFT_MANAGE')）。 */
 export async function deleteShift(
   request: APIRequestContext,
   token: string,
@@ -330,15 +330,14 @@ export async function approveShiftRequest(
   request: APIRequestContext,
   token: string,
   id: string,
-): Promise<void> {
+  published?: boolean,
+): Promise<{ shift_id: string }> {
   const res = await request.post(`/api/store/shift-requests/${id}/approval`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    ...(published === undefined ? {} : { data: { published } }),
   });
-  if (!res.ok()) {
-    throw new Error(
-      `approve shift request failed: ${res.status()} ${await res.text()}`,
-    );
-  }
+  expect(res.status(), await res.text()).toBe(200);
+  return res.json();
 }
 
 /** 会員を自助登録し会員コードを返す（POST /api/platform/members, 匿名・CSRF 免除）。 */
@@ -1052,4 +1051,135 @@ export async function mergeCustomers(
     },
   );
   expect(response.status()).toBe(200);
+}
+
+export async function submitCastShiftRequest(
+  request: APIRequestContext,
+  token: string,
+  data: {
+    store_id: number;
+    work_date: string;
+    start_time: string;
+    end_time: string;
+    note?: string;
+  },
+): Promise<{ id: string }> {
+  const res = await request.post("/api/platform/me/shift-requests", {
+    headers: { Authorization: `Bearer ${token}` },
+    data,
+  });
+  expect(res.status(), await res.text()).toBe(201);
+  return res.json();
+}
+
+export async function submitCastShiftChangeRequest(
+  request: APIRequestContext,
+  token: string,
+  data: {
+    shift_id: string;
+    work_date: string;
+    start_time: string;
+    end_time: string;
+    note?: string;
+  },
+): Promise<{ id: string }> {
+  const res = await request.post("/api/platform/me/shift-requests/changes", {
+    headers: { Authorization: `Bearer ${token}` },
+    data,
+  });
+  expect(res.status(), await res.text()).toBe(201);
+  return res.json();
+}
+
+export async function declineShiftRequest(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+): Promise<void> {
+  const res = await request.post(`/api/store/shift-requests/${id}/rejection`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
+export async function updateShift(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  data: {
+    cast_id?: string;
+    work_date?: string;
+    start_time?: string;
+    end_time?: string;
+    status?: string;
+  },
+): Promise<void> {
+  const res = await request.put(`/api/store/shifts/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data,
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
+export async function changeShiftPublication(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  published: boolean,
+): Promise<void> {
+  const res = await request.put(`/api/store/shifts/${id}/publication`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { published },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
+export async function recordAttendance(
+  request: APIRequestContext,
+  token: string,
+  data: {
+    cast_id: string;
+    shift_id?: string;
+    actual_start_at: string;
+    actual_end_at?: string | null;
+    waiting_place?: string | null;
+  },
+): Promise<{ id: string }> {
+  const res = await request.post("/api/store/attendances", {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data,
+  });
+  expect(res.status(), await res.text()).toBe(201);
+  return res.json();
+}
+
+export async function correctAttendance(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  data: {
+    business_date: string;
+    actual_start_at: string;
+    actual_end_at?: string | null;
+    waiting_place?: string | null;
+  },
+): Promise<void> {
+  const res = await request.put(`/api/store/attendances/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data,
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
+export async function cancelAttendance(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  reason: string,
+): Promise<void> {
+  const res = await request.post(`/api/store/attendances/${id}/cancellation`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { reason },
+  });
+  expect(res.status(), await res.text()).toBe(204);
 }
