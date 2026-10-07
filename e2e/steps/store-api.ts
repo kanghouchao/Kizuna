@@ -1,4 +1,9 @@
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import {
+  expect,
+  type APIRequestContext,
+  type APIResponse,
+  type Page,
+} from "@playwright/test";
 import { PLATFORM_URL } from "../base-url";
 
 // store1 は seed 済み（store_id=1）。store API は Host に加えて
@@ -726,6 +731,33 @@ export async function createCourse(
   return (await response.json()).id;
 }
 
+export async function submitConfirmedStoreRequest(
+  request: APIRequestContext,
+  token: string,
+  previewPath: string,
+  path: string,
+  data: object,
+  method: "post" | "put" = "post",
+  storeId: string = STORE1_ID,
+): Promise<APIResponse> {
+  const headers = {
+    ...STORE_HEADERS,
+    "X-Store-ID": storeId,
+    Authorization: `Bearer ${token}`,
+  };
+  const preview = await request.post(previewPath, { headers, data });
+  expect(preview.status(), await preview.text()).toBe(200);
+  const response = await request[method](path, {
+    headers,
+    data: {
+      ...data,
+      confirmation_token: (await preview.json()).confirmation_token,
+    },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  return response;
+}
+
 export async function createAgreedOrder(
   request: APIRequestContext,
   token: string,
@@ -734,11 +766,6 @@ export async function createAgreedOrder(
   customerName: string,
   options: { storeId?: string; businessDate?: string } = {},
 ): Promise<string> {
-  const headers = {
-    ...STORE_HEADERS,
-    "X-Store-ID": options.storeId ?? STORE1_ID,
-    Authorization: `Bearer ${token}`,
-  };
   const data = {
     cast_id: castId,
     course_id: courseId,
@@ -750,18 +777,15 @@ export async function createAgreedOrder(
         timeZone: "Asia/Tokyo",
       }).format(new Date()),
   };
-  const preview = await request.post("/api/store/orders/preview", {
-    headers,
+  const result = await submitConfirmedStoreRequest(
+    request,
+    token,
+    "/api/store/orders/preview",
+    "/api/store/orders",
     data,
-  });
-  expect(preview.ok()).toBeTruthy();
-  const result = await request.post("/api/store/orders", {
-    headers,
-    data: {
-      ...data,
-      confirmation_token: (await preview.json()).confirmation_token,
-    },
-  });
+    "post",
+    options.storeId,
+  );
   expect(result.status()).toBe(201);
   return (await result.json()).id;
 }
@@ -772,26 +796,17 @@ export async function completeAgreedOrder(
   id: string,
   storeId: string = STORE1_ID,
 ): Promise<void> {
-  const headers = {
-    ...STORE_HEADERS,
-    "X-Store-ID": storeId,
-    Authorization: `Bearer ${token}`,
-  };
   const order = await getOrder(request, token, storeId, id);
   const data = { expected_version: order.version, fee_lines: [] };
-  const preview = await request.post(
+  await submitConfirmedStoreRequest(
+    request,
+    token,
     `/api/store/orders/${id}/completion-preview`,
-    { headers, data },
+    `/api/store/orders/${id}/completion`,
+    data,
+    "post",
+    storeId,
   );
-  expect(preview.ok()).toBeTruthy();
-  const result = await request.post(`/api/store/orders/${id}/completion`, {
-    headers,
-    data: {
-      ...data,
-      confirmation_token: (await preview.json()).confirmation_token,
-    },
-  });
-  expect(result.ok()).toBeTruthy();
 }
 
 export async function invalidateOrder(
