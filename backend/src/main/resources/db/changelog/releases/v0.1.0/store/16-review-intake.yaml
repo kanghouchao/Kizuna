@@ -1,0 +1,496 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-016-review-intake
+      author: kanghouchao
+      changes:
+        - createTable:
+            tableName: t_reviews
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_reviews
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: body
+                  type: VARCHAR(5000)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: display_name
+                  type: VARCHAR(60)
+              - column:
+                  name: received_via
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: received_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: origin_order_id
+                  type: VARCHAR(32)
+              - column:
+                  name: origin_checked_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: origin_order_version
+                  type: BIGINT
+              - column:
+                  name: recorded_by
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recorder_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: permission_status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: supersedes_id
+                  type: VARCHAR(32)
+              - column:
+                  name: superseded_by_id
+                  type: VARCHAR(32)
+        - addUniqueConstraint:
+            tableName: t_reviews
+            columnNames: id, store_id
+            constraintName: uq_t_reviews_id_store
+        - addForeignKeyConstraint:
+            baseTableName: t_reviews
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_reviews_store
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_reviews
+            baseColumnNames: recorded_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_reviews_actor
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_reviews
+            baseColumnNames: origin_order_id, store_id
+            referencedTableName: t_orders
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_reviews_order
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_reviews
+            baseColumnNames: supersedes_id, store_id
+            referencedTableName: t_reviews
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_reviews_supersedes
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_reviews
+            baseColumnNames: superseded_by_id, store_id
+            referencedTableName: t_reviews
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_reviews_superseded
+            onDelete: NO ACTION
+        - createTable:
+            tableName: t_review_operations
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_review_operations
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: dedupe_key
+                  type: VARCHAR(120)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fingerprint
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: committed_version
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: t_review_operations
+            columnNames: store_id, actor_id, dedupe_key
+            constraintName: uq_t_review_operations_key
+        - addForeignKeyConstraint:
+            baseTableName: t_review_operations
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_review_operations_store
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_review_operations
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_review_operations_actor
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_review_operations
+            baseColumnNames: review_id, store_id
+            referencedTableName: t_reviews
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_review_operations_review
+            onDelete: NO ACTION
+        - createTable:
+            tableName: t_review_history
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_review_history
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: before_version
+                  type: BIGINT
+              - column:
+                  name: after_version
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: before_status
+                  type: VARCHAR(20)
+              - column:
+                  name: after_status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: before_permission_status
+                  type: VARCHAR(20)
+              - column:
+                  name: after_permission_status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+              - column:
+                  name: related_review_id
+                  type: VARCHAR(32)
+              - column:
+                  name: permission_record_id
+                  type: VARCHAR(32)
+        - addForeignKeyConstraint:
+            baseTableName: t_review_history
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_review_history_store
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_review_history
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_review_history_actor
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_review_history
+            baseColumnNames: review_id, store_id
+            referencedTableName: t_reviews
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_review_history_review
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_review_history
+            baseColumnNames: related_review_id, store_id
+            referencedTableName: t_reviews
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_review_history_related
+            onDelete: NO ACTION
+        - createIndex:
+            tableName: t_review_history
+            indexName: idx_t_review_history_cursor
+            columns:
+              - column: {name: store_id}
+              - column: {name: review_id}
+              - column: {name: id, descending: true}
+        - createTable:
+            tableName: t_review_permissions
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_review_permissions
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: review_id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: basis_type
+                  type: VARCHAR(24)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: granted_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: evidence_note
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recorded_by
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: recorder_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: withdrawal_received_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: revocation_reason
+                  type: VARCHAR(500)
+              - column:
+                  name: revoked_by
+                  type: BIGINT
+              - column:
+                  name: revoker_name
+                  type: VARCHAR(255)
+              - column:
+                  name: revoked_at
+                  type: TIMESTAMP WITH TIME ZONE
+        - addUniqueConstraint:
+            tableName: t_review_permissions
+            columnNames: review_id
+            constraintName: uq_t_review_permissions_review
+        - addUniqueConstraint:
+            tableName: t_review_permissions
+            columnNames: id, store_id
+            constraintName: uq_t_review_permissions_id_store
+        - addForeignKeyConstraint:
+            baseTableName: t_review_permissions
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_review_permissions_store
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_review_permissions
+            baseColumnNames: recorded_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_review_permissions_actor
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_review_permissions
+            baseColumnNames: revoked_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_review_permissions_revoker
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_review_permissions
+            baseColumnNames: review_id, store_id
+            referencedTableName: t_reviews
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_review_permissions_review
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_review_history
+            baseColumnNames: permission_record_id, store_id
+            referencedTableName: t_review_permissions
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_review_history_permission
+            onDelete: NO ACTION
+        - addUniqueConstraint:
+            tableName: t_reviews
+            columnNames: supersedes_id
+            constraintName: uq_t_reviews_supersedes
+        - addUniqueConstraint:
+            tableName: t_reviews
+            columnNames: superseded_by_id
+            constraintName: uq_t_reviews_superseded
+        - createIndex:
+            tableName: t_reviews
+            indexName: idx_t_reviews_received
+            columns:
+              - column: {name: store_id}
+              - column: {name: received_at}
+              - column: {name: id}
+        - createIndex:
+            tableName: t_reviews
+            indexName: idx_t_reviews_created
+            columns:
+              - column: {name: store_id}
+              - column: {name: created_at}
+              - column: {name: id}
+        - sql:
+            sql: |
+              ALTER TABLE t_reviews ADD CONSTRAINT ck_t_reviews_states CHECK (
+                status IN ('PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN')
+                AND permission_status IN ('NOT_GRANTED', 'GRANTED', 'REVOKED'));
+              ALTER TABLE t_reviews ADD CONSTRAINT ck_t_reviews_origin CHECK (
+                (origin_order_id IS NULL AND origin_checked_at IS NULL AND origin_order_version IS NULL)
+                OR (origin_order_id IS NOT NULL AND origin_checked_at IS NOT NULL AND origin_order_version IS NOT NULL));
+              ALTER TABLE t_reviews ADD CONSTRAINT ck_t_reviews_correction CHECK (
+                (supersedes_id IS NULL OR supersedes_id <> id)
+                AND (superseded_by_id IS NULL OR (superseded_by_id <> id AND status = 'WITHDRAWN')));
+              ALTER TABLE t_review_permissions ADD CONSTRAINT ck_t_review_permissions_revocation CHECK (
+                (revoked_at IS NULL AND revoked_by IS NULL AND revoker_name IS NULL AND revocation_reason IS NULL AND withdrawal_received_at IS NULL)
+                OR (revoked_at IS NOT NULL AND revoked_by IS NOT NULL AND revoker_name IS NOT NULL AND revocation_reason IS NOT NULL AND withdrawal_received_at IS NOT NULL));

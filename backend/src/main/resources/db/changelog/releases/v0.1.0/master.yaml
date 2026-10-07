@@ -80,6 +80,9 @@ databaseChangeLog:
       file: store/10-notification-delivery.yaml
       relativeToChangelogFile: true
   - include:
+      file: store/16-review-intake.yaml
+      relativeToChangelogFile: true
+  - include:
       file: seed/01-roles.yaml
       relativeToChangelogFile: true
   - include:
