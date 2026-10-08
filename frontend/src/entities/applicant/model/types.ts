@@ -91,3 +91,25 @@ export const applicantStatusClasses: Record<ApplicantStatus, string> = {
   REJECTED: 'border-transparent bg-destructive/10 text-destructive-strong',
   WITHDRAWN: 'border-transparent bg-muted text-foreground',
 };
+
+export interface ApplicantAttachment {
+  id: string;
+  media_type: 'image/jpeg' | 'image/png';
+  size_bytes: number;
+  created_at: string;
+}
+export interface ApplicantAttachmentUpload extends ApplicantAttachment {
+  idempotency_key: string;
+  status: 'PENDING' | 'RECOVERY_REQUIRED';
+  failure_code: string | null;
+}
+export interface ApplicantAttachmentPolicy {
+  configured: boolean;
+  allowed_media_types: string[];
+  max_file_bytes: number;
+  max_image_pixels: number;
+  max_image_dimension: number;
+  max_decoded_bytes: number;
+  max_applicant_files: number;
+  max_applicant_bytes: number;
+}

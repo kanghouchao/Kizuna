@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.api.dto.StoreCreateDTO;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -288,6 +290,21 @@ class StoreRegistryServiceTest {
     assertThatThrownBy(() -> storeRegistryService.delete("1"))
         .isInstanceOf(ServiceException.class)
         .hasMessage(message);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"fk_t_applicant_uploads_store", "fk_t_applicant_uploads_applicant_store"})
+  void delete_storeWithPrivateAttachmentOwnership_isConflict(String constraint) {
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    doThrow(
+            new DataIntegrityViolationException(
+                "削除拒否",
+                new ConstraintViolationException("違反", new SQLException("外部キー違反"), constraint)))
+        .when(storeRepository)
+        .flush();
+    assertThatThrownBy(() -> storeRegistryService.delete("1"))
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("非公開添付の記録が存在する店舗は削除できません");
   }
 
   @Test

@@ -25,6 +25,10 @@ public enum DbConstraint {
   FK_T_CUSTOMER_CONTACT_HISTORY_ORIGIN("fk_t_customer_contact_history_origin"),
   UQ_T_CAST_ENROLLMENTS_CURRENT("uq_t_cast_enrollments_current"),
 
+  /** 私有添付の所有記録は、保持方針が未設定のまま親削除へ連鎖させない。 */
+  FK_T_APPLICANT_UPLOADS_STORE("fk_t_applicant_uploads_store"),
+  FK_T_APPLICANT_UPLOADS_APPLICANT_STORE("fk_t_applicant_uploads_applicant_store"),
+
   /** t_users.email の一意制約。 */
   UQ_T_USERS_EMAIL("uq_t_users_email"),
 

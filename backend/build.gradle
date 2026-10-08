@@ -74,6 +74,8 @@ dependencies {
     // 宣言しないため、同期クライアント用に url-connection-client を明示的に追加する（version は BOM で解決）。
     implementation 'software.amazon.awssdk:s3'
     implementation 'software.amazon.awssdk:url-connection-client'
+    // 非公開添付は全体期限にソケットを中断できる同期 transport を使う。
+    implementation 'software.amazon.awssdk:apache-client'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     // Spring Boot 4 でスライステスト系アノテーションは技術別モジュールへ分離された。@WebMvcTest はこの成果物にある。
     testImplementation 'org.springframework.boot:spring-boot-webmvc-test'

@@ -59,6 +59,8 @@ export type PlatformPermission =
   | 'RECRUITMENT_VIEW'
   | 'RECRUITMENT_MANAGE'
   | 'RECRUITMENT_DECIDE'
+  | 'RECRUITMENT_ATTACHMENT_VIEW'
+  | 'RECRUITMENT_ATTACHMENT_MANAGE'
   | 'STORE_MENU_VIEW';
 
 // ログイン後の着地先（サーバ側が権限目録から導出する — /me の console）。

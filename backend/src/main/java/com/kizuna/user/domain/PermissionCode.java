@@ -61,6 +61,12 @@ public enum PermissionCode {
   /** 採用判断の記録。既定授与はしない。 */
   RECRUITMENT_DECIDE(Console.STORE),
 
+  /** 応募者の非公開添付の閲覧。既定授与はしない。 */
+  RECRUITMENT_ATTACHMENT_VIEW(Console.STORE),
+
+  /** 応募者の非公開添付の登録・回復。既定授与はしない。 */
+  RECRUITMENT_ATTACHMENT_MANAGE(Console.STORE),
+
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 

@@ -71,6 +71,31 @@ public class AppProperties {
   /** app.upload.* */
   private Upload upload = new Upload();
 
+  private PrivateAttachments privateAttachments = new PrivateAttachments();
+
+  @Getter
+  @Setter
+  public static class PrivateAttachments {
+    private boolean enabled = false;
+    private String endpoint;
+    private String bucket;
+    private String accessKey;
+    private String secretKey;
+    private long maxFileBytes = 10L * 1024 * 1024;
+    private int maxImageDimension = 8192;
+    private long maxImagePixels = 16_777_216;
+    private long maxDecodedBytes = 64L * 1024 * 1024;
+    private int imageProcessingTimeoutSeconds = 15;
+    private int maxApplicantFiles = 20;
+    private long maxApplicantBytes = 200L * 1024 * 1024;
+    private int maxConcurrentUploads = 2;
+    private int maxConcurrentDownloads = 2;
+    private int storageTimeoutSeconds = 15;
+    private int storageAttemptTimeoutSeconds = 5;
+    private int receiveTimeoutSeconds = 30;
+    private String temporaryDirectory = "/tmp/kizuna-private-attachments";
+  }
+
   /** app.line.* */
   private Line line = new Line();
 

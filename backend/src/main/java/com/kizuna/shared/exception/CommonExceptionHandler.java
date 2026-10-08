@@ -33,6 +33,17 @@ import tools.jackson.databind.util.NamingStrategyImpls;
 @ControllerAdvice
 public class CommonExceptionHandler {
 
+  @ExceptionHandler(UploadInputException.class)
+  public ResponseEntity<Map<String, Object>> handle(UploadInputException exception) {
+    HttpStatus status =
+        switch (exception.getReason()) {
+          case INVALID -> HttpStatus.BAD_REQUEST;
+          case LIMIT -> HttpStatus.PAYLOAD_TOO_LARGE;
+          case TYPE -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
+        };
+    return ResponseEntity.status(status).body(Map.of("error", exception.getMessage()));
+  }
+
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
   public ResponseEntity<Map<String, Object>> handle(HttpRequestMethodNotSupportedException ex) {
     return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
@@ -221,6 +232,13 @@ public class CommonExceptionHandler {
     Map<String, Object> body = new HashMap<>();
     body.put("error", ex.getMessage());
     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(body);
+  }
+
+  @ExceptionHandler(ResourceBusyException.class)
+  public ResponseEntity<Map<String, Object>> handle(ResourceBusyException ex) {
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .header("Retry-After", "1")
+        .body(Map.of("error", ex.getMessage()));
   }
 
   @ExceptionHandler(ServiceUnavailableException.class)

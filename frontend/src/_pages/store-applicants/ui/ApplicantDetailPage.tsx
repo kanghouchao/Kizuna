@@ -20,6 +20,7 @@ import {
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Badge, Button, ConfirmDialog, RegionError } from '@/shared/ui';
+import { ApplicantAttachmentsPanel } from './ApplicantAttachmentsPanel';
 import { ApplicantIntakeForm } from './ApplicantIntakeForm';
 import { ApplicantInterviewForm } from './ApplicantInterviewForm';
 import { ApplicantHistoryPanel } from './ApplicantHistoryPanel';
@@ -29,6 +30,7 @@ export default function ApplicantDetailPage() {
   const resource = useResource(() => applicantApi.get(id), [id]);
   const policy = useResource(() => applicantApi.policy());
   const [canManage, setCanManage] = useState(false);
+  const [attachments, setAttachments] = useState({ read: false, write: false });
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [pendingMode, setPendingMode] = useState<
@@ -37,6 +39,10 @@ export default function ApplicantDetailPage() {
   const [mode, setMode] = useState<'intake' | 'interview' | null>(null);
   useEffect(() => {
     const claims = readTokenClaims();
+    const read =
+      hasPermission(claims, 'RECRUITMENT_VIEW') &&
+      hasPermission(claims, 'RECRUITMENT_ATTACHMENT_VIEW');
+    setAttachments({ read, write: read && hasPermission(claims, 'RECRUITMENT_ATTACHMENT_MANAGE') });
     setCanManage(
       hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'RECRUITMENT_MANAGE')
     );
@@ -267,6 +273,14 @@ export default function ApplicantDetailPage() {
         onClose={() => setPendingMode(null)}
         onConfirm={discardAndMove}
       />
+      {attachments.read && (
+        <ApplicantAttachmentsPanel
+          key={`attachments:${storeId}:${id}`}
+          id={id}
+          canManage={attachments.write}
+          editable={allowedApplicantTransitions(applicant.status).length > 0}
+        />
+      )}
       <ApplicantHistoryPanel key={`history:${id}:${applicant.version}`} id={id} />
     </div>
   );
