@@ -97,7 +97,7 @@ Then("添付は認証取得だけに公開され店外と権限不足を拒否�
     expect((await request.get(contentPath, { headers: { ...headers(), 'X-Store-ID': String(other) } })).status()).toBe(403);
   } finally { await client.end(); }
 });
-Then("監査障害で未完了になった添付を画面から同じ画像で回復できる", async ({ request, page }) => {
+Then("監査障害で未完了になった添付を画面から同じ画像で回復できる", async ({ request, page, $testInfo }) => {
   const client = await database();
   recoveryKey = randomUUID();
   try {
@@ -112,16 +112,40 @@ Then("監査障害で未完了になった添付を画面から同じ画像で�
     expect(rows[0].status).toBe('RECOVERY_REQUIRED');
     for (const field of ['original_sha256', 'canonical_sha256', 'object_id', 'bucket', 'url']) expect(rows[0]).not.toHaveProperty(field);
     expect((await request.get(`${path()}/attachments/${recoveryId}/content`, { headers: headers() })).status()).toBe(404);
+    await client.query("update t_applicant_attachment_uploads set failure='CONTENT_MISMATCH' where id=$1", [recoveryId]);
     await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`);
+    const resend = page.getByRole('button', { name: '修復後の同じ画像を再送' });
+    await expect(resend).toBeDisabled();
+    await expect(page.getByText(/同じ画像の再送だけでは回復できません/)).toBeVisible();
+    const confirmed = page.getByRole('checkbox', { name: '管理者による保存先の確認・修復が完了している' });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => { localStorage.setItem('theme', value); document.documentElement.classList.toggle('dark', value === 'dark'); }, theme);
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 960 });
+        await confirmed.scrollIntoViewIfNeeded();
+        await confirmed.focus();
+        await expect(confirmed).toBeFocused();
+        await page.screenshot({ path: $testInfo.outputPath(`attachment-repair-${theme}-${width}.png`), fullPage: true });
+      }
+    }
+    await page.keyboard.press('Space');
+    await expect(confirmed).toBeChecked();
+    await expect(resend).toBeEnabled();
     await page.getByLabel('最初に送信した画像').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: image });
     const response = page.waitForResponse(value => value.url().includes(`/attachment-uploads/${recoveryId}/content`) && value.request().method() === 'PUT');
-    await page.getByRole('button', { name: '同じ画像を再送' }).click();
+    await resend.click();
     expect((await response).status()).toBe(200);
     await expect(page.getByText('未完了のアップロードはありません。')).toBeVisible();
     expect(Number((await client.query('select count(*) from t_audit_events where target_id=$1', [recoveryId])).rows[0].count)).toBe(1);
     const repeated = await request.put(`${path()}/attachment-uploads/${recoveryId}/content`, { headers: uploadHeaders(recoveryKey), data: image });
     expect(repeated.status()).toBe(200);
     expect((await repeated.json()).id).toBe(recoveryId);
+    const unavailable = '**/attachments/*/content';
+    await page.route(unavailable, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '画像処理が混み合っています' }) }));
+    try {
+      await page.getByRole('button', { name: 'ダウンロード', exact: true }).first().click();
+      await expect(page.getByText('画像処理が混み合っています', { exact: true })).toBeVisible();
+    } finally { await page.unroute(unavailable); }
   } finally { await client.end(); }
 });
 Then("添付画面は両テーマと狭幅で操作でき認証失効後は再送も拒否する", async ({ page, request, $testInfo }) => {

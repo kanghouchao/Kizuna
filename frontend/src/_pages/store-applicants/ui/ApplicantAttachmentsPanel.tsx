@@ -10,6 +10,7 @@ import { getApiErrorMessage, useCursorList, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
+  Checkbox,
   Input,
   RegionError,
   Form,
@@ -19,6 +20,19 @@ import {
   FormLabel,
   FormMessage,
 } from '@/shared/ui';
+
+type RecoveryState = ReturnType<
+  typeof useResource<Awaited<ReturnType<typeof applicantAttachmentApi.uploads>>>
+>;
+
+function recoveryFailure(
+  recovery: RecoveryState,
+  key?: string,
+  upload?: ApplicantAttachmentUpload
+) {
+  const current = recovery.data?.rows.find(row => row.idempotency_key === key);
+  return current ? current.failure_code : upload?.failure_code;
+}
 
 export function ApplicantAttachmentsPanel({
   id,
@@ -68,6 +82,11 @@ function AttachmentContents({
   const [refresh, setRefresh] = useState(0);
   const [completedKey, setCompletedKey] = useState<string | null>(null);
   const lifetime = useTransferLifetime();
+  // 応募者の上限20件と一覧の取得件数が一致するため、一回で対象操作を照合できる。
+  const recovery = useResource(canManage ? () => applicantAttachmentApi.uploads(id) : null, [
+    id,
+    canManage,
+  ]);
   const [downloading, setDownloading] = useState<string | null>(null);
   const download = async (attachment: ApplicantAttachment) => {
     if (downloading) return;
@@ -154,6 +173,7 @@ function AttachmentContents({
               onComplete={completed}
               onUncertain={completed}
               completedKey={completedKey}
+              recovery={recovery}
             />
           ) : (
             <p>選考が終了しているため、画像の追加・再送はできません。</p>
@@ -164,6 +184,7 @@ function AttachmentContents({
             policy={policy}
             editable={editable}
             onComplete={completed}
+            recovery={recovery}
           />
         </>
       )}
@@ -176,12 +197,14 @@ function PendingUploads({
   policy,
   editable,
   onComplete,
+  recovery,
 }: {
   refresh: number;
   id: string;
   policy: ApplicantAttachmentPolicy;
   editable: boolean;
   onComplete: (key: string) => void;
+  recovery: RecoveryState;
 }) {
   const list = useCursorList(cursor => applicantAttachmentApi.uploads(id, cursor));
   const reload = list.reload;
@@ -202,14 +225,24 @@ function PendingUploads({
             <div key={upload.id} className="space-y-4 rounded-lg border p-4">
               <p>
                 {new Date(upload.created_at).toLocaleString('ja-JP')}・
-                {upload.status === 'PENDING' ? '処理結果の確認待ち' : '再送が必要'}
+                {recoveryFailure(recovery, upload.idempotency_key, upload) === 'CONTENT_MISMATCH'
+                  ? '保存先の確認・修復待ち'
+                  : upload.status === 'PENDING'
+                    ? '処理結果の確認待ち'
+                    : '再送が必要'}
               </p>
+              {recoveryFailure(recovery, upload.idempotency_key, upload) === 'CONTENT_MISMATCH' && (
+                <p className="text-sm text-destructive-strong">
+                  保存済み画像の内容が一致しません。同じ画像の再送だけでは回復できません。管理者に保存先の確認・修復を依頼してください。未完了の予約は引き続き件数・容量の上限に含まれます。
+                </p>
+              )}
               {editable && (
                 <AttachmentUploadForm
                   id={id}
                   policy={policy}
                   upload={upload}
                   onComplete={onComplete}
+                  recovery={recovery}
                 />
               )}
             </div>
@@ -245,6 +278,7 @@ function AttachmentUploadForm({
   onComplete,
   onUncertain,
   completedKey,
+  recovery,
 }: {
   id: string;
   policy: ApplicantAttachmentPolicy;
@@ -252,38 +286,59 @@ function AttachmentUploadForm({
   onComplete: (key: string) => void;
   onUncertain?: () => void;
   completedKey?: string | null;
+  recovery: RecoveryState;
 }) {
   const input = useRef<HTMLInputElement | null>(null);
-  const operation = useRef<string | null>(null);
+  const [operation, setOperation] = useState<string | null>(null);
   const lifetime = useTransferLifetime();
-  const form = useForm<{ file: File | null }>({ defaultValues: { file: null } });
+  const key = operation ?? upload?.idempotency_key;
+  const failureCode = recoveryFailure(recovery, key, upload);
+  const contentMismatch = failureCode === 'CONTENT_MISMATCH';
+  const checking = Boolean(key) && recovery.isLoading;
+  const stateUnavailable = Boolean(key) && recovery.failure !== null;
+  const form = useForm<{ file: File | null; repairConfirmed: boolean }>({
+    defaultValues: { file: null, repairConfirmed: false },
+  });
+  const repairConfirmed = form.watch('repairConfirmed');
   const reset = form.reset;
+  const setValue = form.setValue;
   useEffect(() => {
-    if (completedKey && operation.current === completedKey) {
-      operation.current = null;
+    setValue('repairConfirmed', false);
+  }, [failureCode, recovery.isLoading, setValue]);
+  useEffect(() => {
+    if (completedKey && operation === completedKey) {
+      setOperation(null);
       reset();
       if (input.current) input.current.value = '';
     }
-  }, [completedKey, reset]);
+  }, [completedKey, operation, reset]);
   const busy = form.formState.isSubmitting;
   const submit = async ({ file }: { file: File | null }) => {
-    if (!file) return;
+    if (!file || checking || stateUnavailable) return;
     const signal = lifetime.current!.signal;
-    operation.current ??= upload?.idempotency_key ?? createOperationKey();
-    const key = operation.current;
+    const key = operation ?? upload?.idempotency_key ?? createOperationKey();
+    setOperation(key);
     try {
       await applicantAttachmentApi.upload(id, file, key, upload?.id, signal);
       if (signal.aborted) return;
-      operation.current = null;
+      setOperation(null);
       form.reset();
       if (input.current) input.current.value = '';
       notify.success('添付画像を保存しました');
       onComplete(key);
     } catch (failure) {
       if (signal.aborted) return;
+      if (contentMismatch) form.setValue('repairConfirmed', false);
       notify.error(
-        getApiErrorMessage(failure, '画像を保存できませんでした。同じファイルで再試行してください')
+        getApiErrorMessage(
+          failure,
+          contentMismatch
+            ? '画像を回復できませんでした。管理者に保存先の再確認を依頼してください'
+            : '画像を保存できませんでした。同じファイルで再試行してください'
+        )
       );
+      await recovery.reload();
+      if (signal.aborted) return;
       onUncertain?.();
     }
   };
@@ -294,6 +349,43 @@ function AttachmentUploadForm({
         onSubmit={event => void form.handleSubmit(submit)(event)}
         className="space-y-3"
       >
+        {checking && <p role="status">操作の状態を確認中...</p>}
+        {stateUnavailable && (
+          <RegionError
+            message="操作の状態を確認できません。ファイルを保持したまま状態を再確認してください。"
+            onRetry={() => void recovery.reload()}
+          />
+        )}
+        {contentMismatch && !upload && (
+          <p className="text-sm text-destructive-strong">
+            保存済み画像の内容が一致しません。同じ画像の再送だけでは回復できません。管理者に保存先の確認・修復を依頼してください。
+          </p>
+        )}
+        {contentMismatch && (
+          <FormField
+            control={form.control}
+            name="repairConfirmed"
+            rules={{ validate: value => value || '保存先の確認・修復が必要です' }}
+            render={({ field }) => (
+              <FormItem>
+                <div className="flex items-center gap-2">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                      disabled={busy}
+                      required
+                    />
+                  </FormControl>
+                  <FormLabel>管理者による保存先の確認・修復が完了している</FormLabel>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <FormField
           control={form.control}
           name="file"
@@ -331,8 +423,17 @@ function AttachmentUploadForm({
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={busy}>
-          {busy ? '送信中...' : upload ? '同じ画像を再送' : '画像を追加'}
+        <Button
+          type="submit"
+          disabled={busy || checking || stateUnavailable || (contentMismatch && !repairConfirmed)}
+        >
+          {busy
+            ? '送信中...'
+            : contentMismatch
+              ? '修復後の同じ画像を再送'
+              : upload
+                ? '同じ画像を再送'
+                : '画像を追加'}
         </Button>
       </form>
     </Form>
