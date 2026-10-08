@@ -237,6 +237,20 @@ export interface CreateShiftParams {
   status: string;
 }
 
+export async function listShifts(
+  request: APIRequestContext,
+  token: string,
+  from: string,
+  to: string,
+): Promise<{ id: string }[]> {
+  const response = await request.get("/api/store/shifts", {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    params: { from, to },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
+}
+
 /** シフトを作成し id を返す（POST /api/store/shifts, hasAuthority('PERM_SHIFT_MANAGE')）。 */
 export async function createShift(
   request: APIRequestContext,
@@ -850,6 +864,21 @@ export async function currentCustomerMemberLink(
   if (!response.ok())
     throw new Error(`関連照会に失敗しました: ${response.status()}`);
   return response.json();
+}
+
+/** 既存区間を理由付きで解除し、204 を確認する。 */
+export async function releaseCustomerMemberLink(
+  request: APIRequestContext,
+  token: string,
+  customerId: string,
+  expectedLinkId: string,
+  reason: string,
+): Promise<void> {
+  const response = await request.post(`/api/store/customers/${customerId}/member-link/releases`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { expected_link_id: expectedLinkId, operation_reason: reason },
+  });
+  expect(response.status(), await response.text()).toBe(204);
 }
 
 /** 会員関連の区間履歴の先頭ページを照会する。 */

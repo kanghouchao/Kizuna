@@ -16,9 +16,11 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
@@ -42,6 +44,7 @@ public class CustomerMemberLinkService {
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final MemberLookupService memberLookupService;
   private final PlatformUserRepository platformUserRepository;
+  private final BusinessAudit audit;
 
   @StoreScoped
   @Transactional
@@ -78,8 +81,19 @@ public class CustomerMemberLinkService {
       // 紐づけ先の変更は解除と新規紐づけを同一トランザクションで行い、どちらでもない中間状態を外へ見せない。
       // 部分一意索引（customer_id WHERE status='ACTIVE'）は据置不可なので、新しい行の INSERT より先に
       // 旧行の UPDATE を DB へ流す — flush の既定順は INSERT が先で、そのままでは自分自身と衝突する。
+      var before = snapshot(current);
       current.release(actorId, normalizedReason, operatedAt);
       customerMemberLinkRepository.saveAndFlush(current);
+      audit.recordById(
+          actorId,
+          current.getStoreId(),
+          "CUSTOMER_MEMBER_LINK_RELEASED",
+          "CUSTOMER_MEMBER_LINK",
+          current.getId(),
+          "CUSTOMER",
+          current.getCustomerId(),
+          before,
+          snapshot(current));
     }
 
     CustomerMemberLink link =
@@ -98,6 +112,16 @@ public class CustomerMemberLinkService {
     // CommonExceptionHandler が SQLSTATE で一意違反だけを 409 へ写像し、FK 等の他の整合性違反は
     // 実装欠陥として 500 のまま大きく失敗させる分類を持っているため、そこへ委ねる。
     CustomerMemberLink saved = customerMemberLinkRepository.saveAndFlush(link);
+    audit.recordById(
+        actorId,
+        saved.getStoreId(),
+        "CUSTOMER_MEMBER_LINK_CREATED",
+        "CUSTOMER_MEMBER_LINK",
+        saved.getId(),
+        "CUSTOMER",
+        saved.getCustomerId(),
+        Map.of(),
+        snapshot(saved));
     return new CustomerMemberLinkResponse(
         saved.getId(), true, saved.getMemberCode(), saved.getLinkedAt());
   }
@@ -113,8 +137,33 @@ public class CustomerMemberLinkService {
             .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
             .orElseThrow(() -> new ConflictException("関連状態が変わりました。再取得して確認してください"));
     requireExpectedLink(current, expectedLinkId);
+    var before = snapshot(current);
     current.release(actorId, operationReason, OffsetDateTime.now());
     customerMemberLinkRepository.save(current);
+    customerMemberLinkRepository.flush();
+    audit.recordById(
+        actorId,
+        current.getStoreId(),
+        "CUSTOMER_MEMBER_LINK_RELEASED",
+        "CUSTOMER_MEMBER_LINK",
+        current.getId(),
+        "CUSTOMER",
+        current.getCustomerId(),
+        before,
+        snapshot(current));
+  }
+
+  private static Map<String, String> snapshot(CustomerMemberLink link) {
+    return Map.of(
+        "customer_id", link.getCustomerId(),
+        "member_id", Objects.toString(link.getMemberId(), ""),
+        "status", link.getStatus().name(),
+        "reason", link.getReason().name(),
+        "version", Objects.toString(link.getVersion(), ""),
+        "linked_by", Objects.toString(link.getLinkedBy(), ""),
+        "linked_at", Objects.toString(link.getLinkedAt(), ""),
+        "released_by", Objects.toString(link.getReleasedBy(), ""),
+        "released_at", Objects.toString(link.getReleasedAt(), ""));
   }
 
   /**
