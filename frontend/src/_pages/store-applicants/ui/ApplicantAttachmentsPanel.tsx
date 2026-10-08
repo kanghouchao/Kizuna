@@ -290,15 +290,55 @@ function AttachmentUploadForm({
 }) {
   const input = useRef<HTMLInputElement | null>(null);
   const [operation, setOperation] = useState<string | null>(null);
+  const operationRef = useRef<string | null>(null);
+  const inFlight = useRef(false);
+  const reportedCompletion = useRef(false);
   const lifetime = useTransferLifetime();
   const key = operation ?? upload?.idempotency_key;
   const failureCode = recoveryFailure(recovery, key, upload);
   const contentMismatch = failureCode === 'CONTENT_MISMATCH';
-  const checking = Boolean(key) && recovery.isLoading;
-  const stateUnavailable = Boolean(key) && recovery.failure !== null;
   const form = useForm<{ file: File | null; repairConfirmed: boolean }>({
     defaultValues: { file: null, repairConfirmed: false },
   });
+  const busy = form.formState.isSubmitting;
+  const verifyCompletion = Boolean(
+    upload &&
+    operation &&
+    !busy &&
+    !recovery.isLoading &&
+    recovery.failure === null &&
+    recovery.data &&
+    !recovery.data.rows.some(row => row.id === upload.id)
+  );
+  const completion = useResource(verifyCompletion ? () => applicantAttachmentApi.list(id) : null, [
+    id,
+    verifyCompletion,
+    recovery.data,
+  ]);
+  const confirmedReady = Boolean(
+    verifyCompletion && completion.data?.rows.some(row => row.id === upload?.id)
+  );
+  const checking =
+    (Boolean(key) && recovery.isLoading) ||
+    (verifyCompletion &&
+      (completion.isLoading || (completion.data === null && completion.failure === null)));
+  const stateUnavailable =
+    (Boolean(key) && recovery.failure !== null) ||
+    (verifyCompletion &&
+      (completion.failure !== null ||
+        (!completion.isLoading && completion.data !== null && !confirmedReady)));
+  useEffect(() => {
+    if (
+      confirmedReady &&
+      !completion.isLoading &&
+      completion.failure === null &&
+      upload &&
+      !reportedCompletion.current
+    ) {
+      reportedCompletion.current = true;
+      onComplete(upload.idempotency_key);
+    }
+  }, [confirmedReady, completion.isLoading, completion.failure, upload, onComplete]);
   const repairConfirmed = form.watch('repairConfirmed');
   const reset = form.reset;
   const setValue = form.setValue;
@@ -307,20 +347,22 @@ function AttachmentUploadForm({
   }, [failureCode, recovery.isLoading, setValue]);
   useEffect(() => {
     if (completedKey && operation === completedKey) {
+      operationRef.current = null;
       setOperation(null);
       reset();
       if (input.current) input.current.value = '';
     }
   }, [completedKey, operation, reset]);
-  const busy = form.formState.isSubmitting;
   const submit = async ({ file }: { file: File | null }) => {
     if (!file || checking || stateUnavailable) return;
     const signal = lifetime.current!.signal;
-    const key = operation ?? upload?.idempotency_key ?? createOperationKey();
+    const key = operationRef.current ?? upload?.idempotency_key ?? createOperationKey();
+    operationRef.current = key;
     setOperation(key);
     try {
       await applicantAttachmentApi.upload(id, file, key, upload?.id, signal);
       if (signal.aborted) return;
+      operationRef.current = null;
       setOperation(null);
       form.reset();
       if (input.current) input.current.value = '';
@@ -332,8 +374,8 @@ function AttachmentUploadForm({
       notify.error(
         getApiErrorMessage(
           failure,
-          contentMismatch
-            ? '画像を回復できませんでした。管理者に保存先の再確認を依頼してください'
+          upload
+            ? '回復の応答を確認できませんでした。保存状態を再確認します'
             : '画像を保存できませんでした。同じファイルで再試行してください'
         )
       );
@@ -346,14 +388,29 @@ function AttachmentUploadForm({
     <Form {...form}>
       <form
         noValidate
-        onSubmit={event => void form.handleSubmit(submit)(event)}
+        onSubmit={event => {
+          if (inFlight.current) {
+            event.preventDefault();
+            return;
+          }
+          inFlight.current = true;
+          void form
+            .handleSubmit(submit)(event)
+            .finally(() => {
+              inFlight.current = false;
+            });
+        }}
         className="space-y-3"
       >
         {checking && <p role="status">操作の状態を確認中...</p>}
         {stateUnavailable && (
           <RegionError
             message="操作の状態を確認できません。ファイルを保持したまま状態を再確認してください。"
-            onRetry={() => void recovery.reload()}
+            onRetry={() =>
+              void (verifyCompletion && completion.failure !== null
+                ? completion.reload()
+                : recovery.reload())
+            }
           />
         )}
         {contentMismatch && !upload && (

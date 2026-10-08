@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Request } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
@@ -67,9 +67,25 @@ When("非公開添付の初回登録と同一操作の再送を行う", async ({
   finally { await client.end(); }
   await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`);
   await page.getByLabel('追加する画像').setInputFiles({ name: 'synthetic-ui.png', mimeType: 'image/png', buffer: image });
-  const created = page.waitForResponse(value => value.url().endsWith(`${path()}/attachments`) && value.request().method() === 'POST');
-  await page.getByRole('button', { name: '画像を追加' }).click();
-  expect((await created).status()).toBe(201);
+  let submissions = 0;
+  const countSubmission = (request: Request) => {
+    if (request.method() === 'POST' && request.url().endsWith(`${path()}/attachments`)) submissions++;
+  };
+  page.on('request', countSubmission);
+  try {
+    const created = page.waitForResponse(value => value.url().endsWith(`${path()}/attachments`) && value.request().method() === 'POST');
+    await page.getByLabel('追加する画像').evaluate(input => {
+      const form = input.closest('form')!;
+      form.requestSubmit();
+      form.requestSubmit();
+    });
+    expect((await created).status()).toBe(201);
+    await expect(page.getByRole('button', { name: 'ダウンロード', exact: true })).toHaveCount(2);
+    expect(submissions).toBe(1);
+    const verify = await database();
+    try { expect(Number((await verify.query('select count(*) from t_applicant_attachment_uploads where applicant_id=$1', [applicantId])).rows[0].count)).toBe(2); }
+    finally { await verify.end(); }
+  } finally { page.off('request', countSubmission); }
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: 'ダウンロード', exact: true }).first().click();
   expect((await downloaded).suggestedFilename()).toMatch(/^attachment-\d+\.png$/);
@@ -132,10 +148,19 @@ Then("監査障害で未完了になった添付を画面から同じ画像で�
     await expect(confirmed).toBeChecked();
     await expect(resend).toBeEnabled();
     await page.getByLabel('最初に送信した画像').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: image });
-    const response = page.waitForResponse(value => value.url().includes(`/attachment-uploads/${recoveryId}/content`) && value.request().method() === 'PUT');
-    await resend.click();
-    expect((await response).status()).toBe(200);
-    await expect(page.getByText('未完了のアップロードはありません。')).toBeVisible();
+    const lostResponse = `**/attachment-uploads/${recoveryId}/content`;
+    let storedStatus = 0;
+    await page.route(lostResponse, async route => {
+      const response = await route.fetch();
+      storedStatus = response.status();
+      await route.abort('failed');
+    });
+    try {
+      await resend.click();
+      await expect.poll(() => storedStatus).toBe(200);
+      await expect(page.getByText('未完了のアップロードはありません。')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'ダウンロード', exact: true })).toHaveCount(3);
+    } finally { await page.unroute(lostResponse); }
     expect(Number((await client.query('select count(*) from t_audit_events where target_id=$1', [recoveryId])).rows[0].count)).toBe(1);
     const repeated = await request.put(`${path()}/attachment-uploads/${recoveryId}/content`, { headers: uploadHeaders(recoveryKey), data: image });
     expect(repeated.status()).toBe(200);

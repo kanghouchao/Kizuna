@@ -23,6 +23,128 @@ beforeEach(() => {
   (applicantAttachmentApi.list as jest.Mock).mockResolvedValue({ rows: [], nextCursor: null });
   (applicantAttachmentApi.uploads as jest.Mock).mockResolvedValue({ rows: [], nextCursor: null });
 });
+test('同じ描画中の二重送信でも新規アップロードを重複実行しない', async () => {
+  const upload = applicantAttachmentApi.upload as jest.Mock;
+  upload.mockImplementation(() => new Promise(() => {}));
+  render(<ApplicantAttachmentsPanel id="a" canManage editable />);
+  const input = await screen.findByLabelText('追加する画像');
+  const file = new File(['png'], 'original.png', { type: 'image/png' });
+  fireEvent.change(input, { target: { files: [file] } });
+  await act(async () => {
+    fireEvent.submit(input.closest('form')!);
+    fireEvent.submit(input.closest('form')!);
+  });
+  expect(upload).toHaveBeenCalledTimes(1);
+  expect(upload.mock.calls[0][1]).toBe(file);
+  expect(input).toBeDisabled();
+});
+
+test('回復成功の応答を失ってもREADY確認後は未完了を除きダウンロードを表示する', async () => {
+  const upload = applicantAttachmentApi.upload as jest.Mock;
+  upload.mockRejectedValue(new Error('応答消失'));
+  (applicantAttachmentApi.uploads as jest.Mock).mockImplementation(async () => ({
+    rows: upload.mock.calls.length
+      ? []
+      : [
+          {
+            id: 'ready-after-recovery',
+            idempotency_key: 'original-key',
+            status: 'RECOVERY_REQUIRED',
+            failure_code: 'CONTENT_MISMATCH',
+            media_type: 'image/png',
+            size_bytes: 3,
+            created_at: '2026-10-07T00:00:00Z',
+          },
+        ],
+    nextCursor: null,
+  }));
+  (applicantAttachmentApi.list as jest.Mock).mockImplementation(async () => ({
+    rows: upload.mock.calls.length
+      ? [
+          {
+            id: 'ready-after-recovery',
+            media_type: 'image/png',
+            size_bytes: 3,
+            created_at: '2026-10-07T00:00:00Z',
+          },
+        ]
+      : [],
+    nextCursor: null,
+  }));
+  render(<ApplicantAttachmentsPanel id="a" canManage editable />);
+  const input = await screen.findByLabelText('最初に送信した画像');
+  const file = new File(['png'], 'original.png', { type: 'image/png' });
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: '管理者による保存先の確認・修復が完了している' })
+  );
+  fireEvent.click(screen.getByRole('button', { name: '修復後の同じ画像を再送' }));
+  expect(await screen.findByRole('button', { name: 'ダウンロード' })).toBeVisible();
+  await waitFor(() =>
+    expect(screen.queryByLabelText('最初に送信した画像')).not.toBeInTheDocument()
+  );
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(upload).toHaveBeenCalledTimes(1);
+  expect(upload).toHaveBeenCalledWith(
+    'a',
+    file,
+    'original-key',
+    'ready-after-recovery',
+    expect.any(AbortSignal)
+  );
+});
+
+test.each(['取得失敗', '対象なし'])(
+  'READY照合が%sならファイルを保持し状態の再確認だけで完了を反映する',
+  async missing => {
+    let phase = 'pending';
+    const pending = {
+      id: 'recovering',
+      idempotency_key: 'original-key',
+      status: 'RECOVERY_REQUIRED',
+      failure_code: 'CONTENT_MISMATCH',
+      media_type: 'image/png',
+      size_bytes: 3,
+      created_at: '2026-10-07T00:00:00Z',
+    };
+    const upload = applicantAttachmentApi.upload as jest.Mock;
+    upload.mockImplementation(async () => {
+      phase = 'uncertain';
+      throw new Error('応答消失');
+    });
+    (applicantAttachmentApi.uploads as jest.Mock).mockImplementation(async () => ({
+      rows: phase === 'pending' ? [pending] : [],
+      nextCursor: null,
+    }));
+    (applicantAttachmentApi.list as jest.Mock).mockImplementation(async () => {
+      if (phase === 'uncertain' && missing === '取得失敗') throw new Error('一覧取得不可');
+      return { rows: phase === 'ready' ? [pending] : [], nextCursor: null };
+    });
+    render(<ApplicantAttachmentsPanel id="a" canManage editable />);
+    const input = await screen.findByLabelText('最初に送信した画像');
+    const file = new File(['png'], 'original.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: '管理者による保存先の確認・修復が完了している' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: '修復後の同じ画像を再送' }));
+    expect(
+      await screen.findByText(
+        '操作の状態を確認できません。ファイルを保持したまま状態を再確認してください。'
+      )
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: '修復後の同じ画像を再送' })).toBeDisabled();
+    expect((input as HTMLInputElement).files?.[0]).toBe(file);
+    phase = 'ready';
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    expect(await screen.findByRole('button', { name: 'ダウンロード' })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.queryByLabelText('最初に送信した画像')).not.toBeInTheDocument()
+    );
+    expect(upload).toHaveBeenCalledTimes(1);
+  }
+);
+
 test('再送で判明した内容不一致を同じ操作キーの新規フォームにも反映する', async () => {
   const upload = applicantAttachmentApi.upload as jest.Mock;
   upload.mockRejectedValue(new Error('保存失敗'));
