@@ -55,6 +55,7 @@ export function SurveyTextField<T extends FieldValues>({
                 required={required}
                 maxLength={maxLength}
                 type={type}
+                className={type === 'datetime-local' ? 'dark:[color-scheme:dark]' : undefined}
               />
             )}
           </FormControl>
