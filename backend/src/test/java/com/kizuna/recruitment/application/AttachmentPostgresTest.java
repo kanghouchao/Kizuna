@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.domain.AuditEventRepository;
@@ -24,6 +25,7 @@ import com.kizuna.recruitment.infrastructure.PrivateAttachmentFile;
 import com.kizuna.recruitment.infrastructure.PrivateAttachmentStorage;
 import com.kizuna.recruitment.infrastructure.RasterImageNormalizer;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.exception.ServiceException;
@@ -47,9 +49,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -58,6 +64,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -125,6 +133,9 @@ class AttachmentPostgresTest {
   @BeforeEach
   void actor() {
     reset(storage);
+    var limits = context.getBean(AppProperties.class).getPrivateAttachments();
+    limits.setMaxApplicantFiles(20);
+    limits.setMaxApplicantBytes(200L * 1024 * 1024);
     authorize(1L);
   }
 
@@ -378,6 +389,273 @@ class AttachmentPostgresTest {
       }
       assertThat(first.get(5, TimeUnit.SECONDS).created()).isTrue();
       assertThat(auditCount(upload.getId())).isEqualTo(1);
+    }
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @CsvSource({"件数の最後の一枠, 2, 100", "容量の最後の3bytes, 10, 6"})
+  void concurrentDifferentKeysCannotExceedRemainingQuota(
+      String scenario, int maxFiles, long maxBytes) throws Exception {
+    var limits = context.getBean(AppProperties.class).getPrivateAttachments();
+    limits.setMaxApplicantFiles(maxFiles);
+    limits.setMaxApplicantBytes(maxBytes);
+    var applicant = applicant();
+    var winningKey = UUID.randomUUID();
+    var losingKey = UUID.randomUUID();
+    try (var image = content();
+        var executor = Executors.newFixedThreadPool(2);
+        var first = new DatabaseTransaction();
+        var second = new DatabaseTransaction()) {
+      var recovery = service.reserve(applicant, UUID.randomUUID(), image, "operator@example.test");
+      service.recordFailure(
+          applicant, recovery.getId(), AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
+      var winner =
+          first.submit(
+              executor,
+              () -> {
+                var upload = service.reserve(applicant, winningKey, image, "operator@example.test");
+                first.hold();
+                return upload;
+              });
+      first.awaitHeld();
+      var loser =
+          second.submit(
+              executor,
+              () -> service.reserve(applicant, losingKey, image, "operator@example.test"));
+      second.awaitBlockedBy(first);
+      first.close();
+      var committed = winner.get(5, TimeUnit.SECONDS);
+      assertThatThrownBy(() -> loser.get(5, TimeUnit.SECONDS))
+          .hasCauseInstanceOf(ConflictException.class)
+          .hasRootCauseMessage("添付の件数または容量が上限に達しています。未完了のアップロードを確認してください");
+      assertReservations(applicant, 2, 6);
+      assertThat(status(recovery.getId())).isEqualTo("RECOVERY_REQUIRED");
+      assertThat(status(committed.getId())).isEqualTo("PENDING");
+      assertThat(
+              service.lookup(applicant, null, losingKey, image.originalSha256(), image.mediaType()))
+          .isEmpty();
+      assertThat(service.list(applicant, false, null, 20).content()).hasSize(2);
+      assertThat(service.list(applicant, true, null, 20).content()).isEmpty();
+      assertApplicantAuditCount(applicant, 0);
+      verifyNoInteractions(storage);
+      assertThat(complete(applicant, committed, image).created()).isTrue();
+      assertThat(complete(applicant, committed, image).created()).isFalse();
+      assertReservations(applicant, 2, 6);
+      assertApplicantAuditCount(applicant, 1);
+    }
+  }
+
+  @Test
+  void concurrentSameKeySharesOneReservationEvenAtQuota() throws Exception {
+    var limits = context.getBean(AppProperties.class).getPrivateAttachments();
+    limits.setMaxApplicantFiles(1);
+    limits.setMaxApplicantBytes(3);
+    var applicant = applicant();
+    var key = UUID.randomUUID();
+    try (var image = content();
+        var executor = Executors.newFixedThreadPool(2);
+        var first = new DatabaseTransaction();
+        var second = new DatabaseTransaction()) {
+      var original =
+          first.submit(
+              executor,
+              () -> {
+                var upload = service.reserve(applicant, key, image, "operator@example.test");
+                first.hold();
+                return upload;
+              });
+      first.awaitHeld();
+      var replay =
+          second.submit(
+              executor, () -> service.reserve(applicant, key, image, "operator@example.test"));
+      second.awaitBlockedBy(first);
+      first.close();
+      var committed = original.get(5, TimeUnit.SECONDS);
+      assertThat(replay.get(5, TimeUnit.SECONDS).getId()).isEqualTo(committed.getId());
+      assertReservations(applicant, 1, 3);
+      assertApplicantAuditCount(applicant, 0);
+      verifyNoInteractions(storage);
+      assertThat(complete(applicant, committed, image).created()).isTrue();
+      assertThat(complete(applicant, replay.get(), image).created()).isFalse();
+      assertThat(service.list(applicant, true, null, 20).content()).hasSize(1);
+      assertReservations(applicant, 1, 3);
+      assertApplicantAuditCount(applicant, 1);
+    }
+  }
+
+  @Test
+  void anotherApplicantCanReserveWhileFirstApplicantTransactionIsHeld() throws Exception {
+    var limits = context.getBean(AppProperties.class).getPrivateAttachments();
+    limits.setMaxApplicantFiles(1);
+    limits.setMaxApplicantBytes(3);
+    var applicant = applicant();
+    var otherApplicant = applicant();
+    try (var image = content();
+        var executor = Executors.newFixedThreadPool(2);
+        var first = new DatabaseTransaction();
+        var second = new DatabaseTransaction()) {
+      var heldReservation =
+          first.submit(
+              executor,
+              () -> {
+                var upload =
+                    service.reserve(applicant, UUID.randomUUID(), image, "operator@example.test");
+                first.hold();
+                return upload;
+              });
+      first.awaitHeld();
+      var independent =
+          second.submit(
+              executor,
+              () ->
+                  service.reserve(
+                      otherApplicant, UUID.randomUUID(), image, "operator@example.test"));
+      assertThat(independent.get(5, TimeUnit.SECONDS).getStatus())
+          .isEqualTo(AttachmentUpload.Status.PENDING);
+      assertThat(second.connectionId.get()).isNotEqualTo(first.connectionId.get());
+      assertThat(heldReservation.isDone()).isFalse();
+      assertReservations(applicant, 0, 0);
+      assertReservations(otherApplicant, 1, 3);
+      first.close();
+      assertThat(heldReservation.get(5, TimeUnit.SECONDS).getStatus())
+          .isEqualTo(AttachmentUpload.Status.PENDING);
+      assertReservations(applicant, 1, 3);
+      assertReservations(otherApplicant, 1, 3);
+      assertApplicantAuditCount(applicant, 0);
+      assertApplicantAuditCount(otherApplicant, 0);
+      verifyNoInteractions(storage);
+    }
+  }
+
+  @Test
+  void rolledBackReservationReleasesQuotaForWaitingKey() throws Exception {
+    var limits = context.getBean(AppProperties.class).getPrivateAttachments();
+    limits.setMaxApplicantFiles(1);
+    limits.setMaxApplicantBytes(3);
+    var applicant = applicant();
+    var abortedKey = UUID.randomUUID();
+    var waitingKey = UUID.randomUUID();
+    try (var image = content();
+        var executor = Executors.newFixedThreadPool(2);
+        var first = new DatabaseTransaction();
+        var second = new DatabaseTransaction()) {
+      var aborted =
+          first.submit(
+              executor,
+              () -> {
+                service.reserve(applicant, abortedKey, image, "operator@example.test");
+                first.hold();
+                throw new IllegalStateException("合成トランザクションの失敗");
+              });
+      first.awaitHeld();
+      var waiting =
+          second.submit(
+              executor,
+              () -> service.reserve(applicant, waitingKey, image, "operator@example.test"));
+      second.awaitBlockedBy(first);
+      first.close();
+      assertThatThrownBy(() -> aborted.get(5, TimeUnit.SECONDS))
+          .hasCauseInstanceOf(IllegalStateException.class)
+          .hasRootCauseMessage("合成トランザクションの失敗");
+      var committed = waiting.get(5, TimeUnit.SECONDS);
+      assertThat(committed.getIdempotencyKey()).isEqualTo(waitingKey);
+      assertThat(committed.getStatus()).isEqualTo(AttachmentUpload.Status.PENDING);
+      assertThat(
+              service.lookup(
+                  applicant, null, abortedKey, image.originalSha256(), image.mediaType()))
+          .isEmpty();
+      assertReservations(applicant, 1, 3);
+      assertApplicantAuditCount(applicant, 0);
+      verifyNoInteractions(storage);
+      assertThat(complete(applicant, committed, image).created()).isTrue();
+      assertReservations(applicant, 1, 3);
+      assertApplicantAuditCount(applicant, 1);
+    }
+  }
+
+  private void assertReservations(String applicant, long count, long bytes) {
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_applicant_attachment_uploads where applicant_id=?",
+                Long.class,
+                applicant))
+        .isEqualTo(count);
+    assertThat(
+            jdbc.queryForObject(
+                "select coalesce(sum(size_bytes),0) from t_applicant_attachment_uploads where applicant_id=?",
+                Long.class,
+                applicant))
+        .isEqualTo(bytes);
+  }
+
+  private void assertApplicantAuditCount(String applicant, long count) {
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_audit_events where action='APPLICANT_ATTACHMENT_STORED' and after_values->>'applicant_id'=?",
+                Long.class,
+                applicant))
+        .isEqualTo(count);
+  }
+
+  // 実際のDB接続とロック待ちを観測し、実行順だけの試験を並行検証と誤認しない。
+  private class DatabaseTransaction implements AutoCloseable {
+    private final CompletableFuture<Integer> connectionId = new CompletableFuture<>();
+    private final CountDownLatch held = new CountDownLatch(1);
+    private final CountDownLatch release = new CountDownLatch(1);
+
+    <T> Future<T> submit(ExecutorService executor, Supplier<T> action) {
+      return executor.submit(
+          () -> {
+            authorize(1L);
+            try {
+              return transactions.execute(
+                  tx -> {
+                    em.createNativeQuery("set local statement_timeout='10s'").executeUpdate();
+                    connectionId.complete(
+                        ((Number)
+                                em.createNativeQuery("select pg_backend_pid()", Integer.class)
+                                    .getSingleResult())
+                            .intValue());
+                    return action.get();
+                  });
+            } finally {
+              scope.clear();
+              SecurityContextHolder.clearContext();
+            }
+          });
+    }
+
+    void hold() {
+      held.countDown();
+      try {
+        if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("検証同期の期限超過");
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException("検証同期が中断されました", e);
+      }
+    }
+
+    void awaitHeld() throws Exception {
+      assertThat(held.await(5, TimeUnit.SECONDS)).isTrue();
+    }
+
+    void awaitBlockedBy(DatabaseTransaction holder) throws Exception {
+      int waiterId = connectionId.get(5, TimeUnit.SECONDS);
+      int holderId = holder.connectionId.get(5, TimeUnit.SECONDS);
+      assertThat(waiterId).isNotEqualTo(holderId);
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+      do {
+        if (Boolean.TRUE.equals(
+            jdbc.queryForObject(
+                "select ? = any(pg_blocking_pids(?))", Boolean.class, holderId, waiterId))) return;
+        Thread.sleep(20);
+      } while (System.nanoTime() < deadline);
+      throw new AssertionError("異なる接続間の実ロック待ちを確認できませんでした");
+    }
+
+    @Override
+    public void close() {
+      release.countDown();
     }
   }
 
