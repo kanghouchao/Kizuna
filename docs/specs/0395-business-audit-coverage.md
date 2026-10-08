@@ -18,7 +18,7 @@
 | 帰属訂正・無効化、伝票再発行、ポイント巻戻し | 後続 | 帰属・訂正・台帳 ID、状態・金額。トークン生値・digestは含めない。#820 の実行器/失効処理と重複変更しない |
 | 顧客と会員の関連付け・解除 | 後続 | 関連区間 ID、顧客・会員 ID、状態、既存理由の参照 |
 | キャスト作成/編集/削除・公開・在籍、招待、カスタム項目 | 後続 | 在籍/状態履歴/設定 ID、状態、公開区分、版。招待秘密・個人情報・任意入力値は複写しない |
-| シフト作成/編集/削除・公開、本人申請/店舗決定、出勤実績 | #1006で11入口を実装・検証中 | 班次・申請・実績・在籍 ID、日時、状態、版。自由記述は必要性を個別に確認 |
+| シフト作成/編集/削除・公開、本人申請/店舗決定、出勤実績 | #1008合流済み、#1006完了 | 班次・申請・実績・在籍 ID、日時、状態、版。自由記述は必要性を個別に確認 |
 | 顧客作成/編集/削除 | #1005合流済み、#1002完了 | 顧客 ID、状態・変更項目名。会員関連付け/解除とは別に扱う |
 | 連絡先、用途許諾、優先関係 | #1001合流済み、#1000完了 | 連絡先/既存履歴 ID、種類・許諾状態・優先関係・変更項目名。[5入口の契約](0395-contact-audit.md)。値・許諾根拠原文は複写しない |
 | 店舗プロフィール・サービス設定・ファイル登録 | 後続 | 設定/版本 ID、価格・時間・報酬、公開状態、必要なファイルメタデータ。外部ストレージの確定順序は別途検証 |
@@ -59,3 +59,7 @@ CI [37609155073](https://github.com/kanghouchao/Kizuna/actions/runs/37609155073)
 #1000 / PR [#1001](https://github.com/kanghouchao/Kizuna/pull/1001) は master `662f5506058e7352cdead3501b72fb21285ed221` へ合流した。検証HEADは `43540abaa5762f70d4b1ce5a3b340349361ab1de`。単体7件・実PG7件・Task lint/test/buildがexit 0、focused E2E2/2成功。全量Task e2eはexit 0、79 passed + 1 flaky（retry成功）。既存注文場面の名前入力locator重複を同一コード・新しい専用スタックでretries0/repeat3として再確認し3/3成功。連絡先監査と注文監査は初回成功。専用栈撤収済み。
 
 CI/CodeQL等7チェック全SUCCESS、[Codex](https://github.com/kanghouchao/Kizuna/pull/1001#issuecomment-6037709546)は同一HEADで12:22:28 UTCにCompleted、公式botの新規👍は12:22:31 UTC、未解決thread0。#1000はCLOSED/COMPLETED、#395はOPENを継続する。
+
+## シフト監査バッチの完了
+
+#1006 / PR #1008はmaster `c1ff7775f89e4fcd6257c0d76d606438ff86db02`に合流済み。検証HEAD381fb223はTask lint/test/build/e2e exit0、E2E84/84・focused2・実PG8・unit5、双軸review残0。CI実step/CodeQL成功、Codex同HEAD Completed後に公式bot👍、未解決thread0。GitGuardian再実行run113084058038は2026-10-08 00:19:15 UTCにSUCCESS、秘密検出なし。旧NEUTRALとは区別する。親#395はOPENのまま。
