@@ -43,14 +43,14 @@ class SurveyInputPrivacyTest {
   static class MethodSecurity {}
 
   @Autowired MockMvc mvc;
-  @MockitoBean SurveyService reviews;
+  @MockitoBean SurveyService service;
   @MockitoBean SurveyReadService reads;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
   @MockitoBean StoreActivationService activation;
 
   @Test
-  void rejectedPrivateReviewInputNeverEntersLogsOrResponses() throws Exception {
+  void rejectedPrivateSurveyInputNeverEntersLogsOrResponses() throws Exception {
     when(stores.exists(anyLong())).thenReturn(true);
     var auth =
         new UsernamePasswordAuthenticationToken(
@@ -58,7 +58,8 @@ class SurveyInputPrivacyTest {
             "unused",
             List.of(
                 new SimpleGrantedAuthority("PERM_SURVEY_VIEW"),
-                new SimpleGrantedAuthority("PERM_SURVEY_MANAGE")));
+                new SimpleGrantedAuthority("PERM_SURVEY_MANAGE"),
+                new SimpleGrantedAuthority("PERM_SURVEY_RECORD")));
     TestSecurityContextHolder.setAuthentication(auth);
     String secret = "survey-private@example.invalid 非公開本文";
     String valid =
@@ -112,11 +113,50 @@ class SurveyInputPrivacyTest {
               .andReturn()
               .getResponse();
       assertThat(actionResponse.getContentAsString()).doesNotContain(secret, "非公開設問文");
+      for (String endpoint :
+          List.of(
+              "/store/surveys/1/revisions/2/responses", "/store/survey-responses/3/corrections")) {
+        for (String timestamp :
+            List.of(
+                "1767225600",
+                "1767225600.5",
+                "true",
+                "{}",
+                "[]",
+                "null",
+                "\"2026-01-01T00:00:00\"",
+                "\"" + secret + "\"")) {
+          String fields =
+              endpoint.endsWith("corrections")
+                  ? "\"version\":0,\"reason\":\"訂正理由\","
+                  : "\"revision_version\":1,";
+          mvc.perform(
+                  post(endpoint)
+                      .with(csrf())
+                      .header("X-Role", "store")
+                      .header("X-Store-ID", "1")
+                      .with(
+                          request -> {
+                            request.setUserPrincipal(auth);
+                            return request;
+                          })
+                      .contentType("application/json")
+                      .content(
+                          "{"
+                              + fields
+                              + "\"received_via\":\"PAPER\",\"received_at\":"
+                              + timestamp
+                              + ",\"answers\":[{\"question_key\":\"q1\",\"text\":\""
+                              + secret
+                              + "\"}],\"dedupe_key\":\"invalid-date\"}"))
+              .andExpect(status().isBadRequest());
+        }
+      }
       assertThat(capture.events)
           .extracting(event -> event.getMessage().getFormattedMessage())
           .allSatisfy(message -> assertThat(message).doesNotContain(secret, "非公開設問文"));
       assertThat(capture.events).allSatisfy(event -> assertThat(event.getThrown()).isNull());
-      verifyNoInteractions(reviews);
+      verifyNoInteractions(service);
     } finally {
       logger.removeAppender(capture);
       capture.stop();

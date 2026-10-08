@@ -12,7 +12,7 @@ import tools.jackson.databind.annotation.JsonDeserialize;
 public record SurveyAnswerCreateRequest(
     @JsonDeserialize(using = SurveyVersionDeserializer.class) Long revisionVersion,
     @JsonDeserialize(using = SurveyStringDeserializer.class) String receivedVia,
-    OffsetDateTime receivedAt,
+    @JsonDeserialize(using = SurveyDateTimeDeserializer.class) OffsetDateTime receivedAt,
     List<SurveyAnswerInputRequest> answers,
     @JsonDeserialize(using = SurveyStringDeserializer.class) String dedupeKey) {
   @JsonAnySetter

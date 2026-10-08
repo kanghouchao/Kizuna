@@ -250,7 +250,10 @@ function QuestionEditor({
         name={`questions.${index}.type`}
         label="回答形式"
         required
-        items={{ TEXT: 'テキスト', SINGLE_CHOICE: '単一選択' }}
+        items={[
+          { value: 'TEXT', label: 'テキスト' },
+          { value: 'SINGLE_CHOICE', label: '単一選択' },
+        ]}
         disabled={disabled}
         validate={v => ['TEXT', 'SINGLE_CHOICE'].includes(v) || '回答形式を選択してください'}
         onChange={v =>
@@ -464,7 +467,7 @@ function AnswerEditor({
                       name={`values.${index}.value`}
                       label={`${q.prompt}${q.required ? '（必須）' : '（任意）'}`}
                       required={q.required}
-                      items={Object.fromEntries(q.options.map(o => [o.option_key, o.label]))}
+                      items={q.options.map(o => ({ value: o.option_key, label: o.label }))}
                       disabled={disabled}
                       validate={v =>
                         (!q.required && !v) ||
@@ -479,7 +482,7 @@ function AnswerEditor({
                   name="received_via"
                   label="取得経路"
                   required
-                  items={viaLabels}
+                  items={Object.entries(viaLabels).map(([value, label]) => ({ value, label }))}
                   disabled={disabled}
                   validate={v => Object.hasOwn(viaLabels, v) || '取得経路を選択してください'}
                 />

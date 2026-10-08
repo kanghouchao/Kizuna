@@ -525,3 +525,29 @@ test('詳細の404は再試行せず一覧へ戻す', async () => {
   fireEvent.click(screen.getByRole('button', { name: '一覧へ戻る' }));
   expect(await screen.findByRole('button', { name: '版と回答' })).toBeVisible();
 });
+
+test('数字の選択肢キーでも設問版に記録した順序で表示する', async () => {
+  fixtures();
+  permission('SURVEY_VIEW', 'SURVEY_RECORD');
+  api.revision.mockResolvedValue({
+    ...revision,
+    questions: [
+      {
+        question_key: 'choice',
+        type: 'SINGLE_CHOICE',
+        prompt: '順序付き選択',
+        required: true,
+        options: [
+          { option_key: '2', label: '先に表示' },
+          { option_key: '1', label: '後に表示' },
+        ],
+      },
+    ],
+  });
+  render(<SurveysPage />);
+  await showRevision();
+  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
+  fireEvent.click(await screen.findByLabelText('順序付き選択（必須）'));
+  const options = await screen.findAllByRole('option');
+  expect(options.map(option => option.textContent)).toEqual(['先に表示', '後に表示']);
+});

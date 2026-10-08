@@ -74,7 +74,7 @@ export function SurveyChoiceField<T extends FieldValues>({
   disabled,
   onChange,
 }: FieldProps<T> & {
-  items: Record<string, string>;
+  items: { value: string; label: string }[];
   disabled?: boolean;
   onChange?: (value: string) => void;
 }) {
@@ -98,14 +98,18 @@ export function SurveyChoiceField<T extends FieldValues>({
             }}
           >
             <FormControl>
-              <SelectTrigger ref={field.ref} onBlur={field.onBlur}>
+              <SelectTrigger
+                ref={field.ref}
+                onBlur={field.onBlur}
+                className="w-full min-w-0 max-w-full"
+              >
                 <SelectValue placeholder="選択してください" />
               </SelectTrigger>
             </FormControl>
             <SelectContent>
-              {Object.entries(items).map(([value, text]) => (
+              {items.map(({ value, label }) => (
                 <SelectItem key={value} value={value}>
-                  {text}
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>

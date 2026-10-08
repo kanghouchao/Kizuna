@@ -13,7 +13,7 @@ public record SurveyAnswerCorrectionRequest(
     @JsonDeserialize(using = SurveyVersionDeserializer.class) Long version,
     @JsonDeserialize(using = SurveyStringDeserializer.class) String reason,
     @JsonDeserialize(using = SurveyStringDeserializer.class) String receivedVia,
-    OffsetDateTime receivedAt,
+    @JsonDeserialize(using = SurveyDateTimeDeserializer.class) OffsetDateTime receivedAt,
     List<SurveyAnswerInputRequest> answers,
     @JsonDeserialize(using = SurveyStringDeserializer.class) String dedupeKey) {
   @JsonAnySetter
