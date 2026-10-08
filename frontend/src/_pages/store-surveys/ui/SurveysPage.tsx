@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useParams } from 'next/navigation';
-import { surveyApi, SurveyCommand } from '@/entities/survey';
+import { surveyApi, SurveyCommand, Revision } from '@/entities/survey';
 import {
   readTokenClaims,
   hasPermission,
@@ -51,6 +51,11 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
   const [conflict, setConflict] = useState(false);
   const [missing, setMissing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [revisionCandidate, setRevisionCandidate] = useState<{
+    revision: Revision;
+    draftId?: string;
+  } | null>(null);
   const [denied, setDenied] = useState<string | null>(null);
   const lock = useRef(false),
     active = useRef(true);
@@ -106,11 +111,32 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
       if (active.current) setBusy(false);
     }
   };
+  const navigate = (next: View) => {
+    if (busy || pending) return;
+    setEditor(null);
+    setOpen(false);
+    setConflict(false);
+    setMissing(false);
+    setRefreshError(null);
+    setRevisionCandidate(null);
+    setView(next);
+  };
   const refresh = async () => {
     if (!editor || busy) return;
     setBusy(true);
+    setRefreshError(null);
+    let parentFound = false;
     try {
       let updated: Editor = editor;
+      if (editor.kind === 'REVISE') {
+        const survey = await surveyApi.survey(editor.revision.survey_id);
+        parentFound = true;
+        const latest = await surveyApi.revision(survey.id, survey.latest_revision_id);
+        if (!active.current) return;
+        setRevisionCandidate({ revision: latest, draftId: survey.draft_revision_id });
+        setEpoch(n => n + 1);
+        return;
+      }
       if ('answer' in editor) {
         const answer = await surveyApi.answer(editor.answer.id);
         updated =
@@ -136,33 +162,24 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
       if (!active.current) return;
       const denial = accessError(error);
       if (denial) deny(denial);
-      else if (isNotFound(error)) {
-        let parentExists = false;
-        if (editor.kind === 'REVISE') {
-          try {
-            await surveyApi.survey(editor.revision.survey_id);
-            parentExists = true;
-          } catch (parentError) {
-            const reason = accessError(parentError);
-            if (reason) deny(reason);
-          }
-        }
-        if (!active.current) return;
-        if (!parentExists) {
-          setEditor(null);
-          setOpen(false);
-          setView({ kind: 'catalogue' });
-          setEpoch(n => n + 1);
-          setMissing(false);
-          setConflict(false);
-        }
-      }
-      notify.error(getApiErrorMessage(error, '最新状態を確認できません'));
+      else if (isNotFound(error) && !parentFound) {
+        setEditor(null);
+        setOpen(false);
+        setView({ kind: 'catalogue' });
+        setEpoch(n => n + 1);
+        setMissing(false);
+        setConflict(false);
+      } else
+        setRefreshError(
+          getApiErrorMessage(error, '最新状態を確認できません。入力は保持しています')
+        );
     } finally {
       if (active.current) setBusy(false);
     }
   };
   const edit = (value: Editor) => {
+    setRefreshError(null);
+    setRevisionCandidate(null);
     setEditor(value);
     setEditorKey(n => n + 1);
     setOpen(true);
@@ -182,6 +199,31 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
     (editor.kind === 'RECEIVE' && editor.revision.status === 'OPEN');
   const feedback = (
     <>
+      {refreshError && <p role="alert">{refreshError}</p>}
+      {revisionCandidate && editor?.kind === 'REVISE' && (
+        <div role="status" className="rounded-lg border p-4 space-y-3">
+          <p>
+            最新版は版 {revisionCandidate.revision.revision_number}{' '}
+            です。入力した改版案は保持しています。
+          </p>
+          {revisionCandidate.draftId ? (
+            <p>未完了の下書きがあります。版一覧でその下書きを確認してください。</p>
+          ) : (
+            <Button
+              disabled={busy}
+              variant="outline"
+              onClick={() => {
+                setEditor({ ...editor, revision: revisionCandidate.revision });
+                setRevisionCandidate(null);
+                setConflict(false);
+                setMissing(false);
+              }}
+            >
+              この最新版を改版元にする
+            </Button>
+          )}
+        </div>
+      )}
       {pending && uncertain && (
         <div role="alert" className="rounded-lg border p-4 space-y-3">
           <p>結果が確認できません。同じ要求で結果を確認するまで、新しい操作はできません。</p>
@@ -209,7 +251,7 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
       )}
     </>
   );
-  const props = { navigate: setView, edit, denied: deny, canManage, canRecord, disabled };
+  const props = { navigate, edit, denied: deny, canManage, canRecord, disabled };
   if (denied) return <div role="alert">{denied}。再ログインまたは権限を確認してください。</div>;
   return (
     <div className="space-y-6">
@@ -217,7 +259,7 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
         <Button
           variant="outline"
           disabled={disabled}
-          onClick={() => setView({ kind: 'catalogue' })}
+          onClick={() => navigate({ kind: 'catalogue' })}
         >
           アンケート一覧へ
         </Button>
@@ -245,7 +287,7 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
           editor={editor}
           open={open}
           onOpenChange={setOpen}
-          disabled={disabled || conflict || missing || !allowed}
+          disabled={disabled || conflict || missing || revisionCandidate !== null || !allowed}
           onSubmit={submit}
           feedback={feedback}
         />

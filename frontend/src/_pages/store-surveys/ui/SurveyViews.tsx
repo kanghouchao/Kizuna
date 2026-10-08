@@ -134,17 +134,17 @@ export function SurveyVersions({ sid, ...props }: ViewProps & { sid: string }) {
   const guard = useGuardedRead(props.denied);
   const detail = useResource(() => guard(() => surveyApi.survey(sid)), [sid]);
   const list = useListPage(page => guard(() => surveyApi.revisions(sid, page), 'list'));
-  if (detail.failure)
+  if (detail.failure === 'notFound')
     return (
-      <RegionError
-        message={
-          detail.failure === 'notFound'
-            ? 'アンケートが見つかりません'
-            : 'アンケートを取得できませんでした'
-        }
-        onRetry={detail.reload}
-      />
+      <div role="alert" className="space-y-3">
+        <p>アンケートが見つかりません</p>
+        <Button variant="outline" onClick={() => props.navigate({ kind: 'catalogue' })}>
+          一覧へ戻る
+        </Button>
+      </div>
     );
+  if (detail.failure)
+    return <RegionError message="アンケートを取得できませんでした" onRetry={detail.reload} />;
   if (!detail.data || detail.isLoading) return <p>読み込み中...</p>;
   return (
     <ListPage
@@ -210,15 +210,17 @@ export function SurveyRevisionView({
       guard(() => surveyApi.answers(sid, rid, page, criteria), 'list'),
     {}
   );
-  if (detail.failure)
+  if (detail.failure === 'notFound')
     return (
-      <RegionError
-        message={
-          detail.failure === 'notFound' ? '設問版が見つかりません' : '設問版を取得できませんでした'
-        }
-        onRetry={detail.reload}
-      />
+      <div role="alert" className="space-y-3">
+        <p>設問版が見つかりません</p>
+        <Button variant="outline" onClick={() => props.navigate({ kind: 'catalogue' })}>
+          一覧へ戻る
+        </Button>
+      </div>
     );
+  if (detail.failure)
+    return <RegionError message="設問版を取得できませんでした" onRetry={detail.reload} />;
   if (!detail.data || detail.isLoading) return <p>読み込み中...</p>;
   const { revision, series, counts } = detail.data;
   return (
@@ -384,15 +386,17 @@ export function SurveyAnswerView({ aid, ...props }: ViewProps & { aid: string })
       }),
     [aid]
   );
-  if (detail.failure)
+  if (detail.failure === 'notFound')
     return (
-      <RegionError
-        message={
-          detail.failure === 'notFound' ? '回答が見つかりません' : '回答を取得できませんでした'
-        }
-        onRetry={detail.reload}
-      />
+      <div role="alert" className="space-y-3">
+        <p>回答が見つかりません</p>
+        <Button variant="outline" onClick={() => props.navigate({ kind: 'catalogue' })}>
+          一覧へ戻る
+        </Button>
+      </div>
     );
+  if (detail.failure)
+    return <RegionError message="回答を取得できませんでした" onRetry={detail.reload} />;
   if (!detail.data || detail.isLoading) return <p>読み込み中...</p>;
   const { answer, revision } = detail.data;
   return (

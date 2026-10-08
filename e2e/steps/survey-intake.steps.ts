@@ -15,6 +15,11 @@ import {
   loginViaUiAndEnterStore,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
+const questionPrompt =
+  "利用体験の記録。" +
+  "受付時の説明や案内について、紙面に記載された内容をそのまま記録します。".repeat(
+    4,
+  );
 let email = "",
   secret = "",
   token = "",
@@ -80,7 +85,7 @@ Given(
 );
 When(
   "設問を作成し通信結果不明から同じ要求で復帰して受付を開始する",
-  async ({ page }) => {
+  async ({ page, $testInfo }) => {
     await page.context().clearCookies();
     await page.goto(`${PLATFORM_URL}/platform/login`);
     await page.getByLabel("メールアドレス", { exact: true }).fill(email);
@@ -98,7 +103,33 @@ When(
     await editor
       .getByLabel("題名", { exact: true })
       .fill("担当者が作成した問票");
-    await editor.getByLabel("設問文", { exact: true }).fill("利用体験の記録");
+    await editor.getByLabel("設問文", { exact: true }).fill(questionPrompt);
+    await editor
+      .getByRole("button", { name: "設問を追加", exact: true })
+      .click();
+    const second = editor.locator("section").last();
+    await second.getByLabel("設問文", { exact: true }).fill("任意の選択式記録");
+    await second.getByLabel("回答形式", { exact: true }).click();
+    await page.getByRole("option", { name: "単一選択", exact: true }).click();
+    await second.getByLabel("回答必須", { exact: true }).click();
+    await second
+      .getByLabel("選択肢 1", { exact: true })
+      .fill("紙面の選択欄に記載された最初の選択肢です。".repeat(4));
+    await second
+      .getByLabel("選択肢 2", { exact: true })
+      .fill("紙面の選択欄に記載された別の選択肢です。".repeat(4));
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await editor.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBeTruthy();
+    await page.screenshot({
+      path: $testInfo.outputPath("survey-definition-mobile.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
     let intercepted = false;
     let original: unknown;
     await page.route("**/api/store/surveys", async (route) => {
@@ -164,7 +195,7 @@ When("回答を人工受付し設問版を終了する", async ({ page, request 
   await page.getByRole("button", { name: "回答を受付", exact: true }).click();
   const intake = page.getByRole("dialog", { name: "回答を受付", exact: true });
   await intake
-    .getByLabel("利用体験の記録（必須）", { exact: true })
+    .getByLabel(`${questionPrompt}（必須）`, { exact: true })
     .fill("  紙面に書かれた原回答\n二行目を保持する  ");
   await intake.getByLabel("受領日時", { exact: true }).fill("2026-01-01T09:00");
   const [created] = await Promise.all([
@@ -215,7 +246,7 @@ Then(
       exact: true,
     });
     await correction
-      .getByLabel("利用体験の記録（必須）", { exact: true })
+      .getByLabel(`${questionPrompt}（必須）`, { exact: true })
       .fill("訂正した回答");
     await correction.getByLabel("操作理由").fill("紙面の転記誤りを修正");
     await page.setViewportSize({ width: 390, height: 844 });
