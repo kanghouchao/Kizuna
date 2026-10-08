@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "status": "MISMATCH",
+  "context": {
+    "batch_id": "synthetic-batch-1",
+    "snapshot_id": "synthetic-snapshot-1",
+    "scope_id": "synthetic-all",
+    "basis_id": "synthetic-counts-v1"
+  },
+  "categories": [
+    {
+      "category": "balance",
+      "old_count": "4",
+      "new_count": "4",
+      "mapping_count": "4",
+      "new_minus_old": "0",
+      "mapping_minus_old": "0",
+      "status": "MATCHED"
+    },
+    {
+      "category": "cast",
+      "old_count": "3",
+      "new_count": "3",
+      "mapping_count": "3",
+      "new_minus_old": "0",
+      "mapping_minus_old": "0",
+      "status": "MATCHED"
+    },
+    {
+      "category": "customer",
+      "old_count": "10",
+      "new_count": "9",
+      "mapping_count": "10",
+      "new_minus_old": "-1",
+      "mapping_minus_old": "0",
+      "status": "MISMATCH"
+    },
+    {
+      "category": "order",
+      "old_count": "20",
+      "new_count": "20",
+      "mapping_count": "20",
+      "new_minus_old": "0",
+      "mapping_minus_old": "0",
+      "status": "MATCHED"
+    },
+    {
+      "category": "order_detail",
+      "old_count": "25",
+      "new_count": "25",
+      "mapping_count": "25",
+      "new_minus_old": "0",
+      "mapping_minus_old": "0",
+      "status": "MATCHED"
+    }
+  ],
+  "exemptions": [
+    {
+      "category": "customer",
+      "exemption_code": "synthetic-history-gap",
+      "reason": "合成試験用の履歴欠落",
+      "count": "11",
+      "bookkeeping_location": "synthetic-summary:exemptions:customer",
+      "post_migration_constraint": "合成試験上の参照専用"
+    }
+  ],
+  "errors": [],
+  "not_evaluated": [
+    "amounts",
+    "manual_sampling",
+    "real_migration"
+  ],
+  "evidence_scope": "SUPPLIED_ANONYMOUS_COUNTS_ONLY"
+}

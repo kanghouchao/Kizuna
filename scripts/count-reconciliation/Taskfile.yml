@@ -1,0 +1,35 @@
+version: '3'
+
+silent: true
+
+vars:
+  NODE_IMAGE:
+    sh: awk '$1 == "FROM" && $2 ~ /^node:/ { print $2; exit }' ../../frontend/Dockerfile
+  DOCKER_RUN: >-
+    docker run --rm --pull=never --network none --read-only
+    --user "$(id -u):$(id -g)"
+    --mount "type=bind,source={{.TASKFILE_DIR}},target=/repo/scripts/count-reconciliation,readonly"
+    --mount "type=bind,source={{.TASKFILE_DIR}}/../../docs/specs/0397-count-reconciliation-fixtures,target=/repo/docs/specs/0397-count-reconciliation-fixtures,readonly"
+    --workdir /repo/scripts/count-reconciliation
+
+tasks:
+  prepare:
+    desc: 既存フロントエンドと同じNodeイメージを取得
+    cmds:
+      - docker pull {{.NODE_IMAGE}}
+
+  reconcile:
+    desc: 標準入力の匿名件数を照合してJSONを標準出力へ返す
+    cmds:
+      - '{{.DOCKER_RUN}} -i {{.NODE_IMAGE}} node reconcile.mjs'
+
+  lint:
+    desc: Node標準の構文検査
+    cmds:
+      - '{{.DOCKER_RUN}} {{.NODE_IMAGE}} node --check reconcile.mjs'
+      - '{{.DOCKER_RUN}} {{.NODE_IMAGE}} node --check reconcile.test.mjs'
+
+  test:
+    desc: ネットワーク無効・読取専用の合成CLI受け入れ試験
+    cmds:
+      - '{{.DOCKER_RUN}} {{.NODE_IMAGE}} node --test reconcile.test.mjs'

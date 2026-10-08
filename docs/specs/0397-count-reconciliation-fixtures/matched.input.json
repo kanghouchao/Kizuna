@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "expected_categories": [
+    "balance",
+    "cast",
+    "customer",
+    "order",
+    "order_detail"
+  ],
+  "old": {
+    "batch_id": "synthetic-batch-1",
+    "snapshot_id": "synthetic-snapshot-1",
+    "scope_id": "synthetic-all",
+    "basis_id": "synthetic-counts-v1",
+    "counts": [
+      {
+        "category": "balance",
+        "count": "4"
+      },
+      {
+        "category": "cast",
+        "count": "3"
+      },
+      {
+        "category": "customer",
+        "count": "10"
+      },
+      {
+        "category": "order",
+        "count": "20"
+      },
+      {
+        "category": "order_detail",
+        "count": "25"
+      }
+    ]
+  },
+  "new": {
+    "batch_id": "synthetic-batch-1",
+    "snapshot_id": "synthetic-snapshot-1",
+    "scope_id": "synthetic-all",
+    "basis_id": "synthetic-counts-v1",
+    "counts": [
+      {
+        "category": "balance",
+        "count": "4"
+      },
+      {
+        "category": "cast",
+        "count": "3"
+      },
+      {
+        "category": "customer",
+        "count": "10"
+      },
+      {
+        "category": "order",
+        "count": "20"
+      },
+      {
+        "category": "order_detail",
+        "count": "25"
+      }
+    ]
+  },
+  "mapping": {
+    "batch_id": "synthetic-batch-1",
+    "snapshot_id": "synthetic-snapshot-1",
+    "scope_id": "synthetic-all",
+    "basis_id": "synthetic-counts-v1",
+    "counts": [
+      {
+        "category": "balance",
+        "count": "4"
+      },
+      {
+        "category": "cast",
+        "count": "3"
+      },
+      {
+        "category": "customer",
+        "count": "10"
+      },
+      {
+        "category": "order",
+        "count": "20"
+      },
+      {
+        "category": "order_detail",
+        "count": "25"
+      }
+    ]
+  },
+  "exemptions": []
+}

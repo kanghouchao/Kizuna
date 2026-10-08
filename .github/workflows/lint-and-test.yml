@@ -21,10 +21,17 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # リポジトリ横断 lint（workflows / .claude）は軽量なため docs-only でも常時実行する。
-      # これにより .claude のみの変更（docs-only 扱い）でも壊れを CI で検知できる（#290/#301）。
+      # スクリプトとワークフローの検査はdocs-onlyでも省略しない。
       - name: Repo lint
         run: task lint service=.github
+
+      - name: Prepare offline count reconciliation runtime
+        run: task -d scripts/count-reconciliation prepare
+
+      - name: Check offline count reconciliation
+        run: |
+          task lint service=scripts/count-reconciliation
+          task test service=scripts/count-reconciliation
 
   lint-and-test-frontend:
     name: Lint and Test (frontend)
