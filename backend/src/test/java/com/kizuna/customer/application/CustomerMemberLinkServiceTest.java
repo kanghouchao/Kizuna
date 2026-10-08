@@ -18,6 +18,7 @@ import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -45,6 +46,7 @@ class CustomerMemberLinkServiceTest {
   private static final String MEMBER_CODE = "123456789012";
   private static final long ACTOR_ID = 42L;
 
+  @Mock private BusinessAudit audit;
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private MemberLookupService memberLookupService;
