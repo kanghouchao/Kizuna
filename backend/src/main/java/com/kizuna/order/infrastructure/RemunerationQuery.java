@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-public class MonthlyRemunerationQuery {
+public class RemunerationQuery {
   private final EntityManager entityManager;
 
   private static final String PEOPLE =
@@ -38,7 +38,7 @@ public class MonthlyRemunerationQuery {
       from com.kizuna.order.domain.Order o
       join com.kizuna.cast.domain.CastEnrollment e on e.id = o.castId and e.storeId = o.storeId
       where o.storeId = :storeId and e.castId = :personId
-        and o.businessDate >= :start and o.businessDate < :end
+        and o.businessDate >= :start and o.businessDate <= :end
         and o.status = com.kizuna.order.domain.OrderStatus.COMPLETED
       """;
 
@@ -91,6 +91,14 @@ public class MonthlyRemunerationQuery {
   }
 
   public long total(Long storeId, Long personId, YearMonth month) {
+    return total(storeId, personId, month.atDay(1), month.atEndOfMonth());
+  }
+
+  public long dailyTotal(Long storeId, Long personId, LocalDate day) {
+    return total(storeId, personId, day, day);
+  }
+
+  private long total(Long storeId, Long personId, LocalDate start, LocalDate end) {
     return bind(
             entityManager.createQuery(
                 "select coalesce(sum(case when o.completionInvalidated then 0 else o.accruedRemuneration end), 0) "
@@ -98,12 +106,23 @@ public class MonthlyRemunerationQuery {
                 Long.class),
             storeId,
             personId,
-            month)
+            start,
+            end)
         .getSingleResult();
   }
 
   public Page<MonthlyRemunerationOrderSummary> orders(
       Long storeId, Long personId, YearMonth month, Pageable page) {
+    return orders(storeId, personId, month.atDay(1), month.atEndOfMonth(), page);
+  }
+
+  public Page<MonthlyRemunerationOrderSummary> dailyOrders(
+      Long storeId, Long personId, LocalDate day, Pageable page) {
+    return orders(storeId, personId, day, day, page);
+  }
+
+  private Page<MonthlyRemunerationOrderSummary> orders(
+      Long storeId, Long personId, LocalDate start, LocalDate end, Pageable page) {
     var rows =
         bind(
                 entityManager.createQuery(
@@ -113,7 +132,8 @@ public class MonthlyRemunerationQuery {
                     Tuple.class),
                 storeId,
                 personId,
-                month)
+                start,
+                end)
             .setFirstResult((int) page.getOffset())
             .setMaxResults(page.getPageSize())
             .getResultList();
@@ -122,7 +142,8 @@ public class MonthlyRemunerationQuery {
                 entityManager.createQuery("select count(o) " + ORDERS, Long.class),
                 storeId,
                 personId,
-                month)
+                start,
+                end)
             .getSingleResult();
     var names = new HashMap<String, List<String>>();
     if (!rows.isEmpty()) {
@@ -165,11 +186,11 @@ public class MonthlyRemunerationQuery {
   }
 
   private <T> TypedQuery<T> bind(
-      TypedQuery<T> query, Long storeId, Long personId, YearMonth month) {
+      TypedQuery<T> query, Long storeId, Long personId, LocalDate start, LocalDate end) {
     return query
         .setParameter("storeId", storeId)
         .setParameter("personId", personId)
-        .setParameter("start", month.atDay(1))
-        .setParameter("end", month.plusMonths(1).atDay(1));
+        .setParameter("start", start)
+        .setParameter("end", end);
   }
 }

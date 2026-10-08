@@ -2,7 +2,7 @@ package com.kizuna.order.application;
 
 import com.kizuna.order.api.dto.MonthlyRemunerationCastSummary;
 import com.kizuna.order.api.dto.MonthlyRemunerationResponse;
-import com.kizuna.order.infrastructure.MonthlyRemunerationQuery;
+import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MonthlyRemunerationService {
-  private final MonthlyRemunerationQuery query;
+  private final RemunerationQuery query;
   private final StoreContext storeContext;
 
   @StoreScoped

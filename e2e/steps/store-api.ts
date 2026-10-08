@@ -1243,3 +1243,10 @@ export async function cancelAttendance(
   });
   expect(res.status(), await res.text()).toBe(204);
 }
+
+export function getSelfDailyRemunerations(
+  request: APIRequestContext,
+  options: Parameters<APIRequestContext["get"]>[1],
+): Promise<APIResponse> {
+  return request.get("/api/platform/me/daily-remunerations", options);
+}

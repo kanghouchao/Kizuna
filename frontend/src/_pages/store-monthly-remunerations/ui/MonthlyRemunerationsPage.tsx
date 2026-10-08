@@ -4,7 +4,12 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { MonthlyRemunerationCast, monthlyRemunerationApi } from '@/entities/order';
+import {
+  MonthlyRemunerationCast,
+  monthlyRemunerationApi,
+  dailyRemunerationApi,
+  validateRemunerationPeriod,
+} from '@/entities/order';
 import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { fromSpringPage } from '@/shared/api';
 import { storePath, useResource } from '@/shared/lib';
@@ -32,10 +37,12 @@ import { PersonPicker } from './PersonPicker';
 interface Criteria {
   person: MonthlyRemunerationCast | null;
   month: string;
+  businessDate: string;
 }
 interface Query {
   personId: number;
-  month: string;
+  period: string;
+  mode: 'month' | 'day';
   page: number;
 }
 
@@ -48,6 +55,7 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
   const form = useForm<Criteria>({
     defaultValues: {
       person: null,
+      businessDate: '',
       month: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' })
         .format(new Date())
         .slice(0, 7),
@@ -55,29 +63,57 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
   });
   const [history, setHistory] = useState<{ orderId: string; open: boolean } | null>(null);
   const [query, setQuery] = useState<Query | null>(null);
+  const [mode, setMode] = useState<'month' | 'day'>('month');
+  const clearResult = () => {
+    setQuery(null);
+    setHistory(null);
+  };
   const statement = useResource(
-    query ? () => monthlyRemunerationApi.monthly(query.personId, query.month, query.page) : null,
+    query
+      ? async () => ({
+          query,
+          result:
+            query.mode === 'day'
+              ? await dailyRemunerationApi.store(query.personId, query.period, query.page)
+              : await monthlyRemunerationApi.monthly(query.personId, query.period, query.page),
+        })
+      : null,
     [query]
   );
-  const result = !statement.isLoading && statement.failure === null ? statement.data : null;
-  const pdfResult =
-    statement.failure === null &&
-    statement.data?.person_id === query?.personId &&
-    statement.data?.month === query?.month
-      ? statement.data
+  const result =
+    query && statement.data?.query === query && !statement.isLoading && statement.failure === null
+      ? statement.data.result
       : null;
+  const previous = statement.data?.result;
+  const pdfResult =
+    query?.mode === 'month' &&
+    statement.failure === null &&
+    previous &&
+    'month' in previous &&
+    previous.month === query.period &&
+    previous.person_id === query.personId
+      ? previous
+      : null;
+  const periodLabel = mode === 'day' ? '営業日' : '対象月';
+  const title = mode === 'day' ? '日別給与明細' : '月次給与明細';
+  const totalLabel = mode === 'day' ? '日別報酬合計' : '月次報酬合計';
   const paging = result
     ? fromSpringPage(result.orders)
     : { rows: [], page: 0, pageCount: 0, total: 0 };
   const submit = form.handleSubmit(values => {
     if (values.person)
-      setQuery({ personId: values.person.person_id, month: values.month, page: 0 });
+      setQuery({
+        personId: values.person.person_id,
+        mode,
+        period: mode === 'day' ? values.businessDate : values.month,
+        page: 0,
+      });
   });
   return (
     <Form {...form}>
       <ListPage
-        title="月次給与明細"
-        description="原営業日の自然月に属する発生済み固定報酬を確認します。"
+        title={title}
+        description="原営業日の日別・月別に発生済み固定報酬を確認します。"
         actions={
           <Button variant="outline" render={<Link href={storePath(storeId, '/orders')} />}>
             受注一覧
@@ -87,6 +123,22 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
           onSearch: () => void submit(),
           content: (
             <div className="w-full space-y-6">
+              <div role="group" aria-label="集計単位" className="flex gap-3">
+                {(['month', 'day'] as const).map(value => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={mode === value ? 'default' : 'outline'}
+                    aria-pressed={mode === value}
+                    onClick={() => {
+                      clearResult();
+                      setMode(value);
+                    }}
+                  >
+                    {value === 'day' ? '日別' : '月別'}
+                  </Button>
+                ))}
+              </div>
               <div className="flex flex-wrap items-start gap-6">
                 <FormField
                   control={form.control}
@@ -98,7 +150,10 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
                       <FormControl>
                         <PersonPicker
                           value={field.value}
-                          onChange={field.onChange}
+                          onChange={value => {
+                            clearResult();
+                            field.onChange(value);
+                          }}
                           triggerRef={field.ref}
                         />
                       </FormControl>
@@ -108,18 +163,25 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
                 />
                 <FormField
                   control={form.control}
-                  name="month"
+                  key={mode}
+                  name={mode === 'day' ? 'businessDate' : 'month'}
                   rules={{
-                    required: '対象月を入力してください',
-                    validate: value =>
-                      /^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])$/.test(value) ||
-                      '対象月は YYYY-MM 形式で入力してください',
+                    required: `${periodLabel}を入力してください`,
+                    validate: value => validateRemunerationPeriod(mode, value),
                   }}
                   render={({ field }) => (
                     <FormItem className="w-44">
-                      <FormLabel>対象月</FormLabel>
+                      <FormLabel>{periodLabel}</FormLabel>
                       <FormControl>
-                        <Input {...field} aria-required="true" placeholder="YYYY-MM" />
+                        <Input
+                          {...field}
+                          onChange={event => {
+                            clearResult();
+                            field.onChange(event);
+                          }}
+                          aria-required="true"
+                          placeholder={mode === 'day' ? 'YYYY-MM-DD' : 'YYYY-MM'}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -144,10 +206,10 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
               {result && (
                 <section className="space-y-2" aria-label="集計結果">
                   <p className="text-sm break-words">
-                    {result.name} / {result.month}
+                    {result.name} / {'month' in result ? result.month : result.business_date}
                   </p>
-                  <p className="text-sm text-muted-foreground">月次報酬合計</p>
-                  <p aria-label="月次報酬合計" className="text-3xl font-bold">
+                  <p className="text-sm text-muted-foreground">{totalLabel}</p>
+                  <p aria-label={totalLabel} className="text-3xl font-bold">
                     ¥{result.total_remuneration.toLocaleString('ja-JP')}
                   </p>
                   <p className="text-sm text-muted-foreground">
@@ -164,7 +226,10 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
           isLoading: statement.isLoading,
           failed: statement.failure !== null && statement.failure !== 'notFound',
           onPageChange: result
-            ? page => setQuery(current => current && { ...current, page })
+            ? page => {
+                setHistory(null);
+                setQuery(current => current && { ...current, page });
+              }
             : undefined,
         }}
         emptyMessage={
@@ -174,12 +239,12 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
               fallback={{ href: storePath(storeId, '/orders'), label: '受注一覧へ戻る' }}
             />
           ) : query ? (
-            '対象月の完了受注はありません'
+            `${periodLabel}の完了受注はありません`
           ) : (
-            'キャスト本人と対象月を選択してください'
+            `キャスト本人と${periodLabel}を選択してください`
           )
         }
-        errorMessage="月次給与明細を取得できませんでした。"
+        errorMessage={`${title}を取得できませんでした。`}
         onRetry={statement.reload}
       >
         <Table>

@@ -16,6 +16,7 @@ jest.mock('@/shared/lib', () => ({
   readTokenClaims: () => ({}),
 }));
 jest.mock('@/entities/order', () => ({
+  ...jest.requireActual('@/entities/order'),
   fetchMonthlyPdf: jest.fn(),
   monthlyRemunerationApi: { casts: jest.fn(), monthly: jest.fn() },
   platformMonthlyRemunerationApi: { stores: jest.fn(), casts: jest.fn(), monthly: jest.fn() },
@@ -103,7 +104,7 @@ describe.each(scopes)('$scope の月次 PDF ライフサイクル', ({ scope, Pa
   }
 
   it.each(['download', 'print'] as const)(
-    '%s は未適用の月を編集してページ移動しても完了し保存リンクを保持する',
+    '%s は同じ対象のページ移動でも完了し保存リンクを保持する',
     async mode => {
       await search();
       const pdf = deferred<Blob>();
@@ -123,7 +124,8 @@ describe.each(scopes)('$scope の月次 PDF ライフサイクル', ({ scope, Pa
       const signal = jest.mocked(fetchMonthlyPdf).mock.calls[0][1];
       const page = deferred<typeof statement>();
       jest.mocked(api.monthly).mockReturnValueOnce(page.promise);
-      fireEvent.change(screen.getByLabelText('対象月'), { target: { value: '2026-10' } });
+      if (scope === 'platform')
+        fireEvent.change(screen.getByLabelText('対象月'), { target: { value: '2026-10' } });
       next();
       await waitFor(() => expect(api.monthly).toHaveBeenCalledTimes(2));
       expect(screen.getByText('全月の PDF を生成しています...')).toBeInTheDocument();

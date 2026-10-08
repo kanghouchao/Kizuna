@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.order.application.MonthlyRemunerationService;
-import com.kizuna.order.infrastructure.MonthlyRemunerationQuery;
+import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -40,7 +40,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import({
   MonthlyRemunerationControllerTest.MethodSecurityConfig.class,
   MonthlyRemunerationService.class,
-  MonthlyRemunerationQuery.class,
+  RemunerationQuery.class,
   StoreContext.class
 })
 @WithMockUser(authorities = "PERM_ORDER_MANAGE")

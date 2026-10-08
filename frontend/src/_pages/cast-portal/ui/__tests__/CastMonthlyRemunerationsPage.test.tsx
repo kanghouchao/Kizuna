@@ -3,6 +3,7 @@ import { CastMonthlyRemunerationsPage } from '../CastMonthlyRemunerationsPage';
 import { selfMonthlyRemunerationApi, selfRemunerationApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
+  ...jest.requireActual('@/entities/order'),
   selfMonthlyRemunerationApi: { stores: jest.fn(), monthly: jest.fn() },
   selfRemunerationApi: { detail: jest.fn(), changes: jest.fn() },
 }));
@@ -64,7 +65,6 @@ it('退店店舗の月合計を保ちながら適用済み条件でページを�
   render(<CastMonthlyRemunerationsPage />);
   await search();
   expect(screen.getByLabelText('月次報酬合計')).toHaveTextContent('¥14,000');
-  fireEvent.change(screen.getByLabelText('対象月'), { target: { value: '2026-10' } });
   fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   await waitFor(() =>
     expect(selfMonthlyRemunerationApi.monthly).toHaveBeenLastCalledWith(1, '2026-09', 1)

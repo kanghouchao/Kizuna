@@ -14,7 +14,7 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
 import com.kizuna.order.api.dto.SelfMonthlyRemunerationStoreSummary;
 import com.kizuna.order.application.SelfMonthlyRemunerationService;
-import com.kizuna.order.infrastructure.MonthlyRemunerationQuery;
+import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
@@ -62,7 +62,7 @@ class PlatformSelfMonthlyRemunerationControllerTest {
   @MockitoBean private ActorIdentityService actors;
   @MockitoBean private CastRepository people;
   @MockitoBean private SelfMonthlyRemunerationQuery selfQuery;
-  @MockitoBean private MonthlyRemunerationQuery monthlyQuery;
+  @MockitoBean private RemunerationQuery monthlyQuery;
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean private StoreActivationService storeActivationService;

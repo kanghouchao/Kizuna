@@ -2,6 +2,7 @@ import { expect, type APIRequestContext } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { PLATFORM_URL } from "../base-url";
 import {
+  getSelfDailyRemunerations,
   acceptCastInvitation,
   acceptExistingCastInvitation,
   cancelOrder,
@@ -519,5 +520,126 @@ Then(
         /customer|contact|remarks|corrected_by|receptionist|actor|本人月次へ返してはいけない顧客/,
       );
     }
+  },
+);
+
+Then(
+  "本人の日別照会は歴史在籍と専用項目を守り月別へ戻れる",
+  async ({ request, page, $testInfo: testInfo }) => {
+    const headers = { Authorization: `Bearer ${token}` };
+    const params = { store_id: STORE1_ID, business_date: oldDate };
+    const response = await getSelfDailyRemunerations(request, {
+      headers,
+      params: { ...params, size: 1 },
+    });
+    expect(response.status()).toBe(200);
+    const result = await response.json();
+    expect(result.total_remuneration).toBe(initialTotal);
+    expect(Object.keys(result).sort()).toEqual([
+      "business_date",
+      "orders",
+      "store_id",
+      "store_name",
+      "total_remuneration",
+    ]);
+    expect(Object.keys(result.orders.content[0]).sort()).toEqual([
+      "accrued_remuneration",
+      "business_date",
+      "completion_invalidated",
+      "order_id",
+      "service_summary",
+    ]);
+    expect(JSON.stringify(result)).not.toContain(privateName);
+    const suspended = await getSelfDailyRemunerations(request, {
+      headers,
+      params: { ...params, store_id: secondStore },
+    });
+    expect(suspended.status()).toBe(200);
+    expect((await suspended.json()).total_remuneration).toBe(7000);
+    const foreign = await getSelfDailyRemunerations(request, {
+      headers: { Authorization: `Bearer ${otherToken}` },
+      params,
+    });
+    expect(
+      (await foreign.json()).orders.content.map(
+        (r: { order_id: string }) => r.order_id,
+      ),
+    ).not.toContain(firstOrder);
+    await page.getByRole("button", { name: "日別", exact: true }).click();
+    await page.getByLabel("営業日", { exact: true }).fill(oldDate);
+    await page.getByRole("button", { name: "照会", exact: true }).click();
+    await expect(page.getByLabel("日別報酬合計")).toHaveText(
+      `¥${initialTotal.toLocaleString("ja-JP")}`,
+    );
+    await expect(
+      page.getByRole("button", { name: "PDF ダウンロード" }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "詳細・変更履歴を確認" })
+      .first()
+      .click();
+    await page
+      .getByRole("button", { name: "変更履歴を確認", exact: true })
+      .click();
+    await expect(page.getByText("変更履歴はありません")).toBeVisible();
+    await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
+    await correctOrderExtension(
+      request,
+      manager,
+      firstOrder,
+      "本人の日別延長を訂正",
+    );
+    expect(
+      (
+        await (
+          await getSelfDailyRemunerations(request, { headers, params })
+        ).json()
+      ).total_remuneration,
+    ).toBe(initialTotal + 2000);
+    await invalidateOrder(
+      request,
+      manager,
+      firstOrder,
+      "本人の日別未提供を無効化",
+    );
+    await page.getByRole("button", { name: "照会", exact: true }).click();
+    await expect(page.getByLabel("日別報酬合計")).toHaveText(
+      `¥${(initialTotal - 7000).toLocaleString("ja-JP")}`,
+    );
+    await page.route("**/api/platform/me/daily-remunerations?*", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "一時的に取得できません" }),
+      }),
+    );
+    await page.getByRole("button", { name: "照会", exact: true }).click();
+    await expect(
+      page.getByText("日別給与明細を取得できませんでした。"),
+    ).toBeVisible();
+    await expect(page.getByLabel("日別報酬合計")).toHaveCount(0);
+    await page.unroute("**/api/platform/me/daily-remunerations?*");
+    await page.getByRole("button", { name: "再試行", exact: true }).click();
+    await expect(page.getByLabel("日別報酬合計")).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((theme) => {
+        document.documentElement.classList.remove("light", "dark");
+        document.documentElement.classList.add(theme);
+        document.documentElement.style.colorScheme = theme;
+      }, theme);
+      const path = testInfo.outputPath(`daily-self-${theme}.png`);
+      await page.screenshot({ path, fullPage: true, animations: "disabled" });
+      await testInfo.attach(`日別本人-${theme}`, {
+        path,
+        contentType: "image/png",
+      });
+    }
+    await page.getByRole("button", { name: "月別", exact: true }).click();
+    await expect(page.getByLabel("日別報酬合計")).toHaveCount(0);
+    await page.getByRole("button", { name: "照会", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "PDF ダウンロード" }),
+    ).toBeVisible();
   },
 );
