@@ -2,8 +2,8 @@ package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
-import com.kizuna.order.infrastructure.MonthlyRemunerationQuery;
 import com.kizuna.order.infrastructure.PlatformMonthlyRemunerationStores;
+import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
@@ -26,7 +26,7 @@ public class MonthlyPdfSnapshotService {
   private final MonthlyRemunerationService store;
   private final PlatformMonthlyRemunerationService platform;
   private final SelfMonthlyRemunerationService self;
-  private final MonthlyRemunerationQuery query;
+  private final RemunerationQuery query;
   private final PlatformMonthlyRemunerationStores stores;
   private final StoreContext context;
   private final ActorIdentityService actors;

@@ -23,8 +23,8 @@ import com.kizuna.order.application.MonthlyRemunerationService;
 import com.kizuna.order.application.PlatformMonthlyRemunerationService;
 import com.kizuna.order.application.SelfMonthlyRemunerationService;
 import com.kizuna.order.infrastructure.MonthlyPdfRenderer;
-import com.kizuna.order.infrastructure.MonthlyRemunerationQuery;
 import com.kizuna.order.infrastructure.PlatformMonthlyRemunerationStores;
+import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
@@ -101,7 +101,7 @@ class MonthlyPdfControllerTest {
 
   @Autowired MockMvc mvc;
   @Autowired AppProperties properties;
-  @MockitoBean MonthlyRemunerationQuery query;
+  @MockitoBean RemunerationQuery query;
   @MockitoBean PlatformMonthlyRemunerationStores stores;
   @MockitoBean SelfMonthlyRemunerationQuery self;
   @MockitoBean ActorIdentityService actors;

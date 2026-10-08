@@ -11,8 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.order.application.PlatformMonthlyRemunerationService;
-import com.kizuna.order.infrastructure.MonthlyRemunerationQuery;
 import com.kizuna.order.infrastructure.PlatformMonthlyRemunerationStores;
+import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -67,7 +67,7 @@ class PlatformMonthlyRemunerationControllerTest {
   @Autowired private MockMvc mvc;
   @MockitoBean private EntityManager entityManager;
   @MockitoBean private PlatformTransactionManager transactionManager;
-  @MockitoBean private MonthlyRemunerationQuery query;
+  @MockitoBean private RemunerationQuery query;
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean private StoreActivationService storeActivationService;

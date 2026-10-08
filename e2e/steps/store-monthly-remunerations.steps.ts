@@ -2,6 +2,7 @@ import { expect, type APIRequestContext } from "@playwright/test";
 import { PLATFORM_URL } from "../base-url";
 import { createBdd } from "playwright-bdd";
 import {
+  getSelfDailyRemunerations,
   acceptCastInvitation,
   createAgreedOrder,
   completeAgreedOrder,
@@ -492,5 +493,198 @@ Then(
       });
       expect(response.status()).toBe(400);
     }
+  },
+);
+
+When("店長が日別給与明細で原営業日を照会する", async ({ page }) => {
+  const storeId = await loginViaUiAndEnterStore(page);
+  await page.goto(
+    `${PLATFORM_URL}/store/${storeId}/orders/monthly-remunerations`,
+  );
+  await page.getByRole("button", { name: "日別", exact: true }).click();
+  await page.getByRole("combobox", { name: "キャスト本人" }).click();
+  await page.getByPlaceholder("源氏名で検索").fill(`${name}-旧名`);
+  await page
+    .getByRole("option", { name: `${name}-新名`, exact: false })
+    .click();
+  await page.getByLabel("営業日", { exact: true }).fill(originalDate);
+  await page.getByRole("button", { name: "照会", exact: true }).click();
+  await expect(page.getByLabel("日別報酬合計")).toHaveText("¥147,000");
+  await expect(
+    page.getByRole("button", { name: "PDF ダウンロード" }),
+  ).toHaveCount(0);
+});
+
+Then(
+  "日別報酬は全ページを集計し訂正と無効化を原日に反映する",
+  async ({ request, page, $testInfo: testInfo }) => {
+    const headers = {
+      ...STORE_HEADERS,
+      Authorization: `Bearer ${managerToken}`,
+    };
+    const daily = async (index = 0) => {
+      const response = await request.get("/api/store/daily-remunerations", {
+        headers,
+        params: {
+          person_id: personId,
+          business_date: originalDate,
+          page: index,
+          size: 20,
+        },
+      });
+      expect(response.status(), await response.text()).toBe(200);
+      return response.json();
+    };
+    const pages = [await daily(), await daily(1)];
+    expect(pages.map((p) => p.total_remuneration)).toEqual([147000, 147000]);
+    expect(
+      pages
+        .flatMap((p) => p.orders.content)
+        .map((r: { order_id: string }) => r.order_id)
+        .sort(),
+    ).toEqual([...orderIds].sort());
+    await page.getByRole("button", { name: "次へ", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "訂正履歴", exact: true }),
+    ).toHaveCount(1);
+    await completeAgreedOrder(request, managerToken, pendingId);
+    expect((await daily()).total_remuneration).toBe(154000);
+    await correctOrderExtension(
+      request,
+      managerToken,
+      originalOrderId,
+      "日別の原営業日の延長を訂正",
+    );
+    expect((await daily()).total_remuneration).toBe(156000);
+    await invalidateOrder(
+      request,
+      managerToken,
+      originalOrderId,
+      "日別の未提供を無効化",
+    );
+    const invalidated = await request.get("/api/store/daily-remunerations", {
+      headers,
+      params: { person_id: personId, business_date: originalDate, size: 2000 },
+    });
+    const result = await invalidated.json();
+    expect(result.total_remuneration).toBe(147000);
+    expect(result.orders.total_elements).toBe(22);
+    expect(
+      result.orders.content.find(
+        (r: { order_id: string }) => r.order_id === originalOrderId,
+      ),
+    ).toMatchObject({
+      accrued_remuneration: 0,
+      completion_invalidated: true,
+      business_date: originalDate,
+    });
+    await page.getByRole("button", { name: "照会", exact: true }).click();
+    await expect(
+      page.getByText("全 22 件の合計。", { exact: false }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "次へ", exact: true }).click();
+    const row = page.getByRole("row").filter({ hasText: originalOrderId });
+    await row.getByRole("button", { name: "訂正履歴" }).click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "日別の原営業日の延長を訂正",
+    );
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((theme) => {
+        document.documentElement.classList.remove("light", "dark");
+        document.documentElement.classList.add(theme);
+        document.documentElement.style.colorScheme = theme;
+      }, theme);
+      const path = testInfo.outputPath(`daily-store-${theme}.png`);
+      await page.screenshot({ path, fullPage: true, animations: "disabled" });
+      await testInfo.attach(`日別店舗-${theme}`, {
+        path,
+        contentType: "image/png",
+      });
+    }
+    await page.getByLabel("営業日", { exact: true }).fill("0001-01-01");
+    await expect(page.getByLabel("日別報酬合計")).toHaveCount(0);
+    await page.getByRole("button", { name: "照会", exact: true }).click();
+    await expect(page.getByLabel("日別報酬合計")).toHaveText("¥0");
+    await expect(page.getByText("営業日の完了受注はありません")).toBeVisible();
+  },
+);
+
+Then(
+  "日別照会は店舗越権と他人照会と不正入力を拒否する",
+  async ({ request }) => {
+    const path = "/api/store/daily-remunerations";
+    const params = { person_id: staffPersonId, business_date: "2026-09-30" };
+    const headers = { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` };
+    expect((await request.get(path, { headers, params })).status()).toBe(200);
+    expect(
+      (
+        await request.get(path, {
+          headers,
+          params: { ...params, person_id: foreignPersonId },
+        })
+      ).status(),
+    ).toBe(404);
+    expect(
+      (
+        await request.get(path, {
+          headers: { ...headers, "X-Store-ID": otherStoreId },
+          params,
+        })
+      ).status(),
+    ).toBe(403);
+    expect(
+      (await request.get(path, { headers: STORE_HEADERS, params })).status(),
+    ).toBe(401);
+    expect(
+      (
+        await request.get(path, {
+          headers: {
+            ...STORE_HEADERS,
+            "X-Store-ID": otherStoreId,
+            Authorization: `Bearer ${castToken}`,
+          },
+          params,
+        })
+      ).status(),
+    ).toBe(403);
+    for (const business_date of ["2026-02-30", "0000-01-01", "2026-9-30"])
+      expect(
+        (
+          await request.get(path, {
+            headers,
+            params: { ...params, business_date },
+          })
+        ).status(),
+      ).toBe(400);
+    for (const page of [-1, 2147483647])
+      expect(
+        (
+          await request.get(path, { headers, params: { ...params, page } })
+        ).status(),
+      ).toBe(400);
+    const selfParams = { store_id: STORE1_ID, business_date: "2026-09-30" };
+    expect(
+      (
+        await getSelfDailyRemunerations(request, { params: selfParams })
+      ).status(),
+    ).toBe(401);
+    expect(
+      (
+        await getSelfDailyRemunerations(request, {
+          headers: { Authorization: `Bearer ${staffToken}` },
+          params: selfParams,
+        })
+      ).status(),
+    ).toBe(403);
+    expect(
+      (
+        await getSelfDailyRemunerations(request, {
+          headers: { Authorization: `Bearer ${castToken}` },
+          params: { ...selfParams, person_id: staffPersonId },
+        })
+      ).status(),
+    ).toBe(404);
   },
 );
