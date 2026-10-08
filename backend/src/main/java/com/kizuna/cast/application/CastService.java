@@ -27,11 +27,14 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,6 +42,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,6 +76,7 @@ public class CastService {
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
   private final AttendanceReferenceCheck attendanceReferenceCheck;
   private final OrderReferenceCheck orderReferenceCheck;
+  private final BusinessAudit audit;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -172,8 +177,31 @@ public class CastService {
                 .build());
     enrollmentService.recordCreation(enrollment, actorEmail);
     CastProfile profile = profileRepository.save(castMapper.toProfile(request, enrollment.getId()));
+    profileRepository.flush();
+    audit.record(
+        actorEmail,
+        enrollment.getStoreId(),
+        "CAST_ENROLLMENT_CREATED",
+        "CAST_ENROLLMENT",
+        enrollment.getId(),
+        null,
+        null,
+        Map.of(),
+        snapshot(enrollment, profile));
     return castMapper.toResponse(
         enrollment, profile, null, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
+  }
+
+  private static Map<String, String> snapshot(CastEnrollment enrollment, CastProfile profile) {
+    return Map.of(
+        "exists", "true",
+        "cast_id", Objects.toString(enrollment.getCastId(), ""),
+        "status", enrollment.getStatus().name(),
+        "ended_at", Objects.toString(enrollment.getEndedAt(), ""),
+        "enrollment_version", Objects.toString(enrollment.getVersion(), ""),
+        "profile_id", Objects.toString(profile.getId(), ""),
+        "profile_version", Objects.toString(profile.getVersion(), ""),
+        "publication_status", profile.getPublicationStatus().name());
   }
 
   @StoreScoped
@@ -185,6 +213,8 @@ public class CastService {
             .findScopedByIdForUpdate(id)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
     CastProfile profile = requireProfile(id);
+    var before = snapshot(enrollment, profile);
+    var privateBefore = privateValues(enrollment, profile);
     if (request.getName() != null && request.getName().isBlank())
       throw new ServiceException("源氏名は必須です");
     if (request.getCustomFields() != null) {
@@ -202,8 +232,47 @@ public class CastService {
       profile.replaceCustomFields(external);
     }
     profile.apply(castMapper.toPatch(request));
+    var changedFields = new TreeSet<String>();
+    var privateAfter = privateValues(enrollment, profile);
+    privateAfter.forEach(
+        (key, value) -> {
+          if (!Objects.equals(privateBefore.get(key), value)) changedFields.add(key);
+        });
+    boolean changed = !before.equals(snapshot(enrollment, profile)) || !changedFields.isEmpty();
+    profileRepository.flush();
+    if (changed) {
+      var after = new HashMap<>(snapshot(enrollment, profile));
+      if (!changedFields.isEmpty())
+        after.put("redacted_fields_changed", String.join(",", changedFields));
+      audit.record(
+          actorEmail,
+          enrollment.getStoreId(),
+          "CAST_ENROLLMENT_UPDATED",
+          "CAST_ENROLLMENT",
+          enrollment.getId(),
+          null,
+          null,
+          before,
+          after);
+    }
     return castMapper.toResponse(
         enrollment, profile, null, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
+  }
+
+  private static Map<String, Object> privateValues(CastEnrollment enrollment, CastProfile profile) {
+    var values = new HashMap<String, Object>();
+    values.put("name", profile.getName());
+    values.put("photo_url", profile.getPhotoUrl());
+    values.put("introduction", profile.getIntroduction());
+    values.put("age", profile.getAge());
+    values.put("height", profile.getHeight());
+    values.put("bust", profile.getBust());
+    values.put("waist", profile.getWaist());
+    values.put("hip", profile.getHip());
+    values.put("display_order", profile.getDisplayOrder());
+    values.put("internal_custom_fields", new HashMap<>(enrollment.getCustomFields()));
+    values.put("public_custom_fields", new HashMap<>(profile.getCustomFields()));
+    return values;
   }
 
   @StoreScoped
@@ -211,8 +280,30 @@ public class CastService {
   public CastPublicationResponse changePublication(String id, CastPublicationStatus status) {
     requireEnrollment(id);
     CastProfile profile = requireProfile(id);
+    var before = profileSnapshot(profile);
     profile.changePublication(status);
+    boolean changed = !before.equals(profileSnapshot(profile));
+    profileRepository.flush();
+    if (changed) {
+      audit.record(
+          SecurityContextHolder.getContext().getAuthentication().getName(),
+          profile.getStoreId(),
+          "CAST_PROFILE_PUBLICATION_CHANGED",
+          "CAST_PROFILE",
+          profile.getId(),
+          "CAST_ENROLLMENT",
+          id,
+          before,
+          profileSnapshot(profile));
+    }
     return new CastPublicationResponse(profile.getPublicationStatus());
+  }
+
+  private static Map<String, String> profileSnapshot(CastProfile profile) {
+    return Map.of(
+        "enrollment_id", profile.getEnrollmentId(),
+        "version", Objects.toString(profile.getVersion(), ""),
+        "publication_status", profile.getPublicationStatus().name());
   }
 
   /** カスタムフィールド値を検証する。未知 key・値の文字数超過はいずれも {@link ServiceException}（400）。 */

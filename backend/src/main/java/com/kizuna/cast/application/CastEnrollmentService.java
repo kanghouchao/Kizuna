@@ -17,12 +17,14 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
@@ -38,14 +40,18 @@ public class CastEnrollmentService {
   private final PlatformUserRepository users;
   private final StoreRepository stores;
   private final StoreContext storeContext;
+  private final BusinessAudit audit;
 
   @StoreScoped
   @Transactional
   public CastEnrollmentStatusResponse suspend(String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(id);
+    var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
     enrollment.suspend();
-    record(enrollment, previous, actorEmail, now());
+    var history = record(enrollment, previous, actorEmail, now());
+    enrollments.flush();
+    recordAudit(enrollment, history, actorEmail, before);
     return response(enrollment);
   }
 
@@ -53,9 +59,12 @@ public class CastEnrollmentService {
   @Transactional
   public CastEnrollmentStatusResponse resume(String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(id);
+    var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
     enrollment.resume();
-    record(enrollment, previous, actorEmail, now());
+    var history = record(enrollment, previous, actorEmail, now());
+    enrollments.flush();
+    recordAudit(enrollment, history, actorEmail, before);
     return response(enrollment);
   }
 
@@ -63,10 +72,13 @@ public class CastEnrollmentService {
   @Transactional
   public CastEnrollmentStatusResponse withdraw(String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(id);
+    var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
     OffsetDateTime at = now();
     enrollment.withdraw(at);
-    record(enrollment, previous, actorEmail, at);
+    var history = record(enrollment, previous, actorEmail, at);
+    enrollments.flush();
+    recordAudit(enrollment, history, actorEmail, before);
     return response(enrollment);
   }
 
@@ -175,12 +187,12 @@ public class CastEnrollmentService {
         .getId();
   }
 
-  private void record(
+  private CastEnrollmentStatusHistory record(
       CastEnrollment enrollment,
       CastEnrollmentStatus previous,
       String actorEmail,
       OffsetDateTime at) {
-    histories.save(
+    return histories.save(
         CastEnrollmentStatusHistory.builder()
             .enrollmentId(enrollment.getId())
             .previousStatus(previous)
@@ -188,6 +200,38 @@ public class CastEnrollmentService {
             .actorId(actorId(actorEmail))
             .recordedAt(at)
             .build());
+  }
+
+  private void recordAudit(
+      CastEnrollment enrollment,
+      CastEnrollmentStatusHistory history,
+      String actorEmail,
+      Map<String, String> before) {
+    String action =
+        switch (enrollment.getStatus()) {
+          case SUSPENDED -> "CAST_ENROLLMENT_SUSPENDED";
+          case ENROLLED -> "CAST_ENROLLMENT_RESUMED";
+          case WITHDRAWN -> "CAST_ENROLLMENT_WITHDRAWN";
+        };
+    audit.record(
+        actorEmail,
+        enrollment.getStoreId(),
+        action,
+        "CAST_ENROLLMENT",
+        enrollment.getId(),
+        "CAST_ENROLLMENT_STATUS_HISTORY",
+        history.getId(),
+        before,
+        snapshot(enrollment));
+  }
+
+  private static Map<String, String> snapshot(CastEnrollment enrollment) {
+    return Map.of(
+        "exists", "true",
+        "cast_id", Objects.toString(enrollment.getCastId(), ""),
+        "status", enrollment.getStatus().name(),
+        "ended_at", Objects.toString(enrollment.getEndedAt(), ""),
+        "version", Objects.toString(enrollment.getVersion(), ""));
   }
 
   private static OffsetDateTime now() {

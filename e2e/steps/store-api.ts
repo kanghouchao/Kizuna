@@ -125,40 +125,65 @@ export async function setCustomTexts(
 }
 
 /** キャストを作成し id を返す（POST /api/store/casts, hasAuthority('CAST_MANAGE')）。 */
+export async function createUnpublishedCast(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+  storeId: string = STORE1_ID,
+): Promise<string> {
+  const response = await request.post("/api/store/casts", {
+    headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
+    data: { name },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).id;
+}
+
+export async function setCastPublication(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  publicationStatus: "PUBLISHED" | "UNPUBLISHED",
+  storeId: string = STORE1_ID,
+): Promise<void> {
+  const response = await request.patch(`/api/store/casts/${id}/publication`, {
+    headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
+    data: { publication_status: publicationStatus },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+}
+
 export async function createCast(
   request: APIRequestContext,
   token: string,
   name: string,
   storeId: string = STORE1_ID,
 ): Promise<string> {
-  const res = await request.post("/api/store/casts", {
-    headers: {
-      ...STORE_HEADERS,
-      "X-Store-ID": storeId,
-      Authorization: `Bearer ${token}`,
-    },
-    data: { name },
+  const id = await createUnpublishedCast(request, token, name, storeId);
+  await setCastPublication(request, token, id, "PUBLISHED", storeId);
+  return id;
+}
+
+export async function renameCast(request: APIRequestContext, token: string, id: string, name: string): Promise<void> {
+  const response = await request.put(`/api/store/casts/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { name },
   });
-  if (!res.ok()) {
-    throw new Error(`create cast failed: ${res.status()} ${await res.text()}`);
-  }
-  const body = await res.json();
-  const publication = await request.patch(
-    `/api/store/casts/${body.id}/publication`,
-    {
-      headers: {
-        ...STORE_HEADERS,
-        "X-Store-ID": storeId,
-        Authorization: `Bearer ${token}`,
-      },
-      data: { publication_status: "PUBLISHED" },
-    },
-  );
-  if (!publication.ok())
-    throw new Error(
-      `publish cast failed: ${publication.status()} ${await publication.text()}`,
-    );
-  return body.id as string;
+  expect(response.status(), await response.text()).toBe(200);
+}
+
+export async function resumeCast(request: APIRequestContext, token: string, id: string): Promise<void> {
+  const response = await request.post(`/api/store/casts/${id}/resumption`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+}
+
+export async function castStatusHistory(request: APIRequestContext, token: string, id: string): Promise<{ content: { id: string; actor_id: number; new_status: string }[] }> {
+  const response = await request.get(`/api/store/casts/${id}/status-histories`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
 }
 
 /** キャストを削除する（DELETE /api/store/casts/{id}, hasAuthority('CAST_MANAGE')）。 */
@@ -645,7 +670,7 @@ export async function withdrawCast(
       Authorization: `Bearer ${token}`,
     },
   });
-  expect(response.ok()).toBeTruthy();
+  expect(response.status(), await response.text()).toBe(200);
 }
 
 export async function suspendCast(
@@ -1024,8 +1049,8 @@ export type AuditEventSummary = {
   target_id: string;
   target_type: string;
   result: string;
-  source_type: string | null;
-  source_id: string | null;
+  source_type?: string;
+  source_id?: string;
 };
 
 export async function listAuditEvents(
