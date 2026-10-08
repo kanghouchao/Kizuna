@@ -21,6 +21,9 @@ import lombok.Getter;
 public enum PermissionCode {
   /** 口コミの閲覧。 */
   REVIEW_VIEW(Console.STORE),
+  SURVEY_VIEW(Console.STORE),
+  SURVEY_MANAGE(Console.STORE),
+  SURVEY_RECORD(Console.STORE),
   /** 口コミの手動受付・訂正・取り下げと公開許可の記録。 */
   REVIEW_MANAGE(Console.STORE),
   /** 口コミの内部承認・却下。 */

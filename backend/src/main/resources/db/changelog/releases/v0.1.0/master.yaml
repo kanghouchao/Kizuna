@@ -83,6 +83,9 @@ databaseChangeLog:
       file: store/16-review-intake.yaml
       relativeToChangelogFile: true
   - include:
+      file: store/17-survey-intake.yaml
+      relativeToChangelogFile: true
+  - include:
       file: seed/01-roles.yaml
       relativeToChangelogFile: true
   - include:

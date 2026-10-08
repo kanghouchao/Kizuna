@@ -17,6 +17,7 @@ package com.kizuna.shared.exception;
  * <p>各成員の字面が DDL に実在することと、上の NO ACTION 規律は適応度テスト（{@code DbConstraintLiteralTests}）が機械検証する。
  */
 public enum DbConstraint {
+  UQ_T_SURVEY_OPERATIONS_KEY("uq_t_survey_operations_key"),
   UQ_T_REVIEW_OPERATIONS_KEY("uq_t_review_operations_key"),
   UQ_T_NOTIFICATION_DELIVERIES_KEY("uq_t_notification_deliveries_key"),
   UQ_T_EXECUTION_REQUESTS_KEY("uq_t_execution_requests_key"),

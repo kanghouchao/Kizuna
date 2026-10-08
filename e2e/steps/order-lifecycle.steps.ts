@@ -42,7 +42,7 @@ Given('店舗コンソールへ入り受注一覧を開く', async ({ page, requ
 
 async function registerPhoneOrder(page: Page, chooseCustomer?: () => Promise<void>) {
   await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/create`);
-  await page.getByLabel('お客様名', { exact: true }).fill(customerName);
+  await page.getByRole('textbox', { name: 'お客様名', exact: true }).fill(customerName);
   if (chooseCustomer) await chooseCustomer();
   await page.getByLabel('営業日', { exact: true }).fill(todayInTokyo());
   await page.getByLabel('人数', { exact: true }).fill('2');
