@@ -1,6 +1,6 @@
 # アンケートの版管理と回答の手動受付 — 394-B 契約案
 
-実装票: [#1007](https://github.com/kanghouchao/Kizuna/issues/1007)。親課題: [#394](https://github.com/kanghouchao/Kizuna/issues/394)。基点: master `4a426636ba67db894bbe7a309dae62e228d464c7`。状態: **2026-10-07 主タスクがHTTP・状態・正規化・計数・回復・試験面と単独縦切片を承認済み。実装可能**。
+実装票: [#1007](https://github.com/kanghouchao/Kizuna/issues/1007)。親課題: [#394](https://github.com/kanghouchao/Kizuna/issues/394)。設計基点: master `4a426636ba67db894bbe7a309dae62e228d464c7`。実装・最終検証基点: master `86be6e51c9eb59419e423e3fb40752b11489f4f7`。状態: **2026-10-07 主タスクがHTTP・状態・正規化・計数・回復・試験面と単独縦切片を承認済み。実装・ローカル最終検証完了**。
 
 ## 課題と解決
 
