@@ -26,6 +26,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.UserType;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +43,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class CastServiceTest {
@@ -54,16 +58,20 @@ class CastServiceTest {
   @Mock CastEnrollmentStatusHistoryRepository histories;
   @Mock CastEnrollmentSnapshotRepository snapshots;
   @Mock PlatformUserRepository users;
+  @Mock BusinessAudit audit;
   CastService service;
 
   @BeforeEach
   void setup() {
     StoreContext context = new StoreContext();
     context.setStoreId(1L);
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken("actor", null, List.of()));
     service =
         new CastService(
             enrollments,
-            new CastEnrollmentService(enrollments, histories, snapshots, users, stores, context),
+            new CastEnrollmentService(
+                enrollments, histories, snapshots, users, stores, context, audit),
             Mappers.getMapper(CastMapper.class),
             profiles,
             stores,
@@ -71,7 +79,13 @@ class CastServiceTest {
             invitations,
             definitions,
             attendance,
-            orders);
+            orders,
+            audit);
+  }
+
+  @AfterEach
+  void clearAuthentication() {
+    SecurityContextHolder.clearContext();
   }
 
   private void existing() {
@@ -159,7 +173,7 @@ class CastServiceTest {
     CastEnrollment enrollment = CastEnrollment.builder().build();
     when(enrollments.findById("e1")).thenReturn(Optional.of(enrollment));
     when(profiles.findByEnrollmentId("e1"))
-        .thenReturn(Optional.of(CastProfile.builder().name("花").build()));
+        .thenReturn(Optional.of(CastProfile.builder().name("花").enrollmentId("e1").build()));
     assertThat(service.changePublication("e1", CastPublicationStatus.PUBLISHED).publicationStatus())
         .isEqualTo(CastPublicationStatus.PUBLISHED);
   }
