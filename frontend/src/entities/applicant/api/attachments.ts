@@ -4,6 +4,7 @@ import type {
   ApplicantAttachment,
   ApplicantAttachmentUpload,
   ApplicantAttachmentPolicy,
+  ApplicantAttachmentOperation,
 } from '../model/types';
 const resource = (id: string) => `/store/applicants/${requireId(id, '応募者')}`;
 export const applicantAttachmentApi = {
@@ -21,6 +22,12 @@ export const applicantAttachmentApi = {
       (await apiClient.get(`${resource(id)}/attachment-uploads`, { params: { cursor, size: 20 } }))
         .data
     ),
+  operation: async (id: string, key: string): Promise<ApplicantAttachmentOperation> =>
+    (
+      await apiClient.get(
+        `${resource(id)}/attachment-operations/${encodeURIComponent(requireId(key, '操作'))}`
+      )
+    ).data,
   upload: async (
     id: string,
     file: File,

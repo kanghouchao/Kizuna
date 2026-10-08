@@ -103,6 +103,11 @@ export interface ApplicantAttachmentUpload extends ApplicantAttachment {
   status: 'PENDING' | 'RECOVERY_REQUIRED';
   failure_code: string | null;
 }
+export interface ApplicantAttachmentOperation extends ApplicantAttachment {
+  idempotency_key: string;
+  status: 'PENDING' | 'RECOVERY_REQUIRED' | 'READY';
+  failure_code?: 'STORAGE_UNAVAILABLE' | 'CONTENT_MISMATCH' | 'NORMALIZER_UNAVAILABLE' | null;
+}
 export interface ApplicantAttachmentPolicy {
   configured: boolean;
   allowed_media_types: string[];

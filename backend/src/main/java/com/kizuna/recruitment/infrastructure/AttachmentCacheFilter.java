@@ -28,6 +28,7 @@ public class AttachmentCacheFilter extends OncePerRequestFilter {
               "/store/applicants/{id}/attachments",
               "/store/applicants/{id}/attachments/{attachmentId}/content",
               "/store/applicants/{id}/attachment-uploads",
+              "/store/applicants/{id}/attachment-operations/{key}",
               "/store/applicants/{id}/attachment-uploads/{uploadId}/content")
           .map(PathPatternParser.defaultInstance::parse)
           .toList();

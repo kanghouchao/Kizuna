@@ -56,6 +56,18 @@ public class AttachmentService {
   @PreAuthorize(WRITE)
   public UUID preflight(String applicantId, String uploadId, String rawKey) {
     storage.requireConfigured();
+    UUID key = operationKey(rawKey);
+    transactions.preflight(applicantId, uploadId, key);
+    return key;
+  }
+
+  @PreAuthorize(WRITE)
+  public AttachmentUploadResponse operation(String applicantId, String rawKey) {
+    storage.requireConfigured();
+    return AttachmentUploadResponse.from(transactions.operation(applicantId, operationKey(rawKey)));
+  }
+
+  private static UUID operationKey(String rawKey) {
     UUID key;
     try {
       key = UUID.fromString(rawKey);
@@ -63,7 +75,6 @@ public class AttachmentService {
     } catch (IllegalArgumentException | NullPointerException exception) {
       throw new ServiceException("アップロードの操作キーが不正です");
     }
-    transactions.preflight(applicantId, uploadId, key);
     return key;
   }
 

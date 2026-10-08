@@ -149,3 +149,17 @@ focused検証を先行し、重いTaskfile検証は主タスクが調整する39
 Codex初回指摘の回帰では、一時領域のI/O障害を503、画像の解析失敗を400として区別する。正規化方式の不一致・処理枠不足・期限超過・再現失敗はNORMALIZER_UNAVAILABLEを保存し、既存画像での回復成功後は分類を消去する。実PostgreSQLの6件（skipなし）とHTTP境界・実HTTP低速転送を含むfocused検証で確認した。
 
 #1003の口コミ片を含むmaster `4a426636ba67db894bbe7a309dae62e228d464c7` への同期では、REVIEWの3権限と添付の2権限を両方保持する。口コミのschema・include・CRMメニューと応募者のschema・HRMメニューを維持し、競合は権限件数の断言だけを再計算した。
+
+## 操作結果の照合
+
+`GET /store/applicants/{id}/attachment-operations/{key}` は、既存の添付管理権限（RECRUITMENT_VIEW・RECRUITMENT_ATTACHMENT_VIEW・RECRUITMENT_ATTACHMENT_MANAGE）で単一操作を読み取る。keyは既存Idempotency-Keyと同じUUIDの正規形式をround-tripで検証し、短縮表記は400にする。キーは認証用の秘密ではなく、認証・店舗・応募者の範囲検査を常に行う。無権限店舗の指定は403、認可店舗内で不可視・不存在の応募者や操作は404とする。
+
+200は既存AttachmentUploadResponseのid、idempotency_key、status、media_type、size_bytes、created_atと、省略可能なfailure_codeを返す。statusはPENDING・RECOVERY_REQUIRED・READY。NON_NULLによりnullのfailure_codeは省略される。閲覧用AttachmentSummaryResponseへ操作キーは追加しない。200/400/401/403/404/503はprivate,no-store/nosniff境界に含める。読み取りは独立プロキシのStoreScoped/readOnlyトランザクションで行い、終端応募者も照会できる。アップロードpreflight、予約ロック、画像変換、S3、監査書込みは行わない。固定エラー文言と既存要求IDを使い、キー・画像・本文のログを増やさない。
+
+未完了一覧は一つの取得結果を使い、同じ操作のフォームを重複表示しない。新POSTと回復PUTは、成功応答または同じキーのREADY照合でのみ入力を清掃する。404は読取時点の未発見であり、原要求が後から確定し得るため、原File/keyを保持して同キーの明示再送と再照会を可能にする。照会失敗は対象操作だけを止める。古い応答が新しい操作・分類を上書きしてはならない。
+
+入力訂正は送信前の検証失敗、または400による処理終了と精確照合404の両方が確認できた場合に可能とする。後者もキーは維持する。通信断・5xxなど結果不明の原画像を別画像へ差し替えない。添付の保存完了後に選ぶ次の画像は、新しい操作キーを使う。
+
+既存予約の回復で原画像照合を409で拒否され、同じ操作の存在を精確照合できた場合も、正しい原画像を選び直せる。キーは固定し、サーバーの元画像hash照合を維持する。
+
+原画像の訂正可否は409全般ではなく、既存の固定エラー「元のアップロードと同じ画像・形式・操作キーで再送してください」に限って判定する。処理中や変換方式の競合では原Fileを保持する。

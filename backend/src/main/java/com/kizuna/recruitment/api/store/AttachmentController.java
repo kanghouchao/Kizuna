@@ -72,6 +72,12 @@ public class AttachmentController {
     return attachments.uploads(id, cursor, size);
   }
 
+  @GetMapping("/{id}/attachment-operations/{key}")
+  @PreAuthorize(AttachmentService.WRITE)
+  public AttachmentUploadResponse operation(@PathVariable String id, @PathVariable String key) {
+    return attachments.operation(id, key);
+  }
+
   @PostMapping("/{id}/attachments")
   @PreAuthorize(AttachmentService.WRITE)
   public WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>> upload(
