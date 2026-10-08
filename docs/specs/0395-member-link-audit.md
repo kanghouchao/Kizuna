@@ -46,7 +46,7 @@ PERM_CUSTOMER_MANAGE、既存要求/応答、401/403/404/400/409の分類、顧�
 
 最終検証はTask lint/test/build/e2eと双軸レビュー。利用者の再開指示に基づき、独立スタックでfocusedと全量E2Eを順次確認する。draft PR→同一HEADのCI実job/step→Ready→Codex Completedと公式bot反応を確認する。所有者が手動合流する。
 
-2026-10-08、master `e5ba6826`上でTask lint/test/build/e2eは全てexit 0。実PG8件（skipなし）、focused2件、全量E2E88件（retryなし）、TypeScript検査、双軸reviewを完了した。同一HEADのCI/Codexと手動合流は後続のPRで確認する。
+2026-10-08、master `e5ba6826`上でTask lint/test/build/e2eは全てexit 0。実PG8件（skipなし）、focused2件、全量E2E88件（retryなし）、TypeScript検査、双軸reviewを完了した。同一HEADのCI7項目と各実step、Codex Completedと公式bot👍を確認し、PR #1016をmaster `162af97f`へ合流した。#1009はCLOSED、#395はOPENを継続する。
 
 ## 対象外
 

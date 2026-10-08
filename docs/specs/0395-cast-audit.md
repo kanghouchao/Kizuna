@@ -1,12 +1,12 @@
 # キャスト在籍・公開プロフィールの6操作の共通監査
 
-公開票: [#1010](https://github.com/kanghouchao/Kizuna/issues/1010)。技術契約承認済み、実装後の実PG・実HTTP検証は未完了。
+公開票: [#1010](https://github.com/kanghouchao/Kizuna/issues/1010)。技術契約承認済み、実PG・実HTTP・Task全量検証完了。同一HEADのCI/CodexはPRで確認する。
 
 ## 背景 / 目的
 
 親 #395 の業務監査接続のうち、キャスト在籍・公開プロフィールの作成、編集、公開切替、停止、再開、退店を同一取引の共通監査へ接続する。2実体の変更を実際のversionと安全な参照で辿り、任意入力や個人情報を監査へ複写しない。
 
-2026-10-08、6つの非削除入口の技術契約は承認済み。基点はmaster `86be6e51c9eb59419e423e3fb40752b11489f4f7`。#1009から独立し、削除・級聯副作用は別契約として残す。
+2026-10-08、6つの非削除入口の技術契約は承認済み。再開後の検証基点はmaster `162af97f9cb2193d2666beb74bb145b4f35a614e`。未追跡のPG試験を保全し、SHA256一致を確認してrebaseした。#1009から独立し、削除・級聯副作用は別契約として残す。
 
 ## スコープ
 
@@ -47,7 +47,7 @@
 
 ## 検証方針
 
-既存の公開サービス→実BusinessAudit/AuditWriter（DBのみmock）、実PostgreSQLの取引境界、実HTTPという3境界を継続する。CastService/CastEnrollmentService/Controllerの既存試験、cast-enrollment・cast-management-ui・cast-custom-fieldsのE2Eを回帰対象にする。普通試験は独立作業で進め、重型E2Eは親タスクから割当を受ける。#1009のE2E窓が来たら先に完了させる。
+既存の公開サービス→実BusinessAudit/AuditWriter（DBのみmock）、実PostgreSQLの取引境界、実HTTPという3境界を継続する。CastService/CastEnrollmentService/Controllerの既存試験、cast-enrollment・cast-management-ui・cast-custom-fieldsのE2Eを回帰対象にする。普通試験と実PGを完了し、独立スタックのfocusedから全量E2Eへ進む。#1009は合流・閉鎖済みで、共通fixtureと主幹の回帰を引き継ぐ。
 
 ## 対象外（別 issue）
 
@@ -55,5 +55,9 @@ Cast削除と全級聯副作用、招待発行/受諾、カスタム項目定義
 
 ## 依存 / 参考
 
-Blocked by: 実装の依存票なし。重型E2Eのみ親の共有窓割当待ち。#1009とは別ブランチ・別worktree。
+Blocked by: 同一HEADのCI/Codexと手動合流。#1009とは別ブランチ・別worktree。
 親 #395。キャスト三層と在籍履歴の既存実装を維持する。所有者が手動でPRを合流する。
+
+## 再開後の検証記録
+
+実PostgreSQL18の10件はskip/failure/errorなしで成功。2実体の実version、内部値のみの変更、同値操作、作成/編集/公開切替/3状態操作の監査保存失敗、外側rollback、昇格の実主体・状態履歴参照、同時停止の一勝一拒否を確認した。標準CIの条件付きskipとは別のローカル独立実測である。公開サービスから実監査sinkへの6件と既存Cast回帰・ModularityTestsも成功。実HTTPのfocusedはretryなしでexit 0。Task lint/test/build/e2eは全てexit 0、全量E2E89件成功（retryなし、12.5分）。専用スタックは回収済み。同一HEAD CI/CodexはPRで確認する。
