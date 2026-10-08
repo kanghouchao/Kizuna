@@ -912,6 +912,12 @@ export async function createPlatformStaffFixture(request: APIRequestContext, tok
   return (await response.json()).id;
 }
 
+export async function createStoreStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds: number[]): Promise<number> {
+  const response = await request.post('/api/store/staff-members', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).id;
+}
+
 /** 現行同意文面で業務連絡を許可したゲスト申請を隔離テスト用に作る。 */
 export async function createConsentingGuestApplication(
   request: APIRequestContext,

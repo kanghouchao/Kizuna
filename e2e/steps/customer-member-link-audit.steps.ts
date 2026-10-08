@@ -10,6 +10,7 @@ import {
   createCustomer,
   createPermissionRole,
   createPlatformStaffFixture,
+  createStoreStaffFixture,
   currentCustomerMemberLink,
   customerMemberLinkHistory,
   getAuditEvent,
@@ -92,9 +93,9 @@ Given(
       ["SHIFT_MANAGE", "STORE_VIEW", "STORE_MENU_VIEW"],
     );
     const limitedEmail = `link-reader-${suffix}@example.test`;
-    await createPlatformStaffFixture(
+    await createStoreStaffFixture(
       request,
-      owner,
+      staff,
       limitedEmail,
       password,
       [limitedRole],
@@ -165,7 +166,7 @@ When(
         (
           await request.post(`${path}/releases`, {
             headers: headers(limitedStaff),
-            data: change,
+            data: { expected_link_id: first, operation_reason: secret },
           })
         ).status(),
       ).toBe(403);

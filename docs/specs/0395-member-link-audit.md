@@ -4,7 +4,9 @@
 
 2026-10-08、承認済み基点は master `4a426636ba67db894bbe7a309dae62e228d464c7`。親#395はOPENを継続する。顧客と会員の関連を建立・変更・解除する既存2入口を、同じ取引の変更不可監査へ接続する契約は承認済み。シフト監査#1008はその後master `c1ff7775f89e4fcd6257c0d76d606438ff86db02`へ合流し、本作業も未commit変更を保全して競合なしで同期済み。続いて非公開添付#1004の合流後、最終検証の基点を `86be6e51c9eb59419e423e3fb40752b11489f4f7` に同期した。権限目録44件と添付検証補助を引き継ぐ。関連監査の実装上の依存はない。
 
-現行の関連区間正本は理由と状態を保持するが、共通監査へは未接続である。通常担当者と緊急昇格担当者による変更を、安全な区間情報と既存正本への参照だけで追跡する。
+2026-10-08の再開時に、未commit変更がないことを確認してmaster `e5ba6826befb307adfac24b4ad7d3dfcbef1411a`へrebaseした。注文E2Eの可視入力欄の修正は主幹から引き継ぐ。純店舗ロールの検証アカウントは店長による店舗スタッフ作成APIを使い、解除の拒否検証には解除APIの要求型だけを送る。
+
+関連区間正本の理由と状態に加え、本バッチは共通監査へ接続する。通常担当者と緊急昇格担当者による変更を、安全な区間情報と既存正本への参照だけで追跡する。
 
 ## 利用者の要求
 
@@ -42,7 +44,9 @@ PERM_CUSTOMER_MANAGE、既存要求/応答、401/403/404/400/409の分類、顧�
 
 既存CustomerMemberLinkServiceTest、CustomerMemberLinkControllerTest、CustomerAuditPostgresTest/CustomerContactAuditPostgresTest、customer-member-linkのE2Eを使える境界として優先する。DBアダプター以外に不要な新しいmock境界を導入しない。
 
-最終検証はTask lint/test/build/e2eと双軸レビュー。重型E2Eは#1007の窓解放後に割当を受ける。draft PR→同一HEADのCI実job/step→Ready→Codex Completedと公式bot反応を確認する。所有者が手動合流する。
+最終検証はTask lint/test/build/e2eと双軸レビュー。利用者の再開指示に基づき、独立スタックでfocusedと全量E2Eを順次確認する。draft PR→同一HEADのCI実job/step→Ready→Codex Completedと公式bot反応を確認する。所有者が手動合流する。
+
+2026-10-08、master `e5ba6826`上でTask lint/test/build/e2eは全てexit 0。実PG8件（skipなし）、focused2件、全量E2E88件（retryなし）、TypeScript検査、双軸reviewを完了した。同一HEADのCI/Codexと手動合流は後続のPRで確認する。
 
 ## 対象外
 
