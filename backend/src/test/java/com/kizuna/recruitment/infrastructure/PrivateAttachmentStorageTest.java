@@ -29,6 +29,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
@@ -281,6 +283,25 @@ class PrivateAttachmentStorageTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(ints = {0, 21})
+  void applicantFileLimitsOutsideTheRecoveryPageBoundDisableStorage(int limit) {
+    AppProperties properties = configured();
+    properties.getPrivateAttachments().setMaxApplicantFiles(limit);
+    assertUnavailableWithoutClient(properties);
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1, 20})
+  void applicantFileLimitsWithinTheRecoveryPageBoundRemainConfigured(int limit) {
+    AppProperties properties = configured();
+    properties.getPrivateAttachments().setMaxApplicantFiles(limit);
+    try (var storage = new PrivateAttachmentStorage(properties, () -> mock(S3Client.class))) {
+      assertThat(storage.isConfigured()).isTrue();
+      storage.requireConfigured();
+    }
+  }
+
   @Test
   void reusedPublicCredentialsAndIncompleteEnabledConfigurationAreUnavailable() {
     AppProperties properties = configured();
@@ -354,6 +375,8 @@ class PrivateAttachmentStorageTest {
               return mock(S3Client.class);
             })) {
       assertThat(storage.isConfigured()).isFalse();
+      assertThatThrownBy(storage::requireConfigured)
+          .isInstanceOf(ServiceUnavailableException.class);
     }
     assertThat(constructions).hasValue(0);
   }
