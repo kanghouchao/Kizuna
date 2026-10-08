@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Request } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
@@ -67,9 +67,78 @@ When("非公開添付の初回登録と同一操作の再送を行う", async ({
   finally { await client.end(); }
   await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`);
   await page.getByLabel('追加する画像').setInputFiles({ name: 'synthetic-ui.png', mimeType: 'image/png', buffer: image });
-  const created = page.waitForResponse(value => value.url().endsWith(`${path()}/attachments`) && value.request().method() === 'POST');
-  await page.getByRole('button', { name: '画像を追加' }).click();
-  expect((await created).status()).toBe(201);
+  let submissions = 0;
+  let storedStatus = 0;
+  let firstUiKey = '';
+  const lostPost = `**/applicants/${applicantId}/attachments`;
+  const countSubmission = (request: Request) => {
+    if (request.method() === 'POST' && request.url().endsWith(`${path()}/attachments`)) submissions++;
+  };
+  page.on('request', countSubmission);
+  await page.route(lostPost, async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    firstUiKey = route.request().headers()['idempotency-key'];
+    storedStatus = (await route.fetch()).status();
+    await route.abort('failed');
+  });
+  try {
+    await page.getByLabel('追加する画像').evaluate(input => {
+      const form = input.closest('form')!;
+      form.requestSubmit(); form.requestSubmit();
+    });
+    await expect.poll(() => storedStatus).toBe(201);
+    await expect(page.getByRole('button', { name: 'ダウンロード', exact: true })).toHaveCount(2);
+    await expect(page.getByLabel('追加する画像')).toBeEnabled();
+    expect(submissions).toBe(1);
+    const result = await request.get(`${path()}/attachment-operations/${firstUiKey}`, { headers: headers() });
+    expect(result.status()).toBe(200);
+    expect((await result.json()).status).toBe('READY');
+  } finally { page.off('request', countSubmission); await page.unroute(lostPost); }
+  const nextImage = Buffer.from(await page.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 9; canvas.height = 9;
+    return canvas.toDataURL('image/png').split(',')[1];
+  }), 'base64');
+  await page.getByLabel('追加する画像').setInputFiles({ name: 'next.png', mimeType: 'image/png', buffer: nextImage });
+  const nextPost = page.waitForResponse(value => value.url().endsWith(`${path()}/attachments`) && value.request().method() === 'POST');
+  await page.getByRole('button', { name: '画像を追加', exact: true }).click();
+  const next = await nextPost;
+  expect(next.status()).toBe(201);
+  expect(next.request().headers()['idempotency-key']).not.toBe(firstUiKey);
+  await expect(page.getByRole('button', { name: 'ダウンロード', exact: true })).toHaveCount(3);
+  let missingKey = '';
+  await page.route(lostPost, async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    missingKey = route.request().headers()['idempotency-key'];
+    await route.abort('failed');
+  });
+  try {
+    await page.getByLabel('追加する画像').setInputFiles({ name: 'not-delivered.png', mimeType: 'image/png', buffer: image });
+    await page.getByRole('button', { name: '画像を追加', exact: true }).click();
+    await expect(page.getByRole('button', { name: '同じ画像を再送', exact: true })).toBeEnabled();
+    await expect(page.getByLabel('追加する画像')).toBeDisabled();
+  } finally { await page.unroute(lostPost); }
+  const retry = page.waitForResponse(value => value.url().endsWith(`${path()}/attachments`) && value.request().method() === 'POST');
+  await page.getByRole('button', { name: '同じ画像を再送', exact: true }).click();
+  const retried = await retry;
+  expect(retried.status()).toBe(201);
+  expect(retried.request().headers()['idempotency-key']).toBe(missingKey);
+  await expect(page.getByRole('button', { name: 'ダウンロード', exact: true })).toHaveCount(4);
+  await page.getByLabel('追加する画像').setInputFiles({ name: 'invalid.png', mimeType: 'image/png', buffer: Buffer.from('not an image') });
+  const rejected = page.waitForResponse(value => value.url().endsWith(`${path()}/attachments`) && value.request().method() === 'POST');
+  await page.getByRole('button', { name: '画像を追加', exact: true }).click();
+  const invalid = await rejected;
+  expect(invalid.status()).toBe(400);
+  await expect(page.getByText(/画像が拒否され、予約も確認されませんでした/)).toBeVisible();
+  await page.getByLabel('追加する画像').setInputFiles({ name: 'corrected.png', mimeType: 'image/png', buffer: image });
+  const corrected = page.waitForResponse(value => value.url().endsWith(`${path()}/attachments`) && value.request().method() === 'POST');
+  await page.getByRole('button', { name: '同じ画像を再送', exact: true }).click();
+  const correction = await corrected;
+  expect(correction.status()).toBe(201);
+  expect(correction.request().headers()['idempotency-key']).toBe(invalid.request().headers()['idempotency-key']);
+  await expect(page.getByRole('button', { name: 'ダウンロード', exact: true })).toHaveCount(5);
+  const verify = await database();
+  try { expect(Number((await verify.query('select count(*) from t_applicant_attachment_uploads where applicant_id=$1', [applicantId])).rows[0].count)).toBe(5); }
+  finally { await verify.end(); }
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: 'ダウンロード', exact: true }).first().click();
   expect((await downloaded).suggestedFilename()).toMatch(/^attachment-\d+\.png$/);
@@ -88,6 +157,21 @@ Then("添付は認証取得だけに公開され店外と権限不足を拒否�
   expect(head.headers()['content-length']).toBe(file.headers()['content-length']);
   expect((await request.get(contentPath, { headers: STORE_HEADERS })).status()).toBe(401);
   expect((await request.get(contentPath, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` } })).status()).toBe(403);
+  const operationPath = `${path()}/attachment-operations/${key}`;
+  for (const [url, auth, code] of [
+    [operationPath, headers(), 200],
+    [`${path()}/attachment-operations/1-1-1-1-1`, headers(), 400],
+    [operationPath, STORE_HEADERS, 401],
+    [operationPath, { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, 403],
+    [`${path()}/attachment-operations/${randomUUID()}`, headers(), 404],
+  ] as const) {
+    const response = await request.get(url, { headers: auth });
+    expect(response.status(), await response.text()).toBe(code);
+    expect(response.headers()['cache-control']).toBe('private, no-store');
+    expect(response.headers()['x-content-type-options']).toBe('nosniff');
+    if (code === 200) expect(Object.keys(await response.json()).sort()).toEqual(['created_at','id','idempotency_key','media_type','size_bytes','status']);
+    if (code === 400) expect((await response.json()).error).toBe('アップロードの操作キーが不正です');
+  }
   const client = await database();
   try {
     const row = (await client.query('select object_id from t_applicant_attachment_uploads where id=$1', [attachmentId])).rows[0];
@@ -95,9 +179,15 @@ Then("添付は認証取得だけに公開され店外と権限不足を拒否�
     expect((await request.get('http://private-storage:8333/applicant-images')).status()).toBe(403);
     const other = (await client.query('select id from t_stores where id <> $1 order by id limit 1', [STORE1_ID])).rows[0].id;
     expect((await request.get(contentPath, { headers: { ...headers(), 'X-Store-ID': String(other) } })).status()).toBe(403);
+    expect((await request.get(operationPath, { headers: { ...headers(), 'X-Store-ID': String(other) } })).status()).toBe(403);
+    const hidden = `outside-${randomUUID()}`;
+    await client.query('INSERT INTO t_applicants (id,store_id,name,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence) SELECT $1,$2,$3,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence FROM t_applicants WHERE id=$4', [hidden,other,'別店舗応募者',applicantId]);
+    try { expect((await request.get(`/api/store/applicants/${hidden}/attachment-operations/${key}`, { headers: headers() })).status()).toBe(404); }
+    finally { await client.query('delete from t_applicants where id=$1',[hidden]); }
+
   } finally { await client.end(); }
 });
-Then("監査障害で未完了になった添付を画面から同じ画像で回復できる", async ({ request, page }) => {
+Then("監査障害で未完了になった添付を画面から同じ画像で回復できる", async ({ request, page, $testInfo }) => {
   const client = await database();
   recoveryKey = randomUUID();
   try {
@@ -112,16 +202,49 @@ Then("監査障害で未完了になった添付を画面から同じ画像で�
     expect(rows[0].status).toBe('RECOVERY_REQUIRED');
     for (const field of ['original_sha256', 'canonical_sha256', 'object_id', 'bucket', 'url']) expect(rows[0]).not.toHaveProperty(field);
     expect((await request.get(`${path()}/attachments/${recoveryId}/content`, { headers: headers() })).status()).toBe(404);
+    await client.query("update t_applicant_attachment_uploads set failure='CONTENT_MISMATCH' where id=$1", [recoveryId]);
     await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`);
+    const resend = page.getByRole('button', { name: '修復後の同じ画像を再送' });
+    await expect(resend).toBeDisabled();
+    await expect(page.getByText(/同じ画像の再送だけでは回復できません/)).toBeVisible();
+    const confirmed = page.getByRole('checkbox', { name: '管理者による保存先の確認・修復が完了している' });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => { localStorage.setItem('theme', value); document.documentElement.classList.toggle('dark', value === 'dark'); }, theme);
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 960 });
+        await confirmed.scrollIntoViewIfNeeded();
+        await confirmed.focus();
+        await expect(confirmed).toBeFocused();
+        await page.screenshot({ path: $testInfo.outputPath(`attachment-repair-${theme}-${width}.png`), fullPage: true });
+      }
+    }
+    await page.keyboard.press('Space');
+    await expect(confirmed).toBeChecked();
+    await expect(resend).toBeEnabled();
     await page.getByLabel('最初に送信した画像').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: image });
-    const response = page.waitForResponse(value => value.url().includes(`/attachment-uploads/${recoveryId}/content`) && value.request().method() === 'PUT');
-    await page.getByRole('button', { name: '同じ画像を再送' }).click();
-    expect((await response).status()).toBe(200);
-    await expect(page.getByText('未完了のアップロードはありません。')).toBeVisible();
+    const lostResponse = `**/attachment-uploads/${recoveryId}/content`;
+    let storedStatus = 0;
+    await page.route(lostResponse, async route => {
+      const response = await route.fetch();
+      storedStatus = response.status();
+      await route.abort('failed');
+    });
+    try {
+      await resend.click();
+      await expect.poll(() => storedStatus).toBe(200);
+      await expect(page.getByText('未完了のアップロードはありません。')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'ダウンロード', exact: true })).toHaveCount(6);
+    } finally { await page.unroute(lostResponse); }
     expect(Number((await client.query('select count(*) from t_audit_events where target_id=$1', [recoveryId])).rows[0].count)).toBe(1);
     const repeated = await request.put(`${path()}/attachment-uploads/${recoveryId}/content`, { headers: uploadHeaders(recoveryKey), data: image });
     expect(repeated.status()).toBe(200);
     expect((await repeated.json()).id).toBe(recoveryId);
+    const unavailable = '**/attachments/*/content';
+    await page.route(unavailable, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '画像処理が混み合っています' }) }));
+    try {
+      await page.getByRole('button', { name: 'ダウンロード', exact: true }).first().click();
+      await expect(page.getByText('画像処理が混み合っています', { exact: true })).toBeVisible();
+    } finally { await page.unroute(unavailable); }
   } finally { await client.end(); }
 });
 Then("添付画面は両テーマと狭幅で操作でき認証失効後は再送も拒否する", async ({ page, request, $testInfo }) => {
@@ -148,12 +271,29 @@ Then("添付画面は両テーマと狭幅で操作でき認証失効後は再�
   const rejectedBeforeAdmission = await request.post(`${path()}/attachments`, { headers: { ...headers(), 'Content-Type': 'image/svg+xml', 'Idempotency-Key': randomUUID() }, data: 'synthetic' });
   expect(rejectedBeforeAdmission.status()).toBe(400);
   expect((await rejectedBeforeAdmission.json()).error).toContain('選考が終了');
+  const check = await database();
+  const saved = (await check.query('select completed_by,completed_at from t_applicant_attachment_uploads where id=$1',[attachmentId])).rows[0];
+  try {
+    const before = (await check.query('select count(*) from t_audit_events where target_id=$1', [attachmentId])).rows[0].count;
+    for (const state of ['PENDING','RECOVERY_REQUIRED','READY']) {
+      await check.query('update t_applicant_attachment_uploads set status=$1,failure=$2,completed_by=$3,completed_at=$4 where id=$5', [state,state === 'RECOVERY_REQUIRED' ? 'CONTENT_MISMATCH' : null,state === 'READY' ? saved.completed_by : null,state === 'READY' ? saved.completed_at : null,attachmentId]);
+      const result = await request.get(`${path()}/attachment-operations/${key.toUpperCase()}`, { headers: headers() });
+      expect(result.status()).toBe(200);
+      expect((await result.json()).status).toBe(state);
+      expect((await check.query('select status from t_applicant_attachment_uploads where id=$1',[attachmentId])).rows[0].status).toBe(state);
+      expect((await check.query('select count(*) from t_audit_events where target_id=$1', [attachmentId])).rows[0].count).toBe(before);
+    }
+  } finally {
+    await check.query("update t_applicant_attachment_uploads set status='READY',failure=null,completed_by=$1,completed_at=$2 where id=$3",[saved.completed_by,saved.completed_at,attachmentId]);
+    await check.end();
+  }
   expect((await upload(request, key)).status()).toBe(200);
   expect((await request.put(`${path()}/attachment-uploads/${recoveryId}/content`, { headers: uploadHeaders(recoveryKey), data: image })).status()).toBe(200);
   const client = await database();
   try { await client.query('update t_users set enabled=false, credential_version=credential_version+1 where email=$1', [email]); }
   finally { await client.end(); }
   expect((await upload(request,key)).status()).toBe(401);
+  expect((await request.get(`${path()}/attachment-operations/${key}`, { headers: headers() })).status()).toBe(401);
   expect((await request.put(`${path()}/attachment-uploads/${recoveryId}/content`, { headers: uploadHeaders(recoveryKey), data: image })).status()).toBe(401);
   expect((await request.get(`${path()}/attachments/${attachmentId}/content`, { headers: headers() })).status()).toBe(401);
 });

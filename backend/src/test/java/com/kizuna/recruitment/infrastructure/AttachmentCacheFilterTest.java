@@ -12,6 +12,27 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 class AttachmentCacheFilterTest {
   @Test
+  void operationOutcomesKeepCacheHeadersAndClearContext() throws Exception {
+    for (int status : new int[] {200, 400, 401, 403, 404, 503}) {
+      var context = new StoreContext();
+      var request =
+          new MockHttpServletRequest("GET", "/store/applicants/a/attachment-operations/key");
+      var response = new MockHttpServletResponse();
+      new AttachmentCacheFilter(context)
+          .doFilter(
+              request,
+              response,
+              (incoming, outgoing) -> {
+                context.setStoreId(1L);
+                response.setStatus(status);
+              });
+      assertThat(response.getHeader("Cache-Control")).isEqualTo("private, no-store");
+      assertThat(response.getHeader("X-Content-Type-Options")).isEqualTo("nosniff");
+      assertThat(context.hasStoreId()).isFalse();
+    }
+  }
+
+  @Test
   void encodedMvcPathsAndContextPathShareTheSameCleanupBoundary() throws Exception {
     for (String path :
         new String[] {

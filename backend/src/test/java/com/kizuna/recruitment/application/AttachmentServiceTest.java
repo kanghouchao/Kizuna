@@ -1,5 +1,6 @@
 package com.kizuna.recruitment.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -7,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.recruitment.domain.AttachmentUpload;
@@ -15,6 +17,7 @@ import com.kizuna.recruitment.infrastructure.RasterImageNormalizer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ResourceBusyException;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -29,6 +32,30 @@ class AttachmentServiceTest {
       new AttachmentService(transactions, storage, normalizer, new AppProperties());
   private final UUID key = UUID.randomUUID();
   private final Path source = Path.of("synthetic");
+
+  @Test
+  void operationUsesCanonicalKeyWithoutUploadPreflightOrStorageAccess() {
+    var row =
+        AttachmentUpload.reserve(
+            "applicant", key, "a".repeat(64), "image/png", "b".repeat(64), 3, "version", 1L);
+    when(transactions.operation("applicant", key)).thenReturn(row);
+    assertThat(service.operation("applicant", key.toString().toUpperCase()).status())
+        .isEqualTo(AttachmentUpload.Status.PENDING);
+    verify(storage).requireConfigured();
+    verify(transactions).operation("applicant", key);
+    verifyNoMoreInteractions(storage, transactions);
+    verifyNoInteractions(normalizer);
+  }
+
+  @Test
+  void operationRejectsNonCanonicalKeysWithoutEchoingThem() {
+    for (String raw : new String[] {null, "", "1-1-1-1-1", " " + key, key + " ", "invalid"}) {
+      assertThatThrownBy(() -> service.operation("applicant", raw))
+          .isInstanceOf(ServiceException.class)
+          .hasMessage("アップロードの操作キーが不正です");
+    }
+    verifyNoInteractions(transactions, normalizer);
+  }
 
   private AttachmentUpload pending(String version) {
     var upload =

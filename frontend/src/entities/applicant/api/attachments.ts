@@ -4,6 +4,7 @@ import type {
   ApplicantAttachment,
   ApplicantAttachmentUpload,
   ApplicantAttachmentPolicy,
+  ApplicantAttachmentOperation,
 } from '../model/types';
 const resource = (id: string) => `/store/applicants/${requireId(id, '応募者')}`;
 export const applicantAttachmentApi = {
@@ -21,6 +22,12 @@ export const applicantAttachmentApi = {
       (await apiClient.get(`${resource(id)}/attachment-uploads`, { params: { cursor, size: 20 } }))
         .data
     ),
+  operation: async (id: string, key: string): Promise<ApplicantAttachmentOperation> =>
+    (
+      await apiClient.get(
+        `${resource(id)}/attachment-operations/${encodeURIComponent(requireId(key, '操作'))}`
+      )
+    ).data,
   upload: async (
     id: string,
     file: File,
@@ -43,11 +50,27 @@ export const applicantAttachmentApi = {
         : await apiClient.post(`${resource(id)}/attachments`, file, config)
     ).data;
   },
-  download: async (id: string, attachmentId: string, signal?: AbortSignal): Promise<Blob> =>
-    (
-      await apiClient.get(
-        `${resource(id)}/attachments/${requireId(attachmentId, '添付画像')}/content`,
-        { responseType: 'blob', signal, timeout: 60_000 }
-      )
-    ).data,
+  download: async (id: string, attachmentId: string, signal?: AbortSignal): Promise<Blob> => {
+    try {
+      return (
+        await apiClient.get(
+          `${resource(id)}/attachments/${requireId(attachmentId, '添付画像')}/content`,
+          { responseType: 'blob', signal, timeout: 60_000 }
+        )
+      ).data;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      const response = (error as { response?: { data?: unknown } } | null)?.response;
+      if (response?.data instanceof Blob && response.data.type.includes('application/json')) {
+        try {
+          const body: unknown = JSON.parse(await response.data.text());
+          if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string')
+            response.data = body;
+        } catch {
+          // 解読できない本文は共通の代替文言で通知し、HTTP状態と元の失敗を保持する。
+        }
+      }
+      throw error;
+    }
+  },
 };

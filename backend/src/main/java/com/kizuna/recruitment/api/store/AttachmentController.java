@@ -16,6 +16,8 @@ import java.security.Principal;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import lombok.RequiredArgsConstructor;
+import org.apache.logging.log4j.CloseableThreadContext;
+import org.apache.logging.log4j.ThreadContext;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -70,6 +72,12 @@ public class AttachmentController {
     return attachments.uploads(id, cursor, size);
   }
 
+  @GetMapping("/{id}/attachment-operations/{key}")
+  @PreAuthorize(AttachmentService.WRITE)
+  public AttachmentUploadResponse operation(@PathVariable String id, @PathVariable String key) {
+    return attachments.operation(id, key);
+  }
+
   @PostMapping("/{id}/attachments")
   @PreAuthorize(AttachmentService.WRITE)
   public WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>> upload(
@@ -96,10 +104,12 @@ public class AttachmentController {
     UUID key = attachments.preflight(id, uploadId, rawKey);
     var admission = receiver.admit(request);
     Long storeId = storeContext.getStoreId();
+    var loggingContext = ThreadContext.getImmutableContext();
     Callable<ResponseEntity<AttachmentSummaryResponse>> callable =
         new DelegatingSecurityContextCallable<>(
-            () ->
-                scope.runInStore(
+            () -> {
+              try (var ignored = CloseableThreadContext.putAll(loggingContext)) {
+                return scope.runInStore(
                     storeId,
                     () -> {
                       try (admission) {
@@ -116,7 +126,9 @@ public class AttachmentController {
                         int status = uploadId == null && completed.created() ? 201 : 200;
                         return ResponseEntity.status(status).body(completed.attachment());
                       }
-                    }));
+                    });
+              }
+            });
     var task =
         new WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>>(
             requestTimeoutMillis(), callable);

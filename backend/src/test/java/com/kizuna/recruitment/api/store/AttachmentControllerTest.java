@@ -14,7 +14,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.recruitment.api.dto.AttachmentPolicyResponse;
+import com.kizuna.recruitment.api.dto.AttachmentUploadResponse;
 import com.kizuna.recruitment.application.AttachmentService;
+import com.kizuna.recruitment.domain.AttachmentUpload;
 import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
@@ -24,7 +26,9 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeExecutor;
 import com.kizuna.store.application.StoreActivationService;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +47,36 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @WebMvcTest(AttachmentController.class)
 @Import({AttachmentControllerTest.MethodSecurity.class, StoreContext.class, AppProperties.class})
 class AttachmentControllerTest {
+  @Test
+  void exactOperationIncludesAllStatesOnlyBehindWritePermission() throws Exception {
+    UUID key = UUID.randomUUID();
+    for (var state : AttachmentUpload.Status.values()) {
+      when(service.operation("a", key.toString()))
+          .thenReturn(
+              new AttachmentUploadResponse(
+                  "u", key, state, "image/png", 3, OffsetDateTime.now(), null));
+      mvc.perform(
+              get("/store/applicants/a/attachment-operations/" + key)
+                  .header("X-Role", "store")
+                  .header("X-Store-ID", "1")
+                  .with(
+                      actor(
+                          new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                          new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"),
+                          new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.id").value("u"))
+          .andExpect(jsonPath("$.idempotency_key").value(key.toString()))
+          .andExpect(jsonPath("$.status").value(state.name()))
+          .andExpect(jsonPath("$.failure_code").doesNotExist())
+          .andExpect(jsonPath("$.object_id").doesNotExist())
+          .andExpect(jsonPath("$.original_sha256").doesNotExist())
+          .andExpect(jsonPath("$.created_by").doesNotExist())
+          .andExpect(header().string("Cache-Control", "private, no-store"))
+          .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+    }
+  }
+
   @Test
   void terminalPreflightFailureDoesNotAcquireOrReadBody() throws Exception {
     String key = "b61c89c9-9272-4ff5-a30a-e8f27f11c27c";
@@ -159,12 +193,17 @@ class AttachmentControllerTest {
                     .with(actor(authorities)))
             .andExpect(status().isForbidden());
       }
-      mvc.perform(
-              get("/store/applicants/a/attachment-uploads")
-                  .header("X-Role", "store")
-                  .header("X-Store-ID", "1")
-                  .with(actor(authorities)))
-          .andExpect(status().isForbidden());
+      for (String suffix :
+          List.of(
+              "attachment-uploads", "attachment-operations/6d5ff5a4-4817-4ac5-9e76-2756f086e02b")) {
+        mvc.perform(
+                get("/store/applicants/a/" + suffix)
+                    .header("X-Role", "store")
+                    .header("X-Store-ID", "1")
+                    .with(actor(authorities)))
+            .andExpect(status().isForbidden())
+            .andExpect(header().string("Cache-Control", "private, no-store"));
+      }
     }
     verifyNoInteractions(service, receiver);
   }

@@ -23,8 +23,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class RequestCorrelationFilter extends OncePerRequestFilter {
 
   private static final String REQUEST_ID_HEADER = "X-Request-ID";
+  private static final String REQUEST_ID_ATTRIBUTE =
+      RequestCorrelationFilter.class.getName() + ".id";
 
   private final StoreContext storeContext;
+
+  @Override
+  protected boolean shouldNotFilterAsyncDispatch() {
+    return false;
+  }
 
   @Override
   protected void doFilterInternal(
@@ -32,9 +39,11 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
       @NonNull HttpServletResponse response,
       @NonNull FilterChain filterChain)
       throws ServletException, IOException {
-    String requestId = request.getHeader(REQUEST_ID_HEADER);
-    if (!StringUtils.hasText(requestId)) {
-      requestId = UUID.randomUUID().toString();
+    String requestId = (String) request.getAttribute(REQUEST_ID_ATTRIBUTE);
+    if (requestId == null) {
+      requestId = request.getHeader(REQUEST_ID_HEADER);
+      if (!StringUtils.hasText(requestId)) requestId = UUID.randomUUID().toString();
+      request.setAttribute(REQUEST_ID_ATTRIBUTE, requestId);
     }
     ThreadContext.put("requestId", requestId);
     response.setHeader(REQUEST_ID_HEADER, requestId);

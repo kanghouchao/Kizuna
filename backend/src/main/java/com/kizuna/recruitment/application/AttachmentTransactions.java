@@ -50,6 +50,15 @@ public class AttachmentTransactions {
 
   @StoreScoped
   @Transactional(readOnly = true)
+  public AttachmentUpload operation(String applicantId, UUID key) {
+    requireApplicant(applicantId);
+    return uploads
+        .findByApplicantIdAndIdempotencyKey(applicantId, key)
+        .orElseThrow(AttachmentTransactions::missing);
+  }
+
+  @StoreScoped
+  @Transactional(readOnly = true)
   public void preflight(String applicantId, String uploadId, UUID key) {
     Applicant applicant = requireApplicant(applicantId);
     Optional<AttachmentUpload> existing =
