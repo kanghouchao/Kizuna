@@ -19,16 +19,21 @@ import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +50,8 @@ public class ShiftService {
   private final CastProfileRepository castRepository;
   private final PlatformUserRepository platformUserRepository;
   private final BusinessDateService businessDateService;
+  private final BusinessAudit audit;
+  private final ShiftRequestRepository requests;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -96,7 +103,19 @@ public class ShiftService {
 
     // store_id は StoreScopeStampListener が @PrePersist で採番する
     Shift shift = shiftMapper.toEntity(request, resolveActorId(actorEmail));
-    return toResponse(shiftRepository.save(shift));
+    shiftRepository.save(shift);
+    shiftRepository.flush();
+    audit.recordById(
+        shift.getCreatedBy(),
+        shift.getStoreId(),
+        "SHIFT_CREATED",
+        "SHIFT",
+        shift.getId(),
+        null,
+        null,
+        Map.of(),
+        ShiftAuditSnapshot.of(shift).values());
+    return toResponse(shift);
   }
 
   @StoreScoped
@@ -128,10 +147,25 @@ public class ShiftService {
       throw new ServiceException("実績が記録されているシフトの勤務日とキャストは変更できません。実績を取り消してから変更してください");
     }
 
+    var before = ShiftAuditSnapshot.of(shift);
     shift.apply(shiftMapper.toPatch(request));
     shift.stampUpdatedBy(resolveActorId(actorEmail));
 
-    return toResponse(shiftRepository.save(shift));
+    boolean changed = !before.equals(ShiftAuditSnapshot.of(shift));
+    shiftRepository.save(shift);
+    shiftRepository.flush();
+    if (changed)
+      audit.recordById(
+          shift.getUpdatedBy(),
+          shift.getStoreId(),
+          "SHIFT_UPDATED",
+          "SHIFT",
+          shift.getId(),
+          null,
+          null,
+          before.values(),
+          ShiftAuditSnapshot.of(shift).values());
+    return toResponse(shift);
   }
 
   /** 店舗・在籍・シフトの順序を守り、作成と付け替えを退店から直列化する。 */
@@ -154,30 +188,76 @@ public class ShiftService {
         || (request.getCastId() != null && !request.getCastId().equals(shift.getCastId()));
   }
 
-  /**
-   * 店外への露出可否を切り替える。承認とは独立の軸なので、状態や時間帯の更新とは別の口で受ける（ADR 0015）。
-   *
-   * <p>専用の留痕は持たないが、行を書いた操作の実行者を印字する規則には従う。
-   */
+  /** 店外への露出可否は承認と独立した軸なので、状態や時間帯の更新とは別の口で受ける。 */
   @StoreScoped
   @Transactional
   public ShiftResponse changePublication(String id, boolean published, String actorEmail) {
     Shift shift = findShift(id);
+    var before = ShiftAuditSnapshot.of(shift);
     shift.changePublication(published);
     shift.stampUpdatedBy(resolveActorId(actorEmail));
-    return toResponse(shiftRepository.save(shift));
+    boolean changed = !before.equals(ShiftAuditSnapshot.of(shift));
+    shiftRepository.save(shift);
+    shiftRepository.flush();
+    if (changed)
+      audit.recordById(
+          shift.getUpdatedBy(),
+          shift.getStoreId(),
+          "SHIFT_PUBLICATION_CHANGED",
+          "SHIFT",
+          shift.getId(),
+          null,
+          null,
+          before.values(),
+          ShiftAuditSnapshot.of(shift).values());
+    return toResponse(shift);
   }
 
   @StoreScoped
   @Transactional
   public void delete(String id) {
-    findShiftForUpdate(id);
+    Shift shift = findShiftForUpdate(id);
+    var before = ShiftAuditSnapshot.of(shift);
     // 実績が参照する限り削除しない。取消済みも数えるのは、参照を外して消すと「予定通りの出勤」が
     // 「飛び込み」へ不可逆に化けるため（ADR 0014）。誤建の組は実績の取消と TENTATIVE 化で中性化する。
     if (attendanceRepository.existsByShiftId(id)) {
       throw new ConflictException("実績が記録されているシフトは削除できません。実績を取り消したうえで下書きに戻してください");
     }
+    recordUnlinkedRequests(id);
     shiftRepository.deleteById(id);
+    shiftRepository.flush();
+    audit.recordCurrent(
+        shift.getStoreId(),
+        "SHIFT_DELETED",
+        "SHIFT",
+        id,
+        before.values(),
+        Map.of("exists", "false"));
+  }
+
+  private void recordUnlinkedRequests(String shiftId) {
+    String afterId = "";
+    while (true) {
+      var page = requests.findLinkedForUpdate(shiftId, afterId, Limit.of(100));
+      if (page.isEmpty()) return;
+      for (var request : page) {
+        var before = ShiftAuditSnapshot.of(request).values();
+        var after = new HashMap<>(before);
+        after.put("shift_id", "");
+        // FKのSET NULLはversionを増やさない。削除が失敗すればこの監査も同じ取引で取り消される。
+        audit.record(
+            SecurityContextHolder.getContext().getAuthentication().getName(),
+            request.getStoreId(),
+            "SHIFT_REQUEST_UNLINKED",
+            "SHIFT_REQUEST",
+            request.getId(),
+            "SHIFT",
+            shiftId,
+            before,
+            after);
+      }
+      afterId = page.getLast().getId();
+    }
   }
 
   /**

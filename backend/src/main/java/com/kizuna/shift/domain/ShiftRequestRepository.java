@@ -1,14 +1,23 @@
 package com.kizuna.shift.domain;
 
+import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, String> {
+
+  /** 親シフトを先にロックし、DBの関連解除前の値を有限ページで確保する。 */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select r from ShiftRequest r where r.shiftId = :shiftId and r.id > :afterId order by r.id")
+  List<ShiftRequest> findLinkedForUpdate(
+      @Param("shiftId") String shiftId, @Param("afterId") String afterId, Limit limit);
 
   List<ShiftRequest> findByStatusOrderByCreatedAtAsc(ShiftRequestStatus status);
 

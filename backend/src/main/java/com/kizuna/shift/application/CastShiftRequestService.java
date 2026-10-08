@@ -23,10 +23,12 @@ import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
@@ -51,6 +53,7 @@ public class CastShiftRequestService {
   private final ShiftRequestMapper shiftRequestMapper;
   private final BusinessDateService businessDateService;
   private final StoreRepository storeRepository;
+  private final BusinessAudit audit;
 
   @StoreScopeExempt(reason = "所属判定は「指定店舗に本人の未退店の在籍が存在すること」で行い、store_id はその判定に通った店舗を明示設定する")
   @Transactional
@@ -74,7 +77,19 @@ public class CastShiftRequestService {
             .note(request.getNote())
             .build();
     entity.setStoreId(request.getStoreId());
-    return shiftRequestMapper.toResponse(shiftRequestRepository.save(entity));
+    shiftRequestRepository.save(entity);
+    shiftRequestRepository.flush();
+    audit.recordById(
+        userId,
+        entity.getStoreId(),
+        "SHIFT_REQUEST_SUBMITTED",
+        "SHIFT_REQUEST",
+        entity.getId(),
+        null,
+        null,
+        Map.of(),
+        ShiftAuditSnapshot.of(entity).after(null));
+    return shiftRequestMapper.toResponse(entity);
   }
 
   /**
@@ -118,7 +133,19 @@ public class CastShiftRequestService {
             .note(request.getNote())
             .build();
     entity.setStoreId(shift.getStoreId());
-    return shiftRequestMapper.toResponse(shiftRequestRepository.save(entity));
+    shiftRequestRepository.save(entity);
+    shiftRequestRepository.flush();
+    audit.recordById(
+        userId,
+        entity.getStoreId(),
+        "SHIFT_CHANGE_REQUEST_SUBMITTED",
+        "SHIFT_REQUEST",
+        entity.getId(),
+        null,
+        null,
+        Map.of(),
+        ShiftAuditSnapshot.of(entity).after(null));
+    return shiftRequestMapper.toResponse(entity);
   }
 
   /**

@@ -19,6 +19,7 @@ import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -45,6 +46,7 @@ public class ShiftRequestService {
   private final PlatformUserRepository platformUserRepository;
   private final BusinessDateService businessDateService;
   private final StoreRepository storeRepository;
+  private final BusinessAudit audit;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -161,6 +163,7 @@ public class ShiftRequestService {
   @Transactional
   public StoreShiftRequestResponse approve(String id, Boolean published, String actorEmail) {
     ShiftRequest request = findOwnRequest(id);
+    var before = ShiftAuditSnapshot.of(request);
     storeRepository.lockAgainstDeletion(request.getStoreId());
     enrollments
         .findScopedByIdForUpdate(request.getCastId())
@@ -205,11 +208,25 @@ public class ShiftRequestService {
       if (attendanceRepository.hasActiveAttendance(target.getId())) {
         throw new ServiceException("実績が記録されているシフトには変更を適用できません");
       }
+      var shiftBefore = ShiftAuditSnapshot.of(target);
       target.apply(
           new ShiftPatch(
               null, request.getWorkDate(), request.getStartTime(), request.getEndTime(), null));
       target.stampUpdatedBy(actorId);
+      boolean changed = !shiftBefore.equals(ShiftAuditSnapshot.of(target));
       shiftRepository.save(target);
+      shiftRepository.flush();
+      if (changed)
+        audit.recordById(
+            actorId,
+            target.getStoreId(),
+            "SHIFT_UPDATED",
+            "SHIFT",
+            target.getId(),
+            "SHIFT_REQUEST",
+            request.getId(),
+            shiftBefore.values(),
+            ShiftAuditSnapshot.of(target).values());
     } else {
       // store_id は StoreScopeStampListener が @PrePersist で採番する
       Shift shift =
@@ -224,17 +241,53 @@ public class ShiftRequestService {
               .build();
       // 生成したシフトを申請行へ結び、希望→確定の一跳を辿れるようにする（系列の背骨）。
       request.linkShift(shiftRepository.save(shift).getId());
+      shiftRepository.flush();
+      audit.recordById(
+          actorId,
+          shift.getStoreId(),
+          "SHIFT_CREATED",
+          "SHIFT",
+          shift.getId(),
+          "SHIFT_REQUEST",
+          request.getId(),
+          Map.of(),
+          ShiftAuditSnapshot.of(shift).values());
     }
 
-    return shiftRequestMapper.toStoreResponse(shiftRequestRepository.save(request));
+    shiftRequestRepository.save(request);
+    shiftRequestRepository.flush();
+    audit.recordById(
+        request.getProcessedBy(),
+        request.getStoreId(),
+        "SHIFT_REQUEST_APPROVED",
+        "SHIFT_REQUEST",
+        request.getId(),
+        null,
+        null,
+        before.values(),
+        ShiftAuditSnapshot.of(request).after(before));
+    return shiftRequestMapper.toStoreResponse(request);
   }
 
   @StoreScoped
   @Transactional
   public StoreShiftRequestResponse decline(String id, String actorEmail) {
     ShiftRequest request = findOwnRequest(id);
+    var before = ShiftAuditSnapshot.of(request);
     request.decline(resolveActorId(actorEmail), OffsetDateTime.now());
-    return shiftRequestMapper.toStoreResponse(shiftRequestRepository.save(request));
+    shiftRequestRepository.save(request);
+    shiftRequestRepository.flush();
+    audit.recordById(
+        request.getProcessedBy(),
+        request.getStoreId(),
+        "SHIFT_REQUEST_DECLINED",
+        "SHIFT_REQUEST",
+        request.getId(),
+        null,
+        null,
+        before.values(),
+        ShiftAuditSnapshot.of(request).after(before));
+    return shiftRequestMapper.toStoreResponse(request);
   }
 
   private ShiftRequest findOwnRequest(String id) {

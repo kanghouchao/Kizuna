@@ -32,6 +32,7 @@ import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.LocalDate;
@@ -58,6 +59,8 @@ class CastShiftRequestServiceTest {
   @Mock private AttendanceRepository attendanceRepository;
   @Mock private ShiftRequestMapper shiftRequestMapper;
   @Mock private BusinessDateService businessDateService;
+
+  @Mock private BusinessAudit audit;
 
   @InjectMocks private CastShiftRequestService service;
 

@@ -28,8 +28,10 @@ import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftRepository;
+import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -59,6 +61,10 @@ class ShiftServiceTest {
   @Mock private CastProfileRepository castRepository;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private BusinessDateService businessDateService;
+
+  @Mock private BusinessAudit audit;
+
+  @Mock private ShiftRequestRepository requests;
 
   @InjectMocks private ShiftService shiftService;
 

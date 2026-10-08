@@ -3,6 +3,7 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,6 +25,7 @@ import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,6 +68,15 @@ class AttendanceServiceTest {
   @Mock private CastService castService;
   @Mock private PlatformUserRepository platformUserRepository;
   @Mock private BusinessDateService businessDateService;
+
+  @Mock private BusinessAudit audit;
+
+  @BeforeEach
+  void saveCorrectionIdentity() {
+    lenient()
+        .when(correctionRepository.save(any(AttendanceCorrection.class)))
+        .thenAnswer(call -> call.getArgument(0));
+  }
 
   @InjectMocks private AttendanceService attendanceService;
 
