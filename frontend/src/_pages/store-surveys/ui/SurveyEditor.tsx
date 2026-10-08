@@ -408,7 +408,8 @@ function AnswerEditor({
       }
       const input = {
         received_via: v.received_via,
-        received_at: new Date(at).toISOString(),
+        received_at:
+          source && v.received_at === local ? source.received_at : new Date(at).toISOString(),
         answers,
         dedupe_key: base.dedupe_key,
       };

@@ -20,6 +20,7 @@ const questionPrompt =
   "受付時の説明や案内について、紙面に記載された内容をそのまま記録します。".repeat(
     4,
   );
+const firstChoice = "紙面の選択欄に記載された最初の選択肢です。".repeat(4);
 let email = "",
   secret = "",
   token = "",
@@ -111,10 +112,10 @@ When(
     await second.getByLabel("設問文", { exact: true }).fill("任意の選択式記録");
     await second.getByLabel("回答形式", { exact: true }).click();
     await page.getByRole("option", { name: "単一選択", exact: true }).click();
-    await second.getByLabel("回答必須", { exact: true }).click();
     await second
-      .getByLabel("選択肢 1", { exact: true })
-      .fill("紙面の選択欄に記載された最初の選択肢です。".repeat(4));
+      .getByRole("checkbox", { name: "回答必須", exact: true })
+      .click();
+    await second.getByLabel("選択肢 1", { exact: true }).fill(firstChoice);
     await second
       .getByLabel("選択肢 2", { exact: true })
       .fill("紙面の選択欄に記載された別の選択肢です。".repeat(4));
@@ -197,6 +198,8 @@ When("回答を人工受付し設問版を終了する", async ({ page, request 
   await intake
     .getByLabel(`${questionPrompt}（必須）`, { exact: true })
     .fill("  紙面に書かれた原回答\n二行目を保持する  ");
+  await intake.getByLabel("任意の選択式記録（任意）", { exact: true }).click();
+  await page.getByRole("option", { name: firstChoice, exact: true }).click();
   await intake.getByLabel("受領日時", { exact: true }).fill("2026-01-01T09:00");
   const [created] = await Promise.all([
     page.waitForResponse(
@@ -255,6 +258,13 @@ Then(
         (element) => element.scrollWidth <= element.clientWidth,
       ),
     ).toBeTruthy();
+    await page.screenshot({
+      path: $testInfo.outputPath("survey-overlay-mobile.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
+    await page.mouse.move(0, 843);
+    await expect(page.locator('[data-slot="toast"]')).toHaveCount(0);
     await page.screenshot({
       path: $testInfo.outputPath("survey-light-mobile.png"),
       fullPage: true,
@@ -327,6 +337,8 @@ Then(
         ).json()
       ).active_records,
     ).toBe(0);
+    await page.mouse.move(0, 843);
+    await expect(page.locator('[data-slot="toast"]')).toHaveCount(0);
     await page.screenshot({
       path: $testInfo.outputPath("survey-withdrawal-desktop.png"),
       fullPage: true,

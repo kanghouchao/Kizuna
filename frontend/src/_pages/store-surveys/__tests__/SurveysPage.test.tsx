@@ -284,43 +284,56 @@ test('受付409で入力を保持し、終了した版へ新しい要求を自�
   expect(api.write).toHaveBeenCalledTimes(1);
 });
 
-test('同じ版の訂正は理由付き確認で旧回答IDとversionを送る', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.write.mockResolvedValue({
-    answer: { ...answer, id: '31', supersedes_id: '30' },
-    operation: {
-      id: '50',
-      type: 'CORRECTION_RECEIVED',
-      resource_id: '31',
-      committed_version: 0,
-      replayed: false,
-    },
-  });
-  render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '回答・履歴' }));
-  await screen.findByText('保護された原回答');
-  fireEvent.click(screen.getByRole('button', { name: '回答を訂正' }));
-  fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-    target: { value: '訂正後の回答' },
-  });
-  fireEvent.change(screen.getByLabelText('操作理由'), { target: { value: '転記の修正' } });
-  fireEvent.click(screen.getByRole('button', { name: '確認へ' }));
-  const confirm = await screen.findByRole('alertdialog');
-  expect(within(confirm).getByText(/同じ版へ訂正/)).toBeVisible();
-  fireEvent.click(within(confirm).getByRole('button', { name: '確定する' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    kind: 'CORRECT',
-    aid: '30',
-    input: {
-      version: 0,
-      reason: '転記の修正',
-      answers: [{ question_key: 'q1', text: '訂正後の回答' }],
-    },
-  });
-});
+test.each([false, true])(
+  '同じ版の訂正は日時変更=%sに従って受領日時を保持する',
+  async changeReceivedAt => {
+    fixtures();
+    const originalReceivedAt = '2026-01-01T12:34:56.123456Z';
+    api.answer.mockResolvedValue({ ...answer, received_at: originalReceivedAt });
+    permission('SURVEY_VIEW', 'SURVEY_RECORD');
+    api.write.mockResolvedValue({
+      answer: { ...answer, id: '31', supersedes_id: '30' },
+      operation: {
+        id: '50',
+        type: 'CORRECTION_RECEIVED',
+        resource_id: '31',
+        committed_version: 0,
+        replayed: false,
+      },
+    });
+    render(<SurveysPage />);
+    await showRevision();
+    fireEvent.click(screen.getByRole('button', { name: '回答・履歴' }));
+    await screen.findByText('保護された原回答');
+    fireEvent.click(screen.getByRole('button', { name: '回答を訂正' }));
+    fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
+      target: { value: '訂正後の回答' },
+    });
+    if (changeReceivedAt) {
+      fireEvent.change(screen.getByLabelText('受領日時'), {
+        target: { value: '2026-01-02T10:15' },
+      });
+    }
+    fireEvent.change(screen.getByLabelText('操作理由'), { target: { value: '転記の修正' } });
+    fireEvent.click(screen.getByRole('button', { name: '確認へ' }));
+    const confirm = await screen.findByRole('alertdialog');
+    expect(within(confirm).getByText(/同じ版へ訂正/)).toBeVisible();
+    fireEvent.click(within(confirm).getByRole('button', { name: '確定する' }));
+    await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
+    expect(api.write.mock.calls[0][0]).toMatchObject({
+      kind: 'CORRECT',
+      aid: '30',
+      input: {
+        version: 0,
+        reason: '転記の修正',
+        received_at: changeReceivedAt
+          ? new Date('2026-01-02T10:15').toISOString()
+          : originalReceivedAt,
+        answers: [{ question_key: 'q1', text: '訂正後の回答' }],
+      },
+    });
+  }
+);
 
 test('遅れて失敗した旧一覧要求で新しい検索結果の権限を消さない', async () => {
   fixtures();

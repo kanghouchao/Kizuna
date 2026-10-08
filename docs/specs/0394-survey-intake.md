@@ -219,7 +219,7 @@ surveyモジュールが系列、設問版、回答正本、専用履歴、冪�
 
 全表はt_接頭辞とstoreFilter／storeSetFilterを持つ。系列＋revision_number、系列あたりDRAFT／OPENの各部分一意制約、訂正元の一意性、店舗＋操作者＋キーをDBで保証する。FKはonDeleteを明示し、同一店舗削除の既存方針に合わせる。スタッフ削除等で履歴の原文が連鎖消去されないよう主体のスナップショットを保持する。系列／版／回答を物理削除する業務APIは設けない。
 
-DBはpre-launch baselineへ終端形を追加し、増分移行を作らない。主タスクはschema番号17（survey-intake）とCRMメニュー順4を本片へ割り当て済み。三権限の目録・frontend union・件数試験、baseline include、CRM「アンケート管理」のVIEWメニューが共有変更の最小範囲。基点の42権限に三つを加えるが、#1004私有添付の二つが先行合流した場合は47となり両方を保持する。実際の授与は行わない。
+DBはpre-launch baselineへ終端形を追加し、増分移行を作らない。主タスクはschema番号17（survey-intake）とCRMメニュー順4を本片へ割り当て済み。三権限の目録・frontend union・件数試験、baseline include、CRM「アンケート管理」のVIEWメニューが共有変更の最小範囲。合流済みの#1004私有添付二権限を含む44権限に三つを加え、47権限とする。実際の授与は行わない。
 
 ## 管理画面と回復
 
