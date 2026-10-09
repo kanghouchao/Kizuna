@@ -16,9 +16,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.api.store.AdvertisingCostController;
+import com.kizuna.advertising.api.store.AdvertisingMediaController;
 import com.kizuna.advertising.application.AdvertisingExportService;
+import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
+import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -43,7 +46,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
-@WebMvcTest(AdvertisingCostController.class)
+@WebMvcTest({AdvertisingCostController.class, AdvertisingMediaController.class})
 @Import({AdvertisingControllerTest.MethodSecurity.class, StoreContext.class})
 class AdvertisingControllerTest {
   @TestConfiguration
@@ -52,6 +55,7 @@ class AdvertisingControllerTest {
 
   @Autowired MockMvc mvc;
   @MockitoBean AdvertisingService service;
+  @MockitoBean AdvertisingMediaService media;
   @MockitoBean AdvertisingExportService exports;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
@@ -181,6 +185,90 @@ class AdvertisingControllerTest {
                     "{\"category\":\"SALES\",\"media_name\":\"媒体\",\"amount\":0,\"version\":0,\"reason\":\"修正\",\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}"))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(service);
+  }
+
+  @Test
+  void mediaReadPreservesNullAndPagesWholeMonthAndRejectsInvalidQueries() throws Exception {
+    var snapshot =
+        new AdvertisingMediaService.Snapshot(
+            1,
+            "2026-09",
+            1,
+            OffsetDateTime.now(),
+            AdvertisingMediaReport.aggregate(
+                List.of(
+                    new AdvertisingMediaReport.Entry(AdvertisingCategory.SALES, "媒体", 0, null))));
+    when(media.view("2026-09")).thenReturn(snapshot);
+    var query =
+        get("/store/advertising-media-summaries")
+            .param("month", "2026-09")
+            .header("X-Role", "store")
+            .header("X-Store-ID", "1")
+            .with(permissions("VIEW"));
+    var result =
+        mvc.perform(query)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.rows.content[0].inquiry_status").value("UNRECORDED"))
+            .andExpect(jsonPath("$.rows.size").value(20))
+            .andReturn();
+    assertThat(result.getResponse().getContentAsString())
+        .contains("\"recorded_inquiry_count_sum\":null");
+    assertThat(result.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
+    mvc.perform(query.param("page", "2147483647").param("size", "1000"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rows.content").isEmpty())
+        .andExpect(jsonPath("$.rows.size").value(100));
+    for (var invalid :
+        List.of("page=-1", "page=0.1", "size=0", "size=", "sort=amount", "month=2026-09")) {
+      var pair = invalid.split("=", -1);
+      mvc.perform(
+              get("/store/advertising-media-summaries")
+                  .param("month", "2026-09")
+                  .param(pair[0], pair[1])
+                  .header("X-Role", "store")
+                  .header("X-Store-ID", "1")
+                  .with(permissions("VIEW")))
+          .andExpect(status().isBadRequest());
+    }
+    mvc.perform(
+            get("/store/advertising-media-summaries")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .with(permissions("VIEW")))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void mediaExportRequiresBothPermissionsAndRejectsPaging() throws Exception {
+    for (var permissions :
+        List.of(
+            new String[] {"VIEW"},
+            new String[] {"EXPORT"},
+            new String[] {"SET_VIEW", "SET_EXPORT"})) {
+      mvc.perform(
+              get("/store/advertising-media-summaries/exports")
+                  .param("month", "2026-09")
+                  .param("format", "csv")
+                  .header("X-Role", "store")
+                  .header("X-Store-ID", "1")
+                  .with(permissions(permissions)))
+          .andExpect(status().isForbidden());
+    }
+    mvc.perform(
+            get("/store/advertising-media-summaries/exports")
+                .param("month", "2026-09")
+                .param("format", "csv")
+                .param("page", "0")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .with(permissions("VIEW", "EXPORT")))
+        .andExpect(status().isBadRequest());
+    mvc.perform(
+            get("/store/advertising-media-summaries")
+                .param("month", "2026-09")
+                .with(permissions("VIEW")))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(exports, media);
   }
 
   @Test

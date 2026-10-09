@@ -1,7 +1,8 @@
 import { CursorPage, Page } from './types';
 
 // 一覧ページ外殻が扱う正規化ページ型。page は 0 起点で統一する
-export interface PageResult<T> {
+export interface PageResult<T, M = undefined> {
+  metadata?: M;
   rows: T[];
   page: number;
   pageCount: number;

@@ -16,6 +16,7 @@ import com.kizuna.advertising.api.dto.AdvertisingRequests.CopyRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.DeleteRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.ReplaceRequest;
+import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
@@ -319,6 +320,53 @@ class AdvertisingPostgresTest {
     assertThat(snapshot.summary().recordedTotalAmount()).isEqualTo(100);
     assertThat(snapshot.summary().version()).isEqualTo(1);
     assertThat(service.month("2026-09").recordedTotalAmount()).isEqualTo(300);
+  }
+
+  @Test
+  void mediaSummaryKeepsInquiryAmountAndRevisionTogetherAndRecalculatesAfterDeletion() {
+    var first = service.create(create("2026-09", 5, 100, UUID.randomUUID()), "actor");
+    var media = new AdvertisingMediaService(service, context.getBean(AppProperties.class));
+    stores.setStoreId(2L);
+    service.create(create("2026-09", 100, 10000, UUID.randomUUID()), "actor");
+    stores.setStoreId(1L);
+    doAnswer(
+            invocation -> {
+              var rows = invocation.callRealMethod();
+              try (var pool = Executors.newSingleThreadExecutor()) {
+                pool.submit(
+                        () -> {
+                          stores.setStoreId(1L);
+                          try {
+                            service.create(
+                                create("2026-09", null, 200, UUID.randomUUID()), "actor");
+                          } finally {
+                            stores.clear();
+                          }
+                        })
+                    .get(5, TimeUnit.SECONDS);
+              }
+              return rows;
+            })
+        .when(context.getBean(AdvertisingRecords.class))
+        .all(eq("2026-09"), anyInt());
+    var before = media.view("2026-09");
+    assertThat(before.monthVersion()).isEqualTo(1);
+    assertThat(before.report().recordedTotalAmount()).isEqualTo(100);
+    assertThat(before.report().rows().getFirst().recordedInquiryCountSum()).isEqualTo(5);
+    assertThat(before.report().entryCount()).isEqualTo(1);
+    reset(context.getBean(AdvertisingRecords.class));
+    var after = media.view("2026-09");
+    assertThat(after.monthVersion()).isEqualTo(2);
+    assertThat(after.report().recordedTotalAmount()).isEqualTo(300);
+    assertThat(after.report().rows().getFirst().unrecordedInquiryEntryCount()).isEqualTo(1);
+    service.delete(
+        first.id(), new DeleteRequest(first.version(), "修正", UUID.randomUUID()), "actor");
+    var deleted = media.view("2026-09");
+    assertThat(deleted.report().recordedTotalAmount()).isEqualTo(200);
+    assertThat(deleted.report().rows().getFirst().recordedInquiryCountSum()).isNull();
+    context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(1);
+    service.create(create("2026-09", 0, 0, UUID.randomUUID()), "actor");
+    assertThatThrownBy(() -> media.view("2026-09")).isInstanceOf(ServiceUnavailableException.class);
   }
 
   @Test

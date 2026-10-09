@@ -17,6 +17,29 @@ export interface Cost extends CostValues {
   created_at?: string;
   updated_at: string;
 }
+export interface MediaSummary {
+  category: Category;
+  media_name: string;
+  entry_count: number;
+  recorded_amount: number;
+  recorded_inquiry_entry_count: number;
+  unrecorded_inquiry_entry_count: number;
+  recorded_inquiry_count_sum: number | null;
+  inquiry_status: 'UNRECORDED' | 'PARTIAL' | 'RECORDED';
+}
+export interface MediaReport {
+  store_id: number;
+  month: string;
+  month_version: number;
+  generated_at: string;
+  basis: 'advertising-media-records-v1';
+  media_matching: 'EXACT_STORED_NAME';
+  inquiry_basis: 'MANUAL_RECORDED_SUM_NOT_DEDUPLICATED';
+  entry_count: number;
+  recorded_total_amount: number;
+  category_totals: { category: Category; entry_count: number; recorded_amount: number }[];
+  rows: Page<MediaSummary>;
+}
 export interface Month {
   store_id: number;
   month: string;
@@ -67,6 +90,12 @@ export interface Operation {
 const base = '/store/advertising-costs';
 const months = '/store/advertising-cost-months';
 export const advertisingApi = {
+  media: async (month: string, page = 0) =>
+    (
+      await apiClient.get<MediaReport>('/store/advertising-media-summaries', {
+        params: { month, page, size: 20 },
+      })
+    ).data,
   list: async (month: string, page = 0) =>
     (await apiClient.get<Page<Cost>>(base, { params: { month, page, size: 20 } })).data,
   get: async (id: string) => (await apiClient.get<Cost>(`${base}/${id}`)).data,
@@ -113,13 +142,16 @@ export const advertisingApi = {
       ],
     });
   },
-  async download(month: string, format: 'csv' | 'xlsx', signal: AbortSignal) {
+  async download(month: string, format: 'csv' | 'xlsx', signal: AbortSignal, media = false) {
     try {
-      const response = await apiClient.get<Blob>(base + '/exports', {
-        params: { month, format },
-        responseType: 'blob',
-        signal,
-      });
+      const response = await apiClient.get<Blob>(
+        (media ? '/store/advertising-media-summaries' : base) + '/exports',
+        {
+          params: { month, format },
+          responseType: 'blob',
+          signal,
+        }
+      );
       const type =
         format === 'csv'
           ? 'text/csv'
