@@ -34,6 +34,14 @@ export function setPlatformStore(id: number | string, expiresAt?: number): void 
 }
 
 export function clearPlatformSession(): void {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith('pending-operation:')) sessionStorage.removeItem(key);
+    }
+  } catch {
+    // 保存領域が利用不能でもログアウトは完了させる。
+  }
   Cookies.remove(PLATFORM_ROLE_COOKIE);
   Cookies.remove(PLATFORM_STORE_ID_COOKIE);
 }

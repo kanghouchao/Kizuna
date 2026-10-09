@@ -1,0 +1,332 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-019-advertising_costs
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_advertising_costs
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_advertising_costs
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: month
+                  type: VARCHAR(7)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: media_name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: agency_name
+                  type: VARCHAR(200)
+              - column:
+                  name: plan_name
+                  type: VARCHAR(200)
+              - column:
+                  name: inquiry_count
+                  type: INTEGER
+              - column:
+                  name: amount
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deleted
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revision
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_costs
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_advertising_costs_store_id
+            onDelete: CASCADE
+        - sql:
+            sql: |
+              ALTER TABLE t_advertising_costs ADD CONSTRAINT ck_t_advertising_costs_values CHECK (amount >= 0 AND (inquiry_count IS NULL OR inquiry_count >= 0) AND category IN ('SALES','RECRUITMENT'));
+              CREATE INDEX idx_t_advertising_costs_month ON t_advertising_costs(store_id, month, id) WHERE deleted = false;
+  - changeSet:
+      id: store-v0100-019-advertising_months
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_advertising_months
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_advertising_months
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: month
+                  type: VARCHAR(7)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revision
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_months
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_advertising_months_store_id
+            onDelete: CASCADE
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_advertising_months_month ON t_advertising_months(store_id, month);
+  - changeSet:
+      id: store-v0100-019-advertising_changes
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_advertising_changes
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_advertising_changes
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: month
+                  type: VARCHAR(7)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cost_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: action
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+              - column:
+                  name: source_cost_id
+                  type: VARCHAR(64)
+              - column:
+                  name: version_before
+                  type: BIGINT
+              - column:
+                  name: version_after
+                  type: BIGINT
+              - column:
+                  name: before_value
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: after_value
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_changes
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_advertising_changes_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_changes
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_advertising_changes_actor_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_changes
+            baseColumnNames: cost_id
+            referencedTableName: t_advertising_costs
+            referencedColumnNames: id
+            constraintName: fk_t_advertising_changes_cost_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_changes
+            baseColumnNames: source_cost_id
+            referencedTableName: t_advertising_costs
+            referencedColumnNames: id
+            constraintName: fk_t_advertising_changes_source_cost_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE INDEX idx_t_advertising_changes_month ON t_advertising_changes(store_id, month, created_at DESC, id DESC);
+  - changeSet:
+      id: store-v0100-019-advertising_requests
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_advertising_requests
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_advertising_requests
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: request_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: request_value
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: response_value
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_requests
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_advertising_requests_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_requests
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_advertising_requests_actor_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_advertising_requests_request ON t_advertising_requests(store_id, actor_id, request_id);
