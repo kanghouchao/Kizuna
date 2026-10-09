@@ -169,6 +169,8 @@ public class AttachmentBodyReceiver implements AutoCloseable {
         fail(busy());
         throw busy();
       } catch (ExecutionException exception) {
+        // 非同期の失敗通知後も、ファイルと受信枠の解放が完了するまで待つ。
+        close();
         if (exception.getCause() instanceof RuntimeException failure) throw failure;
         throw busy();
       } catch (IOException | NoSuchAlgorithmException exception) {

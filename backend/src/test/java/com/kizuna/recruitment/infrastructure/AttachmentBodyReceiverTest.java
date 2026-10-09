@@ -12,15 +12,24 @@ import com.kizuna.shared.exception.UploadInputException;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.FilterOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class AttachmentBodyReceiverTest {
   @TempDir Path directory;
@@ -69,11 +78,77 @@ class AttachmentBodyReceiverTest {
     try (var receiver = new AttachmentBodyReceiver(properties());
         var admission = receiver.admit(request)) {
       assertThatThrownBy(() -> admission.receive(request))
-          .isInstanceOf(ServiceUnavailableException.class);
+          .isInstanceOf(ServiceUnavailableException.class)
+          .hasMessage("画像の受信が制限時間を超えました");
       assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(3));
       assertEmpty();
       try (var next = receiver.admit(request)) {
         assertThat(next).isNotNull();
+      }
+    }
+  }
+
+  @Test
+  void asynchronousFailureWaitsForFileAndAdmissionCleanupBeforeReturning() throws Exception {
+    var installed = new CompletableFuture<ReadListener>();
+    var stream =
+        new Body(new byte[] {1}, true) {
+          @Override
+          public void setReadListener(ReadListener listener) {
+            installed.complete(listener);
+          }
+        };
+    var request = request(stream, -1, "image/png");
+    var settings = properties();
+    settings.getPrivateAttachments().setReceiveTimeoutSeconds(30);
+    var closeStarted = new CountDownLatch(1);
+    var releaseClose = new CountDownLatch(1);
+    try (var receiver = new AttachmentBodyReceiver(settings);
+        var admission = receiver.admit(request);
+        var workers = Executors.newFixedThreadPool(2)) {
+      var received = workers.submit(() -> admission.receive(request));
+      var listener = installed.get(2, TimeUnit.SECONDS);
+      synchronized (admission) {
+        var original = (OutputStream) ReflectionTestUtils.getField(admission, "output");
+        // ファイルの close を止め、失敗の通知と資源解放の間を実際の受信経路で観測する。
+        ReflectionTestUtils.setField(
+            admission,
+            "output",
+            new FilterOutputStream(original) {
+              @Override
+              public void close() throws IOException {
+                closeStarted.countDown();
+                try {
+                  if (!releaseClose.await(5, TimeUnit.SECONDS))
+                    throw new IOException("解放待ちが期限を超えました");
+                } catch (InterruptedException exception) {
+                  Thread.currentThread().interrupt();
+                  throw new IOException(exception);
+                } finally {
+                  super.close();
+                }
+              }
+            });
+      }
+      var failed = workers.submit(() -> listener.onError(new IOException("受信失敗")));
+      try {
+        assertThat(closeStarted.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThatThrownBy(() -> received.get(300, TimeUnit.MILLISECONDS))
+            .isInstanceOf(TimeoutException.class);
+        assertThatThrownBy(() -> receiver.admit(request)).isInstanceOf(ResourceBusyException.class);
+      } finally {
+        releaseClose.countDown();
+      }
+      assertThatThrownBy(() -> received.get(2, TimeUnit.SECONDS))
+          .isInstanceOf(ExecutionException.class)
+          .hasCauseInstanceOf(ServiceUnavailableException.class);
+      failed.get(2, TimeUnit.SECONDS);
+      assertEmpty();
+      admission.close();
+      admission.close();
+      try (var next = receiver.admit(request)) {
+        assertThat(next).isNotNull();
+        assertThatThrownBy(() -> receiver.admit(request)).isInstanceOf(ResourceBusyException.class);
       }
     }
   }
