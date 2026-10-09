@@ -31,7 +31,8 @@ public class OperationalReportService {
       String groupBy,
       int page,
       int size,
-      boolean includeRemuneration) {
+      boolean includeRemuneration,
+      boolean includeAdvertising) {
     if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
       throw new ServiceException("ページ番号と件数（1〜100）の指定が不正です");
     try {
@@ -42,6 +43,7 @@ public class OperationalReportService {
           to,
           groupBy,
           includeRemuneration,
+          includeAdvertising,
           (report, budget) -> OperationalReportResponse.from(report, page, size));
     } catch (IOException ex) {
       throw new IllegalStateException(ex);
@@ -55,7 +57,8 @@ public class OperationalReportService {
       String to,
       String groupBy,
       String format,
-      boolean includeRemuneration)
+      boolean includeRemuneration,
+      boolean includeAdvertising)
       throws IOException {
     if (!"csv".equals(format) && !"xlsx".equals(format))
       throw new ServiceException("出力形式は csv / xlsx で指定してください");
@@ -66,6 +69,7 @@ public class OperationalReportService {
         to,
         groupBy,
         includeRemuneration,
+        includeAdvertising,
         (report, budget) -> renderer.render(report, format, budget));
   }
 
@@ -76,6 +80,7 @@ public class OperationalReportService {
       String to,
       String groupBy,
       boolean includeRemuneration,
+      boolean includeAdvertising,
       Render<T> render)
       throws IOException {
     var criteria = ReportCriteria.parse(from, to, groupBy);
@@ -84,8 +89,8 @@ public class OperationalReportService {
       var budget = new ReportBudget(properties.getOperationalReport());
       var report =
           platform
-              ? snapshot.platform(storeId, criteria, includeRemuneration)
-              : snapshot.store(criteria, includeRemuneration);
+              ? snapshot.platform(storeId, criteria, includeRemuneration, includeAdvertising)
+              : snapshot.store(criteria, includeRemuneration, includeAdvertising);
       var facts = report.facts();
       if (facts.orders().size() > properties.getOperationalReport().getMaxOrders()
           || facts.orders().size() > 100_000
@@ -99,6 +104,12 @@ public class OperationalReportService {
       if (report.remunerationFacts() != null) {
         report.remunerationFacts().days().forEach(day -> budget.text(day.toString()));
         report.remunerationFacts().bonuses().forEach(bonus -> budget.text(bonus.toString()));
+      }
+      if (report.advertisingFacts() != null) {
+        if (report.advertisingFacts().costs().size()
+            > properties.getOperationalReport().getMaxOrders())
+          throw new ServiceUnavailableException("広告費根拠が多すぎます。条件を絞ってください");
+        report.advertisingFacts().costs().forEach(cost -> budget.text(cost.toString()));
       }
       budget.check();
       T result = render.apply(report, budget);

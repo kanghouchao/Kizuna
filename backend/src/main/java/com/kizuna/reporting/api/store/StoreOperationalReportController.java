@@ -21,7 +21,7 @@ public class StoreOperationalReportController {
 
   @GetMapping
   @PreAuthorize(
-      "(!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW')")
+      "(!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_VIEW')) and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW')")
   public ResponseEntity<OperationalReportResponse> view(
       @RequestParam String from,
       @RequestParam String to,
@@ -29,24 +29,40 @@ public class StoreOperationalReportController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(name = "include_remuneration", defaultValue = "false")
-          boolean includeRemuneration) {
+          boolean includeRemuneration,
+      @RequestParam(name = "include_advertising", defaultValue = "false")
+          boolean includeAdvertising) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(service.view(false, null, from, to, groupBy, page, size, includeRemuneration));
+        .body(
+            service.view(
+                false,
+                null,
+                from,
+                to,
+                groupBy,
+                page,
+                size,
+                includeRemuneration,
+                includeAdvertising));
   }
 
   @GetMapping("/exports")
   @PreAuthorize(
-      "(!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT')")
+      "(!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_VIEW')) and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_EXPORT'))")
   public ResponseEntity<byte[]> export(
       @RequestParam String from,
       @RequestParam String to,
       @RequestParam(name = "group_by", defaultValue = "day") String groupBy,
       @RequestParam String format,
       @RequestParam(name = "include_remuneration", defaultValue = "false")
-          boolean includeRemuneration)
+          boolean includeRemuneration,
+      @RequestParam(name = "include_advertising", defaultValue = "false")
+          boolean includeAdvertising)
       throws IOException {
     return ReportDownload.response(
-        format, service.export(false, null, from, to, groupBy, format, includeRemuneration));
+        format,
+        service.export(
+            false, null, from, to, groupBy, format, includeRemuneration, includeAdvertising));
   }
 }

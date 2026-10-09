@@ -1298,3 +1298,70 @@ export async function cancelBonusAward(
   });
   expect(response.status(), await response.text()).toBe(200);
 }
+
+export type AdvertisingCostValues = {
+  category: 'SALES' | 'RECRUITMENT';
+  media_name: string;
+  agency_name: string | null;
+  plan_name: string | null;
+  inquiry_count: number | null;
+  amount: number;
+};
+
+export async function createAdvertisingCost(
+  request: APIRequestContext, token: string, month: string, values: AdvertisingCostValues,
+  storeId = STORE1_ID,
+): Promise<{ id: string; version: number }> {
+  const response = await request.post('/api/store/advertising-costs', {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { ...values, month, request_id: crypto.randomUUID() },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  return response.json();
+}
+
+export async function updateAdvertisingCost(
+  request: APIRequestContext, token: string, cost: { id: string; version: number },
+  values: AdvertisingCostValues, reason: string, storeId = STORE1_ID,
+): Promise<{ id: string; version: number }> {
+  const response = await request.put(`/api/store/advertising-costs/${cost.id}`, {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { ...values, version: cost.version, reason, request_id: crypto.randomUUID() },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
+}
+
+export async function deleteAdvertisingCost(
+  request: APIRequestContext, token: string, cost: { id: string; version: number },
+  reason: string, storeId = STORE1_ID,
+): Promise<void> {
+  const response = await request.delete(`/api/store/advertising-costs/${cost.id}`, {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { version: cost.version, reason, request_id: crypto.randomUUID() },
+  });
+  expect(response.status(), await response.text()).toBe(204);
+}
+
+export async function getRemunerationCandidates(
+  request: APIRequestContext, token: string, search: string, storeId = STORE1_ID,
+): Promise<{ content: { person_id: number }[] }> {
+  const response = await request.get('/api/store/monthly-remunerations/casts', {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    params: { search },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
+}
+
+export async function createRemunerationGuarantee(
+  request: APIRequestContext, token: string,
+  data: { person_id: number; effective_from: string; state: 'ACTIVE'; daily_amount: number; reason: string; expected_version: number },
+  storeId = STORE1_ID,
+): Promise<void> {
+  const response = await request.post('/api/store/remuneration-guarantees', {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { ...data, request_id: crypto.randomUUID() },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+}

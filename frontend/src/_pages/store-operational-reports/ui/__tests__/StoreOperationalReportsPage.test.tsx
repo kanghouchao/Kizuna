@@ -238,3 +238,216 @@ test('known zero guarantee and total remain zero on repeated remuneration querie
   expect(await screen.findByLabelText('報酬合計（円）')).toHaveTextContent(/^0$/);
   expect(fetch.mock.calls[0]).toEqual(fetch.mock.calls[1]);
 });
+
+function grantAdvertising(output = true) {
+  grantRemuneration();
+  const claims = jest.mocked(readTokenClaims)();
+  jest.mocked(readTokenClaims).mockReturnValue({
+    ...claims!,
+    authorities: [
+      ...claims!.authorities,
+      'PERM_ADVERTISING_COST_VIEW',
+      ...(output ? ['PERM_ADVERTISING_COST_EXPORT'] : []),
+    ],
+  });
+}
+function advertisingReport(
+  status: NonNullable<OperationalReport['advertising']>['status'] = 'RECORDED'
+): OperationalReport {
+  const data = report(0);
+  const applicable = status === 'RECORDED' || status === 'NO_RECORDS';
+  data.advertising = {
+    status,
+    entry_count: applicable ? (status === 'RECORDED' ? 1 : 0) : null,
+    sales_amount: applicable ? 0 : null,
+    recruitment_amount: applicable ? 0 : null,
+    recorded_total_amount: applicable ? 0 : null,
+  };
+  data.rows = {
+    ...data.rows,
+    content: [
+      {
+        store_id: 1,
+        store_name: '広告費のみの店舗',
+        period: '2026-09',
+        order_count: 0,
+        invalidated_order_count: 0,
+        total_fee: 0,
+        total_remuneration: 0,
+        advertising: data.advertising,
+      },
+    ],
+    total_elements: 1,
+    total_pages: 1,
+  };
+  return data;
+}
+test('advertising and remuneration default off and apply independently', async () => {
+  grantAdvertising();
+  fetch.mockResolvedValue(report(0));
+  render(<StoreOperationalReportsPage />);
+  const advertising = await screen.findByRole('checkbox', { name: '広告費を含める' });
+  const remuneration = screen.getByRole('checkbox', { name: '保証不足分・ボーナスを含める' });
+  expect(advertising).not.toBeChecked();
+  expect(remuneration).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  await screen.findByLabelText('請求額（円）');
+  expect(fetch.mock.calls[0][1]).not.toHaveProperty('include_advertising');
+  fireEvent.click(advertising);
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(fetch.mock.calls[1][1]).toHaveProperty('include_advertising', true);
+  expect(fetch.mock.calls[1][1]).not.toHaveProperty('include_remuneration');
+  fireEvent.click(remuneration);
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+  expect(fetch.mock.calls[2][1]).toMatchObject({
+    include_advertising: true,
+    include_remuneration: true,
+  });
+  await screen.findByLabelText('請求額（円）');
+});
+test.each([
+  ['RECORDED', '登録あり（1 件）', '0'],
+  ['NO_RECORDS', '登録なし', '0'],
+  ['NOT_APPLICABLE_PARTIAL_MONTH', '対象外: 月初から月末までの完全な月を指定してください。', ''],
+  [
+    'NOT_APPLICABLE_DAY_GROUPING',
+    '対象外: 広告費は日別に配分しません。月別または店舗別で照会してください。',
+    '',
+  ],
+] as const)(
+  'advertising %s preserves zero or blank and reason in summary and row',
+  async (status, label, amount) => {
+    grantAdvertising();
+    fetch.mockResolvedValue(advertisingReport(status));
+    render(<StoreOperationalReportsPage />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: '広告費を含める' }));
+    fireEvent.click(screen.getByRole('button', { name: '照会' }));
+    expect((await screen.findByLabelText('広告登録額合計（円）')).textContent).toBe(amount);
+    expect(screen.getByLabelText('営業広告登録額（円）').textContent).toBe(amount);
+    expect(screen.getByLabelText('採用広告登録額（円）').textContent).toBe(amount);
+    expect(screen.getAllByText(label, { exact: true })).toHaveLength(2);
+    expect(screen.getByText('広告費のみの店舗')).toBeInTheDocument();
+    expect(
+      screen.getByText(/登録なしは実費が零、または入力完了を意味しません/)
+    ).toBeInTheDocument();
+  }
+);
+test('advertising view requires its export permission even when not applicable', async () => {
+  grantAdvertising(false);
+  fetch.mockResolvedValue(advertisingReport('NOT_APPLICABLE_DAY_GROUPING'));
+  render(<StoreOperationalReportsPage />);
+  const checkbox = await screen.findByRole('checkbox', { name: '広告費を含める' });
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  await screen.findByLabelText('広告登録額合計（円）');
+  expect(screen.queryByRole('button', { name: 'CSV 全件出力' })).not.toBeInTheDocument();
+  expect(
+    screen.getByText('広告費を含む帳票の出力には広告費の出力権限が必要です。')
+  ).toBeInTheDocument();
+  fireEvent.click(checkbox);
+  expect(screen.queryByRole('button', { name: 'CSV 全件出力' })).not.toBeInTheDocument();
+  fetch.mockResolvedValueOnce(report(0));
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  expect(await screen.findByRole('button', { name: 'CSV 全件出力' })).toBeInTheDocument();
+});
+test('store does not accept platform advertising permission', async () => {
+  jest.mocked(readTokenClaims).mockReturnValue({
+    authorities: [
+      'PERM_ORDER_MANAGE',
+      'PERM_OPERATIONAL_REPORT_VIEW',
+      'PERM_ADVERTISING_COST_SET_VIEW',
+    ],
+    userType: 'STAFF',
+    storeBridge: true,
+  });
+  fetch.mockResolvedValue(report(0));
+  render(<StoreOperationalReportsPage />);
+  expect(screen.queryByRole('checkbox', { name: '広告費を含める' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: '照会' }));
+  await screen.findByLabelText('請求額（円）');
+  expect(fetch.mock.calls[0][1]).not.toHaveProperty('include_advertising');
+});
+test('new dates, group and option discard a late advertising response', async () => {
+  grantAdvertising();
+  let previous!: (value: OperationalReport) => void;
+  fetch
+    .mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          previous = resolve;
+        })
+    )
+    .mockResolvedValueOnce(report(16000));
+  render(<StoreOperationalReportsPage />);
+  const checkbox = await screen.findByRole('checkbox', { name: '広告費を含める' });
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  fireEvent.change(screen.getByLabelText('開始営業日'), { target: { value: '2026-09-01' } });
+  fireEvent.change(screen.getByLabelText('終了営業日'), { target: { value: '2026-09-30' } });
+  fireEvent.click(screen.getByRole('combobox', { name: '集計単位' }));
+  const option = screen.getByRole('option', { name: '月別' });
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  expect(await screen.findByLabelText('請求額（円）')).toHaveTextContent('16,000');
+  expect(fetch.mock.calls[1][1]).toMatchObject({
+    from: '2026-09-01',
+    to: '2026-09-30',
+    group_by: 'month',
+  });
+  expect(fetch.mock.calls[1][1]).not.toHaveProperty('include_advertising');
+  await act(async () => previous(advertisingReport()));
+  expect(screen.queryByLabelText('広告登録額合計（円）')).not.toBeInTheDocument();
+});
+test('switching store resets advertising and discards old response', async () => {
+  grantAdvertising();
+  let previous!: (value: OperationalReport) => void;
+  fetch
+    .mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          previous = resolve;
+        })
+    )
+    .mockResolvedValueOnce(report(16000));
+  const view = render(<StoreOperationalReportsPage />);
+  fireEvent.click(await screen.findByRole('checkbox', { name: '広告費を含める' }));
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  mockStoreId = '2';
+  view.rerender(<StoreOperationalReportsPage />);
+  expect(await screen.findByRole('checkbox', { name: '広告費を含める' })).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  await screen.findByLabelText('請求額（円）');
+  await act(async () => previous(advertisingReport()));
+  expect(screen.queryByLabelText('広告登録額合計（円）')).not.toBeInTheDocument();
+});
+
+test('registered advertising amounts stay separate and export uses applied criteria after draft edits', async () => {
+  grantAdvertising();
+  const data = advertisingReport();
+  data.advertising = {
+    status: 'RECORDED',
+    entry_count: 2,
+    sales_amount: 1234,
+    recruitment_amount: 5678,
+    recorded_total_amount: 6912,
+  };
+  data.rows.content[0].advertising = data.advertising;
+  fetch.mockResolvedValue(data);
+  render(<StoreOperationalReportsPage />);
+  const checkbox = await screen.findByRole('checkbox', { name: '広告費を含める' });
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  expect(await screen.findByLabelText('広告登録額合計（円）')).toHaveTextContent('6,912');
+  expect(screen.getByLabelText('営業広告登録額（円）')).toHaveTextContent('1,234');
+  expect(screen.getByLabelText('採用広告登録額（円）')).toHaveTextContent('5,678');
+  fireEvent.click(checkbox);
+  fireEvent.change(screen.getByLabelText('開始営業日'), { target: { value: '2026-08-01' } });
+  expect(jest.mocked(ReportExport).mock.lastCall?.[0].criteria).toEqual(fetch.mock.calls[0][1]);
+  expect(jest.mocked(ReportExport).mock.lastCall?.[0].criteria.include_advertising).toBe(true);
+});

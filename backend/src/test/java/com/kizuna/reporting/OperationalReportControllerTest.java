@@ -1,8 +1,11 @@
 package com.kizuna.reporting;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -10,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.advertising.reporting.AdvertisingReportFacts;
+import com.kizuna.advertising.reporting.AdvertisingReportReader;
 import com.kizuna.order.reporting.OperationalFacts;
 import com.kizuna.order.reporting.OperationalReportReader;
 import com.kizuna.remuneration.reporting.RemunerationReportFacts;
@@ -75,6 +80,7 @@ class OperationalReportControllerTest {
   @Autowired AppProperties properties;
   @MockitoBean OperationalReportReader reader;
   @MockitoBean RemunerationReportReader remuneration;
+  @MockitoBean AdvertisingReportReader advertising;
   @MockitoBean SystemConfigService systemConfigService;
   @MockitoBean StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreActivationService storeActivationService;
@@ -90,6 +96,8 @@ class OperationalReportControllerTest {
             List.of());
     when(remuneration.read(any(), any(), any(), anyInt()))
         .thenReturn(new RemunerationReportFacts(List.of(), List.of()));
+    when(advertising.read(anyBoolean(), any(), any(), any(), anyInt()))
+        .thenReturn(new AdvertisingReportFacts(List.of()));
     when(reader.store(any(), any())).thenReturn(facts);
     when(reader.platform(any(), any(), any())).thenReturn(facts);
   }
@@ -230,6 +238,137 @@ class OperationalReportControllerTest {
         .andExpect(jsonPath("$.rows.content[0].remuneration").value(Matchers.hasKey("total")))
         .andExpect(jsonPath("$.remuneration.known_guarantee_total").value(0))
         .andExpect(jsonPath("$.remuneration.bonus_total").value(500));
+  }
+
+  @Test
+  void advertisingPermissionsAreIndependentForEachConsoleAndExport() throws Exception {
+    for (String scope : List.of("store", "platform")) {
+      String order = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
+      String view = scope.equals("store") ? "ADVERTISING_COST_VIEW" : "ADVERTISING_COST_SET_VIEW";
+      String export =
+          scope.equals("store") ? "ADVERTISING_COST_EXPORT" : "ADVERTISING_COST_SET_EXPORT";
+      String otherView =
+          scope.equals("store") ? "ADVERTISING_COST_SET_VIEW" : "ADVERTISING_COST_VIEW";
+      mvc.perform(request(scope, "", order, "OPERATIONAL_REPORT_VIEW"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.advertising").doesNotExist());
+      for (String group : List.of("month", "day")) {
+        for (String path : List.of("", "/exports")) {
+          for (String extra : List.of("REMUNERATION_VIEW", otherView, export)) {
+            mvc.perform(
+                    request(
+                            scope,
+                            path,
+                            order,
+                            "OPERATIONAL_REPORT_VIEW",
+                            "OPERATIONAL_REPORT_EXPORT",
+                            extra)
+                        .param("include_advertising", "true")
+                        .param("group_by", group)
+                        .param("format", "csv"))
+                .andExpect(status().isForbidden());
+          }
+        }
+      }
+      mvc.perform(
+              request(scope, "", order, "OPERATIONAL_REPORT_VIEW", view)
+                  .param("include_advertising", "true")
+                  .param("group_by", "month"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.advertising.status").value("NO_RECORDS"))
+          .andExpect(jsonPath("$.advertising.entry_count").value(0))
+          .andExpect(jsonPath("$.basis").value("completed-orders-advertising-current-v3"));
+      mvc.perform(
+              request(
+                      scope,
+                      "/exports",
+                      order,
+                      "OPERATIONAL_REPORT_VIEW",
+                      "OPERATIONAL_REPORT_EXPORT",
+                      view)
+                  .param("include_advertising", "true")
+                  .param("group_by", "month")
+                  .param("format", "csv"))
+          .andExpect(status().isForbidden());
+      for (String format : List.of("csv", "xlsx")) {
+        mvc.perform(
+                request(
+                        scope,
+                        "/exports",
+                        order,
+                        "OPERATIONAL_REPORT_VIEW",
+                        "OPERATIONAL_REPORT_EXPORT",
+                        view,
+                        export)
+                    .param("include_advertising", "true")
+                    .param("group_by", "month")
+                    .param("format", format))
+            .andExpect(status().isOk());
+      }
+      mvc.perform(
+              request(scope, "", order, "OPERATIONAL_REPORT_VIEW", view)
+                  .param("include_advertising", "true")
+                  .param("include_remuneration", "true")
+                  .param("group_by", "month"))
+          .andExpect(status().isForbidden());
+      mvc.perform(
+              request(scope, "", order, "OPERATIONAL_REPORT_VIEW", view, "REMUNERATION_VIEW")
+                  .param("include_advertising", "true")
+                  .param("include_remuneration", "true")
+                  .param("group_by", "month"))
+          .andExpect(status().isOk())
+          .andExpect(
+              jsonPath("$.basis").value("completed-orders-remuneration-advertising-current-v3"));
+    }
+  }
+
+  @Test
+  void inapplicableAdvertisingKeepsAllExplicitNullKeysWithoutReadingCosts() throws Exception {
+    when(reader.store(any(), any()))
+        .thenReturn(
+            new OperationalFacts(
+                OffsetDateTime.parse("2026-10-01T12:00:00+09:00"),
+                List.of(new OperationalFacts.Store(1L, "店舗")),
+                List.of(
+                    new OperationalFacts.Order(
+                        "a", 1L, LocalDate.of(2026, 9, 30), 1, false, 1000, 500))));
+    clearInvocations(advertising);
+    for (String[] query :
+        List.of(
+            new String[] {"2026-09-02", "day", "NOT_APPLICABLE_PARTIAL_MONTH"},
+            new String[] {"2026-09-01", "day", "NOT_APPLICABLE_DAY_GROUPING"})) {
+      mvc.perform(
+              request(
+                      "store",
+                      "",
+                      "ORDER_MANAGE",
+                      "OPERATIONAL_REPORT_VIEW",
+                      "ADVERTISING_COST_VIEW")
+                  .with(
+                      r -> {
+                        r.setParameter("from", query[0]);
+                        return r;
+                      })
+                  .param("group_by", query[1])
+                  .param("include_advertising", "true"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.advertising.status").value(query[2]))
+          .andExpect(jsonPath("$.advertising").value(Matchers.hasKey("entry_count")))
+          .andExpect(jsonPath("$.advertising").value(Matchers.hasKey("sales_amount")))
+          .andExpect(jsonPath("$.advertising").value(Matchers.hasKey("recruitment_amount")))
+          .andExpect(jsonPath("$.advertising").value(Matchers.hasKey("recorded_total_amount")))
+          .andExpect(jsonPath("$.advertising.entry_count").value(Matchers.nullValue()))
+          .andExpect(jsonPath("$.advertising.sales_amount").value(Matchers.nullValue()))
+          .andExpect(jsonPath("$.advertising.recruitment_amount").value(Matchers.nullValue()))
+          .andExpect(jsonPath("$.advertising.recorded_total_amount").value(Matchers.nullValue()))
+          .andExpect(
+              jsonPath("$.rows.content[0].advertising")
+                  .value(Matchers.hasKey("recorded_total_amount")))
+          .andExpect(
+              jsonPath("$.rows.content[0].advertising.recorded_total_amount")
+                  .value(Matchers.nullValue()));
+    }
+    verifyNoInteractions(advertising);
   }
 
   @Test

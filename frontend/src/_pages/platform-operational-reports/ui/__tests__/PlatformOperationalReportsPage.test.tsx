@@ -93,3 +93,50 @@ test('invalid period is shown next to fields without sending request', async () 
   ).toBeGreaterThan(0);
   expect(fetch).not.toHaveBeenCalled();
 });
+
+test.each([
+  ['ADVERTISING_COST_VIEW', false, false],
+  ['ADVERTISING_COST_SET_VIEW', false, true],
+  ['ADVERTISING_COST_SET_VIEW', true, true],
+] as const)(
+  'platform permission %s export %s controls selected advertising',
+  async (permission, exportAllowed, visible) => {
+    jest.mocked(readTokenClaims).mockReturnValue({
+      authorities: [
+        'PERM_ORDER_SET_MANAGE',
+        'PERM_OPERATIONAL_REPORT_VIEW',
+        'PERM_OPERATIONAL_REPORT_EXPORT',
+        `PERM_${permission}`,
+        ...(exportAllowed
+          ? ['PERM_ADVERTISING_COST_SET_EXPORT']
+          : ['PERM_ADVERTISING_COST_EXPORT']),
+      ],
+      userType: 'STAFF',
+      storeBridge: false,
+    });
+    const data = report(0);
+    if (visible)
+      data.advertising = {
+        status: 'NO_RECORDS',
+        entry_count: 0,
+        sales_amount: 0,
+        recruitment_amount: 0,
+        recorded_total_amount: 0,
+      };
+    fetch.mockResolvedValue(data);
+    render(<PlatformOperationalReportsPage />);
+    const checkbox = screen.queryByRole('checkbox', { name: '広告費を含める' });
+    if (visible) {
+      expect(checkbox).not.toBeChecked();
+      fireEvent.click(checkbox!);
+    } else expect(checkbox).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('店舗ID（空欄は授権全店）'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: '照会' }));
+    await screen.findByLabelText('請求額（円）');
+    expect(fetch.mock.calls[0][1]).toMatchObject({ store_id: 8 });
+    expect(Boolean(fetch.mock.calls[0][1].include_advertising)).toBe(visible);
+    if (!visible || exportAllowed)
+      expect(screen.getByRole('button', { name: 'CSV 全件出力' })).toBeInTheDocument();
+    else expect(screen.queryByRole('button', { name: 'CSV 全件出力' })).not.toBeInTheDocument();
+  }
+);

@@ -6,6 +6,7 @@ export interface ReportCriteria {
   group_by: 'day' | 'month' | 'store';
   store_id?: number;
   include_remuneration?: boolean;
+  include_advertising?: boolean;
 }
 export interface ReportRemuneration {
   known_guarantee_total: number;
@@ -14,6 +15,14 @@ export interface ReportRemuneration {
   total: number | null;
   pending_attendance_days: number;
   not_configured_days: number;
+}
+export interface ReportAdvertising {
+  status:
+    'RECORDED' | 'NO_RECORDS' | 'NOT_APPLICABLE_PARTIAL_MONTH' | 'NOT_APPLICABLE_DAY_GROUPING';
+  entry_count: number | null;
+  sales_amount: number | null;
+  recruitment_amount: number | null;
+  recorded_total_amount: number | null;
 }
 export interface ReportRow {
   store_id: number;
@@ -24,6 +33,7 @@ export interface ReportRow {
   total_fee: number;
   total_remuneration: number;
   remuneration?: ReportRemuneration;
+  advertising?: ReportAdvertising;
 }
 export interface OperationalReport extends ReportCriteria {
   generated_at: string;
@@ -34,6 +44,7 @@ export interface OperationalReport extends ReportCriteria {
   total_fee: number;
   total_remuneration: number;
   remuneration?: ReportRemuneration;
+  advertising?: ReportAdvertising;
   rows: Page<ReportRow>;
 }
 export type ReportScope = 'store' | 'platform';

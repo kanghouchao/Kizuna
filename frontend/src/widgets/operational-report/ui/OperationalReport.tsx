@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import {
   fetchReport,
   validReportPeriod,
+  type ReportAdvertising,
   type ReportCriteria,
   type ReportRemuneration,
 } from '@/entities/operational-report';
@@ -38,6 +39,7 @@ interface Fields {
   group_by: ReportCriteria['group_by'];
   store: string;
   include_remuneration: boolean;
+  include_advertising: boolean;
 }
 export function useOperationalReportPage(scope: 'store' | 'platform') {
   const [access, setAccess] = useState({
@@ -45,6 +47,8 @@ export function useOperationalReportPage(scope: 'store' | 'platform') {
     view: false,
     output: false,
     remuneration: false,
+    advertising: false,
+    advertisingOutput: false,
   });
   useEffect(() => {
     const claims = readTokenClaims();
@@ -55,6 +59,14 @@ export function useOperationalReportPage(scope: 'store' | 'platform') {
         hasPermission(claims, scope === 'store' ? 'ORDER_MANAGE' : 'ORDER_SET_MANAGE'),
       output: hasPermission(claims, 'OPERATIONAL_REPORT_EXPORT'),
       remuneration: hasPermission(claims, 'REMUNERATION_VIEW'),
+      advertising: hasPermission(
+        claims,
+        scope === 'store' ? 'ADVERTISING_COST_VIEW' : 'ADVERTISING_COST_SET_VIEW'
+      ),
+      advertisingOutput: hasPermission(
+        claims,
+        scope === 'store' ? 'ADVERTISING_COST_EXPORT' : 'ADVERTISING_COST_SET_EXPORT'
+      ),
     });
   }, [scope]);
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
@@ -65,6 +77,7 @@ export function useOperationalReportPage(scope: 'store' | 'platform') {
       group_by: 'day',
       store: '',
       include_remuneration: false,
+      include_advertising: false,
     },
   });
   const [query, setQuery] = useState<{
@@ -90,6 +103,7 @@ export function useOperationalReportPage(scope: 'store' | 'platform') {
         ...(access.remuneration && values.include_remuneration
           ? { include_remuneration: true }
           : {}),
+        ...(access.advertising && values.include_advertising ? { include_advertising: true } : {}),
       },
       page: 0,
       revision: (current?.revision ?? 0) + 1,
@@ -194,15 +208,38 @@ export function ReportSearch({ model }: { model: ReportModel }) {
             )}
           />
         )}
+        {access.advertising && (
+          <FormField
+            control={form.control}
+            name="include_advertising"
+            render={({ field }) => (
+              <FormItem className="mt-7 flex items-center gap-2">
+                <FormControl>
+                  <Checkbox
+                    ref={field.ref}
+                    name={field.name}
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                </FormControl>
+                <FormLabel>広告費を含める</FormLabel>
+              </FormItem>
+            )}
+          />
+        )}
         <Button type="submit" className="mt-7">
           照会
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        営業日は保存済みの帰属日です。実収・未収・実際の給与支払・広告費は含みません。
+        営業日は保存済みの帰属日です。実収・未収・実際の給与支払は含みません。
         {access.remuneration
           ? '保証不足分・ボーナスは選択して照会した場合に含まれます。'
           : '保証不足分・ボーナスは含みません。'}
+        {access.advertising
+          ? '広告費は選択時に、月初から月末までの期間を月別・店舗別で照会した場合に含まれます。日割りは行いません。'
+          : '広告費は含みません。'}
       </p>
       {result && (
         <section aria-label="集計結果" className="space-y-3">
@@ -213,6 +250,9 @@ export function ReportSearch({ model }: { model: ReportModel }) {
             <p className="text-sm">
               保証不足分・ボーナス: {result.remuneration ? '含む' : '含まない'}
             </p>
+          )}
+          {access.advertising && (
+            <p className="text-sm">広告費: {result.advertising ? '選択済み' : '含まない'}</p>
           )}
           <p className="text-sm break-words">
             対象店舗:{' '}
@@ -245,7 +285,35 @@ export function ReportSearch({ model }: { model: ReportModel }) {
             ))}
           </div>
           {result.remuneration && <RemunerationStatus remuneration={result.remuneration} />}
-          {access.output && query && <ReportExport scope={scope} criteria={query.criteria} />}
+          {result.advertising && (
+            <section aria-label="広告費集計" className="space-y-3">
+              <div className="flex flex-wrap gap-6">
+                {advertisingAmounts(result.advertising).map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-sm text-muted-foreground">{label}</p>
+                    <p aria-label={label} className="min-h-9 text-3xl font-bold">
+                      {formatAdvertisingAmount(value)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <AdvertisingStatus advertising={result.advertising} />
+              <p className="text-sm text-muted-foreground">
+                広告費は現在の有効な登録額です。登録なしは実費が零、または入力完了を意味しません。
+                請求額・報酬・広告費を差し引いた利益や実際の支払額は算出しません。
+              </p>
+            </section>
+          )}
+          {access.output &&
+            query &&
+            (!query.criteria.include_remuneration || access.remuneration) &&
+            (!query.criteria.include_advertising ||
+              (access.advertising && access.advertisingOutput)) && (
+              <ReportExport scope={scope} criteria={query.criteria} />
+            )}
+          {access.output && query?.criteria.include_advertising && !access.advertisingOutput && (
+            <p className="text-sm">広告費を含む帳票の出力には広告費の出力権限が必要です。</p>
+          )}
         </section>
       )}
     </div>
@@ -272,6 +340,13 @@ export function ReportTable({ model }: { model: ReportModel }) {
             ['保証不足分（円）', 'ボーナス（円）', '報酬合計（円）', '確認状況'].map(label => (
               <TableHead key={label}>{label}</TableHead>
             ))}
+          {result?.advertising &&
+            [
+              '営業広告登録額（円）',
+              '採用広告登録額（円）',
+              '広告登録額合計（円）',
+              '広告費状態',
+            ].map(label => <TableHead key={label}>{label}</TableHead>)}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -292,6 +367,16 @@ export function ReportTable({ model }: { model: ReportModel }) {
                 <TableCell>{formatAmount(row.remuneration.total)}</TableCell>
                 <TableCell className="min-w-48 whitespace-normal">
                   <RemunerationStatus remuneration={row.remuneration} />
+                </TableCell>
+              </>
+            )}
+            {row.advertising && (
+              <>
+                {advertisingAmounts(row.advertising).map(([label, value]) => (
+                  <TableCell key={label}>{formatAdvertisingAmount(value)}</TableCell>
+                ))}
+                <TableCell className="min-w-48 whitespace-normal">
+                  <AdvertisingStatus advertising={row.advertising} />
                 </TableCell>
               </>
             )}
@@ -316,4 +401,27 @@ function RemunerationStatus({ remuneration }: { remuneration: ReportRemuneration
       </p>
     </div>
   );
+}
+
+function advertisingAmounts(advertising: ReportAdvertising): [string, number | null][] {
+  return [
+    ['営業広告登録額（円）', advertising.sales_amount],
+    ['採用広告登録額（円）', advertising.recruitment_amount],
+    ['広告登録額合計（円）', advertising.recorded_total_amount],
+  ];
+}
+
+function formatAdvertisingAmount(value: number | null) {
+  return value === null ? '' : value.toLocaleString('ja-JP');
+}
+
+function AdvertisingStatus({ advertising }: { advertising: ReportAdvertising }) {
+  const labels: Record<ReportAdvertising['status'], string> = {
+    RECORDED: `登録あり（${advertising.entry_count?.toLocaleString('ja-JP')} 件）`,
+    NO_RECORDS: '登録なし',
+    NOT_APPLICABLE_PARTIAL_MONTH: '対象外: 月初から月末までの完全な月を指定してください。',
+    NOT_APPLICABLE_DAY_GROUPING:
+      '対象外: 広告費は日別に配分しません。月別または店舗別で照会してください。',
+  };
+  return <p className="text-sm">{labels[advertising.status]}</p>;
 }
