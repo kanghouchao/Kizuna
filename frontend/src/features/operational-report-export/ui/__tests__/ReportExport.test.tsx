@@ -12,6 +12,7 @@ const criteria: ReportCriteria = {
   to: '2026-09-30',
   group_by: 'day',
   include_remuneration: true,
+  include_advertising: true,
 };
 beforeEach(() => {
   jest.clearAllMocks();
@@ -21,7 +22,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-test('repeated clicks generate one export with the applied remuneration criteria', async () => {
+test('repeated clicks generate one export with both applied amount sources', async () => {
   let complete!: (blob: Blob) => void;
   download.mockImplementationOnce(
     () =>
@@ -44,6 +45,8 @@ test('repeated clicks generate one export with the applied remuneration criteria
 
 test.each<Partial<ReportCriteria>>([
   { include_remuneration: false },
+  { include_advertising: false },
+  { group_by: 'month' },
   { store_id: 2 },
   { from: '2026-08-01' },
 ])('applied criteria change aborts pending export and discards its file: %j', async change => {

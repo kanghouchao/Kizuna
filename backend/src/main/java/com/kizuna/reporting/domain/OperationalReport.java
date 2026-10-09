@@ -1,6 +1,7 @@
 package com.kizuna.reporting.domain;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.kizuna.advertising.reporting.AdvertisingReportFacts;
 import com.kizuna.order.reporting.OperationalFacts;
 import com.kizuna.remuneration.reporting.RemunerationReportFacts;
 import com.kizuna.shared.exception.ServiceUnavailableException;
@@ -20,10 +21,16 @@ public record OperationalReport(
     long totalRemuneration,
     List<Row> rows,
     RemunerationReportFacts remunerationFacts,
-    Amounts remuneration) {
+    Amounts remuneration,
+    AdvertisingReportFacts advertisingFacts,
+    AdvertisingAmounts advertising) {
   public static final String BASIS = "completed-orders-current-v1";
 
   public String basis() {
+    if (advertising != null)
+      return remuneration == null
+          ? "completed-orders-advertising-current-v3"
+          : "completed-orders-remuneration-advertising-current-v3";
     return remuneration == null ? BASIS : "completed-orders-remuneration-current-v2";
   }
 
@@ -44,7 +51,8 @@ public record OperationalReport(
       long invalidatedOrderCount,
       long totalFee,
       long totalRemuneration,
-      @JsonInclude(JsonInclude.Include.NON_NULL) Amounts remuneration) {}
+      @JsonInclude(JsonInclude.Include.NON_NULL) Amounts remuneration,
+      @JsonInclude(JsonInclude.Include.NON_NULL) AdvertisingAmounts advertising) {}
 
   private record Key(Long storeId, String period) {}
 
@@ -54,6 +62,15 @@ public record OperationalReport(
 
   public static OperationalReport aggregate(
       ReportCriteria criteria, OperationalFacts facts, RemunerationReportFacts remuneration) {
+    return aggregate(criteria, facts, remuneration, null);
+  }
+
+  public static OperationalReport aggregate(
+      ReportCriteria criteria,
+      OperationalFacts facts,
+      RemunerationReportFacts remuneration,
+      AdvertisingReportFacts advertising) {
+    String advertisingStatus = AdvertisingAmounts.inapplicableStatus(criteria);
     Map<Long, String> names = new HashMap<>();
     facts.stores().forEach(store -> names.put(store.storeId(), store.storeName()));
     Map<Key, Totals> groups =
@@ -74,6 +91,15 @@ public record OperationalReport(
             .day(day);
         total.day(day);
       }
+    if (advertising != null && advertisingStatus == null)
+      for (var cost : advertising.costs()) {
+        groups
+            .computeIfAbsent(
+                new Key(cost.storeId(), criteria.groupBy().equals("month") ? cost.month() : ""),
+                key -> new Totals())
+            .cost(cost);
+        total.cost(cost);
+      }
     var rows = new ArrayList<Row>();
     groups.forEach(
         (key, sum) ->
@@ -86,7 +112,8 @@ public record OperationalReport(
                     sum.invalidated,
                     sum.fee,
                     sum.orderAmount,
-                    remuneration == null ? null : sum.amounts())));
+                    remuneration == null ? null : sum.amounts(),
+                    advertising == null ? null : sum.advertising(advertisingStatus))));
     return new OperationalReport(
         criteria,
         facts,
@@ -96,7 +123,9 @@ public record OperationalReport(
         total.orderAmount,
         List.copyOf(rows),
         remuneration,
-        remuneration == null ? null : total.amounts());
+        remuneration == null ? null : total.amounts(),
+        advertising,
+        advertising == null ? null : total.advertising(advertisingStatus));
   }
 
   private static final class Totals {
@@ -107,7 +136,10 @@ public record OperationalReport(
         guaranteeKnown,
         bonuses,
         pendingAttendance,
-        notConfigured;
+        notConfigured,
+        advertisingEntries,
+        sales,
+        recruitment;
 
     void order(OperationalFacts.Order order) {
       if (order.invalidated()) {
@@ -126,6 +158,25 @@ public record OperationalReport(
       if (day.guaranteeStatus().equals("PENDING_ATTENDANCE"))
         pendingAttendance = add(pendingAttendance, 1);
       if (day.guaranteeStatus().equals("NOT_CONFIGURED")) notConfigured = add(notConfigured, 1);
+    }
+
+    void cost(AdvertisingReportFacts.Cost cost) {
+      advertisingEntries = add(advertisingEntries, 1);
+      switch (cost.category()) {
+        case "SALES" -> sales = add(sales, cost.amount());
+        case "RECRUITMENT" -> recruitment = add(recruitment, cost.amount());
+        default -> throw new ServiceUnavailableException("広告費区分を確認できません");
+      }
+    }
+
+    AdvertisingAmounts advertising(String status) {
+      if (status != null) return new AdvertisingAmounts(status, null, null, null, null);
+      return new AdvertisingAmounts(
+          advertisingEntries == 0 ? "NO_RECORDS" : "RECORDED",
+          advertisingEntries,
+          sales,
+          recruitment,
+          add(sales, recruitment));
     }
 
     Amounts amounts() {

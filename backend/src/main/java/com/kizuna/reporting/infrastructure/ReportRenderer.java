@@ -4,6 +4,7 @@ import static com.kizuna.shared.export.TabularCells.writeCsv;
 import static com.kizuna.shared.export.TabularCells.writeXlsx;
 
 import com.kizuna.reporting.application.ReportBudget;
+import com.kizuna.reporting.domain.AdvertisingAmounts;
 import com.kizuna.reporting.domain.OperationalReport;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -63,10 +64,36 @@ public class ReportRenderer {
     }
   }
 
+  private enum AdvertisingColumn {
+    STATUS("広告費状態"),
+    ENTRIES("広告費登録件数"),
+    SALES("営業広告登録額（円）"),
+    RECRUITMENT("採用広告登録額（円）"),
+    TOTAL("広告登録額合計（円）"),
+    ID("広告費ID"),
+    VERSION("広告費版"),
+    MONTH("広告費対象月"),
+    CATEGORY("広告費区分"),
+    AMOUNT("広告費額（円）");
+    private final String label;
+
+    AdvertisingColumn(String label) {
+      this.label = label;
+    }
+
+    int index(OperationalReport report) {
+      return HEADER.size()
+          + (report.remuneration() == null ? 0 : ExtraColumn.values().length)
+          + ordinal();
+    }
+  }
+
   private List<Object> header(OperationalReport report) {
     var result = new ArrayList<>(HEADER);
     if (report.remuneration() != null)
       for (var column : ExtraColumn.values()) result.add(column.label);
+    if (report.advertising() != null)
+      for (var column : AdvertisingColumn.values()) result.add(column.label);
     return result;
   }
 
@@ -82,10 +109,10 @@ public class ReportRenderer {
       try (var workbook = new SXSSFWorkbook(100)) {
         workbook.setCompressTempFiles(true);
         var sheets = new HashMap<String, Sheet>();
-        for (String name :
-            report.remuneration() == null
-                ? List.of("metadata", "summary", "order")
-                : List.of("metadata", "summary", "order", "remuneration_day", "bonus")) {
+        var types = new ArrayList<>(List.of("metadata", "summary", "order"));
+        if (report.remuneration() != null) types.addAll(List.of("remuneration_day", "bonus"));
+        if (report.advertising() != null) types.add("advertising_cost");
+        for (String name : types) {
           var sheet =
               workbook.createSheet(
                   switch (name) {
@@ -93,6 +120,7 @@ public class ReportRenderer {
                     case "summary" -> "集計";
                     case "remuneration_day" -> "日別報酬根拠";
                     case "bonus" -> "ボーナス根拠";
+                    case "advertising_cost" -> "広告費根拠";
                     default -> "受注明細";
                   });
           writeXlsx(sheet, header(report), budget);
@@ -124,7 +152,9 @@ public class ReportRenderer {
                 report.invalidatedOrderCount(),
                 report.totalFee(),
                 report.totalRemuneration()),
-            report.remuneration()));
+            report.remuneration(),
+            report,
+            report.advertising()));
     for (var summary : report.rows())
       rows.accept(
           withAmounts(
@@ -141,7 +171,11 @@ public class ReportRenderer {
                   summary.invalidatedOrderCount(),
                   summary.totalFee(),
                   summary.totalRemuneration()),
-              summary.remuneration()));
+              summary.remuneration(),
+              report,
+              summary.advertising()));
+    if (report.advertising() != null)
+      rows.accept(row(report, "metadata", "", "", "注記: " + report.advertising().explanation()));
     var names = new HashMap<Long, String>();
     for (var store : report.facts().stores()) {
       names.put(store.storeId(), store.storeName());
@@ -175,6 +209,23 @@ public class ReportRenderer {
               order.invalidated() ? 1 : 0,
               order.invalidated() ? 0 : order.totalFee(),
               order.invalidated() ? 0 : order.remuneration()));
+    if (report.advertisingFacts() != null && report.advertising().entryCount() != null) {
+      for (var cost : report.advertisingFacts().costs()) {
+        var values =
+            row(
+                report,
+                "advertising_cost",
+                cost.storeId().toString(),
+                names.get(cost.storeId()),
+                cost.month());
+        values.set(AdvertisingColumn.ID.index(report), cost.id());
+        values.set(AdvertisingColumn.VERSION.index(report), Long.toString(cost.version()));
+        values.set(AdvertisingColumn.MONTH.index(report), cost.month());
+        values.set(AdvertisingColumn.CATEGORY.index(report), cost.category());
+        values.set(AdvertisingColumn.AMOUNT.index(report), cost.amount());
+        rows.accept(values);
+      }
+    }
     if (report.remunerationFacts() != null) {
       for (var day : report.remunerationFacts().days()) {
         var values =
@@ -262,7 +313,11 @@ public class ReportRenderer {
     return value == null ? "" : value;
   }
 
-  private List<Object> withAmounts(List<Object> row, OperationalReport.Amounts amounts) {
+  private List<Object> withAmounts(
+      List<Object> row,
+      OperationalReport.Amounts amounts,
+      OperationalReport report,
+      AdvertisingAmounts advertising) {
     if (amounts != null) {
       row.set(ExtraColumn.KNOWN_GUARANTEE.index(), amounts.knownGuaranteeTotal());
       row.set(ExtraColumn.GUARANTEE.index(), blank(amounts.guaranteeTotal()));
@@ -270,6 +325,13 @@ public class ReportRenderer {
       row.set(ExtraColumn.TOTAL.index(), blank(amounts.total()));
       row.set(ExtraColumn.PENDING_ATTENDANCE.index(), amounts.pendingAttendanceDays());
       row.set(ExtraColumn.NOT_CONFIGURED.index(), amounts.notConfiguredDays());
+    }
+    if (advertising != null) {
+      row.set(AdvertisingColumn.STATUS.index(report), advertising.status());
+      row.set(AdvertisingColumn.ENTRIES.index(report), blank(advertising.entryCount()));
+      row.set(AdvertisingColumn.SALES.index(report), blank(advertising.salesAmount()));
+      row.set(AdvertisingColumn.RECRUITMENT.index(report), blank(advertising.recruitmentAmount()));
+      row.set(AdvertisingColumn.TOTAL.index(report), blank(advertising.recordedTotalAmount()));
     }
     return row;
   }

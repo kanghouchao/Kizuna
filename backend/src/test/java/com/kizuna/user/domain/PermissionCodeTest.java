@@ -3,6 +3,7 @@ package com.kizuna.user.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
@@ -19,10 +20,12 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("PLATFORM コンソールの権限はプラットフォーム管理系の 14 個")
+  @DisplayName("PLATFORM コンソールの権限はプラットフォーム管理系の 16 個")
   void platformPermissions() {
     assertThat(byConsole(PermissionCode.Console.PLATFORM))
         .containsExactlyInAnyOrder(
+            PermissionCode.ADVERTISING_COST_SET_VIEW,
+            PermissionCode.ADVERTISING_COST_SET_EXPORT,
             PermissionCode.STORE_MANAGE,
             PermissionCode.CAST_PERSON_VIEW,
             PermissionCode.ROLE_MANAGE,
@@ -111,9 +114,9 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("権限目録は 54 個で全てコンソール分類を持つ")
+  @DisplayName("権限目録は 56 個で全てコンソール分類を持つ")
   void catalogIsComplete() {
-    assertThat(PermissionCode.values()).hasSize(54);
+    assertThat(PermissionCode.values()).hasSize(56);
     assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getConsole))
         .doesNotContainNull();
   }
@@ -122,6 +125,18 @@ class PermissionCodeTest {
   void attachmentPermissionsHaveNoDefaultGrants() {
     assertThat(PermissionCode.RECRUITMENT_ATTACHMENT_VIEW.getDefaultRoles()).isEmpty();
     assertThat(PermissionCode.RECRUITMENT_ATTACHMENT_MANAGE.getDefaultRoles()).isEmpty();
+  }
+
+  @Test
+  void advertisingPlatformReadPermissionsHaveNoDefaultGrantsOrStoreBridge() {
+    for (var permission :
+        List.of(
+            PermissionCode.ADVERTISING_COST_SET_VIEW, PermissionCode.ADVERTISING_COST_SET_EXPORT)) {
+      assertThat(permission.getDefaultRoles()).isEmpty();
+      assertThat(permission.grantsStoreConsole()).isFalse();
+    }
+    assertThat(PermissionCode.ADVERTISING_COST_VIEW.grantsStoreConsole()).isTrue();
+    assertThat(PermissionCode.ADVERTISING_COST_EXPORT.grantsStoreConsole()).isTrue();
   }
 
   private Set<PermissionCode> byConsole(PermissionCode.Console console) {

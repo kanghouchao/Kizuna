@@ -9,11 +9,19 @@ const criteria: ReportCriteria = {
   group_by: 'day',
   store_id: 7,
   include_remuneration: true,
+  include_advertising: true,
 };
 beforeEach(() => jest.clearAllMocks());
 
 test('query preserves null, zero and known subtotal without client recalculation', async () => {
   const response = {
+    advertising: {
+      status: 'NOT_APPLICABLE_PARTIAL_MONTH',
+      entry_count: null,
+      sales_amount: null,
+      recruitment_amount: null,
+      recorded_total_amount: null,
+    },
     remuneration: {
       guarantee_total: null,
       known_guarantee_total: 2000,
