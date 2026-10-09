@@ -17,7 +17,7 @@ import {
   withdrawCast,
   recordAttendance,
   createPermissionRole,
-  createStoreStaffFixture,
+  createPlatformStaffFixture,
   loginAsStoreAdmin,
   loginPlatformUser,
   getAuthorizedStores,
@@ -82,9 +82,9 @@ Given(
         "REMUNERATION_CORRECT",
       ],
     );
-    await createStoreStaffFixture(
+    await createPlatformStaffFixture(
       request,
-      manager,
+      owner,
       staffEmail,
       password,
       [role],
@@ -245,6 +245,9 @@ Then(
     expect(data.total).toBe(11500);
     expect(data.days.at(-1).closed_duration).toBe("PT4H");
     await expect(page.getByText("¥11,500", { exact: true })).toBeVisible();
+    await page
+      .getByRole("heading", { name: "受注報酬・保証・ボーナス", exact: true })
+      .scrollIntoViewIfNeeded();
     await page.screenshot({
       animations: "disabled",
       path: $testInfo.outputPath("remuneration-store-light.png"),
@@ -318,6 +321,9 @@ Then(
     await expect(
       platformPage.getByRole("button", { name: "ボーナスを記録" }),
     ).toHaveCount(0);
+    await platformPage
+      .getByRole("heading", { name: "受注報酬・保証・ボーナス", exact: true })
+      .scrollIntoViewIfNeeded();
     await platformPage.screenshot({
       animations: "disabled",
       path: $testInfo.outputPath("remuneration-platform.png"),
@@ -358,6 +364,9 @@ Then(
     await expect(
       page.getByText("¥10,000", { exact: true }).first(),
     ).toBeVisible();
+    await page
+      .getByRole("heading", { name: "受注報酬・保証・ボーナス", exact: true })
+      .scrollIntoViewIfNeeded();
     await page.screenshot({
       animations: "disabled",
       path: $testInfo.outputPath("remuneration-self.png"),
