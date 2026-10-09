@@ -5,6 +5,15 @@ export interface ReportCriteria {
   to: string;
   group_by: 'day' | 'month' | 'store';
   store_id?: number;
+  include_remuneration?: boolean;
+}
+export interface ReportRemuneration {
+  known_guarantee_total: number;
+  guarantee_total: number | null;
+  bonus_total: number;
+  total: number | null;
+  pending_attendance_days: number;
+  not_configured_days: number;
 }
 export interface ReportRow {
   store_id: number;
@@ -14,6 +23,7 @@ export interface ReportRow {
   invalidated_order_count: number;
   total_fee: number;
   total_remuneration: number;
+  remuneration?: ReportRemuneration;
 }
 export interface OperationalReport extends ReportCriteria {
   generated_at: string;
@@ -23,6 +33,7 @@ export interface OperationalReport extends ReportCriteria {
   invalidated_order_count: number;
   total_fee: number;
   total_remuneration: number;
+  remuneration?: ReportRemuneration;
   rows: Page<ReportRow>;
 }
 export type ReportScope = 'store' | 'platform';

@@ -1,5 +1,6 @@
 package com.kizuna.reporting.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.kizuna.order.reporting.OperationalFacts;
 import com.kizuna.reporting.domain.OperationalReport;
 import java.time.LocalDate;
@@ -20,7 +21,8 @@ public record OperationalReportResponse(
     long invalidatedOrderCount,
     long totalFee,
     long totalRemuneration,
-    Page<OperationalReport.Row> rows) {
+    Page<OperationalReport.Row> rows,
+    @JsonInclude(JsonInclude.Include.NON_NULL) OperationalReport.Amounts remuneration) {
   public static OperationalReportResponse from(OperationalReport report, int page, int size) {
     var pageable = PageRequest.of(page, size);
     int start = (int) Math.min(pageable.getOffset(), report.rows().size());
@@ -30,12 +32,13 @@ public record OperationalReportResponse(
         report.criteria().to(),
         report.criteria().groupBy(),
         report.facts().generatedAt(),
-        OperationalReport.BASIS,
+        report.basis(),
         report.facts().stores(),
         report.totalOrderCount(),
         report.invalidatedOrderCount(),
         report.totalFee(),
         report.totalRemuneration(),
-        new PageImpl<>(report.rows().subList(start, end), pageable, report.rows().size()));
+        new PageImpl<>(report.rows().subList(start, end), pageable, report.rows().size()),
+        report.remuneration());
   }
 }

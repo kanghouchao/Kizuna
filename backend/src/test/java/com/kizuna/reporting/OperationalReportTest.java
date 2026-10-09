@@ -13,8 +13,10 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.order.reporting.OperationalFacts;
 import com.kizuna.order.reporting.OperationalReportReader;
+import com.kizuna.remuneration.reporting.RemunerationReportReader;
 import com.kizuna.reporting.application.OperationalReportService;
 import com.kizuna.reporting.application.ReportBudget;
+import com.kizuna.reporting.application.ReportSnapshot;
 import com.kizuna.reporting.domain.OperationalReport;
 import com.kizuna.reporting.domain.ReportCriteria;
 import com.kizuna.reporting.infrastructure.ReportRenderer;
@@ -44,7 +46,10 @@ class OperationalReportTest {
   final OperationalReportReader reader = mock(OperationalReportReader.class);
   final AppProperties properties = new AppProperties();
   final OperationalReportService service =
-      new OperationalReportService(reader, new ReportRenderer(), properties);
+      new OperationalReportService(
+          new ReportSnapshot(reader, mock(RemunerationReportReader.class), properties),
+          new ReportRenderer(),
+          properties);
 
   void rows(int count) {
     var rows =
@@ -77,18 +82,18 @@ class OperationalReportTest {
   @Test
   void fullExportContainsFirstMiddleLastAndSafeTypedCells() throws Exception {
     rows(2001);
-    var response = service.view(false, null, "2026-09-01", "2026-10-31", "day", 0, 1);
+    var response = service.view(false, null, "2026-09-01", "2026-10-31", "day", 0, 1, false);
     assertThat(response.totalOrderCount()).isEqualTo(2001);
     assertThat(response.totalFee()).isEqualTo(2001L * Integer.MAX_VALUE);
     assertThat(response.stores()).hasSize(2);
-    var csv = service.export(false, null, "2026-09-01", "2026-10-31", "day", "csv");
+    var csv = service.export(false, null, "2026-09-01", "2026-10-31", "day", "csv", false);
     assertThat(new String(csv, StandardCharsets.UTF_8))
         .startsWith("\ufeff")
         .contains("\"'00000000\"", "\"'00001000\"", "\"'00002000\"", "\"'=日本語,\"\"店舗\"\"\r\n@式\"");
     try (var workbook =
         new XSSFWorkbook(
             new ByteArrayInputStream(
-                service.export(false, null, "2026-09-01", "2026-10-31", "day", "xlsx")))) {
+                service.export(false, null, "2026-09-01", "2026-10-31", "day", "xlsx", false)))) {
       assertThat(workbook.getNumberOfSheets()).isEqualTo(3);
       var orders = workbook.getSheet("受注明細");
       assertThat(orders.getLastRowNum()).isEqualTo(2001);
@@ -109,7 +114,7 @@ class OperationalReportTest {
         List.of(
             new OperationalFacts.Order("a", 1L, LocalDate.of(2026, 9, 30), 8, false, 12000, 5000),
             new OperationalFacts.Order("b", 1L, LocalDate.of(2026, 10, 1), 6, true, 10000, 4000)));
-    var result = service.view(false, null, "2026-09-01", "2026-10-31", "month", 0, 20);
+    var result = service.view(false, null, "2026-09-01", "2026-10-31", "month", 0, 20, false);
     assertThat(result.totalOrderCount()).isEqualTo(1);
     assertThat(result.invalidatedOrderCount()).isEqualTo(1);
     assertThat(result.totalFee()).isEqualTo(12000);
@@ -119,7 +124,7 @@ class OperationalReportTest {
         .containsExactly("2026-09", "2026-10");
     assertThat(
             service
-                .view(false, null, "2026-09-01", "2026-10-31", "store", 0, 20)
+                .view(false, null, "2026-09-01", "2026-10-31", "store", 0, 20, false)
                 .rows()
                 .getTotalElements())
         .isEqualTo(1);
@@ -128,7 +133,7 @@ class OperationalReportTest {
   @Test
   void emptyIncludesStoresAndZeroTotals() {
     rows(0);
-    var result = service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20);
+    var result = service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20, false);
     assertThat(result.rows()).isEmpty();
     assertThat(result.totalFee()).isZero();
     assertThat(result.stores()).hasSize(2);
@@ -147,11 +152,13 @@ class OperationalReportTest {
         .isInstanceOf(ServiceException.class);
     for (int size : List.of(-1, 0, 101))
       assertThatThrownBy(
-              () -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, size))
+              () -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, size, false))
           .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> service.view(false, null, "2026-09-01", "2026-09-30", "day", -1, 20))
+    assertThatThrownBy(
+            () -> service.view(false, null, "2026-09-01", "2026-09-30", "day", -1, 20, false))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> service.export(false, null, "2026-09-01", "2026-09-30", "day", "xls"))
+    assertThatThrownBy(
+            () -> service.export(false, null, "2026-09-01", "2026-09-30", "day", "xls", false))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -159,18 +166,21 @@ class OperationalReportTest {
   void resourceFailuresReleaseSlotAndNeverReturnPartialOutput() throws Exception {
     rows(2);
     properties.getOperationalReport().setMaxOrders(1);
-    assertThatThrownBy(() -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20))
+    assertThatThrownBy(
+            () -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20, false))
         .isInstanceOf(ServiceUnavailableException.class);
     properties.getOperationalReport().setMaxOrders(20_000);
     properties.getOperationalReport().setMaxBytes(8);
     for (String format : List.of("csv", "xlsx"))
       assertThatThrownBy(
-              () -> service.export(false, null, "2026-09-01", "2026-09-30", "day", format))
+              () -> service.export(false, null, "2026-09-01", "2026-09-30", "day", format, false))
           .isInstanceOf(ServiceUnavailableException.class);
     properties.getOperationalReport().setMaxBytes(16L * 1024 * 1024);
-    assertThat(service.export(false, null, "2026-09-01", "2026-09-30", "day", "csv")).isNotEmpty();
+    assertThat(service.export(false, null, "2026-09-01", "2026-09-30", "day", "csv", false))
+        .isNotEmpty();
     properties.getOperationalReport().setMaxCharacters(1);
-    assertThatThrownBy(() -> service.export(false, null, "2026-09-01", "2026-09-30", "day", "csv"))
+    assertThatThrownBy(
+            () -> service.export(false, null, "2026-09-01", "2026-09-30", "day", "csv", false))
         .isInstanceOf(ServiceUnavailableException.class);
   }
 
@@ -178,12 +188,15 @@ class OperationalReportTest {
   void hardLimitAndNumericBoundaryApplyToViewAndExport() {
     properties.getOperationalReport().setMaxOrders(100_001);
     rows(100_001);
-    assertThatThrownBy(() -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20))
+    assertThatThrownBy(
+            () -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20, false))
         .isInstanceOf(ServiceUnavailableException.class);
-    assertThatThrownBy(() -> service.export(false, null, "2026-09-01", "2026-09-30", "day", "csv"))
+    assertThatThrownBy(
+            () -> service.export(false, null, "2026-09-01", "2026-09-30", "day", "csv", false))
         .isInstanceOf(ServiceUnavailableException.class);
     facts(List.of(new OperationalFacts.Order("a", 1L, LocalDate.of(2026, 9, 30), 1, false, -1, 0)));
-    assertThatThrownBy(() -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20))
+    assertThatThrownBy(
+            () -> service.view(false, null, "2026-09-01", "2026-09-30", "day", 0, 20, false))
         .isInstanceOf(ServiceUnavailableException.class);
   }
 
@@ -221,7 +234,13 @@ class OperationalReportTest {
                       () ->
                           assertThat(
                                   service.export(
-                                      false, null, "2026-09-01", "2026-09-30", "day", "xlsx"))
+                                      false,
+                                      null,
+                                      "2026-09-01",
+                                      "2026-09-30",
+                                      "day",
+                                      "xlsx",
+                                      false))
                               .isNotEmpty())
                   .doesNotThrowAnyException();
             } else if (outcome.equals("write")) {
@@ -242,7 +261,9 @@ class OperationalReportTest {
                   .isInstanceOf(IOException.class);
             } else {
               assertThatThrownBy(
-                      () -> service.export(false, null, "2026-09-01", "2026-09-30", "day", "xlsx"))
+                      () ->
+                          service.export(
+                              false, null, "2026-09-01", "2026-09-30", "day", "xlsx", false))
                   .isInstanceOf(ServiceUnavailableException.class);
             }
             return null;
@@ -269,7 +290,9 @@ class OperationalReportTest {
             0,
             maximum,
             maximum,
-            List.of());
+            List.of(),
+            null,
+            null);
     var bytes =
         new ReportRenderer()
             .render(report, "xlsx", new ReportBudget(properties.getOperationalReport()));

@@ -1264,3 +1264,37 @@ export async function deleteService(
   });
   expect(response.status(), await response.text()).toBe(204);
 }
+
+export async function createBonusAward(
+  request: APIRequestContext,
+  token: string,
+  personId: number,
+  awardDate: string,
+  amount: number,
+  reason: string,
+  storeId: string = STORE1_ID,
+  requestId: string = crypto.randomUUID(),
+): Promise<{ id: string; version: number }> {
+  const response = await request.post('/api/store/bonus-awards', {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { person_id: personId, award_date: awardDate, amount, reason, request_id: requestId },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).bonus;
+}
+
+export async function cancelBonusAward(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  expectedVersion: number,
+  reason: string,
+  storeId: string = STORE1_ID,
+  requestId: string = crypto.randomUUID(),
+): Promise<void> {
+  const response = await request.post(`/api/store/bonus-awards/${id}/cancellation`, {
+    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    data: { expected_version: expectedVersion, reason, request_id: requestId },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+}

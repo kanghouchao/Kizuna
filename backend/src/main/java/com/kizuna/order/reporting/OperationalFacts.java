@@ -19,5 +19,17 @@ public record OperationalFacts(OffsetDateTime generatedAt, List<Store> stores, L
       long version,
       boolean invalidated,
       int totalFee,
-      int remuneration) {}
+      int remuneration,
+      Long personId) {
+    public Order(
+        String orderId,
+        Long storeId,
+        LocalDate businessDate,
+        long version,
+        boolean invalidated,
+        int totalFee,
+        int remuneration) {
+      this(orderId, storeId, businessDate, version, invalidated, totalFee, remuneration, null);
+    }
+  }
 }

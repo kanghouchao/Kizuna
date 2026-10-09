@@ -1,12 +1,18 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { fetchReport, validReportPeriod, type ReportCriteria } from '@/entities/operational-report';
+import {
+  fetchReport,
+  validReportPeriod,
+  type ReportCriteria,
+  type ReportRemuneration,
+} from '@/entities/operational-report';
 import { ReportExport } from '@/features/operational-report-export';
 import { fromSpringPage } from '@/shared/api';
 import { hasPermission, readTokenClaims, useKeyedResource } from '@/shared/lib';
 import {
   Button,
+  Checkbox,
   FormField,
   FormItem,
   FormLabel,
@@ -31,9 +37,15 @@ interface Fields {
   to: string;
   group_by: ReportCriteria['group_by'];
   store: string;
+  include_remuneration: boolean;
 }
 export function useOperationalReportPage(scope: 'store' | 'platform') {
-  const [access, setAccess] = useState({ ready: false, view: false, output: false });
+  const [access, setAccess] = useState({
+    ready: false,
+    view: false,
+    output: false,
+    remuneration: false,
+  });
   useEffect(() => {
     const claims = readTokenClaims();
     setAccess({
@@ -42,11 +54,18 @@ export function useOperationalReportPage(scope: 'store' | 'platform') {
         hasPermission(claims, 'OPERATIONAL_REPORT_VIEW') &&
         hasPermission(claims, scope === 'store' ? 'ORDER_MANAGE' : 'ORDER_SET_MANAGE'),
       output: hasPermission(claims, 'OPERATIONAL_REPORT_EXPORT'),
+      remuneration: hasPermission(claims, 'REMUNERATION_VIEW'),
     });
   }, [scope]);
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
   const form = useForm<Fields>({
-    defaultValues: { from: `${today.slice(0, 7)}-01`, to: today, group_by: 'day', store: '' },
+    defaultValues: {
+      from: `${today.slice(0, 7)}-01`,
+      to: today,
+      group_by: 'day',
+      store: '',
+      include_remuneration: false,
+    },
   });
   const [query, setQuery] = useState<{
     criteria: ReportCriteria;
@@ -68,6 +87,9 @@ export function useOperationalReportPage(scope: 'store' | 'platform') {
         to: values.to,
         group_by: values.group_by,
         ...(scope === 'platform' && values.store ? { store_id: Number(values.store) } : {}),
+        ...(access.remuneration && values.include_remuneration
+          ? { include_remuneration: true }
+          : {}),
       },
       page: 0,
       revision: (current?.revision ?? 0) + 1,
@@ -152,18 +174,46 @@ export function ReportSearch({ model }: { model: ReportModel }) {
             )}
           />
         )}
+        {access.remuneration && (
+          <FormField
+            control={form.control}
+            name="include_remuneration"
+            render={({ field }) => (
+              <FormItem className="mt-7 flex items-center gap-2">
+                <FormControl>
+                  <Checkbox
+                    ref={field.ref}
+                    name={field.name}
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                </FormControl>
+                <FormLabel>保証不足分・ボーナスを含める</FormLabel>
+              </FormItem>
+            )}
+          />
+        )}
         <Button type="submit" className="mt-7">
           照会
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        営業日は保存済みの帰属日です。実収・未収・実際の給与支払、期間保証・賞与・広告費は含みません。
+        営業日は保存済みの帰属日です。実収・未収・実際の給与支払・広告費は含みません。
+        {access.remuneration
+          ? '保証不足分・ボーナスは選択して照会した場合に含まれます。'
+          : '保証不足分・ボーナスは含みません。'}
       </p>
       {result && (
         <section aria-label="集計結果" className="space-y-3">
           <p className="text-sm">
             対象: {result.from} 〜 {result.to} / 生成: {result.generated_at}
           </p>
+          {access.remuneration && (
+            <p className="text-sm">
+              保証不足分・ボーナス: {result.remuneration ? '含む' : '含まない'}
+            </p>
+          )}
           <p className="text-sm break-words">
             対象店舗:{' '}
             {result.stores.map(store => `${store.store_name} (${store.store_id})`).join('、') ||
@@ -174,16 +224,27 @@ export function ReportSearch({ model }: { model: ReportModel }) {
               ['有効完了件数', result.total_order_count],
               ['無効化件数', result.invalidated_order_count],
               ['請求額（円）', result.total_fee],
-              ['発生済み固定報酬（円）', result.total_remuneration],
+              [
+                result.remuneration ? '受注報酬（円）' : '発生済み固定報酬（円）',
+                result.total_remuneration,
+              ],
+              ...(result.remuneration
+                ? [
+                    ['保証不足分（円）', result.remuneration.guarantee_total],
+                    ['ボーナス（円）', result.remuneration.bonus_total],
+                    ['報酬合計（円）', result.remuneration.total],
+                  ]
+                : []),
             ].map(([label, value]) => (
               <div key={label}>
                 <p className="text-sm text-muted-foreground">{label}</p>
                 <p aria-label={String(label)} className="text-3xl font-bold">
-                  {Number(value).toLocaleString('ja-JP')}
+                  {value === null ? '未確定' : Number(value).toLocaleString('ja-JP')}
                 </p>
               </div>
             ))}
           </div>
+          {result.remuneration && <RemunerationStatus remuneration={result.remuneration} />}
           {access.output && query && <ReportExport scope={scope} criteria={query.criteria} />}
         </section>
       )}
@@ -192,14 +253,25 @@ export function ReportSearch({ model }: { model: ReportModel }) {
 }
 
 export function ReportTable({ model }: { model: ReportModel }) {
-  const { paging } = model;
+  const { paging, result } = model;
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          {['店舗', '期間', '有効完了', '無効化', '請求額（円）', '固定報酬（円）'].map(label => (
+          {[
+            '店舗',
+            '期間',
+            '有効完了',
+            '無効化',
+            '請求額（円）',
+            result?.remuneration ? '受注報酬（円）' : '固定報酬（円）',
+          ].map(label => (
             <TableHead key={label}>{label}</TableHead>
           ))}
+          {result?.remuneration &&
+            ['保証不足分（円）', 'ボーナス（円）', '報酬合計（円）', '確認状況'].map(label => (
+              <TableHead key={label}>{label}</TableHead>
+            ))}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -213,9 +285,35 @@ export function ReportTable({ model }: { model: ReportModel }) {
             <TableCell>{row.invalidated_order_count}</TableCell>
             <TableCell>{row.total_fee.toLocaleString('ja-JP')}</TableCell>
             <TableCell>{row.total_remuneration.toLocaleString('ja-JP')}</TableCell>
+            {row.remuneration && (
+              <>
+                <TableCell>{formatAmount(row.remuneration.guarantee_total)}</TableCell>
+                <TableCell>{formatAmount(row.remuneration.bonus_total)}</TableCell>
+                <TableCell>{formatAmount(row.remuneration.total)}</TableCell>
+                <TableCell className="min-w-48 whitespace-normal">
+                  <RemunerationStatus remuneration={row.remuneration} />
+                </TableCell>
+              </>
+            )}
           </TableRow>
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+function formatAmount(value: number | null) {
+  return value === null ? '未確定' : value.toLocaleString('ja-JP');
+}
+
+function RemunerationStatus({ remuneration }: { remuneration: ReportRemuneration }) {
+  return (
+    <div className="text-sm">
+      <p>保証不足分の既知小計: {formatAmount(remuneration.known_guarantee_total)} 円</p>
+      <p>
+        出勤確認待ち: {remuneration.pending_attendance_days} 人日 / 日額未設定:{' '}
+        {remuneration.not_configured_days} 人日
+      </p>
+    </div>
   );
 }

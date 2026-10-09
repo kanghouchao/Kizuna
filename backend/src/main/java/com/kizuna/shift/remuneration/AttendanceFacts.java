@@ -31,4 +31,31 @@ public class AttendanceFacts {
         .setParameter("end", end)
         .getResultList();
   }
+
+  public record ReportInterval(
+      Long storeId,
+      Long personId,
+      LocalDate businessDate,
+      LocalDateTime start,
+      LocalDateTime end) {}
+
+  public List<ReportInterval> forReport(
+      List<Long> stores, LocalDate from, LocalDate to, int limit) {
+    return em.createQuery(
+            """
+      select new com.kizuna.shift.remuneration.AttendanceFacts$ReportInterval(
+        a.storeId, e.castId, a.businessDate, a.actualStartAt, a.actualEndAt)
+      from com.kizuna.shift.domain.Attendance a
+      join com.kizuna.cast.domain.CastEnrollment e on e.id = a.castId and e.storeId = a.storeId
+      where a.storeId in :stores and e.castId is not null and a.cancelledAt is null
+        and a.businessDate >= :from and a.businessDate <= :to
+      order by a.storeId, e.castId, a.businessDate, a.actualStartAt, a.id
+      """,
+            ReportInterval.class)
+        .setParameter("stores", stores)
+        .setParameter("from", from)
+        .setParameter("to", to)
+        .setMaxResults(limit + 1)
+        .getResultList();
+  }
 }
