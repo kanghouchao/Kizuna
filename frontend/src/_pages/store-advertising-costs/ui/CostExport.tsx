@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { advertisingApi } from '../api/advertising';
 import { Button, RegionError } from '@/shared/ui';
-export function CostExport({ store, month }: { store: string; month: string }) {
+export function CostExport({
+  store,
+  month,
+  media = false,
+}: {
+  store: string;
+  month: string;
+  media?: boolean;
+}) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
   const pending = useRef<AbortController | null>(null);
@@ -15,12 +23,12 @@ export function CostExport({ store, month }: { store: string; month: string }) {
     setBusy(true);
     setError(null);
     try {
-      const blob = await advertisingApi.download(month, format, controller.signal);
+      const blob = await advertisingApi.download(month, format, controller.signal, media);
       if (controller.signal.aborted) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `advertising-costs-${store}-${month}.${format}`;
+      a.download = `${media ? 'advertising-media-summaries' : 'advertising-costs'}-${store}-${month}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -34,7 +42,7 @@ export function CostExport({ store, month }: { store: string; month: string }) {
     }
   }
   return (
-    <section aria-label="広告費出力" className="space-y-3">
+    <section aria-label={media ? '媒体別集計出力' : '広告費出力'} className="space-y-3">
       <div className="flex gap-3">
         <Button variant="outline" disabled={busy} onClick={() => void run('csv')}>
           CSV 全件出力

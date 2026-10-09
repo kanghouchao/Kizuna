@@ -255,3 +255,46 @@ describe('useListPage', () => {
     expect(fetcher).toHaveBeenLastCalledWith(0, 'やまだ');
   });
 });
+
+it('一覧と同時に総計を更新し、旧応答と失敗後の総計を残さない', async () => {
+  type Result = PageResult<string, { amount: number }>;
+  let resolveOld!: (value: Result) => void;
+  const fetcher = jest
+    .fn<Promise<Result>, [number]>()
+    .mockResolvedValueOnce({ ...pageOf(0), metadata: { amount: 100 } })
+    .mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveOld = resolve;
+        })
+    )
+    .mockResolvedValueOnce({ ...pageOf(2, ['new']), metadata: { amount: 200 } })
+    .mockRejectedValueOnce(new Error('通信失敗'))
+    .mockResolvedValueOnce({ ...pageOf(0, []), metadata: { amount: 0 } });
+  const { result } = renderHook(() => useListPage<string, { amount: number }>(fetcher));
+  await waitFor(() => expect(result.current.metadata?.amount).toBe(100));
+  let old!: Promise<void>;
+  act(() => {
+    old = result.current.onPageChange(1);
+  });
+  await act(async () => {
+    await result.current.onPageChange(2);
+  });
+  await act(async () => {
+    resolveOld({ ...pageOf(1), metadata: { amount: 999 } });
+    await old;
+  });
+  expect(result.current.rows).toEqual(['new']);
+  expect(result.current.metadata?.amount).toBe(200);
+  await act(async () => {
+    await result.current.reload();
+  });
+  expect(result.current.page).toBe(0);
+  expect(result.current.metadata).toBeUndefined();
+  expect(result.current.rows).toEqual([]);
+  await act(async () => {
+    await result.current.reload();
+  });
+  expect(fetcher).toHaveBeenLastCalledWith(0, undefined);
+  expect(result.current.metadata?.amount).toBe(0);
+});

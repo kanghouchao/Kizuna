@@ -88,7 +88,7 @@ Given("広告費検証用の権限と店舗がある", async ({ request, $testIn
   );
   const suffix = randomUUID();
   password = randomUUID();
-  month = `${($testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
+  month = `${($testInfo.title.includes("媒体別") ? 1970 : $testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
   const tokens: string[] = [];
   for (const [index, perms] of [
     [
@@ -114,7 +114,7 @@ Given("広告費検証用の権限と店舗がある", async ({ request, $testIn
       address,
       password,
       [role],
-      [Number(STORE1_ID), Number(foreign)],
+      index === 1 ? [Number(STORE1_ID)] : [Number(STORE1_ID), Number(foreign)],
     );
     tokens.push(await loginPlatformUser(request, address, password));
   }
@@ -319,6 +319,28 @@ Then(
     expect(sheet).toContain('t="n"');
     expect(sheet).toContain('t="inlineStr"');
     expect((await summary(request)).recorded_total_amount).toBe(200100);
+    for (const format of ["csv", "xlsx"]) {
+      const response = await request.get(
+        "/api/store/advertising-media-summaries/exports",
+        { headers: h(), params: { month, format } },
+      );
+      expect(response.status(), await response.text()).toBe(200);
+      const bytes = await response.body();
+      if (format === "csv") {
+        const text = bytes.toString();
+        expect(
+          text.split("\r\n").filter((line) => line.includes("'=媒体")),
+        ).toHaveLength(2001);
+        expect(text).toContain("'=媒体0001");
+        expect(text).toContain("'=媒体1000");
+        expect(text).toContain("'=媒体2000");
+      } else {
+        const sheet = zipEntry(bytes, "xl/worksheets/sheet2.xml");
+        expect(sheet.match(/<row /g)).toHaveLength(2002);
+        expect(sheet).toContain("=媒体2000");
+        expect(sheet).not.toContain("<f>");
+      }
+    }
   },
 );
 When(
@@ -367,6 +389,14 @@ When(
       )
         requests.push(req.postData()!);
     });
+    await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "媒体別集計", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "費用記録", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "同じ要求で結果を確認" }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "同じ要求で結果を確認" }).click();
     await expect(
       page.getByRole("button", { name: "同じ要求で結果を確認" }),
@@ -486,5 +516,343 @@ Then(
         })
       ).status(),
     ).toBe(403);
+  },
+);
+
+const mediaBase = "/api/store/advertising-media-summaries";
+When(
+  "同名媒体の費用と問い合わせ人数の入力状態を用意する",
+  async ({ request }) => {
+    for (const [media_name, inquiry_count] of [
+      ["同名", 5],
+      ["同名", null],
+      ["全空", null],
+      ["全空", null],
+      ["既知零", 0],
+      ["既知零", null],
+      ["全部零", 0],
+      ["全部零", 0],
+      ["ABC", 1],
+      ["abc", 2],
+      ["ＡＢＣ", 3],
+      ['=媒体,"試験"', null],
+    ] as const)
+      await add(request, { media_name, inquiry_count });
+    await add(request, {
+      media_name: "同名",
+      category: "RECRUITMENT",
+      inquiry_count: 9,
+      amount: 500,
+    });
+    for (let i = 0; i < 25; i++)
+      await add(request, {
+        media_name: `追加媒体${String(i).padStart(2, "0")}`,
+        inquiry_count: 0,
+        amount: 0,
+      });
+    await add(request, {
+      media_name: "長い媒体名".repeat(35),
+      inquiry_count: null,
+      amount: 0,
+    });
+    original = await add(request, {
+      media_name: "原月変更",
+      inquiry_count: 2,
+      amount: 400,
+    });
+  },
+);
+Then(
+  "媒体別集計と全件出力と古い応答の破棄を確認できる",
+  async ({ request, page, $testInfo }) => {
+    $testInfo.setTimeout(120000);
+    const read = async (t = token, store = STORE1_ID) =>
+      request.get(mediaBase, {
+        headers: h(t, store),
+        params: { month, size: 100 },
+      });
+    const response = await read();
+    expect(response.status(), await response.text()).toBe(200);
+    const report = await response.json();
+    expect(report.recorded_total_amount).toBe(2100);
+    const group = (name: string, category = "SALES") =>
+      report.rows.content.find(
+        (r: any) => r.media_name === name && r.category === category,
+      );
+    expect(group("同名")).toMatchObject({
+      recorded_amount: 200,
+      recorded_inquiry_count_sum: 5,
+      unrecorded_inquiry_entry_count: 1,
+      inquiry_status: "PARTIAL",
+    });
+    expect(group("同名", "RECRUITMENT")).toMatchObject({
+      recorded_amount: 500,
+      recorded_inquiry_count_sum: 9,
+      inquiry_status: "RECORDED",
+    });
+    expect(group("全空")).toMatchObject({
+      recorded_inquiry_count_sum: null,
+      inquiry_status: "UNRECORDED",
+    });
+    expect(group("既知零")).toMatchObject({
+      recorded_inquiry_count_sum: 0,
+      inquiry_status: "PARTIAL",
+    });
+    expect(group("全部零")).toMatchObject({
+      recorded_inquiry_count_sum: 0,
+      inquiry_status: "RECORDED",
+    });
+    expect(group("ABC").recorded_inquiry_count_sum).toBe(1);
+    expect(group("abc").recorded_inquiry_count_sum).toBe(2);
+    expect(group("ＡＢＣ").recorded_inquiry_count_sum).toBe(3);
+    expect((await read(reader)).status()).toBe(200);
+    expect((await read(reader, foreign)).status()).toBe(403);
+    expect((await read(exporter)).status()).toBe(403);
+    const isolated = await (await read(token, foreign)).json();
+    expect(isolated.entry_count).toBe(0);
+    expect(
+      (
+        await request.get(mediaBase, {
+          headers: h("invalid-token"),
+          params: { month },
+        })
+      ).status(),
+    ).toBe(401);
+    for (const t of [reader, exporter])
+      expect(
+        (
+          await request.get(mediaBase + "/exports", {
+            headers: h(t),
+            params: { month, format: "csv" },
+          })
+        ).status(),
+      ).toBe(403);
+    for (const params of [
+      { month, page: -1 },
+      { month, size: 0 },
+      { month, sort: "amount" },
+      { month: "2026-13" },
+    ])
+      expect(
+        (await request.get(mediaBase, { headers: h(), params })).status(),
+      ).toBe(400);
+    const updated = await request.put(`${base}/${original.id}`, {
+      headers: h(),
+      data: {
+        ...values,
+        media_name: "原月変更",
+        inquiry_count: 4,
+        amount: 600,
+        version: original.version,
+        reason: "集計訂正",
+        request_id: randomUUID(),
+      },
+    });
+    expect(updated.status()).toBe(200);
+    original = await updated.json();
+    expect((await (await read()).json()).recorded_total_amount).toBe(2300);
+    expect(
+      (
+        await request.delete(`${base}/${original.id}`, {
+          headers: h(),
+          data: {
+            version: original.version,
+            reason: "誤登録",
+            request_id: randomUUID(),
+          },
+        })
+      ).status(),
+    ).toBe(204);
+    expect((await (await read()).json()).recorded_total_amount).toBe(1700);
+    await login(page);
+    await page.getByRole("tab", { name: "媒体別集計", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { name: "媒体別集計", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("row", { name: /営業広告 同名/ }),
+    ).toContainText("5人");
+    await expect(
+      page.getByRole("row", { name: /営業広告 全空/ }),
+    ).toContainText("全行未入力");
+    await expect(
+      page.getByRole("row", { name: /営業広告 既知零/ }),
+    ).toContainText("0人");
+    await page.route(
+      "**/api/store/advertising-media-summaries?**",
+      async (route) => {
+        if (new URL(route.request().url()).searchParams.get("page") === "1")
+          return route.abort("failed");
+        return route.continue();
+      },
+    );
+    await page
+      .getByRole("button", { name: "次へ", exact: true })
+      .last()
+      .click();
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "媒体別集計を取得できませんでした。" }),
+    ).toContainText("媒体別集計を取得できませんでした。");
+    await expect(
+      page.getByRole("navigation", { name: "ページネーション" }),
+    ).toHaveCount(0);
+    await page.unroute("**/api/store/advertising-media-summaries?**");
+    await page
+      .getByRole("alert")
+      .filter({ hasText: "媒体別集計を取得できませんでした。" })
+      .getByRole("button")
+      .click();
+    await expect(
+      page.getByRole("row", { name: /営業広告 同名/ }),
+    ).toBeVisible();
+    let releasePage!: () => void, enterPage!: () => void;
+    const pageGate = new Promise<void>((r) => {
+      releasePage = r;
+    });
+    const pageArrived = new Promise<void>((r) => {
+      enterPage = r;
+    });
+    await page.route(
+      "**/api/store/advertising-media-summaries?**",
+      async (route) => {
+        if (new URL(route.request().url()).searchParams.get("page") !== "1")
+          return route.continue();
+        const result = await route.fetch();
+        enterPage();
+        await pageGate;
+        await route.fulfill({ response: result }).catch(() => {});
+      },
+    );
+    await page
+      .getByRole("button", { name: "次へ", exact: true })
+      .last()
+      .click();
+    await pageArrived;
+    await page.getByRole("tab", { name: "費用記録", exact: true }).click();
+    await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
+    await expect(
+      page.getByRole("row", { name: /営業広告 同名/ }),
+    ).toBeVisible();
+    releasePage();
+    await page.unroute("**/api/store/advertising-media-summaries?**");
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "CSV 全件出力" }).click();
+    expect((await downloadPromise).suggestedFilename()).toBe(
+      `advertising-media-summaries-${STORE1_ID}-${month}.csv`,
+    );
+    let releaseExport!: () => void,
+      enterExport!: () => void,
+      finishExport!: () => void;
+    const exportGate = new Promise<void>((r) => {
+      releaseExport = r;
+    });
+    const exportArrived = new Promise<void>((r) => {
+      enterExport = r;
+    });
+    const exportFinished = new Promise<void>((r) => {
+      finishExport = r;
+    });
+    let exportRequests = 0,
+      lateDownloads = 0;
+    page.on("download", () => {
+      lateDownloads++;
+    });
+    await page.route(
+      "**/api/store/advertising-media-summaries/exports?**",
+      async (route) => {
+        exportRequests++;
+        const result = await route.fetch();
+        enterExport();
+        await exportGate;
+        await route.fulfill({ response: result }).catch(() => {});
+        finishExport();
+      },
+    );
+    await page.getByRole("button", { name: "CSV 全件出力" }).dblclick();
+    await exportArrived;
+    await page.getByRole("tab", { name: "費用記録", exact: true }).click();
+    await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
+    await expect(
+      page.getByRole("row", { name: /営業広告 同名/ }),
+    ).toBeVisible();
+    releaseExport();
+    await exportFinished;
+    expect(exportRequests).toBe(1);
+    expect(lateDownloads).toBe(0);
+    await page.unroute("**/api/store/advertising-media-summaries/exports?**");
+    for (const theme of ["light", "dark"]) {
+      await page
+        .getByRole("button", { name: "表示モード", exact: true })
+        .click();
+      await page
+        .getByRole("menuitemradio", {
+          name: theme === "dark" ? "ダーク" : "ライト",
+          exact: true,
+        })
+        .click();
+      await page.screenshot({
+        path: $testInfo.outputPath(`advertising-media-${theme}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    await page
+      .getByRole("button", { name: "次へ", exact: true })
+      .last()
+      .click();
+    await expect(
+      page.getByRole("cell", { name: "長い媒体名".repeat(35), exact: true }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 760, height: 900 });
+    await page
+      .getByRole("cell", { name: "長い媒体名".repeat(35), exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: $testInfo.outputPath("advertising-media-narrow.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
+    let release!: () => void, entered!: () => void;
+    const arrived = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(
+      "**/api/store/advertising-media-summaries?**",
+      async (route) => {
+        const result = await route.fetch();
+        entered();
+        await held;
+        await route.fulfill({ response: result }).catch(() => {});
+      },
+    );
+    await page.getByRole("tab", { name: "費用記録", exact: true }).click();
+    await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
+    await arrived;
+    await page.unroute("**/api/store/advertising-media-summaries?**");
+    const next = month.replace("-09", "-10");
+    await page.getByLabel("対象月", { exact: true }).fill(next);
+    await page.getByRole("button", { name: "表示", exact: true }).click();
+    await expect(
+      page.getByText("この月の広告費は登録されていません", { exact: true }),
+    ).toBeVisible();
+    release();
+    await expect(
+      page.getByRole("cell", { name: "同名", exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole("tab", { name: "費用記録", exact: true }).click();
+    await login(page, readerEmail);
+    await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
+    await expect(
+      page.getByRole("row", { name: /営業広告 同名/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "CSV 全件出力" }),
+    ).toHaveCount(0);
   },
 );

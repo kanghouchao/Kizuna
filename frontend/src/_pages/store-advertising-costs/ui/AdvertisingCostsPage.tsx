@@ -20,6 +20,10 @@ import {
   DialogTitle,
   DialogDescription,
   RegionError,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
 } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -34,6 +38,7 @@ import { CostTable } from './CostTable';
 import { CostExport } from './CostExport';
 import { CostHistory } from './CostHistory';
 import { CopyPreview } from './CopyPreview';
+import { MediaSummaryPage } from './MediaSummaryPage';
 export default function AdvertisingCostsPage() {
   const { storeId } = useParams<{ storeId: string }>();
   const [claims, setClaims] = useState<ReturnType<typeof readTokenClaims>>(null);
@@ -71,6 +76,7 @@ function StorePage({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
   const [input, setInput] = useState(month);
+  const [view, setView] = useState('costs');
   const [error, setError] = useState(false);
   return (
     <div className="space-y-6">
@@ -106,7 +112,20 @@ function StorePage({
         </div>
         <Button type="submit">表示</Button>
       </form>
-      <MonthPage key={month} {...{ store, subject, manage, canExport, month }} />
+      <Tabs value={view} onValueChange={value => setView(String(value))}>
+        <TabsList aria-label="広告費の表示">
+          <TabsTrigger value="costs">費用記録</TabsTrigger>
+          <TabsTrigger value="media">媒体別集計</TabsTrigger>
+        </TabsList>
+        <TabsContent value="costs">
+          {view === 'costs' && (
+            <MonthPage key={month} {...{ store, subject, manage, canExport, month }} />
+          )}
+        </TabsContent>
+        <TabsContent value="media">
+          {view === 'media' && <MediaSummaryPage key={month} {...{ store, month, canExport }} />}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

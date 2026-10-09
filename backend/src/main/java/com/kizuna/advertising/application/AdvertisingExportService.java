@@ -1,5 +1,6 @@
 package com.kizuna.advertising.application;
 
+import com.kizuna.advertising.infrastructure.AdvertisingMediaRenderer;
 import com.kizuna.advertising.infrastructure.AdvertisingRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
@@ -17,9 +18,19 @@ public class AdvertisingExportService {
   private final AdvertisingService service;
   private final AdvertisingRenderer renderer;
   private final AppProperties properties;
+  private final AdvertisingMediaService media;
+  private final AdvertisingMediaRenderer mediaRenderer;
   private final Semaphore slot = new Semaphore(1);
 
   public byte[] export(String month, String format) {
+    return generate(month, format, false);
+  }
+
+  public byte[] exportMedia(String month, String format) {
+    return generate(month, format, true);
+  }
+
+  private byte[] generate(String month, String format, boolean mediaSummary) {
     AdvertisingInput.month(month);
     if (!"csv".equals(format) && !"xlsx".equals(format))
       throw new ServiceException("出力形式はcsvまたはxlsxで指定してください");
@@ -28,9 +39,11 @@ public class AdvertisingExportService {
       return AdvertisingFailures.run(
           () -> {
             var budget = new DocumentBudget(properties.getAdvertisingCost());
-            var snapshot = service.snapshot(month);
-            budget.check();
             try {
+              if (mediaSummary)
+                return mediaRenderer.render(media.snapshot(month, budget), format, budget);
+              var snapshot = service.snapshot(month);
+              budget.check();
               return renderer.render(snapshot, format, budget);
             } catch (IOException ex) {
               throw new UncheckedIOException(ex);

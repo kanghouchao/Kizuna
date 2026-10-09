@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PageResult } from '@/shared/api';
 
-const EMPTY_PAGE: PageResult<never> = { rows: [], page: 0, pageCount: 0, total: 0 };
+const EMPTY_PAGE: PageResult<never, never> = { rows: [], page: 0, pageCount: 0, total: 0 };
 
-interface ListPageResult<T, C> extends PageResult<T> {
+interface ListPageResult<T, C, M = undefined> extends PageResult<T, M> {
   isLoading: boolean;
   /** 取得に失敗した状態。行が無いだけの空表示（＝0 件）と区別するために分ける。 */
   failed: boolean;
@@ -22,17 +22,17 @@ interface ListPageResult<T, C> extends PageResult<T> {
  * 検索条件は引数で fetcher に渡し、条件更新直後の古いクロージャによる取得を防ぐ。
  * 失敗は failed と error で返し、分類と提示は呼び出し側に委ねる。
  */
-export function useListPage<T>(
-  fetcher: (page: number) => Promise<PageResult<T>>
-): ListPageResult<T, void>;
-export function useListPage<T, C>(
-  fetcher: (page: number, criteria: C) => Promise<PageResult<T>>,
+export function useListPage<T, M = undefined>(
+  fetcher: (page: number) => Promise<PageResult<T, M>>
+): ListPageResult<T, void, M>;
+export function useListPage<T, C, M = undefined>(
+  fetcher: (page: number, criteria: C) => Promise<PageResult<T, M>>,
   initialCriteria: C
-): ListPageResult<T, C>;
-export function useListPage<T, C>(
-  fetcher: (page: number, criteria: C) => Promise<PageResult<T>>,
+): ListPageResult<T, C, M>;
+export function useListPage<T, C, M = undefined>(
+  fetcher: (page: number, criteria: C) => Promise<PageResult<T, M>>,
   initialCriteria?: C
-): ListPageResult<T, C> {
+): ListPageResult<T, C, M> {
   const fetcherRef = useRef(fetcher);
   // レンダー中の ref 書き込みは不可のため、コミット後に最新のクロージャへ差し替える
   useEffect(() => {
@@ -42,7 +42,7 @@ export function useListPage<T, C>(
   const requestIdRef = useRef(0);
   // 適用済みの検索条件。ページ送りと再取得はこれをそのまま使う
   const criteriaRef = useRef(initialCriteria as C);
-  const [pageResult, setPageResult] = useState<PageResult<T>>(EMPTY_PAGE);
+  const [pageResult, setPageResult] = useState<PageResult<T, M>>(EMPTY_PAGE);
   const [isLoading, setIsLoading] = useState(true);
   const [failure, setFailure] = useState<{ error: unknown } | null>(null);
 
