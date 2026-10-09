@@ -1,7 +1,14 @@
 'use client';
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import { remunerationApi, type Bonus, type Guarantee } from '../api';
+import {
+  createRequestId,
+  submitOperation,
+  usePendingOperation,
+  type EditTarget,
+  type EditValues,
+  type Operation,
+} from '../model/operation';
 import { getApiErrorMessage } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
@@ -21,35 +28,33 @@ import {
   Input,
 } from '@/shared/ui';
 
-export type EditTarget =
-  | { kind: 'guarantee'; item?: Guarantee; version: number; cancel?: boolean }
-  | { kind: 'bonus'; item?: Bonus; cancel?: boolean };
-interface Values {
-  date: string;
-  amount: number | undefined;
-  stopped: boolean;
-  reason: string;
-  correction_reason: string;
-}
 export function RemunerationEditor({
   target,
   open,
   personId,
+  personName,
+  scope,
+  recovery,
   onClose,
   onSaved,
 }: {
   target: EditTarget;
   open: boolean;
   personId: number;
+  personName: string;
+  scope: string;
+  recovery?: Operation;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
-  const [pending, setPending] = useState<Values | null>(null);
-  const [request, setRequest] = useState<{ fingerprint: string; id: string } | null>(null);
+  const [pending, setPending] = useState<EditValues | null>(null);
+  const outstanding = usePendingOperation(scope);
+  const sending = outstanding?.phase === 'submitting';
+  const locked = outstanding !== null;
   const correcting = !!target.item;
-  const form = useForm<Values>({
-    defaultValues: {
+  const form = useForm<EditValues>({
+    defaultValues: recovery?.values ?? {
       date:
         target.kind === 'guarantee'
           ? (target.item?.effective_from ?? '')
@@ -61,62 +66,33 @@ export function RemunerationEditor({
     },
   });
   const stopped = useWatch({ control: form.control, name: 'stopped' });
-  const save = async (values: Values) => {
-    const fingerprint = JSON.stringify(values);
-    const attempt =
-      request?.fingerprint === fingerprint ? request : { fingerprint, id: createRequestId() };
-    setRequest(attempt);
-    const requestId = attempt.id;
+  const save = async (values?: EditValues) => {
+    const original = outstanding?.operation;
+    if (sending || (outstanding && !original)) return;
+    const operation = original ?? {
+      scope,
+      personId,
+      personName,
+      target: { ...target, ...(target.item ? { item: { ...target.item } } : {}) } as EditTarget,
+      values: { ...values! },
+      requestId: createRequestId(),
+    };
     try {
-      if (target.cancel && target.item) {
-        const body = {
-          reason: values.reason.trim(),
-          request_id: requestId,
-          expected_version: target.kind === 'guarantee' ? target.version : target.item.version,
-        };
-        if (target.kind === 'guarantee')
-          await remunerationApi.cancelGuarantee(target.item.id, body);
-        else await remunerationApi.cancelBonus(target.item.id, body);
-      } else if (target.kind === 'guarantee') {
-        const body = {
-          effective_from: values.date,
-          state: values.stopped ? ('STOPPED' as const) : ('ACTIVE' as const),
-          daily_amount: values.stopped ? null : (values.amount ?? 0),
-          reason: values.reason.trim(),
-          request_id: requestId,
-          expected_version: target.version,
-        };
-        if (target.item)
-          await remunerationApi.correctGuarantee(target.item.id, {
-            ...body,
-            correction_reason: values.correction_reason.trim(),
-          });
-        else await remunerationApi.createGuarantee(personId, body);
-      } else {
-        const body = {
-          award_date: values.date,
-          amount: values.amount ?? 0,
-          reason: values.reason.trim(),
-          request_id: requestId,
-        };
-        if (target.item)
-          await remunerationApi.correctBonus(target.item.id, {
-            ...body,
-            expected_version: target.item.version,
-            correction_reason: values.correction_reason.trim(),
-          });
-        else await remunerationApi.createBonus(personId, body);
-      }
+      if (!(await submitOperation(operation, !!original))) return;
       notify.success(target.cancel ? '記録を取り消しました' : '記録を保存しました');
       onSaved();
       onClose();
     } catch (error) {
       notify.error(
-        getApiErrorMessage(error, '保存できませんでした。競合時は閉じて再照会してください。')
+        getApiErrorMessage(
+          error,
+          '保存結果を確認できませんでした。元の内容で結果を確認してください。'
+        )
       );
     }
   };
   const submit = form.handleSubmit(async values => {
+    if (locked) return;
     if (target.cancel) {
       setPending(values);
       setConfirm(true);
@@ -128,13 +104,21 @@ export function RemunerationEditor({
       <Dialog
         open={open}
         onOpenChange={open => {
-          if (!open) onClose();
+          if (!open && !sending) onClose();
         }}
       >
         <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
+          {outstanding?.phase === 'unknown' && (
+            <div role="alert" className="space-y-2 rounded-lg border p-4">
+              <p>送信結果が未確認です。{personName} の元の内容を保持しています。</p>
+              <p>
+                重複を防ぐため編集と新しい登録を止めています。結果確認後に続けてください。ページの再読み込みや終了は避けてください。
+              </p>
+            </div>
+          )}
           <Form {...form}>
             <form
               noValidate
@@ -144,112 +128,94 @@ export function RemunerationEditor({
               }}
               className="space-y-6"
             >
-              {!target.cancel && (
-                <>
-                  <FormField
-                    control={form.control}
-                    name="date"
-                    rules={{ required: '日付を入力してください' }}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {target.kind === 'guarantee' ? '適用開始日' : '帰属日'}
-                        </FormLabel>
-                        <FormControl>
-                          <Input type="date" required {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {target.kind === 'guarantee' && (
+              <fieldset disabled={locked} className="space-y-6">
+                {!target.cancel && (
+                  <>
                     <FormField
                       control={form.control}
-                      name="stopped"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center gap-3">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              ref={field.ref}
-                            />
-                          </FormControl>
-                          <FormLabel>この日から保証を停止する</FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                  {!(target.kind === 'guarantee' && stopped) && (
-                    <FormField
-                      control={form.control}
-                      name="amount"
-                      rules={{
-                        validate: value =>
-                          (Number.isSafeInteger(value) &&
-                            value !== undefined &&
-                            value >= (target.kind === 'guarantee' ? 0 : 1)) ||
-                          '金額を整数の円で入力してください',
-                      }}
+                      name="date"
+                      rules={{ required: '日付を入力してください' }}
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>
-                            {target.kind === 'guarantee' ? '日額（円）' : '付与額（円）'}
+                            {target.kind === 'guarantee' ? '適用開始日' : '帰属日'}
                           </FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              min={target.kind === 'guarantee' ? 0 : 1}
-                              step="1"
-                              required
-                              {...field}
-                              value={field.value ?? ''}
-                              onChange={event =>
-                                field.onChange(
-                                  Number.isNaN(event.target.valueAsNumber)
-                                    ? undefined
-                                    : event.target.valueAsNumber
-                                )
-                              }
-                            />
+                            <Input type="date" required {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  )}
-                </>
-              )}
-              <FormField
-                control={form.control}
-                name="reason"
-                rules={{
-                  required: '理由を入力してください',
-                  maxLength: { value: 500, message: '理由は500文字以内にしてください' },
-                  validate: value => !!value.trim() || '理由を入力してください',
-                }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{target.cancel ? '取消理由' : '理由・説明'}</FormLabel>
-                    <FormControl>
-                      <Input required maxLength={500} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                    {target.kind === 'guarantee' && (
+                      <FormField
+                        control={form.control}
+                        name="stopped"
+                        render={({ field }) => (
+                          <FormItem className="flex items-center gap-3">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                ref={field.ref}
+                              />
+                            </FormControl>
+                            <FormLabel>この日から保証を停止する</FormLabel>
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    {!(target.kind === 'guarantee' && stopped) && (
+                      <FormField
+                        control={form.control}
+                        name="amount"
+                        rules={{
+                          validate: value =>
+                            (Number.isSafeInteger(value) &&
+                              value !== undefined &&
+                              value >= (target.kind === 'guarantee' ? 0 : 1)) ||
+                            '金額を整数の円で入力してください',
+                        }}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {target.kind === 'guarantee' ? '日額（円）' : '付与額（円）'}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={target.kind === 'guarantee' ? 0 : 1}
+                                step="1"
+                                required
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={event =>
+                                  field.onChange(
+                                    Number.isNaN(event.target.valueAsNumber)
+                                      ? undefined
+                                      : event.target.valueAsNumber
+                                  )
+                                }
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </>
                 )}
-              />
-              {correcting && !target.cancel && (
                 <FormField
                   control={form.control}
-                  name="correction_reason"
+                  name="reason"
                   rules={{
-                    required: '訂正理由を入力してください',
-                    maxLength: { value: 500, message: '訂正理由は500文字以内にしてください' },
-                    validate: value => !!value.trim() || '訂正理由を入力してください',
+                    required: '理由を入力してください',
+                    maxLength: { value: 500, message: '理由は500文字以内にしてください' },
+                    validate: value => !!value.trim() || '理由を入力してください',
                   }}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>訂正理由（内部記録）</FormLabel>
+                      <FormLabel>{target.cancel ? '取消理由' : '理由・説明'}</FormLabel>
                       <FormControl>
                         <Input required maxLength={500} {...field} />
                       </FormControl>
@@ -257,19 +223,45 @@ export function RemunerationEditor({
                     </FormItem>
                   )}
                 />
-              )}
-              {target.kind === 'guarantee' && (
-                <p className="text-sm text-muted-foreground">
-                  適用開始日から次の条件まで有効です。過去条件の訂正・取消は原月の明細にも反映されます。
-                </p>
-              )}
-              <div className="flex gap-3">
-                <Button type="button" variant="outline" onClick={onClose}>
+                {correcting && !target.cancel && (
+                  <FormField
+                    control={form.control}
+                    name="correction_reason"
+                    rules={{
+                      required: '訂正理由を入力してください',
+                      maxLength: { value: 500, message: '訂正理由は500文字以内にしてください' },
+                      validate: value => !!value.trim() || '訂正理由を入力してください',
+                    }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>訂正理由（内部記録）</FormLabel>
+                        <FormControl>
+                          <Input required maxLength={500} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {target.kind === 'guarantee' && (
+                  <p className="text-sm text-muted-foreground">
+                    適用開始日から次の条件まで有効です。過去条件の訂正・取消は原月の明細にも反映されます。
+                  </p>
+                )}
+              </fieldset>
+              <div className="flex flex-wrap gap-3">
+                <Button type="button" variant="outline" disabled={sending} onClick={onClose}>
                   閉じる
                 </Button>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {target.cancel ? '取消内容を確認' : '保存する'}
-                </Button>
+                {outstanding ? (
+                  <Button type="button" disabled={sending} onClick={() => void save()}>
+                    {sending ? '送信中...' : '元の内容で結果を確認'}
+                  </Button>
+                ) : (
+                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                    {target.cancel ? '取消内容を確認' : '保存する'}
+                  </Button>
+                )}
               </div>
             </form>
           </Form>
@@ -291,12 +283,4 @@ export function RemunerationEditor({
       />
     </>
   );
-}
-
-function createRequestId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

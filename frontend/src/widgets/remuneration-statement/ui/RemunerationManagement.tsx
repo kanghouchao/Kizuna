@@ -3,16 +3,24 @@ import { useState } from 'react';
 import { remunerationApi } from '../api';
 import { hasPermission, readTokenClaims, useResource } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
-import { RemunerationEditor, type EditTarget } from './RemunerationEditor';
+import { RemunerationEditor } from './RemunerationEditor';
+import {
+  currentOperationScope,
+  usePendingOperation,
+  type EditTarget,
+  type Operation,
+} from '../model/operation';
 import { RemunerationHistory } from './RemunerationHistory';
 import { Paging } from './Paging';
 export function RemunerationManagement({
   personId,
+  personName,
   month,
   refreshKey,
   onSaved,
 }: {
   personId: number;
+  personName: string;
   month: string;
   refreshKey: number;
   onSaved: () => void;
@@ -20,11 +28,42 @@ export function RemunerationManagement({
   const [guaranteePage, setGuaranteePage] = useState(0),
     [bonusPage, setBonusPage] = useState(0),
     [revision, setRevision] = useState(0);
-  const [editor, setEditor] = useState<{ target: EditTarget; open: boolean; key: number } | null>(
-    null
-  );
-  const edit = (target: EditTarget) =>
-    setEditor(current => ({ target, open: true, key: (current?.key ?? 0) + 1 }));
+  const scope = currentOperationScope();
+  const outstanding = usePendingOperation(scope);
+  const blocked = !scope || outstanding !== null;
+  const [editor, setEditor] = useState<{
+    scope: string;
+    target: EditTarget;
+    personId: number;
+    personName: string;
+    recovery?: Operation;
+    open: boolean;
+    key: number;
+  } | null>(null);
+  const edit = (target: EditTarget) => {
+    if (blocked) return;
+    setEditor(current => ({
+      scope: scope!,
+      target,
+      personId,
+      personName,
+      open: true,
+      key: (current?.key ?? 0) + 1,
+    }));
+  };
+  const restore = () => {
+    if (!outstanding) return;
+    const operation = outstanding.operation;
+    setEditor(current => ({
+      scope: operation.scope,
+      target: operation.target,
+      personId: operation.personId,
+      personName: operation.personName,
+      recovery: operation,
+      open: true,
+      key: (current?.key ?? 0) + 1,
+    }));
+  };
   const [history, setHistory] = useState<{
     kind: 'guarantee' | 'bonus';
     id: string;
@@ -50,6 +89,22 @@ export function RemunerationManagement({
   return (
     <section className="space-y-6 border-t pt-6" aria-label="保証とボーナスの管理">
       <h3 className="font-semibold">保証条件・付与記録の管理</h3>
+      {outstanding && (
+        <div role="status" className="space-y-3 rounded-lg border p-4">
+          <p>
+            {outstanding.operation.personName}{' '}
+            の送信結果を確認するまで、新しい記録は作成できません。
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={outstanding.phase === 'submitting'}
+            onClick={restore}
+          >
+            未確認の送信を復元
+          </Button>
+        </div>
+      )}
       {guarantees.isLoading && <p role="status">保証条件を読み込み中...</p>}
       {guarantees.failure !== null && (
         <RegionError message="保証条件を取得できませんでした。" onRetry={guarantees.reload} />
@@ -57,7 +112,11 @@ export function RemunerationManagement({
       {g && (
         <div className="space-y-3">
           {canGuarantee && (
-            <Button type="button" onClick={() => edit({ kind: 'guarantee', version: g.version })}>
+            <Button
+              type="button"
+              disabled={blocked}
+              onClick={() => edit({ kind: 'guarantee', version: g.version })}
+            >
               保証条件を追加・停止
             </Button>
           )}
@@ -85,6 +144,7 @@ export function RemunerationManagement({
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={blocked}
                       onClick={() => edit({ kind: 'guarantee', item, version: g.version })}
                     >
                       保証条件を訂正
@@ -92,6 +152,7 @@ export function RemunerationManagement({
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={blocked}
                       onClick={() =>
                         edit({ kind: 'guarantee', item, version: g.version, cancel: true })
                       }
@@ -112,7 +173,7 @@ export function RemunerationManagement({
         </div>
       )}
       {canBonus && (
-        <Button type="button" onClick={() => edit({ kind: 'bonus' })}>
+        <Button type="button" disabled={blocked} onClick={() => edit({ kind: 'bonus' })}>
           ボーナスを記録
         </Button>
       )}
@@ -142,6 +203,7 @@ export function RemunerationManagement({
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={blocked}
                       onClick={() => edit({ kind: 'bonus', item })}
                     >
                       ボーナスを訂正
@@ -149,6 +211,7 @@ export function RemunerationManagement({
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={blocked}
                       onClick={() => edit({ kind: 'bonus', item, cancel: true })}
                     >
                       ボーナスを取り消す
@@ -161,12 +224,15 @@ export function RemunerationManagement({
           <Paging page={bonusPage} total={b.total_pages} label="付与記録" onPage={setBonusPage} />
         </div>
       )}
-      {editor && (
+      {editor && scope && editor.scope === scope && (
         <RemunerationEditor
           key={editor.key}
           target={editor.target}
           open={editor.open}
-          personId={personId}
+          personId={editor.personId}
+          personName={editor.personName}
+          scope={scope}
+          recovery={editor.recovery}
           onClose={() => setEditor(current => current && { ...current, open: false })}
           onSaved={() => {
             setRevision(v => v + 1);

@@ -221,6 +221,7 @@ function Statement({ scope, month }: { scope: StatementScope; month: string }) {
       {scope.scope === 'store' && (
         <RemunerationManagement
           personId={scope.personId}
+          personName={data?.name ?? `本人 ID ${scope.personId}`}
           month={month}
           refreshKey={revision}
           onSaved={() => setRevision(v => v + 1)}

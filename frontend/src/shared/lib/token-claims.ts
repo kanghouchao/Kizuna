@@ -10,6 +10,8 @@ import Cookies from 'js-cookie';
  * 表示・導線制御にのみ使う（権限の強制は各エンドポイントのサーバ側認可）。
  */
 export interface TokenClaims {
+  /** 操作者ごとの画面内状態を分離する既存の JWT subject。 */
+  subject?: string;
   /** STAFF は PERM_ 接頭辞の権限並集、CAST / MEMBER は ROLE_CAST / ROLE_MEMBER の標識。 */
   authorities: string[];
   /** STAFF / CAST / MEMBER。 */
@@ -44,6 +46,7 @@ export function readTokenClaims(): TokenClaims | null {
   try {
     const payload = JSON.parse(decodeBase64Url(segments[1])) as Record<string, unknown>;
     return {
+      subject: typeof payload.sub === 'string' && payload.sub ? payload.sub : undefined,
       authorities: Array.isArray(payload.authorities)
         ? payload.authorities.filter((entry): entry is string => typeof entry === 'string')
         : [],

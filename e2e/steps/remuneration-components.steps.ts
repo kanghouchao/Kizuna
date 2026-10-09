@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { PLATFORM_URL } from "../base-url";
@@ -481,3 +481,181 @@ After({ tags: "@remuneration-components" }, async ({ request }) => {
   await deleteService(request, manager, courseId, 1);
   courseId = "";
 });
+
+When("ボーナスが保存された直後に応答を失う", async ({ page, request }) => {
+  await page.goto(PLATFORM_URL + "/platform/login");
+  await page.getByLabel("メールアドレス", { exact: true }).fill(staffEmail);
+  await page.getByLabel("パスワード", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "ログイン", exact: true }).click();
+  await page.waitForURL((url) => url.pathname !== "/platform/login");
+  await page.goto(
+    `${PLATFORM_URL}/store/${STORE1_ID}/orders/monthly-remunerations`,
+  );
+  await selectPerson(page, name);
+  await page.getByLabel("対象月").fill(month);
+  await page.getByRole("button", { name: "照会", exact: true }).click();
+  await page
+    .getByRole("button", { name: "保証・ボーナスを含む月次明細" })
+    .click();
+  await page.getByRole("button", { name: "ボーナスを記録" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "ボーナスの登録",
+    exact: true,
+  });
+  await dialog.getByLabel("帰属日").fill(date);
+  await dialog.getByLabel("付与額（円）").fill("1500");
+  await dialog.getByLabel("理由・説明").fill("応答喪失の検証");
+  lostRequests = [];
+  await page.route("**/api/store/bonus-awards", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    lostRequests.push(route.request().postDataJSON());
+    const committed = await route.fetch();
+    expect(committed.status()).toBe(201);
+    await route.abort("failed");
+  });
+  await dialog.getByRole("button", { name: "保存する" }).click();
+  await expect(
+    dialog.getByRole("button", { name: "元の内容で結果を確認" }),
+  ).toBeVisible();
+  await expect(dialog.getByLabel("付与額（円）")).toBeDisabled();
+  await expect(dialog.getByLabel("理由・説明")).toBeDisabled();
+  await dialog.getByRole("button", { name: "元の内容で結果を確認" }).click();
+  await expect(
+    dialog.getByRole("button", { name: "元の内容で結果を確認" }),
+  ).toBeVisible();
+  expect(lostRequests).toHaveLength(2);
+  expect(lostRequests[1]).toEqual(lostRequests[0]);
+  const data = await statement(request);
+  expect(data.bonus_total).toBe(1500);
+  expect(data.bonus_awards.content).toHaveLength(1);
+  await page.unroute("**/api/store/bonus-awards");
+});
+let lostRequests: Record<string, unknown>[] = [];
+async function selectPerson(page: Page, personName: string) {
+  await page.getByRole("combobox", { name: "キャスト本人" }).click();
+  await page.getByPlaceholder("源氏名で検索").fill(personName);
+  await page.getByRole("option", { name: personName, exact: false }).click();
+}
+Then(
+  "閉じ直しと本人切替後も元の要求を確認するまで新しい付与を止める",
+  async ({ page, request, $testInfo }) => {
+    let dialog = page.getByRole("dialog", {
+      name: "ボーナスの登録",
+      exact: true,
+    });
+    await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "ボーナスを記録" }),
+    ).toBeDisabled();
+    await page.getByRole("button", { name: "未確認の送信を復元" }).click();
+    await expect(dialog.getByLabel("付与額（円）")).toHaveValue("1500");
+    await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
+    const otherName = `復元対象とは別の本人-${randomUUID().slice(0, 8)}`;
+    const other = await createCast(request, manager, otherName);
+    await acceptCastInvitation(
+      request,
+      await issueCastInvitation(request, manager, other),
+      `${randomUUID()}@example.test`,
+      password,
+      otherName,
+    );
+    await selectPerson(page, otherName);
+    await page.getByRole("button", { name: "照会", exact: true }).click();
+    const expand = page.getByRole("button", {
+      name: "保証・ボーナスを含む月次明細",
+    });
+    if ((await expand.getAttribute("aria-expanded")) === "false")
+      await expand.click();
+    await expect(
+      page.getByRole("button", { name: "ボーナスを記録" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText(
+        `${name} の送信結果を確認するまで、新しい記録は作成できません。`,
+      ),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "未確認の送信を復元" }).click();
+    dialog = page.getByRole("dialog", { name: "ボーナスの登録", exact: true });
+    await expect(dialog.getByLabel("理由・説明")).toHaveValue("応答喪失の検証");
+    await expect(dialog.getByLabel("付与額（円）")).toBeDisabled();
+    for (let i = 0; i < 2; i++) {
+      const notice = page
+        .getByRole("dialog", {
+          name: "保存結果を確認できませんでした。元の内容で結果を確認してください。",
+          exact: true,
+        })
+        .first();
+      await notice.hover();
+      await notice.getByRole("button", { name: "通知を閉じる" }).click();
+      await expect(
+        page.getByRole("dialog", {
+          name: "保存結果を確認できませんでした。元の内容で結果を確認してください。",
+          exact: true,
+        }),
+      ).toHaveCount(1 - i);
+    }
+    await page.screenshot({
+      animations: "disabled",
+      path: $testInfo.outputPath("remuneration-unknown-recovery.png"),
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await expect(dialog).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await dialog.getByRole("button", { name: "元の内容で結果を確認" }).focus();
+    await page.screenshot({
+      animations: "disabled",
+      path: $testInfo.outputPath(
+        "remuneration-unknown-recovery-dark-mobile.png",
+      ),
+    });
+    await page.evaluate(() =>
+      document.documentElement.classList.remove("dark"),
+    );
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const [replayed] = await Promise.all([
+      page.waitForRequest(
+        (req) =>
+          req.url().endsWith("/api/store/bonus-awards") &&
+          req.method() === "POST",
+      ),
+      dialog.getByRole("button", { name: "元の内容で結果を確認" }).click(),
+    ]);
+    expect(replayed.postDataJSON()).toEqual(lostRequests[0]);
+    await expect(dialog).not.toBeVisible();
+    expect((await statement(request)).bonus_awards.content).toHaveLength(1);
+    await expect(
+      page.getByRole("button", { name: "ボーナスを記録" }),
+    ).toBeEnabled();
+    await selectPerson(page, name);
+    await page.getByRole("button", { name: "照会", exact: true }).click();
+    if ((await expand.getAttribute("aria-expanded")) === "false")
+      await expand.click();
+    await page.getByRole("button", { name: "ボーナスを記録" }).click();
+    await dialog.getByLabel("帰属日").fill(date);
+    await dialog.getByLabel("付与額（円）").fill("500");
+    await dialog.getByLabel("理由・説明").fill("確定後の別付与");
+    const [fresh] = await Promise.all([
+      page.waitForRequest(
+        (req) =>
+          req.url().endsWith("/api/store/bonus-awards") &&
+          req.method() === "POST",
+      ),
+      dialog.getByRole("button", { name: "保存する" }).click(),
+    ]);
+    expect(fresh.postDataJSON().request_id).not.toBe(
+      lostRequests[0].request_id,
+    );
+    await expect(dialog).not.toBeVisible();
+    const data = await statement(request);
+    expect(data.bonus_total).toBe(2000);
+    expect(data.bonus_awards.content).toHaveLength(2);
+  },
+);
