@@ -3,6 +3,7 @@ package com.kizuna.remuneration.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastEnrollment;
@@ -42,9 +43,11 @@ import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -76,6 +79,7 @@ import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -130,6 +134,7 @@ class RemunerationPostgresTest {
 
   @BeforeEach
   void fixture() {
+    when(context.getBean(Clock.class).instant()).thenReturn(Instant.parse("2026-10-09T12:00:00Z"));
     transactions.executeWithoutResult(
         tx -> {
           var store = new Store("保証検証店", UUID.randomUUID() + ".example.test", null);
@@ -177,6 +182,22 @@ class RemunerationPostgresTest {
                   actor.getId()));
         });
     authorize();
+  }
+
+  @Test
+  void guaranteeRetryAcrossBusinessDateReturnsReceiptWithoutNewCorrectionPermission() {
+    var clock = context.getBean(Clock.class);
+    when(clock.instant()).thenReturn(Instant.parse("2026-09-30T12:00:00Z"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(email, "", List.of()));
+    var request = guarantee(10000, 0, UUID.randomUUID());
+    var original = management.createGuarantee(request, email);
+    when(clock.instant()).thenReturn(Instant.parse("2026-10-01T12:00:00Z"));
+    assertThat(management.createGuarantee(request, email)).isEqualTo(original);
+    assertThatThrownBy(
+            () -> management.createGuarantee(guarantee(10000, 1, UUID.randomUUID()), email))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThat(management.guarantees(personId, 0, 20).entries().getTotalElements()).isEqualTo(1);
   }
 
   private GuaranteeCreateRequest guarantee(long amount, long version, UUID id) {
@@ -527,7 +548,9 @@ class RemunerationPostgresTest {
 
     @Bean
     Clock clock() {
-      return Clock.systemUTC();
+      var clock = mock(Clock.class);
+      when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+      return clock;
     }
 
     @Bean

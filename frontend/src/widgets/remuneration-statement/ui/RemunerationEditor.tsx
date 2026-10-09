@@ -137,6 +137,7 @@ export function RemunerationEditor({
           </DialogHeader>
           <Form {...form}>
             <form
+              noValidate
               onSubmit={event => {
                 event.stopPropagation();
                 void submit(event);

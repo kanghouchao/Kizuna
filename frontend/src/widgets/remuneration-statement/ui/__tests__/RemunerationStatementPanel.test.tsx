@@ -3,8 +3,15 @@ import { remunerationApi, type Statement } from '../../api';
 import { readTokenClaims } from '@/shared/lib';
 import { RemunerationStatementPanel } from '../RemunerationStatementPanel';
 import { RemunerationEditor } from '../RemunerationEditor';
+import { RemunerationManagement } from '../RemunerationManagement';
 jest.mock('../../api', () => ({
-  remunerationApi: { statement: jest.fn(), createBonus: jest.fn() },
+  remunerationApi: {
+    statement: jest.fn(),
+    createBonus: jest.fn(),
+    guarantees: jest.fn(),
+    bonuses: jest.fn(),
+    changes: jest.fn(),
+  },
 }));
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
@@ -106,4 +113,52 @@ it('HTTP環境でもボーナス保存に帰属日と理由とUUIDを送信す�
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     ),
   });
+});
+
+it('必須入力の不足をブラウザの吹き出しではなく日本語で示す', async () => {
+  render(
+    <RemunerationEditor
+      open
+      personId={2}
+      target={{ kind: 'bonus' }}
+      onClose={jest.fn()}
+      onSaved={jest.fn()}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+  expect(await screen.findByText('日付を入力してください')).toBeInTheDocument();
+  expect(screen.getByText('金額を整数の円で入力してください')).toBeInTheDocument();
+  expect(screen.getByText('理由を入力してください')).toBeInTheDocument();
+  expect(remunerationApi.createBonus).not.toHaveBeenCalled();
+});
+it('履歴を開き直すと同一記録でも最新の先頭へ戻り別記録のカーソルを使わない', async () => {
+  jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
+  const bonus = (id: string) => ({
+    id,
+    person_id: 2,
+    award_date: '2026-09-30',
+    amount: 1000,
+    effective_amount: 1000,
+    reason: id,
+    version: 0,
+  });
+  jest
+    .mocked(remunerationApi.bonuses)
+    .mockResolvedValue({ ...page, content: [bonus('a'), bonus('b')] });
+  const changes = jest.mocked(remunerationApi.changes);
+  changes.mockResolvedValue({ content: [], next_cursor: 'older' });
+  render(
+    <RemunerationManagement personId={2} month="2026-09" refreshKey={0} onSaved={jest.fn()} />
+  );
+  fireEvent.click((await screen.findAllByRole('button', { name: 'ボーナスの変更履歴' }))[0]);
+  fireEvent.click(await screen.findByRole('button', { name: '次の履歴' }));
+  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'a', 'older'));
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'ボーナスの変更履歴' })[1]);
+  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', undefined));
+  fireEvent.click(await screen.findByRole('button', { name: '次の履歴' }));
+  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', 'older'));
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'ボーナスの変更履歴' })[1]);
+  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', undefined));
 });

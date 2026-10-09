@@ -77,7 +77,6 @@ public class RemunerationManagementService {
   @Transactional
   public GuaranteeMutationResponse createGuarantee(GuaranteeCreateRequest request, String actor) {
     requirePerson(request.personId());
-    if (request.effectiveFrom().isBefore(dates.currentBusinessDate())) requireCorrection();
     return once(
         actor,
         request.requestId(),
@@ -85,6 +84,7 @@ public class RemunerationManagementService {
         request,
         GuaranteeMutationResponse.class,
         () -> {
+          if (request.effectiveFrom().isBefore(dates.currentBusinessDate())) requireCorrection();
           var timeline = records.lockedTimeline(store(), request.personId());
           timeline.advance(request.expectedVersion());
           var terms = records.activeTerms(store(), request.personId());

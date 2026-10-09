@@ -29,7 +29,10 @@ export function RemunerationManagement({
     kind: 'guarantee' | 'bonus';
     id: string;
     open: boolean;
+    key: number;
   } | null>(null);
+  const showHistory = (kind: 'guarantee' | 'bonus', id: string) =>
+    setHistory(current => ({ kind, id, open: true, key: (current?.key ?? 0) + 1 }));
   const [claims] = useState(readTokenClaims);
   const canGuarantee = hasPermission(claims, 'GUARANTEE_MANAGE'),
     canBonus = hasPermission(claims, 'BONUS_AWARD'),
@@ -73,7 +76,7 @@ export function RemunerationManagement({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setHistory({ kind: 'guarantee', id: item.id, open: true })}
+                  onClick={() => showHistory('guarantee', item.id)}
                 >
                   保証の変更履歴
                 </Button>
@@ -130,7 +133,7 @@ export function RemunerationManagement({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setHistory({ kind: 'bonus', id: item.id, open: true })}
+                  onClick={() => showHistory('bonus', item.id)}
                 >
                   ボーナスの変更履歴
                 </Button>
@@ -173,7 +176,10 @@ export function RemunerationManagement({
       )}
       {history && (
         <RemunerationHistory
-          {...history}
+          key={history.key}
+          kind={history.kind}
+          id={history.id}
+          open={history.open}
           onClose={() => setHistory(current => current && { ...current, open: false })}
         />
       )}

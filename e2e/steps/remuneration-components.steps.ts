@@ -75,6 +75,7 @@ Given(
         "ORDER_SET_MANAGE",
         "STORE_VIEW",
         "STORE_MENU_VIEW",
+        "PLATFORM_MENU_VIEW",
         "REMUNERATION_VIEW",
         "GUARANTEE_MANAGE",
         "BONUS_AWARD",
@@ -208,6 +209,7 @@ When(
       name: "保証条件が更新されています。再読み込みしてください",
       exact: true,
     });
+    await notice.hover();
     await expect(notice).toHaveCSS("opacity", "1");
     await page.screenshot({
       animations: "disabled",
@@ -290,7 +292,37 @@ When("担当がボーナスを訂正して誤記として取り消す", async ({
 });
 Then(
   "本人も原月の最新内訳を安全に参照できる",
-  async ({ request, browser, $testInfo }) => {
+  async ({ request, browser, page: platformPage, $testInfo }) => {
+    await platformPage.goto(
+      PLATFORM_URL + "/platform/orders/monthly-remunerations",
+    );
+    await platformPage
+      .getByRole("combobox", { name: "店舗", exact: true })
+      .click();
+    await platformPage.getByRole("option").first().click();
+    await platformPage
+      .getByRole("combobox", { name: "キャスト本人", exact: true })
+      .click();
+    await platformPage.getByPlaceholder("源氏名で検索").fill(name);
+    await platformPage.getByRole("option", { name, exact: false }).click();
+    await platformPage.getByLabel("対象月").fill(month);
+    await platformPage
+      .getByRole("button", { name: "照会", exact: true })
+      .click();
+    await platformPage
+      .getByRole("button", { name: "保証・ボーナスを含む月次明細" })
+      .click();
+    await expect(
+      platformPage.getByText("¥10,000", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      platformPage.getByRole("button", { name: "ボーナスを記録" }),
+    ).toHaveCount(0);
+    await platformPage.screenshot({
+      animations: "disabled",
+      path: $testInfo.outputPath("remuneration-platform.png"),
+      fullPage: true,
+    });
     await withdrawCast(request, manager, secondEnrollment);
     const response = await request.get(
       "/api/platform/me/remuneration-statements",
