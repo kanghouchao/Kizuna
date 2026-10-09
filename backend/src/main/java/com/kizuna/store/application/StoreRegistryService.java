@@ -45,7 +45,7 @@ public class StoreRegistryService {
   private final PointLedgerService pointLedgerService;
   private final AttendanceRecordCheck attendanceRecordCheck;
 
-  /** 削除を止める側の外部キーの写像。監査記録とサービス設定は誤登録の撤回にも従わせない。 */
+  /** 削除を止める側の外部キーの写像。履歴と業務記録は誤登録の撤回にも従わせない。 */
   private static final Map<DbConstraint, Supplier<RuntimeException>> DELETION_VIOLATIONS =
       Map.of(
           DbConstraint.FK_T_APPLICANT_UPLOADS_STORE,
@@ -57,7 +57,11 @@ public class StoreRegistryService {
           DbConstraint.FK_T_SERVICES_STORE,
           () -> new ServiceException("サービス設定が存在する店舗は削除できません"),
           DbConstraint.FK_T_SERVICE_REVISIONS_STORE,
-          () -> new ServiceException("サービス変更履歴が存在する店舗は削除できません"));
+          () -> new ServiceException("サービス変更履歴が存在する店舗は削除できません"),
+          DbConstraint.FK_T_GUARANTEE_TERMS_STORE,
+          () -> new ServiceException("保証条件の記録が存在する店舗は削除できません"),
+          DbConstraint.FK_T_BONUS_AWARDS_STORE,
+          () -> new ServiceException("ボーナスの記録が存在する店舗は削除できません"));
 
   @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional(readOnly = true)

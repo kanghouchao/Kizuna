@@ -29,6 +29,7 @@ describe('readTokenClaims', () => {
     );
 
     expect(readTokenClaims()).toEqual({
+      subject: 'staff@kizuna.test',
       authorities: ['PERM_CAST_INVITE', 'PERM_ORDER_MANAGE'],
       userType: 'STAFF',
       storeBridge: true,

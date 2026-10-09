@@ -1250,3 +1250,17 @@ export function getSelfDailyRemunerations(
 ): Promise<APIResponse> {
   return request.get("/api/platform/me/daily-remunerations", options);
 }
+
+export async function deleteService(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  expectedVersion: number,
+  storeId: string = STORE1_ID,
+): Promise<void> {
+  const response = await request.delete(`/api/store/services/${id}`, {
+    headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
+    params: { expected_version: expectedVersion },
+  });
+  expect(response.status(), await response.text()).toBe(204);
+}

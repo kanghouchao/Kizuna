@@ -72,6 +72,10 @@ public enum DbConstraint {
 
   FK_T_SERVICE_REVISIONS_STORE("fk_t_service_revisions_store"),
 
+  FK_T_GUARANTEE_TERMS_STORE("fk_t_guarantee_terms_store_id"),
+
+  FK_T_BONUS_AWARDS_STORE("fk_t_bonus_awards_store_id"),
+
   /** t_point_entries.idempotency_key の一意制約（ADR 0007）。 */
   UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY("uq_t_point_entries_idempotency_key"),
 

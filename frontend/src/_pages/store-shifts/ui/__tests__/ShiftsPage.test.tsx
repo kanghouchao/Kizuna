@@ -725,10 +725,36 @@ describe('当日実績の記録・訂正・取消', () => {
     await waitFor(() => expect(mockedCorrect).toHaveBeenCalledTimes(1));
     expect(mockedCorrect).toHaveBeenCalledWith('a1', {
       business_date: TODAY,
-      actual_start_at: `${TODAY}T18:05`,
+      actual_start_at: `${TODAY}T18:05:00`,
       actual_end_at: null,
       waiting_place: null,
     });
+  });
+
+  it('待機場所だけの訂正では開始・終了の秒と小数秒を保つこと', async () => {
+    const precise = {
+      ...attendance,
+      actual_start_at: `${TODAY}T18:05:59.123456`,
+      actual_end_at: `${TODAY}T22:05:59.123456`,
+    };
+    mockedShiftList.mockResolvedValue([shift]);
+    mockedAttendanceList.mockResolvedValue([precise]);
+    mockedCorrect.mockResolvedValue({});
+    await openBoard();
+    fireEvent.click(await screen.findByRole('button', { name: 'さくらの実績を訂正' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('待機場所'), { target: { value: '別室' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
+    await waitFor(() =>
+      expect(mockedCorrect).toHaveBeenCalledWith(
+        'a1',
+        expect.objectContaining({
+          actual_start_at: precise.actual_start_at,
+          actual_end_at: precise.actual_end_at,
+          waiting_place: '別室',
+        })
+      )
+    );
   });
 
   it('シフト紐づきの実績には帰属営業日の欄を出さないこと', async () => {
