@@ -10,6 +10,7 @@ import {
   dailyRemunerationApi,
   validateRemunerationPeriod,
 } from '@/entities/order';
+import { RemunerationStatementPanel } from '@/widgets/remuneration-statement';
 import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { fromSpringPage } from '@/shared/api';
 import { storePath, useResource } from '@/shared/lib';
@@ -194,6 +195,7 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
               <p className="text-sm text-muted-foreground">
                 退店・再入店を含め同じ本人の本店の報酬を集計します。支払済み額ではありません。実際の入出金・返金・給与支払いは管理対象外です。
               </p>
+
               {pdfResult && (
                 <MonthlyPdfActions
                   criteria={{
@@ -293,6 +295,12 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
           </TableBody>
         </Table>
       </ListPage>
+      {query?.mode === 'month' && (
+        <RemunerationStatementPanel
+          scope={{ scope: 'store', personId: query.personId }}
+          month={query.period}
+        />
+      )}
       {history && (
         <OrderCorrectionHistoryModal
           orderId={history.orderId}

@@ -276,9 +276,11 @@ class StoreRegistryServiceTest {
   @ParameterizedTest
   @CsvSource({
     "fk_t_services_store, サービス設定が存在する店舗は削除できません",
-    "fk_t_service_revisions_store, サービス変更履歴が存在する店舗は削除できません"
+    "fk_t_service_revisions_store, サービス変更履歴が存在する店舗は削除できません",
+    "fk_t_guarantee_terms_store_id, 保証条件の記録が存在する店舗は削除できません",
+    "fk_t_bonus_awards_store_id, ボーナスの記録が存在する店舗は削除できません"
   })
-  void delete_storeWithServices_translatesConstraint(String constraint, String message) {
+  void delete_storeWithRetainedRecords_translatesConstraint(String constraint, String message) {
     when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
     doThrow(
             new DataIntegrityViolationException(

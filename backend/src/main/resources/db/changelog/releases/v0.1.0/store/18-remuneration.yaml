@@ -1,0 +1,400 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-018-guarantee_timelines
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_guarantee_timelines
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_guarantee_timelines
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: person_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revision
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_guarantee_timelines
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_guarantee_timelines_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_guarantee_timelines
+            baseColumnNames: person_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            constraintName: fk_t_guarantee_timelines_person_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_guarantee_timelines_person ON t_guarantee_timelines(store_id, person_id);
+  - changeSet:
+      id: store-v0100-018-guarantee_terms
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_guarantee_terms
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_guarantee_terms
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: person_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: effective_from
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: state
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: daily_amount
+                  type: BIGINT
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cancelled_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_guarantee_terms
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_guarantee_terms_store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_guarantee_terms
+            baseColumnNames: person_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            constraintName: fk_t_guarantee_terms_person_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_guarantee_terms_date ON t_guarantee_terms(store_id, person_id, effective_from) WHERE cancelled_at IS NULL;
+              ALTER TABLE t_guarantee_terms ADD CONSTRAINT ck_t_guarantee_terms_amount CHECK ((state = 'ACTIVE' AND daily_amount IS NOT NULL AND daily_amount BETWEEN 0 AND 9007199254740991) OR (state = 'STOPPED' AND daily_amount IS NULL));
+  - changeSet:
+      id: store-v0100-018-bonus_awards
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_bonus_awards
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_bonus_awards
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: person_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: award_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cancelled_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_bonus_awards
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_bonus_awards_store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_bonus_awards
+            baseColumnNames: person_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            constraintName: fk_t_bonus_awards_person_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE INDEX idx_t_bonus_awards_person_date ON t_bonus_awards(store_id, person_id, award_date, id);
+              ALTER TABLE t_bonus_awards ADD CONSTRAINT ck_t_bonus_awards_amount CHECK (amount BETWEEN 1 AND 9007199254740991);
+  - changeSet:
+      id: store-v0100-018-remuneration_changes
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_remuneration_changes
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_remuneration_changes
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: person_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: resource_type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: resource_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: action
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: before_value
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: after_value
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_remuneration_changes
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_remuneration_changes_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_remuneration_changes
+            baseColumnNames: person_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            constraintName: fk_t_remuneration_changes_person_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_remuneration_changes
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_remuneration_changes_actor_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE INDEX idx_t_remuneration_changes_resource ON t_remuneration_changes(store_id, resource_type, resource_id, created_at, id);
+  - changeSet:
+      id: store-v0100-018-remuneration_requests
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_remuneration_requests
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_remuneration_requests
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: request_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: request_value
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: response_value
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: t_remuneration_requests
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_remuneration_requests_store_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: t_remuneration_requests
+            baseColumnNames: actor_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            constraintName: fk_t_remuneration_requests_actor_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_remuneration_requests_request ON t_remuneration_requests(store_id, actor_id, request_id);

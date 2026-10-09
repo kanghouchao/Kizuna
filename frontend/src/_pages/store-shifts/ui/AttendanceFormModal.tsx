@@ -125,9 +125,11 @@ export function AttendanceFormModal({
   const submit = async (values: AttendanceFormValues) => {
     if (target === null) return;
     // 空欄は「値なし」として送る。空文字のまま送ると待機場所に空の記録が残る
+    const preserveTime = (value: string, original: string | undefined) =>
+      original && value === toDateTimeInput(original) ? original : value;
     const common = {
-      actual_start_at: values.actual_start_at,
-      actual_end_at: values.actual_end_at || null,
+      actual_start_at: preserveTime(values.actual_start_at, target.attendance?.actual_start_at),
+      actual_end_at: preserveTime(values.actual_end_at, target.attendance?.actual_end_at) || null,
       waiting_place: values.waiting_place.trim() || null,
     };
     try {

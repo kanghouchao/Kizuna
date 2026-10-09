@@ -40,7 +40,7 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("SHARED コンソールの権限は跨店参照系の 5 個")
+  @DisplayName("SHARED コンソールの権限は跨店参照系の 6 個")
   void sharedPermissions() {
     assertThat(byConsole(PermissionCode.Console.SHARED))
         .containsExactlyInAnyOrder(
@@ -48,11 +48,12 @@ class PermissionCodeTest {
             PermissionCode.ORDER_SET_MANAGE,
             PermissionCode.OPERATIONAL_REPORT_VIEW,
             PermissionCode.OPERATIONAL_REPORT_EXPORT,
-            PermissionCode.NOTIFICATION_DELIVER);
+            PermissionCode.NOTIFICATION_DELIVER,
+            PermissionCode.REMUNERATION_VIEW);
   }
 
   @Test
-  @DisplayName("STORE コンソールの権限は店舗業務系の 28 個")
+  @DisplayName("STORE コンソールの権限は店舗業務系の 31 個")
   void storePermissions() {
     assertThat(byConsole(PermissionCode.Console.STORE))
         .containsExactlyInAnyOrder(
@@ -73,6 +74,9 @@ class PermissionCodeTest {
             PermissionCode.ORDER_CORRECT,
             PermissionCode.POINT_ADJUST,
             PermissionCode.SHIFT_MANAGE,
+            PermissionCode.GUARANTEE_MANAGE,
+            PermissionCode.BONUS_AWARD,
+            PermissionCode.REMUNERATION_CORRECT,
             PermissionCode.CAST_MANAGE,
             PermissionCode.CAST_INVITE,
             PermissionCode.CAST_FIELD_DEF_VIEW,
@@ -104,9 +108,9 @@ class PermissionCodeTest {
   }
 
   @Test
-  @DisplayName("権限目録は 47 個で全てコンソール分類を持つ")
+  @DisplayName("権限目録は 51 個で全てコンソール分類を持つ")
   void catalogIsComplete() {
-    assertThat(PermissionCode.values()).hasSize(47);
+    assertThat(PermissionCode.values()).hasSize(51);
     assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getConsole))
         .doesNotContainNull();
   }

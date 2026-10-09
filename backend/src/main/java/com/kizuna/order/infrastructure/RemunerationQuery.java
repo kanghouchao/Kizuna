@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -88,6 +89,24 @@ public class RemunerationQuery {
         .getResultStream()
         .findFirst()
         .orElseThrow(() -> new NotFoundException("キャスト本人が見つかりません"));
+  }
+
+  public Map<LocalDate, Long> dailyTotals(Long storeId, Long personId, YearMonth month) {
+    var rows =
+        bind(
+                entityManager.createQuery(
+                    "select o.businessDate, coalesce(sum(case when o.completionInvalidated then 0 else o.accruedRemuneration end), 0) "
+                        + ORDERS
+                        + " group by o.businessDate",
+                    Tuple.class),
+                storeId,
+                personId,
+                month.atDay(1),
+                month.atEndOfMonth())
+            .getResultList();
+    var result = new HashMap<LocalDate, Long>();
+    for (var row : rows) result.put(row.get(0, LocalDate.class), row.get(1, Long.class));
+    return result;
   }
 
   public long total(Long storeId, Long personId, YearMonth month) {

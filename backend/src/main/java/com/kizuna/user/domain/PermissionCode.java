@@ -186,6 +186,11 @@ public enum PermissionCode {
   /** 出勤（シフト）の閲覧・登録・更新（ShiftController）。 */
   SHIFT_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
+  REMUNERATION_VIEW(Console.SHARED),
+  GUARANTEE_MANAGE(Console.STORE),
+  BONUS_AWARD(Console.STORE),
+  REMUNERATION_CORRECT(Console.STORE),
+
   /** キャストの閲覧・登録・更新・削除（CastController — 在籍停止のキャストも対象）。 */
   CAST_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
