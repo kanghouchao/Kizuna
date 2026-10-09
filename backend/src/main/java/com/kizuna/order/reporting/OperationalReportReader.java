@@ -82,6 +82,7 @@ public class OperationalReportReader {
     String fromClause =
         """
         from com.kizuna.order.domain.Order o
+        left join com.kizuna.cast.domain.CastEnrollment e on e.id = o.castId and e.storeId = o.storeId
         where o.status = com.kizuna.order.domain.OrderStatus.COMPLETED
           and o.businessDate >= :from and o.businessDate <= :to
           and o.storeId in :storeIds
@@ -92,7 +93,7 @@ public class OperationalReportReader {
                 """
         select o.id, o.storeId, o.businessDate, o.version, o.completionInvalidated,
           case when o.completionInvalidated then 0 else o.totalFee end,
-          case when o.completionInvalidated then 0 else o.accruedRemuneration end
+          case when o.completionInvalidated then 0 else o.accruedRemuneration end, e.castId
         """
                     + fromClause
                     + " order by o.storeId, o.businessDate, o.id",
@@ -114,7 +115,8 @@ public class OperationalReportReader {
                         row.get(3, Long.class),
                         row.get(4, Boolean.class),
                         row.get(5, Integer.class),
-                        row.get(6, Integer.class)))
+                        row.get(6, Integer.class),
+                        row.get(7, Long.class)))
             .toList();
     return new OperationalFacts(OffsetDateTime.now(clock), stores, orders);
   }

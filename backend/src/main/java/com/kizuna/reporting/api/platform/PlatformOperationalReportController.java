@@ -21,30 +21,34 @@ public class PlatformOperationalReportController {
 
   @GetMapping
   @PreAuthorize(
-      "hasAuthority('PERM_ORDER_SET_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW')")
+      "(!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_SET_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW')")
   public ResponseEntity<OperationalReportResponse> view(
       @RequestParam(name = "store_id", required = false) Long storeId,
       @RequestParam String from,
       @RequestParam String to,
       @RequestParam(name = "group_by", defaultValue = "day") String groupBy,
       @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(name = "include_remuneration", defaultValue = "false")
+          boolean includeRemuneration) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(service.view(true, storeId, from, to, groupBy, page, size));
+        .body(service.view(true, storeId, from, to, groupBy, page, size, includeRemuneration));
   }
 
   @GetMapping("/exports")
   @PreAuthorize(
-      "hasAuthority('PERM_ORDER_SET_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT')")
+      "(!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_SET_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT')")
   public ResponseEntity<byte[]> export(
       @RequestParam(name = "store_id", required = false) Long storeId,
       @RequestParam String from,
       @RequestParam String to,
       @RequestParam(name = "group_by", defaultValue = "day") String groupBy,
-      @RequestParam String format)
+      @RequestParam String format,
+      @RequestParam(name = "include_remuneration", defaultValue = "false")
+          boolean includeRemuneration)
       throws IOException {
     return ReportDownload.response(
-        format, service.export(true, storeId, from, to, groupBy, format));
+        format, service.export(true, storeId, from, to, groupBy, format, includeRemuneration));
   }
 }

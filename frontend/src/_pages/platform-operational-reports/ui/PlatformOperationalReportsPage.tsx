@@ -24,7 +24,7 @@ function ReportPage() {
             ? page => setQuery(current => current && { ...current, page })
             : undefined,
         }}
-        emptyMessage={query ? '対象期間の完了受注はありません' : '期間と集計単位を指定してください'}
+        emptyMessage={query ? '対象期間の集計対象はありません' : '期間と集計単位を指定してください'}
         errorMessage="集計を取得できませんでした。権限と条件を確認し、再試行してください。"
         onRetry={() => void report.reload()}
       >

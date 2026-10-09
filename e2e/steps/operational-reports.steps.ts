@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { Client } from 'pg';
-import { inflateRawSync } from 'node:zlib';
+import { zipEntry } from './report-export';
 import { writeFile } from 'node:fs/promises';
 import { PLATFORM_URL } from '../base-url';
 import { createCast, createCourse, createAgreedOrder, completeAgreedOrder, correctOrderExtension,
@@ -12,24 +12,6 @@ const { Given, When, Then } = createBdd();
 const base = '/api/platform/operational-reports';
 const params = { from: '1999-09-01', to: '1999-10-31', group_by: 'month' };
 let manager = '', writer = '', viewer = '', secondReader = '', orderId = '', foreign = '', email = '', password = '', prefix = '';
-function zipEntry(bytes: Buffer, name: string): string {
-  const end = bytes.lastIndexOf(Buffer.from('504b0506', 'hex'));
-  if (end < 0) throw new Error('XLSX の中央ディレクトリがありません');
-  let offset = bytes.readUInt32LE(end + 16);
-  while (bytes.readUInt32LE(offset) === 0x02014b50) {
-    const nameSize = bytes.readUInt16LE(offset + 28);
-    const entry = bytes.subarray(offset + 46, offset + 46 + nameSize).toString();
-    if (entry === name) {
-      const size = bytes.readUInt32LE(offset + 20);
-      const local = bytes.readUInt32LE(offset + 42);
-      const start = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
-      const content = bytes.subarray(start, start + size);
-      return bytes.readUInt16LE(offset + 10) === 8 ? inflateRawSync(content, {maxOutputLength: 16 * 1024 * 1024}).toString() : content.toString();
-    }
-    offset += 46 + nameSize + bytes.readUInt16LE(offset + 30) + bytes.readUInt16LE(offset + 32);
-  }
-  throw new Error('XLSX のシートがありません: ' + name);
-}
 const headers = (token: string) => ({ Authorization: 'Bearer ' + token });
 async function database() {
   if (process.env.PGHOST !== 'database') throw new Error('専用 E2E DB でのみ実行できます');

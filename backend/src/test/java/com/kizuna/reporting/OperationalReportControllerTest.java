@@ -1,6 +1,7 @@
 package com.kizuna.reporting;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -11,18 +12,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.order.reporting.OperationalFacts;
 import com.kizuna.order.reporting.OperationalReportReader;
+import com.kizuna.remuneration.reporting.RemunerationReportFacts;
+import com.kizuna.remuneration.reporting.RemunerationReportReader;
 import com.kizuna.reporting.api.platform.PlatformOperationalReportController;
 import com.kizuna.reporting.api.store.StoreOperationalReportController;
 import com.kizuna.reporting.application.OperationalReportService;
+import com.kizuna.reporting.application.ReportSnapshot;
 import com.kizuna.reporting.infrastructure.ReportRenderer;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.store.application.StoreActivationService;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,11 +44,13 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @WebMvcTest({StoreOperationalReportController.class, PlatformOperationalReportController.class})
 @Import({
   OperationalReportControllerTest.Config.class,
   OperationalReportService.class,
+  ReportSnapshot.class,
   ReportRenderer.class,
   StoreContext.class
 })
@@ -62,9 +70,11 @@ class OperationalReportControllerTest {
     }
   }
 
+  @MockitoBean PlatformTransactionManager transactions;
   @Autowired MockMvc mvc;
   @Autowired AppProperties properties;
   @MockitoBean OperationalReportReader reader;
+  @MockitoBean RemunerationReportReader remuneration;
   @MockitoBean SystemConfigService systemConfigService;
   @MockitoBean StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreActivationService storeActivationService;
@@ -78,6 +88,8 @@ class OperationalReportControllerTest {
             OffsetDateTime.parse("2026-10-01T12:00:00+09:00"),
             List.of(new OperationalFacts.Store(1L, "日本語店舗")),
             List.of());
+    when(remuneration.read(any(), any(), any(), anyInt()))
+        .thenReturn(new RemunerationReportFacts(List.of(), List.of()));
     when(reader.store(any(), any())).thenReturn(facts);
     when(reader.platform(any(), any(), any())).thenReturn(facts);
   }
@@ -141,6 +153,83 @@ class OperationalReportControllerTest {
                         "Content-Disposition",
                         "attachment; filename=\"operational-report." + format + "\""));
     }
+  }
+
+  @Test
+  void additionalAmountsRequireRemunerationPermissionAndLegacyOmitsFields() throws Exception {
+    for (String scope : List.of("store", "platform")) {
+      String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
+      mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.remuneration").doesNotExist())
+          .andExpect(jsonPath("$.basis").value("completed-orders-current-v1"));
+      for (String path : List.of("", "/exports")) {
+        mvc.perform(
+                request(
+                        scope,
+                        path,
+                        permission,
+                        "OPERATIONAL_REPORT_VIEW",
+                        "OPERATIONAL_REPORT_EXPORT")
+                    .param("include_remuneration", "true")
+                    .param("format", "csv"))
+            .andExpect(status().isForbidden());
+        mvc.perform(
+                request(
+                        scope,
+                        path,
+                        permission,
+                        "OPERATIONAL_REPORT_VIEW",
+                        "OPERATIONAL_REPORT_EXPORT",
+                        "REMUNERATION_VIEW")
+                    .param("include_remuneration", "true")
+                    .param("format", "csv"))
+            .andExpect(status().isOk());
+      }
+      mvc.perform(
+              request(scope, "", permission, "OPERATIONAL_REPORT_VIEW", "REMUNERATION_VIEW")
+                  .param("include_remuneration", "true"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.remuneration.total").value(0))
+          .andExpect(jsonPath("$.basis").value("completed-orders-remuneration-current-v2"));
+      mvc.perform(
+              request(scope, "/exports", permission, "OPERATIONAL_REPORT_VIEW", "REMUNERATION_VIEW")
+                  .param("include_remuneration", "true")
+                  .param("format", "csv"))
+          .andExpect(status().isForbidden());
+    }
+  }
+
+  @Test
+  void unknownAmountsAreExplicitNullDespiteGlobalNonNullSerialization() throws Exception {
+    var day =
+        new RemunerationReportFacts.Day(
+            1L,
+            9L,
+            LocalDate.of(2026, 9, 1),
+            0,
+            null,
+            null,
+            null,
+            null,
+            "PT4H",
+            false,
+            "NOT_CONFIGURED",
+            null,
+            500);
+    when(remuneration.read(any(), any(), any(), anyInt()))
+        .thenReturn(new RemunerationReportFacts(List.of(day), List.of()));
+    mvc.perform(
+            request("store", "", "ORDER_MANAGE", "OPERATIONAL_REPORT_VIEW", "REMUNERATION_VIEW")
+                .param("include_remuneration", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.remuneration.guarantee_total").value(Matchers.nullValue()))
+        .andExpect(jsonPath("$.remuneration.total").value(Matchers.nullValue()))
+        .andExpect(jsonPath("$.remuneration").value(Matchers.hasKey("guarantee_total")))
+        .andExpect(jsonPath("$.remuneration").value(Matchers.hasKey("total")))
+        .andExpect(jsonPath("$.rows.content[0].remuneration").value(Matchers.hasKey("total")))
+        .andExpect(jsonPath("$.remuneration.known_guarantee_total").value(0))
+        .andExpect(jsonPath("$.remuneration.bonus_total").value(500));
   }
 
   @Test

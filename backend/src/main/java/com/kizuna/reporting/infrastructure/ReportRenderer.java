@@ -2,6 +2,7 @@ package com.kizuna.reporting.infrastructure;
 
 import com.kizuna.reporting.application.ReportBudget;
 import com.kizuna.reporting.domain.OperationalReport;
+import com.kizuna.shared.exception.ServiceUnavailableException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -33,27 +34,68 @@ public class ReportRenderer {
           "請求額（円）",
           "発生済み固定報酬（円）");
 
+  private enum ExtraColumn {
+    KNOWN_GUARANTEE("保証既知小計（円）"),
+    GUARANTEE("保証不足分（円）"),
+    BONUS("ボーナス（円）"),
+    TOTAL("報酬合計（円）"),
+    PENDING_ATTENDANCE("出勤待確認人日数"),
+    NOT_CONFIGURED("保証未設定人日数"),
+    PERSON("本人ID"),
+    TERM("保証条件ID"),
+    EFFECTIVE_FROM("条件開始日"),
+    STATE("保証条件状態"),
+    DAILY_AMOUNT("日額（円）"),
+    DURATION("閉合出勤時間"),
+    INCOMPLETE("未終了出勤"),
+    STATUS("保証判定"),
+    AWARD("付与ID"),
+    VERSION("付与版"),
+    CANCELLED("付与取消");
+    private final String label;
+
+    ExtraColumn(String label) {
+      this.label = label;
+    }
+
+    int index() {
+      return HEADER.size() + ordinal();
+    }
+  }
+
+  private List<Object> header(OperationalReport report) {
+    var result = new ArrayList<>(HEADER);
+    if (report.remuneration() != null)
+      for (var column : ExtraColumn.values()) result.add(column.label);
+    return result;
+  }
+
   public byte[] render(OperationalReport report, String format, ReportBudget budget)
       throws IOException {
     var output = budget.output();
     if (format.equals("csv")) {
       output.write(new byte[] {(byte) 0xef, (byte) 0xbb, (byte) 0xbf});
-      writeCsv(output, HEADER, budget);
+      writeCsv(output, header(report), budget);
       rows(report, row -> writeCsv(output, row, budget));
     } else {
       // POI 5.5.1 の close は一時ファイルも破棄するため、例外経路も同じ寿命に閉じる。
       try (var workbook = new SXSSFWorkbook(100)) {
         workbook.setCompressTempFiles(true);
         var sheets = new HashMap<String, Sheet>();
-        for (String name : List.of("metadata", "summary", "order")) {
+        for (String name :
+            report.remuneration() == null
+                ? List.of("metadata", "summary", "order")
+                : List.of("metadata", "summary", "order", "remuneration_day", "bonus")) {
           var sheet =
               workbook.createSheet(
                   switch (name) {
                     case "metadata" -> "条件と総計";
                     case "summary" -> "集計";
+                    case "remuneration_day" -> "日別報酬根拠";
+                    case "bonus" -> "ボーナス根拠";
                     default -> "受注明細";
                   });
-          writeXlsx(sheet, HEADER, budget);
+          writeXlsx(sheet, header(report), budget);
           sheet.createFreezePane(0, 1);
           sheets.put(name, sheet);
         }
@@ -68,34 +110,38 @@ public class ReportRenderer {
 
   private void rows(OperationalReport report, RowConsumer rows) throws IOException {
     rows.accept(
-        row(
-            report,
-            "metadata",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            report.totalOrderCount(),
-            report.invalidatedOrderCount(),
-            report.totalFee(),
-            report.totalRemuneration()));
+        withAmounts(
+            row(
+                report,
+                "metadata",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                report.totalOrderCount(),
+                report.invalidatedOrderCount(),
+                report.totalFee(),
+                report.totalRemuneration()),
+            report.remuneration()));
     for (var summary : report.rows())
       rows.accept(
-          row(
-              report,
-              "summary",
-              summary.storeId().toString(),
-              summary.storeName(),
-              summary.period(),
-              "",
-              "",
-              "",
-              summary.orderCount(),
-              summary.invalidatedOrderCount(),
-              summary.totalFee(),
-              summary.totalRemuneration()));
+          withAmounts(
+              row(
+                  report,
+                  "summary",
+                  summary.storeId().toString(),
+                  summary.storeName(),
+                  summary.period(),
+                  "",
+                  "",
+                  "",
+                  summary.orderCount(),
+                  summary.invalidatedOrderCount(),
+                  summary.totalFee(),
+                  summary.totalRemuneration()),
+              summary.remuneration()));
     var names = new HashMap<Long, String>();
     for (var store : report.facts().stores()) {
       names.put(store.storeId(), store.storeName());
@@ -129,6 +175,68 @@ public class ReportRenderer {
               order.invalidated() ? 1 : 0,
               order.invalidated() ? 0 : order.totalFee(),
               order.invalidated() ? 0 : order.remuneration()));
+    if (report.remunerationFacts() != null) {
+      for (var day : report.remunerationFacts().days()) {
+        var values =
+            row(
+                report,
+                "remuneration_day",
+                day.storeId().toString(),
+                names.get(day.storeId()),
+                day.businessDate().toString(),
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                day.orderAmount());
+        values.set(
+            ExtraColumn.KNOWN_GUARANTEE.index(),
+            day.guaranteeAmount() == null ? 0L : day.guaranteeAmount());
+        values.set(ExtraColumn.GUARANTEE.index(), blank(day.guaranteeAmount()));
+        values.set(ExtraColumn.BONUS.index(), day.bonusAmount());
+        values.set(
+            ExtraColumn.PENDING_ATTENDANCE.index(),
+            day.guaranteeStatus().equals("PENDING_ATTENDANCE") ? 1L : 0L);
+        values.set(
+            ExtraColumn.NOT_CONFIGURED.index(),
+            day.guaranteeStatus().equals("NOT_CONFIGURED") ? 1L : 0L);
+        values.set(ExtraColumn.PERSON.index(), day.personId().toString());
+        values.set(ExtraColumn.TERM.index(), blank(day.termId()));
+        values.set(
+            ExtraColumn.EFFECTIVE_FROM.index(),
+            day.effectiveFrom() == null ? "" : day.effectiveFrom().toString());
+        values.set(ExtraColumn.STATE.index(), blank(day.guaranteeState()));
+        values.set(ExtraColumn.DAILY_AMOUNT.index(), blank(day.dailyAmount()));
+        values.set(ExtraColumn.DURATION.index(), day.closedDuration());
+        values.set(ExtraColumn.INCOMPLETE.index(), day.attendanceIncomplete());
+        values.set(ExtraColumn.STATUS.index(), day.guaranteeStatus());
+        rows.accept(values);
+      }
+      for (var bonus : report.remunerationFacts().bonuses()) {
+        var values =
+            row(
+                report,
+                "bonus",
+                bonus.storeId().toString(),
+                names.get(bonus.storeId()),
+                bonus.awardDate().toString(),
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "");
+        values.set(ExtraColumn.BONUS.index(), bonus.effectiveAmount());
+        values.set(ExtraColumn.PERSON.index(), bonus.personId().toString());
+        values.set(ExtraColumn.AWARD.index(), bonus.id());
+        values.set(ExtraColumn.VERSION.index(), Long.toString(bonus.version()));
+        values.set(ExtraColumn.CANCELLED.index(), bonus.cancelled());
+        rows.accept(values);
+      }
+    }
   }
 
   private interface RowConsumer {
@@ -144,8 +252,25 @@ public class ReportRenderer {
                 report.criteria().to().toString(),
                 report.criteria().groupBy(),
                 report.facts().generatedAt().toString(),
-                OperationalReport.BASIS));
-    row.addAll(List.of(values));
+                report.basis()));
+    for (var value : values) row.add(blank(value));
+    while (row.size() < header(report).size()) row.add("");
+    return row;
+  }
+
+  private Object blank(Object value) {
+    return value == null ? "" : value;
+  }
+
+  private List<Object> withAmounts(List<Object> row, OperationalReport.Amounts amounts) {
+    if (amounts != null) {
+      row.set(ExtraColumn.KNOWN_GUARANTEE.index(), amounts.knownGuaranteeTotal());
+      row.set(ExtraColumn.GUARANTEE.index(), blank(amounts.guaranteeTotal()));
+      row.set(ExtraColumn.BONUS.index(), amounts.bonusTotal());
+      row.set(ExtraColumn.TOTAL.index(), blank(amounts.total()));
+      row.set(ExtraColumn.PENDING_ATTENDANCE.index(), amounts.pendingAttendanceDays());
+      row.set(ExtraColumn.NOT_CONFIGURED.index(), amounts.notConfiguredDays());
+    }
     return row;
   }
 
@@ -169,8 +294,11 @@ public class ReportRenderer {
       Object value = values.get(col);
       budget.text(value.toString());
       var cell = row.createCell(col);
-      if (value instanceof Number number) cell.setCellValue(number.doubleValue());
-      else if (value instanceof Boolean bool) cell.setCellValue(bool);
+      if (value instanceof Number number) {
+        if (number.longValue() < 0 || number.longValue() > 999_999_999_999_999L)
+          throw new ServiceUnavailableException("Excelで正確に表せる金額の上限を超えています。CSVを選ぶか条件を絞ってください");
+        cell.setCellValue(number.doubleValue());
+      } else if (value instanceof Boolean bool) cell.setCellValue(bool);
       else cell.setCellValue(value.toString());
     }
   }
