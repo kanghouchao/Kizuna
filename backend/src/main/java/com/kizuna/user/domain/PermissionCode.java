@@ -19,6 +19,9 @@ import lombok.Getter;
  */
 @Getter
 public enum PermissionCode {
+  ADVERTISING_COST_VIEW(Console.STORE),
+  ADVERTISING_COST_MANAGE(Console.STORE),
+  ADVERTISING_COST_EXPORT(Console.STORE),
   /** 口コミの閲覧。 */
   REVIEW_VIEW(Console.STORE),
   SURVEY_VIEW(Console.STORE),

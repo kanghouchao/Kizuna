@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 public class AppProperties {
 
   private OperationalReport operationalReport = new OperationalReport();
+  private OperationalReport advertisingCost = new OperationalReport();
 
   @Getter
   @Setter

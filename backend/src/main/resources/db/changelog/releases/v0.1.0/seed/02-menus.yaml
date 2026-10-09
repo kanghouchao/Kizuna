@@ -308,3 +308,13 @@ databaseChangeLog:
               - column: { name: icon, value: ClipboardListIcon }
               - column: { name: permission, value: SURVEY_VIEW }
               - column: { name: sort_order, valueNumeric: 4 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-advertising-costs }
+              - column: { name: parent_id, value: store-crm }
+              - column: { name: label, value: 広告費管理 }
+              - column: { name: path, value: /store/advertising-costs }
+              - column: { name: icon, value: MegaphoneIcon }
+              - column: { name: permission, value: ADVERTISING_COST_VIEW }
+              - column: { name: sort_order, valueNumeric: 5 }
