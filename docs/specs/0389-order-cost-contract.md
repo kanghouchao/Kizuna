@@ -110,4 +110,5 @@ advertisingのユースケースが `@StoreScoped` とREPEATABLE_READ取引を�
 - 顧客統合の既存 `CustomerMergeConfirmDialog` テストで一度タイミング依存の失敗があった。該当14テストの単独実行と全量Taskfile再実行がexit 0。該当機能のコードは変更していない。
 - ローカルcode-reviewはStandards／Specとも残存0。出力の解釈説明、出力種別の共通定義、空白名の視認性とhover時の文字色を修正して再確認した。
 - 実ブラウザで本機能のシナリオ成功。切店のブラウザ確認はページ遷移で行い、同一コンポーネントの世代切替はunit testでも確認した。明暗・760px幅・長名・キーボード画像を `docs/screenshots/0389-order-cost-*.png` に保存。
+- 広告費E2Eの店舗IDはログイン後のURLから取得し、fixture・注文操作・ナビゲーション・ファイル名へ渡す。共有helperの省略時既定値は既存呼出しとの互換を維持する。
 - `task e2e` は102シナリオ成功・skip／retry 0、exit 0。CIと最新SHA公式Codexレビューの確定結果はPRで記録する。

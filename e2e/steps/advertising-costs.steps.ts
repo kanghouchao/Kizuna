@@ -6,7 +6,7 @@ import { zipEntry } from "./report-export";
 import { PLATFORM_URL } from "../base-url";
 import {
   ADMIN_PASSWORD,
-  STORE1_ID,
+  loginViaUiAndEnterStore,
   STORE_HEADERS,
   loginPlatformUser,
   loginAsStoreAdmin,
@@ -24,7 +24,8 @@ import {
 const { Given, When, Then } = createBdd();
 const base = "/api/store/advertising-costs",
   months = "/api/store/advertising-cost-months";
-let token = "",
+let storeId = "",
+  token = "",
   reader = "",
   exporter = "",
   foreign = "",
@@ -36,7 +37,7 @@ let token = "",
   month = "",
   current: any,
   original: any;
-const h = (t = token, store = STORE1_ID) => ({
+const h = (t = token, store = storeId) => ({
   ...STORE_HEADERS,
   "X-Store-ID": store,
   Authorization: `Bearer ${t}`,
@@ -78,64 +79,69 @@ async function login(page: Page, address = email) {
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await expect(page).toHaveURL(/\/store\/\d+\//);
-  await page.goto(`${PLATFORM_URL}/store/${STORE1_ID}/advertising-costs`);
+  await page.goto(`${PLATFORM_URL}/store/${storeId}/advertising-costs`);
   await expect(page.getByRole("heading", { name: "広告費管理" })).toBeVisible();
   await selectMonth(page, month);
 }
-Given("広告費検証用の権限と店舗がある", async ({ request, $testInfo }) => {
-  $testInfo.setTimeout(120000);
-  const owner = await loginPlatformUser(
-    request,
-    "admin@kizuna.test",
-    ADMIN_PASSWORD,
-  );
-  const manager = await loginAsStoreAdmin(request);
-  foreign = String(
-    (await getAuthorizedStores(request, manager)).find(
-      (s) => String(s.id) !== STORE1_ID,
-    )!.id,
-  );
-  const suffix = randomUUID();
-  password = randomUUID();
-  month = `${($testInfo.title.includes("受注あたり") ? 1980 : $testInfo.title.includes("媒体別") ? 1970 : $testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
-  const tokens: string[] = [];
-  for (const [index, perms] of [
-    [
-      "ADVERTISING_COST_VIEW",
-      "ADVERTISING_COST_MANAGE",
-      "ADVERTISING_COST_EXPORT",
-      ...($testInfo.title.includes("受注あたり") ? ["ORDER_MANAGE"] : []),
-    ],
-    ["ADVERTISING_COST_VIEW"],
-    ["ADVERTISING_COST_EXPORT"],
-    ...($testInfo.title.includes("受注あたり")
-      ? [["ADVERTISING_COST_VIEW", "ORDER_MANAGE"]]
-      : []),
-  ].entries()) {
-    const role = await createPermissionRole(
+Given(
+  "広告費検証用の権限と店舗がある",
+  async ({ request, page, $testInfo }) => {
+    $testInfo.setTimeout(120000);
+    storeId = await loginViaUiAndEnterStore(page);
+    const owner = await loginPlatformUser(
       request,
-      owner,
-      `広告費-${index}-${suffix}`,
-      ["STORE_VIEW", "STORE_MENU_VIEW", ...perms],
+      "admin@kizuna.test",
+      ADMIN_PASSWORD,
     );
-    const address = `advertising-${index}-${suffix}@example.test`;
-    if (index === 0) email = address;
-    if (index === 1) readerEmail = address;
-    if (index === 3) orderReaderEmail = address;
-    await createStoreStaffFixture(
-      request,
-      manager,
-      address,
-      password,
-      [role],
-      index === 1 || index === 3
-        ? [Number(STORE1_ID)]
-        : [Number(STORE1_ID), Number(foreign)],
+    const manager = await loginAsStoreAdmin(request);
+    foreign = String(
+      (await getAuthorizedStores(request, manager)).find(
+        (s) => String(s.id) !== storeId,
+      )!.id,
     );
-    tokens.push(await loginPlatformUser(request, address, password));
-  }
-  [token, reader, exporter, orderReader] = tokens;
-});
+    const suffix = randomUUID();
+    password = randomUUID();
+    month = `${($testInfo.title.includes("受注あたり") ? 1980 : $testInfo.title.includes("媒体別") ? 1970 : $testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
+    const tokens: string[] = [];
+    for (const [index, perms] of [
+      [
+        "ADVERTISING_COST_VIEW",
+        "ADVERTISING_COST_MANAGE",
+        "ADVERTISING_COST_EXPORT",
+        ...($testInfo.title.includes("受注あたり") ? ["ORDER_MANAGE"] : []),
+      ],
+      ["ADVERTISING_COST_VIEW"],
+      ["ADVERTISING_COST_EXPORT"],
+      ...($testInfo.title.includes("受注あたり")
+        ? [["ADVERTISING_COST_VIEW", "ORDER_MANAGE"]]
+        : []),
+    ].entries()) {
+      const role = await createPermissionRole(
+        request,
+        owner,
+        `広告費-${index}-${suffix}`,
+        ["STORE_VIEW", "STORE_MENU_VIEW", ...perms],
+      );
+      const address = `advertising-${index}-${suffix}@example.test`;
+      if (index === 0) email = address;
+      if (index === 1) readerEmail = address;
+      if (index === 3) orderReaderEmail = address;
+      await createStoreStaffFixture(
+        request,
+        manager,
+        address,
+        password,
+        [role],
+        index === 1 || index === 3
+          ? [Number(storeId)]
+          : [Number(storeId), Number(foreign)],
+        storeId,
+      );
+      tokens.push(await loginPlatformUser(request, address, password));
+    }
+    [token, reader, exporter, orderReader] = tokens;
+  },
+);
 When("広告費を登録変更コピー削除する", async ({ request }) => {
   const key = randomUUID();
   original = await add(request, { request_id: key });
@@ -481,7 +487,7 @@ Then(
     await page.goto(`${PLATFORM_URL}/store/${foreign}/advertising-costs`);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
-    await page.goto(`${PLATFORM_URL}/store/${STORE1_ID}/advertising-costs`);
+    await page.goto(`${PLATFORM_URL}/store/${storeId}/advertising-costs`);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeVisible();
     for (const theme of ["light", "dark"]) {
@@ -582,7 +588,7 @@ Then(
   "媒体別集計と全件出力と古い応答の破棄を確認できる",
   async ({ request, page, $testInfo }) => {
     $testInfo.setTimeout(120000);
-    const read = async (t = token, store = STORE1_ID) =>
+    const read = async (t = token, store = storeId) =>
       request.get(mediaBase, {
         headers: h(t, store),
         params: { month, size: 100 },
@@ -757,7 +763,7 @@ Then(
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "CSV 全件出力" }).click();
     expect((await downloadPromise).suggestedFilename()).toBe(
-      `advertising-media-summaries-${STORE1_ID}-${month}.csv`,
+      `advertising-media-summaries-${storeId}-${month}.csv`,
     );
     let releaseExport!: () => void,
       enterExport!: () => void,
@@ -879,11 +885,17 @@ let orderCostWriter = "",
   orderCostSeed = "";
 When("営業広告と零円を含む有効受注の記録を用意する", async ({ request }) => {
   orderCostWriter = await loginAsStoreAdmin(request);
-  const cast = await createCast(request, orderCostWriter, "広告費比較検証");
+  const cast = await createCast(
+    request,
+    orderCostWriter,
+    "広告費比較検証",
+    storeId,
+  );
   const course = await createCourse(
     request,
     orderCostWriter,
     "広告費比較コース",
+    storeId,
   );
   async function order(
     media: string | null,
@@ -907,11 +919,13 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
         business_date: date,
         media_name: media,
       },
+      "post",
+      storeId,
     );
     const id = (await response.json()).id;
     if (state === "COMPLETED" || state === "INVALID") {
       if (zero) {
-        const current = await getOrder(request, orderCostWriter, STORE1_ID, id);
+        const current = await getOrder(request, orderCostWriter, storeId, id);
         await submitConfirmedStoreRequest(
           request,
           orderCostWriter,
@@ -921,13 +935,21 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
             expected_version: current.version,
             fee_lines: [{ kind: "DISCOUNT", name: "全額割引", amount: 12000 }],
           },
+          "post",
+          storeId,
         );
-      } else await completeAgreedOrder(request, orderCostWriter, id);
+      } else await completeAgreedOrder(request, orderCostWriter, id, storeId);
     }
     if (state === "INVALID")
-      await invalidateOrder(request, orderCostWriter, id, "未提供の検証");
+      await invalidateOrder(
+        request,
+        orderCostWriter,
+        id,
+        "未提供の検証",
+        storeId,
+      );
     if (state === "CANCELLED")
-      await cancelOrder(request, orderCostWriter, id, "取消の検証");
+      await cancelOrder(request, orderCostWriter, id, "取消の検証", storeId);
     return id;
   }
   original = await add(request, {
@@ -964,7 +986,7 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
 Then(
   "受注あたり記録費用の意味と全件出力と切替が守られる",
   async ({ request, page, $testInfo }) => {
-    const read = (t = token, store = STORE1_ID) =>
+    const read = (t = token, store = storeId) =>
       request.get(orderCostBase, {
         headers: h(t, store),
         params: { month, size: 100 },
@@ -1038,6 +1060,7 @@ Then(
       orderCostWriter,
       orderCostInvalidation,
       "原月への無効化反映",
+      storeId,
     );
     report = await (await read()).json();
     expect(row("ABC").cost_per_order).toBe("50.00");
@@ -1100,7 +1123,7 @@ Then(
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "CSV 全件出力" }).click();
     expect((await download).suggestedFilename()).toBe(
-      `advertising-order-costs-${STORE1_ID}-${month}.csv`,
+      `advertising-order-costs-${storeId}-${month}.csv`,
     );
     let release!: () => void, entered!: () => void, finished!: () => void;
     let requests = 0,
