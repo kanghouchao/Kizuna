@@ -27,6 +27,16 @@ task e2e
 `screenshot` が `e2e/test-results/`、HTML レポートが `e2e/playwright-report/` に
 残ります（いずれも Git 管理外）。
 
+### 型検査
+
+`task lint service=e2e` は、前端と同じ固定NodeイメージでE2E自身の依存とTypeScriptを使い、
+`tsconfig.json`に含まれる手書きTypeScriptを検査します。ブラウザやDBは起動しません。
+生成済みの`.features-gen`と実行成果物は検査対象外です。Playwrightの変換・実行だけでは型の整合性は保証されません。
+
+標準`task lint`とCIのRepo Lintにこの検査を含め、フルE2Eのランナーもシナリオ生成前に実行します。
+CIでフルスタックのE2Eを実行しない運用は維持します。ホストでの高速な反復は`e2e/`で
+`npm ci`の後に`npm run typecheck`を実行できます。
+
 ### 開発スタックとの関係
 
 E2E は**開発スタック（project `kizuna`）を使いません**。専用の使い捨てスタックを毎回立て、
@@ -91,6 +101,5 @@ Docker を使わず手元の Node で回す場合は、`e2e/` で以下を実行
 cd e2e
 npm ci
 npx playwright install chromium
-npx bddgen        # .feature からテストコードを生成
-npx playwright test
+npm run test:e2e  # 型検査 → .feature の変換 → シナリオ実行
 ```

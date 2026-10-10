@@ -1,0 +1,18 @@
+version: '3'
+
+silent: true
+
+vars:
+  NODE_IMAGE:
+    sh: awk '$1 == "FROM" && $2 ~ /^node:/ { print $2; exit }' ../frontend/Dockerfile
+
+tasks:
+  lint:
+    desc: DockerでE2EのTypeScriptを検査（ブラウザ・DB不要）
+    cmds:
+      - >-
+        docker buildx build
+        --build-arg NODE_IMAGE={{.NODE_IMAGE}}
+        --target lint
+        --output type=cacheonly
+        .

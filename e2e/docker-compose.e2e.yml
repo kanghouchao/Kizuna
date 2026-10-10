@@ -239,7 +239,7 @@ services:
           fi
           sleep 2
         done
-        npm ci && npx bddgen && npx playwright test
+        npm ci && npm run test:e2e
     # backend / frontend が healthy になってから gateway が起動する連鎖に乗るための依存。
     depends_on:
       gateway:

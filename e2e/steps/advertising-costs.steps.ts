@@ -649,12 +649,13 @@ Then(
           })
         ).status(),
       ).toBe(403);
-    for (const params of [
+    const invalidQueries: Record<string, string | number | boolean>[] = [
       { month, page: -1 },
       { month, size: 0 },
       { month, sort: "amount" },
       { month: "2026-13" },
-    ])
+    ];
+    for (const params of invalidQueries)
       expect(
         (await request.get(mediaBase, { headers: h(), params })).status(),
       ).toBe(400);
