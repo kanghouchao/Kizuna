@@ -20,6 +20,11 @@ import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
@@ -38,6 +43,7 @@ public class ServiceSettingsService {
   private final ActorIdentityService actors;
   private final StoreRepository stores;
   private final StoreContext context;
+  private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
   @StoreScoped
@@ -73,7 +79,17 @@ public class ServiceSettingsService {
                 request.price(),
                 request.remuneration()));
     items.saveAndFlush(item);
-    revisions.save(ServiceRevision.record(item, null, actorId));
+    var revision = revisions.save(ServiceRevision.record(item, null, actorId));
+    audit.recordById(
+        actorId,
+        item.getStoreId(),
+        "SERVICE_CREATED",
+        "SERVICE",
+        item.getId(),
+        "SERVICE_REVISION",
+        revision.getId(),
+        Map.of(),
+        auditValues(item));
     return item.getId();
   }
 
@@ -84,6 +100,7 @@ public class ServiceSettingsService {
     var actorId = actors.requireUserId(actor);
     var item = lock(id);
     var before = item.getTerms();
+    var beforeValues = auditValues(item);
     var next =
         new ServiceTerms(
             before.getKind(),
@@ -93,8 +110,20 @@ public class ServiceSettingsService {
             request.price(),
             request.remuneration());
     if (item.replace(next, request.expectedVersion())) {
-      revisions.save(ServiceRevision.record(item, before, actorId));
+      var revision = revisions.save(ServiceRevision.record(item, before, actorId));
       items.flush();
+      var after = new HashMap<>(auditValues(item));
+      after.put("redacted_fields_changed", changedFields(before, next));
+      audit.recordById(
+          actorId,
+          item.getStoreId(),
+          "SERVICE_UPDATED",
+          "SERVICE",
+          item.getId(),
+          "SERVICE_REVISION",
+          revision.getId(),
+          beforeValues,
+          after);
     }
     return mapper.response(item);
   }
@@ -107,8 +136,20 @@ public class ServiceSettingsService {
     var actorId = actors.requireUserId(actor);
     var item = lock(id);
     var before = item.getTerms();
+    var beforeValues = auditValues(item);
     item.delete(expectedVersion);
-    revisions.save(ServiceRevision.record(item, before, actorId));
+    var revision = revisions.save(ServiceRevision.record(item, before, actorId));
+    items.flush();
+    audit.recordById(
+        actorId,
+        item.getStoreId(),
+        "SERVICE_DELETED",
+        "SERVICE",
+        item.getId(),
+        "SERVICE_REVISION",
+        revision.getId(),
+        beforeValues,
+        auditValues(item));
   }
 
   @Transactional(readOnly = true)
@@ -127,6 +168,32 @@ public class ServiceSettingsService {
             size,
             revision -> PageCursor.encodeKey(Long.toString(revision.getRevisionNumber())))
         .map(mapper::revision);
+  }
+
+  private static String changedFields(ServiceTerms before, ServiceTerms after) {
+    var names = new ArrayList<String>();
+    if (!Objects.equals(before.getName(), after.getName())) names.add("name");
+    if (!Objects.equals(before.getDurationMinutes(), after.getDurationMinutes()))
+      names.add("duration_minutes");
+    if (before.getChargeType() != after.getChargeType()) names.add("charge_type");
+    if (!Objects.equals(before.getPrice(), after.getPrice())) names.add("price");
+    if (!Objects.equals(before.getRemuneration(), after.getRemuneration()))
+      names.add("remuneration");
+    return String.join(",", names);
+  }
+
+  private static Map<String, String> auditValues(ServiceItem item) {
+    return Map.of(
+        "exists",
+        "true",
+        "deleted",
+        String.valueOf(item.isDeleted()),
+        "version",
+        String.valueOf(item.getVersion()),
+        "revision_number",
+        String.valueOf(item.getRevisionNumber()),
+        "terms_version",
+        String.valueOf(item.getTermsVersion()));
   }
 
   private static long decodeVersion(String cursor) {

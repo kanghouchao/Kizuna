@@ -246,9 +246,17 @@ export type CastFieldDefinition = {
   display_order: number;
 };
 
-export async function listCastFieldDefinitions(request: APIRequestContext, token: string): Promise<CastFieldDefinition[]> {
+export async function listCastFieldDefinitions(
+  request: APIRequestContext,
+  token: string,
+  storeId: string = STORE1_ID,
+): Promise<CastFieldDefinition[]> {
   const response = await request.get("/api/store/casts/fields", {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
   });
   expect(response.status(), await response.text()).toBe(200);
   return response.json();
@@ -745,9 +753,14 @@ export async function createSpecialService(
   request: APIRequestContext,
   token: string,
   name: string,
+  storeId: string = STORE1_ID,
 ): Promise<string> {
   const response = await request.post("/api/store/services", {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
     data: {
       kind: "SPECIAL_SERVICE",
       name,
@@ -1398,4 +1411,148 @@ export async function createRemunerationGuarantee(
     data: { ...data, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(201);
+}
+
+export type ServiceSettingChange = {
+  name: string;
+  duration_minutes?: number;
+  charge_type?: "FREE" | "PAID";
+  price: number;
+  remuneration: number;
+  expected_version: number;
+};
+
+export async function getServiceSetting(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  storeId: string = STORE1_ID,
+): Promise<{ id: string; version: number; deleted: boolean }> {
+  const response = await request.get(`/api/store/services/${id}`, {
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+export async function updateServiceSetting(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  data: ServiceSettingChange,
+  storeId: string = STORE1_ID,
+): Promise<{ id: string; version: number }> {
+  const response = await request.put(`/api/store/services/${id}`, {
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
+    data,
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+export async function deleteServiceSetting(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  expectedVersion: number,
+  storeId: string = STORE1_ID,
+): Promise<void> {
+  const response = await request.delete(`/api/store/services/${id}`, {
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
+    params: { expected_version: expectedVersion },
+  });
+  expect(response.status()).toBe(204);
+}
+
+export async function decideOwnServiceCondition(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  termsVersion: number,
+  consentVersion: number,
+  decision: "ACCEPTED" | "REJECTED",
+  storeId = STORE1_ID,
+): Promise<{
+  consent_version: number;
+  terms_version: number;
+  consent_status: string;
+}> {
+  const response = await request.put(
+    `/api/platform/me/service-conditions/${id}/consent`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { store_id: storeId },
+      data: {
+        terms_version: termsVersion,
+        consent_version: consentVersion,
+        decision,
+      },
+    },
+  );
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+export async function getPlatformMe(
+  request: APIRequestContext,
+  token: string,
+): Promise<{ email: string; user_type: string }> {
+  const response = await request.get("/api/platform/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+export async function listServiceRevisions(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  storeId: string = STORE1_ID,
+): Promise<{ content: { id: string; version: number }[] }> {
+  const response = await request.get(`/api/store/services/${id}/revisions`, {
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+export async function findPlatformCastUserId(
+  request: APIRequestContext,
+  token: string,
+  displayName: string,
+): Promise<number> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const found = await request.get("/api/platform/casts", {
+    headers,
+    params: { search: displayName },
+  });
+  expect(found.status()).toBe(200);
+  const rows = (await found.json()).content as {
+    id: number;
+    display_name: string;
+  }[];
+  const matching = rows.filter((row) => row.display_name === displayName);
+  expect(matching).toHaveLength(1);
+  const detail = await request.get(`/api/platform/casts/${matching[0].id}`, {
+    headers,
+  });
+  expect(detail.status()).toBe(200);
+  return (await detail.json()).platform_user_id;
 }
