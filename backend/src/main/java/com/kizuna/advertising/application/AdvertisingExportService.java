@@ -1,6 +1,7 @@
 package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.infrastructure.AdvertisingMediaRenderer;
+import com.kizuna.advertising.infrastructure.AdvertisingOrderCostRenderer;
 import com.kizuna.advertising.infrastructure.AdvertisingRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
@@ -20,17 +21,30 @@ public class AdvertisingExportService {
   private final AppProperties properties;
   private final AdvertisingMediaService media;
   private final AdvertisingMediaRenderer mediaRenderer;
+  private final AdvertisingOrderCostService orderCosts;
+  private final AdvertisingOrderCostRenderer orderCostRenderer;
+
+  private enum Kind {
+    COSTS,
+    MEDIA,
+    ORDER_COSTS
+  }
+
   private final Semaphore slot = new Semaphore(1);
 
   public byte[] export(String month, String format) {
-    return generate(month, format, false);
+    return generate(month, format, Kind.COSTS);
   }
 
   public byte[] exportMedia(String month, String format) {
-    return generate(month, format, true);
+    return generate(month, format, Kind.MEDIA);
   }
 
-  private byte[] generate(String month, String format, boolean mediaSummary) {
+  public byte[] exportOrderCost(String month, String format) {
+    return generate(month, format, Kind.ORDER_COSTS);
+  }
+
+  private byte[] generate(String month, String format, Kind kind) {
     AdvertisingInput.month(month);
     if (!"csv".equals(format) && !"xlsx".equals(format))
       throw new ServiceException("出力形式はcsvまたはxlsxで指定してください");
@@ -40,7 +54,9 @@ public class AdvertisingExportService {
           () -> {
             var budget = new DocumentBudget(properties.getAdvertisingCost());
             try {
-              if (mediaSummary)
+              if (kind == Kind.ORDER_COSTS)
+                return orderCostRenderer.render(orderCosts.snapshot(month, budget), format, budget);
+              if (kind == Kind.MEDIA)
                 return mediaRenderer.render(media.snapshot(month, budget), format, budget);
               var snapshot = service.snapshot(month);
               budget.check();

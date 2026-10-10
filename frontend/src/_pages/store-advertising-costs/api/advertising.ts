@@ -40,6 +40,37 @@ export interface MediaReport {
   category_totals: { category: Category; entry_count: number; recorded_amount: number }[];
   rows: Page<MediaSummary>;
 }
+export type ExportKind = 'costs' | 'media' | 'orders';
+export const advertisingExports = {
+  costs: { resource: 'advertising-costs', label: '広告費出力' },
+  media: { resource: 'advertising-media-summaries', label: '媒体別集計出力' },
+  orders: { resource: 'advertising-order-costs', label: '受注あたり記録広告費出力' },
+} satisfies Record<ExportKind, { resource: string; label: string }>;
+export interface OrderCostSummary {
+  media_name: string;
+  cost_entry_count: number;
+  recorded_sales_amount: number | null;
+  valid_completed_order_count: number;
+  zero_amount_order_count: number;
+  cost_per_order: string | null;
+  calculation_status: 'CALCULATED' | 'NO_COST_RECORDS' | 'NO_VALID_ORDERS';
+}
+export interface OrderCostReport {
+  store_id: number;
+  month: string;
+  month_version: number;
+  generated_at: string;
+  basis: 'recorded-sales-cost-per-valid-order-v1';
+  media_matching: 'EXACT_STORED_NAME';
+  order_basis: 'VALID_COMPLETED_ORIGINAL_BUSINESS_DATE_INCLUDING_ZERO';
+  rounding: 'HALF_UP_2_DECIMAL_YEN';
+  cost_entry_count: number;
+  recorded_sales_amount: number | null;
+  valid_completed_order_count: number;
+  zero_amount_order_count: number;
+  unnamed_media_order_count: number;
+  rows: Page<OrderCostSummary>;
+}
 export interface Month {
   store_id: number;
   month: string;
@@ -90,6 +121,12 @@ export interface Operation {
 const base = '/store/advertising-costs';
 const months = '/store/advertising-cost-months';
 export const advertisingApi = {
+  orderCosts: async (month: string, page = 0) =>
+    (
+      await apiClient.get<OrderCostReport>('/store/advertising-order-costs', {
+        params: { month, page, size: 20 },
+      })
+    ).data,
   media: async (month: string, page = 0) =>
     (
       await apiClient.get<MediaReport>('/store/advertising-media-summaries', {
@@ -142,10 +179,15 @@ export const advertisingApi = {
       ],
     });
   },
-  async download(month: string, format: 'csv' | 'xlsx', signal: AbortSignal, media = false) {
+  async download(
+    month: string,
+    format: 'csv' | 'xlsx',
+    signal: AbortSignal,
+    kind: ExportKind = 'costs'
+  ) {
     try {
       const response = await apiClient.get<Blob>(
-        (media ? '/store/advertising-media-summaries' : base) + '/exports',
+        '/store/' + advertisingExports[kind].resource + '/exports',
         {
           params: { month, format },
           responseType: 'blob',

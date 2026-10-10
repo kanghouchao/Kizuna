@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { advertisingApi } from '../api/advertising';
+import { advertisingApi, advertisingExports, type ExportKind } from '../api/advertising';
 import { Button, RegionError } from '@/shared/ui';
 export function CostExport({
   store,
   month,
-  media = false,
+  kind = 'costs',
 }: {
   store: string;
   month: string;
-  media?: boolean;
+  kind?: ExportKind;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
@@ -23,12 +23,12 @@ export function CostExport({
     setBusy(true);
     setError(null);
     try {
-      const blob = await advertisingApi.download(month, format, controller.signal, media);
+      const blob = await advertisingApi.download(month, format, controller.signal, kind);
       if (controller.signal.aborted) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${media ? 'advertising-media-summaries' : 'advertising-costs'}-${store}-${month}.${format}`;
+      a.download = `${advertisingExports[kind].resource}-${store}-${month}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -42,7 +42,7 @@ export function CostExport({
     }
   }
   return (
-    <section aria-label={media ? '媒体別集計出力' : '広告費出力'} className="space-y-3">
+    <section aria-label={advertisingExports[kind].label} className="space-y-3">
       <div className="flex gap-3">
         <Button variant="outline" disabled={busy} onClick={() => void run('csv')}>
           CSV 全件出力

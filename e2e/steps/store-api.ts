@@ -609,9 +609,10 @@ export async function cancelOrder(
   token: string,
   id: string,
   reason: string,
+  storeId: string = STORE1_ID,
 ): Promise<void> {
   const res = await request.post(`/api/store/orders/${id}/cancellation`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
     data: { reason },
   });
   if (!res.ok()) {
@@ -864,9 +865,10 @@ export async function invalidateOrder(
   token: string,
   id: string,
   reason: string,
+  storeId: string = STORE1_ID,
 ): Promise<void> {
-  const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
-  const order = await getOrder(request, token, STORE1_ID, id);
+  const headers = { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` };
+  const order = await getOrder(request, token, storeId, id);
   const result = await request.post(
     `/api/store/orders/${id}/completion-invalidation`,
     { headers, data: { expected_version: order.version, reason } },
@@ -937,8 +939,8 @@ export async function createPlatformStaffFixture(request: APIRequestContext, tok
   return (await response.json()).id;
 }
 
-export async function createStoreStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds: number[]): Promise<number> {
-  const response = await request.post('/api/store/staff-members', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
+export async function createStoreStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds: number[], storeId: string = STORE1_ID): Promise<number> {
+  const response = await request.post('/api/store/staff-members', { headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }

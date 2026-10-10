@@ -100,7 +100,7 @@ it('出力の連打を一要求にまとめ、切月後の古いファイルを�
   fireEvent.click(button);
   expect(advertisingApi.download).toHaveBeenCalledTimes(1);
   const [month, format, signal, media] = jest.mocked(advertisingApi.download).mock.calls[0];
-  expect([month, format, media]).toEqual(['2026-09', 'csv', true]);
+  expect([month, format, media]).toEqual(['2026-09', 'csv', 'media']);
   view.rerender(<MediaSummaryPage key="10" store="1" month="2026-10" canExport />);
   expect(signal.aborted).toBe(true);
   await act(async () => finish(new Blob(['old'], { type: 'text/csv' })));

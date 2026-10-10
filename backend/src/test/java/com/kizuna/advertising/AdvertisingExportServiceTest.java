@@ -10,8 +10,10 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingMediaService;
+import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.infrastructure.AdvertisingMediaRenderer;
+import com.kizuna.advertising.infrastructure.AdvertisingOrderCostRenderer;
 import com.kizuna.advertising.infrastructure.AdvertisingRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
@@ -30,8 +32,17 @@ class AdvertisingExportServiceTest {
     var renderer = mock(AdvertisingRenderer.class);
     var media = mock(AdvertisingMediaService.class);
     var mediaRenderer = mock(AdvertisingMediaRenderer.class);
+    var orderCosts = mock(AdvertisingOrderCostService.class);
+    var orderRenderer = mock(AdvertisingOrderCostRenderer.class);
     var service =
-        new AdvertisingExportService(records, renderer, new AppProperties(), media, mediaRenderer);
+        new AdvertisingExportService(
+            records,
+            renderer,
+            new AppProperties(),
+            media,
+            mediaRenderer,
+            orderCosts,
+            orderRenderer);
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     when(records.snapshot("2026-09"))
@@ -47,6 +58,8 @@ class AdvertisingExportServiceTest {
       assertThatThrownBy(() -> service.export("2026-09", "csv"))
           .isInstanceOf(ServiceUnavailableException.class);
       assertThatThrownBy(() -> service.exportMedia("2026-09", "csv"))
+          .isInstanceOf(ServiceUnavailableException.class);
+      assertThatThrownBy(() -> service.exportOrderCost("2026-09", "csv"))
           .isInstanceOf(ServiceUnavailableException.class);
       release.countDown();
       assertThatThrownBy(() -> first.get(5, TimeUnit.SECONDS))
@@ -65,6 +78,11 @@ class AdvertisingExportServiceTest {
     assertThat(service.exportMedia("2026-09", "csv")).containsExactly((byte) 2);
     assertThatThrownBy(() -> service.exportMedia("2026-09", null))
         .isInstanceOf(ServiceException.class);
+    when(orderRenderer.render(eq(null), eq("xlsx"), any())).thenThrow(new IOException("生成失敗"));
+    assertThatThrownBy(() -> service.exportOrderCost("2026-09", "xlsx"))
+        .isInstanceOf(UncheckedIOException.class);
+    when(orderRenderer.render(eq(null), eq("xlsx"), any())).thenReturn(new byte[] {3});
+    assertThat(service.exportOrderCost("2026-09", "xlsx")).containsExactly((byte) 3);
     assertThatThrownBy(() -> service.export("2026-09", "pdf")).isInstanceOf(ServiceException.class);
   }
 }

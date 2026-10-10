@@ -17,11 +17,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.api.store.AdvertisingCostController;
 import com.kizuna.advertising.api.store.AdvertisingMediaController;
+import com.kizuna.advertising.api.store.AdvertisingOrderCostController;
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingMediaService;
+import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
+import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -46,7 +49,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
-@WebMvcTest({AdvertisingCostController.class, AdvertisingMediaController.class})
+@WebMvcTest({
+  AdvertisingCostController.class,
+  AdvertisingMediaController.class,
+  AdvertisingOrderCostController.class
+})
 @Import({AdvertisingControllerTest.MethodSecurity.class, StoreContext.class})
 class AdvertisingControllerTest {
   @TestConfiguration
@@ -56,6 +63,7 @@ class AdvertisingControllerTest {
   @Autowired MockMvc mvc;
   @MockitoBean AdvertisingService service;
   @MockitoBean AdvertisingMediaService media;
+  @MockitoBean AdvertisingOrderCostService orderCosts;
   @MockitoBean AdvertisingExportService exports;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
@@ -283,5 +291,111 @@ class AdvertisingControllerTest {
                 .content(
                     "{\"version\":0,\"reason\":\"誤入力\",\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}"))
         .andExpect(status().isNoContent());
+  }
+
+  private RequestPostProcessor orderPermissions(String... codes) {
+    return actor()
+        .authorities(
+            Arrays.stream(codes).map(c -> new SimpleGrantedAuthority("PERM_" + c)).toList());
+  }
+
+  @Test
+  void orderCostsKeepMissingAmountsAndRatiosAndRejectInvalidPaging() throws Exception {
+    var report =
+        AdvertisingOrderCostReport.aggregate(
+            List.of(), List.of(new AdvertisingOrderCostReport.Order("注文だけ", true)));
+    when(orderCosts.view("2026-09"))
+        .thenReturn(
+            new AdvertisingOrderCostService.Snapshot(
+                1, "2026-09", 0, OffsetDateTime.now(), report));
+    var result =
+        mvc.perform(
+                get("/store/advertising-order-costs")
+                    .param("month", "2026-09")
+                    .header("X-Role", "store")
+                    .header("X-Store-ID", "1")
+                    .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.rows.size").value(20))
+            .andExpect(jsonPath("$.rows.content[0].calculation_status").value("NO_COST_RECORDS"))
+            .andReturn();
+    assertThat(result.getResponse().getContentAsString())
+        .contains("\"recorded_sales_amount\":null", "\"cost_per_order\":null");
+    assertThat(result.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
+    mvc.perform(
+            get("/store/advertising-order-costs")
+                .param("month", "2026-09")
+                .param("page", "2147483647")
+                .param("size", "1000")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rows.content").isEmpty())
+        .andExpect(jsonPath("$.rows.size").value(100));
+    for (var invalid :
+        List.of(
+            "page=-1", "page=0.1", "size=0", "page=2147483648", "sort=amount", "month=2026-09")) {
+      var pair = invalid.split("=", -1);
+      mvc.perform(
+              get("/store/advertising-order-costs")
+                  .param("month", "2026-09")
+                  .param(pair[0], pair[1])
+                  .header("X-Role", "store")
+                  .header("X-Store-ID", "1")
+                  .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
+          .andExpect(status().isBadRequest());
+    }
+  }
+
+  @Test
+  void orderCountsAndExportsRequireBothSourcePermissions() throws Exception {
+    for (var codes :
+        List.of(
+            new String[] {"ADVERTISING_COST_VIEW"},
+            new String[] {"ORDER_MANAGE"},
+            new String[] {"ADVERTISING_COST_VIEW", "ADVERTISING_COST_EXPORT"})) {
+      for (var path :
+          List.of("/store/advertising-order-costs", "/store/advertising-order-costs/exports")) {
+        mvc.perform(
+                get(path)
+                    .param("month", "2026-09")
+                    .param("format", "csv")
+                    .header("X-Role", "store")
+                    .header("X-Store-ID", "1")
+                    .with(orderPermissions(codes)))
+            .andExpect(status().isForbidden());
+      }
+    }
+    mvc.perform(
+            get("/store/advertising-order-costs/exports")
+                .param("month", "2026-09")
+                .param("format", "csv")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
+        .andExpect(status().isForbidden());
+    when(exports.exportOrderCost("2026-09", "csv")).thenReturn(new byte[] {1});
+    mvc.perform(
+            get("/store/advertising-order-costs/exports")
+                .param("month", "2026-09")
+                .param("format", "csv")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .with(
+                    orderPermissions(
+                        "ADVERTISING_COST_VIEW", "ORDER_MANAGE", "ADVERTISING_COST_EXPORT")))
+        .andExpect(status().isOk());
+    mvc.perform(
+            get("/store/advertising-order-costs/exports")
+                .param("month", "2026-09")
+                .param("format", "csv")
+                .param("page", "0")
+                .header("X-Role", "store")
+                .header("X-Store-ID", "1")
+                .with(
+                    orderPermissions(
+                        "ADVERTISING_COST_VIEW", "ORDER_MANAGE", "ADVERTISING_COST_EXPORT")))
+        .andExpect(status().isBadRequest());
   }
 }
