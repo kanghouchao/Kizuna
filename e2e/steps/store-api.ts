@@ -246,9 +246,17 @@ export type CastFieldDefinition = {
   display_order: number;
 };
 
-export async function listCastFieldDefinitions(request: APIRequestContext, token: string): Promise<CastFieldDefinition[]> {
+export async function listCastFieldDefinitions(
+  request: APIRequestContext,
+  token: string,
+  storeId: string = STORE1_ID,
+): Promise<CastFieldDefinition[]> {
   const response = await request.get("/api/store/casts/fields", {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
   });
   expect(response.status(), await response.text()).toBe(200);
   return response.json();
@@ -745,9 +753,14 @@ export async function createSpecialService(
   request: APIRequestContext,
   token: string,
   name: string,
+  storeId: string = STORE1_ID,
 ): Promise<string> {
   const response = await request.post("/api/store/services", {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
     data: {
       kind: "SPECIAL_SERVICE",
       name,
@@ -1413,9 +1426,14 @@ export async function getServiceSetting(
   request: APIRequestContext,
   token: string,
   id: string,
+  storeId: string = STORE1_ID,
 ): Promise<{ id: string; version: number; deleted: boolean }> {
   const response = await request.get(`/api/store/services/${id}`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
   });
   expect(response.status()).toBe(200);
   return response.json();
@@ -1426,9 +1444,14 @@ export async function updateServiceSetting(
   token: string,
   id: string,
   data: ServiceSettingChange,
+  storeId: string = STORE1_ID,
 ): Promise<{ id: string; version: number }> {
   const response = await request.put(`/api/store/services/${id}`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
     data,
   });
   expect(response.status()).toBe(200);
@@ -1440,9 +1463,14 @@ export async function deleteServiceSetting(
   token: string,
   id: string,
   expectedVersion: number,
+  storeId: string = STORE1_ID,
 ): Promise<void> {
   const response = await request.delete(`/api/store/services/${id}`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
     params: { expected_version: expectedVersion },
   });
   expect(response.status()).toBe(204);
@@ -1492,9 +1520,14 @@ export async function listServiceRevisions(
   request: APIRequestContext,
   token: string,
   id: string,
+  storeId: string = STORE1_ID,
 ): Promise<{ content: { id: string; version: number }[] }> {
   const response = await request.get(`/api/store/services/${id}/revisions`, {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    headers: {
+      ...STORE_HEADERS,
+      "X-Store-ID": storeId,
+      Authorization: `Bearer ${token}`,
+    },
   });
   expect(response.status()).toBe(200);
   return response.json();

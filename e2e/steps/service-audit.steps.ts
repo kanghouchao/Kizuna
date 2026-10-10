@@ -3,7 +3,6 @@ import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import {
   ADMIN_PASSWORD,
-  STORE1_ID,
   STORE_HEADERS,
   activateEmergencyElevation,
   revokeEmergencyElevation,
@@ -27,6 +26,7 @@ import {
   listAuditEvents,
   getAuthorizedStores,
   loginAsStoreAdmin,
+  loginViaUiAndEnterStore,
   loginPlatformUser,
   type ServiceSettingChange,
 } from "./store-api";
@@ -40,7 +40,8 @@ let manager = "",
   castToken = "",
   secret = "",
   enrollment = "",
-  otherStore = "";
+  otherStore = "",
+  storeId = "";
 let ordinaryId = 0,
   auditorId = 0,
   castId = 0,
@@ -70,7 +71,7 @@ const consentKeys = [
   "enrollment_id",
   "service_revision_id",
 ];
-const headers = (token: string, store = STORE1_ID) => ({
+const headers = (token: string, store = storeId) => ({
   ...STORE_HEADERS,
   "X-Store-ID": store,
   Authorization: `Bearer ${token}`,
@@ -78,7 +79,7 @@ const headers = (token: string, store = STORE1_ID) => ({
 
 Given(
   "サービス監査専用の通常担当と本人と昇格セッションを用意する",
-  async ({ request, $testInfo }) => {
+  async ({ request, page, $testInfo }) => {
     $testInfo.setTimeout(120000);
     cases = [];
     active.clear();
@@ -88,10 +89,11 @@ Given(
       password = randomUUID();
     secret = `監査へ複写しない内容-${suffix}`;
     manager = await loginAsStoreAdmin(request);
+    storeId = await loginViaUiAndEnterStore(page);
     const stores = await getAuthorizedStores(request, manager);
-    otherStore = String(
-      stores.find((store) => String(store.id) !== STORE1_ID)!.id,
-    );
+    const foreignStore = stores.find((store) => String(store.id) !== storeId);
+    if (!foreignStore) throw new Error("検証対象と異なる店舗が必要です");
+    otherStore = String(foreignStore.id);
     const owner = await loginPlatformUser(
       request,
       "admin@kizuna.test",
@@ -111,6 +113,7 @@ Given(
       password,
       [role],
       stores.map((store) => store.id),
+      storeId,
     );
     ordinary = await loginPlatformUser(request, email, password);
     const limitedRole = await createPermissionRole(
@@ -126,15 +129,16 @@ Given(
       limitedEmail,
       password,
       [limitedRole],
-      [Number(STORE1_ID)],
+      [Number(storeId)],
+      storeId,
     );
     limited = await loginPlatformUser(request, limitedEmail, password);
     expect(
       (await getAuthorizedStores(request, limited)).map((store) =>
         String(store.id),
       ),
-    ).toContain(STORE1_ID);
-    await listCastFieldDefinitions(request, limited);
+    ).toContain(storeId);
+    await listCastFieldDefinitions(request, limited, storeId);
     const auditRole = await createPermissionRole(
       request,
       owner,
@@ -158,14 +162,19 @@ Given(
     const session = await activateEmergencyElevation(
       request,
       auditor,
-      STORE1_ID,
+      storeId,
       "サービス監査の検証",
       password,
     );
     elevated = session.token;
     elevationId = session.id;
-    enrollment = await createUnpublishedCast(request, manager, secret);
-    const invitation = await issueCastInvitation(request, manager, enrollment);
+    enrollment = await createUnpublishedCast(request, manager, secret, storeId);
+    const invitation = await issueCastInvitation(
+      request,
+      manager,
+      enrollment,
+      storeId,
+    );
     const castEmail = `service-cast-${suffix}@example.test`;
     await acceptCastInvitation(
       request,
@@ -197,7 +206,12 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     { token: ordinary, id: ordinaryId, elevated: false },
     { token: elevated, id: auditorId, elevated: true },
   ]) {
-    const id = await createSpecialService(request, actor.token, secret);
+    const id = await createSpecialService(
+      request,
+      actor.token,
+      secret,
+      storeId,
+    );
     active.add(id);
     cases.push({ id, actorId: actor.id, elevated: actor.elevated });
     const original: ServiceSettingChange = {
@@ -208,7 +222,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
       expected_version: 1,
     };
     const unchanged = await auditIds(request);
-    await updateServiceSetting(request, actor.token, id, original);
+    await updateServiceSetting(request, actor.token, id, original, storeId);
     expect(await auditIds(request)).toEqual(unchanged);
     expect(
       (
@@ -219,15 +233,25 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
           1,
           0,
           "ACCEPTED",
+          storeId,
         )
       ).consent_status,
     ).toBe("ACCEPTED");
     const renamed = { ...original, name: `${secret}-変更` };
     expect(
-      (await updateServiceSetting(request, actor.token, id, renamed)).version,
+      (await updateServiceSetting(request, actor.token, id, renamed, storeId))
+        .version,
     ).toBe(2);
     const same = await auditIds(request);
-    await decideOwnServiceCondition(request, castToken, id, 1, 1, "ACCEPTED");
+    await decideOwnServiceCondition(
+      request,
+      castToken,
+      id,
+      1,
+      1,
+      "ACCEPTED",
+      storeId,
+    );
     expect(await auditIds(request)).toEqual(same);
     const changed: ServiceSettingChange = {
       name: renamed.name,
@@ -237,7 +261,8 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
       expected_version: 2,
     };
     expect(
-      (await updateServiceSetting(request, actor.token, id, changed)).version,
+      (await updateServiceSetting(request, actor.token, id, changed, storeId))
+        .version,
     ).toBe(3);
     const beforeDenials = await auditIds(request);
     expect(
@@ -320,7 +345,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
       (
         await request.put(consentPath, {
           headers: { Authorization: `Bearer ${castToken}` },
-          params: { store_id: STORE1_ID },
+          params: { store_id: storeId },
           data: { ...consent, terms_version: 1 },
         })
       ).status(),
@@ -329,7 +354,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
       (
         await request.put(consentPath, {
           headers: { Authorization: `Bearer ${castToken}` },
-          params: { store_id: STORE1_ID },
+          params: { store_id: storeId },
           data: { ...consent, consent_version: 0 },
         })
       ).status(),
@@ -338,7 +363,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
       (
         await request.put(consentPath, {
           headers: { Authorization: `Bearer ${ordinary}` },
-          params: { store_id: STORE1_ID },
+          params: { store_id: storeId },
           data: consent,
         })
       ).status(),
@@ -362,6 +387,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
           2,
           1,
           "ACCEPTED",
+          storeId,
         )
       ).consent_version,
     ).toBe(2);
@@ -374,15 +400,26 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
           2,
           2,
           "REJECTED",
+          storeId,
         )
       ).consent_status,
     ).toBe("REJECTED");
     const rejected = await auditIds(request);
-    await decideOwnServiceCondition(request, castToken, id, 2, 3, "REJECTED");
+    await decideOwnServiceCondition(
+      request,
+      castToken,
+      id,
+      2,
+      3,
+      "REJECTED",
+      storeId,
+    );
     expect(await auditIds(request)).toEqual(rejected);
-    await deleteServiceSetting(request, actor.token, id, 3);
+    await deleteServiceSetting(request, actor.token, id, 3, storeId);
     active.delete(id);
-    expect(await getServiceSetting(request, actor.token, id)).toMatchObject({
+    expect(
+      await getServiceSetting(request, actor.token, id, storeId),
+    ).toMatchObject({
       deleted: true,
       version: 4,
     });
@@ -399,7 +436,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
       (
         await request.put(consentPath, {
           headers: { Authorization: `Bearer ${castToken}` },
-          params: { store_id: STORE1_ID },
+          params: { store_id: storeId },
           data: { ...consent, consent_version: 3 },
         })
       ).status(),
@@ -423,7 +460,7 @@ Then(
           expect(row).toMatchObject({
             actor_id: item.actorId,
             actor_type: "STAFF",
-            store_id: Number(STORE1_ID),
+            store_id: Number(storeId),
             target_type: "SERVICE",
             source_type: "SERVICE_REVISION",
             result: "SUCCEEDED",
@@ -460,6 +497,7 @@ Then(
             request,
             ordinary,
             item.id,
+            storeId,
           );
           expect(
             history.content.some((entry) => entry.id === row.source_id),
@@ -483,7 +521,7 @@ Then(
         expect(row).toMatchObject({
           actor_id: castId,
           actor_type: "CAST",
-          store_id: Number(STORE1_ID),
+          store_id: Number(storeId),
           target_type: "SERVICE_CONSENT",
           source_type: "SERVICE_CONSENT_EVENT",
           result: "SUCCEEDED",
@@ -520,12 +558,18 @@ Then(
 
 After({ tags: "@service-audit" }, async ({ request }) => {
   for (const id of active) {
-    const current = await getServiceSetting(request, manager, id);
+    const current = await getServiceSetting(request, manager, id, storeId);
     if (!current.deleted)
-      await deleteServiceSetting(request, manager, id, current.version);
+      await deleteServiceSetting(
+        request,
+        manager,
+        id,
+        current.version,
+        storeId,
+      );
   }
   active.clear();
-  if (enrollment) await withdrawCast(request, manager, enrollment);
+  if (enrollment) await withdrawCast(request, manager, enrollment, storeId);
   if (elevationId)
     await revokeEmergencyElevation(request, auditor, elevationId);
 });
