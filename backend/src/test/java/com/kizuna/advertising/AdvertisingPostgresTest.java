@@ -17,9 +17,14 @@ import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.DeleteRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.ReplaceRequest;
 import com.kizuna.advertising.application.AdvertisingMediaService;
+import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderCourses;
+import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.reporting.AdvertisingOrderReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
@@ -33,6 +38,8 @@ import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -64,9 +71,14 @@ import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -91,6 +103,7 @@ class AdvertisingPostgresTest {
 
   @AfterAll
   void close() {
+    SecurityContextHolder.clearContext();
     if (context != null) context.close();
   }
 
@@ -98,6 +111,11 @@ class AdvertisingPostgresTest {
   void setup() {
     jdbc.execute(
         "TRUNCATE t_advertising_changes,t_advertising_requests,t_advertising_costs,t_advertising_months");
+    jdbc.execute("TRUNCATE t_orders CASCADE");
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                "reader", "unused", List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE"))));
     stores.setStoreId(1L);
     reset(context.getBean(AdvertisingRecords.class));
     reset((BusinessAudit) AopTestUtils.getTargetObject(context.getBean(BusinessAudit.class)));
@@ -416,10 +434,132 @@ class AdvertisingPostgresTest {
     }
   }
 
+  String order(
+      long store, String month, String media, OrderStatus status, boolean invalid, int amount) {
+    stores.setStoreId(store);
+    return new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
+        .execute(
+            tx -> {
+              var order =
+                  Order.builder()
+                      .businessDate(LocalDate.parse(month + "-01"))
+                      .mediaName(media)
+                      .status(OrderStatus.CONFIRMED)
+                      .build();
+              order.setStoreId(store);
+              order.adoptCourse(OrderCourses.course("検証コース", 60, amount), List.of());
+              if (status == OrderStatus.COMPLETED) {
+                order.completeWith(0, 0);
+                if (invalid) order.invalidateCompletion();
+              } else if (status == OrderStatus.CANCELLED)
+                order.cancelWith("検証", 42L, OffsetDateTime.now());
+              else if (status == OrderStatus.IN_SERVICE)
+                order.start("検証", 42L, OffsetDateTime.now());
+              context.getBean(EntityManager.class).persist(order);
+              return order.getId();
+            });
+  }
+
+  @Test
+  void orderComparisonUsesOriginalMonthValidOrdersAndExcludesRecruitment() {
+    var cost = service.create(create("2026-09", 999, 100, UUID.randomUUID()), "actor");
+    service.create(
+        new CreateRequest(
+            "2026-09",
+            AdvertisingCategory.RECRUITMENT,
+            "媒体",
+            null,
+            null,
+            null,
+            10000,
+            UUID.randomUUID()),
+        "actor");
+    order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
+    var free = order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 0);
+    order(1, "2026-09", "媒体", OrderStatus.COMPLETED, true, 100);
+    order(1, "2026-09", "媒体", OrderStatus.CANCELLED, false, 100);
+    order(1, "2026-09", "媒体", OrderStatus.CONFIRMED, false, 100);
+    order(1, "2026-09", "媒体", OrderStatus.IN_SERVICE, false, 100);
+    order(1, "2026-10", "媒体", OrderStatus.COMPLETED, false, 100);
+    order(1, "2026-09", null, OrderStatus.COMPLETED, false, 0);
+    order(1, "2026-09", " 媒体 ", OrderStatus.COMPLETED, false, 100);
+    order(2, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
+    stores.setStoreId(1L);
+    var compare = context.getBean(AdvertisingOrderCostService.class);
+    var report = compare.view("2026-09").report();
+    assertThat(report.costEntryCount()).isEqualTo(1);
+    assertThat(report.recordedSalesAmount()).isEqualTo(100);
+    assertThat(report.validCompletedOrderCount()).isEqualTo(4);
+    assertThat(report.zeroAmountOrderCount()).isEqualTo(2);
+    assertThat(report.unnamedMediaOrderCount()).isEqualTo(1);
+    assertThat(report.rows().getLast().costPerOrder()).isEqualTo("50.00");
+    jdbc.update("update t_orders set completion_invalidated=true where id=?", free);
+    assertThat(compare.view("2026-09").report().rows().getLast().costPerOrder())
+        .isEqualTo("100.00");
+    service.delete(cost.id(), new DeleteRequest(cost.version(), "訂正", UUID.randomUUID()), "actor");
+    assertThat(compare.view("2026-09").report().recordedSalesAmount()).isNull();
+  }
+
+  @Test
+  void orderAndCostChangesShareOneSnapshotAndReadLimitFailsClosed() throws Exception {
+    service.create(create("2026-09", null, 100, UUID.randomUUID()), "actor");
+    order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
+    var changed = new AtomicInteger();
+    doAnswer(
+            invocation -> {
+              var rows = invocation.callRealMethod();
+              if (changed.getAndIncrement() == 0) {
+                try (var pool = Executors.newSingleThreadExecutor()) {
+                  pool.submit(
+                          () -> {
+                            try {
+                              stores.setStoreId(1L);
+                              service.create(
+                                  create("2026-09", null, 200, UUID.randomUUID()), "actor");
+                              order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 0);
+                            } finally {
+                              stores.clear();
+                            }
+                          })
+                      .get(5, TimeUnit.SECONDS);
+                }
+              }
+              return rows;
+            })
+        .when(context.getBean(AdvertisingRecords.class))
+        .all(eq("2026-09"), anyInt());
+    var compare = context.getBean(AdvertisingOrderCostService.class);
+    var first = compare.view("2026-09");
+    assertThat(first.monthVersion()).isEqualTo(1);
+    assertThat(first.report().rows().getFirst().costPerOrder()).isEqualTo("100.00");
+    assertThat(first.report().validCompletedOrderCount()).isEqualTo(1);
+    reset(context.getBean(AdvertisingRecords.class));
+    var second = compare.view("2026-09");
+    assertThat(second.monthVersion()).isEqualTo(2);
+    assertThat(second.report().rows().getFirst().costPerOrder()).isEqualTo("150.00");
+    context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(1);
+    assertThatThrownBy(() -> compare.view("2026-09"))
+        .isInstanceOf(ServiceUnavailableException.class);
+    jdbc.execute("delete from t_advertising_costs");
+    assertThatThrownBy(() -> compare.view("2026-09"))
+        .isInstanceOf(ServiceUnavailableException.class);
+    context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(20000);
+    assertThat(compare.view("2026-09").report().validCompletedOrderCount()).isEqualTo(2);
+    stores.clear();
+    assertThatThrownBy(() -> compare.view("2026-09")).isInstanceOf(RuntimeException.class);
+  }
+
   @Configuration
   @EnableTransactionManagement
   @EnableAspectJAutoProxy
-  @Import({AdvertisingService.class, StoreScopeStampListener.class, StoreFilterEnable.class})
+  @EnableMethodSecurity
+  @Import({
+    AdvertisingService.class,
+    AdvertisingOrderCostService.class,
+    AdvertisingOrderReader.class,
+    StoreScopeStampListener.class,
+    StoreFilterEnable.class
+  })
   static class Config {
     @Bean
     AdvertisingRecords records(EntityManager em) {
@@ -437,7 +577,7 @@ class AdvertisingPostgresTest {
         DataSource source, ConfigurableListableBeanFactory beans) {
       var f = new LocalContainerEntityManagerFactoryBean();
       f.setDataSource(source);
-      f.setPackagesToScan("com.kizuna.advertising.domain");
+      f.setPackagesToScan("com.kizuna.advertising.domain", "com.kizuna.order.domain");
       f.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
       f.setJpaPropertyMap(
           Map.of(

@@ -117,7 +117,7 @@ export function MediaSummaryPage({
           </p>
         </section>
       )}
-      {canExport && <CostExport store={store} month={month} media />}
+      {canExport && <CostExport store={store} month={month} kind="media" />}
     </div>
   );
 }

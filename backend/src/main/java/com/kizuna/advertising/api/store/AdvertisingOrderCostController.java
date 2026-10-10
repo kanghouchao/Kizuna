@@ -1,8 +1,8 @@
 package com.kizuna.advertising.api.store;
 
-import com.kizuna.advertising.api.dto.AdvertisingMediaSummaryResponse;
+import com.kizuna.advertising.api.dto.AdvertisingOrderCostResponse;
 import com.kizuna.advertising.application.AdvertisingExportService;
-import com.kizuna.advertising.application.AdvertisingMediaService;
+import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.shared.storescope.StoreContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -17,31 +17,31 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/store/advertising-media-summaries")
+@RequestMapping("/store/advertising-order-costs")
 @RequiredArgsConstructor
-public class AdvertisingMediaController {
-  private final AdvertisingMediaService service;
+public class AdvertisingOrderCostController {
+  private final AdvertisingOrderCostService service;
   private final AdvertisingExportService exports;
   private final StoreContext stores;
 
   @GetMapping
-  @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
-  public ResponseEntity<AdvertisingMediaSummaryResponse> list(
+  @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ORDER_MANAGE')")
+  public ResponseEntity<AdvertisingOrderCostResponse> list(
       @RequestParam MultiValueMap<String, String> params) {
     var query = AdvertisingSummaryQuery.parse(params, false);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(AdvertisingMediaSummaryResponse.of(service.view(query.month()), query.page()));
+        .body(AdvertisingOrderCostResponse.of(service.view(query.month()), query.page()));
   }
 
   @GetMapping("/exports")
   @PreAuthorize(
-      "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_EXPORT')")
+      "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ADVERTISING_COST_EXPORT')")
   public ResponseEntity<byte[]> export(@RequestParam MultiValueMap<String, String> params) {
     var query = AdvertisingSummaryQuery.parse(params, true);
     String month = query.month();
     String format = query.format();
-    var bytes = exports.exportMedia(month, format);
+    var bytes = exports.exportOrderCost(month, format);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
         .contentType(
@@ -51,7 +51,7 @@ public class AdvertisingMediaController {
                     : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
-            "attachment; filename=\"advertising-media-summaries-"
+            "attachment; filename=\"advertising-order-costs-"
                 + stores.getStoreId()
                 + "-"
                 + month

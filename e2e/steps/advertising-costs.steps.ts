@@ -13,6 +13,13 @@ import {
   getAuthorizedStores,
   createPermissionRole,
   createStoreStaffFixture,
+  createCast,
+  createCourse,
+  completeAgreedOrder,
+  getOrder,
+  invalidateOrder,
+  cancelOrder,
+  submitConfirmedStoreRequest,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const base = "/api/store/advertising-costs",
@@ -23,6 +30,8 @@ let token = "",
   foreign = "",
   email = "",
   readerEmail = "",
+  orderReader = "",
+  orderReaderEmail = "",
   password = "",
   month = "",
   current: any,
@@ -88,16 +97,20 @@ Given("広告費検証用の権限と店舗がある", async ({ request, $testIn
   );
   const suffix = randomUUID();
   password = randomUUID();
-  month = `${($testInfo.title.includes("媒体別") ? 1970 : $testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
+  month = `${($testInfo.title.includes("受注あたり") ? 1980 : $testInfo.title.includes("媒体別") ? 1970 : $testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
   const tokens: string[] = [];
   for (const [index, perms] of [
     [
       "ADVERTISING_COST_VIEW",
       "ADVERTISING_COST_MANAGE",
       "ADVERTISING_COST_EXPORT",
+      ...($testInfo.title.includes("受注あたり") ? ["ORDER_MANAGE"] : []),
     ],
     ["ADVERTISING_COST_VIEW"],
     ["ADVERTISING_COST_EXPORT"],
+    ...($testInfo.title.includes("受注あたり")
+      ? [["ADVERTISING_COST_VIEW", "ORDER_MANAGE"]]
+      : []),
   ].entries()) {
     const role = await createPermissionRole(
       request,
@@ -108,17 +121,20 @@ Given("広告費検証用の権限と店舗がある", async ({ request, $testIn
     const address = `advertising-${index}-${suffix}@example.test`;
     if (index === 0) email = address;
     if (index === 1) readerEmail = address;
+    if (index === 3) orderReaderEmail = address;
     await createStoreStaffFixture(
       request,
       manager,
       address,
       password,
       [role],
-      index === 1 ? [Number(STORE1_ID)] : [Number(STORE1_ID), Number(foreign)],
+      index === 1 || index === 3
+        ? [Number(STORE1_ID)]
+        : [Number(STORE1_ID), Number(foreign)],
     );
     tokens.push(await loginPlatformUser(request, address, password));
   }
-  [token, reader, exporter] = tokens;
+  [token, reader, exporter, orderReader] = tokens;
 });
 When("広告費を登録変更コピー削除する", async ({ request }) => {
   const key = randomUUID();
@@ -854,5 +870,437 @@ Then(
     await expect(
       page.getByRole("button", { name: "CSV 全件出力" }),
     ).toHaveCount(0);
+  },
+);
+
+const orderCostBase = "/api/store/advertising-order-costs";
+let orderCostWriter = "",
+  orderCostInvalidation = "",
+  orderCostSeed = "";
+When("営業広告と零円を含む有効受注の記録を用意する", async ({ request }) => {
+  orderCostWriter = await loginAsStoreAdmin(request);
+  const cast = await createCast(request, orderCostWriter, "広告費比較検証");
+  const course = await createCourse(
+    request,
+    orderCostWriter,
+    "広告費比較コース",
+  );
+  async function order(
+    media: string | null,
+    zero = false,
+    state = "COMPLETED",
+    date = month + "-01",
+  ) {
+    const response = await submitConfirmedStoreRequest(
+      request,
+      orderCostWriter,
+      "/api/store/orders/preview",
+      "/api/store/orders",
+      {
+        cast_id: cast,
+        course_id: course,
+        fee_lines: zero
+          ? [{ kind: "DISCOUNT", name: "全額割引", amount: 12000 }]
+          : [],
+        customer_selection: { mode: "NONE" },
+        contact_snapshot: { name: "出力禁止の顧客資料" },
+        business_date: date,
+        media_name: media,
+      },
+    );
+    const id = (await response.json()).id;
+    if (state === "COMPLETED" || state === "INVALID") {
+      if (zero) {
+        const current = await getOrder(request, orderCostWriter, STORE1_ID, id);
+        await submitConfirmedStoreRequest(
+          request,
+          orderCostWriter,
+          `/api/store/orders/${id}/completion-preview`,
+          `/api/store/orders/${id}/completion`,
+          {
+            expected_version: current.version,
+            fee_lines: [{ kind: "DISCOUNT", name: "全額割引", amount: 12000 }],
+          },
+        );
+      } else await completeAgreedOrder(request, orderCostWriter, id);
+    }
+    if (state === "INVALID")
+      await invalidateOrder(request, orderCostWriter, id, "未提供の検証");
+    if (state === "CANCELLED")
+      await cancelOrder(request, orderCostWriter, id, "取消の検証");
+    return id;
+  }
+  original = await add(request, {
+    media_name: "ABC",
+    amount: 100,
+    inquiry_count: 999,
+  });
+  orderCostSeed = original.id;
+  await add(request, {
+    category: "RECRUITMENT",
+    media_name: "ABC",
+    amount: 10000,
+  });
+  await add(request, { media_name: "零", amount: 0 });
+  await add(request, { media_name: "費用のみ", amount: 500 });
+  await add(request, { media_name: "ＡＢＣ", amount: 200 });
+  await add(request, { media_name: "abc", amount: 300 });
+  await add(request, { media_name: "長い媒体名".repeat(35), amount: 0 });
+  await order("ABC");
+  orderCostInvalidation = await order("ABC", true);
+  await order("ABC");
+  await order("ABC", false, "INVALID");
+  await order("ABC", false, "CANCELLED");
+  await order("ABC", false, "CONFIRMED");
+  await order("ABC", false, "COMPLETED", month.replace("-09", "-10") + "-01");
+  await order("零", true);
+  await order("ＡＢＣ");
+  await order("abc");
+  await order(" ABC ");
+  await order("注文のみ");
+  await order(null, true);
+  await order(" \t");
+});
+Then(
+  "受注あたり記録費用の意味と全件出力と切替が守られる",
+  async ({ request, page, $testInfo }) => {
+    const read = (t = token, store = STORE1_ID) =>
+      request.get(orderCostBase, {
+        headers: h(t, store),
+        params: { month, size: 100 },
+      });
+    let response = await read();
+    expect(response.status(), await response.text()).toBe(200);
+    let report = await response.json();
+    expect(report).toMatchObject({
+      recorded_sales_amount: 1100,
+      cost_entry_count: 6,
+      valid_completed_order_count: 10,
+      zero_amount_order_count: 3,
+      unnamed_media_order_count: 2,
+    });
+    const row = (name: string) =>
+      report.rows.content.find((r: any) => r.media_name === name);
+    expect(row("ABC")).toMatchObject({
+      cost_per_order: "33.33",
+      valid_completed_order_count: 3,
+      zero_amount_order_count: 1,
+    });
+    expect(row("零")).toMatchObject({
+      cost_per_order: "0.00",
+      recorded_sales_amount: 0,
+    });
+    expect(row("費用のみ")).toMatchObject({
+      cost_per_order: null,
+      calculation_status: "NO_VALID_ORDERS",
+    });
+    expect(row("注文のみ")).toMatchObject({
+      recorded_sales_amount: null,
+      cost_per_order: null,
+      calculation_status: "NO_COST_RECORDS",
+    });
+    expect(row(" ABC ").calculation_status).toBe("NO_COST_RECORDS");
+    expect(row("ＡＢＣ").cost_per_order).toBe("200.00");
+    expect(row("abc").cost_per_order).toBe("300.00");
+    for (const t of [reader, exporter, orderCostWriter])
+      expect((await read(t)).status()).toBe(403);
+    expect((await read(orderReader)).status()).toBe(200);
+    expect((await read(orderReader, foreign)).status()).toBe(403);
+    expect(
+      (await (await read(token, foreign)).json()).recorded_sales_amount,
+    ).toBeNull();
+    expect(
+      (
+        await request.get(orderCostBase, {
+          headers: h("invalid-token"),
+          params: { month },
+        })
+      ).status(),
+    ).toBe(401);
+    expect(
+      (
+        await request.get(orderCostBase, {
+          headers: { Authorization: `Bearer ${token}`, "X-Role": "platform" },
+          params: { month },
+        })
+      ).status(),
+    ).toBe(403);
+    expect(
+      (
+        await request.get(orderCostBase + "/exports", {
+          headers: h(orderReader),
+          params: { month, format: "csv" },
+        })
+      ).status(),
+    ).toBe(403);
+    await invalidateOrder(
+      request,
+      orderCostWriter,
+      orderCostInvalidation,
+      "原月への無効化反映",
+    );
+    report = await (await read()).json();
+    expect(row("ABC").cost_per_order).toBe("50.00");
+    const updated = await request.put(`${base}/${original.id}`, {
+      headers: h(),
+      data: {
+        ...values,
+        media_name: "ABC",
+        amount: 200,
+        version: original.version,
+        reason: "原月の費用訂正",
+        request_id: randomUUID(),
+      },
+    });
+    expect(updated.status()).toBe(200);
+    original = await updated.json();
+    report = await (await read()).json();
+    expect(row("ABC").cost_per_order).toBe("100.00");
+
+    await login(page);
+    await page
+      .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("row", { name: /^ABC .*約 100\.00円/ }),
+    ).toContainText("約 100.00円");
+    await expect(page.getByRole("row", { name: /^零 / })).toContainText(
+      "約 0.00円",
+    );
+    await expect(page.getByText(/新客単価は未提供/)).toBeVisible();
+    await expect(
+      page.getByText("前後に空白あり", { exact: true }),
+    ).toBeVisible();
+    for (const theme of ["ライト", "ダーク"]) {
+      await page
+        .getByRole("button", { name: "表示モード", exact: true })
+        .click();
+      await page
+        .getByRole("menuitemradio", { name: theme, exact: true })
+        .click();
+      await page.screenshot({
+        path: $testInfo.outputPath(
+          `advertising-order-cost-${theme === "ライト" ? "light" : "dark"}.png`,
+        ),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    await page.setViewportSize({ width: 760, height: 900 });
+    await page
+      .getByRole("cell", { name: "長い媒体名".repeat(35), exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: $testInfo.outputPath("advertising-order-cost-narrow.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
+
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "CSV 全件出力" }).click();
+    expect((await download).suggestedFilename()).toBe(
+      `advertising-order-costs-${STORE1_ID}-${month}.csv`,
+    );
+    let release!: () => void, entered!: () => void, finished!: () => void;
+    let requests = 0,
+      lateDownloads = 0;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const arrived = new Promise<void>((r) => {
+      entered = r;
+    });
+    const done = new Promise<void>((r) => {
+      finished = r;
+    });
+    page.on("download", () => {
+      lateDownloads++;
+    });
+    await page.route(
+      "**/api/store/advertising-order-costs/exports?**",
+      async (route) => {
+        requests++;
+        const result = await route.fetch();
+        entered();
+        await gate;
+        await route.fulfill({ response: result }).catch(() => {});
+        finished();
+      },
+    );
+    await page.getByRole("button", { name: "CSV 全件出力" }).dblclick();
+    await arrived;
+    await page.getByRole("tab", { name: "費用記録", exact: true }).click();
+    await page
+      .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
+      .click();
+    await expect(
+      page.getByRole("row", { name: /^ABC .*約 100\.00円/ }),
+    ).toBeVisible();
+    release();
+    await done;
+    expect(requests).toBe(1);
+    expect(lateDownloads).toBe(0);
+    await page.unroute("**/api/store/advertising-order-costs/exports?**");
+
+    let releaseRead!: () => void, enterRead!: () => void;
+    const readGate = new Promise<void>((r) => {
+      releaseRead = r;
+    });
+    const readArrived = new Promise<void>((r) => {
+      enterRead = r;
+    });
+    await page.route(
+      "**/api/store/advertising-order-costs?**",
+      async (route) => {
+        const result = await route.fetch();
+        enterRead();
+        await readGate;
+        await route.fulfill({ response: result }).catch(() => {});
+      },
+    );
+    await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
+    await page
+      .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
+      .click();
+    await readArrived;
+    await page.unroute("**/api/store/advertising-order-costs?**");
+    await page
+      .getByLabel("対象月", { exact: true })
+      .fill(month.replace("-09", "-11"));
+    await page.getByRole("button", { name: "表示", exact: true }).click();
+    await expect(
+      page.getByText("この月に比較対象の媒体記録はありません", { exact: true }),
+    ).toBeVisible();
+    releaseRead();
+    await expect(
+      page.getByRole("cell", { name: "ABC", exact: true }),
+    ).toHaveCount(0);
+
+    await page.getByLabel("対象月", { exact: true }).fill(month);
+    await page.getByRole("button", { name: "表示", exact: true }).click();
+    await expect(
+      page.getByRole("row", { name: /^ABC .*約 100\.00円/ }),
+    ).toBeVisible();
+    let releaseStore!: () => void,
+      enterStore!: () => void,
+      finishStore!: () => void;
+    const storeGate = new Promise<void>((r) => {
+      releaseStore = r;
+    });
+    const storeArrived = new Promise<void>((r) => {
+      enterStore = r;
+    });
+    const storeDone = new Promise<void>((r) => {
+      finishStore = r;
+    });
+    await page.route(
+      "**/api/store/advertising-order-costs?**",
+      async (route) => {
+        const result = await route.fetch();
+        enterStore();
+        await storeGate;
+        await route.fulfill({ response: result }).catch(() => {});
+        finishStore();
+      },
+    );
+    await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
+    await page
+      .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
+      .click();
+    await storeArrived;
+    await page.unroute("**/api/store/advertising-order-costs?**");
+    await page.goto(`${PLATFORM_URL}/store/${foreign}/advertising-costs`);
+    await selectMonth(page, month);
+    await page
+      .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
+      .click();
+    await expect(
+      page.getByText("この月に比較対象の媒体記録はありません", { exact: true }),
+    ).toBeVisible();
+    releaseStore();
+    await storeDone;
+    await expect(
+      page.getByRole("cell", { name: "ABC", exact: true }),
+    ).toHaveCount(0);
+
+    await login(page, readerEmail);
+    await expect(
+      page.getByRole("tab", { name: "受注あたり記録広告費", exact: true }),
+    ).toHaveCount(0);
+    await login(page, orderReaderEmail);
+    await page
+      .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
+      .click();
+    await expect(
+      page.getByRole("row", { name: /^ABC .*約 100\.00円/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "CSV 全件出力" }),
+    ).toHaveCount(0);
+
+    if (process.env.PGHOST !== "database")
+      throw new Error("専用 E2E DB でのみ実行できます");
+    const db = new Client({ application_name: "order-cost389-bdd" });
+    await db.connect();
+    const prefix = "order-cost-" + randomUUID();
+    try {
+      await db.query(
+        `INSERT INTO t_advertising_costs(id,store_id,month,category,media_name,amount,deleted,revision,version,created_at,updated_at)
+      SELECT ($2 || '-' || n),store_id,month,category,('=検証媒体' || lpad(n::text,4,'0')),0,false,0,0,created_at,updated_at
+      FROM t_advertising_costs CROSS JOIN generate_series(1,2001) n WHERE id=$1`,
+        [orderCostSeed, prefix],
+      );
+      for (const format of ["csv", "xlsx"]) {
+        response = await request.get(orderCostBase + "/exports", {
+          headers: h(),
+          params: { month, format },
+        });
+        expect(response.status(), await response.text()).toBe(200);
+        const bytes = await response.body();
+        const content =
+          format === "csv"
+            ? bytes.toString()
+            : zipEntry(bytes, "xl/worksheets/sheet2.xml");
+        for (const n of ["0001", "1000", "2001"])
+          expect(content).toContain("=検証媒体" + n);
+        expect(content).not.toContain("出力禁止の顧客資料");
+        if (format === "csv") {
+          expect(content.startsWith("\ufeff")).toBe(true);
+          expect(content).toContain("'=検証媒体");
+        } else {
+          expect(content).not.toContain("<f>");
+          expect(content).toContain('t="inlineStr"');
+        }
+      }
+    } finally {
+      await db.end();
+    }
+    await login(page);
+    await page
+      .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
+      .click();
+    await page.route(
+      "**/api/store/advertising-order-costs?**",
+      async (route) => {
+        if (new URL(route.request().url()).searchParams.get("page") === "1")
+          return route.abort("failed");
+        return route.continue();
+      },
+    );
+    await page
+      .getByRole("button", { name: "次へ", exact: true })
+      .last()
+      .click();
+    const alert = page
+      .getByRole("alert")
+      .filter({ hasText: "受注あたり記録広告費を取得できませんでした。" });
+    await expect(alert).toBeVisible();
+    await expect(page.getByLabel("受注比較の月合計")).toHaveCount(0);
+    await page.unroute("**/api/store/advertising-order-costs?**");
+    await alert.getByRole("button").click();
+    await expect(
+      page.getByRole("cell", { name: "=検証媒体0001", exact: true }),
+    ).toBeVisible();
   },
 );
