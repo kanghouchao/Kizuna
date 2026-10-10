@@ -21,6 +21,7 @@ import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PlatformUserRepository;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,21 +100,24 @@ public class CastEnrollmentService {
 
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
-  public void removeInternalField(List<CastEnrollment> enrollments, String key, String actorEmail) {
+  public List<CastEnrollmentSnapshot> removeInternalField(
+      List<CastEnrollment> enrollments, String key, String actorEmail) {
     var affected =
         enrollments.stream()
             .filter(enrollment -> enrollment.getCustomFields().containsKey(key))
             .toList();
-    if (affected.isEmpty()) return;
+    if (affected.isEmpty()) return List.of();
     Long actorId = actorId(actorEmail);
+    var recorded = new ArrayList<CastEnrollmentSnapshot>();
     for (CastEnrollment enrollment : affected) {
-      saveSnapshot(enrollment, actorId);
+      recorded.add(saveSnapshot(enrollment, actorId));
       enrollment.removeCustomField(key);
     }
+    return recorded;
   }
 
-  private void saveSnapshot(CastEnrollment enrollment, Long actorId) {
-    snapshots.save(
+  private CastEnrollmentSnapshot saveSnapshot(CastEnrollment enrollment, Long actorId) {
+    return snapshots.save(
         CastEnrollmentSnapshot.builder()
             .enrollmentId(enrollment.getId())
             .actorId(actorId)

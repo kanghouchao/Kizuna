@@ -212,10 +212,7 @@ export interface CreateCastFieldDefinitionParams {
   isPublic: boolean;
 }
 
-/**
- * カスタムフィールド定義を作成し id を返す
- * （POST /api/store/casts/fields, hasAuthority('ROLE_STORE_MANAGER')）。
- */
+/** 定義の変更は CAST_FIELD_DEF_MANAGE を要する。 */
 export async function createCastFieldDefinition(
   request: APIRequestContext,
   token: string,
@@ -225,19 +222,11 @@ export async function createCastFieldDefinition(
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { key: params.key, label: params.label, is_public: params.isPublic },
   });
-  if (!res.ok()) {
-    throw new Error(
-      `create cast field definition failed: ${res.status()} ${await res.text()}`,
-    );
-  }
+  expect(res.status(), await res.text()).toBe(201);
   const body = await res.json();
   return body.id as string;
 }
 
-/**
- * カスタムフィールド定義を削除する
- * （DELETE /api/store/casts/fields/{id}, hasAuthority('ROLE_STORE_MANAGER')）。
- */
 export async function deleteCastFieldDefinition(
   request: APIRequestContext,
   token: string,
@@ -246,11 +235,54 @@ export async function deleteCastFieldDefinition(
   const res = await request.delete(`/api/store/casts/fields/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
-  if (!res.ok()) {
-    throw new Error(
-      `delete cast field definition failed: ${res.status()} ${await res.text()}`,
-    );
-  }
+  expect(res.status(), await res.text()).toBe(204);
+}
+
+export type CastFieldDefinition = {
+  id: string;
+  key: string;
+  label: string;
+  is_public: boolean;
+  display_order: number;
+};
+
+export async function listCastFieldDefinitions(request: APIRequestContext, token: string): Promise<CastFieldDefinition[]> {
+  const response = await request.get("/api/store/casts/fields", {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
+}
+
+export async function updateCastFieldDefinition(request: APIRequestContext, token: string, id: string, data: { label?: string; display_order?: number; is_public?: boolean }): Promise<CastFieldDefinition> {
+  const response = await request.put(`/api/store/casts/fields/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data,
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
+}
+
+export async function setCastCustomFields(request: APIRequestContext, token: string, id: string, values: Record<string, string>): Promise<void> {
+  const response = await request.put(`/api/store/casts/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { custom_fields: values },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+}
+
+export async function getCastCustomFields(request: APIRequestContext, token: string, id: string): Promise<Record<string, string>> {
+  const response = await request.get(`/api/store/casts/${id}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return (await response.json()).custom_fields;
+}
+
+export async function castFieldSnapshots(request: APIRequestContext, token: string, id: string): Promise<{content: {id: string; actor_id: number; custom_fields: Record<string, string>}[]}> {
+  const response = await request.get(`/api/store/casts/${id}/snapshots`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
 }
 
 /** シフト作成パラメータ（JSON キーは snake_case で送信する）。 */
