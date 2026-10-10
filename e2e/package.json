@@ -6,7 +6,8 @@
   "scripts": {
     "bddgen": "bddgen",
     "test": "playwright test",
-    "test:e2e": "bddgen && playwright test"
+    "test:e2e": "npm run typecheck && bddgen && playwright test",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",
@@ -14,6 +15,7 @@
     "@types/pg": "8.23.1",
     "pdfjs-dist": "6.3.289",
     "pg": "8.23.1",
-    "playwright-bdd": "9.2.0"
+    "playwright-bdd": "9.2.0",
+    "typescript": "5.9.3"
   }
 }

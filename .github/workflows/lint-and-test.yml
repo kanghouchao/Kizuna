@@ -25,6 +25,9 @@ jobs:
       - name: Repo lint
         run: task lint service=.github
 
+      - name: Check E2E types
+        run: task lint service=e2e
+
       - name: Prepare offline count reconciliation runtime
         run: task -d scripts/count-reconciliation prepare
 

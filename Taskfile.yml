@@ -33,7 +33,7 @@ tasks:
         fi
 
   lint:
-    desc: 前後端のLintを実行（service=frontend|backend|.github で個別指定可）
+    desc: 前後端とE2EのLintを実行（service=frontend|backend|e2e|.github で個別指定可）
     cmds:
       - |
         if [ -n "{{.service}}" ]; then
@@ -45,6 +45,8 @@ tasks:
           task -d frontend lint
           echo "🧹 Backend lint..."
           task -d backend lint
+          echo "🧹 E2E typecheck..."
+          task -d e2e lint
           echo "✅ Lint 完了"
         fi
 

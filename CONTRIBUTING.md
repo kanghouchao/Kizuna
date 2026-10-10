@@ -16,7 +16,8 @@
 | コマンド | 用途 |
 | --- | --- |
 | `task build` | 前後端の本番イメージをビルド |
-| `task lint` | 前後端の整形・静的検査 |
+| `task lint` | 前後端の整形・静的検査とE2Eの型検査 |
+| `task lint service=e2e` | E2Eの型検査のみ（ブラウザ・DB不要） |
 | `task lint service=.github` | actionlint によるワークフロー検査（明示指定時のみ。`task -d .github lint` でも実行可） |
 | `task test` | 前後端の単体テストとカバレッジゲート |
 | `task e2e` | 独立した使い捨てスタックで E2E |
@@ -33,11 +34,11 @@
 
 ## CI と PR
 
-[CI](.github/workflows/lint-and-test.yml) は `Lint and Test (frontend)`、`Lint and Test (backend)`、`Repo Lint` の三チェック。前後端はそれぞれ lint・単体テスト・本番 build を実行する。コード領域に触れない docs-only 差分では前後端の重いステップを省略するが、Repo Lint は常に走る。`frontend/`・`backend/` 等の配下の文書変更もコード領域判定に入る。
+[CI](.github/workflows/lint-and-test.yml) は `Lint and Test (frontend)`、`Lint and Test (backend)`、`Repo Lint` の三チェック。前後端はそれぞれ lint・単体テスト・本番 build を実行する。コード領域に触れない docs-only 差分では前後端の重いステップを省略するが、Repo Lint は常に走り、E2Eの型検査も含む。`frontend/`・`backend/` 等の配下の文書変更もコード領域判定に入る。
 
 別の [CodeQL](.github/workflows/codeql.yml) ワークフローが Java と JavaScript / TypeScript を解析する。master 向け PR、master・`releases/**` への push、週次スケジュールが対象で、docs-only のスキップはない。主 CI の三チェックだけで全ワークフローを表すわけではない。
 
-E2E は CI で実行しない。PR 作成前は `task lint`、`task test`、`task build`、`task e2e` とローカルコードレビューを実施し、[PR テンプレート](.github/pull_request_template.md)の検証欄に結果を記す。E2E の実行・成果物・日本語 Gherkin は [E2E ガイド](e2e/README.md)を参照する。
+フルスタックのE2EはCIで実行しない。E2Eの静的型検査はRepo Lintで実行する。PR 作成前は `task lint`、`task test`、`task build`、`task e2e` とローカルコードレビューを実施し、[PR テンプレート](.github/pull_request_template.md)の検証欄に結果を記す。E2E の実行・成果物・日本語 Gherkin は [E2E ガイド](e2e/README.md)を参照する。
 
 issue は [機能](.github/ISSUE_TEMPLATE/feature.md)／[不具合](.github/ISSUE_TEMPLATE/bug.md)テンプレートを使う。コミットの要約は短く、PR タイトルは conventional commit 形式と日本語を使う。非自明な判断は理由を説明し、関連 issue を紐づける。
 
