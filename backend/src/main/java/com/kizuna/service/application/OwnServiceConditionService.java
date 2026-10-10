@@ -21,6 +21,8 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class OwnServiceConditionService {
   private final StoreRepository stores;
   private final StoreContext context;
   private final SpecialServiceRejectionHandler rejectionHandler;
+  private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
   @StoreScoped
@@ -82,6 +85,7 @@ public class OwnServiceConditionService {
         consents
             .findByEnrollmentIdAndServiceId(enrollment, id)
             .orElseGet(() -> ServiceConsent.create(enrollment, id));
+    var before = auditValues(consent);
     var revision =
         revisions.findByServiceIdAndRevisionNumber(id, item.getRevisionNumber()).orElseThrow();
     if (consent.decide(
@@ -92,8 +96,39 @@ public class OwnServiceConditionService {
         rejectionHandler.applyRejection(
             new SpecialServiceRejection(
                 enrollment, id, event.getId(), actorId, event.getOccurredAt()));
+      audit.recordById(
+          actorId,
+          consent.getStoreId(),
+          "SERVICE_CONSENT_CHANGED",
+          "SERVICE_CONSENT",
+          consent.getId(),
+          "SERVICE_CONSENT_EVENT",
+          event.getId(),
+          before,
+          auditValues(consent));
     }
     return summary(item, consent);
+  }
+
+  private static Map<String, String> auditValues(ServiceConsent consent) {
+    if (consent.getId() == null) return Map.of();
+    return Map.of(
+        "exists",
+        "true",
+        "version",
+        String.valueOf(consent.getVersion()),
+        "revision_number",
+        String.valueOf(consent.getRevisionNumber()),
+        "terms_version",
+        String.valueOf(consent.getTermsVersion()),
+        "decision",
+        consent.getDecision().name(),
+        "service_id",
+        consent.getServiceId(),
+        "enrollment_id",
+        consent.getEnrollmentId(),
+        "service_revision_id",
+        consent.getServiceRevisionId());
   }
 
   private String requireEnrollment(Long actorId) {
