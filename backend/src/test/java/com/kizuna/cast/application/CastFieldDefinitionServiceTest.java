@@ -20,6 +20,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +40,7 @@ class CastFieldDefinitionServiceTest {
   @Mock private StoreContext storeContext;
   @Mock private CastEnrollmentRepository enrollmentRepository;
   @Mock private CastProfileRepository profileRepository;
+  @Mock private BusinessAudit audit;
 
   @InjectMocks private CastFieldDefinitionService service;
 
@@ -172,7 +174,6 @@ class CastFieldDefinitionServiceTest {
   void delete_hardDeletesById() {
     when(repository.findById("d1"))
         .thenReturn(Optional.of(CastFieldDefinition.builder().key("memo").build()));
-    when(repository.existsById("d1")).thenReturn(true);
 
     service.delete("d1", "actor");
 
@@ -181,7 +182,7 @@ class CastFieldDefinitionServiceTest {
 
   @Test
   void delete_throwsWhenNotFound() {
-    when(repository.existsById("missing")).thenReturn(false);
+    when(repository.findById("missing")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.delete("missing", "actor"))
         .isInstanceOf(NotFoundException.class)
