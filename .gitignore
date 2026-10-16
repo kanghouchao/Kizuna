@@ -26,3 +26,6 @@ docs/research/
 
 # モジュール構造テストが生成するドキュメント
 /backend/docs/modulith/
+
+package-lock.json
+skill.lock.json
