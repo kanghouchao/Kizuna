@@ -19,3 +19,5 @@ junit.xml
 next-env.d.ts
 
 tsconfig.tsbuildinfo
+
+pakcage-lock.json

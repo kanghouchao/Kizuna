@@ -2,3 +2,4 @@ node_modules/
 test-results/
 playwright-report/
 .features-gen/
+package-lock.json
