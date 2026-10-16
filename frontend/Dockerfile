@@ -2,7 +2,7 @@
 
 FROM node:24.7.0-alpine3.22 AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json ./
 RUN --mount=type=cache,id=npm-cache,target=/root/.npm,uid=1000,gid=1000,sharing=locked \
     npm ci --no-audit --no-fund
 
