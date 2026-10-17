@@ -1,6 +1,6 @@
 'use client';
 
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import {
   getAllTemplateMetas,
   getTemplateMeta,
@@ -84,9 +84,9 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
       partner_links: initialData.partner_links || [],
     },
   });
-  const { register, control, handleSubmit, watch } = form;
+  const { register, control, handleSubmit} = form;
 
-  const templateKey = watch('template_key');
+  const templateKey = useWatch({ control, name: 'template_key' });
   const textSlots = getTemplateMeta(templateKey).textSlots;
 
   const {
@@ -137,7 +137,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                   return (
                     <label
                       key={meta.key}
-                      className={`group block rounded-lg border p-3 cursor-pointer transition-colors has-[:focus-visible]:ring-2 ${
+                      className={`group block rounded-lg border p-3 cursor-pointer transition-colors has-focus-visible:ring-2 ${
                         selected
                           ? 'border-primary ring-2 ring-primary bg-primary/10'
                           : 'hover:bg-muted'

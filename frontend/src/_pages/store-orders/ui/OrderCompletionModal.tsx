@@ -4,7 +4,7 @@ import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
   Order,
@@ -94,7 +94,6 @@ export function OrderCompletionModal({
     handleSubmit,
     reset,
     control,
-    watch,
     formState: { isSubmitting },
   } = form;
 
@@ -114,8 +113,9 @@ export function OrderCompletionModal({
     order === null ? null : () => orderApi.get(order.id)
   );
   const { data: detail, failure: detailFailure, reload: reloadDetail } = resource;
+  const usePoints = useWatch({ control, name: 'use_points' });
   const chargeAmount =
-    feeLinesTotal(watch('fee_lines') ?? []) +
+    feeLinesTotal(useWatch({ control, name: 'fee_lines' }) ?? []) +
     (detail?.course.price ?? 0) +
     (detail?.special_services ?? []).reduce((sum, item) => sum + item.price, 0);
   const onClose = () => {
@@ -335,7 +335,7 @@ export function OrderCompletionModal({
                   )
                 )}
                 {/* 資格が変わっても入力済みの利用値は消さず、利用者が明示的に修正できるよう残す。 */}
-                {(preview?.member_linked || watch('use_points') > 0) && (
+                {(preview?.member_linked || usePoints > 0) && (
                   <FormField
                     control={control}
                     name="use_points"
