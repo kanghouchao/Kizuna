@@ -85,20 +85,18 @@ describe('proxy integration', () => {
     const res = (await proxy(req))!;
 
     expect(res.status).toBe(200);
-    expect(res.cookies.get('x-mw-role').value).toBe('store');
-    expect(res.cookies.get('x-mw-store-id').value).toBe('t1');
-    expect(res.cookies.get('x-mw-store-template').value).toBe('dark');
-    expect(res.cookies.get('x-mw-store-domain').value).toBe('store.test');
+    expect(res.cookies.get('x-mw-role')?.value).toBe('store');
+    expect(res.cookies.get('x-mw-store-id')?.value).toBe('t1');
+    expect(res.cookies.get('x-mw-store-template')?.value).toBe('dark');
+    expect(res.cookies.get('x-mw-store-domain')?.value).toBe('store.test');
   });
 
   it('平台ドメインを cookie でクライアントへ渡す', async () => {
-    // NEXT_PUBLIC_* はビルド時インライン置換のため実行時 env が届かない。
-    // 店舗ドメインから会員ポータルへ渡す絶対 URL の根拠はこの cookie だけ
     mockResolveStore.mockResolvedValue({ role: 'platform' });
     mockHandleRouteProtection.mockReturnValue(null);
 
     const res = (await proxy(createRequest()))!;
 
-    expect(res.cookies.get('x-mw-platform-domain').value).toBe('platform.example');
+    expect(res.cookies.get('x-mw-platform-domain')?.value).toBe('platform.example');
   });
 });

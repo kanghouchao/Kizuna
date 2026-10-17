@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import fs from 'fs';
 import path from 'path';
-import { ThemeScope } from '@/_app/providers';
+import { ThemeScope } from '@/_app';
 
 // テーマ配線は管理コンソールだけの関心事。作用範囲は根 layout の route group 分割で
 // 構造的に隔離される（(admin) だけが ThemeScope を持ち、(public) はテーマ配線を一切
