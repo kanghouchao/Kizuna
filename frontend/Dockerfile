@@ -1,11 +1,8 @@
-## frontend/Dockerfile
-
 FROM node:24.22.0-alpine3.24 AS deps
 WORKDIR /app
 COPY package.json ./
 RUN --mount=type=cache,id=npm-cache,target=/root/.npm,uid=1000,gid=1000,sharing=locked \
-    npm install --legacy-peer-deps --no-audit --no-fund \
-    npm ci --no-audit --no-fund
+    npm install --legacy-peer-deps --no-audit --no-fund
 
 FROM deps AS lint
 WORKDIR /app
