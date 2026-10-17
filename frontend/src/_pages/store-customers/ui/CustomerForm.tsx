@@ -186,12 +186,12 @@ export function CustomerForm({
                           <Input
                             {...field}
                             type={
-                                  contactValues?.[index]?.type === 'EMAIL'
-                                    ? 'email'
-                                    : contactValues?.[index]?.type === 'PHONE'
-                                      ? 'tel'
-                                      : 'text'
-                                }
+                              contactValues?.[index]?.type === 'EMAIL'
+                                ? 'email'
+                                : contactValues?.[index]?.type === 'PHONE'
+                                  ? 'tel'
+                                  : 'text'
+                            }
                             required
                           />
                         </FormControl>

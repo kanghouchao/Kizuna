@@ -84,7 +84,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
       partner_links: initialData.partner_links || [],
     },
   });
-  const { register, control, handleSubmit} = form;
+  const { register, control, handleSubmit } = form;
 
   const templateKey = useWatch({ control, name: 'template_key' });
   const textSlots = getTemplateMeta(templateKey).textSlots;
