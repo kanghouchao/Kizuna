@@ -5,7 +5,7 @@ import { PERMISSION_STATUSES, CONTACT_PURPOSES } from '../lib/contactPermissions
 import type { ContactPurpose } from '@/entities/customer';
 import { useState } from 'react';
 import { validateContactValue } from '../lib/contactValidation';
-import { useForm } from 'react-hook-form';
+import { useForm,useWatch } from 'react-hook-form';
 import { customerApi, ContactInput, ContactResponse, ContactState } from '@/entities/customer';
 import { useCursorList, getApiErrorMessage, isNotFound } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -66,6 +66,10 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const form = useForm<ContactInput>({ defaultValues: { type: 'PHONE', value: '' } });
+  const type = useWatch({
+    control: form.control,
+    name: 'type',
+  });
   const refresh = () => {
     contacts.reload();
     history.reload();
@@ -316,9 +320,9 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
                         <Input
                           {...field}
                           type={
-                            form.watch('type') === 'EMAIL'
+                            type === 'EMAIL'
                               ? 'email'
-                              : form.watch('type') === 'PHONE'
+                              : type === 'PHONE'
                                 ? 'tel'
                                 : 'text'
                           }

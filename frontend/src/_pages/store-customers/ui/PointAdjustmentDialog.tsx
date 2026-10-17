@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useRef, useCallback } from 'react';
+import { useForm,useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CustomerPointBalanceResponse, customerApi } from '@/entities/customer';
 import { getApiErrorMessage, integerRule } from '@/shared/lib';
@@ -85,14 +85,10 @@ export function PointAdjustmentDialog({
     control,
     handleSubmit,
     reset,
-    watch,
     formState: { isSubmitting },
   } = form;
-  // 有効期限は加算のときだけ意味を持つ。減算に添えるとサーバが 400 を返す
-  const isGrant = watch('delta') > 0;
+  const isGrant = useWatch({ control, name: 'delta' }) > 0;
 
-  // 開くたびに 1 回の人間の操作としてキーを発行する。失敗後の再送信・入力変更では変えない —
-  // サーバはこのキーで「commit 済みの初回への再送」を見分けて二重記帳を遮断する（ADR 0007）。
   const idempotencyKeyRef = useRef('');
 
   useEffect(() => {
@@ -106,8 +102,6 @@ export function PointAdjustmentDialog({
       const balance = await customerApi.adjustPoints(customerId, {
         delta: values.delta,
         reason: values.reason_category + CATEGORY_SEPARATOR + values.reason.trim(),
-        // 欄が消えても react-hook-form は値を保つ。減算へ切り替えた後の持ち越しを送らないよう、
-        // 送信可否は入力の有無ではなく今の増減で決める（undefined は JSON 化の段でキーごと消える）。
         expires_on: isGrant && values.expires_on ? values.expires_on : undefined,
         idempotency_key: idempotencyKeyRef.current,
       });
@@ -115,9 +109,12 @@ export function PointAdjustmentDialog({
       onAdjusted(balance);
       onClose();
     } catch (error) {
-      // 残高不足・未紐づけは、サーバが対処できる文言を返す。汎用文言に潰さない。
       notify.error(getApiErrorMessage(error, 'ポイントの調整に失敗しました'));
     }
+  };
+
+  const onSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
+    void handleSubmit(submit)(event);
   };
 
   return (
@@ -135,21 +132,15 @@ export function PointAdjustmentDialog({
       >
         <DialogTitle className="border-b px-6 py-4">ポイント調整</DialogTitle>
         <Form {...form}>
-          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-              我々の文言は永久に描かれない。required は下の規則が引き継ぐ */}
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
+          <form onSubmit={onSubmit} className="space-y-4 px-6 py-5" noValidate>
             <FormField
               control={control}
               name="delta"
               rules={{
                 required: DELTA_REQUIRED,
                 validate: {
-                  // 空欄は NaN であって null でも空文字でもないため required は素通りする
                   notEmpty: value => !Number.isNaN(value) || DELTA_REQUIRED,
-                  // noValidate は type="number" の暗黙の step=1 も止める。これが無いと
-                  // 1.5 が Integer の delta へ届く
                   integer: integerRule('増減ポイント'),
-                  // 0 は台帳が撥ねる。往復させずに欄の傍で返す
                   nonZero: value =>
                     Number.isNaN(value) || value !== 0 || '0 以外の増減を入力してください',
                 },
@@ -162,8 +153,6 @@ export function PointAdjustmentDialog({
                       type="number"
                       required
                       {...field}
-                      // register の valueAsNumber と同じ写像。Number() は空欄を 0 にしてしまい、
-                      // 「未入力」を表す NaN が失われる。
                       value={Number.isNaN(field.value) ? '' : field.value}
                       onChange={event => field.onChange(event.target.valueAsNumber)}
                     />
@@ -173,8 +162,6 @@ export function PointAdjustmentDialog({
                 </FormItem>
               )}
             />
-            {/* 分類と自由記述は併存する。分類だけでは「なぜその額か」が残らず、自由記述だけでは
-                後から分類で拾えない */}
             <FormField
               control={control}
               name="reason_category"
@@ -209,8 +196,6 @@ export function PointAdjustmentDialog({
               control={control}
               name="reason"
               rules={{
-                // 空白だけの入力は required を素通りする。分類を前へ繋ぐと台帳側の @NotBlank も
-                // 通ってしまい、説明の無い準金銭的な調整が成立する
                 validate: value => value.trim() !== '' || '事由を入力してください',
                 maxLength: {
                   value: DETAIL_MAX_LENGTH,

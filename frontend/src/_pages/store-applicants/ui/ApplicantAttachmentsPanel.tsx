@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import {
   applicantAttachmentApi,
   type ApplicantAttachment,
@@ -271,7 +271,7 @@ function AttachmentUploadForm({
     (missing && operation?.inputRejected) ||
     (upload && operation?.originalRejected && known && known.status !== 'READY');
   const fileLocked = operation !== null && !correctable;
-  const repairConfirmed = form.watch('repairConfirmed');
+  const repairConfirmed = useWatch({ control: form.control, name: 'repairConfirmed' });
   const reset = form.reset;
   const setValue = form.setValue;
   useEffect(() => {

@@ -13,7 +13,7 @@ import { OrderCustomerField } from './OrderCustomerField';
 import { OrderContactFields } from './OrderContactFields';
 import { CustomerSelection, ContactSnapshot, GuestContactImportInput } from '@/entities/order';
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
   Order,
@@ -38,11 +38,6 @@ import {
   FormLabel,
   FormMessage,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@/shared/ui';
 
@@ -120,7 +115,6 @@ export function OrderApplicationConfirmModal({
     handleSubmit,
     reset,
     control,
-    watch,
     setValue,
     formState: { isSubmitting },
   } = form;
@@ -186,8 +180,8 @@ export function OrderApplicationConfirmModal({
     }
   };
 
-  const clearCast = watch('clear_cast');
-  const selectedCastId = watch('cast_id');
+  const clearCast = useWatch({ control, name: 'clear_cast' });
+  const selectedCastId = useWatch({ control, name: 'cast_id' });
   // 会員コードのスナップショットの有無がそのまま入口の別。サーバ側の判定と同じ根拠を使う
   const isGuest = application !== null && !application.requester_member_code;
   return (
