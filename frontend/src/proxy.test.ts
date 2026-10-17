@@ -82,7 +82,7 @@ describe('proxy integration', () => {
     mockHandleRouteProtection.mockReturnValue(null);
 
     const req = createRequest();
-    const res = (await proxy(req)) as any;
+    const res = (await proxy(req))!;
 
     expect(res.status).toBe(200);
     expect(res.cookies.get('x-mw-role').value).toBe('store');
@@ -97,7 +97,7 @@ describe('proxy integration', () => {
     mockResolveStore.mockResolvedValue({ role: 'platform' });
     mockHandleRouteProtection.mockReturnValue(null);
 
-    const res = (await proxy(createRequest())) as any;
+    const res = (await proxy(createRequest()))!;
 
     expect(res.cookies.get('x-mw-platform-domain').value).toBe('platform.example');
   });

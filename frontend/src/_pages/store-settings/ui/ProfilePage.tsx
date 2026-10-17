@@ -23,7 +23,7 @@ export default function StoreProfilePage() {
       const updated = await storeProfileApi.update(data);
       setConfig(updated);
       notify.success('設定を保存しました');
-    } catch (error) {
+    } catch {
       notify.error('設定の保存に失敗しました');
     } finally {
       setIsSubmitting(false);

@@ -1,20 +1,21 @@
 import Cookies from 'js-cookie';
+import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 import { apiClient } from '@/shared/api';
 
 jest.mock('js-cookie');
 
 async function requestTo(url: string) {
-  const original = apiClient.defaults.adapter as any;
-  apiClient.defaults.adapter = (async (config: any) => ({
+  const original = apiClient.defaults.adapter;
+  apiClient.defaults.adapter = (async (config: InternalAxiosRequestConfig) => ({
     data: {},
     status: 200,
     statusText: 'OK',
     headers: {},
     config,
-  })) as any;
+  })) as AxiosAdapter;
   const res = await apiClient.get(url);
   apiClient.defaults.adapter = original;
-  return res.config.headers as any;
+  return res.config.headers;
 }
 
 describe('apiClient platform branch', () => {

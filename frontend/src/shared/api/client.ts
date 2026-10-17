@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AxiosHeaders } from 'axios';
 import Cookies from 'js-cookie';
 import {
   clearPlatformSession,
@@ -8,6 +9,12 @@ import {
   rememberMemberReturnPath,
   setPlatformStore,
 } from '@/shared/lib';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    skipAuthRedirect?: boolean;
+  }
+}
 
 const apiClient = axios.create({
   baseURL: '/api',
@@ -28,7 +35,7 @@ apiClient.interceptors.request.use(
     }
     const csrfToken = Cookies.get('XSRF-TOKEN') || Cookies.get('X-CSRF-TOKEN');
     if (csrfToken) {
-      (config.headers as any)['X-XSRF-TOKEN'] = csrfToken;
+      (config.headers as AxiosHeaders).set('X-XSRF-TOKEN', csrfToken);
     }
     // 平台セッションがあれば legacy な x-mw ヘッダ注入をスキップする
     try {
@@ -37,18 +44,18 @@ apiClient.interceptors.request.use(
         const storeId = getStoreIdFromPath(window.location.pathname);
         const url = config.url || '';
         if (storeId && (url.startsWith('/store') || url.startsWith('/files'))) {
-          (config.headers as any)['X-Role'] = 'store';
-          (config.headers as any)['X-Store-ID'] = storeId;
+          (config.headers as AxiosHeaders).set('X-Role', 'store');
+          (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
         }
       } else {
         // proxy が焼いた x-mw cookie から役割と店舗文脈をヘッダへ移す
         const role = Cookies.get('x-mw-role');
         if (role) {
-          (config.headers as any)['X-Role'] = role;
+          (config.headers as AxiosHeaders).set('X-Role', role);
           if (role === 'store') {
             const storeId = Cookies.get('x-mw-store-id');
             if (storeId) {
-              (config.headers as any)['X-Store-ID'] = storeId;
+              (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
             }
           }
         }
@@ -68,7 +75,7 @@ apiClient.interceptors.response.use(
     // 成功応答が X-Store-ID を伴う＝バックエンドが StoreIdInterceptor の fail-closed 検証
     //（storeBridge + scope.authorizes）を通過して受理した証拠。このときだけ「前回選択」cookie を更新し、
     // 未検証の URL 由来 id で cookie を汚染しない。
-    const storeId = (response.config?.headers as any)?.['X-Store-ID'];
+    const storeId = response.config?.headers?.get('X-Store-ID');
     if (storeId) {
       setPlatformStore(storeId);
     }
@@ -78,7 +85,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       // 招待受諾のインラインログイン等、呼び出し元が独自にセッションを扱う経路は
       // config.skipAuthRedirect でグローバルな token 除去/リダイレクトから除外する
-      if ((error.config as any)?.skipAuthRedirect) {
+      if (error.config?.skipAuthRedirect) {
         return Promise.reject(error);
       }
       Cookies.remove('token');

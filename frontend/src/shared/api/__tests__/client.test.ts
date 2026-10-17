@@ -1,4 +1,5 @@
 import Cookies from 'js-cookie';
+import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 import { apiClient } from '@/shared/api';
 
 jest.mock('js-cookie');
@@ -10,18 +11,18 @@ describe('apiClient request interceptor', () => {
 
   it('adds Authorization and CSRF header when cookies exist', async () => {
     (Cookies.get as jest.Mock).mockReturnValue('abc123');
-    const original = apiClient.defaults.adapter as any;
-    apiClient.defaults.adapter = (async (config: any) => ({
+    const original = apiClient.defaults.adapter;
+    apiClient.defaults.adapter = (async (config: InternalAxiosRequestConfig) => ({
       data: {},
       status: 200,
       statusText: 'OK',
       headers: {},
       config,
-    })) as any;
+    })) as AxiosAdapter;
 
     const res = await apiClient.get('/platform/me');
     expect(res.config.headers?.Authorization).toBe('Bearer abc123');
-    expect((res.config.headers as any)['X-XSRF-TOKEN']).toBe('abc123');
+    expect(res.config.headers.get('X-XSRF-TOKEN')).toBe('abc123');
 
     apiClient.defaults.adapter = original;
   });
@@ -34,19 +35,19 @@ describe('apiClient request interceptor', () => {
       return undefined;
     });
 
-    const original = apiClient.defaults.adapter as any;
-    apiClient.defaults.adapter = (async (config: any) => ({
+    const original = apiClient.defaults.adapter;
+    apiClient.defaults.adapter = (async (config: InternalAxiosRequestConfig) => ({
       data: {},
       status: 200,
       statusText: 'OK',
       headers: {},
       config,
-    })) as any;
+    })) as AxiosAdapter;
 
     const res = await apiClient.get('/store/me');
-    expect((res.config.headers as any)['X-Role']).toBe('store');
-    expect((res.config.headers as any)['X-Store-ID']).toBe('42');
-    expect((res.config.headers as any)['X-XSRF-TOKEN']).toBeUndefined();
+    expect(res.config.headers.get('X-Role')).toBe('store');
+    expect(res.config.headers.get('X-Store-ID')).toBe('42');
+    expect(res.config.headers.get('X-XSRF-TOKEN')).toBeUndefined();
 
     apiClient.defaults.adapter = original;
   });

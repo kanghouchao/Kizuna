@@ -61,9 +61,19 @@ export default function CreateStorePage() {
       await platformStoreApi.create(formData);
       notify.success('店舗を作成しました。店舗一覧に戻ります');
       router.push('/platform/stores');
-    } catch (error: any) {
-      if (error.response?.data?.errors) {
-        setErrors(error.response.data.errors);
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof error.response === 'object' &&
+        error.response !== null &&
+        'data' in error.response &&
+        typeof error.response.data === 'object' &&
+        error.response.data !== null &&
+        'errors' in error.response.data
+      ) {
+        setErrors(error.response.data.errors as Partial<CreateStoreRequest>);
       }
       notify.error('店舗作成に失敗しました。入力内容をご確認ください');
     } finally {

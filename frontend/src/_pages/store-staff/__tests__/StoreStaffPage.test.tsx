@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
 import { StoreStaffResponse, storeStaffApi, useStoreContext } from '@/entities/user';
 import StoreStaffPage from '../ui/StoreStaffPage';

@@ -59,7 +59,7 @@ export default function ShiftsPage() {
     }
     return all;
   });
-  const casts = castsData ?? [];
+  const casts = useMemo(() => castsData ?? [], [castsData]);
 
   // 表示中のタブに応じた取得区間（カレンダー = 月、タイムライン = 単日）
   const range = useMemo(

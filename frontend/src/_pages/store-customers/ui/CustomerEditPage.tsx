@@ -63,7 +63,8 @@ export default function CustomerEditPage() {
   const handleSubmit = async (data: CustomerFormData) => {
     try {
       setIsSubmitting(true);
-      const { contacts: _contacts, ...profile } = toCustomerRequest(data);
+      const profile = toCustomerRequest(data);
+      delete profile.contacts;
       await customerApi.update(resolvedId, profile);
       notify.success('顧客情報を更新しました');
       router.push(storePath(storeId, '/customers'));

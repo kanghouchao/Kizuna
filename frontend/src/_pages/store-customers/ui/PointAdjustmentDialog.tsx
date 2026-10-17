@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
-import { useForm,useWatch } from 'react-hook-form';
+import { useEffect, useRef } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CustomerPointBalanceResponse, customerApi } from '@/entities/customer';
 import { getApiErrorMessage, integerRule } from '@/shared/lib';

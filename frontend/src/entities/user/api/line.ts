@@ -20,14 +20,14 @@ export const platformLineApi = {
   login: async (data: LineAuthorizationRequest): Promise<LineLoginResponse> => {
     const response = await apiClient.post('/platform/line/login', data, {
       skipAuthRedirect: true,
-    } as any);
+    });
     return response.data;
   },
   /** 登録チケットで会員を作成し、そのままログインする（公開・匿名）。 */
   register: async (data: LineRegisterRequest): Promise<LoginResponse> => {
     const response = await apiClient.post('/platform/line/register', data, {
       skipAuthRedirect: true,
-    } as any);
+    });
     return response.data;
   },
   /** 既存アカウントへ LINE を連携する。409 は連携済み ないし 当該 LINE が他アカウントに使用済み。 */

@@ -24,11 +24,12 @@ export function MediaSummaryPage({
     const { rows, ...metadata } = await advertisingApi.media(month, page);
     return { ...fromSpringPage(rows), metadata };
   }, undefined);
+  const reload = list.reload;
   useEffect(() => {
-    const refresh = () => void list.reload();
+    const refresh = () => void reload();
     window.addEventListener('advertising-operation', refresh);
     return () => window.removeEventListener('advertising-operation', refresh);
-  }, [list.reload]);
+  }, [reload]);
   const visible = !list.isLoading && !list.failed ? list.metadata : null;
   return (
     <div className="space-y-6">

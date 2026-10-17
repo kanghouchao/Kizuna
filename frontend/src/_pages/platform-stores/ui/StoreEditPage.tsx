@@ -59,8 +59,20 @@ export default function EditStorePage() {
       await platformStoreApi.update(store.id, formData);
       notify.success('店舗情報を更新しました');
       router.push('/platform/stores');
-    } catch (err: any) {
-      if (err.response?.data?.errors) setErrors(err.response.data.errors);
+    } catch (err: unknown) {
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof err.response === 'object' &&
+        err.response !== null &&
+        'data' in err.response &&
+        typeof err.response.data === 'object' &&
+        err.response.data !== null &&
+        'errors' in err.response.data
+      ) {
+        setErrors(err.response.data.errors as Partial<UpdateStoreRequest>);
+      }
       notify.error(getApiErrorMessage(err, '更新に失敗しました。入力内容をご確認ください'));
     } finally {
       setSaving(false);
