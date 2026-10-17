@@ -49,8 +49,8 @@
     "jest": "30.5.2",
     "jest-environment-jsdom": "30.5.2",
     "jest-junit": "17.0.0",
-    "postcss": "8.5.28",
-    "prettier": "3.9.9",
+    "postcss": "8.5.30",
+    "prettier": "3.9.10",
     "steiger": "0.7.0",
     "tailwindcss": "4.3.3",
     "ts-jest": "29.4.14",
@@ -60,8 +60,8 @@
   },
   "overrides": {
     "next": {
-      "postcss": "^8.5.18",
-      "sharp": "^0.35.3"
+      "postcss": "8.5.30",
+      "sharp": "^0.35.5"
     }
   }
 }
