@@ -77,7 +77,7 @@ apiClient.interceptors.response.use(
     // 未検証の URL 由来 id で cookie を汚染しない。
     const storeId = response.config?.headers?.get('X-Store-ID');
     if (storeId) {
-      setPlatformStore(storeId);
+      setPlatformStore(Number(storeId));
     }
     return response;
   },

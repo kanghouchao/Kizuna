@@ -155,7 +155,7 @@ export function Sidebar() {
                 {section.name}
               </h3>
               <ul className="space-y-1">
-                {                section.items.map(item => {
+                {section.items.map(item => {
                   const href = resolveStoreHref(item.href, storeId);
                   const isActive = pathname === href;
                   return (

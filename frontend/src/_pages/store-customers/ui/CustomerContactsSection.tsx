@@ -5,7 +5,7 @@ import { PERMISSION_STATUSES, CONTACT_PURPOSES } from '../lib/contactPermissions
 import type { ContactPurpose } from '@/entities/customer';
 import { useState } from 'react';
 import { validateContactValue } from '../lib/contactValidation';
-import { useForm,useWatch } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { customerApi, ContactInput, ContactResponse, ContactState } from '@/entities/customer';
 import { useCursorList, getApiErrorMessage, isNotFound } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -319,13 +319,7 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
                       <FormControl>
                         <Input
                           {...field}
-                          type={
-                            type === 'EMAIL'
-                              ? 'email'
-                              : type === 'PHONE'
-                                ? 'tel'
-                                : 'text'
-                          }
+                          type={type === 'EMAIL' ? 'email' : type === 'PHONE' ? 'tel' : 'text'}
                           required
                         />
                       </FormControl>

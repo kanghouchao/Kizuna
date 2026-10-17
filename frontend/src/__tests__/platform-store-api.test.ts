@@ -1,17 +1,20 @@
-import { platformStoreApi } from '@/entities/store';
-import { ClientDataError } from '@/shared/lib';
-
-const mockGet = jest.fn<(...args: unknown[]) => unknown>();
-const mockPost = jest.fn<(...args: unknown[]) => unknown>();
-const mockPut = jest.fn<(...args: unknown[]) => unknown>();
-const mockDelete = jest.fn<(...args: unknown[]) => unknown>();
+const mockGet = jest.fn<Promise<{ data: unknown }>, unknown[]>();
+const mockPost = jest.fn<Promise<{ data: { id: number } }>, unknown[]>();
+const mockPut = jest.fn<Promise<void>, unknown[]>();
+const mockDelete = jest.fn<Promise<void>, unknown[]>();
 
 jest.mock('@/shared/api/client', () => ({
-  get: (...args: [string, ...unknown[]]) => mockGet(...args),
-  post: (...args: [string, ...unknown[]]) => mockPost(...args),
-  put: (...args: [string, ...unknown[]]) => mockPut(...args),
-  delete: (...args: [string, ...unknown[]]) => mockDelete(...args),
+  __esModule: true,
+  default: {
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    put: (...args: unknown[]) => mockPut(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
+  },
 }));
+
+import { platformStoreApi } from '@/entities/store';
+import { ClientDataError } from '@/shared/lib';
 
 describe('platform store api wrappers', () => {
   afterEach(() => {
@@ -36,17 +39,28 @@ describe('platform store api wrappers', () => {
 
     // 作成の端点は 201 Created。body には作成された店舗の id だけが載る。
     mockPost.mockResolvedValueOnce({ data: { id: 1 } });
-    const created = await platformStoreApi.create({ name: 't', domain: 't.example.com', email: 't@example.com' });
+    const created = await platformStoreApi.create({
+      name: 't',
+      domain: 't.example.com',
+      email: 't@example.com',
+    });
     expect(created).toEqual({ id: 1 });
-    expect(mockPost).toHaveBeenCalledWith('/platform/stores', { name: 't' });
+    expect(mockPost).toHaveBeenCalledWith('/platform/stores', {
+      name: 't',
+      domain: 't.example.com',
+      email: 't@example.com',
+    });
 
     // 更新の端点は 204 No Content。body は返らない。
-    mockPut.mockResolvedValueOnce({});
+    mockPut.mockResolvedValueOnce();
     const updated = await platformStoreApi.update('3', { name: 'u', email: 'u@example.com' });
     expect(updated).toBeUndefined();
-    expect(mockPut).toHaveBeenCalledWith('/platform/stores/3', { name: 'u' });
+    expect(mockPut).toHaveBeenCalledWith('/platform/stores/3', {
+      name: 'u',
+      email: 'u@example.com',
+    });
 
-    mockDelete.mockResolvedValueOnce({});
+    mockDelete.mockResolvedValueOnce();
     await platformStoreApi.delete('3');
     expect(mockDelete).toHaveBeenCalledWith('/platform/stores/3');
 

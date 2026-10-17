@@ -119,7 +119,7 @@ export function CastForm({
       ...initialData,
     },
   });
-  const { register, handleSubmit, setValue,  control } = form;
+  const { register, handleSubmit, setValue, control } = form;
 
   const photoUrl = useWatch({ control, name: 'photo_url' });
 
