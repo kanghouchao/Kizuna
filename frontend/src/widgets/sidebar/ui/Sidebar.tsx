@@ -26,6 +26,7 @@ import {
   UserCogIcon,
   UsersIcon,
   UsersRoundIcon,
+  type LucideIcon,
 } from 'lucide-react';
 import { menuApi, MenuVO } from '@/entities/menu';
 import {
@@ -39,7 +40,7 @@ import {
 
 // キーはメニュー API（seed データ）が返す icon 文字列との wire 契約。
 // lucide-react のエクスポート名をそのまま用い、メニューが参照してよいアイコンの許可リストを兼ねる。
-const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
+const ICON_MAP: Record<string, LucideIcon> = {
   BotIcon,
   BriefcaseIcon,
   BuildingIcon,
@@ -63,13 +64,24 @@ const ICON_MAP: { [key: string]: React.ForwardRefExoticComponent<any> } = {
   UsersRoundIcon,
 };
 
+interface NavigationItem {
+  name?: string;
+  href: string;
+  icon: LucideIcon;
+}
+
+interface NavigationSection {
+  name?: string;
+  items: NavigationItem[];
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   // 店舗リンクへ埋め込む storeId は path 由来 id を最優先し、無ければ前回選択 cookie に fallback する。
   // path 組立は store-route（店舗パス知識の唯一 module）の resolveStoreHref に委ねる。
   const storeId = getStoreIdFromPath(pathname) ?? getPlatformStoreId();
   const [role, setRole] = useState<string>('platform');
-  const [navigation, setNavigation] = useState<any[]>([]);
+  const [navigation, setNavigation] = useState<NavigationSection[]>([]);
 
   useEffect(() => {
     // 「前回選択」cookie の更新は apiClient の応答インターセプタ（X-Store-ID 受理時のみ）に委ね、
@@ -143,7 +155,7 @@ export function Sidebar() {
                 {section.name}
               </h3>
               <ul className="space-y-1">
-                {section.items.map((item: any) => {
+                {                section.items.map(item => {
                   const href = resolveStoreHref(item.href, storeId);
                   const isActive = pathname === href;
                   return (

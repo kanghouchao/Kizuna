@@ -31,7 +31,7 @@ import {
 import { notify } from '@/shared/notify';
 import { customerHeadingText } from '../lib/customerLabel';
 // 空欄は「値なし」として送る。この契約は全量送信なので、省略と空欄が同じ意味になる。
-import { optionalNumber, optionalTime, toTimeInput } from '../lib/formValues';
+import { optionalTime, toTimeInput } from '../lib/formValues';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import {
   Button,

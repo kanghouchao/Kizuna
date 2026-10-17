@@ -14,7 +14,7 @@ export const emergencyElevationApi = {
     // パスワードの打ち間違いで有効なセッションごと破棄されるため、フォーム側で提示する
     const response = await apiClient.post('/platform/emergency-elevations', data, {
       skipAuthRedirect: true,
-    } as any);
+    });
     return response.data;
   },
   /** 発動履歴を新しい順に取得する。続きは応答の nextCursor をそのまま cursor に渡して取る。 */

@@ -25,7 +25,7 @@ function isMemberReceiptClaimPath(path: string): boolean {
   return path === '/member/receipts' || path === '/member/receipts/';
 }
 
-export function handleRouteProtection(request: NextRequest, role: 'platform' | 'store') {
+export function handleRouteProtection(request: NextRequest, _role: 'platform' | 'store') {
   const path = request.nextUrl.pathname;
   const hasToken = request.cookies.has('token');
 

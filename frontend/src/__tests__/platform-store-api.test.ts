@@ -1,16 +1,16 @@
 import { platformStoreApi } from '@/entities/store';
 import { ClientDataError } from '@/shared/lib';
 
-const mockGet = jest.fn();
-const mockPost = jest.fn();
-const mockPut = jest.fn();
-const mockDelete = jest.fn();
+const mockGet = jest.fn<(...args: unknown[]) => unknown>();
+const mockPost = jest.fn<(...args: unknown[]) => unknown>();
+const mockPut = jest.fn<(...args: unknown[]) => unknown>();
+const mockDelete = jest.fn<(...args: unknown[]) => unknown>();
 
 jest.mock('@/shared/api/client', () => ({
-  get: (...args: any[]) => mockGet(...args),
-  post: (...args: any[]) => mockPost(...args),
-  put: (...args: any[]) => mockPut(...args),
-  delete: (...args: any[]) => mockDelete(...args),
+  get: (...args: [string, ...unknown[]]) => mockGet(...args),
+  post: (...args: [string, ...unknown[]]) => mockPost(...args),
+  put: (...args: [string, ...unknown[]]) => mockPut(...args),
+  delete: (...args: [string, ...unknown[]]) => mockDelete(...args),
 }));
 
 describe('platform store api wrappers', () => {
@@ -36,13 +36,13 @@ describe('platform store api wrappers', () => {
 
     // 作成の端点は 201 Created。body には作成された店舗の id だけが載る。
     mockPost.mockResolvedValueOnce({ data: { id: 1 } });
-    const created = await platformStoreApi.create({ name: 't' } as any);
+    const created = await platformStoreApi.create({ name: 't', domain: 't.example.com', email: 't@example.com' });
     expect(created).toEqual({ id: 1 });
     expect(mockPost).toHaveBeenCalledWith('/platform/stores', { name: 't' });
 
     // 更新の端点は 204 No Content。body は返らない。
     mockPut.mockResolvedValueOnce({});
-    const updated = await platformStoreApi.update('3', { name: 'u' } as any);
+    const updated = await platformStoreApi.update('3', { name: 'u', email: 'u@example.com' });
     expect(updated).toBeUndefined();
     expect(mockPut).toHaveBeenCalledWith('/platform/stores/3', { name: 'u' });
 
