@@ -1,9 +1,10 @@
 ## frontend/Dockerfile
 
-FROM node:24.7.0-alpine3.22 AS deps
+FROM node:24.22.0-alpine3.24 AS deps
 WORKDIR /app
 COPY package.json ./
 RUN --mount=type=cache,id=npm-cache,target=/root/.npm,uid=1000,gid=1000,sharing=locked \
+    npm install --legacy-peer-deps --no-audit --no-fund \
     npm ci --no-audit --no-fund
 
 FROM deps AS lint
@@ -31,7 +32,7 @@ COPY . .
 RUN --mount=type=cache,id=npm-cache,target=/root/.npm,uid=1000,gid=1000,sharing=locked \
     npm run build
 
-FROM node:24.7.0-alpine3.22 AS runner
+FROM node:24.22.0-alpine3.24 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
