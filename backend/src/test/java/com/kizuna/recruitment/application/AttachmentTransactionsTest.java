@@ -40,7 +40,8 @@ class AttachmentTransactionsTest {
       if (state == AttachmentUpload.Status.RECOVERY_REQUIRED)
         row.recordFailure(AttachmentUpload.Failure.CONTENT_MISMATCH);
       if (state == AttachmentUpload.Status.READY) row.complete(1L, OffsetDateTime.now());
-      clearInvocations(applicants, uploads);
+      clearInvocations(applicants);
+      clearInvocations(uploads);
       assertThat(service.operation("a", key)).isSameAs(row);
       assertThat(row.getStatus()).isEqualTo(state);
       verify(applicants).findById("a");
