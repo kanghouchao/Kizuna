@@ -156,13 +156,13 @@ Then("添付は認証取得だけに公開され店外と権限不足を拒否�
   expect(head.status()).toBe(200);
   expect(head.headers()['content-length']).toBe(file.headers()['content-length']);
   expect((await request.get(contentPath, { headers: STORE_HEADERS })).status()).toBe(401);
-  expect((await request.get(contentPath, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` } })).status()).toBe(403);
+  expect((await request.get(contentPath, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` } })).status()).toBe(200);
   const operationPath = `${path()}/attachment-operations/${key}`;
   for (const [url, auth, code] of [
     [operationPath, headers(), 200],
     [`${path()}/attachment-operations/1-1-1-1-1`, headers(), 400],
     [operationPath, STORE_HEADERS, 401],
-    [operationPath, { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, 403],
+    [operationPath, { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, 200],
     [`${path()}/attachment-operations/${randomUUID()}`, headers(), 404],
   ] as const) {
     const response = await request.get(url, { headers: auth });

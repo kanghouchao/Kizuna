@@ -19,61 +19,61 @@ import lombok.Getter;
  */
 @Getter
 public enum PermissionCode {
-  ADVERTISING_COST_VIEW(Console.STORE),
-  ADVERTISING_COST_MANAGE(Console.STORE),
-  ADVERTISING_COST_EXPORT(Console.STORE),
-  ADVERTISING_COST_SET_VIEW(Console.PLATFORM),
-  ADVERTISING_COST_SET_EXPORT(Console.PLATFORM),
+  ADVERTISING_COST_VIEW(Console.STORE, SystemRole.STORE_MANAGER),
+  ADVERTISING_COST_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
+  ADVERTISING_COST_EXPORT(Console.STORE, SystemRole.STORE_MANAGER),
+  ADVERTISING_COST_SET_VIEW(Console.PLATFORM, SystemRole.HQ_ADMIN),
+  ADVERTISING_COST_SET_EXPORT(Console.PLATFORM, SystemRole.HQ_ADMIN),
   /** 口コミの閲覧。 */
-  REVIEW_VIEW(Console.STORE),
-  SURVEY_VIEW(Console.STORE),
-  SURVEY_MANAGE(Console.STORE),
-  SURVEY_RECORD(Console.STORE),
+  REVIEW_VIEW(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  SURVEY_VIEW(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  SURVEY_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
+  SURVEY_RECORD(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
   /** 口コミの手動受付・訂正・取り下げと公開許可の記録。 */
-  REVIEW_MANAGE(Console.STORE),
+  REVIEW_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
   /** 口コミの内部承認・却下。 */
-  REVIEW_MODERATE(Console.STORE),
+  REVIEW_MODERATE(Console.STORE, SystemRole.STORE_MANAGER),
   /** 業務通知の内容・状態・履歴の閲覧。 */
-  NOTIFICATION_VIEW(Console.STORE),
+  NOTIFICATION_VIEW(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
   /** 業務通知の作成。閲覧権限と併用する。 */
-  NOTIFICATION_MANAGE(Console.STORE),
+  NOTIFICATION_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
   /** 業務通知の送信待ち登録と明示再試行。閲覧権限と併用する。 */
-  NOTIFICATION_SEND(Console.STORE),
-  /** SERVICE による業務通知の配送と運営側からの手動実行。既定授与はしない。 */
+  NOTIFICATION_SEND(Console.STORE, SystemRole.STORE_MANAGER),
+  /** SERVICE による業務通知の配送と運営側からの手動実行。サービス ID 向けのため既定授与はしない。 */
   NOTIFICATION_DELIVER(Console.SHARED),
 
-  /** 授権範囲内の運営集計の閲覧。既定授与はしない。 */
-  OPERATIONAL_REPORT_VIEW(Console.SHARED),
+  /** 授権範囲内の運営集計の閲覧。 */
+  OPERATIONAL_REPORT_VIEW(Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
-  /** 授権範囲内の運営集計の出力。閲覧権限と併用し、既定授与はしない。 */
-  OPERATIONAL_REPORT_EXPORT(Console.SHARED),
+  /** 授権範囲内の運営集計の出力。閲覧権限と併用する。 */
+  OPERATIONAL_REPORT_EXPORT(Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
-  /** 登録済み処理の実行・再試行・中断記録と全体履歴の閲覧。既定授与はしない。 */
-  TASK_MANAGE(Console.PLATFORM),
+  /** 登録済み処理の実行・再試行・中断記録と全体履歴の閲覧。 */
+  TASK_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
-  /** サービス ID による実行基盤の検証処理。業務処理固有の権限を代替しない。 */
+  /** サービス ID による実行基盤の検証処理。業務処理固有の権限を代替しない。サービス ID 専用のため既定授与はしない。 */
   TASK_EXECUTE(Console.PLATFORM),
 
-  /** 全会員の期限切れポイントの記帳。既定授与はしない。 */
-  POINT_EXPIRE(Console.PLATFORM),
+  /** 全会員の期限切れポイントの記帳。 */
+  POINT_EXPIRE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
-  /** 全店舗の変更不可な業務監査の閲覧。既定授与はしない。 */
-  AUDIT_VIEW(Console.PLATFORM),
+  /** 全店舗の変更不可な業務監査の閲覧。 */
+  AUDIT_VIEW(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
-  /** 応募者一覧・非公開詳細の閲覧。既定授与はしない。 */
-  RECRUITMENT_VIEW(Console.STORE),
+  /** 応募者一覧・非公開詳細の閲覧。 */
+  RECRUITMENT_VIEW(Console.STORE, SystemRole.STORE_MANAGER),
 
-  /** 応募者情報と面接状態の登録・更新。既定授与はしない。 */
-  RECRUITMENT_MANAGE(Console.STORE),
+  /** 応募者情報と面接状態の登録・更新。 */
+  RECRUITMENT_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
 
-  /** 採用判断の記録。既定授与はしない。 */
-  RECRUITMENT_DECIDE(Console.STORE),
+  /** 採用判断の記録。 */
+  RECRUITMENT_DECIDE(Console.STORE, SystemRole.STORE_MANAGER),
 
-  /** 応募者の非公開添付の閲覧。既定授与はしない。 */
-  RECRUITMENT_ATTACHMENT_VIEW(Console.STORE),
+  /** 応募者の非公開添付の閲覧。 */
+  RECRUITMENT_ATTACHMENT_VIEW(Console.STORE, SystemRole.STORE_MANAGER),
 
-  /** 応募者の非公開添付の登録・回復。既定授与はしない。 */
-  RECRUITMENT_ATTACHMENT_MANAGE(Console.STORE),
+  /** 応募者の非公開添付の登録・回復。 */
+  RECRUITMENT_ATTACHMENT_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
 
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
@@ -191,10 +191,10 @@ public enum PermissionCode {
   /** 出勤（シフト）の閲覧・登録・更新（ShiftController）。 */
   SHIFT_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
-  REMUNERATION_VIEW(Console.SHARED),
-  GUARANTEE_MANAGE(Console.STORE),
-  BONUS_AWARD(Console.STORE),
-  REMUNERATION_CORRECT(Console.STORE),
+  REMUNERATION_VIEW(Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
+  GUARANTEE_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
+  BONUS_AWARD(Console.STORE, SystemRole.STORE_MANAGER),
+  REMUNERATION_CORRECT(Console.STORE, SystemRole.STORE_MANAGER),
 
   /** キャストの閲覧・登録・更新・削除（CastController — 在籍停止のキャストも対象）。 */
   CAST_MANAGE(Console.STORE, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),

@@ -443,16 +443,17 @@ Then(
   },
 );
 Then("授権外店舗と無権限の内訳操作は拒否される", async ({ request }) => {
-  for (const [auth, storeId] of [
-    [manager, STORE1_ID],
-    [token, otherStore],
-  ]) {
-    const response = await request.get("/api/store/remuneration-statements", {
-      headers: headers(auth, storeId),
-      params: { person_id: personId, month },
-    });
-    expect(response.status()).toBe(403);
-  }
+  const denied = await request.get("/api/store/remuneration-statements", {
+    headers: headers(token, otherStore),
+    params: { person_id: personId, month },
+  });
+  expect(denied.status()).toBe(403);
+  // 店長は既定授与で REMUNERATION_VIEW を持つ。
+  const managed = await request.get("/api/store/remuneration-statements", {
+    headers: headers(manager, STORE1_ID),
+    params: { person_id: personId, month },
+  });
+  expect(managed.status(), await managed.text()).toBe(200);
   const platform = await request.get("/api/platform/remuneration-statements", {
     headers: { Authorization: `Bearer ${token}` },
     params: { person_id: personId, store_id: STORE1_ID, month },

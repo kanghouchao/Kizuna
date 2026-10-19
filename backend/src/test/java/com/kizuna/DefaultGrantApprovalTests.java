@@ -1,6 +1,13 @@
 package com.kizuna;
 
+import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_EXPORT;
+import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_SET_EXPORT;
+import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_SET_VIEW;
+import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_VIEW;
+import static com.kizuna.user.domain.PermissionCode.AUDIT_VIEW;
 import static com.kizuna.user.domain.PermissionCode.BENEFIT_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.BONUS_AWARD;
 import static com.kizuna.user.domain.PermissionCode.CAST_FIELD_DEF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CAST_FIELD_DEF_VIEW;
 import static com.kizuna.user.domain.PermissionCode.CAST_INVITE;
@@ -9,12 +16,29 @@ import static com.kizuna.user.domain.PermissionCode.CAST_PERSON_VIEW;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MERGE;
 import static com.kizuna.user.domain.PermissionCode.EMERGENCY_ELEVATE;
+import static com.kizuna.user.domain.PermissionCode.GUARANTEE_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_SEND;
+import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_VIEW;
+import static com.kizuna.user.domain.PermissionCode.OPERATIONAL_REPORT_EXPORT;
+import static com.kizuna.user.domain.PermissionCode.OPERATIONAL_REPORT_VIEW;
 import static com.kizuna.user.domain.PermissionCode.ORDER_CORRECT;
 import static com.kizuna.user.domain.PermissionCode.ORDER_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.ORDER_SET_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.PLATFORM_ASSET_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.PLATFORM_MENU_VIEW;
 import static com.kizuna.user.domain.PermissionCode.POINT_ADJUST;
+import static com.kizuna.user.domain.PermissionCode.POINT_EXPIRE;
+import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_ATTACHMENT_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_ATTACHMENT_VIEW;
+import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_DECIDE;
+import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_VIEW;
+import static com.kizuna.user.domain.PermissionCode.REMUNERATION_CORRECT;
+import static com.kizuna.user.domain.PermissionCode.REMUNERATION_VIEW;
+import static com.kizuna.user.domain.PermissionCode.REVIEW_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.REVIEW_MODERATE;
+import static com.kizuna.user.domain.PermissionCode.REVIEW_VIEW;
 import static com.kizuna.user.domain.PermissionCode.ROLE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SERVICE_ID_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SERVICE_MANAGE;
@@ -25,7 +49,11 @@ import static com.kizuna.user.domain.PermissionCode.STORE_MENU_VIEW;
 import static com.kizuna.user.domain.PermissionCode.STORE_PROFILE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_STAFF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_VIEW;
+import static com.kizuna.user.domain.PermissionCode.SURVEY_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.SURVEY_RECORD;
+import static com.kizuna.user.domain.PermissionCode.SURVEY_VIEW;
 import static com.kizuna.user.domain.PermissionCode.SYSTEM_CONFIG_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.TASK_MANAGE;
 import static com.kizuna.user.domain.SystemRole.HQ_ADMIN;
 import static com.kizuna.user.domain.SystemRole.STORE_MANAGER;
 import static com.kizuna.user.domain.SystemRole.STORE_STAFF;
@@ -81,7 +109,35 @@ class DefaultGrantApprovalTests {
           Map.entry(CAST_FIELD_DEF_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CAST_FIELD_DEF_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(STORE_PROFILE_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
-          Map.entry(STORE_MENU_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)));
+          Map.entry(STORE_MENU_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
+          Map.entry(ADVERTISING_COST_VIEW, Set.of(STORE_MANAGER)),
+          Map.entry(ADVERTISING_COST_MANAGE, Set.of(STORE_MANAGER)),
+          Map.entry(ADVERTISING_COST_EXPORT, Set.of(STORE_MANAGER)),
+          Map.entry(ADVERTISING_COST_SET_VIEW, Set.of(HQ_ADMIN)),
+          Map.entry(ADVERTISING_COST_SET_EXPORT, Set.of(HQ_ADMIN)),
+          Map.entry(REVIEW_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
+          Map.entry(REVIEW_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
+          Map.entry(REVIEW_MODERATE, Set.of(STORE_MANAGER)),
+          Map.entry(SURVEY_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
+          Map.entry(SURVEY_MANAGE, Set.of(STORE_MANAGER)),
+          Map.entry(SURVEY_RECORD, Set.of(STORE_MANAGER, STORE_STAFF)),
+          Map.entry(NOTIFICATION_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
+          Map.entry(NOTIFICATION_MANAGE, Set.of(STORE_MANAGER)),
+          Map.entry(NOTIFICATION_SEND, Set.of(STORE_MANAGER)),
+          Map.entry(OPERATIONAL_REPORT_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER)),
+          Map.entry(OPERATIONAL_REPORT_EXPORT, Set.of(HQ_ADMIN, STORE_MANAGER)),
+          Map.entry(TASK_MANAGE, Set.of(HQ_ADMIN)),
+          Map.entry(POINT_EXPIRE, Set.of(HQ_ADMIN)),
+          Map.entry(AUDIT_VIEW, Set.of(HQ_ADMIN)),
+          Map.entry(RECRUITMENT_VIEW, Set.of(STORE_MANAGER)),
+          Map.entry(RECRUITMENT_MANAGE, Set.of(STORE_MANAGER)),
+          Map.entry(RECRUITMENT_DECIDE, Set.of(STORE_MANAGER)),
+          Map.entry(RECRUITMENT_ATTACHMENT_VIEW, Set.of(STORE_MANAGER)),
+          Map.entry(RECRUITMENT_ATTACHMENT_MANAGE, Set.of(STORE_MANAGER)),
+          Map.entry(REMUNERATION_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER)),
+          Map.entry(GUARANTEE_MANAGE, Set.of(STORE_MANAGER)),
+          Map.entry(BONUS_AWARD, Set.of(STORE_MANAGER)),
+          Map.entry(REMUNERATION_CORRECT, Set.of(STORE_MANAGER)));
 
   @Test
   @DisplayName("コード側宣言の既定授与が承認台帳と完全に一致すること")
