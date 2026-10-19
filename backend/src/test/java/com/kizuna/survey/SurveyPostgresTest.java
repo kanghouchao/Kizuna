@@ -99,7 +99,8 @@ class SurveyPostgresTest {
     jdbc = context.getBean(JdbcTemplate.class);
     store = context.getBean(StoreContext.class);
     mvc =
-        MockMvcBuilders.standaloneSetup(context.getBean("surveyController"))
+        MockMvcBuilders.standaloneSetup(
+                context.getBean("surveyController"), context.getBean("surveyResponseController"))
             .setControllerAdvice(new CommonExceptionHandler())
             .setMessageConverters(new JacksonJsonHttpMessageConverter(json))
             .build();
