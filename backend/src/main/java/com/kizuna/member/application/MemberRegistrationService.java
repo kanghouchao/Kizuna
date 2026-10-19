@@ -43,7 +43,7 @@ public class MemberRegistrationService {
   private final MemberRepository memberRepository;
   private final PasswordEncoder passwordEncoder;
 
-  private static final SecureRandom random = new SecureRandom();
+  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
   @Transactional
   public MemberRegistrationResponse register(MemberRegistrationRequest request) {
@@ -108,14 +108,14 @@ public class MemberRegistrationService {
   /** パスワードログインを成立させないための乱数パスワード（符号化前の平文はどこにも残さない）。 */
   private String randomPassword() {
     byte[] bytes = new byte[32];
-    random.nextBytes(bytes);
+    SECURE_RANDOM.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
   /** 一意の会員コードを発行する。事前の存在チェックで衝突を避け、上限到達は例外（並行登録との厳密な競合は DB の一意制約が最終防衛線として 409 で顕在化する）。 */
   private String issueCode() {
     for (int attempt = 0; attempt < CODE_ISSUE_ATTEMPTS; attempt++) {
-      String code = MemberCodes.generate(random);
+      String code = MemberCodes.generate(SECURE_RANDOM);
       if (!memberRepository.existsByMemberCode(code)) {
         return code;
       }

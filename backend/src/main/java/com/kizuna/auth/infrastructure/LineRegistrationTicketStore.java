@@ -29,12 +29,12 @@ public class LineRegistrationTicketStore {
 
   private final RedisTemplate<String, Object> redisTemplate;
 
-  private static final SecureRandom random = new SecureRandom();
+  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
   /** LINE ユーザー ID に対する新しいチケットを発行する。 */
   public String issue(String lineUserId) {
     byte[] bytes = new byte[TICKET_BYTES];
-    random.nextBytes(bytes);
+    SECURE_RANDOM.nextBytes(bytes);
     String ticket = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     redisTemplate.opsForValue().set(KEY_PREFIX + ticket, lineUserId, TTL);
     return ticket;
