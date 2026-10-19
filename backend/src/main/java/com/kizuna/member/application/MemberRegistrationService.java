@@ -43,7 +43,7 @@ public class MemberRegistrationService {
   private final MemberRepository memberRepository;
   private final PasswordEncoder passwordEncoder;
 
-  private final SecureRandom random = new SecureRandom();
+  private static final SecureRandom random = new SecureRandom();
 
   @Transactional
   public MemberRegistrationResponse register(MemberRegistrationRequest request) {

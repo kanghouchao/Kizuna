@@ -29,7 +29,7 @@ public class LineRegistrationTicketStore {
 
   private final RedisTemplate<String, Object> redisTemplate;
 
-  private final SecureRandom random = new SecureRandom();
+  private static final SecureRandom random = new SecureRandom();
 
   /** LINE ユーザー ID に対する新しいチケットを発行する。 */
   public String issue(String lineUserId) {
