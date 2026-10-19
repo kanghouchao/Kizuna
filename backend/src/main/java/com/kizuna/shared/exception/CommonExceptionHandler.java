@@ -38,7 +38,7 @@ public class CommonExceptionHandler {
     HttpStatus status =
         switch (exception.getReason()) {
           case INVALID -> HttpStatus.BAD_REQUEST;
-          case LIMIT -> HttpStatus.PAYLOAD_TOO_LARGE;
+          case LIMIT -> HttpStatus.CONTENT_TOO_LARGE;
           case TYPE -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
         };
     return ResponseEntity.status(status).body(Map.of("error", exception.getMessage()));
