@@ -35,7 +35,7 @@ task e2e
 
 標準`task lint`とCIのRepo Lintにこの検査を含め、フルE2Eのランナーもシナリオ生成前に実行します。
 CIでフルスタックのE2Eを実行しない運用は維持します。ホストでの高速な反復は`e2e/`で
-`npm ci`の後に`npm run typecheck`を実行できます。
+`npm install`の後に`npm run typecheck`を実行できます。
 
 ### 開発スタックとの関係
 
@@ -99,7 +99,7 @@ Docker を使わず手元の Node で回す場合は、`e2e/` で以下を実行
 
 ```bash
 cd e2e
-npm ci
+npm install
 npx playwright install chromium
 npm run test:e2e  # 型検査 → .feature の変換 → シナリオ実行
 ```

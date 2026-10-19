@@ -60,9 +60,12 @@ export function toCustomerRequest(data: CustomerFormData): CustomerCreateRequest
 }
 
 interface CustomerFormProps {
+  /** 編集時の初期データ */
   initialData?: Partial<CustomerFormData>;
   creating?: boolean;
+  /** フォーム送信時のコールバック */
   onSubmit: (data: CustomerFormData) => void;
+  /** 送信中フラグ */
   isSubmitting?: boolean;
 }
 
@@ -100,6 +103,8 @@ export function CustomerForm({
 
   return (
     <Form {...form}>
+      {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          我々の文言は永久に描かれない。執行は各 rules が担う */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         {/* 基本情報 */}
         <Card>
