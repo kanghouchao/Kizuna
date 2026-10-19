@@ -27,5 +27,5 @@ docs/research/
 # モジュール構造テストが生成するドキュメント
 /backend/docs/modulith/
 
-# skillインストールされないので、skill.lock.json は除外する
-skill.lock.json
+# skillインストールされないので、skills-lock.json は除外する
+skills-lock.json

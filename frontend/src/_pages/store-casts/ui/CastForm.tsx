@@ -40,13 +40,18 @@ export interface CastFormData {
   waist: number | null;
   hip: number | null;
   display_order: number;
+  // 活きた定義に対応する入力欄のみ登録される（孤児キーは含まれない）
   custom_fields?: Record<string, string>;
 }
 
 interface CastFormProps {
+  /** 編集時の初期データ */
   initialData?: Partial<CastFormData>;
+  /** 編集時の既存カスタムフィールド値（活きた定義の分のみ動的欄の初期値に使う。孤児値は描画しない） */
   existingCustomFields?: Record<string, string>;
+  /** フォーム送信時のコールバック */
   onSubmit: (data: CastFormData) => void;
+  /** 送信中フラグ */
   isSubmitting?: boolean;
 }
 
@@ -82,6 +87,7 @@ function NumericProfileField({
         <FormItem className="gap-2">
           <FormLabel>{unit ? `${label} (${unit})` : label}</FormLabel>
           <FormControl>
+            {/* id は FormControl が持つ。ここで与えると FormLabel の htmlFor と食い違う */}
             <Input
               type="number"
               {...field}
@@ -123,6 +129,8 @@ export function CastForm({
 
   const photoUrl = useWatch({ control, name: 'photo_url' });
 
+  // カスタムフィールドの動的欄は編集時のみ表示する（値の入力自体は既存 PUT のまま、
+  // 作成時は付与するキャストがまだ無いため定義取得自体を行わない）。
   const isEdit = initialData !== undefined;
   const {
     items: definitions,
@@ -135,6 +143,8 @@ export function CastForm({
 
   return (
     <Form {...form}>
+      {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          我々の文言は永久に描かれない。執行は各 rules が担う */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         {!isEdit && (
           <Card>
@@ -325,6 +335,7 @@ function CustomFields({
             <Input
               id={`cast-custom-field-${key}`}
               type="text"
+              // 継承プロパティを値として取り込まないよう、所有するキーだけを読む。
               defaultValue={
                 existingValues && Object.hasOwn(existingValues, key) ? existingValues[key] : ''
               }

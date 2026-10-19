@@ -92,6 +92,8 @@ describe('proxy integration', () => {
   });
 
   it('平台ドメインを cookie でクライアントへ渡す', async () => {
+    // NEXT_PUBLIC_* はビルド時インライン置換のため実行時 env が届かない。
+    // 店舗ドメインから会員ポータルへ渡す絶対 URL の根拠はこの cookie だけ
     mockResolveStore.mockResolvedValue({ role: 'platform' });
     mockHandleRouteProtection.mockReturnValue(null);
 

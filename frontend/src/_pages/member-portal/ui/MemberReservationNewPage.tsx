@@ -57,6 +57,10 @@ export function MemberReservationNewPage() {
     failure: storeFailure,
     reload: reloadStore,
   } = useResource(domain ? () => platformStoreApi.lookupByDomain(domain) : null, [domain]);
+  // フックが持つのは「最後に取れた店舗」であって「今の ?store= の店舗」ではない。取りに行く
+  // 理由が無くなっても値は残る（フックの既定 — 開き直した区画に生の id を出さないため）ので、
+  // この頁では捨てる。残すと ?store= の外れた URL で前の店舗宛のフォームが送信できてしまう。
+  // ドメインが別の値へ変わる場合は取得中の相（読み込み中）が引き取る。
   const store = domain ? storeData : null;
   const storeId = store?.id ? Number(store.id) : null;
 
@@ -86,9 +90,13 @@ export function MemberReservationNewPage() {
       : null,
     [storeId, businessDate]
   );
+  // 候補はその日その店舗の確定シフトに紐づく。日付は頁に留まったまま何度でも変わり、フックは
+  // 次が届くまで前の値を持ち続けるので、取得中も読み込み表示だけで済ませると、選択肢には前の
+  // 日付のキャストが並び続ける（選べてしまう）。取りに行っていない間・待っている間は空にする。
   const casts: ConfirmedShiftCast[] = castsRequested && !castsLoading ? (castsData ?? []) : [];
 
   useEffect(() => {
+    // 候補が入れ替わる契機では選択も捨てる。残すと、その日に出勤しないキャストの指名が通る。
     setValue('cast_id', '');
   }, [storeId, businessDate, setValue]);
 
@@ -127,6 +135,8 @@ export function MemberReservationNewPage() {
           {storeLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : storeFailure === 'error' ? (
+            // 「そのドメインの店舗が無い」（404）と照会自体の失敗を区別する。後者は再試行で
+            // 復帰しうるので、下の案内と同じ行き止まりに見せない。
             <RegionError
               message="店舗情報を取得できませんでした"
               onRetry={() => void reloadStore()}
@@ -137,13 +147,18 @@ export function MemberReservationNewPage() {
             </p>
           ) : (
             <Form {...form}>
+              {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+                  我々の文言は永久に描かれない。人数の min={1} は下の min 規則が引き継ぐ */}
               <form onSubmit={handleSubmit(submit)} className="space-y-4" noValidate>
+                {/* 店舗が知る名前はここで名乗る名前だけ。ご登録の表示名・メールは店舗へ渡らない */}
                 <FormField
                   control={control}
                   name="declared_name"
                   rules={{
                     required: '店舗へ名乗るお名前を入力してください',
                     maxLength: { value: 255, message: 'お名前は 255 文字以内で入力してください' },
+                    // required は空白だけの入力を「入っている」と見る。サーバ側の @NotBlank が
+                    // 弾く形をそのまま通すと、欄の傍ではなく送信失敗の通知として返ってくる。
                     validate: value =>
                       value.trim().length > 0 || '店舗へ名乗るお名前を入力してください',
                   }}
@@ -153,6 +168,9 @@ export function MemberReservationNewPage() {
                       <FormControl>
                         <Input required {...field} />
                       </FormControl>
+                      {/* 名乗りが台帳に載るのは、その店舗に自分の記録がまだ無いときだけ（既にあれば
+                          店舗が持つ記録の氏名がそのまま使われる）。「必ず店舗に伝わる」と読める文言は
+                          置かない */}
                       <FormDescription>
                         初めてのご利用なら、このお名前で店舗の台帳に登録されます。ご登録の表示名・メールアドレスは店舗に伝わりません。
                       </FormDescription>
@@ -188,6 +206,8 @@ export function MemberReservationNewPage() {
                   rules={{
                     required: '人数を入力してください',
                     min: { value: 1, message: '人数は 1 以上です' },
+                    // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
+                    // Integer の pax へ届く
                     validate: integerRule('人数'),
                   }}
                   render={({ field }) => (
@@ -202,6 +222,7 @@ export function MemberReservationNewPage() {
                 />
                 <div>
                   <Label htmlFor="cast_id">指名（任意）</Label>
+                  {/* 指名候補はその日の確定シフトに限る。ネイティブ select を使うのは、フォーム値をそのまま扱えるため。 */}
                   <select
                     id="cast_id"
                     className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
@@ -227,6 +248,8 @@ export function MemberReservationNewPage() {
                       className="mt-1"
                     />
                   )}
+                  {/* 取得が終わるまで「出勤なし」と言い切らない — 未解決の間に空表示を出すと、
+                    指名するつもりの会員が誤った空き情報のまま指名なしで申請してしまう。 */}
                   {businessDate && !castsLoading && castsFailure === null && casts.length === 0 && (
                     <p className="mt-1 text-xs text-muted-foreground">
                       この日に出勤予定のキャストはいません。
@@ -249,6 +272,9 @@ export function MemberReservationNewPage() {
                     </FormItem>
                   )}
                 />
+                {/* 候補が確定するまで送信させない。取得中も失敗中も「その日に誰が出勤するか」は
+                  未確定であり、指名を選ぶ機会が無いまま「指名なし」で申請が通ってしまう。
+                  失敗のときは再読み込みが復帰の手段になる。 */}
                 <Button
                   type="submit"
                   className="w-full"

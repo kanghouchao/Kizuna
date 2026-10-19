@@ -212,7 +212,7 @@ services:
       # コンテナ側（linux）の node_modules を、bind-mount したホスト e2e/ から分離するための
       # 匿名 volume（`docker compose run --rm` のコンテナ削除と一緒に消える。中断で残った回は
       # Taskfile の事前回収 `docker rm -fv` が拾う）。ホスト（別プラットフォーム）の node_modules
-      # との衝突を避けるのが目的で、npm ci は毎回作り直すため取得の高速化ではなく、残す理由も無い。
+      # との衝突を避けるのが目的で、npm install は毎回作り直すため取得の高速化ではなく、残す理由も無い。
       - /e2e/node_modules
     environment:
       # gateway alias 経由で store ドメインへ到達する baseURL。
@@ -239,7 +239,7 @@ services:
           fi
           sleep 2
         done
-        npm ci && npm run test:e2e
+        npm install --legacy-peer-deps --no-audit --no-fund && npm run test:e2e
     # backend / frontend が healthy になってから gateway が起動する連鎖に乗るための依存。
     depends_on:
       gateway:
