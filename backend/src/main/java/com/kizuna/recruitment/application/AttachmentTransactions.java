@@ -140,7 +140,7 @@ public class AttachmentTransactions {
         .isTerminal()) throw new ServiceException("選考が終了した応募者には画像を追加できません");
     AttachmentObject object = object(upload);
     if (content == null) {
-      try (PrivateAttachmentFile ignored = storage.readVerified(object)) {
+      try (PrivateAttachmentFile _ = storage.readVerified(object)) {
         // 既に存在する正しい正規化画像を使う回復は、現在の符号化器に依存しない。
       } catch (AttachmentStorageMissingException missingObject) {
         return null;

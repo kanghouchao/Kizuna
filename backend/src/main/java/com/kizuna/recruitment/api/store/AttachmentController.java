@@ -108,7 +108,7 @@ public class AttachmentController {
     Callable<ResponseEntity<AttachmentSummaryResponse>> callable =
         new DelegatingSecurityContextCallable<>(
             () -> {
-              try (var ignored = CloseableThreadContext.putAll(loggingContext)) {
+              try (var _ = CloseableThreadContext.putAll(loggingContext)) {
                 return scope.runInStore(
                     storeId,
                     () -> {

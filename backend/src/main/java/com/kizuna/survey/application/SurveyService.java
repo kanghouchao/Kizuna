@@ -229,7 +229,7 @@ public class SurveyService {
 
   private void lock(SurveyCommand command) {
     switch (command) {
-      case SurveyCommand.Create ignored -> {}
+      case SurveyCommand.Create _ -> {}
       case SurveyCommand.Revise c ->
           surveys.lockById(c.surveyId()).orElseThrow(SurveyService::missing);
       case SurveyCommand.Replace c -> lockRevision(c.surveyId(), c.revisionId(), true);
