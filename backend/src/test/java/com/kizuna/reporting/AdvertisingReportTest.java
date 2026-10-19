@@ -205,7 +205,7 @@ class AdvertisingReportTest {
       assertThat(sheet.getRow(2001).getCell(24).getStringCellValue()).isEqualTo("SALES");
       assertThat(sheet.getRow(2001).getCell(25).getNumericCellValue()).isEqualTo(2000);
       assertThat(sheet.getRow(1).getCell(20).getStringCellValue()).isEmpty();
-      assertThat(workbook.getExternalLinksTable()).isEmpty();
+      assertThat(workbook.getExternalLinksTables()).isEmpty();
       for (var page : workbook)
         for (var row : page)
           for (var cell : row) assertThat(cell.getCellType()).isNotEqualTo(CellType.FORMULA);

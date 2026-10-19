@@ -74,10 +74,6 @@ class AdvertisingControllerTest {
   }
 
   private static class TestActor {
-    RequestPostProcessor authorities(GrantedAuthority... authorities) {
-      return authorities(List.of(authorities));
-    }
-
     RequestPostProcessor authorities(Collection<? extends GrantedAuthority> authorities) {
       var authentication = new UsernamePasswordAuthenticationToken("actor", "unused", authorities);
       TestSecurityContextHolder.setAuthentication(authentication);

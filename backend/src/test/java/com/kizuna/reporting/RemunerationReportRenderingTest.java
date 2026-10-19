@@ -155,7 +155,7 @@ class RemunerationReportRenderingTest {
       assertThat(days.getRow(1).getCell(23).getStringCellValue()).isEmpty();
       assertThat(days.getRow(2).getCell(17).getCellType()).isEqualTo(CellType.NUMERIC);
       assertThat(days.getRow(2).getCell(17).getNumericCellValue()).isZero();
-      assertThat(workbook.getExternalLinksTable()).isEmpty();
+      assertThat(workbook.getExternalLinksTables()).isEmpty();
     }
   }
 

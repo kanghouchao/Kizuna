@@ -157,7 +157,9 @@ class PrivateAttachmentStorageTest {
               ((byte[]) call.getArgument(0))[0] = 0;
               return 1;
             });
-    when(client.getObject(any(GetObjectRequest.class))).thenReturn(input, response(bytes));
+    var firstResponse = new AtomicBoolean(true);
+    when(client.getObject(any(GetObjectRequest.class)))
+        .thenAnswer(call -> firstResponse.getAndSet(false) ? input : response(bytes));
     long start = System.nanoTime();
     try (var storage = new PrivateAttachmentStorage(properties, () -> client)) {
       assertThatThrownBy(() -> storage.readVerified(object))
