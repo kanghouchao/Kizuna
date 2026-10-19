@@ -96,7 +96,7 @@ public class PrivateAttachmentStorage implements AutoCloseable {
           RequestBody.fromFile(source));
     } catch (S3Exception exception) {
       if (exception.statusCode() != 412) throw unavailable();
-      try (PrivateAttachmentFile ignored = readVerified(object)) {
+      try (PrivateAttachmentFile _ = readVerified(object)) {
         // 条件付き作成の競合は、既存オブジェクトの実バイトが同一の場合だけ成功とする。
       } catch (IOException cleanupFailure) {
         throw unavailable();

@@ -251,7 +251,7 @@ class PrivateAttachmentStorageTest {
     try (PrivateAttachmentStorage storage =
         new PrivateAttachmentStorage(properties, () -> client)) {
       try (PrivateAttachmentFile first = storage.readVerified(object);
-          PrivateAttachmentFile second = storage.readVerified(object)) {
+          PrivateAttachmentFile _ = storage.readVerified(object)) {
         assertThat(Files.readAllBytes(first.path())).containsExactly(bytes);
         assertThatThrownBy(() -> storage.readVerified(object))
             .isInstanceOf(ServiceUnavailableException.class);
