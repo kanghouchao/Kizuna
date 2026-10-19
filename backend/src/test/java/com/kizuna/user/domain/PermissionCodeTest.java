@@ -142,9 +142,17 @@ class PermissionCodeTest {
   }
 
   @Test
-  void serviceOnlyPermissionsHaveNoDefaultGrants() {
+  void serviceOnlyPermissionHasNoDefaultGrants() {
     assertThat(PermissionCode.TASK_EXECUTE.getDefaultRoles()).isEmpty();
-    assertThat(PermissionCode.NOTIFICATION_DELIVER.getDefaultRoles()).isEmpty();
+  }
+
+  @Test
+  void manualTaskPermissionsAreGrantedToHqOnlyWithoutStoreBridge() {
+    for (var permission :
+        List.of(PermissionCode.POINT_EXPIRE, PermissionCode.NOTIFICATION_DELIVER)) {
+      assertThat(permission.getDefaultRoles()).containsExactly(SystemRole.HQ_ADMIN);
+      assertThat(permission.grantsStoreConsole()).isFalse();
+    }
   }
 
   private Set<PermissionCode> byConsole(PermissionCode.Console console) {

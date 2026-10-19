@@ -17,6 +17,7 @@ import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MERGE;
 import static com.kizuna.user.domain.PermissionCode.EMERGENCY_ELEVATE;
 import static com.kizuna.user.domain.PermissionCode.GUARANTEE_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_DELIVER;
 import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_SEND;
 import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_VIEW;
@@ -127,6 +128,7 @@ class DefaultGrantApprovalTests {
           Map.entry(OPERATIONAL_REPORT_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER)),
           Map.entry(OPERATIONAL_REPORT_EXPORT, Set.of(HQ_ADMIN, STORE_MANAGER)),
           Map.entry(TASK_MANAGE, Set.of(HQ_ADMIN)),
+          Map.entry(NOTIFICATION_DELIVER, Set.of(HQ_ADMIN)),
           Map.entry(POINT_EXPIRE, Set.of(HQ_ADMIN)),
           Map.entry(AUDIT_VIEW, Set.of(HQ_ADMIN)),
           Map.entry(RECRUITMENT_VIEW, Set.of(STORE_MANAGER)),
