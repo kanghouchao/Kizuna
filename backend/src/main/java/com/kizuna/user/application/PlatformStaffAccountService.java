@@ -47,7 +47,7 @@ public class PlatformStaffAccountService {
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   /** 仮パスワードの生成源。予測可能な乱数だと発行直後の乗っ取りを許すため暗号論的乱数に限る。 */
-  private static final SecureRandom random = new SecureRandom();
+  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
   private final BusinessAudit businessAudit;
   private final PlatformUserRepository repository;
@@ -185,7 +185,7 @@ public class PlatformStaffAccountService {
   /** 仮パスワード（URL 安全 Base64 の 16 文字）。生値は符号化して保存した後、応答以外のどこにも残さない。 */
   private String temporaryPassword() {
     byte[] bytes = new byte[12];
-    random.nextBytes(bytes);
+    SECURE_RANDOM.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
