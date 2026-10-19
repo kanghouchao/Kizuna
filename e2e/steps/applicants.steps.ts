@@ -9,6 +9,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   loginAsStoreAdmin,
+  loginPlatformUser,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
@@ -285,8 +286,14 @@ Then(
     });
     expect(created.status(), await created.text()).toBe(201);
     applicantId = (await created.json()).id;
+    // 店舗スタッフは CAST_MANAGE を持つが採用権限は既定授与されない。
+    const staffToken = await loginPlatformUser(
+      request,
+      "yamada.jiro@kizuna.test",
+      ADMIN_PASSWORD,
+    );
     const denied = await request.get(path(), {
-      headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` },
+      headers: { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` },
     });
     expect(denied.status()).toBe(403);
     const outsideStore = await request.get("/api/platform/stores/me", {
