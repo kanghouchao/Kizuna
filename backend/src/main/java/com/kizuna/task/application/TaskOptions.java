@@ -2,6 +2,7 @@ package com.kizuna.task.application;
 
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.execution.TaskHandler;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
@@ -51,7 +52,7 @@ public class TaskOptions {
   public Page<StoreOption> stores(int page, int size) {
     if (page < 0 || size < 1 || size > 100) throw new ServiceException("ページ指定が不正です");
     return stores
-        .findAll(PageRequest.of(page, size, Sort.by("name", "id")))
+        .findAll(PageRequest.of(page, size, Sort.by(Store::getName, Store::getId)))
         .map(store -> new StoreOption(store.getId().toString(), store.getName()));
   }
 

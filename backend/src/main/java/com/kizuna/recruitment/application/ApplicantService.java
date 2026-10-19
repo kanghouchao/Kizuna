@@ -71,7 +71,7 @@ public class ApplicantService {
         PageRequest.of(
             pageable.getPageNumber(),
             Math.clamp(pageable.getPageSize(), 1, 100),
-            Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+            Sort.by(Sort.Direction.DESC, Applicant::getCreatedAt, Applicant::getId));
     return applicants
         .findBy(spec, query -> query.as(ApplicantSummaryView.class).page(bounded))
         .map(mapper::toSummary);

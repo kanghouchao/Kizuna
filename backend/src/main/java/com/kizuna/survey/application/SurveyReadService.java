@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.core.TypedPropertyPath;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -55,7 +56,7 @@ public class SurveyReadService {
   public Page<SurveySummaryResponse> list(
       String email, int page, int size, String q, String id, RevisionStatus status, String sort) {
     actors.require(email, PermissionCode.SURVEY_VIEW);
-    var paging = page(page, size, sort, false);
+    var paging = page(page, size, sort, null, SurveySeries::getCreatedAt, SurveySeries::getId);
     Specification<SurveySeries> spec = (r, query, cb) -> cb.conjunction();
     if (id != null) {
       var target = SurveyInput.id(id);
@@ -133,7 +134,12 @@ public class SurveyReadService {
                 f.as(SurveyRevisionSummaryView.class)
                     .page(
                         PageRequest.of(
-                            page, size, Sort.by(Sort.Direction.DESC, "revisionNumber", "id"))))
+                            page,
+                            size,
+                            Sort.by(
+                                Sort.Direction.DESC,
+                                SurveyRevision::getRevisionNumber,
+                                SurveyRevision::getId))))
         .map(SurveyRevisionSummaryResponse::of);
   }
 
@@ -150,7 +156,14 @@ public class SurveyReadService {
       String sort) {
     actors.require(email, PermissionCode.SURVEY_VIEW);
     requireRevision(sid, rid);
-    var paging = page(page, size, sort, true);
+    var paging =
+        page(
+            page,
+            size,
+            sort,
+            SurveyAnswer::getReceivedAt,
+            SurveyAnswer::getCreatedAt,
+            SurveyAnswer::getId);
     Specification<SurveyAnswer> spec = (r, q, cb) -> cb.equal(r.get("revisionId"), rid);
     if (id != null) {
       var target = SurveyInput.id(id);
@@ -193,7 +206,9 @@ public class SurveyReadService {
                 spec,
                 f ->
                     f.as(SurveyHistoryView.class)
-                        .page(PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))))
+                        .page(
+                            PageRequest.of(
+                                0, size + 1, Sort.by(Sort.Direction.DESC, SurveyHistory::getId))))
             .getContent();
     return CursorPage.of(rows, size, r -> PageCursor.encodeKey(r.getId()));
   }
@@ -248,18 +263,24 @@ public class SurveyReadService {
     if (page < 0 || size < 1 || size > 100) throw SurveyInput.invalid();
   }
 
-  private PageRequest page(int page, int size, String sort, boolean answer) {
+  private <T> PageRequest page(
+      int page,
+      int size,
+      String sort,
+      TypedPropertyPath<T, ?> received,
+      TypedPropertyPath<T, ?> created,
+      TypedPropertyPath<T, ?> id) {
     validatePage(page, size);
     if (sort == null
         || !List.of("CREATED_ASC", "CREATED_DESC").contains(sort)
-            && (!answer || !List.of("RECEIVED_ASC", "RECEIVED_DESC").contains(sort)))
+            && (received == null || !List.of("RECEIVED_ASC", "RECEIVED_DESC").contains(sort)))
       throw SurveyInput.invalid();
     return PageRequest.of(
         page,
         size,
         Sort.by(
             sort.endsWith("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC,
-            sort.startsWith("RECEIVED") ? "receivedAt" : "createdAt",
-            "id"));
+            sort.startsWith("RECEIVED") ? received : created,
+            id));
   }
 }

@@ -74,7 +74,8 @@ public class ServiceExecutionIdentityService {
 
   public Page<Candidate> candidates(int page, int size, PermissionCode permission, Long storeId) {
     if (page < 0 || size < 1 || size > 100) throw new ServiceException("ページ指定が不正です");
-    var pageable = PageRequest.of(page, size, Sort.by("displayName", "id"));
+    var pageable =
+        PageRequest.of(page, size, Sort.by(PlatformUser::getDisplayName, PlatformUser::getId));
     var roleIds = roles.findIdsByPermissionCode(PermissionCode.TASK_EXECUTE.name());
     var taskRoleIds = roles.findIdsByPermissionCode(permission.name());
     if (roleIds.isEmpty() || taskRoleIds.isEmpty()) return Page.empty(pageable);

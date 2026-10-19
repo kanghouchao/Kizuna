@@ -328,7 +328,9 @@ public class ReviewService {
                 spec,
                 q ->
                     q.as(ReviewHistoryView.class)
-                        .page(PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))))
+                        .page(
+                            PageRequest.of(
+                                0, size + 1, Sort.by(Sort.Direction.DESC, ReviewHistory::getId))))
             .getContent();
     return CursorPage.of(rows, size, h -> PageCursor.encodeKey(h.getId()))
         .map(ReviewHistoryResponse::of);
