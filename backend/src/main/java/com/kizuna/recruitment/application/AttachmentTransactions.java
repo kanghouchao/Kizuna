@@ -208,7 +208,11 @@ public class AttachmentTransactions {
             specification,
             query ->
                 query
-                    .sortBy(Sort.by(Sort.Direction.DESC, "createdAt", "id"))
+                    .sortBy(
+                        Sort.by(
+                            Sort.Direction.DESC,
+                            AttachmentUpload::getCreatedAt,
+                            AttachmentUpload::getId))
                     .limit(size + 1)
                     .all());
     return CursorPage.of(

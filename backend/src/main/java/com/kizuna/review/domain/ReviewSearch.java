@@ -4,6 +4,7 @@ import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.Locale;
+import org.springframework.data.core.TypedPropertyPath;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -36,10 +37,14 @@ public record ReviewSearch(
 
   public PageRequest pageable() {
     boolean asc = order == Order.RECEIVED_ASC || order == Order.CREATED_ASC;
-    String field =
-        order == Order.RECEIVED_ASC || order == Order.RECEIVED_DESC ? "receivedAt" : "createdAt";
+    TypedPropertyPath<ReviewRecord, ?> field =
+        order == Order.RECEIVED_ASC || order == Order.RECEIVED_DESC
+            ? ReviewRecord::getReceivedAt
+            : ReviewRecord::getCreatedAt;
     return PageRequest.of(
-        page, size, Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, field, "id"));
+        page,
+        size,
+        Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, field, ReviewRecord::getId));
   }
 
   public Specification<ReviewRecord> specification() {
