@@ -39,8 +39,8 @@ public enum PermissionCode {
   NOTIFICATION_MANAGE(Console.STORE, SystemRole.STORE_MANAGER),
   /** 業務通知の送信待ち登録と明示再試行。閲覧権限と併用する。 */
   NOTIFICATION_SEND(Console.STORE, SystemRole.STORE_MANAGER),
-  /** SERVICE による業務通知の配送と運営側からの手動実行。サービス ID 向けのため既定授与はしない。 */
-  NOTIFICATION_DELIVER(Console.SHARED),
+  /** SERVICE による業務通知の配送と運営側からの手動実行。手動実行者として HQ へ授与する。 */
+  NOTIFICATION_DELIVER(Console.SHARED, SystemRole.HQ_ADMIN),
 
   /** 授権範囲内の運営集計の閲覧。 */
   OPERATIONAL_REPORT_VIEW(Console.SHARED, SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
