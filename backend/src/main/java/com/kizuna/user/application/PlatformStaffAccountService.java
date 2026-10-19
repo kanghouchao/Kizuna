@@ -47,7 +47,7 @@ public class PlatformStaffAccountService {
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   /** 仮パスワードの生成源。予測可能な乱数だと発行直後の乗っ取りを許すため暗号論的乱数に限る。 */
-  private final SecureRandom random = new SecureRandom();
+  private static final SecureRandom random = new SecureRandom();
 
   private final BusinessAudit businessAudit;
   private final PlatformUserRepository repository;
