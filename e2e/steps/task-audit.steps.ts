@@ -20,8 +20,8 @@ const menuPaths = (menus: MenuNode[]): (string | null)[] => menus.flatMap(menu =
 Given('専用の処理実行者とサービスIDが用意されている', async ({ request, $testInfo }) => {
   $testInfo.setTimeout(120000);
   admin = await loginPlatformUser(request, 'admin@kizuna.test', 'pass');
-  expect((await request.get('/api/platform/task-executions', { headers: headers(admin) })).status()).toBe(403);
-  expect((await request.get('/api/platform/audit-events', { headers: headers(admin) })).status()).toBe(403);
+  expect((await request.get('/api/platform/task-executions', { headers: headers(admin) })).status()).toBe(200);
+  expect((await request.get('/api/platform/audit-events', { headers: headers(admin) })).status()).toBe(200);
   const suffix = Date.now().toString();
   password = 'Audit-' + suffix + '-fixture';
   email = 'audit-' + suffix + '@kizuna.test';
@@ -39,7 +39,7 @@ Given('専用の処理実行者とサービスIDが用意されている', async
 });
 
 When('処理を再送し主体の権限と対象範囲を検証する', async ({ request, browser }) => {
-  for (const [token, visible] of [[operator, true], [restricted, false], [admin, false]] as const) {
+  for (const [token, visible] of [[operator, true], [restricted, false], [admin, true]] as const) {
     const menus = await request.get('/api/platform/menus/me', { headers: headers(token) });
     expect(menus.status()).toBe(200);
     const paths = menuPaths(await menus.json());
@@ -78,7 +78,9 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   expect(replayAfterSuspension.status(), await replayAfterSuspension.text()).toBe(200);
   expect((await replayAfterSuspension.json()).execution.id).toBe(execution.id);
   expect((await request.post('/api/platform/task-executions', { headers: headers(operator), data: { ...body, period_end: '2026-10-08' } })).status()).toBe(409);
-  expect((await request.post('/api/platform/task-executions', { headers: headers(admin), data: body })).status()).toBe(403);
+  const adminReplay = await request.post('/api/platform/task-executions', { headers: headers(admin), data: body });
+  expect(adminReplay.status()).toBe(200);
+  expect((await adminReplay.json()).execution.id).toBe(execution.id);
   expect((await request.post('/api/platform/task-executions', { headers: headers(restricted), data: body })).status()).toBe(403);
   expect((await request.post('/api/platform/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
   expect((await request.post(`/api/platform/service-identities/${serviceId}/resumption`, { headers: headers(admin) })).status()).toBe(204);

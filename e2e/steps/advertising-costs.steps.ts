@@ -1025,8 +1025,10 @@ Then(
     expect(row(" ABC ").calculation_status).toBe("NO_COST_RECORDS");
     expect(row("ＡＢＣ").cost_per_order).toBe("200.00");
     expect(row("abc").cost_per_order).toBe("300.00");
-    for (const t of [reader, exporter, orderCostWriter])
+    for (const t of [reader, exporter])
       expect((await read(t)).status()).toBe(403);
+    // 店長は既定授与で広告費 VIEW と ORDER_MANAGE を併せ持つ。
+    expect((await read(orderCostWriter)).status()).toBe(200);
     expect((await read(orderReader)).status()).toBe(200);
     expect((await read(orderReader, foreign)).status()).toBe(403);
     expect(
