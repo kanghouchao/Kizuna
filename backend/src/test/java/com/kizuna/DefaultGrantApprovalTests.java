@@ -54,6 +54,7 @@ import static com.kizuna.user.domain.PermissionCode.SURVEY_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SURVEY_RECORD;
 import static com.kizuna.user.domain.PermissionCode.SURVEY_VIEW;
 import static com.kizuna.user.domain.PermissionCode.SYSTEM_CONFIG_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.TASK_EXECUTE;
 import static com.kizuna.user.domain.PermissionCode.TASK_MANAGE;
 import static com.kizuna.user.domain.SystemRole.HQ_ADMIN;
 import static com.kizuna.user.domain.SystemRole.STORE_MANAGER;
@@ -140,6 +141,20 @@ class DefaultGrantApprovalTests {
           Map.entry(GUARANTEE_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(BONUS_AWARD, Set.of(STORE_MANAGER)),
           Map.entry(REMUNERATION_CORRECT, Set.of(STORE_MANAGER)));
+
+  /** どの平台既定ロールにも与えないと承認済みの権限。サービス ID 専用で人のロールに載せないもの。 */
+  private static final Set<PermissionCode> APPROVED_WITHOUT_DEFAULT_GRANT = Set.of(TASK_EXECUTE);
+
+  @Test
+  @DisplayName("既定授与の無い権限は承認済みのものに限ること")
+  void permissionsWithoutDefaultGrantsAreApproved() {
+    // defaultRoles の省略は実行時 fail-closed だが、上の台帳照合は空の宣言を見ない。新しい権限が
+    // 誰にも授与されないまま出荷されるのを単体段階の失敗に変える — 授与するか本集合へ載せるかを迫る。
+    assertThat(PermissionCode.values())
+        .filteredOn(code -> code.getDefaultRoles().isEmpty())
+        .as("既定授与の無い権限")
+        .containsExactlyInAnyOrderElementsOf(APPROVED_WITHOUT_DEFAULT_GRANT);
+  }
 
   @Test
   @DisplayName("コード側宣言の既定授与が承認台帳と完全に一致すること")

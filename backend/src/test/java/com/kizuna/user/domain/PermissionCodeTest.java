@@ -122,19 +122,10 @@ class PermissionCodeTest {
   }
 
   @Test
-  void attachmentPermissionsAreGrantedOnlyToStoreManager() {
-    assertThat(PermissionCode.RECRUITMENT_ATTACHMENT_VIEW.getDefaultRoles())
-        .containsExactly(SystemRole.STORE_MANAGER);
-    assertThat(PermissionCode.RECRUITMENT_ATTACHMENT_MANAGE.getDefaultRoles())
-        .containsExactly(SystemRole.STORE_MANAGER);
-  }
-
-  @Test
-  void advertisingPlatformReadPermissionsAreHqOnlyWithoutStoreBridge() {
+  void advertisingPlatformReadPermissionsHaveNoStoreBridge() {
     for (var permission :
         List.of(
             PermissionCode.ADVERTISING_COST_SET_VIEW, PermissionCode.ADVERTISING_COST_SET_EXPORT)) {
-      assertThat(permission.getDefaultRoles()).containsExactly(SystemRole.HQ_ADMIN);
       assertThat(permission.grantsStoreConsole()).isFalse();
     }
     assertThat(PermissionCode.ADVERTISING_COST_VIEW.grantsStoreConsole()).isTrue();
@@ -142,15 +133,9 @@ class PermissionCodeTest {
   }
 
   @Test
-  void serviceOnlyPermissionHasNoDefaultGrants() {
-    assertThat(PermissionCode.TASK_EXECUTE.getDefaultRoles()).isEmpty();
-  }
-
-  @Test
-  void manualTaskPermissionsAreGrantedToHqOnlyWithoutStoreBridge() {
+  void manualTaskPermissionsHaveNoStoreBridge() {
     for (var permission :
         List.of(PermissionCode.POINT_EXPIRE, PermissionCode.NOTIFICATION_DELIVER)) {
-      assertThat(permission.getDefaultRoles()).containsExactly(SystemRole.HQ_ADMIN);
       assertThat(permission.grantsStoreConsole()).isFalse();
     }
   }
