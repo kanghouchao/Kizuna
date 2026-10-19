@@ -454,6 +454,17 @@ Then("授権外店舗と無権限の内訳操作は拒否される", async ({ re
     params: { person_id: personId, month },
   });
   expect(managed.status(), await managed.text()).toBe(200);
+  // 店舗スタッフには REMUNERATION_VIEW の既定授与が無い。
+  const staff = await loginPlatformUser(
+    request,
+    "yamada.jiro@kizuna.test",
+    ADMIN_PASSWORD,
+  );
+  const unprivileged = await request.get("/api/store/remuneration-statements", {
+    headers: headers(staff, STORE1_ID),
+    params: { person_id: personId, month },
+  });
+  expect(unprivileged.status()).toBe(403);
   const platform = await request.get("/api/platform/remuneration-statements", {
     headers: { Authorization: `Bearer ${token}` },
     params: { person_id: personId, store_id: STORE1_ID, month },

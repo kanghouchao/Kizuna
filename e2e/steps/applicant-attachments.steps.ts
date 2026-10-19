@@ -3,11 +3,12 @@ import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { PLATFORM_URL } from "../base-url";
-import { ADMIN_PASSWORD, STORE1_ID, STORE_HEADERS, createPermissionRole, loginAsStoreAdmin } from "./store-api";
+import { ADMIN_PASSWORD, STORE1_ID, STORE_HEADERS, createPermissionRole, loginAsStoreAdmin, loginPlatformUser } from "./store-api";
 const { Given, When, Then } = createBdd();
 let storeId = "";
 let token = "";
 let managerToken = "";
+let staffToken = "";
 let email = "";
 let applicantId = "";
 let attachmentId = "";
@@ -26,6 +27,8 @@ Given("添付検証専用の担当者と応募者が存在する", async ({ page
   $testInfo.setTimeout(120000);
   const suffix = randomUUID();
   managerToken = await loginAsStoreAdmin(request);
+  // 店舗スタッフは店舗 1 に授権されるが採用権限は既定授与されない。
+  staffToken = await loginPlatformUser(request, "yamada.jiro@kizuna.test", ADMIN_PASSWORD);
   const ownerLogin = await request.post("/api/platform/login", { data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD } });
   expect(ownerLogin.status()).toBe(200);
   const owner = (await ownerLogin.json()).token;
@@ -157,12 +160,14 @@ Then("添付は認証取得だけに公開され店外と権限不足を拒否�
   expect(head.headers()['content-length']).toBe(file.headers()['content-length']);
   expect((await request.get(contentPath, { headers: STORE_HEADERS })).status()).toBe(401);
   expect((await request.get(contentPath, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` } })).status()).toBe(200);
+  expect((await request.get(contentPath, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` } })).status()).toBe(403);
   const operationPath = `${path()}/attachment-operations/${key}`;
   for (const [url, auth, code] of [
     [operationPath, headers(), 200],
     [`${path()}/attachment-operations/1-1-1-1-1`, headers(), 400],
     [operationPath, STORE_HEADERS, 401],
     [operationPath, { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, 200],
+    [operationPath, { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` }, 403],
     [`${path()}/attachment-operations/${randomUUID()}`, headers(), 404],
   ] as const) {
     const response = await request.get(url, { headers: auth });

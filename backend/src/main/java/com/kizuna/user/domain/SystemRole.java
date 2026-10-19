@@ -13,7 +13,7 @@ import lombok.Getter;
 @Getter
 public enum SystemRole {
 
-  /** HQ（プラットフォーム）管理者。プラットフォーム側の全権限と跨店参照系を持つ。 */
+  /** HQ（プラットフォーム）管理者。プラットフォーム側の全権限（サービス ID 専用の TASK_EXECUTE を除く）と跨店参照系を持つ。 */
   HQ_ADMIN("HQ管理者"),
 
   /** 店長。店舗側の全権限と跨店参照系を持つ。 */
