@@ -19,6 +19,7 @@ import com.kizuna.review.application.ReviewService;
 import com.kizuna.review.domain.ReviewChange;
 import com.kizuna.review.domain.ReviewCorrection;
 import com.kizuna.review.domain.ReviewDetailsView;
+import com.kizuna.review.domain.ReviewHistory;
 import com.kizuna.review.domain.ReviewHistoryRepository;
 import com.kizuna.review.domain.ReviewInput;
 import com.kizuna.review.domain.ReviewOperation;
@@ -53,8 +54,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor.SpecificationFluentQuery;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -304,7 +307,10 @@ class ReviewApplicationTest {
   @Test
   void listAndHistoryExposeOnlyTheirPublicResponseFields() {
     String id = create();
-    when(rows.findBy(any(Specification.class), any(Function.class)))
+    when(rows.findBy(
+            ArgumentMatchers.<Specification<ReviewRecord>>any(),
+            ArgumentMatchers
+                .<Function<? super SpecificationFluentQuery<ReviewRecord>, Object>>any()))
         .thenReturn(
             new PageImpl<>(
                 List.of(projections.createProjection(ReviewSummaryView.class, records.get(id)))));
@@ -313,7 +319,10 @@ class ReviewApplicationTest {
             "actor",
             new ReviewSearch(0, 20, null, null, null, null, ReviewSearch.Order.RECEIVED_DESC));
     assertThat(page.getContent().getFirst().displayName()).isEqualTo("表示名");
-    when(history.findBy(any(Specification.class), any(Function.class)))
+    when(history.findBy(
+            ArgumentMatchers.<Specification<ReviewHistory>>any(),
+            ArgumentMatchers
+                .<Function<? super SpecificationFluentQuery<ReviewHistory>, Object>>any()))
         .thenReturn(new PageImpl<>(List.of()));
     assertThat(service.history("actor", id, null, 20).content()).isEmpty();
     assertThatThrownBy(() -> service.history("actor", id, null, 101))

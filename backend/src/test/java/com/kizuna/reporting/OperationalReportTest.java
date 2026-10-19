@@ -107,7 +107,7 @@ class OperationalReportTest {
       assertThat(orders.getRow(2001).getCell(9).getStringCellValue()).isEqualTo("00002000");
       assertThat(workbook.getSheet("条件と総計").getRow(1).getCell(14).getNumericCellValue())
           .isEqualTo(2001L * Integer.MAX_VALUE);
-      assertThat(workbook.getExternalLinksTable()).isEmpty();
+      assertThat(workbook.getExternalLinksTables()).isEmpty();
       for (var sheet : workbook)
         for (var row : sheet)
           for (var cell : row) assertThat(cell.getCellType()).isNotEqualTo(CellType.FORMULA);
