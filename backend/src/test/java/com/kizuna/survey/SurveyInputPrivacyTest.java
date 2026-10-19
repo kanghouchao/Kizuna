@@ -14,6 +14,7 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.store.application.StoreActivationService;
 import com.kizuna.survey.api.store.SurveyController;
+import com.kizuna.survey.api.store.SurveyResponseController;
 import com.kizuna.survey.application.SurveyReadService;
 import com.kizuna.survey.application.SurveyService;
 import java.util.ArrayList;
@@ -35,7 +36,7 @@ import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(SurveyController.class)
+@WebMvcTest({SurveyController.class, SurveyResponseController.class})
 @Import({SurveyInputPrivacyTest.MethodSecurity.class, StoreContext.class})
 class SurveyInputPrivacyTest {
   @TestConfiguration
