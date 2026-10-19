@@ -143,8 +143,8 @@ final class PngRasterSource {
 
   private static void verifyInflatedSize(Path compressed, long expected, long deadline)
       throws IOException {
-    Inflater inflater = new Inflater();
-    try (InputStream source = Files.newInputStream(compressed);
+    try (Inflater inflater = new Inflater();
+        InputStream source = Files.newInputStream(compressed);
         InflaterInputStream input = new InflaterInputStream(source, inflater)) {
       byte[] buffer = new byte[8192];
       long total = 0;
@@ -161,8 +161,6 @@ final class PngRasterSource {
           || source.read() != -1) throw invalid();
     } catch (EOFException | ZipException exception) {
       throw invalid();
-    } finally {
-      inflater.end();
     }
   }
 
