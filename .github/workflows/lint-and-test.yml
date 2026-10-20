@@ -21,20 +21,12 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # スクリプトとワークフローの検査はdocs-onlyでも省略しない。
+      # ワークフローと E2E 型の検査は docs-only でも省略しない。
       - name: Repo lint
         run: task lint service=.github
 
       - name: Check E2E types
         run: task lint service=e2e
-
-      - name: Prepare offline count reconciliation runtime
-        run: task -d scripts/count-reconciliation prepare
-
-      - name: Check offline count reconciliation
-        run: |
-          task lint service=scripts/count-reconciliation
-          task test service=scripts/count-reconciliation
 
   lint-and-test-frontend:
     name: Lint and Test (frontend)

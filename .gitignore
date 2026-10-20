@@ -8,24 +8,8 @@ Thumbs.db
 # playwright MCP の使い捨て出力（QA エビデンス置き場）
 .playwright-mcp/
 
-# 個人ローカル設定（.claude/ 本体は入庫対象）
-.claude/settings.local.json
-
-# dev-loop のローカル作業文書（skill が「git-excluded」を前提とするため全クローンで除外する）
-docs/plans/
-!docs/agents/
-docs/agents/*
-!docs/agents/issue-tracker.md
-!docs/agents/domain.md
-!docs/agents/triage-labels.md
-docs/superpowers/
-docs/research/
-
-# dev-loop の worktree（プロジェクト内 .worktrees/ に置き、git 追跡対象外にする）
-/.worktrees/
+# Claude Code の個人ローカル設定と worktree（.claude/ は入庫しない）
+.claude/
 
 # モジュール構造テストが生成するドキュメント
 /backend/docs/modulith/
-
-# skillインストールされないので、skills-lock.json は除外する
-skills-lock.json
