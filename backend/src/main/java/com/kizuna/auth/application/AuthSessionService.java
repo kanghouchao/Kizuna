@@ -24,7 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 配送され（{@code TransactionalApplicationListenerSynchronization$PlatformSynchronization} は {@code
  * afterCommit()} を実装していない）、{@code TransactionSynchronizationUtils.invokeAfterCompletion} が
  * Throwable を握って ログへ落とすため、Redis 書き込みが失敗しても管理者には 200 が返る。{@code afterCommit()} を直接登録する経路 （{@code
- * invokeAfterCommit}）だけが例外を伝播させる（PR #435 codex 指摘）。
+ * invokeAfterCommit}）だけが例外を伝播させる。
  */
 @Service
 @RequiredArgsConstructor
