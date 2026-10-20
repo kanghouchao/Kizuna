@@ -21,7 +21,7 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # スクリプトとワークフローの検査はdocs-onlyでも省略しない。
+      # ワークフローと E2E 型の検査は docs-only でも省略しない。
       - name: Repo lint
         run: task lint service=.github
 

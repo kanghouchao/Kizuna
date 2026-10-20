@@ -17,7 +17,7 @@ Kizuna operates multiple stores within one group (CMS / CRM / HRM). Before reaso
 ## Language Policy
 
 - **AI-instruction docs** (this file, per-directory `AGENTS.md`, and `CLAUDE.md` loaders): **English**.
-- **Human-facing docs** (`docs/**`, `README.md`), **code comments**, **GitHub issues/PRs**, and **commit messages**: **Japanese**.
+- **Human-facing docs** (`README.md`, `CONTEXT.md`, `CONTRIBUTING.md`, `frontend/DESIGN.md`, `e2e/README.md`), **code comments**, **GitHub issues/PRs**, and **commit messages**: **Japanese**.
 - Code identifiers, module names, and shell commands stay verbatim regardless of the surrounding language.
 
 ## Comment Policy
