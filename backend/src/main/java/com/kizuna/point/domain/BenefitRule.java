@@ -50,7 +50,7 @@ public class BenefitRule extends BaseEntity {
   @Column(nullable = false, updatable = false, length = 20)
   private BenefitRuleType type;
 
-  /** 発火側の絞り込み種別。授権（{@code PlatformUser}）と同じ語彙を共有するが、意味は「どの店舗での事象を拾うか」である。 */
+  /** 発火側の絞り込み種別。授権（{@code User}）と同じ語彙を共有するが、意味は「どの店舗での事象を拾うか」である。 */
   @Enumerated(EnumType.STRING)
   @Column(name = "store_scope_type", nullable = false, length = 20)
   private StoreScopeType storeScopeType;

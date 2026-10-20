@@ -34,9 +34,9 @@ import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -149,9 +149,9 @@ class ServiceAuditPostgresTest {
     return transactions.execute(
         status ->
             context
-                .getBean(PlatformUserRepository.class)
+                .getBean(UserRepository.class)
                 .saveAndFlush(
-                    PlatformUser.builder()
+                    User.builder()
                         .email(email)
                         .password(UUID.randomUUID().toString())
                         .displayName("検証担当")
@@ -181,9 +181,8 @@ class ServiceAuditPostgresTest {
             status -> {
               var repo = context.getBean(CastRepository.class);
               var person =
-                  repo.findByPlatformUserId(castId)
-                      .orElseGet(
-                          () -> repo.saveAndFlush(Cast.builder().platformUserId(castId).build()));
+                  repo.findByUserId(castId)
+                      .orElseGet(() -> repo.saveAndFlush(Cast.builder().userId(castId).build()));
               return context
                   .getBean(CastEnrollmentRepository.class)
                   .saveAndFlush(CastEnrollment.builder().castId(person.getId()).build())
@@ -667,13 +666,13 @@ class ServiceAuditPostgresTest {
     }
 
     @Bean
-    PlatformUserRepository users(EntityManager em) {
+    UserRepository users(EntityManager em) {
       var factory = new JpaRepositoryFactory(em);
       factory.addRepositoryProxyPostProcessor(
           (proxy, information) ->
               proxy.addAdvice(
                   new PersistenceExceptionTranslationInterceptor(new HibernateJpaDialect())));
-      return factory.getRepository(PlatformUserRepository.class);
+      return factory.getRepository(UserRepository.class);
     }
   }
 }

@@ -10,12 +10,12 @@ import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -47,14 +47,14 @@ public class PlatformStaffService {
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   private final BusinessAudit businessAudit;
-  private final PlatformUserRepository repository;
+  private final UserRepository repository;
   private final RoleRepository roleRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
   private final PasswordEncoder passwordEncoder;
 
   @Transactional(readOnly = true)
   public Page<PlatformStaffResponse> list(String search, Long storeId, Pageable pageable) {
-    Page<PlatformUser> staff =
+    Page<User> staff =
         repository.findAll(staffSpec(search, storeId, roleRepository.findHqRoleIds()), pageable);
     Set<Long> allRoleIds =
         staff.getContent().stream()
@@ -71,8 +71,7 @@ public class PlatformStaffService {
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
    */
-  private static Specification<PlatformUser> staffSpec(
-      String search, Long storeId, Set<Long> hqRoleIds) {
+  private static Specification<User> staffSpec(String search, Long storeId, Set<Long> hqRoleIds) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
@@ -104,8 +103,8 @@ public class PlatformStaffService {
     if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
     }
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email(req.getEmail())
             .password(passwordEncoder.encode(req.getPassword()))
             .displayName(req.getDisplayName())
@@ -129,7 +128,7 @@ public class PlatformStaffService {
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
   public PlatformStaffResponse get(Long id) {
-    PlatformUser user = requireManagedStaff(id, roleRepository.findHqRoleIds());
+    User user = requireManagedStaff(id, roleRepository.findHqRoleIds());
     return toResponse(user, roleNamesOf(user.getRoleIds()));
   }
 
@@ -142,7 +141,7 @@ public class PlatformStaffService {
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
     Set<Long> hqRoleIds = roleRepository.findHqRoleIds();
     requireHqRole(req.getRoleIds(), hqRoleIds);
-    PlatformUser user = requireManagedStaff(id, hqRoleIds);
+    User user = requireManagedStaff(id, hqRoleIds);
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
     // ため、応答で往復させた version を明示比対して 409 で拒否する。
     if (!user.getVersion().equals(req.getVersion())) {
@@ -172,7 +171,7 @@ public class PlatformStaffService {
    * <p>本人種別がスタッフ以外（CAST/MEMBER）の行と、HQ 側ロールを 1 つも持たない行は、存在しても本 API の対象外として 「見つからない」に倒す（一覧と同じ絞り）。
    * 対象外と不在を呼出側から区別できないようにするため、両者は同一の応答になる — 店舗側の利用者の在否をこの面から列挙させない。
    */
-  private PlatformUser requireManagedStaff(Long id, Set<Long> hqRoleIds) {
+  private User requireManagedStaff(Long id, Set<Long> hqRoleIds) {
     return repository
         .findById(id)
         .filter(user -> user.getUserType() == UserType.STAFF)
@@ -208,7 +207,7 @@ public class PlatformStaffService {
    * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（存在しない店舗 id）は店舗エラー、ロール FK
    * 違反（requireRoles 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
    */
-  private PlatformUser save(PlatformUser user) {
+  private User save(User user) {
     return IntegrityViolations.translateOnFailure(
         () -> repository.saveAndFlush(user),
         Map.of(
@@ -220,7 +219,7 @@ public class PlatformStaffService {
             () -> new ServiceException("指定されたロールが存在しません")));
   }
 
-  private static PlatformStaffResponse toResponse(PlatformUser user, Map<Long, String> roleNames) {
+  private static PlatformStaffResponse toResponse(User user, Map<Long, String> roleNames) {
     List<PlatformStaffResponse.RoleRef> roles =
         user.getRoleIds().stream()
             .map(id -> new PlatformStaffResponse.RoleRef(id, roleNames.get(id)))

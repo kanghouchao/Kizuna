@@ -13,7 +13,7 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +35,7 @@ public class CustomerPointService {
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final PointLedgerService pointLedgerService;
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final StoreContext storeContext;
 
   @StoreScoped
@@ -132,7 +132,7 @@ public class CustomerPointService {
    * 失効した認証セッションによる人手の操作がそれと区別できなくなる。
    */
   private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
+    return userRepository
         .findByEmail(actorEmail)
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
         .getId();

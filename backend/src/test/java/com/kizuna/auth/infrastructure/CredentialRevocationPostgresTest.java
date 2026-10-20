@@ -12,9 +12,9 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.config.RedisConfig;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.CredentialOperations;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManagerFactory;
 import java.nio.charset.StandardCharsets;
@@ -73,7 +73,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CredentialRevocationPostgresTest {
   private AnnotationConfigApplicationContext context;
-  private PlatformUserRepository users;
+  private UserRepository users;
   private CredentialOperations credentials;
   private CredentialVersionService versions;
   private RedisTemplate<String, Object> redis;
@@ -86,7 +86,7 @@ class CredentialRevocationPostgresTest {
   @SuppressWarnings("unchecked")
   void connect() throws Exception {
     context = new AnnotationConfigApplicationContext(Config.class);
-    users = context.getBean(PlatformUserRepository.class);
+    users = context.getBean(UserRepository.class);
     credentials = context.getBean(CredentialOperations.class);
     versions = context.getBean(CredentialVersionService.class);
     redis = context.getBean(RedisTemplate.class);
@@ -135,7 +135,7 @@ class CredentialRevocationPostgresTest {
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtValidationException.class);
     assertThat(redis.opsForValue().get(key(user))).isEqualTo("1");
 
-    mutate(user, PlatformUser::resume);
+    mutate(user, User::resume);
     versions.reflect(user.getEmail(), 0);
     assertThat(redis.opsForValue().get(key(user))).isEqualTo("1");
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtValidationException.class);
@@ -176,11 +176,11 @@ class CredentialRevocationPostgresTest {
     assertThat(decoder.decode(token).getSubject()).isEqualTo(user.getEmail());
   }
 
-  private PlatformUser createUser(UserType type) {
+  private User createUser(UserType type) {
     return transaction.execute(
         status ->
             users.saveAndFlush(
-                PlatformUser.builder()
+                User.builder()
                     .email(UUID.randomUUID() + "@revocation.test")
                     .password(UUID.randomUUID().toString())
                     .displayName("失効検証")
@@ -197,7 +197,7 @@ class CredentialRevocationPostgresTest {
                     .build()));
   }
 
-  private String token(PlatformUser user, long version) {
+  private String token(User user, long version) {
     return context
         .getBean(PlatformJwtIssuer.class)
         .issue(
@@ -206,12 +206,12 @@ class CredentialRevocationPostgresTest {
         .token();
   }
 
-  private void mutate(PlatformUser user, Consumer<PlatformUser> mutation) {
+  private void mutate(User user, Consumer<User> mutation) {
     transaction.executeWithoutResult(
         status -> mutation.accept(users.findByIdForUpdate(user.getId()).orElseThrow()));
   }
 
-  private void assertCommittedVersionWithStaleCache(PlatformUser user) {
+  private void assertCommittedVersionWithStaleCache(User user) {
     assertThat(
             jdbc.queryForObject(
                 "select credential_version from t_users where id = ?", Long.class, user.getId()))
@@ -230,7 +230,7 @@ class CredentialRevocationPostgresTest {
     }
   }
 
-  private String key(PlatformUser user) {
+  private String key(User user) {
     return "credential-version:" + user.getEmail();
   }
 
@@ -254,7 +254,7 @@ class CredentialRevocationPostgresTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableJpaRepositories(basePackageClasses = PlatformUserRepository.class)
+  @EnableJpaRepositories(basePackageClasses = UserRepository.class)
   @Import({
     PlatformAuthService.class,
     CredentialOperations.class,

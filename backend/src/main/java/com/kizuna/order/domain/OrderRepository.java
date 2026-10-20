@@ -22,7 +22,7 @@ public interface OrderRepository
       join com.kizuna.cast.domain.CastEnrollment e on e.id = o.castId
       join com.kizuna.cast.domain.Cast c on c.id = e.castId
       join com.kizuna.store.domain.Store st on st.id = o.storeId
-      where c.platformUserId = :userId
+      where c.userId = :userId
       """;
   String SELF_SELECT =
       """
@@ -118,8 +118,8 @@ public interface OrderRepository
         left join com.kizuna.customer.domain.Customer c on c.id = o.customerId
         left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = o.castId
         left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
-        left join com.kizuna.user.domain.PlatformUser u on u.id = o.receptionistId
-        left join com.kizuna.user.domain.PlatformUser cu on cu.id = o.cancelledBy
+        left join com.kizuna.user.domain.User u on u.id = o.receptionistId
+        left join com.kizuna.user.domain.User cu on cu.id = o.cancelledBy
       """;
 
   @Query(

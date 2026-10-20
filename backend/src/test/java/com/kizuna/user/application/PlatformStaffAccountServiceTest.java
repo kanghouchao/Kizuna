@@ -14,13 +14,13 @@ import com.kizuna.user.api.dto.StaffAccountRoleRef;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Optional;
@@ -56,7 +56,7 @@ class PlatformStaffAccountServiceTest {
 
   private static final String ACTOR = "actor@kizuna.test";
 
-  @Mock private PlatformUserRepository repository;
+  @Mock private UserRepository repository;
 
   @Mock private RoleRepository roleRepository;
 
@@ -76,9 +76,9 @@ class PlatformStaffAccountServiceTest {
     return role;
   }
 
-  private PlatformUser staff(long id, String email, Set<Long> roleIds) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private User staff(long id, String email, Set<Long> roleIds) {
+    User user =
+        User.builder()
             .email(email)
             .password("hash")
             .displayName("表示名")
@@ -92,9 +92,9 @@ class PlatformStaffAccountServiceTest {
     return user;
   }
 
-  private PlatformUser castUser(long id, String email) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private User castUser(long id, String email) {
+    User user =
+        User.builder()
             .email(email)
             .password("hash")
             .displayName("キャスト")
@@ -110,7 +110,7 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("守衛が拒否したとき停止も保存も行わないこと")
   void suspend_guardRejectsWithoutStoppingOrSaving() {
-    PlatformUser existing = staff(3L, "last-admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
+    User existing = staff(3L, "last-admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
     when(repository.findStaffEmailById(3L)).thenReturn(Optional.of("last-admin@kizuna.test"));
     when(roleManageHolderGuard.loadForSuspension(3L))
         .thenThrow(new LastRoleManageHolderException("最後の管理権限保持者を停止・降格することはできません"));
@@ -127,7 +127,7 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("他に保持者が残るなら ROLE_MANAGE 保持者の停止は通ること（守衛が停止そのものを塞いでいない対照）")
   void suspend_roleManageHolderWhileAnotherRemains_isAllowed() {
-    PlatformUser existing = staff(3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
+    User existing = staff(3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
     when(repository.findStaffEmailById(3L)).thenReturn(Optional.of("admin@kizuna.test"));
     when(roleManageHolderGuard.loadForSuspension(3L)).thenReturn(existing);
 
@@ -141,7 +141,7 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("非保持者の停止も守衛から取得した対象へ適用すること")
   void suspend_nonHolder_stopsTheTargetReturnedByTheGuard() {
-    PlatformUser existing = staff(4L, "store-only@kizuna.test", Set.of(STORE_SIDE_ROLE));
+    User existing = staff(4L, "store-only@kizuna.test", Set.of(STORE_SIDE_ROLE));
     when(repository.findStaffEmailById(4L)).thenReturn(Optional.of("store-only@kizuna.test"));
     when(roleManageHolderGuard.loadForSuspension(4L)).thenReturn(existing);
 
@@ -168,7 +168,7 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("停止済みでも不減零検証と保存をせず統一操作へ渡すこと")
   void suspend_alreadyDisabled_republishesTheRevocationOnly() {
-    PlatformUser existing = staff(3L, "stopped@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
+    User existing = staff(3L, "stopped@kizuna.test", Set.of(ROLE_MANAGE_ROLE));
     existing.stop();
     when(repository.findStaffEmailById(3L)).thenReturn(Optional.of("stopped@kizuna.test"));
     when(roleManageHolderGuard.loadForSuspension(3L)).thenReturn(existing);
@@ -182,7 +182,7 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("停止済みの再開は enabled を戻し、失効機構には何も発行しないこと（旧セッションは復活しない）")
   void resume_disabledTarget_resumesWithoutPublishing() {
-    PlatformUser existing = staff(3L, "stopped@kizuna.test", Set.of(STORE_SIDE_ROLE));
+    User existing = staff(3L, "stopped@kizuna.test", Set.of(STORE_SIDE_ROLE));
     existing.stop();
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
 
@@ -196,7 +196,7 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("既に有効な対象への再開は 204 相当の no-op で、何も発行しないこと（冪等）")
   void resume_alreadyEnabled_isANoOp() {
-    PlatformUser existing = staff(3L, "enabled@kizuna.test", Set.of(STORE_SIDE_ROLE));
+    User existing = staff(3L, "enabled@kizuna.test", Set.of(STORE_SIDE_ROLE));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
 
     service.resume(3L);
@@ -219,7 +219,7 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("HQ 側ロール保持者へのパスワード再設定は 400 で拒否され、何も書かれないこと（守衛 G6）")
   void resetPassword_hqRoleHolder_isRejectedAndWritesNothing() {
-    PlatformUser existing = staff(3L, "hq@kizuna.test", Set.of(HQ_ROLE));
+    User existing = staff(3L, "hq@kizuna.test", Set.of(HQ_ROLE));
     when(repository.findById(3L)).thenReturn(Optional.of(existing));
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
 
@@ -238,7 +238,7 @@ class PlatformStaffAccountServiceTest {
   void resetPassword_selfTarget_isRejectedWithoutRoleLookup() {
     // JWT の権限は発行時の写しなので、降格済みの残存セッションでは実行主体が店舗側になり G6 を通る。
     // 自己拒否がロール判定に依存しない（roleRepository を引く前に落ちる）ことまで固定する。
-    PlatformUser existing = staff(5L, "self@kizuna.test", Set.of(STORE_SIDE_ROLE));
+    User existing = staff(5L, "self@kizuna.test", Set.of(STORE_SIDE_ROLE));
     when(repository.findById(5L)).thenReturn(Optional.of(existing));
 
     assertThatThrownBy(() -> service.resetPassword(5L, "self@kizuna.test"))
@@ -254,7 +254,7 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("店舗側ロールだけの対象は仮パスワードを符号化して保存し、失効イベントを発行すること")
   void resetPassword_storeSideTarget_encodesAndPublishes() {
-    PlatformUser existing = staff(4L, "store-only@kizuna.test", Set.of(STORE_SIDE_ROLE));
+    User existing = staff(4L, "store-only@kizuna.test", Set.of(STORE_SIDE_ROLE));
     when(repository.findById(4L)).thenReturn(Optional.of(existing));
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
     when(passwordEncoder.encode(ArgumentMatchers.anyString())).thenReturn("encoded");
@@ -288,11 +288,11 @@ class PlatformStaffAccountServiceTest {
   @Test
   @DisplayName("一覧は店舗側ロールしか持たないアカウントも含め、ロール名称を解決して返すこと")
   void list_includesStoreSideOnlyAccountsWithResolvedRoleNames() {
-    List<PlatformUser> accounts =
+    List<User> accounts =
         List.of(
             staff(1L, "hq@kizuna.test", Set.of(ROLE_MANAGE_ROLE)),
             staff(2L, "mgr@kizuna.test", Set.of(STORE_SIDE_ROLE)));
-    when(repository.findAll(ArgumentMatchers.<Specification<PlatformUser>>any(), eq(PAGEABLE)))
+    when(repository.findAll(ArgumentMatchers.<Specification<User>>any(), eq(PAGEABLE)))
         .thenReturn(new PageImpl<>(accounts, PAGEABLE, accounts.size()));
     when(roleRepository.findAllById(Set.of(ROLE_MANAGE_ROLE, STORE_SIDE_ROLE)))
         .thenReturn(List.of(role(ROLE_MANAGE_ROLE, "HQ管理者"), role(STORE_SIDE_ROLE, "店長")));

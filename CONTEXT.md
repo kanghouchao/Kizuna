@@ -17,12 +17,12 @@ Central は構造概念としては退場済みで、プラットフォーム管
 
 ### アカウント
 
-**PlatformUser（プラットフォームユーザー）**:
+**User（ユーザー）**:
 プラットフォーム共通アカウント。本人種別は STAFF / CAST / MEMBER / SERVICE。人のログイン入口は `/platform/login` に統一し、サーバが返す console と本人種別から平台・店舗・キャスト・会員の画面へ振り分ける。授権はロールと本人の店舗集合で表す。店舗コンソール資格は JWT の `storeBridge` と `/platform/me` の `store_bridge` に同源で公開され、店舗 API は授権店舗を検証する。
-避ける表現・設計: PlatformAccount、CentralUser / StoreUser による二重アカウント、ロール名だけでの画面・権限判定
+避ける表現・設計: ロール名だけでの画面・権限判定
 
 **サービスID（本人種別 SERVICE）**:
-定期処理・外部連携の実行主体。資格情報を持たない PlatformUser で、対話ログインしない。自作ロールだけを授与でき、ALL_STORES は明示授与を要する。人と同じ actor 参照・授権語彙を使い、専用管理面で扱う。実行追跡は「定期処理の実行追跡」の項。外部サービス鍵は別課題。理由と構造は ADR 0025。
+定期処理・外部連携の実行主体。資格情報を持たない User で、対話ログインしない。自作ロールだけを授与でき、ALL_STORES は明示授与を要する。人と同じ actor 参照・授権語彙を使い、専用管理面で扱う。実行追跡は「定期処理の実行追跡」の項。外部サービス鍵は別課題。理由と構造は ADR 0025。
 避ける表現・設計: 人の共用アカウント、サービスIDの別表化、既定ロールの授与
 
 **AuthSession（認証セッション）**:
@@ -34,13 +34,13 @@ HQ が理由とパスワード再照合を伴って、一店舗の店舗操作�
 避ける表現・設計: 時限ロール授与、既存行の期限延長、店舗書き込みへの elevation_id 配線
 
 **集合作用域（StoreScope / storeSetFilter / @StoreSetScoped）**:
-PlatformUser の授権を表す店舗集合（ALL_STORES または SPECIFIC_STORES の店舗 ID 集合）。読みは Hibernate の第二 filter（`storeSetFilter`）が機構的に濾過する fail-closed 設計（解決不能なら例外）。書きは明示的単一 storeId を受け取り、その storeId が授権集合に含まれるか検証したうえで既存の単店機構（StoreContext + storeFilter）へ委譲する。
+User の授権を表す店舗集合（ALL_STORES または SPECIFIC_STORES の店舗 ID 集合）。読みは Hibernate の第二 filter（`storeSetFilter`）が機構的に濾過する fail-closed 設計（解決不能なら例外）。書きは明示的単一 storeId を受け取り、その storeId が授権集合に含まれるか検証したうえで既存の単店機構（StoreContext + storeFilter）へ委譲する。
 避ける表現・設計: 読み・書きを同一機構と混同すること（読みは集合フィルタ、書きは単一 storeId 検証で別経路）
 
 スタッフ管理の行使面は四面に分かれる（#762）— **アカウント管理**（平台コンソール。本人種別 STAFF の全アカウントの停止・再開・パスワード代理再設定を担い、授与は一切扱わない）、**管理者管理**（平台コンソール。HQ 側ロール保持者のアカウントのみを扱う）、**店長設定**（店舗管理内の一節。店長の任命・解任・降格。一店 0..n 人）、**店舗スタッフ管理**（店舗コンソール。店舗側ロールのみのアカウントを扱い、行使者は店長）。**HQ の通常セッションは店舗コンソールに入らない**（ADR 0021。緊急昇格は ADR 0024 の別セッション）— 既定授与に店舗コンソール資格になる権限が無く storeBridge は false で、店舗の面は店舗側ロール保持者だけのものである。対象は HQ_ADMIN/STORE_MANAGER/STORE_STAFF のみで、CAST/MEMBER は別チケットの専用フローが扱う。停止（enabled=false）とパスワード変更・再設定は資格情報の版を増やして即時失効する（ADR 0022）。ロール・店舗集合の変更は従来どおり次回ログイン反映。
 
 **Role（ロール）/ Permission（権限）**:
-Permission は機能権限の目録で、PermissionCode から播種する。Role はその束で、既定ロールは改廃不可、自作ロールは管理可能。店舗集合は Role ではなく PlatformUser に属す。authority は PERM\_ 接頭辞の権限で、ROLE_CAST / ROLE_MEMBER は本人種別の標識。
+Permission は機能権限の目録で、PermissionCode から播種する。Role はその束で、既定ロールは改廃不可、自作ロールは管理可能。店舗集合は Role ではなく User に属す。authority は PERM\_ 接頭辞の権限で、ROLE_CAST / ROLE_MEMBER は本人種別の標識。
 
 管理は Owner 層（ROLE_MANAGE: ロール定義・管理者管理・店長任命）、委譲層（STORE_STAFF_MANAGE: 店舗スタッフ）、防提権の守衛に分かれる。店舗側ロールは STORE / SHARED 権限のみで構成し、PLATFORM を含むものは HQ 側となる。委譲先は本人の店舗部分集合・店舗側アカウントに限定し、再委譲権限を持つロールは付与不可。Owner は属性ではなく、有効な ROLE_MANAGE 保持者をゼロにしない守衛で表す。詳細は ADR 0020 / 0021。
 避ける表現・設計: Capability、ロールへの店舗紐付け、店長による店長任命、is_owner
@@ -60,7 +60,7 @@ Permission は機能権限の目録で、PermissionCode から播種する。Rol
 避ける表現・設計: 設定削除による歴史版本の消失、設定改定による既存受注の自動変更
 
 **Cast**:
-店舗を跨いで同一人物を表すプラットフォーム級集約。CAST 種別の PlatformUser と 1:1 で、本人同一性はアカウント同一性に一致する。招待受諾で作成・解決し、本名と生年月日（いずれも任意）を持つ。本人照会は平台専属で読み取り専用。本人・在籍・公開プロフィールの三層は報酬項目を持たない（ADR 0026）。
+店舗を跨いで同一人物を表すプラットフォーム級集約。CAST 種別の User と 1:1 で、本人同一性はアカウント同一性に一致する。招待受諾で作成・解決し、本名と生年月日（いずれも任意）を持つ。本人照会は平台専属で読み取り専用。本人・在籍・公開プロフィールの三層は報酬項目を持たない（ADR 0026）。
 避ける表現・設計: Cast を店舗在籍の意味で使うこと、別アカウント間の自動人物統合
 
 **CastEnrollment（店舗在籍）**:
@@ -126,7 +126,7 @@ Permission は機能権限の目録で、PermissionCode から播種する。Rol
 避ける表現・設計: 完了後訂正の門から自動で引くこと、利用の逆転を新規ロットの再付与で表すこと、受注取消（CONFIRMED / IN_SERVICE → CANCELLED）と混同すること
 
 **Order（注文）**:
-顧客の店舗における 1 回の予約／受注記録。Customer、キャスト（参照先は店舗在籍 = CastEnrollment）、および接客担当（PlatformUser）に紐づく。店舗への帰属は `store_id`（StoreScopedEntity）のみで表し、店舗名を非正規化して保存しない（表示が必要な場合は Store への JOIN で導出する。ADR 0003）。
+顧客の店舗における 1 回の予約／受注記録。Customer、キャスト（参照先は店舗在籍 = CastEnrollment）、および接客担当（User）に紐づく。店舗への帰属は `store_id`（StoreScopedEntity）のみで表し、店舗名を非正規化して保存しない（表示が必要な場合は Store への JOIN で導出する。ADR 0003）。
 **すべての受注は確定で出生する**（ADR 0017）。店舗が起こす受注は電話口で受けると決めた時点で可否が判断済みであり、会員ポータルと公開店面からの申請は別記録の**予約申請（OrderApplication）**が受けて、店舗の確定操作が CONFIRMED の受注を生む。状態機械は CONFIRMED → IN_SERVICE → COMPLETED / CANCELLED（CONFIRMED からの直接完了・取消も可能） のみ。**受付経路 MEMBER_WEB / GUEST_WEB は申請確定由来の受注だけが名乗る**値で、会員ポータル由来が MEMBER_WEB、公開店面のゲスト申請由来が GUEST_WEB になる。どちらも店舗の作成経路では拒否される（広告費と効果集計の根拠になる記録が代理入力で偽装されないため）。
 受注の「人」への帰属は Customer（店舗台帳行）に着地する。会員の申請による受注も確定時に台帳行と関連が整えられ、完了時の会員解決（ポイント記帳先）は「顧客 → 有効な関連 → 会員」の一本だけを通る（ADR 0008）。申請者の記録（requester）は申請の出所であって帰属ではない。顧客にも会員にも帰属しない受注（**無帰属受注**）は正規の状態として成立し、売上には数えるがポイントは記帳されず、店舗のみが見る。
 **取消**は確定した受注を終わらせる唯一の操作で、理由・実行者・時刻を伴い、二度は行えない。理由は「なぜこの受注が消えたか」を後から辿るための人の判断の記録であって、集計のための分類軸ではない。**取消済み・完了済みは終端**であり、内容の書き換えも行の削除も受け付けない — 誤登録も行を消さず取消として残す。完了後に内容を直すことはこれとは別の概念で、権限と訂正の記録を伴う専用の経路（**完了後訂正**）が担う（ADR 0019。財務ロックを設けないという方針は変えない）。
@@ -231,7 +231,7 @@ Order に紐づく 1 名のキャストが**指名**（参照先は店舗在籍 
 店舗サイトのブランドと外観の設定（テンプレート、logo、banner、SNS リンク等）。
 
 **応募者（Applicant）**:
-店舗に属する応募の正本で、Cast・CastEnrollment・PlatformUser を作らない。受付チャネル（PHONE / WEB / MEDIA / OTHER）と応募元（DIRECT / MEDIA / REFERRAL / SCOUT）を区別し、担当者・紹介者・面接担当者名は記録用テキストに留まる。選考状態は RECEIVED → SCREENING ⇄ INTERVIEWED（INTERVIEWED は面接記録を要する）、各状態から WITHDRAWN（応募者の辞退）で、全遷移に理由と状態履歴を伴う。HIRED / REJECTED は終端で、採否確定は RECRUITMENT_DECIDE を要し、最終責任者（本部か店舗か）の裁定を前提とする。
+店舗に属する応募の正本で、Cast・CastEnrollment・User を作らない。受付チャネル（PHONE / WEB / MEDIA / OTHER）と応募元（DIRECT / MEDIA / REFERRAL / SCOUT）を区別し、担当者・紹介者・面接担当者名は記録用テキストに留まる。選考状態は RECEIVED → SCREENING ⇄ INTERVIEWED（INTERVIEWED は面接記録を要する）、各状態から WITHDRAWN（応募者の辞退）で、全遷移に理由と状態履歴を伴う。HIRED / REJECTED は終端で、採否確定は RECRUITMENT_DECIDE を要し、最終責任者（本部か店舗か）の裁定を前提とする。
 権限は RECRUITMENT_VIEW / MANAGE / DECIDE で、CAST_MANAGE では代替しない。一覧は連絡先・住所・経歴・面接内容を返さない。画像添付は RECRUITMENT_ATTACHMENT_VIEW / MANAGE を要する専用の非公開ストレージ経路だけで扱い、JPEG / PNG を再符号化した副本（付加情報除去済み）であって原本の証拠保全ではない。在籍・招待への接続、保持・匿名化方針は別課題。
 避ける表現・設計: 応募者を Cast や在籍の前段状態として持つこと、公開バケットへの添付保存、応募元媒体名を広告費の媒体と同一視すること
 

@@ -25,7 +25,7 @@ import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import com.zaxxer.hikari.HikariDataSource;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
@@ -106,12 +106,12 @@ class PointExpiryPostgresTest {
     jdbc.update(
         "update t_users set enabled=true, store_scope_type='ALL_STORES' where id=?", serviceId);
     jdbc.update(
-        "insert into t_user_roles(platform_user_id,role_id) values (?,?) on conflict do nothing",
+        "insert into t_user_roles(user_id,role_id) values (?,?) on conflict do nothing",
         serviceId,
         expiryRole);
     first.getBean(AppProperties.class).getPointsExpiry().setMaxLots(100);
     jdbc.update(
-        "insert into t_user_roles(platform_user_id,role_id) values (?,?) on conflict do nothing",
+        "insert into t_user_roles(user_id,role_id) values (?,?) on conflict do nothing",
         operator.id(),
         expiryRole);
     memberId = member();
@@ -168,9 +168,7 @@ class PointExpiryPostgresTest {
         .isEqualTo(160);
     jdbc.update("update t_users set enabled=false where id=?", serviceId);
     jdbc.update(
-        "delete from t_user_roles where platform_user_id=? and role_id=?",
-        operator.id(),
-        expiryRole);
+        "delete from t_user_roles where user_id=? and role_id=?", operator.id(), expiryRole);
     var replay = executor.execute(command, operator);
     assertThat(replay.created()).isFalse();
     assertThat(replay.execution().id()).isEqualTo(run.id());
@@ -389,12 +387,10 @@ class PointExpiryPostgresTest {
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(command()))
         .isInstanceOf(AccessDeniedException.class);
     jdbc.update("update t_users set store_scope_type='ALL_STORES' where id=?", serviceId);
-    jdbc.update(
-        "delete from t_user_roles where platform_user_id=? and role_id=?", serviceId, expiryRole);
+    jdbc.update("delete from t_user_roles where user_id=? and role_id=?", serviceId, expiryRole);
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(command()))
         .isInstanceOf(AccessDeniedException.class);
-    jdbc.update(
-        "insert into t_user_roles(platform_user_id,role_id) values (?,?)", serviceId, expiryRole);
+    jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", serviceId, expiryRole);
     jdbc.update("update t_users set enabled=false where id=?", serviceId);
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(command()))
         .isInstanceOf(AccessDeniedException.class);
@@ -413,7 +409,7 @@ class PointExpiryPostgresTest {
                   work.executeWithoutResult(
                       status -> {
                         first
-                            .getBean(PlatformUserRepository.class)
+                            .getBean(UserRepository.class)
                             .findById(serviceId)
                             .orElseThrow()
                             .getRoleIds()
@@ -429,7 +425,7 @@ class PointExpiryPostgresTest {
                                   serviceId);
                           case "role" ->
                               external.update(
-                                  "delete from t_user_roles where platform_user_id=? and role_id=?",
+                                  "delete from t_user_roles where user_id=? and role_id=?",
                                   serviceId,
                                   expiryRole);
                           case "permission" ->
@@ -443,7 +439,7 @@ class PointExpiryPostgresTest {
       external.update(
           "update t_users set enabled=true, store_scope_type='ALL_STORES' where id=?", serviceId);
       external.update(
-          "insert into t_user_roles(platform_user_id,role_id) values (?,?) on conflict do nothing",
+          "insert into t_user_roles(user_id,role_id) values (?,?) on conflict do nothing",
           serviceId,
           expiryRole);
       external.update(
@@ -527,9 +523,7 @@ class PointExpiryPostgresTest {
     assertThatThrownBy(() -> executor.execute(request, new AuditActor(serviceId, "STAFF", "偽装")))
         .isInstanceOf(AccessDeniedException.class);
     jdbc.update(
-        "delete from t_user_roles where platform_user_id=? and role_id=?",
-        operator.id(),
-        expiryRole);
+        "delete from t_user_roles where user_id=? and role_id=?", operator.id(), expiryRole);
     assertThatThrownBy(() -> executor.execute(request, operator))
         .isInstanceOf(AccessDeniedException.class);
     var future =
@@ -544,9 +538,7 @@ class PointExpiryPostgresTest {
     assertThatThrownBy(() -> executor.retry(failed.id(), "再試行", operator))
         .isInstanceOf(AccessDeniedException.class);
     jdbc.update(
-        "insert into t_user_roles(platform_user_id,role_id) values (?,?)",
-        operator.id(),
-        expiryRole);
+        "insert into t_user_roles(user_id,role_id) values (?,?)", operator.id(), expiryRole);
     assertThat(executor.execute(request, operator).execution().status()).isEqualTo("SUCCEEDED");
   }
 
@@ -658,7 +650,7 @@ class PointExpiryPostgresTest {
             key + "@example.test",
             HASH);
     return jdbc.queryForObject(
-        "insert into t_members(member_code,platform_user_id) values (?,?) returning id",
+        "insert into t_members(member_code,user_id) values (?,?) returning id",
         Long.class,
         key.substring(0, 20),
         user);
@@ -684,7 +676,7 @@ class PointExpiryPostgresTest {
             Long.class,
             name);
     for (long role : roles)
-      jdbc.update("insert into t_user_roles(platform_user_id,role_id) values (?,?)", id, role);
+      jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", id, role);
     return id;
   }
 
@@ -723,7 +715,7 @@ class PointExpiryPostgresTest {
         PointEntryRepository.class,
         ExecutionRequestRepository.class,
         AuditEventRepository.class,
-        PlatformUserRepository.class,
+        UserRepository.class,
         StoreRepository.class
       })
   @Import({

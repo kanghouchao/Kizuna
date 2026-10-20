@@ -220,7 +220,7 @@ class MemberRankServiceTest {
 
   /** 判定は「読んで、上位なら書く」なので、会員行は書き込み用のロック付きで引かれる。 */
   private Member stubMember() {
-    Member member = Member.builder().memberCode("123456789012").platformUserId(1L).build();
+    Member member = Member.builder().memberCode("123456789012").userId(1L).build();
     when(memberRepository.findByIdForUpdate(MEMBER_ID)).thenReturn(Optional.of(member));
     return member;
   }

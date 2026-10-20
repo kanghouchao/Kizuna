@@ -11,12 +11,12 @@ import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleInUseException;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleRoleUpdateException;
 import com.kizuna.user.domain.SystemRoleImmutableException;
+import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,7 +42,7 @@ public class RoleService {
   private final BusinessAudit businessAudit;
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
 
   /** 一覧は権限の個数だけを返す要約。権限コードの列挙が要るのは編集時のみで、それは {@link #get(Long)} が担う。 */
@@ -111,7 +111,7 @@ public class RoleService {
     if (Boolean.TRUE.equals(role.getSystemRole())) {
       throw new SystemRoleImmutableException("平台既定ロールは削除できません");
     }
-    if (platformUserRepository.existsByRoleId(id)) {
+    if (userRepository.existsByRoleId(id)) {
       throw new RoleInUseException("授与中のロールは削除できません");
     }
     try {

@@ -17,7 +17,7 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +43,7 @@ public class CustomerMemberLinkService {
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final MemberLookupService memberLookupService;
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final BusinessAudit audit;
 
   @StoreScoped
@@ -238,7 +238,7 @@ public class CustomerMemberLinkService {
 
   /** JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。 */
   private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
+    return userRepository
         .findByEmail(actorEmail)
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
         .getId();

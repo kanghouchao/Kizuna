@@ -6,13 +6,13 @@ import com.kizuna.user.api.dto.StaffAccountRoleRef;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.PermissionRepository;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.security.SecureRandom;
@@ -50,7 +50,7 @@ public class PlatformStaffAccountService {
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
   private final BusinessAudit businessAudit;
-  private final PlatformUserRepository repository;
+  private final UserRepository repository;
   private final RoleRepository roleRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
   private final PasswordEncoder passwordEncoder;
@@ -58,7 +58,7 @@ public class PlatformStaffAccountService {
 
   @Transactional(readOnly = true)
   public Page<StaffAccountSummaryResponse> list(String search, Long storeId, Pageable pageable) {
-    Page<PlatformUser> accounts = repository.findAll(accountSpec(search, storeId), pageable);
+    Page<User> accounts = repository.findAll(accountSpec(search, storeId), pageable);
     Map<Long, String> roleNames =
         roleNamesOf(
             accounts.getContent().stream()
@@ -81,7 +81,7 @@ public class PlatformStaffAccountService {
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
    */
-  private static Specification<PlatformUser> accountSpec(String search, Long storeId) {
+  private static Specification<User> accountSpec(String search, Long storeId) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
@@ -107,7 +107,7 @@ public class PlatformStaffAccountService {
 
   @Transactional(readOnly = true)
   public StaffAccountResponse get(Long id) {
-    PlatformUser user = requireStaffAccount(id);
+    User user = requireStaffAccount(id);
     return new StaffAccountResponse(
         user.getId(),
         user.getEmail(),
@@ -129,7 +129,7 @@ public class PlatformStaffAccountService {
     if (email.equals(actorEmail)) {
       throw new SelfStopNotAllowedException("自分自身を停止することはできません");
     }
-    PlatformUser target = roleManageHolderGuard.loadForSuspension(id);
+    User target = roleManageHolderGuard.loadForSuspension(id);
     boolean wasEnabled = target.getEnabled();
     credentialOperations.stop(target);
     if (wasEnabled) {
@@ -156,7 +156,7 @@ public class PlatformStaffAccountService {
    */
   @Transactional
   public String resetPassword(Long id, String actorEmail) {
-    PlatformUser target = requireStaffAccount(id);
+    User target = requireStaffAccount(id);
     // 自己再設定は G6 に委ねず名指しで拒む。JWT の権限は発行時の写しでロール降格後も失効まで残るため、
     // 降格済みの残存セッションからは自分が店舗側に見え、G6 を素通りして口座を恒久奪取できてしまう。
     if (target.getEmail().equals(actorEmail)) {
@@ -192,7 +192,7 @@ public class PlatformStaffAccountService {
   /** 再開する。既に有効でも 204 で受理する（冪等）。失効機構には何もしない — 停止で増えた版は戻らないため、 停止前のセッションは復活せず再ログインを要する（ADR 0022）。 */
   @Transactional
   public void resume(Long id) {
-    PlatformUser target = requireStaffAccount(id);
+    User target = requireStaffAccount(id);
     if (!target.getEnabled()) {
       target.resume();
       repository.saveAndFlush(target);
@@ -210,7 +210,7 @@ public class PlatformStaffAccountService {
    * アカウント面の対象行を取り出す。本人種別がスタッフ以外（CAST/MEMBER）の行は、存在しても対象外として「見つからない」に倒す。
    * 対象外と不在を呼出側から区別できないようにするため、両者は id を添えた同一の応答になる。
    */
-  private PlatformUser requireStaffAccount(Long id) {
+  private User requireStaffAccount(Long id) {
     return repository
         .findById(id)
         .filter(user -> user.getUserType() == UserType.STAFF)
@@ -221,7 +221,7 @@ public class PlatformStaffAccountService {
     return new NotFoundException("アカウントが見つかりません: " + id);
   }
 
-  private static List<StaffAccountRoleRef> rolesOf(PlatformUser user, Map<Long, String> roleNames) {
+  private static List<StaffAccountRoleRef> rolesOf(User user, Map<Long, String> roleNames) {
     return user.getRoleIds().stream()
         .map(id -> new StaffAccountRoleRef(id, roleNames.get(id)))
         .sorted(

@@ -37,5 +37,5 @@ databaseChangeLog:
         - insert:
             tableName: t_user_roles
             columns:
-              - column: { name: platform_user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'admin@kizuna.test')" }
+              - column: { name: user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'admin@kizuna.test')" }
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }

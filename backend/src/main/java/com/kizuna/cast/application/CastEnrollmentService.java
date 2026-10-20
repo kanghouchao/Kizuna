@@ -18,7 +18,7 @@ import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -38,7 +38,7 @@ public class CastEnrollmentService {
   private final CastEnrollmentRepository enrollments;
   private final CastEnrollmentStatusHistoryRepository histories;
   private final CastEnrollmentSnapshotRepository snapshots;
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final StoreRepository stores;
   private final StoreContext storeContext;
   private final BusinessAudit audit;

@@ -68,10 +68,10 @@ class DailyRemunerationControllerTest {
   @BeforeEach
   void fixture() {
     when(storeExistence.exists(anyLong())).thenReturn(true);
-    var person = Cast.builder().platformUserId(12L).build();
+    var person = Cast.builder().userId(12L).build();
     person.setId(34L);
     when(actors.requireUserId("cast@example.test")).thenReturn(12L);
-    when(people.findByPlatformUserId(12L)).thenReturn(Optional.of(person));
+    when(people.findByUserId(12L)).thenReturn(Optional.of(person));
     when(query.personName(1L, 34L)).thenReturn("本人");
     when(selfQuery.storeName(34L, 1L)).thenReturn("退店店舗");
     when(query.dailyTotal(eq(1L), eq(34L), any())).thenReturn(14000L);
@@ -174,7 +174,7 @@ class DailyRemunerationControllerTest {
 
   @Test
   void castWithoutIdentityCannotReadHistory() throws Exception {
-    when(people.findByPlatformUserId(12L)).thenReturn(Optional.empty());
+    when(people.findByUserId(12L)).thenReturn(Optional.empty());
     mvc.perform(request("self", "2026-09-30")).andExpect(status().isNotFound());
   }
 

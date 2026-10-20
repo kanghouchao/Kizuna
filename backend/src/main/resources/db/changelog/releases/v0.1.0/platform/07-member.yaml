@@ -3,7 +3,7 @@ databaseChangeLog:
       id: platform-v0100-007-member-schema
       author: kanghouchao
       # 会員（Member）。プラットフォーム層の会員身分で、店舗 CRM 台帳（Customer）とは別概念。
-      # PlatformUser（user_type=MEMBER）と 1 対 1 で対応し、来店時に提示する一意の会員コードを持つ。
+      # User（user_type=MEMBER）と 1 対 1 で対応し、来店時に提示する一意の会員コードを持つ。
       # ランクはプラットフォーム級の等級。更新条件（利用回数・付与の純額）が跨店舗の累計である以上、
       # 店舗級には置けない。列の既定は集約の構築時の値と揃えるが、正本は集約側にある。
       preConditions:
@@ -31,13 +31,13 @@ databaseChangeLog:
                     uniqueConstraintName: uq_t_members_member_code
                   remarks: 来店時に提示する一意の会員コード（数字 12 桁）
               - column:
-                  name: platform_user_id
+                  name: user_id
                   type: BIGINT
                   constraints:
                     nullable: false
                     unique: true
-                    uniqueConstraintName: uq_t_members_platform_user
-                  remarks: 会員本人のプラットフォームユーザー（user_type=MEMBER、1 対 1）
+                    uniqueConstraintName: uq_t_members_user
+                  remarks: 会員本人のユーザー（user_type=MEMBER、1 対 1）
               - column:
                   name: rank
                   type: VARCHAR(20)
@@ -67,7 +67,7 @@ databaseChangeLog:
         - addForeignKeyConstraint:
             constraintName: fk_t_members_user
             baseTableName: t_members
-            baseColumnNames: platform_user_id
+            baseColumnNames: user_id
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: CASCADE

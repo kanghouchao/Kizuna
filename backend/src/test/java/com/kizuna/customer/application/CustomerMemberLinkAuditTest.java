@@ -21,9 +21,9 @@ import com.kizuna.member.domain.MemberIdentityView;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -39,7 +39,7 @@ class CustomerMemberLinkAuditTest {
   private final CustomerRepository customers = mock(CustomerRepository.class);
   private final CustomerMemberLinkRepository links = mock(CustomerMemberLinkRepository.class);
   private final MemberRepository members = mock(MemberRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final AuditEventRepository events = mock(AuditEventRepository.class);
   private final List<AuditEvent> audit = new ArrayList<>();
   private CustomerMemberLinkService service;
@@ -47,7 +47,7 @@ class CustomerMemberLinkAuditTest {
   @BeforeEach
   void prepare() {
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("operator@example.test")
             .displayName("監査担当")
             .password(UUID.randomUUID().toString())

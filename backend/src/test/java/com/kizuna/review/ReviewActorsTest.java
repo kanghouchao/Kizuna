@@ -10,9 +10,9 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.math.BigInteger;
 import java.time.Clock;
@@ -31,11 +31,11 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 class ReviewActorsTest {
   private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-10-07T00:00:00Z");
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final RoleRepository roles = mock(RoleRepository.class);
   private final StoreContext store = mock(StoreContext.class);
   private final EmergencyElevationRepository elevations = mock(EmergencyElevationRepository.class);
-  private final PlatformUser user = mock(PlatformUser.class);
+  private final User user = mock(User.class);
   private final ReviewActors actors =
       new ReviewActors(
           users, roles, store, elevations, Clock.fixed(NOW.toInstant(), ZoneOffset.UTC));

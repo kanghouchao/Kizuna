@@ -23,9 +23,9 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.EnumMap;
 import java.util.List;
@@ -42,7 +42,7 @@ class OrderBusinessContactTest {
   private final BusinessContactHistoryRepository histories =
       mock(BusinessContactHistoryRepository.class);
   private final OrderRepository orders = mock(OrderRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final StoreContext store = new StoreContext();
   private final BusinessContactPolicy policy =
       new BusinessContactPolicy(new BusinessContactRestrictions(contacts, store));
@@ -152,7 +152,7 @@ class OrderBusinessContactTest {
     var order = Order.builder().build();
     order.setId("o1");
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("actor@kizuna.test")
             .password(UUID.randomUUID().toString())
             .userType(UserType.STAFF)

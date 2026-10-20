@@ -43,8 +43,8 @@ class CastInvitationServiceTest {
 
   @InjectMocks private CastInvitationService castInvitationService;
 
-  private CastEnrollment cast(String id, Long platformUserId) {
-    CastEnrollment cast = CastEnrollment.builder().castId(platformUserId).build();
+  private CastEnrollment cast(String id, Long userId) {
+    CastEnrollment cast = CastEnrollment.builder().castId(userId).build();
     cast.setId(id);
     cast.setStoreId(1L);
     return cast;

@@ -79,9 +79,9 @@ public class MemberVisitService {
   }
 
   private Long resolveMemberId(String email) {
-    Long platformUserId = actorIdentityService.requireUserId(email);
+    Long userId = actorIdentityService.requireUserId(email);
     return memberLookupService
-        .findByPlatformUserId(platformUserId)
+        .findByUserId(userId)
         .map(MemberLookup::memberId)
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }

@@ -199,7 +199,7 @@ class NotificationPostgresTest {
         "insert into t_role_permissions(role_id,permission_id) select ?,id from t_permissions where code in ('TASK_EXECUTE','NOTIFICATION_DELIVER')",
         serviceRole);
     jdbc.update(
-        "insert into t_user_roles(platform_user_id,role_id) values (?,?),(?,?)",
+        "insert into t_user_roles(user_id,role_id) values (?,?),(?,?)",
         operatorId,
         role,
         serviceId,
@@ -676,8 +676,7 @@ class NotificationPostgresTest {
   void serviceCandidatesRespectTaskPermissionsAndTargetStoreWithoutGrantingExecution() {
     var options = context.getBean(TaskOptions.class);
     jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", serviceId);
-    jdbc.update(
-        "insert into t_user_stores(platform_user_id,store_id) values (?,?)", serviceId, storeId);
+    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", serviceId, storeId);
     assertThat(options.candidates("NOTIFICATION_DELIVER", storeId, 0, 100).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
         .contains(serviceId);

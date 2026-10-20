@@ -22,7 +22,7 @@ import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -60,7 +60,7 @@ public class AttendanceService {
   private final AttendanceMapper attendanceMapper;
   private final ShiftRepository shiftRepository;
   private final CastService castService;
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final BusinessDateService businessDateService;
   private final BusinessAudit audit;
 
@@ -216,7 +216,7 @@ public class AttendanceService {
   }
 
   private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
+    return userRepository
         .findByEmail(actorEmail)
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
         .getId();

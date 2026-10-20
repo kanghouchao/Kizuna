@@ -32,9 +32,9 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -50,7 +50,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ServiceAuditTest {
   private final ServiceItemRepository items = mock(ServiceItemRepository.class);
   private final ServiceRevisionRepository revisions = mock(ServiceRevisionRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final AuditEventRepository events = mock(AuditEventRepository.class);
   private final List<AuditEvent> recorded = new ArrayList<>();
   private final BusinessAudit audit =
@@ -71,7 +71,7 @@ class ServiceAuditTest {
             store,
             audit);
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("operator@example.test")
             .password(UUID.randomUUID().toString())
             .displayName("監査担当")
@@ -222,7 +222,7 @@ class ServiceAuditTest {
     when(items.findForUpdate("service")).thenReturn(Optional.of(item));
     when(revisions.findByServiceIdAndRevisionNumber("service", 1L))
         .thenReturn(Optional.of(revision));
-    when(enrollments.findIdsByPlatformUserIdAndStoreId(9L, 1L)).thenReturn(List.of("enrollment"));
+    when(enrollments.findIdsByUserIdAndStoreId(9L, 1L)).thenReturn(List.of("enrollment"));
     var consent = ServiceConsent.create("enrollment", "service");
     when(consents.findByEnrollmentIdAndServiceId("enrollment", "service"))
         .thenReturn(Optional.of(consent));

@@ -19,9 +19,9 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
@@ -54,7 +54,7 @@ public class CastInvitationAcceptanceService {
   private final CastEnrollmentRepository castRepository;
   private final CastRepository personRepository;
   private final CastProfileRepository profileRepository;
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final StoreRepository storeRepository;
   private final PasswordEncoder passwordEncoder;
 
@@ -81,16 +81,14 @@ public class CastInvitationAcceptanceService {
     CastInvitation invitation = findByToken(token);
     storeRepository.lockAgainstDeletion(invitation.getStoreId());
     CastEnrollment cast = requireCastForUpdate(invitation.getCastId());
-    if (platformUserRepository
-        .findByEmail(request.getEmail().toLowerCase(Locale.ROOT))
-        .isPresent()) {
+    if (userRepository.findByEmail(request.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
     }
     claim(invitation);
 
-    PlatformUser user =
+    User user =
         saveUser(
-            PlatformUser.builder()
+            User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .displayName(request.getDisplayName())
@@ -118,15 +116,15 @@ public class CastInvitationAcceptanceService {
     // 身分は档案・招待の後に押さえる（順序は ADR 0016）。ロック取得後の新鮮な読み込みで storeIds の
     // read-modify-write を直列化し、並行受諾の取りこぼしを防ぐ。非CAST・不在ユーザーの防御的拒否は
     // RuntimeException でトランザクションごとロールバックされ、招待は消費されない。
-    PlatformUser user =
-        platformUserRepository
+    User user =
+        userRepository
             .findByEmailForUpdate(email)
             .orElseThrow(() -> new AccessDeniedException("アクセス権限がありません"));
     if (user.getUserType() != UserType.CAST) {
       throw new AccessDeniedException("CAST アカウントのみ既存受諾できます");
     }
     if (!castRepository
-        .findIdsByPlatformUserIdAndStoreId(user.getId(), invitation.getStoreId())
+        .findIdsByUserIdAndStoreId(user.getId(), invitation.getStoreId())
         .isEmpty()) {
       throw new ConflictException("この店舗には既に有効な在籍があります");
     }
@@ -137,7 +135,7 @@ public class CastInvitationAcceptanceService {
       Set<Long> storeIds = new HashSet<>(user.getStoreIds());
       storeIds.add(invitation.getStoreId());
       user.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
-      platformUserRepository.save(user);
+      userRepository.save(user);
     }
     link(cast, user.getId());
     return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
@@ -163,12 +161,11 @@ public class CastInvitationAcceptanceService {
     }
   }
 
-  private void link(CastEnrollment cast, Long platformUserId) {
+  private void link(CastEnrollment cast, Long userId) {
     Cast person =
         personRepository
-            .findByPlatformUserId(platformUserId)
-            .orElseGet(
-                () -> personRepository.save(Cast.builder().platformUserId(platformUserId).build()));
+            .findByUserId(userId)
+            .orElseGet(() -> personRepository.save(Cast.builder().userId(userId).build()));
     cast.linkCast(person.getId());
     IntegrityViolations.translateOnFailure(
         () -> castRepository.saveAndFlush(cast),
@@ -218,9 +215,9 @@ public class CastInvitationAcceptanceService {
     return invitation.isExpired(OffsetDateTime.now()) ? "EXPIRED" : "VALID";
   }
 
-  private PlatformUser saveUser(PlatformUser user) {
+  private User saveUser(User user) {
     try {
-      return platformUserRepository.save(user);
+      return userRepository.save(user);
     } catch (DataIntegrityViolationException ex) {
       throw IntegrityViolations.translate(
           ex,

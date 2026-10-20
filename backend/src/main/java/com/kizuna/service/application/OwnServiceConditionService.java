@@ -132,7 +132,7 @@ public class OwnServiceConditionService {
   }
 
   private String requireEnrollment(Long actorId) {
-    return enrollments.findIdsByPlatformUserIdAndStoreId(actorId, context.getStoreId()).stream()
+    return enrollments.findIdsByUserIdAndStoreId(actorId, context.getStoreId()).stream()
         .findFirst()
         .orElseThrow(() -> new NotFoundException("本人の有効な在籍が見つかりません"));
   }

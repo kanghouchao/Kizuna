@@ -7,11 +7,11 @@ import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class PlatformUserTest {
+class UserTest {
 
   /** STAFF・ALL_STORES・ロール {1} の妥当な既定値。各テストが対象の属性だけ上書きする。 */
-  private PlatformUser.PlatformUserBuilder staffBuilder() {
-    return PlatformUser.builder()
+  private User.UserBuilder staffBuilder() {
+    return User.builder()
         .email("user@kizuna.test")
         .password("hash")
         .displayName("表示名")
@@ -84,7 +84,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("MEMBER は SPECIFIC_STORES + 空集合で構築でき、どの店舗も授権しない（登録時点で紐づけ店舗なし）")
   void memberWithEmptySpecificStoresBuildsAndAuthorizesNothing() {
-    PlatformUser user =
+    User user =
         staffBuilder()
             .userType(UserType.MEMBER)
             .roleIds(Set.of())
@@ -113,7 +113,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("CAST はロールなしで構築できる")
   void castWithoutRolesBuilds() {
-    PlatformUser user =
+    User user =
         staffBuilder()
             .userType(UserType.CAST)
             .roleIds(Set.of())
@@ -128,7 +128,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("ALL_STORES は任意の店舗 id を授権する")
   void allStoresAuthorizesAnyStore() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
 
     assertThat(user.authorizes(1L)).isTrue();
     assertThat(user.authorizes(999L)).isTrue();
@@ -137,7 +137,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("SPECIFIC_STORES はメンバー店舗のみを授権する")
   void specificStoresAuthorizesOnlyMembers() {
-    PlatformUser user =
+    User user =
         staffBuilder()
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L, 2L))
@@ -151,7 +151,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("email は構築時に小文字へ正規化される")
   void emailIsNormalizedToLowerCase() {
-    PlatformUser user = staffBuilder().email("TANAKA.Hanako@KIZUNA.test").build();
+    User user = staffBuilder().email("TANAKA.Hanako@KIZUNA.test").build();
 
     assertThat(user.getEmail()).isEqualTo("tanaka.hanako@kizuna.test");
   }
@@ -159,7 +159,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("reassignGrants はロール・店舗集合を更新する")
   void reassignGrantsUpdatesAllGrantDimensions() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
 
     user.reassignGrants(Set.of(2L, 3L), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
 
@@ -171,7 +171,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("reassignGrants は STAFF のロール空集合を不変条件違反で拒否する")
   void reassignGrantsWithEmptyRolesThrows() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
 
     assertThatThrownBy(() -> user.reassignGrants(Set.of(), StoreScopeType.ALL_STORES, Set.of()))
         .isInstanceOf(InvalidRoleGrantException.class);
@@ -180,7 +180,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("reassignStores は店舗集合のみを更新しロールを変えない（CAST 受諾用）")
   void reassignStoresUpdatesOnlyStoreScope() {
-    PlatformUser user =
+    User user =
         staffBuilder()
             .userType(UserType.CAST)
             .roleIds(Set.of())
@@ -198,7 +198,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("reassignStores で SPECIFIC_STORES に空集合を渡すと不変条件違反で例外")
   void reassignStoresSpecificWithEmptyThrows() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
 
     assertThatThrownBy(() -> user.reassignStores(StoreScopeType.SPECIFIC_STORES, Set.of()))
         .isInstanceOf(InvalidStoreScopeException.class);
@@ -207,7 +207,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("stop は enabled を false に、resume は true に切り替える（行は保持され実行主体記録が残る）")
   void stopAndResumeToggleEnabled() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
 
     user.stop();
     assertThat(user.getEnabled()).isFalse();
@@ -219,7 +219,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("stop は資格情報の版を増やし、resume は増やさない（再開で停止前セッションは復活しない — ADR 0022）")
   void stopBumpsCredentialVersionAndResumeDoesNot() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
     assertThat(user.getCredentialVersion()).isEqualTo(0L);
 
     user.stop();
@@ -235,7 +235,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("changePassword は資格情報の版を増やす（全端末の既存セッションを失効させる — ADR 0022）")
   void changePasswordBumpsCredentialVersion() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
 
     user.changePassword("new-encoded-hash");
 
@@ -245,7 +245,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("invalidateSessions は資格情報の版をちょうど 1 つ進める（緊急昇格の撤回時の失効 — ADR 0022）")
   void invalidateSessionsBumpsCredentialVersionByOne() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
     assertThat(user.getCredentialVersion()).isZero();
 
     user.invalidateSessions();
@@ -256,7 +256,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("updateDisplayName は表示名を更新する")
   void updateDisplayNameUpdatesDisplayName() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
 
     user.updateDisplayName("新しい表示名");
 
@@ -266,7 +266,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("changePassword はエンコード済みパスワードで置き換える")
   void changePasswordReplacesPassword() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
 
     user.changePassword("new-encoded-hash");
 
@@ -276,7 +276,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("未連携の身分は linkLine で LINE ユーザー ID を持つ")
   void linkLineSetsLineUserId() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
     assertThat(user.getLineUserId()).isNull();
 
     user.linkLine("U-line-1");
@@ -287,7 +287,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("連携済みの身分への再連携は 409 相当のドメイン例外（付け替えを許すと連携先を無断で移せる）")
   void linkLineOnAlreadyLinkedUserThrows() {
-    PlatformUser user = staffBuilder().build();
+    User user = staffBuilder().build();
     user.linkLine("U-line-1");
 
     assertThatThrownBy(() -> user.linkLine("U-line-2"))
@@ -296,8 +296,8 @@ class PlatformUserTest {
   }
 
   /** SERVICE・ALL_STORES・ロール {1} の妥当な既定値。資格情報を持たないことが構築の前提。 */
-  private PlatformUser.PlatformUserBuilder serviceBuilder() {
-    return PlatformUser.builder()
+  private User.UserBuilder serviceBuilder() {
+    return User.builder()
         .displayName("夜間バッチ")
         .enabled(true)
         .userType(UserType.SERVICE)
@@ -309,7 +309,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("SERVICE は email・パスワードなしで構築できる（資格情報を持たないことが構造上の事実）")
   void serviceWithoutCredentialsBuilds() {
-    PlatformUser user = serviceBuilder().build();
+    User user = serviceBuilder().build();
 
     assertThat(user.getUserType()).isEqualTo(UserType.SERVICE);
     assertThat(user.getEmail()).isNull();
@@ -333,7 +333,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("SERVICE の changePassword は不変条件違反で拒否される（構築後にも資格情報を持てない）")
   void serviceChangePasswordThrows() {
-    PlatformUser user = serviceBuilder().build();
+    User user = serviceBuilder().build();
 
     assertThatThrownBy(() -> user.changePassword("new-encoded-hash"))
         .isInstanceOf(InvalidCredentialAssignmentException.class);
@@ -351,7 +351,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("SERVICE への linkLine は不変条件違反で拒否される（構築後にも LINE の同一性根拠を持てない）")
   void serviceLinkLineThrows() {
-    PlatformUser user = serviceBuilder().build();
+    User user = serviceBuilder().build();
 
     assertThatThrownBy(() -> user.linkLine("U-line-1"))
         .isInstanceOf(InvalidCredentialAssignmentException.class);
@@ -368,7 +368,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("SERVICE は ALL_STORES を持てる（明示授与のみ。STAFF と同じ店舗集合の語彙）")
   void serviceWithAllStoresAuthorizesAnyStore() {
-    PlatformUser user = serviceBuilder().build();
+    User user = serviceBuilder().build();
 
     assertThat(user.authorizes(99L)).isTrue();
   }
@@ -388,7 +388,7 @@ class PlatformUserTest {
   @Test
   @DisplayName("SERVICE を停止しても行は残り、過去の実行主体の記録を保持する")
   void serviceStopKeepsTheRow() {
-    PlatformUser user = serviceBuilder().build();
+    User user = serviceBuilder().build();
 
     user.stop();
 

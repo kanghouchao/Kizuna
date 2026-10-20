@@ -80,7 +80,7 @@ public class MonthlyPdfSnapshotService {
     var first = self.monthly(actor, storeId, month, 0, 1);
     var person =
         people
-            .findByPlatformUserId(actors.requireUserId(actor))
+            .findByUserId(actors.requireUserId(actor))
             .orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
     return collect(
         storeId,

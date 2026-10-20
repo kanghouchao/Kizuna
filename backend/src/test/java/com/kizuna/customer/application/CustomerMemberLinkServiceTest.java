@@ -19,9 +19,9 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -50,13 +50,13 @@ class CustomerMemberLinkServiceTest {
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private MemberLookupService memberLookupService;
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
 
   @InjectMocks private CustomerMemberLinkService service;
 
   private void givenActor() {
-    PlatformUser actor =
-        PlatformUser.builder()
+    User actor =
+        User.builder()
             .email(ACTOR_EMAIL)
             .password("encoded")
             .displayName("山田次郎")
@@ -67,7 +67,7 @@ class CustomerMemberLinkServiceTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(ACTOR_ID);
-    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
   }
 
   private void givenCustomerExists() {
@@ -253,7 +253,7 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外で、副作用が無いこと")
   void linkFailsWhenActorMissing() {
-    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
+    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.link(CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);

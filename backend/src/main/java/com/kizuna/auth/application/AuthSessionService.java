@@ -2,7 +2,7 @@ package com.kizuna.auth.application;
 
 import com.kizuna.auth.infrastructure.CredentialVersionService;
 import com.kizuna.auth.infrastructure.TokenBlacklistService;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
+import com.kizuna.user.domain.UserCredentialsChanged;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -12,8 +12,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /**
  * 認証セッション（発行済み JWT が表す認証状態）の失効。ログアウト（トークン単位）と、資格情報の版の変更 （パスワード変更・再設定・停止 — アカウント単位、ADR
- * 0022）が共用する唯一の失効経路。資格情報を変える ユースケースは必ず {@link PlatformUserCredentialsChanged}
- * を発行してここを通すこと（controller で個別に組み立てない）。
+ * 0022）が共用する唯一の失効経路。資格情報を変える ユースケースは必ず {@link UserCredentialsChanged} を発行してここを通すこと（controller
+ * で個別に組み立てない）。
  *
  * <p>backend/CLAUDE.md の既定はモジュール間イベントを {@code @ApplicationModuleListener}（= 非同期 + イベント発行レジストリ）で
  * 受けることだが、本用途だけは同期の {@code @EventListener} + 手書きの commit 後同期を用いる。停止・再設定は 即時性が要る安全制御であり、(1)
@@ -43,7 +43,7 @@ public class AuthSessionService {
    * 逆向きの書き込みと競合することも無く、確定状態の読み直しは要らない。
    */
   @EventListener
-  public void onCredentialsChanged(PlatformUserCredentialsChanged event) {
+  public void onCredentialsChanged(UserCredentialsChanged event) {
     afterCommit(() -> credentialVersionService.reflect(event.email(), event.credentialVersion()));
   }
 

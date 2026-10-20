@@ -36,9 +36,9 @@ import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -143,7 +143,7 @@ class RemunerationPostgresTest {
           context.getBean(StoreContext.class).setStoreId(storeId);
           email = UUID.randomUUID() + "@example.test";
           var actor =
-              PlatformUser.builder()
+              User.builder()
                   .email(email)
                   .password(UUID.randomUUID().toString())
                   .displayName("本人")
@@ -154,7 +154,7 @@ class RemunerationPostgresTest {
                   .storeIds(Set.of(storeId))
                   .build();
           em.persist(actor);
-          var person = Cast.builder().platformUserId(actor.getId()).build();
+          var person = Cast.builder().userId(actor.getId()).build();
           em.persist(person);
           personId = person.getId();
           String first = enrollment(CastEnrollmentStatus.WITHDRAWN),
@@ -564,8 +564,8 @@ class RemunerationPostgresTest {
     }
 
     @Bean
-    PlatformUserRepository users(EntityManager em) {
-      return new JpaRepositoryFactory(em).getRepository(PlatformUserRepository.class);
+    UserRepository users(EntityManager em) {
+      return new JpaRepositoryFactory(em).getRepository(UserRepository.class);
     }
   }
 }

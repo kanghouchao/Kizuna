@@ -22,9 +22,9 @@ public interface EmergencyElevationRepository extends JpaRepository<EmergencyEle
              e.reason as reason, e.activatedAt as activatedAt, e.expiresAt as expiresAt,
              e.status as status, r.displayName as revokerName, e.revokedAt as revokedAt
       from com.kizuna.user.domain.EmergencyElevation e
-        join com.kizuna.user.domain.PlatformUser u on u.id = e.activatedBy
+        join com.kizuna.user.domain.User u on u.id = e.activatedBy
         join com.kizuna.store.domain.Store st on st.id = e.targetStoreId
-        left join com.kizuna.user.domain.PlatformUser r on r.id = e.revokedBy
+        left join com.kizuna.user.domain.User r on r.id = e.revokedBy
       """;
 
   // 新しい発動から。カーソルの比較（下記 AFTER 条件）はこの並びと同じ列の組で行う。

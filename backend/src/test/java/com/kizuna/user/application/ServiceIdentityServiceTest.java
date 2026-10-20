@@ -16,13 +16,13 @@ import com.kizuna.user.api.dto.ServiceIdentityResponse;
 import com.kizuna.user.api.dto.ServiceIdentityRoleRef;
 import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
 import com.kizuna.user.domain.StaleServiceIdentityUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Optional;
@@ -45,7 +45,7 @@ class ServiceIdentityServiceTest {
   private static final long SYSTEM_ROLE = 21L;
 
   @Mock private BusinessAudit businessAudit;
-  @Mock private PlatformUserRepository repository;
+  @Mock private UserRepository repository;
 
   @Mock private RoleRepository roleRepository;
 
@@ -53,7 +53,7 @@ class ServiceIdentityServiceTest {
 
   @InjectMocks private ServiceIdentityService service;
 
-  @Captor private ArgumentCaptor<PlatformUser> userCaptor;
+  @Captor private ArgumentCaptor<User> userCaptor;
 
   private Role role(long id, String name, boolean systemRole) {
     Role role = Role.builder().name(name).systemRole(systemRole).permissionIds(Set.of(1L)).build();
@@ -61,9 +61,9 @@ class ServiceIdentityServiceTest {
     return role;
   }
 
-  private PlatformUser serviceIdentity(long id, Set<Long> roleIds) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private User serviceIdentity(long id, Set<Long> roleIds) {
+    User user =
+        User.builder()
             .displayName("夜間バッチ")
             .enabled(true)
             .userType(UserType.SERVICE)
@@ -102,7 +102,7 @@ class ServiceIdentityServiceTest {
     when(repository.saveAndFlush(userCaptor.capture()))
         .thenAnswer(
             invocation -> {
-              PlatformUser saved = invocation.getArgument(0);
+              User saved = invocation.getArgument(0);
               // 永続化で version 列が初期化される実挙動を模す。
               ReflectionTestUtils.setField(saved, "version", 0L);
               ReflectionTestUtils.setField(saved, "id", 100L);
@@ -111,7 +111,7 @@ class ServiceIdentityServiceTest {
 
     ServiceIdentityResponse res = service.create(createRequest(Set.of(CUSTOM_ROLE)));
 
-    PlatformUser saved = userCaptor.getValue();
+    User saved = userCaptor.getValue();
     assertThat(saved.getUserType()).isEqualTo(UserType.SERVICE);
     assertThat(saved.getEmail()).isNull();
     assertThat(saved.getPassword()).isNull();
@@ -148,7 +148,7 @@ class ServiceIdentityServiceTest {
   void update_reassignsGrants() {
     when(roleRepository.findAllById(Set.of(CUSTOM_ROLE)))
         .thenReturn(List.of(role(CUSTOM_ROLE, "バッチ実行", false)));
-    PlatformUser existing = serviceIdentity(5L, Set.of(CUSTOM_ROLE));
+    User existing = serviceIdentity(5L, Set.of(CUSTOM_ROLE));
     when(repository.findById(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
@@ -185,8 +185,8 @@ class ServiceIdentityServiceTest {
   void update_nonServiceTarget_isNotFound() {
     when(roleRepository.findAllById(Set.of(CUSTOM_ROLE)))
         .thenReturn(List.of(role(CUSTOM_ROLE, "バッチ実行", false)));
-    PlatformUser staff =
-        PlatformUser.builder()
+    User staff =
+        User.builder()
             .email("staff@kizuna.test")
             .password("hash")
             .displayName("職員")
@@ -207,7 +207,7 @@ class ServiceIdentityServiceTest {
   @Test
   @DisplayName("停止は行を押さえて enabled=false へ落とし、停止済みへの再送は何も書かない（冪等）")
   void suspend_isIdempotent() {
-    PlatformUser existing = serviceIdentity(5L, Set.of(CUSTOM_ROLE));
+    User existing = serviceIdentity(5L, Set.of(CUSTOM_ROLE));
     when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
@@ -222,7 +222,7 @@ class ServiceIdentityServiceTest {
   @Test
   @DisplayName("再開は行を押さえて enabled=true へ戻し、有効への再送は何も書かない（冪等）")
   void resume_isIdempotent() {
-    PlatformUser existing = serviceIdentity(5L, Set.of(CUSTOM_ROLE));
+    User existing = serviceIdentity(5L, Set.of(CUSTOM_ROLE));
     existing.stop();
     when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);

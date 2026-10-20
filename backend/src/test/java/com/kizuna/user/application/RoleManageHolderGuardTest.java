@@ -12,9 +12,9 @@ import static org.mockito.Mockito.when;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionRepository;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Optional;
@@ -29,15 +29,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class RoleManageHolderGuardTest {
-  @Mock private PlatformUserRepository repository;
+  @Mock private UserRepository repository;
   @Mock private RoleRepository roleRepository;
   @Mock private PermissionRepository permissionRepository;
   @InjectMocks private RoleManageHolderGuard guard;
 
   @Test
   void grantChange_countsFreshHoldersAfterTheMutexAndPopulationLocks() {
-    PlatformUser target =
-        PlatformUser.builder()
+    User target =
+        User.builder()
             .email("guard@kizuna.test")
             .password("hash")
             .displayName("管理者")
@@ -63,8 +63,8 @@ class RoleManageHolderGuardTest {
 
   @Test
   void suspension_loadsTheTargetAfterTheMutexAndCountsFreshHolders() {
-    PlatformUser target =
-        PlatformUser.builder()
+    User target =
+        User.builder()
             .email("guard@kizuna.test")
             .password("hash")
             .displayName("管理者")
@@ -151,7 +151,7 @@ class RoleManageHolderGuardTest {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void suspension_returnsNonHoldersAndDisabledTargetsWithoutPopulationLocks(boolean enabled) {
-    PlatformUser target = target(Set.of(20L));
+    User target = target(Set.of(20L));
     if (!enabled) {
       target.stop();
     } else {
@@ -180,7 +180,7 @@ class RoleManageHolderGuardTest {
 
   @Test
   void suspension_allowsAHolderWhenAnotherRemains() {
-    PlatformUser target = target(Set.of(10L));
+    User target = target(Set.of(10L));
     when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(target));
     when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of(10L));
     when(repository.findEnabledRoleHolderIds(Set.of(10L))).thenReturn(List.of(1L, 2L));
@@ -223,9 +223,9 @@ class RoleManageHolderGuardTest {
     verify(repository, never()).findEnabledRoleHolderIds(Set.of());
   }
 
-  private PlatformUser target(Set<Long> roleIds) {
-    PlatformUser target =
-        PlatformUser.builder()
+  private User target(Set<Long> roleIds) {
+    User target =
+        User.builder()
             .email("guard@kizuna.test")
             .password("hash")
             .displayName("管理者")

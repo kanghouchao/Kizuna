@@ -1,9 +1,9 @@
 package com.kizuna.user.application;
 
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
 import java.util.List;
@@ -19,13 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 @NamedInterface("receptionist-eligibility")
 @Transactional(readOnly = true)
 public class ReceptionistEligibilityService {
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final RoleRepository roleRepository;
 
   public List<ReceptionistCandidate> listCandidates(Long storeId) {
     Set<Long> roleIds = roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
     // 他店舗・停止中・非 STAFF を DB で除外し、無関係な利用者のロール集合を読み込まない。
-    return platformUserRepository
+    return userRepository
         .findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, storeId)
         .stream()
         .filter(user -> isEligible(user, storeId, roleIds))
@@ -35,22 +35,22 @@ public class ReceptionistEligibilityService {
 
   public Optional<Long> findEligibleIdByEmail(String email, Long storeId) {
     Set<Long> roleIds = roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
-    return platformUserRepository
+    return userRepository
         .findByEmail(email)
         .filter(user -> isEligible(user, storeId, roleIds))
-        .map(PlatformUser::getId);
+        .map(User::getId);
   }
 
   public boolean isEligible(Long userId, Long storeId) {
     Set<Long> roleIds = roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
-    return platformUserRepository
+    return userRepository
         .findById(userId)
         .filter(user -> isEligible(user, storeId, roleIds))
         .isPresent();
   }
 
   // 受付資格は現在のアカウントと保持ロールで判断する。緊急昇格や JWT の権限は資格を与えない。
-  private boolean isEligible(PlatformUser user, Long storeId, Set<Long> roleIds) {
+  private boolean isEligible(User user, Long storeId, Set<Long> roleIds) {
     return user.getUserType() == UserType.STAFF
         && user.getEnabled()
         && user.authorizes(storeId)

@@ -2,7 +2,7 @@ databaseChangeLog:
   - changeSet:
       id: platform-v0100-002-user-schema
       author: kanghouchao
-      # プラットフォーム共通ユーザー（PlatformUser）。身分は全プラットフォーム級で、
+      # プラットフォーム共通ユーザー（User）。身分は全プラットフォーム級で、
       # データの見える範囲は「授権店舗集合（StoreScope）」で決まる。
       preConditions:
         - dbms:
@@ -23,7 +23,7 @@ databaseChangeLog:
               - column:
                   # 資格情報の 2 列が NULL 可なのは本人種別 SERVICE のため。列に値が無いことが
                   # 「サービスIDは対話ログインしない」の構造上の根拠で、種別ごとの要否は
-                  # PlatformUser の不変条件が守る。一意制約は複数の NULL を許すので保つ。
+                  # User の不変条件が守る。一意制約は複数の NULL を許すので保つ。
                   name: email
                   type: VARCHAR(255)
                   constraints:
@@ -100,7 +100,7 @@ databaseChangeLog:
             remarks: 授権店舗集合（store_scope_type=SPECIFIC_STORES 時のみ行を持つ）
             columns:
               - column:
-                  name: platform_user_id
+                  name: user_id
                   type: BIGINT
                   constraints:
                     nullable: false
@@ -111,12 +111,12 @@ databaseChangeLog:
                     nullable: false
         - addPrimaryKey:
             tableName: t_user_stores
-            columnNames: platform_user_id,store_id
+            columnNames: user_id,store_id
             constraintName: pk_t_user_stores
         - addForeignKeyConstraint:
             constraintName: fk_t_user_stores_user
             baseTableName: t_user_stores
-            baseColumnNames: platform_user_id
+            baseColumnNames: user_id
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: CASCADE

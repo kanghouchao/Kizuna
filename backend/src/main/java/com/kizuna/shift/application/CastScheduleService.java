@@ -7,7 +7,7 @@ import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shift.api.dto.CastScheduleResponse;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.domain.ShiftRepository;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -27,7 +27,7 @@ public class CastScheduleService {
 
   private static final int MAX_SPAN_DAYS = 31;
 
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final CastEnrollmentRepository castRepository;
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
@@ -39,11 +39,11 @@ public class CastScheduleService {
       throw new ServiceException("取得範囲が不正です");
     }
     Long userId =
-        platformUserRepository
+        userRepository
             .findByEmail(email)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
             .getId();
-    List<String> castIds = castRepository.findIdsByPlatformUserId(userId);
+    List<String> castIds = castRepository.findIdsByUserId(userId);
     if (castIds.isEmpty()) {
       return List.of();
     }

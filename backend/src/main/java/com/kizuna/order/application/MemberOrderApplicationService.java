@@ -121,10 +121,10 @@ public class MemberOrderApplicationService {
   @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、申請者（requesterMemberId）の一致を取り出しの条件に載せることが唯一の境界")
   @Transactional
   public MemberOrderApplicationResponse withdraw(String email, String applicationId) {
-    Long platformUserId = actorIdentityService.requireUserId(email);
-    MemberLookup member = resolveMemberByPlatformUserId(platformUserId);
+    Long userId = actorIdentityService.requireUserId(email);
+    MemberLookup member = resolveMemberByUserId(userId);
     OrderApplication application = ownedApplication(member.memberId(), applicationId);
-    application.withdraw(platformUserId, OffsetDateTime.now());
+    application.withdraw(userId, OffsetDateTime.now());
     orderApplicationRepository.save(application);
     return toResponse(member.memberId(), applicationId);
   }
@@ -138,12 +138,12 @@ public class MemberOrderApplicationService {
   }
 
   private MemberLookup resolveMember(String email) {
-    return resolveMemberByPlatformUserId(actorIdentityService.requireUserId(email));
+    return resolveMemberByUserId(actorIdentityService.requireUserId(email));
   }
 
-  private MemberLookup resolveMemberByPlatformUserId(Long platformUserId) {
+  private MemberLookup resolveMemberByUserId(Long userId) {
     return memberLookupService
-        .findByPlatformUserId(platformUserId)
+        .findByUserId(userId)
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }
 

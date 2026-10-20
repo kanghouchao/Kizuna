@@ -31,7 +31,7 @@ public class SelfMonthlyRemunerationService {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<SelfMonthlyRemunerationStoreSummary> stores(String actor, int page, int size) {
     var pageable = page(page, size);
-    var person = people.findByPlatformUserId(actors.requireUserId(actor));
+    var person = people.findByUserId(actors.requireUserId(actor));
     return person
         .map(p -> selfQuery.stores(p.getId(), pageable))
         .orElseGet(() -> Page.empty(pageable));
@@ -48,7 +48,7 @@ public class SelfMonthlyRemunerationService {
     var target = YearMonth.parse(month);
     var person =
         people
-            .findByPlatformUserId(actors.requireUserId(actor))
+            .findByUserId(actors.requireUserId(actor))
             .orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
     Long personId = person.getId();
     String name = selfQuery.storeName(personId, storeId);

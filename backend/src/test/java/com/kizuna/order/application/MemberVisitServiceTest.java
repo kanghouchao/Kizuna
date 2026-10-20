@@ -15,9 +15,9 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -42,15 +42,12 @@ import org.springframework.data.domain.Limit;
 class MemberVisitServiceTest {
 
   private static final String EMAIL = "member@example.com";
-  private static final long PLATFORM_USER_ID = 10L;
+  private static final long USER_ID = 10L;
   private static final long MEMBER_ID = 7L;
 
-  private final PlatformUserRepository platformUserRepository =
-      Mockito.mock(PlatformUserRepository.class);
+  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
-  @Spy
-  private ActorIdentityService actorIdentityService =
-      new ActorIdentityService(platformUserRepository);
+  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   @Mock private MemberLookupService memberLookupService;
   @Mock private OrderAttributionRepository orderAttributionRepository;
@@ -122,8 +119,8 @@ class MemberVisitServiceTest {
 
   @BeforeEach
   void resolveAuthenticatedMember() {
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email(EMAIL)
             .password("encoded")
             .displayName("会員 花子")
@@ -132,10 +129,10 @@ class MemberVisitServiceTest {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of())
             .build();
-    user.setId(PLATFORM_USER_ID);
-    Mockito.lenient().when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    user.setId(USER_ID);
+    Mockito.lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     Mockito.lenient()
-        .when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID))
+        .when(memberLookupService.findByUserId(USER_ID))
         .thenReturn(Optional.of(new MemberLookup(MEMBER_ID, "123456789012")));
   }
 
@@ -288,8 +285,7 @@ class MemberVisitServiceTest {
   @Test
   @DisplayName("会員でない主体には来店履歴を開かない")
   void refusesANonMemberPrincipal() {
-    Mockito.when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID))
-        .thenReturn(Optional.empty());
+    Mockito.when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.list(EMAIL, null, 20))
         .isInstanceOf(StaleSessionException.class);
@@ -298,7 +294,7 @@ class MemberVisitServiceTest {
   @Test
   @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外")
   void refusesAStalePrincipal() {
-    Mockito.when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+    Mockito.when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.list(EMAIL, null, 20))
         .isInstanceOf(StaleSessionException.class);

@@ -37,7 +37,7 @@ public class SelfRemunerationService {
   @Transactional(readOnly = true)
   public Page<SelfRemunerationEnrollmentSummary> enrollments(String actor, int page, int size) {
     var pageable = page(page, size);
-    var person = people.findByPlatformUserId(actors.requireUserId(actor));
+    var person = people.findByUserId(actors.requireUserId(actor));
     if (person.isEmpty()) return Page.empty(pageable);
     return enrollments
         .findPersonEnrollments(person.get().getId(), pageable)
@@ -54,8 +54,7 @@ public class SelfRemunerationService {
     Long userId = actors.requireUserId(actor);
     if (enrollmentId == null)
       return orders.findSelfRemunerations(userId, pageable).map(this::summary);
-    var person =
-        people.findByPlatformUserId(userId).orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
+    var person = people.findByUserId(userId).orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
     enrollments
         .findById(enrollmentId)
         .filter(e -> person.getId().equals(e.getCastId()))

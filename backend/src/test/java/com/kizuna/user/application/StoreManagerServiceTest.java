@@ -13,12 +13,12 @@ import com.kizuna.user.api.dto.StoreManagerAppointRequest;
 import com.kizuna.user.api.dto.StoreManagerResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.SystemRole;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Optional;
@@ -64,14 +64,14 @@ class StoreManagerServiceTest {
   private static final String RAW_CREDENTIAL = "rawpass";
 
   @Mock private BusinessAudit businessAudit;
-  @Mock private PlatformUserRepository repository;
+  @Mock private UserRepository repository;
   @Mock private RoleRepository roleRepository;
   @Mock private PasswordEncoder encoder;
   @Mock private StoreExistenceCheck storeExistenceCheck;
 
   @InjectMocks private StoreManagerService service;
 
-  @Captor private ArgumentCaptor<PlatformUser> userCaptor;
+  @Captor private ArgumentCaptor<User> userCaptor;
 
   private void givenStore() {
     when(storeExistenceCheck.exists(STORE)).thenReturn(true);
@@ -101,10 +101,10 @@ class StoreManagerServiceTest {
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE));
   }
 
-  private PlatformUser staff(
+  private User staff(
       long id, Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds, boolean enabled) {
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email("target@kizuna.test")
             .password("hash")
             .displayName("表示名")
@@ -119,15 +119,15 @@ class StoreManagerServiceTest {
     return user;
   }
 
-  private void givenTarget(PlatformUser user) {
+  private void givenTarget(User user) {
     when(repository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
   }
 
   private void givenSaveEchoes() {
-    when(repository.saveAndFlush(ArgumentMatchers.any(PlatformUser.class)))
+    when(repository.saveAndFlush(ArgumentMatchers.any(User.class)))
         .thenAnswer(
             invocation -> {
-              PlatformUser saved = invocation.getArgument(0);
+              User saved = invocation.getArgument(0);
               if (saved.getId() == null) ReflectionTestUtils.setField(saved, "id", 100L);
               return saved;
             });
@@ -153,7 +153,7 @@ class StoreManagerServiceTest {
     givenStore();
     givenManagerRole();
     when(repository.findAll(
-            ArgumentMatchers.<Specification<PlatformUser>>any(), ArgumentMatchers.any(Sort.class)))
+            ArgumentMatchers.<Specification<User>>any(), ArgumentMatchers.any(Sort.class)))
         .thenReturn(
             List.of(
                 staff(
@@ -323,7 +323,7 @@ class StoreManagerServiceTest {
     service.appoint(STORE, appointNew());
 
     verify(repository).saveAndFlush(userCaptor.capture());
-    PlatformUser created = userCaptor.getValue();
+    User created = userCaptor.getValue();
     assertThat(created.getUserType()).isEqualTo(UserType.STAFF);
     assertThat(created.getRoleIds()).containsExactly(MANAGER_ROLE);
     assertThat(created.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
@@ -435,7 +435,7 @@ class StoreManagerServiceTest {
     service.demote(STORE, 5L);
 
     verify(repository).saveAndFlush(userCaptor.capture());
-    PlatformUser demoted = userCaptor.getValue();
+    User demoted = userCaptor.getValue();
     assertThat(demoted.getRoleIds())
         .as("店長ロールだけを店舗スタッフロールへ入れ替え、他のロールは保持すること")
         .containsExactlyInAnyOrder(STAFF_ROLE, CLERK_ROLE);
@@ -455,7 +455,7 @@ class StoreManagerServiceTest {
     service.demote(STORE, 5L);
 
     verify(repository).saveAndFlush(userCaptor.capture());
-    PlatformUser demoted = userCaptor.getValue();
+    User demoted = userCaptor.getValue();
     assertThat(demoted.getRoleIds()).containsExactly(STAFF_ROLE);
     assertThat(demoted.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
     assertThat(demoted.getStoreIds()).isEmpty();

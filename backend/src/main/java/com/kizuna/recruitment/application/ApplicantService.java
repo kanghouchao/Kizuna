@@ -22,7 +22,7 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ApplicantService {
   private final ApplicantRepository applicants;
   private final ApplicantStatusHistoryRepository histories;
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final ApplicantMapper mapper;
   private final BusinessAudit audit;
 

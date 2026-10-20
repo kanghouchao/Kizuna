@@ -75,7 +75,7 @@ public class ShiftRequest extends StoreScopedEntity {
   @Builder.Default
   private ShiftRequestStatus status = ShiftRequestStatus.PENDING;
 
-  /** 承認・却下を実行した者（PlatformUser id）。未処理では null。利用者削除後も申請は残す（FK が SET NULL）。 */
+  /** 承認・却下を実行した者（User id）。未処理では null。利用者削除後も申請は残す（FK が SET NULL）。 */
   @Column(name = "processed_by")
   private Long processedBy;
 

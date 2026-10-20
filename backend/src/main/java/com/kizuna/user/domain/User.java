@@ -40,7 +40,7 @@ import org.hibernate.annotations.BatchSize;
 @Table(name = "t_users")
 @Getter
 @NoArgsConstructor
-public class PlatformUser extends BaseEntity {
+public class User extends BaseEntity {
 
   /** ログイン ID を兼ねるメールアドレス。SERVICE のみ null（資格情報を持たないことの構造上の表現）。 */
   @Column(unique = true, length = 255)
@@ -77,7 +77,7 @@ public class PlatformUser extends BaseEntity {
   // 親エンティティ1行ごとに個別 SELECT を発行する。複数ユーザーを一括取得する経路(受付候補一覧等)で
   // 行数分の副問い合わせが積み上がらないよう、@BatchSize で IN 句によるまとめ取得に切り替える。
   @ElementCollection(fetch = FetchType.EAGER)
-  @CollectionTable(name = "t_user_roles", joinColumns = @JoinColumn(name = "platform_user_id"))
+  @CollectionTable(name = "t_user_roles", joinColumns = @JoinColumn(name = "user_id"))
   @Column(name = "role_id")
   @BatchSize(size = 25)
   private Set<Long> roleIds = new HashSet<>();
@@ -87,13 +87,13 @@ public class PlatformUser extends BaseEntity {
   private StoreScopeType storeScopeType;
 
   @ElementCollection(fetch = FetchType.EAGER)
-  @CollectionTable(name = "t_user_stores", joinColumns = @JoinColumn(name = "platform_user_id"))
+  @CollectionTable(name = "t_user_stores", joinColumns = @JoinColumn(name = "user_id"))
   @Column(name = "store_id")
   @BatchSize(size = 25)
   private Set<Long> storeIds = new HashSet<>();
 
   @Builder
-  public PlatformUser(
+  public User(
       String email,
       String password,
       String displayName,

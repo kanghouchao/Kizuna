@@ -24,9 +24,9 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -55,7 +55,7 @@ class CastInvitationAcceptanceServiceTest {
 
   @Mock private CastInvitationRepository castInvitationRepository;
   @Mock private CastEnrollmentRepository castRepository;
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
   @Mock private StoreRepository storeRepository;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private CastRepository personRepository;
@@ -75,7 +75,7 @@ class CastInvitationAcceptanceServiceTest {
         .thenAnswer(
             inv -> {
               Cast person = inv.getArgument(0);
-              person.setId(person.getPlatformUserId());
+              person.setId(person.getUserId());
               return person;
             });
   }
@@ -118,13 +118,13 @@ class CastInvitationAcceptanceServiceTest {
     assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).claimPending(any(), any(), any(), any());
-    verify(platformUserRepository, never()).save(any());
-    verify(platformUserRepository, never()).findByEmailForUpdate(any());
+    verify(userRepository, never()).save(any());
+    verify(userRepository, never()).findByEmailForUpdate(any());
   }
 
-  private PlatformUser user(long id, UserType userType, Set<Long> storeIds) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private User user(long id, UserType userType, Set<Long> storeIds) {
+    User user =
+        User.builder()
             .email("cast@example.com")
             .password("x")
             .displayName("既存キャスト")
@@ -138,9 +138,9 @@ class CastInvitationAcceptanceServiceTest {
     return user;
   }
 
-  private PlatformUser allStoresUser(long id) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private User allStoresUser(long id) {
+    User user =
+        User.builder()
             .email("cast@example.com")
             .password("x")
             .displayName("全店キャスト")
@@ -235,15 +235,15 @@ class CastInvitationAcceptanceServiceTest {
     CastEnrollment cast = cast("c1", "花子档案");
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast));
-    when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     when(passwordEncoder.encode("password1")).thenReturn("encoded");
-    when(platformUserRepository.save(any()))
+    when(userRepository.save(any()))
         .thenAnswer(
             call -> {
-              PlatformUser saved = call.getArgument(0);
+              User saved = call.getArgument(0);
               saved.setId(42L);
               return saved;
             });
@@ -259,9 +259,9 @@ class CastInvitationAcceptanceServiceTest {
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED));
     assertThat(cast.getCastId()).isEqualTo(42L);
 
-    ArgumentCaptor<PlatformUser> captor = ArgumentCaptor.forClass(PlatformUser.class);
-    verify(platformUserRepository).save(captor.capture());
-    PlatformUser saved = captor.getValue();
+    ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+    verify(userRepository).save(captor.capture());
+    User saved = captor.getValue();
     assertThat(saved.getUserType()).isEqualTo(UserType.CAST);
     assertThat(saved.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(saved.getStoreIds()).containsExactly(1L);
@@ -274,14 +274,14 @@ class CastInvitationAcceptanceServiceTest {
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
-    when(platformUserRepository.findByEmail("dup@example.com"))
+    when(userRepository.findByEmail("dup@example.com"))
         .thenReturn(Optional.of(user(9L, UserType.CAST, Set.of(1L))));
 
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("Dup@Example.com")))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に登録されています");
     assertThat(invitation.getStatus()).isEqualTo(CastInvitation.Status.PENDING);
-    verify(platformUserRepository, never()).save(any());
+    verify(userRepository, never()).save(any());
   }
 
   @Test
@@ -290,13 +290,13 @@ class CastInvitationAcceptanceServiceTest {
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
-    when(platformUserRepository.findByEmail("race@example.com")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("race@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     when(passwordEncoder.encode("password1")).thenReturn("encoded");
     // 事前チェックを擦り抜けた並行登録の敗者側。email 一意制約違反が事前チェックと同じ重複エラーへ写像される。
-    when(platformUserRepository.save(any()))
+    when(userRepository.save(any()))
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
@@ -318,11 +318,11 @@ class CastInvitationAcceptanceServiceTest {
                 invitation(
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1))));
     when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
-    when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("New@Example.com")))
         .isInstanceOf(CastInvitationStateException.class);
-    verify(platformUserRepository, never()).save(any());
+    verify(userRepository, never()).save(any());
   }
 
   @Test
@@ -332,7 +332,7 @@ class CastInvitationAcceptanceServiceTest {
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
-    when(platformUserRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(0);
@@ -340,7 +340,7 @@ class CastInvitationAcceptanceServiceTest {
     // クレームが 0 行なら受諾権を確定できず、身分作成の前に弾かれること（二重登録の防止）。
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("New@Example.com")))
         .isInstanceOf(CastInvitationStateException.class);
-    verify(platformUserRepository, never()).save(any());
+    verify(userRepository, never()).save(any());
   }
 
   @Test
@@ -348,13 +348,12 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     CastEnrollment enrollment = cast("c2", "招待先");
-    PlatformUser existing = user(7L, UserType.CAST, Set.of(1L));
+    User existing = user(7L, UserType.CAST, Set.of(1L));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(enrollment));
     when(castInvitationRepository.claimPending(any(), any(), any(), any())).thenReturn(1);
-    when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
-        .thenReturn(Optional.of(existing));
-    when(castRepository.findIdsByPlatformUserIdAndStoreId(7L, 2L)).thenReturn(List.of("current"));
+    when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(existing));
+    when(castRepository.findIdsByUserIdAndStoreId(7L, 2L)).thenReturn(List.of("current"));
 
     assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
         .isInstanceOf(ConflictException.class)
@@ -362,7 +361,7 @@ class CastInvitationAcceptanceServiceTest {
     assertThat(enrollment.getCastId()).isNull();
     assertThat(existing.getStoreIds()).containsExactly(1L);
     verify(castRepository, never()).saveAndFlush(any());
-    verify(platformUserRepository, never()).save(any());
+    verify(userRepository, never()).save(any());
   }
 
   @Test
@@ -370,11 +369,10 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     CastEnrollment cast = cast("c2", "花子档案（店舗B）");
-    PlatformUser existing = user(7L, UserType.CAST, Set.of(1L));
+    User existing = user(7L, UserType.CAST, Set.of(1L));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast));
-    when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
-        .thenReturn(Optional.of(existing));
+    when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(existing));
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
@@ -390,7 +388,7 @@ class CastInvitationAcceptanceServiceTest {
     verify(castInvitationRepository)
         .claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED));
-    verify(platformUserRepository).save(existing);
+    verify(userRepository).save(existing);
   }
 
   @Test
@@ -398,11 +396,10 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     CastEnrollment cast = cast("c2", "花子档案（全店）");
-    PlatformUser existing = allStoresUser(7L);
+    User existing = allStoresUser(7L);
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast));
-    when(platformUserRepository.findByEmailForUpdate("cast@example.com"))
-        .thenReturn(Optional.of(existing));
+    when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(existing));
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
@@ -415,8 +412,8 @@ class CastInvitationAcceptanceServiceTest {
     assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
     assertThat(existing.getStoreIds()).isEmpty();
     assertThat(cast.getCastId()).isEqualTo(7L);
-    // 授権に変更がないため PlatformUser は永続化しない（档案の紐づけのみ）。
-    verify(platformUserRepository, never()).save(any());
+    // 授権に変更がないため User は永続化しない（档案の紐づけのみ）。
+    verify(userRepository, never()).save(any());
   }
 
   @Test
@@ -425,11 +422,11 @@ class CastInvitationAcceptanceServiceTest {
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast("c2", "花子档案")));
-    // 悲観ロック取得は招待クレーム後（招待→PlatformUser のロック順）。ロック行の本人種別が非CASTなら弾く。
+    // 悲観ロック取得は招待クレーム後（招待→User のロック順）。ロック行の本人種別が非CASTなら弾く。
     when(castInvitationRepository.claimPending(
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
-    when(platformUserRepository.findByEmailForUpdate("staff@example.com"))
+    when(userRepository.findByEmailForUpdate("staff@example.com"))
         .thenReturn(Optional.of(user(8L, UserType.STAFF, Set.of(1L))));
 
     assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "staff@example.com"))
@@ -437,6 +434,6 @@ class CastInvitationAcceptanceServiceTest {
     // 招待エンティティは直接変更しない。クレームの UPDATE は AccessDeniedException で
     // @Transactional ごとロールバックされ、招待は消費されない。
     assertThat(invitation.getStatus()).isEqualTo(CastInvitation.Status.PENDING);
-    verify(platformUserRepository, never()).save(any());
+    verify(userRepository, never()).save(any());
   }
 }

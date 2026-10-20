@@ -14,9 +14,9 @@ import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.HashMap;
 import java.util.List;
@@ -35,7 +35,7 @@ class CastEnrollmentServiceTest {
   @Mock CastEnrollmentRepository enrollments;
   @Mock CastEnrollmentSnapshotRepository snapshots;
   @Mock CastEnrollmentStatusHistoryRepository histories;
-  @Mock PlatformUserRepository users;
+  @Mock UserRepository users;
   @Mock StoreRepository stores;
   @Mock StoreContext storeContext;
   @Mock BusinessAudit audit;
@@ -49,8 +49,8 @@ class CastEnrollmentServiceTest {
             .build();
     var second = CastEnrollment.builder().customFields(new HashMap<>(Map.of("memo", "二"))).build();
     var untouched = CastEnrollment.builder().customFields(Map.of("other", "対象外")).build();
-    PlatformUser actor =
-        PlatformUser.builder()
+    User actor =
+        User.builder()
             .userType(UserType.CAST)
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))

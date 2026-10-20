@@ -85,10 +85,10 @@ import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ReceptionistEligibilityService;
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
@@ -140,18 +140,15 @@ class OrderServiceTest {
   @Mock ConfirmedShiftLookupService confirmedShiftLookupService;
   @Mock PointLedgerService pointLedgerService;
   @Mock AttributionMaterializer materializer;
-  private final PlatformUserRepository platformUserRepository =
-      Mockito.mock(PlatformUserRepository.class);
+  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
-  @Spy
-  private ActorIdentityService actorIdentityService =
-      new ActorIdentityService(platformUserRepository);
+  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   private final RoleRepository roleRepository = Mockito.mock(RoleRepository.class);
 
   @Spy
   private ReceptionistEligibilityService receptionistEligibilityService =
-      new ReceptionistEligibilityService(platformUserRepository, roleRepository);
+      new ReceptionistEligibilityService(userRepository, roleRepository);
 
   @Mock StoreContext storeContext;
   @Mock BusinessDateService businessDateService;
@@ -252,9 +249,8 @@ class OrderServiceTest {
         .thenReturn(new AttributionMaterializer.Result(0, 0));
   }
 
-  private PlatformUser receptionist(
-      UserType userType, StoreScopeType scopeType, Set<Long> storeIds) {
-    return PlatformUser.builder()
+  private User receptionist(UserType userType, StoreScopeType scopeType, Set<Long> storeIds) {
+    return User.builder()
         .email("receptionist@kizuna.test")
         .password("pw")
         .displayName("受付担当")
@@ -267,7 +263,7 @@ class OrderServiceTest {
   }
 
   /** 現店舗(store_id=1)を授権し ORDER_MANAGE 権限を持つ受付担当者。 */
-  private PlatformUser authorizedReceptionist() {
+  private User authorizedReceptionist() {
     return receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(STORE_ID));
   }
 
@@ -356,7 +352,7 @@ class OrderServiceTest {
     selected.setId("c1");
     when(customerRepository.findByIdForUpdateNoWait("c1")).thenReturn(Optional.of(selected));
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
-    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -441,7 +437,7 @@ class OrderServiceTest {
   /** 顧客照合の後に続く検証（指名・受付担当）と応答の組み立てを通す stub。 */
   private void stubCreateHappyPath() {
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
-    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -492,7 +488,7 @@ class OrderServiceTest {
                 .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
-    when(platformUserRepository.findById(1L))
+    when(userRepository.findById(1L))
         .thenReturn(
             Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
@@ -519,7 +515,7 @@ class OrderServiceTest {
                 .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
-    when(platformUserRepository.findById(1L))
+    when(userRepository.findById(1L))
         .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
@@ -545,8 +541,8 @@ class OrderServiceTest {
                 .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 店舗を授権していても、ロールが ORDER_MANAGE を含まない STAFF（HQ 系ロールのみ等）は受付担当者になれない。
-    PlatformUser staffWithoutOrderManage =
-        PlatformUser.builder()
+    User staffWithoutOrderManage =
+        User.builder()
             .email("hq@kizuna.test")
             .password("pw")
             .displayName("HQ系スタッフ")
@@ -556,7 +552,7 @@ class OrderServiceTest {
             .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())
             .build();
-    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(staffWithoutOrderManage));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(staffWithoutOrderManage));
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
@@ -581,9 +577,9 @@ class OrderServiceTest {
                 .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 停止(enabled=false)された STAFF はロール・店舗授権を保持したままだが、受付担当者にはなれない。
-    PlatformUser stopped = authorizedReceptionist();
+    User stopped = authorizedReceptionist();
     stopped.stop();
-    when(platformUserRepository.findById(1L)).thenReturn(Optional.of(stopped));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(stopped));
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
@@ -643,7 +639,7 @@ class OrderServiceTest {
         new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
     req.setCastId("g1");
 
-    PlatformUser actor = authorizedReceptionist();
+    User actor = authorizedReceptionist();
     actor.setId(7L);
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderMapper.toEntity(req))
@@ -653,7 +649,7 @@ class OrderServiceTest {
                 .course(OrderCourses.course("基本", 60, 0))
                 .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
-    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -682,7 +678,7 @@ class OrderServiceTest {
                 .course(OrderCourses.course("基本", 60, 0))
                 .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
-    when(platformUserRepository.findByEmail(ACTOR_EMAIL))
+    when(userRepository.findByEmail(ACTOR_EMAIL))
         .thenReturn(
             Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
@@ -706,7 +702,7 @@ class OrderServiceTest {
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(orderMapper.toPatch(any(OrderUpdateRequest.class))).thenReturn(emptyPatch());
     when(nominatableCast.findForUpdate(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
-    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
+    when(userRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -763,7 +759,7 @@ class OrderServiceTest {
     when(orderMapper.toPatch(any(OrderUpdateRequest.class)))
         .thenReturn(patchWith(builder -> builder.pax(3)));
     when(nominatableCast.findForUpdate(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
-    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
+    when(userRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     when(orderRepository.findViewById(nullable(String.class)))
         .thenReturn(Optional.of(mock(OrderView.class)));
@@ -795,10 +791,10 @@ class OrderServiceTest {
             .course(OrderCourses.course("基本", 60, 0))
             .status(OrderStatus.CONFIRMED)
             .build();
-    PlatformUser actor = authorizedReceptionist();
+    User actor = authorizedReceptionist();
     actor.setId(7L);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
-    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
 
     service.cancel("o1", cancellationRequest("客都合。当日夕方に体調不良の連絡あり"), ACTOR_EMAIL);
@@ -825,11 +821,9 @@ class OrderServiceTest {
               .status(status)
               .build();
       when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-      PlatformUser actor = authorizedReceptionist();
+      User actor = authorizedReceptionist();
       actor.setId(7L);
-      lenient()
-          .when(platformUserRepository.findByEmail(ACTOR_EMAIL))
-          .thenReturn(Optional.of(actor));
+      lenient().when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
 
       assertThatThrownBy(() -> service.cancel("o1", cancellationRequest("理由"), ACTOR_EMAIL))
           .as("状態 %s からの取消が拒否されること", status)
@@ -841,7 +835,7 @@ class OrderServiceTest {
   }
 
   @Test
-  void cancelFailsWhenTheActorIsNoLongerAPlatformUser() {
+  void cancelFailsWhenTheActorIsNoLongerAUser() {
     // 実行者不明のまま取消を通すと、失効した認証セッションによる操作が記録から区別できなくなる
     Order confirmed =
         Order.builder()
@@ -850,7 +844,7 @@ class OrderServiceTest {
             .status(OrderStatus.CONFIRMED)
             .build();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(confirmed));
-    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
+    when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.cancel("o1", cancellationRequest("理由"), ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);
@@ -924,7 +918,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     when(nominatableCast.findForUpdate(STORE_ID, "none")).thenReturn(Optional.empty());
-    when(platformUserRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
+    when(userRepository.findById(2L)).thenReturn(Optional.of(authorizedReceptionist()));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("none");
@@ -997,7 +991,7 @@ class OrderServiceTest {
     assertThat(confirmed.getReceptionistId()).isEqualTo(3L);
     // 適格の問い合わせそのものへ行かないこと。「適格な利用者を返す」で緑にすると、
     // 適格でなくなった担当者で撥ねる退行を見逃す
-    verify(platformUserRepository, never()).findById(anyLong());
+    verify(userRepository, never()).findById(anyLong());
   }
 
   @Test
@@ -1011,7 +1005,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
-    when(platformUserRepository.findById(2L))
+    when(userRepository.findById(2L))
         .thenReturn(
             Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
@@ -1036,7 +1030,7 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderRepository.findById("o1")).thenReturn(Optional.of(existing));
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
-    when(platformUserRepository.findById(2L))
+    when(userRepository.findById(2L))
         .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
@@ -1109,7 +1103,7 @@ class OrderServiceTest {
 
     assertThat(confirmed.getPax()).isEqualTo(4);
     assertThat(confirmed.getReceptionistId()).as("未設定のままであること").isNull();
-    verify(platformUserRepository, never()).findById(any());
+    verify(userRepository, never()).findById(any());
   }
 
   @Test
@@ -1462,9 +1456,9 @@ class OrderServiceTest {
   }
 
   private void stubConfirmActor() {
-    PlatformUser actor = authorizedReceptionist();
+    User actor = authorizedReceptionist();
     actor.setId(7L);
-    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
+    when(userRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
   }
 
   @Test
@@ -1663,11 +1657,9 @@ class OrderServiceTest {
     stubBusinessDate();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
-    PlatformUser otherStoreActor =
-        receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    User otherStoreActor = receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
     otherStoreActor.setId(7L);
-    when(platformUserRepository.findByEmail("staff@kizuna.test"))
-        .thenReturn(Optional.of(otherStoreActor));
+    when(userRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(otherStoreActor));
     stubOrderCreation();
 
     service.confirmApplication("a1", confirmation(), "staff@kizuna.test");
@@ -1686,9 +1678,9 @@ class OrderServiceTest {
     stubBusinessDate();
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    PlatformUser otherStoreReceptionist =
+    User otherStoreReceptionist =
         receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
-    when(platformUserRepository.findById(9L)).thenReturn(Optional.of(otherStoreReceptionist));
+    when(userRepository.findById(9L)).thenReturn(Optional.of(otherStoreReceptionist));
 
     OrderApplicationConfirmationRequest request = confirmation();
     request.setReceptionistId(9L);
@@ -2129,9 +2121,9 @@ class OrderServiceTest {
   }
 
   private void stubActor() {
-    PlatformUser actor = authorizedReceptionist();
+    User actor = authorizedReceptionist();
     actor.setId(ACTOR_ID);
-    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
+    when(userRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(actor));
   }
 
   /**
@@ -2611,13 +2603,13 @@ class OrderServiceTest {
   }
 
   @Test
-  void completeFailsWhenTheActorIsNoLongerAPlatformUser() {
+  void completeFailsWhenTheActorIsNoLongerAUser() {
     // 追記型の台帳では実行者 null が「機構が起こした仕訳」の形。失効した認証セッションによる人手の完了を
     // その形で残さず、台帳を触る前に落とす
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
-    when(platformUserRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
         .isInstanceOf(StaleSessionException.class);
@@ -2825,8 +2817,8 @@ class OrderServiceTest {
   }
 
   /** {@link #authorizedReceptionist()} を id・表示名だけ差し替えて複製する（一覧テストで複数件を区別するため）。 */
-  private PlatformUser staffAuthorizedForCurrentStore(long id, String displayName) {
-    PlatformUser user = authorizedReceptionist();
+  private User staffAuthorizedForCurrentStore(long id, String displayName) {
+    User user = authorizedReceptionist();
     user.setId(id);
     user.updateDisplayName(displayName);
     return user;
@@ -2835,10 +2827,9 @@ class OrderServiceTest {
   @Test
   void listReceptionistsReturnsEligibleStaffOrderedByDisplayName() {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    PlatformUser first = staffAuthorizedForCurrentStore(10L, "あさひ");
-    PlatformUser second = staffAuthorizedForCurrentStore(11L, "ひかり");
-    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
-            UserType.STAFF, STORE_ID))
+    User first = staffAuthorizedForCurrentStore(10L, "あさひ");
+    User second = staffAuthorizedForCurrentStore(11L, "ひかり");
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, STORE_ID))
         .thenReturn(List.of(first, second));
 
     List<OrderReceptionistResponse> result = service.listReceptionists();
@@ -2853,10 +2844,9 @@ class OrderServiceTest {
   @Test
   void listReceptionistsExcludesDisabledStaff() {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    PlatformUser disabled = staffAuthorizedForCurrentStore(10L, "停止済み");
+    User disabled = staffAuthorizedForCurrentStore(10L, "停止済み");
     disabled.stop();
-    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
-            UserType.STAFF, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, STORE_ID))
         .thenReturn(List.of(disabled));
 
     assertThat(service.listReceptionists()).isEmpty();
@@ -2865,11 +2855,9 @@ class OrderServiceTest {
   @Test
   void listReceptionistsExcludesStaffAuthorizedForDifferentStore() {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    PlatformUser otherStore =
-        receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    User otherStore = receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
     otherStore.setId(10L);
-    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
-            UserType.STAFF, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, STORE_ID))
         .thenReturn(List.of(otherStore));
 
     assertThat(service.listReceptionists()).isEmpty();
@@ -2878,10 +2866,9 @@ class OrderServiceTest {
   @Test
   void listReceptionistsExcludesCastRole() {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    PlatformUser cast = receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of());
+    User cast = receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of());
     cast.setId(10L);
-    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
-            UserType.STAFF, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, STORE_ID))
         .thenReturn(List.of(cast));
 
     assertThat(service.listReceptionists()).isEmpty();
@@ -2915,8 +2902,8 @@ class OrderServiceTest {
   @Test
   void listReceptionistsExcludesStaffWithoutOrderManagePermission() {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    PlatformUser noPermission =
-        PlatformUser.builder()
+    User noPermission =
+        User.builder()
             .email("hq2@kizuna.test")
             .password("pw")
             .displayName("HQ系スタッフ2")
@@ -2927,8 +2914,7 @@ class OrderServiceTest {
             .storeIds(Set.of())
             .build();
     noPermission.setId(10L);
-    when(platformUserRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
-            UserType.STAFF, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, STORE_ID))
         .thenReturn(List.of(noPermission));
 
     assertThat(service.listReceptionists()).isEmpty();

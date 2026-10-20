@@ -1,6 +1,6 @@
 package com.kizuna.user.application;
 
-import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.User;
 import jakarta.persistence.criteria.Predicate;
 import java.util.Collections;
 import java.util.Set;
@@ -14,7 +14,7 @@ public final class HqRoleMembership {
     this.roleIds = Set.copyOf(roleIds);
   }
 
-  public Specification<PlatformUser> holders() {
+  public Specification<User> holders() {
     // member of は相関 exists となり、複数ロールを持つ親行も増やさずページングを保つ。
     return (root, query, cb) ->
         cb.or(
@@ -23,7 +23,7 @@ public final class HqRoleMembership {
                 .toArray(Predicate[]::new));
   }
 
-  public Specification<PlatformUser> nonHolders() {
+  public Specification<User> nonHolders() {
     return Specification.not(holders());
   }
 

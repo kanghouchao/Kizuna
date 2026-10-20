@@ -32,9 +32,9 @@ import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -59,7 +59,7 @@ class ShiftServiceTest {
   @Mock private StoreRepository storeRepository;
   @Mock private StoreContext storeContext;
   @Mock private CastProfileRepository castRepository;
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
   @Mock private BusinessDateService businessDateService;
 
   @Mock private BusinessAudit audit;
@@ -78,8 +78,8 @@ class ShiftServiceTest {
   }
 
   private void givenActor() {
-    PlatformUser actor =
-        PlatformUser.builder()
+    User actor =
+        User.builder()
             .email(ACTOR_EMAIL)
             .password("encoded")
             .displayName("店長")
@@ -90,7 +90,7 @@ class ShiftServiceTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(ACTOR_ID);
-    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
   }
 
   private ShiftCreateRequest validCreateRequest() {

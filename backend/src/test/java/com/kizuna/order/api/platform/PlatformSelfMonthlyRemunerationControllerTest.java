@@ -74,10 +74,10 @@ class PlatformSelfMonthlyRemunerationControllerTest {
 
   @BeforeEach
   void identity() {
-    var person = Cast.builder().platformUserId(12L).build();
+    var person = Cast.builder().userId(12L).build();
     person.setId(34L);
     when(actors.requireUserId("cast@example.test")).thenReturn(12L);
-    when(people.findByPlatformUserId(12L)).thenReturn(Optional.of(person));
+    when(people.findByUserId(12L)).thenReturn(Optional.of(person));
   }
 
   @ParameterizedTest
@@ -117,7 +117,7 @@ class PlatformSelfMonthlyRemunerationControllerTest {
         .andExpect(jsonPath("$.orders.total_elements").value(1))
         .andExpect(jsonPath("$.person_id").doesNotExist())
         .andExpect(jsonPath("$.orders.content[0].customer_id").doesNotExist());
-    verify(people).findByPlatformUserId(12L);
+    verify(people).findByUserId(12L);
   }
 
   @Test
@@ -132,7 +132,7 @@ class PlatformSelfMonthlyRemunerationControllerTest {
   @Test
   @DisplayName("本人未作成なら店舗候補は空で月次対象は404になる")
   void unlinkedCast() throws Exception {
-    when(people.findByPlatformUserId(12L)).thenReturn(Optional.empty());
+    when(people.findByUserId(12L)).thenReturn(Optional.empty());
     mvc.perform(request(BASE + "/stores"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isEmpty());

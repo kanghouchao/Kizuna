@@ -37,9 +37,9 @@ import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -62,7 +62,7 @@ class ShiftAuditTest {
   private final AttendanceRepository attendances = mock(AttendanceRepository.class);
   private final CastEnrollmentRepository enrollments = mock(CastEnrollmentRepository.class);
   private final StoreRepository stores = mock(StoreRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final List<AuditEvent> events = new ArrayList<>();
   private final BusinessDateService dates =
       new BusinessDateService(mock(SystemConfigService.class), Clock.systemUTC());
@@ -80,7 +80,7 @@ class ShiftAuditTest {
   @BeforeEach
   void prepare() {
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("operator@example.test")
             .password(UUID.randomUUID().toString())
             .enabled(true)
@@ -118,8 +118,8 @@ class ShiftAuditTest {
         .setAuthentication(
             new UsernamePasswordAuthenticationToken(actor.getEmail(), null, List.of()));
     when(enrollments.findByIdForUpdate("cast")).thenReturn(Optional.of(enrollment));
-    when(enrollments.findIdsByPlatformUserIdAndStoreId(9L, 1L)).thenReturn(List.of("cast"));
-    when(enrollments.findIdsByPlatformUserId(9L)).thenReturn(List.of("cast"));
+    when(enrollments.findIdsByUserIdAndStoreId(9L, 1L)).thenReturn(List.of("cast"));
+    when(enrollments.findIdsByUserId(9L)).thenReturn(List.of("cast"));
     when(requests.save(any(ShiftRequest.class)))
         .thenAnswer(
             call -> {

@@ -13,7 +13,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.auth.api.dto.EmergencyElevationActivationResponse;
 import com.kizuna.auth.api.dto.EmergencyElevationSummaryResponse;
 import com.kizuna.auth.api.dto.Token;
-import com.kizuna.auth.infrastructure.PlatformUserDetails;
+import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -23,9 +23,9 @@ import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
 import com.kizuna.user.domain.EmergencyElevationView;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -54,7 +54,7 @@ class EmergencyElevationServiceTest {
 
   @Mock private BusinessAudit businessAudit;
   @Mock private EmergencyElevationRepository elevationRepository;
-  @Mock private PlatformUserRepository userRepository;
+  @Mock private UserRepository userRepository;
   @Mock private PlatformAuthService authService;
   @Mock private AuthenticationManager authenticationManager;
   @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
@@ -62,9 +62,9 @@ class EmergencyElevationServiceTest {
 
   @InjectMocks private EmergencyElevationService service;
 
-  private static PlatformUser user(String email, long id) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private static User user(String email, long id) {
+    User user =
+        User.builder()
             .email(email)
             .password("stored-hash")
             .displayName("HQ管理者")
@@ -78,9 +78,9 @@ class EmergencyElevationServiceTest {
     return user;
   }
 
-  private void stubSuccessfulReauthentication(PlatformUser operator) {
+  private void stubSuccessfulReauthentication(User operator) {
     when(authenticationManager.authenticate(any())).thenReturn(authentication);
-    when(authentication.getPrincipal()).thenReturn(new PlatformUserDetails(operator));
+    when(authentication.getPrincipal()).thenReturn(new UserPrincipal(operator));
   }
 
   private static EmergencyElevation elevationOf(long id, long activatedBy) {
@@ -108,7 +108,7 @@ class EmergencyElevationServiceTest {
   @Test
   @DisplayName("発動が記録を確定させてから昇格トークンを発行すること")
   void activatePersistsRecordBeforeIssuingToken() {
-    PlatformUser operator = user("admin@kizuna.test", 7L);
+    User operator = user("admin@kizuna.test", 7L);
     stubSuccessfulReauthentication(operator);
     when(elevationRepository.saveAndFlush(any(EmergencyElevation.class)))
         .thenAnswer(
@@ -159,8 +159,8 @@ class EmergencyElevationServiceTest {
   @Test
   @DisplayName("撤回が記録を閉じ、発動者の資格情報の版を進めた後の値を事象で運ぶこと")
   void revokeClosesRecordAndBumpsActivatorCredentialVersion() {
-    PlatformUser activator = user("activator@kizuna.test", 7L);
-    PlatformUser revoker = user("revoker@kizuna.test", 8L);
+    User activator = user("activator@kizuna.test", 7L);
+    User revoker = user("revoker@kizuna.test", 8L);
     EmergencyElevation elevation = elevationOf(99L, 7L);
     when(elevationRepository.findById(99L)).thenReturn(Optional.of(elevation));
     when(userRepository.findByEmail("revoker@kizuna.test")).thenReturn(Optional.of(revoker));
@@ -181,8 +181,8 @@ class EmergencyElevationServiceTest {
   @Test
   @DisplayName("撤回が同じ発動者のまだ有効な他の昇格も同時に閉じること（期限切れの除外は問い合わせの述語）")
   void revokeAlsoClosesActivatorsOtherLiveElevations() {
-    PlatformUser activator = user("activator@kizuna.test", 7L);
-    PlatformUser revoker = user("revoker@kizuna.test", 8L);
+    User activator = user("activator@kizuna.test", 7L);
+    User revoker = user("revoker@kizuna.test", 8L);
     EmergencyElevation target = elevationOf(99L, 7L);
     EmergencyElevation live = elevationOf(100L, 7L);
     when(elevationRepository.findById(99L)).thenReturn(Optional.of(target));

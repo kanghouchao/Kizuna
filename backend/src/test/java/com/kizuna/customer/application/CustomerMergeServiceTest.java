@@ -25,9 +25,9 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
@@ -69,7 +69,7 @@ class CustomerMergeServiceTest {
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
   @Mock private StoreContext storeContext;
 
   @Mock private MergePreparation preparation;
@@ -391,8 +391,8 @@ class CustomerMergeServiceTest {
   }
 
   private void givenActor() {
-    PlatformUser actor =
-        PlatformUser.builder()
+    User actor =
+        User.builder()
             .email(ACTOR_EMAIL)
             .password("encoded")
             .displayName("田中花子")
@@ -403,7 +403,7 @@ class CustomerMergeServiceTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(ACTOR_ID);
-    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
   }
 
   /** 両行が押さえられた状態。戻り値は被統合行の実体（墓標化の宛先）。 */

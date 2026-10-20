@@ -51,8 +51,8 @@ public class MemberReceiptClaimService {
   @StoreScopeExempt(reason = "トークンの鍵付きダイジェスト一致だけが申領を成立させる材料で、受注は店舗を跨いで引く（店舗で絞ると照合が成立しない）")
   @Transactional
   public MemberReceiptClaimResponse claim(String email, String rawToken) {
-    Long platformUserId = actorIdentityService.requireUserId(email);
-    MemberLookup member = resolveMember(platformUserId);
+    Long userId = actorIdentityService.requireUserId(email);
+    MemberLookup member = resolveMember(userId);
 
     OrderReceiptToken token =
         orderReceiptTokenRepository
@@ -91,14 +91,14 @@ public class MemberReceiptClaimService {
             order.getStoreId(),
             order.getBusinessDate(),
             now,
-            platformUserId,
+            userId,
             new AttributionMaterializer.ReceiptClaim(token.getPlannedPoints()));
     return new MemberReceiptClaimResponse((long) result.grantedPoints() + result.benefitPoints());
   }
 
-  private MemberLookup resolveMember(Long platformUserId) {
+  private MemberLookup resolveMember(Long userId) {
     return memberLookupService
-        .findByPlatformUserId(platformUserId)
+        .findByUserId(userId)
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }
 }

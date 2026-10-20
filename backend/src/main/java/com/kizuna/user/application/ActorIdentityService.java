@@ -1,8 +1,8 @@
 package com.kizuna.user.application;
 
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.stereotype.Service;
@@ -14,13 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 @NamedInterface("actor-identity")
 public class ActorIdentityService {
 
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
 
   @Transactional(readOnly = true)
   public Long requireUserId(String email) {
-    return platformUserRepository
+    return userRepository
         .findByEmail(email)
-        .map(PlatformUser::getId)
+        .map(User::getId)
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 }

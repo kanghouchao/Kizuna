@@ -41,11 +41,7 @@ public class PlatformCastService {
   public PlatformCastResponse get(Long id) {
     var row = people.findPerson(id).orElseThrow(() -> new NotFoundException("キャスト本人が見つかりません"));
     return new PlatformCastResponse(
-        row.getId(),
-        row.getPlatformUserId(),
-        row.getDisplayName(),
-        row.getRealName(),
-        row.getBirthDate());
+        row.getId(), row.getUserId(), row.getDisplayName(), row.getRealName(), row.getBirthDate());
   }
 
   @StoreScopeExempt(reason = "CAST_PERSON_VIEW を要求する平台専用端点から全店舗の在籍を照会する")

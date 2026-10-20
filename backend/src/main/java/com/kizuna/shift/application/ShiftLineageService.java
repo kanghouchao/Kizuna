@@ -15,8 +15,8 @@ import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestType;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -42,7 +42,7 @@ public class ShiftLineageService {
   private final ShiftRepository shiftRepository;
   private final ShiftRequestRepository shiftRequestRepository;
   private final AttendanceRepository attendanceRepository;
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
 
   /**
    * <b>系列は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。シフト・申請・実績・実行主体と 4 回問い合わせるので、 既定の READ COMMITTED
@@ -182,8 +182,8 @@ public class ShiftLineageService {
     if (actorIds.isEmpty()) {
       return Map.of();
     }
-    return platformUserRepository.findAllById(new ArrayList<>(actorIds)).stream()
-        .collect(Collectors.toMap(PlatformUser::getId, PlatformUser::getDisplayName));
+    return userRepository.findAllById(new ArrayList<>(actorIds)).stream()
+        .collect(Collectors.toMap(User::getId, User::getDisplayName));
   }
 
   /** 実行主体の欄。利用者が削除された行は id ごと欠ける（FK が SET NULL）ので、節点そのものが null になる。 */

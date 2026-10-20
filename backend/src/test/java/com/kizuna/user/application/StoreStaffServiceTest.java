@@ -18,14 +18,14 @@ import com.kizuna.user.api.dto.StoreStaffUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
 import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.util.List;
@@ -88,7 +88,7 @@ class StoreStaffServiceTest {
   private static final String RAW_CREDENTIAL = "rawpass";
 
   @Mock private BusinessAudit businessAudit;
-  @Mock private PlatformUserRepository repository;
+  @Mock private UserRepository repository;
   @Mock private RoleRepository roleRepository;
   @Mock private PasswordEncoder encoder;
   @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
@@ -96,7 +96,7 @@ class StoreStaffServiceTest {
 
   @InjectMocks private StoreStaffService service;
 
-  @Captor private ArgumentCaptor<PlatformUser> userCaptor;
+  @Captor private ArgumentCaptor<User> userCaptor;
 
   @AfterEach
   void clearActor() {
@@ -166,10 +166,10 @@ class StoreStaffServiceTest {
             });
   }
 
-  private PlatformUser staff(
+  private User staff(
       long id, String email, Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email(email)
             .password("hash")
             .displayName("表示名")
@@ -211,9 +211,9 @@ class StoreStaffServiceTest {
     when(storeContext.getStoreId()).thenReturn(CONTEXT_STORE);
   }
 
-  private void givenListReturns(PlatformUser... users) {
+  private void givenListReturns(User... users) {
     when(storeContext.getStoreId()).thenReturn(CONTEXT_STORE);
-    when(repository.findAll(ArgumentMatchers.<Specification<PlatformUser>>any(), eq(PAGEABLE)))
+    when(repository.findAll(ArgumentMatchers.<Specification<User>>any(), eq(PAGEABLE)))
         .thenReturn(new PageImpl<>(List.of(users), PAGEABLE, users.length));
   }
 
@@ -377,7 +377,7 @@ class StoreStaffServiceTest {
   @Test
   @DisplayName("編集: 店舗コンソールへ入れないロール構成への変更は拒否されること（判定は更新後の集合）")
   void updateRejectsRoleSetThatCannotReachStoreConsole() {
-    PlatformUser target =
+    User target =
         staff(
             1L,
             "clerk@kizuna.test",
@@ -523,7 +523,7 @@ class StoreStaffServiceTest {
   @Test
   @DisplayName("編集: 陳腐化した版の提出は 409 になること")
   void updateRejectsStaleVersion() {
-    PlatformUser target =
+    User target =
         staff(
             1L,
             "clerk@kizuna.test",
@@ -550,7 +550,7 @@ class StoreStaffServiceTest {
   @ParameterizedTest
   @CsvSource({"true,false", "false,false", "false,true", "true,true", "true,", "false,"})
   void updateDelegatesOnlyExplicitStop(boolean enabled, Boolean requested) {
-    PlatformUser target =
+    User target =
         staff(
             1L,
             "clerk@kizuna.test",
@@ -590,7 +590,7 @@ class StoreStaffServiceTest {
     "uq_t_users_email,このメールアドレスは既に登録されています"
   })
   void stoppingWhileChangingGrantsPreservesSaveErrorMapping(String constraint, String message) {
-    PlatformUser target =
+    User target =
         staff(
             1L,
             "clerk@kizuna.test",
@@ -656,8 +656,8 @@ class StoreStaffServiceTest {
   }
 
   /** 永続化を模す（DB が採番する id と、flush で初期化される version 列を埋める）。 */
-  private static PlatformUser persisted(org.mockito.invocation.InvocationOnMock invocation) {
-    PlatformUser saved = invocation.getArgument(0);
+  private static User persisted(org.mockito.invocation.InvocationOnMock invocation) {
+    User saved = invocation.getArgument(0);
     if (saved.getId() == null) {
       saved.setId(99L);
     }
