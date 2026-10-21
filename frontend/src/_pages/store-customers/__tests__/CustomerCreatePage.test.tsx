@@ -6,7 +6,17 @@ import { notify } from '@/shared/notify';
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
-  useParams: () => ({ storeId: '1' }),
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 jest.mock('@/entities/customer', () => ({ customerApi: { create: jest.fn() } }));
 jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
@@ -29,7 +39,7 @@ test('連絡先の登録エラーを具体的に伝え、入力を修正して�
   expect(screen.getByLabelText('連絡先の値')).toHaveValue('+12025550123');
   fireEvent.change(screen.getByLabelText('連絡先の値'), { target: { value: '09012345678' } });
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/customers'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/customers'));
   expect(customerApi.create).toHaveBeenLastCalledWith(
     expect.objectContaining({
       contacts: [{ type: 'PHONE', value: '09012345678' }],

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { Trash2Icon } from 'lucide-react';
 import { useFieldArray, useFormContext } from 'react-hook-form';
 import {
@@ -36,10 +36,13 @@ export function OrderFeeLinesField({
   systemLines?: OrderFeeLine[];
   historicalOrderId?: string;
 }) {
-  const storeId = useParams()?.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   const { control, watch, setValue } = useFormContext<OrderFeeLinesFormValues>();
   const { fields, append, remove, update } = useFieldArray({ control, name: 'fee_lines' });
-  const [selection, setSelection] = useState<{ storeId: string; index: number | null }>();
+  const [selection, setSelection] = useState<{
+    storeId: string | undefined;
+    index: number | null;
+  }>();
   const lines = watch('fee_lines') ?? [];
   const preview = watch('fee_preview');
   const subtotal =

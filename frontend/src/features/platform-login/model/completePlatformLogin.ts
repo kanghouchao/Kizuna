@@ -1,11 +1,6 @@
 import Cookies from 'js-cookie';
-import { LoginResponse, platformAuthApi, resolvePlatformDestination } from '@/entities/user';
-import {
-  clearPlatformSession,
-  startPlatformSession,
-  storeEntryPath,
-  takeMemberReturnPath,
-} from '@/shared/lib';
+import { LoginResponse, platformAuthApi } from '@/entities/user';
+import { clearPlatformSession, startPlatformSession, takeMemberReturnPath } from '@/shared/lib';
 
 /** ログイン完了の結果。unsupported は着地先の無い利用者種別で、セッションは破棄済み。 */
 export type PlatformLoginCompletion = { status: 'ok'; path: string } | { status: 'unsupported' };
@@ -31,23 +26,13 @@ export async function completePlatformLogin({
   // ログインが確定する前に消すと、通信の一時的な失敗でやり直したときには戻り先が既に無い
   // （伝票の生値はこの断片にしか無く、再取得の口が無い）。
   const memberReturnPath = takeMemberReturnPath();
-  const activeConsole = me.console ?? 'none';
-  const destination = resolvePlatformDestination(activeConsole);
 
-  if (destination === 'platform') {
-    startPlatformSession(activeConsole, expires_at);
+  // 従業員は一つの管理画面へ入り、着地は全員ダッシュボード（集計カードは権限で出し分ける）。
+  if (me.user_type === 'STAFF') {
+    startPlatformSession('admin', expires_at);
     return { status: 'ok', path: '/platform/dashboard/' };
   }
 
-  if (destination === 'store') {
-    // 着地方針（授権店舗の選択とメニュー由来の着地先解決）は StoreEntryPage 一箇所に集約する。
-    // ここでは無条件に入口へ渡し、店舗の解決には関与しない。
-    startPlatformSession(activeConsole, expires_at);
-    return { status: 'ok', path: storeEntryPath() };
-  }
-
-  // destination='unsupported'（console='none' — CAST または MEMBER）。両者は console だけでは
-  // 区別できないため、既に取得済みの user_type で分岐する。
   if (me.user_type === 'CAST') {
     startPlatformSession('cast', expires_at);
     return { status: 'ok', path: '/cast/schedule/' };

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
-import type { PermissionResponse, RoleResponse } from '@/entities/user';
+import type { RoleResponse } from '@/entities/user';
 import { platformRoleApi } from '@/entities/user';
 import { RoleFormModal } from '../RoleFormModal';
 
@@ -40,9 +40,9 @@ describe('ロール編集モーダル', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRoleApi.permissions.mockResolvedValue([
-      { code: 'ORDER_MANAGE', console: 'STORE' },
-      { code: 'CUSTOMER_MANAGE', console: 'STORE' },
-      { code: 'ROLE_MANAGE', console: 'PLATFORM' },
+      { code: 'ORDER_MANAGE' },
+      { code: 'CUSTOMER_MANAGE' },
+      { code: 'ROLE_MANAGE' },
     ]);
     mockedRoleApi.get.mockResolvedValue(role());
     mockedRoleApi.update.mockResolvedValue({} as never);
@@ -141,28 +141,19 @@ describe('ロール編集モーダル', () => {
     expect(mockedRoleApi.update.mock.calls[1][1]).toEqual(expect.objectContaining({ version: 4 }));
   });
 
-  it('権限目録を console ごとに見出し付きで並べる', async () => {
+  it('権限目録を見出し無しの一つの組にコードの辞書順で並べる', async () => {
     renderModal();
 
-    expect(await screen.findByText('プラットフォーム')).toBeInTheDocument();
-    expect(screen.getByText('店舗')).toBeInTheDocument();
+    await screen.findByLabelText('ORDER_MANAGE');
+    const group = screen.getByRole('group', { name: '権限' });
     // 権限ラベルはバックエンドのコードをそのまま出す（日本語名は持たない）
+    expect(
+      within(group)
+        .getAllByRole('checkbox')
+        .map(box => box.parentElement?.textContent)
+    ).toEqual(['CUSTOMER_MANAGE', 'ORDER_MANAGE', 'ROLE_MANAGE']);
     expect(screen.getByLabelText('ORDER_MANAGE')).toBeChecked();
     expect(screen.getByLabelText('CUSTOMER_MANAGE')).not.toBeChecked();
-  });
-
-  it('未知の console の権限も落とさず、コードそのままの見出しで末尾に出す', async () => {
-    // 組はこちらの表ではなく目録から作る。表で作ると、バックエンドが Console を
-    // 増やした日にその権限が静かに画面から消える（付与できなくなる）。
-    // 型に無い値を敢えて流す（この試験の主題が「フロントがまだ知らない値」そのもののため）
-    mockedRoleApi.permissions.mockResolvedValue([
-      { code: 'ORDER_MANAGE', console: 'STORE' },
-      { code: 'FUTURE_MANAGE', console: 'BILLING' } as unknown as PermissionResponse,
-    ]);
-    renderModal();
-
-    expect(await screen.findByLabelText('FUTURE_MANAGE')).toBeInTheDocument();
-    expect(screen.getByText('BILLING')).toBeInTheDocument();
   });
 
   it('編集保存は詳細応答の version を往復する', async () => {
@@ -229,7 +220,7 @@ describe('ロール編集モーダル', () => {
     expect(submitButton).toBeEnabled();
     // handleSubmit は登録済みの ref を焦点にする。組の先頭まで ref が届いていないと、
     // 他の症状を出さずに焦点移動だけが失われる
-    expect(document.activeElement).toBe(screen.getByLabelText('ROLE_MANAGE'));
+    expect(document.activeElement).toBe(screen.getByLabelText('CUSTOMER_MANAGE'));
   });
 
   it('ロール名が空なら欄の傍に文言を出し保存 API を呼ばない', async () => {

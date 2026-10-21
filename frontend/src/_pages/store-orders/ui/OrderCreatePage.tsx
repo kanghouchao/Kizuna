@@ -5,22 +5,22 @@ import { useOrderConfirmation } from './useOrderConfirmation';
 import { OrderForm, OrderFormData } from './OrderForm';
 import { RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useState } from 'react';
 import { OrderCreateRequest, orderApi, toFeeLineInputs } from '@/entities/order';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 
 export default function CreateOrderPage() {
-  const params = useParams();
+  const storeId = useStoreContext().currentStoreId;
   const replacement = useSearchParams().get('replacement_for_order_id') ?? undefined;
-  return <CreateOrder key={`${params.storeId}:${replacement ?? ''}`} replacement={replacement} />;
+  return <CreateOrder key={`${storeId}:${replacement ?? ''}`} replacement={replacement} />;
 }
 
 function CreateOrder({ replacement }: { replacement?: string }) {
   const confirmation = useOrderConfirmation();
   const router = useRouter();
-  const params = useParams();
-  const storeId = params.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   const original = useResource(replacement ? () => orderApi.get(replacement) : null, [
     replacement,
     storeId,
@@ -52,7 +52,7 @@ function CreateOrder({ replacement }: { replacement?: string }) {
       await orderApi.create({ ...request, confirmation_token: token });
 
       notify.success('オーダーを登録しました');
-      router.push(storePath(storeId, '/orders'));
+      router.push(storePath('/orders'));
     } catch (error) {
       notify.error(getApiErrorMessage(error, 'オーダーの登録に失敗しました'));
     } finally {
@@ -83,7 +83,7 @@ function CreateOrder({ replacement }: { replacement?: string }) {
             {original.failure === 'notFound' && (
               <RegionError
                 message="元受注が見つかりません。"
-                fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
+                fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
               />
             )}
             {original.data &&

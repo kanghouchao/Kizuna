@@ -15,14 +15,14 @@ Feature-Sliced Design is checked by Steiger. Dependencies point downward: app �
 
 Use `shared/lib/hooks` for fetch lifecycles. Pick `useListPage` for paging/applied search, `useCursorList` for queues, `useManagedList` for a whole list, and `useResource` for one value, optional fetching, dependency-driven reload, replacement after writes, or a 404 split. For a plain unparameterized array, either of the last two fits. Failure/loading presentation and retry semantics are defined in [DESIGN.md](DESIGN.md#通知と失敗状態).
 
-Both console layouts mount these separate seams:
+There is one admin shell (`widgets/admin-shell`), mounted by both `app/(admin)/platform/layout.tsx` and `app/(admin)/store/layout.tsx`; `/platform/**` and `/store/**` are mount prefixes without authorization meaning. The shell mounts two seams:
 
-- `StoreContextProvider` / `useStoreContext`: JWT `storeBridge` determines whether to fetch `stores()`; no qualification means an empty switchable list. It owns current store and switching. Do not fetch the same list per consumer.
-- `MeProvider` / `useMe`: profile data outside JWT (`display_name`, `email`); update through `setMe` so all consumers observe the response without a refetch. Login reads `me.console` directly. Read authorities/userType/storeBridge from `readTokenClaims()` rather than re-fetching `/platform/me`.
+- `StoreContextProvider` / `useStoreContext`: fetches the caller's authorized stores (`GET /platform/stores/me`) once, resolves the current store (last-used cookie, else the first store), writes it to the `platform-store-id` cookie, and only then renders `/store/**` children (keyed by the current store so switching remounts the page). Store-level pages carry no store id in the URL; they read `currentStoreId` / `currentStore` from the context and the api client injects `X-Store-ID` from the cookie. A group with one store hides the switcher. Do not fetch the same list per consumer.
+- `MeProvider` / `useMe`: profile data outside JWT (`display_name`, `email`); update through `setMe` so all consumers observe the response without a refetch. Read authorities/userType from `readTokenClaims()` rather than re-fetching `/platform/me`.
 
-The platform staff-management store catalog is deliberately a direct `platformAuthApi.stores()` call, shared with modals via props: a grantor can assign stores outside their own switchable scope. Store-staff management uses the context's own scope because delegated grants must be a subset.
+Staff management is one screen (`_pages/platform-staff`, `/platform/staff`) for every staff member; store choices come from the context's own authorized stores because delegated grants must be a subset of the grantor's. Service-identity modals receive their store catalog via props.
 
-Store paths are assembled only in `shared/lib/store-route` (`storePath`, `storeEntryPath`, `resolveStoreHref`, `replaceStoreIdInPath`). `store-path-invariants.test.ts` catches raw interpolated store paths but not every concatenation; review remains necessary. `/store/entry` resolves the authorized store and menu-derived destination; it renders only loading/failure/dead-end states, not a business page.
+Store paths are assembled only in `shared/lib/store-route` (`storePath(subPath)`). `store-path-invariants.test.ts` catches raw interpolated store paths but not every concatenation; review remains necessary. Legacy `/store/{id}/...` bookmarks are redirected by `routeGuard` to the id-less path with the store written to the cookie. Login lands everyone on `/platform/dashboard`; the `platform-role` cookie holds the session kind `admin` / `cast` / `member`.
 
 ## Public templates and shared UI
 
@@ -33,7 +33,7 @@ Store paths are assembled only in `shared/lib/store-route` (`storePath`, `storeE
 
 ## Code and checks
 
-- Components/types use PascalCase; internal variables/functions follow TypeScript conventions. API **property names** remain snake_case. Store-facing identifiers use Store; the unified account is PlatformUser.
+- Components/types use PascalCase; internal variables/functions follow TypeScript conventions. API **property names** remain snake_case. Store-facing identifiers use Store; the unified account is User.
 - PermissionCode in `entities/user/model/types.ts` mirrors the backend enum manually; update both when adding a permission. There is no parity test.
 - A disabled Steiger rule needs a Japanese reason in `steiger.config.mjs` (the mandatory-comment exception). Keep `_pages` excessive-slicing suppression scoped to pages.
 - Docker lint runs format:check, lint, lint:fsd, typecheck. Run all four for local verification. Coverage and final Taskfile/PR checks are documented in [CONTRIBUTING.md](../CONTRIBUTING.md).

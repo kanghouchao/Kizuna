@@ -11,9 +11,8 @@ jest.mock('@/shared/lib', () => ({
   clearPlatformSession: () => clearPlatformSessionMock(),
   rememberMemberReturnPath: (value: string, fragment?: string) =>
     rememberMemberReturnPathMock(value, fragment),
-  getPlatformConsole: () => platformConsoleValue,
+  getPlatformSessionKind: () => platformConsoleValue,
   getPlatformStoreId: () => undefined,
-  isStoreConsole: (v: string | undefined) => v === 'store',
 }));
 
 import { apiClient } from '@/shared/api';
@@ -103,8 +102,21 @@ describe('apiClient 401/403 interceptor', () => {
     expect(redirectMock).toHaveBeenCalledWith('expired');
   });
 
-  it('does nothing on 403 when the platform-role cookie holds a console value (正当な権限不足はセッションを壊さない)', async () => {
-    platformConsoleValue = 'store';
+  it.each(['platform', 'store'])(
+    'clears session on 403 when the platform-role cookie holds the retired console value %s',
+    async value => {
+      platformConsoleValue = value;
+      const removeSpy = jest.spyOn(Cookies, 'remove');
+
+      await withRejectingAdapter(403, () => apiClient.get('/store/orders'));
+
+      expect(removeSpy).toHaveBeenCalledWith('token');
+      expect(clearPlatformSessionMock).toHaveBeenCalled();
+    }
+  );
+
+  it('does nothing on 403 when the platform-role cookie holds the admin session value (正当な権限不足はセッションを壊さない)', async () => {
+    platformConsoleValue = 'admin';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
     await withRejectingAdapter(403, () => apiClient.get('/platform/stores'));

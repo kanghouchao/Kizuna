@@ -32,8 +32,6 @@ function meResponse(lineLinked: boolean): PlatformMeResponse {
     display_name: '本人',
     user_type: 'MEMBER',
     permissions: [],
-    console: 'none',
-    store_bridge: false,
     line_linked: lineLinked,
   };
 }

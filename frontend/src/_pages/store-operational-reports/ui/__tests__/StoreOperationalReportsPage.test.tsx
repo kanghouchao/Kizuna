@@ -5,7 +5,17 @@ import { readTokenClaims } from '@/shared/lib';
 import StoreOperationalReportsPage from '../StoreOperationalReportsPage';
 
 let mockStoreId = '1';
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: mockStoreId }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/entities/operational-report', () => ({
   ...jest.requireActual('@/entities/operational-report'),
   fetchReport: jest.fn(),
@@ -49,7 +59,6 @@ beforeEach(() => {
   jest.mocked(readTokenClaims).mockReturnValue({
     authorities: ['PERM_ORDER_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
     userType: 'STAFF',
-    storeBridge: false,
   });
 });
 test('view permission does not show export and failures clear totals before retry', async () => {
@@ -107,7 +116,6 @@ function grantRemuneration() {
       'PERM_REMUNERATION_VIEW',
     ],
     userType: 'STAFF',
-    storeBridge: true,
   });
 }
 function remunerationReport(): OperationalReport {
@@ -360,7 +368,6 @@ test('store does not accept platform advertising permission', async () => {
       'PERM_ADVERTISING_COST_SET_VIEW',
     ],
     userType: 'STAFF',
-    storeBridge: true,
   });
   fetch.mockResolvedValue(report(0));
   render(<StoreOperationalReportsPage />);

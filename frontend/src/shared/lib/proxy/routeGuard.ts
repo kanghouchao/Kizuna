@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isLegacyStorePath, isRetiredStorePath, storeEntryPath } from '../store-route';
+import { splitLegacyStorePath, storePath } from '../store-route';
 import { consoleAreaOfPath, isPublicPlatformPath, isSharedPlatformPath } from '../app-area';
 import { MEMBER_RETURN_PATH_COOKIE, isSafeMemberReturnPath } from '../platform-session';
 
-// コンソール別の入場可能エリアとホーム。/me の console（サーバ側が能力目録から導出）を
-// ログイン時に保存した platform-role cookie が根拠。platform コンソールは storeBridge に
-// よる店舗コンソール操作があるため /store も許可する。認可の根拠ではなく画面遷移の整合のみ
-// — データはバックエンドが能力ベースで fail-closed に拒否する。
+// セッション種別（ログイン時に保存した platform-role cookie）ごとの入場可能エリアとホーム。
+// 従業員の管理画面 admin は /platform と /store の両方を一つの画面として持つ。認可の根拠ではなく
+// 画面遷移の整合のみ — データはバックエンドが権限ベースで fail-closed に拒否する。
 const CONSOLE_AREAS: Record<string, { allowed: readonly string[]; home: string }> = {
-  platform: { allowed: ['platform', 'store'], home: '/platform/dashboard' },
-  store: { allowed: ['store'], home: storeEntryPath() },
+  admin: { allowed: ['platform', 'store'], home: '/platform/dashboard' },
   cast: { allowed: ['cast'], home: '/cast/schedule' },
   member: { allowed: ['member'], home: '/member' },
 };
+
+// 現在店舗の置き場（StoreContext と apiClient が読む）。旧 URL の店舗 id はここへ移して着地させる。
+const PLATFORM_STORE_ID_COOKIE = 'platform-store-id';
 
 /**
  * 伝票トークンの申領画面ちょうど（末尾スラッシュの有無は問わない）。
@@ -74,11 +75,10 @@ export function handleRouteProtection(request: NextRequest, _role: 'platform' | 
     return response;
   }
 
-  // 店舗文脈のまま /platform/* を直打ちすると、サイドバー（能力由来）と本文（URL 由来）が
-  // 食い違ったまま描画され、平台 API も 403 になる。トークン保持者のコンソールと URL エリアが
-  // 一致しない場合は自コンソールのホームへ差し戻す。cookie 不在（レガシーセッション）や
-  // 未知の旧形式値は対象外 — 後者は apiClient の 403 応答経路がセッション破棄で回収する。
-  // 共有 platform ルート（自アカウント設定）は店舗コンソールの正当な到達先のため対象外。
+  // キャスト・会員のセッションで管理画面を直打ちすると、サイドバーと本文が食い違ったまま描画され
+  // API も 403 になる。セッション種別と URL エリアが一致しない場合は自分のホームへ差し戻す。
+  // cookie 不在（レガシーセッション）や未知の旧形式値は対象外 — 後者は apiClient の 403 応答経路が
+  // セッション破棄で回収する。共有 platform ルート（自アカウント設定）は種別に依らない到達先のため対象外。
   // 申領画面も対象外 — 別コンソールのセッションが残ったまま QR を開く場面でここが働くと、
   // 描かれる前に差し戻されてフラグメントのトークンが消える（未認証の免除と同じ理由）。
   if (
@@ -99,16 +99,26 @@ export function handleRouteProtection(request: NextRequest, _role: 'platform' | 
     }
   }
 
-  // id 無しの店舗 URL（例 /store/orders、ブックマーク・共有リンクに残りうる）は
-  // /store/[storeId]/... にも /store/entry にもマッチせず 404 になる。
-  // 廃止済みルート（/store/dashboard・/store/5/dashboard 等）も同じく遷移先が無い。
-  // トークン保持者に限り店舗コンソールの入口へ誘導し、解決後に元の遷移先（next）へ復帰させる
-  // — 廃止済みの next は入口が捨て、メニュー由来の着地先へ回す（捨てる判断は入口に一元化）。
-  // 数値id配下（/store/5/...）と /store/entry 自体はレガシー判定の対象外。トークン無しは上の
-  // 分岐で処理済みのため hasToken を明示条件にする（トークン無しはルートへ戻す既存挙動を維持する）。
-  // 判定の正規表現は store-route（店舗パス知識の唯一 module）へ集約済み。
-  if (hasToken && (isLegacyStorePath(path) || isRetiredStorePath(path))) {
-    return NextResponse.redirect(new URL(storeEntryPath(path), request.url));
+  // 入口ルートは廃止済み。ブックマークに残る旧 URL は全員の着地先へ送る。
+  if (hasToken && (path === '/store/entry' || path.startsWith('/store/entry/'))) {
+    return NextResponse.redirect(new URL('/platform/dashboard', request.url));
+  }
+
+  // 店舗 id を URL に持つ旧形式（/store/5/orders）は id 無しの形へ送り、id は現在店舗 cookie へ移す。
+  // 店舗側のアカウント設定は唯一のアカウント設定へ、id 直後で終わる URL と廃止済みの着地画面
+  // （dashboard / select）は対応する画面が無いので全員の着地先へ送る。授権外の id は StoreContext が捨てる。
+  const legacy = hasToken ? splitLegacyStorePath(path) : undefined;
+  if (legacy) {
+    const hasPage =
+      legacy.subPath !== '' && !/^\/(?:select|dashboard)?(?:\/|$)/.test(legacy.subPath);
+    const target = /^\/settings\/account(?:\/|$)/.test(legacy.subPath)
+      ? new URL('/platform/settings/account', request.url)
+      : hasPage
+        ? new URL(`${storePath(legacy.subPath)}${request.nextUrl.search}`, request.url)
+        : new URL('/platform/dashboard', request.url);
+    const response = NextResponse.redirect(target);
+    response.cookies.set(PLATFORM_STORE_ID_COOKIE, legacy.storeId, { path: '/' });
+    return response;
   }
 
   return null;

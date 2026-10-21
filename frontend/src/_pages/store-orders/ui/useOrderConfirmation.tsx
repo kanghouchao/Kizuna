@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { isDeduction, OrderPreview, OrderSpecialService } from '@/entities/order';
 import { getApiErrorMessage, isConflict, useKeyedResource } from '@/shared/lib';
 import { Button, Dialog, DialogContent, DialogTitle, RegionError } from '@/shared/ui';
@@ -37,7 +38,8 @@ function specialServiceComparison(item: OrderSpecialService) {
 
 export function useOrderConfirmation(target?: string) {
   const params = useParams();
-  const scope = `${params?.storeId}:${target ?? params?.id ?? ''}`;
+  const storeId = useStoreContext().currentStoreId;
+  const scope = `${storeId}:${target ?? params?.id ?? ''}`;
   const [open, setOpen] = useState(false);
   const [job, setJob] = useState<{
     load: () => Promise<OrderPreview>;

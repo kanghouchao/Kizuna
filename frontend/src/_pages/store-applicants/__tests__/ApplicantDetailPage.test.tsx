@@ -1,7 +1,18 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { applicantApi, applicantAttachmentApi } from '@/entities/applicant';
 import ApplicantDetailPage from '../ui/ApplicantDetailPage';
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1', id: 'a' }) }));
+jest.mock('next/navigation', () => ({ useParams: () => ({ id: 'a' }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/entities/applicant', () => ({
   ...jest.requireActual('@/entities/applicant'),
   applicantAttachmentApi: { policy: jest.fn() },

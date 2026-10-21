@@ -11,7 +11,8 @@ jest.mock('@/shared/lib', () => ({
 }));
 
 const mockPush = jest.fn();
-let mockParams = { storeId: '1', id: 'o1' };
+let mockStoreId = '1';
+let mockParams = { id: 'o1' };
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -27,6 +28,17 @@ jest.mock('@/entities/order', () => ({
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useParams: () => mockParams,
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -97,7 +109,8 @@ const ATTRIBUTED = { id: 1, attributed: true, member_code: '123456789012' };
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(hasPermission).mockReturnValue(true);
-  mockParams = { storeId: '1', id: 'o1' };
+  mockStoreId = '1';
+  mockParams = { id: 'o1' };
   mockedOrderApi.attribution.mockResolvedValue(ATTRIBUTED);
 });
 
@@ -361,7 +374,8 @@ test('対象変更直後から旧フォームを隠し、新しい詳細で初�
   );
   const { rerender } = render(<OrderCorrectionPage />);
   await screen.findByText(/採用済み:/);
-  mockParams = { storeId: '2', id: 'o2' };
+  mockStoreId = '2';
+  mockParams = { id: 'o2' };
   rerender(<OrderCorrectionPage />);
   expect(screen.queryByText(/採用済み:/)).not.toBeInTheDocument();
   await act(async () =>
@@ -450,7 +464,8 @@ test('訂正後の帰属取得中に別対象へ移ると、古い通知と結�
   await waitFor(() => expect(mockedOrderApi.attribution).toHaveBeenCalled());
   expect(notify.success).toHaveBeenCalledWith('受注を訂正しました');
   jest.mocked(notify.success).mockClear();
-  mockParams = { storeId: '1', id: 'o2' };
+  mockStoreId = '1';
+  mockParams = { id: 'o2' };
   rerender(<OrderCorrectionPage />);
   await act(async () => resolve(ATTRIBUTED));
   expect(notify.success).not.toHaveBeenCalled();

@@ -22,7 +22,6 @@ describe('MemberPortalShell', () => {
     mockedReadClaims.mockReturnValue({
       authorities: ['ROLE_MEMBER'],
       userType: 'MEMBER',
-      storeBridge: false,
     });
 
     render(
@@ -39,7 +38,6 @@ describe('MemberPortalShell', () => {
     mockedReadClaims.mockReturnValue({
       authorities: ['ROLE_CAST'],
       userType: 'CAST',
-      storeBridge: false,
     });
 
     render(

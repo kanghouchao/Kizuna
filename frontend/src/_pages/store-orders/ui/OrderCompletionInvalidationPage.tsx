@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { orderApi, type OrderCorrectionHistoryEntry } from '@/entities/order';
@@ -31,12 +32,12 @@ import { formatDateTime } from '../lib/formatDateTime';
 
 export default function OrderCompletionInvalidationPage() {
   const params = useParams();
-  const storeId = params.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   const id = params.id as string;
-  return <Invalidation key={`${storeId}:${id}`} storeId={storeId} id={id} />;
+  return <Invalidation key={`${storeId}:${id}`} id={id} />;
 }
 
-function Invalidation({ storeId, id }: { storeId: string; id: string }) {
+function Invalidation({ id }: { id: string }) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [canCorrect, setCanCorrect] = useState(false);
   const [canAdjust, setCanAdjust] = useState(false);
@@ -75,7 +76,7 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
           }
         }
       : null,
-    [allowed, id, storeId]
+    [allowed, id]
   );
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -127,7 +128,7 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
     return (
       <RegionError
         message="ORDER_MANAGE と ORDER_CORRECT を持つ訂正担当者へ依頼してください。"
-        fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
+        fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
       />
     );
   return (
@@ -140,7 +141,7 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
       {failure === 'notFound' && (
         <RegionError
           message="受注が見つかりません。"
-          fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
+          fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
         />
       )}
       {order && !failure && !isLoading && (
@@ -182,7 +183,6 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
                 render={
                   <Link
                     href={storePath(
-                      storeId,
                       `/orders/create?replacement_for_order_id=${encodeURIComponent(id)}`
                     )}
                   />
@@ -202,7 +202,7 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
                 残っています。ポイント救済担当者が利用取消を完了した後、ここで再取得して無効化を再実行してください。
               </p>
               {canAdjust ? (
-                <Button render={<Link href={storePath(storeId, `/orders/${id}/point-rollback`)} />}>
+                <Button render={<Link href={storePath(`/orders/${id}/point-rollback`)} />}>
                   ポイント救済へ
                 </Button>
               ) : (
@@ -249,7 +249,7 @@ function Invalidation({ storeId, id }: { storeId: string; id: string }) {
         </>
       )}
       {error && <p role="alert">{error} 内容を再確認してから操作してください。</p>}
-      <Button variant="outline" render={<Link href={storePath(storeId, `/orders/${id}/edit`)} />}>
+      <Button variant="outline" render={<Link href={storePath(`/orders/${id}/edit`)} />}>
         受注詳細へ
       </Button>
       <ConfirmDialog

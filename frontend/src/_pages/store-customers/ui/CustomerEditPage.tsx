@@ -25,7 +25,6 @@ import {
 export default function CustomerEditPage() {
   const params = useParams();
   const id = params.id as string;
-  const storeId = params.storeId as string;
   const router = useRouter();
   const {
     data: customer,
@@ -67,7 +66,7 @@ export default function CustomerEditPage() {
       delete profile.contacts;
       await customerApi.update(resolvedId, profile);
       notify.success('顧客情報を更新しました');
-      router.push(storePath(storeId, '/customers'));
+      router.push(storePath('/customers'));
     } catch {
       notify.error('顧客情報の更新に失敗しました');
     } finally {
@@ -90,7 +89,7 @@ export default function CustomerEditPage() {
           // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="この顧客は見つかりませんでした"
-            fallback={{ href: storePath(storeId, '/customers'), label: '顧客一覧へ' }}
+            fallback={{ href: storePath('/customers'), label: '顧客一覧へ' }}
           />
         ) : (
           <RegionError

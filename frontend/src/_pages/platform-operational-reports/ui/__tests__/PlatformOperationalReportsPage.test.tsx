@@ -45,7 +45,6 @@ beforeEach(() => {
   jest.mocked(readTokenClaims).mockReturnValue({
     authorities: ['PERM_ORDER_SET_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
     userType: 'STAFF',
-    storeBridge: false,
   });
 });
 test('view permission does not show export and failures clear totals before retry', async () => {
@@ -112,7 +111,6 @@ test.each([
           : ['PERM_ADVERTISING_COST_EXPORT']),
       ],
       userType: 'STAFF',
-      storeBridge: false,
     });
     const data = report(0);
     if (visible)

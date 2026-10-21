@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { isAxiosError } from 'axios';
 import { orderApi, SurchargeCandidate } from '@/entities/order';
 import { useKeyedResource } from '@/shared/lib';
@@ -24,7 +24,7 @@ export function OrderSurchargePicker({
   onSelect: (candidate: SurchargeCandidate) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const storeId = useParams()?.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   const [query, setQuery] = useState({
     search: '',
     page: 0,

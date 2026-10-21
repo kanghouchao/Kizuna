@@ -1,10 +1,9 @@
 import Cookies from 'js-cookie';
 import {
   clearPlatformSession,
-  getPlatformConsole,
+  getPlatformSessionKind,
   getPlatformStoreId,
   isPlatformSession,
-  isStoreConsole,
   setPlatformStore,
   isSafeMemberReturnPath,
   rememberMemberReturnPath,
@@ -17,9 +16,9 @@ describe('platform-session', () => {
     clearPlatformSession();
   });
 
-  it('startPlatformSession sets the platform-role cookie, readable via getPlatformConsole', () => {
-    startPlatformSession('platform');
-    expect(getPlatformConsole()).toBe('platform');
+  it('startPlatformSession sets the platform-role cookie, readable via getPlatformSessionKind', () => {
+    startPlatformSession('admin');
+    expect(getPlatformSessionKind()).toBe('admin');
   });
 
   it('setPlatformStore sets the platform-store-id cookie, readable via getPlatformStoreId', () => {
@@ -29,34 +28,25 @@ describe('platform-session', () => {
 
   it('isPlatformSession is true only when platform-role cookie is present', () => {
     expect(isPlatformSession()).toBe(false);
-    startPlatformSession('store');
+    startPlatformSession('admin');
     expect(isPlatformSession()).toBe(true);
   });
 
   it('clearPlatformSession removes both cookies', () => {
-    startPlatformSession('platform');
+    startPlatformSession('admin');
     setPlatformStore(1);
     clearPlatformSession();
-    expect(getPlatformConsole()).toBeUndefined();
+    expect(getPlatformSessionKind()).toBeUndefined();
     expect(getPlatformStoreId()).toBeUndefined();
-  });
-
-  it('isStoreConsole is true only for the store console value', () => {
-    expect(isStoreConsole('store')).toBe(true);
-    expect(isStoreConsole('platform')).toBe(false);
-    expect(isStoreConsole('none')).toBe(false);
-    // 旧形式（ロール名）の cookie が残っていても店舗文脈を確立しない（fail-closed）。
-    expect(isStoreConsole('STORE_MANAGER')).toBe(false);
-    expect(isStoreConsole(undefined)).toBe(false);
   });
 
   it('startPlatformSession sets the platform-role cookie with the same expiry as expiresAt', () => {
     const setSpy = jest.spyOn(Cookies, 'set');
     const expiresAt = Date.now() + 60_000;
 
-    startPlatformSession('platform', expiresAt);
+    startPlatformSession('admin', expiresAt);
 
-    expect(setSpy).toHaveBeenCalledWith('platform-role', 'platform', {
+    expect(setSpy).toHaveBeenCalledWith('platform-role', 'admin', {
       expires: new Date(expiresAt),
     });
     setSpy.mockRestore();

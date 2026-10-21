@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
@@ -109,7 +109,7 @@ export function OrderAttributionModal({
   } = form;
 
   const orderId = order?.id ?? '';
-  const storeId = useParams()?.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   const resource = useKeyedResource<OrderAttribution>(
     ['attribution', storeId, orderId],
     order === null ? null : () => orderApi.attribution(order.id)

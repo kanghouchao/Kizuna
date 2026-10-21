@@ -47,7 +47,18 @@ jest.mock('@/shared/lib', () => ({
 jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
-  useParams: () => ({ storeId: '1' }),
+  useParams: () => ({}),
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -159,7 +170,6 @@ function claimsWith(permissions: string[]): TokenClaims {
   return {
     authorities: permissions.map(permission => `PERM_${permission}`),
     userType: 'STAFF',
-    storeBridge: true,
   };
 }
 
@@ -430,7 +440,7 @@ describe('一覧からの編集', () => {
     fireEvent.click(await screen.findByRole('button', { name: '編集' }));
 
     // 17 欄の編集面は顧客側と同じく専用の頁が持つ。一覧が担うのはそこへの導線だけ
-    expect(mockPush).toHaveBeenCalledWith('/store/1/orders/o1/edit');
+    expect(mockPush).toHaveBeenCalledWith('/store/orders/o1/edit');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
@@ -518,7 +528,7 @@ describe('アーカイブ', () => {
     expect(screen.queryByRole('link', { name: /訂正/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'ポイント救済' })).toHaveAttribute(
       'href',
-      '/store/1/orders/x3/point-rollback'
+      '/store/orders/x3/point-rollback'
     );
 
     withoutPermission.unmount();
@@ -528,7 +538,7 @@ describe('アーカイブ', () => {
     fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
     expect(await screen.findByRole('link', { name: /訂正/ })).toHaveAttribute(
       'href',
-      '/store/1/orders/x3/correction'
+      '/store/orders/x3/correction'
     );
   });
 
@@ -579,7 +589,7 @@ describe('オーダー一覧ページ固有の要素', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('オーダー一覧');
     expect(screen.getByRole('link', { name: /新規オーダー登録/ })).toHaveAttribute(
       'href',
-      '/store/1/orders/create'
+      '/store/orders/create'
     );
   });
 });
@@ -657,7 +667,7 @@ describe('運営帳票の入口', () => {
     render(<OrderListPage />);
     expect(await screen.findByRole('link', { name: '運営金額集計' })).toHaveAttribute(
       'href',
-      '/store/1/operational-reports'
+      '/store/operational-reports'
     );
   });
 });

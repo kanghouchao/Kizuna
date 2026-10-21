@@ -54,7 +54,6 @@ export const serverClient = {
 
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-Role': 'store', // ストアフロントからのアクセスは常に store ロール
     };
 
     if (storeId) {

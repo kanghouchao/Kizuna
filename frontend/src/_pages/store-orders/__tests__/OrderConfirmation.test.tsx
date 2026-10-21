@@ -3,7 +3,17 @@ import { OrderPreview } from '@/entities/order';
 import { useOrderConfirmation } from '../ui/useOrderConfirmation';
 
 let mockStore = '1';
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: mockStore }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStore,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 beforeEach(() => {
   mockStore = '1';
 });

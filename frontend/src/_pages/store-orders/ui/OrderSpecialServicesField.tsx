@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { isAxiosError } from 'axios';
 import { OrderSpecialService, orderApi } from '@/entities/order';
@@ -36,7 +36,7 @@ export function OrderSpecialServicesField({
       lastCast.current = cast;
     }
   }, [cast, historicalOrderId, setValue]);
-  const store = useParams()?.storeId as string;
+  const store = useStoreContext().currentStoreId;
   const changedCast = originalCast !== undefined && originalCast !== cast;
   return (
     <SpecialServiceOptions
@@ -69,7 +69,7 @@ function SpecialServiceOptions({
   selected: string[];
   onChange: (ids: string[], price: number) => void;
 }) {
-  const store = useParams()?.storeId as string;
+  const store = useStoreContext().currentStoreId;
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);

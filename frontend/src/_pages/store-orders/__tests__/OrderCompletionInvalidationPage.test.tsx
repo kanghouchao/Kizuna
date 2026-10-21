@@ -10,8 +10,20 @@ jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
   hasPermission: jest.fn(() => true),
 }));
-let mockParams = { storeId: '1', id: 'o1' };
+let mockStoreId = '1';
+let mockParams = { id: 'o1' };
 jest.mock('next/navigation', () => ({ useParams: () => mockParams }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
@@ -35,7 +47,8 @@ const change = {
 };
 beforeEach(() => {
   jest.clearAllMocks();
-  mockParams = { storeId: '1', id: 'o1' };
+  mockStoreId = '1';
+  mockParams = { id: 'o1' };
   (hasPermission as jest.Mock).mockReturnValue(true);
   (orderApi.get as jest.Mock).mockResolvedValue(order);
   (orderApi.invalidateCompletion as jest.Mock).mockResolvedValue(change);
@@ -87,7 +100,8 @@ test('取得失敗は再試行でき、店舗切替で旧記録を隠す', async
   await screen.findByText('受注を取得できませんでした。');
   fireEvent.click(screen.getByRole('button', { name: /再試行/ }));
   await screen.findByText('コース');
-  mockParams = { storeId: '2', id: 'o1' };
+  mockStoreId = '2';
+  mockParams = { id: 'o1' };
   view.rerender(<OrderCompletionInvalidationPage />);
   expect(screen.queryByText('コース')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('理由')).not.toBeInTheDocument();
@@ -120,7 +134,7 @@ test('ORDER_MANAGE だけでも無効化済み受注から再提供できる', a
   });
   render(<OrderCompletionInvalidationPage />);
   const link = await screen.findByRole('link', { name: '関連する新受注で再提供' });
-  expect(link).toHaveAttribute('href', '/store/1/orders/create?replacement_for_order_id=o1');
+  expect(link).toHaveAttribute('href', '/store/orders/create?replacement_for_order_id=o1');
   expect(screen.queryByLabelText('理由')).not.toBeInTheDocument();
 });
 

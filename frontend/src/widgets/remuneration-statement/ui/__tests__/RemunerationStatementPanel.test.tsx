@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { remunerationApi, type Statement } from '../../api';
-import { readTokenClaims, storePath } from '@/shared/lib';
+import { readTokenClaims, setPlatformStore } from '@/shared/lib';
 import { RemunerationStatementPanel } from '../RemunerationStatementPanel';
 import { RemunerationEditor } from '../RemunerationEditor';
 import { RemunerationManagement } from '../RemunerationManagement';
@@ -48,10 +48,10 @@ const data: Statement = {
 };
 beforeEach(() => {
   jest.clearAllMocks();
-  window.history.replaceState({}, '', storePath('1', '/orders/monthly-remunerations'));
+  setPlatformStore('1');
   jest
     .mocked(readTokenClaims)
-    .mockReturnValue({ subject: 'actor', authorities: [], userType: 'STAFF', storeBridge: true });
+    .mockReturnValue({ subject: 'actor', authorities: [], userType: 'STAFF' });
   statement.mockResolvedValue(data);
 });
 it('未終了時は既知小計を示し完全合計を捏造しない', async () => {
@@ -186,7 +186,6 @@ const allowBonus = () => {
     subject: 'actor',
     authorities: ['PERM_BONUS_AWARD'],
     userType: 'STAFF',
-    storeBridge: true,
   });
   jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
   jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
@@ -362,7 +361,6 @@ it('別の操作者や店舗には未確認内容を見せず、元の作用域�
     subject: 'other',
     authorities: ['PERM_BONUS_AWARD'],
     userType: 'STAFF',
-    storeBridge: true,
   });
   view.rerender(
     <RemunerationManagement
@@ -377,7 +375,7 @@ it('別の操作者や店舗には未確認内容を見せず、元の作用域�
   expect(screen.queryByText(/機密対象/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '未確認の送信を復元' })).not.toBeInTheDocument();
   allowBonus();
-  window.history.replaceState({}, '', storePath('2', '/orders/monthly-remunerations'));
+  setPlatformStore('2');
   view.rerender(
     <RemunerationManagement
       key="store"
@@ -389,7 +387,7 @@ it('別の操作者や店舗には未確認内容を見せず、元の作用域�
     />
   );
   expect(screen.queryByRole('button', { name: '未確認の送信を復元' })).not.toBeInTheDocument();
-  window.history.replaceState({}, '', storePath('1', '/orders/monthly-remunerations'));
+  setPlatformStore('1');
   view.rerender(
     <RemunerationManagement
       key="returned"

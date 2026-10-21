@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { Order, orderApi, ORDER_STATUS_LABELS } from '@/entities/order';
 import { getApiErrorMessage, useKeyedResource } from '@/shared/lib';
 import { Button, Input, Label, RegionError } from '@/shared/ui';
@@ -14,7 +14,7 @@ export function OrderServiceProgress({
   order: Order;
   onOrderUpdated: (order: Order) => void;
 }) {
-  const store = useParams()?.storeId as string;
+  const store = useStoreContext().currentStoreId;
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState(false);
   const reasonInput = useRef<HTMLInputElement>(null);

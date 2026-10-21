@@ -38,7 +38,6 @@ describe('serverClient', () => {
       const headers = await serverClient.getHeaders();
       expect(headers).toEqual({
         'Content-Type': 'application/json',
-        'X-Role': 'store',
       });
     });
 

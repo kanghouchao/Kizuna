@@ -3,7 +3,17 @@ import { SurveysPage } from '../ui/SurveysPage';
 import { surveyApi, Revision, Answer, Survey } from '@/entities/survey';
 import { readTokenClaims } from '@/shared/lib';
 let mockStoreId = '1';
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: mockStoreId }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/entities/survey', () => ({
   surveyApi: {
     list: jest.fn(),
@@ -27,7 +37,6 @@ const claims = jest.mocked(readTokenClaims);
 const permission = (...names: string[]) =>
   claims.mockReturnValue({
     userType: 'STAFF',
-    storeBridge: true,
     authorities: names.map(p => `PERM_${p}`),
   });
 const revision: Revision = {

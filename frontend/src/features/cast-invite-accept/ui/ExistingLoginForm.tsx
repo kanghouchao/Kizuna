@@ -10,7 +10,7 @@ import {
   EMAIL_PATTERN_MESSAGE,
   clearPlatformSession,
   getApiErrorMessage,
-  getPlatformConsole,
+  getPlatformSessionKind,
   getPlatformStoreId,
   setPlatformStore,
   startPlatformSession,
@@ -36,8 +36,8 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
   const submit = async (values: PlatformLoginRequest) => {
     let newTokenWritten = false;
     // ログイン成功で旧セッションを消す前に退避しておく。受諾API失敗時にこれが無いと、
-    // clearPlatformSession() 済みの旧 platform-role(コンソール値)/platform-store-id に戻れず訪問者がログアウト状態に落ちる。
-    const previousConsole = getPlatformConsole();
+    // clearPlatformSession() 済みの旧 platform-role(セッション種別)/platform-store-id に戻れず訪問者がログアウト状態に落ちる。
+    const previousSessionKind = getPlatformSessionKind();
     const previousStoreId = getPlatformStoreId();
     const previousToken = Cookies.get('token');
     try {
@@ -53,7 +53,7 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
       newTokenWritten = true;
       const response = await castInvitationAcceptanceApi.acceptAsExistingUser(token);
       // 受諾はここで完了し、ポータルセッションは開始しない。一時的に張った CAST token を
-      // 残すと token 単独の存在チェックで platform/store コンソールへ誤って通されるため必ず消去する。
+      // 残すと token 単独の存在チェックで管理画面へ誤って通されるため必ず消去する。
       Cookies.remove('token');
       onSuccess(response);
     } catch (error) {
@@ -63,8 +63,8 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
         Cookies.remove('token');
         // 受諾APIの失敗（招待の失効/競合、通信断など）。旧セッションが存在した場合はここで復元する。
         // 未ログイン訪問者だった場合（退避値が無い）は何もしない
-        if (previousConsole) {
-          startPlatformSession(previousConsole);
+        if (previousSessionKind) {
+          startPlatformSession(previousSessionKind);
         }
         if (previousStoreId) {
           setPlatformStore(previousStoreId);

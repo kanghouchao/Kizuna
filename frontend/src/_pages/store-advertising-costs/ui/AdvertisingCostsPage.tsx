@@ -1,5 +1,5 @@
 'use client';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { advertisingApi, validMonth, type Cost, type Mutation } from '../api/advertising';
 import {
@@ -41,7 +41,7 @@ import { CopyPreview } from './CopyPreview';
 import { MediaSummaryPage } from './MediaSummaryPage';
 import { OrderCostPage } from './OrderCostPage';
 export default function AdvertisingCostsPage() {
-  const { storeId } = useParams<{ storeId: string }>();
+  const storeId = useStoreContext().currentStoreId;
   const [claims, setClaims] = useState<ReturnType<typeof readTokenClaims>>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function AdvertisingCostsPage() {
   return (
     <StorePage
       key={JSON.stringify([claims.subject, storeId])}
-      store={storeId}
+      store={storeId ?? ''}
       subject={claims.subject}
       manage={hasPermission(claims, 'ADVERTISING_COST_MANAGE')}
       canExport={hasPermission(claims, 'ADVERTISING_COST_EXPORT')}

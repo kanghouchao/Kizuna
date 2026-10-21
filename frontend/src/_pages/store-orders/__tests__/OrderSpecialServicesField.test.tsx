@@ -3,6 +3,17 @@ import { useForm } from 'react-hook-form';
 import { orderApi, OrderSpecialService } from '@/entities/order';
 import { Form, Button } from '@/shared/ui';
 import { OrderSpecialServicesField } from '../ui/OrderSpecialServicesField';
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),

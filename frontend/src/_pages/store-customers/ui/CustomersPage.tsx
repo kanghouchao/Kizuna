@@ -5,7 +5,6 @@ import { contactLabels } from '../lib/contactLabels';
 import Link from 'next/link';
 import { CopyIcon, PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
 import {
   CustomerMergeComparisonResponse,
   CustomerSummaryResponse,
@@ -63,8 +62,6 @@ const SORT_OPTIONS = [
 
 /** 顧客一覧ページ */
 export default function CustomersPage() {
-  const params = useParams();
-  const storeId = params.storeId as string;
   const [search, setSearch] = useState('');
   const [classification, setClassification] = useState('');
   const [sort, setSort] = useState(SORT_OPTIONS[0].value);
@@ -136,15 +133,12 @@ export default function CustomersPage() {
         actions={
           <>
             {canMerge && (
-              <Button
-                render={<Link href={storePath(storeId, '/customers/duplicates')} />}
-                variant="outline"
-              >
+              <Button render={<Link href={storePath('/customers/duplicates')} />} variant="outline">
                 <CopyIcon />
                 重複候補
               </Button>
             )}
-            <Button render={<Link href={storePath(storeId, '/customers/create')} />}>
+            <Button render={<Link href={storePath('/customers/create')} />}>
               <PlusIcon />
               新規顧客登録
             </Button>
@@ -305,7 +299,7 @@ export default function CustomersPage() {
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button
-                      render={<Link href={storePath(storeId, `/customers/${customer.id}/edit`)} />}
+                      render={<Link href={storePath(`/customers/${customer.id}/edit`)} />}
                       variant="ghost"
                       size="icon-sm"
                     >

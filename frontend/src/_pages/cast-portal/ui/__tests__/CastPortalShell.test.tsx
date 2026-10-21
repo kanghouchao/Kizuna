@@ -16,7 +16,7 @@ jest.mock('@/shared/lib', () => ({
 const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 const mockedRedirect = redirectToLogin as jest.Mock;
 
-const castClaims = { authorities: ['ROLE_CAST'], userType: 'CAST', storeBridge: false };
+const castClaims = { authorities: ['ROLE_CAST'], userType: 'CAST' };
 
 describe('CastPortalShell', () => {
   beforeEach(() => {
@@ -76,7 +76,6 @@ describe('CastPortalShell', () => {
     mockedReadClaims.mockReturnValue({
       authorities: ['ROLE_MEMBER'],
       userType: 'MEMBER',
-      storeBridge: false,
     });
 
     render(

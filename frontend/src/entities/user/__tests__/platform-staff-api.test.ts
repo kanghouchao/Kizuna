@@ -71,6 +71,30 @@ describe('platformStaffApi', () => {
       expect.objectContaining({ version: 7 })
     );
   });
+  it('grantableRoles は /platform/staff/grantable-roles を GET する', async () => {
+    const res = await platformStaffApi.grantableRoles();
+    expect(res).toEqual({ ok: true, url: '/platform/staff/grantable-roles' });
+  });
+  // 停止・再開は本体を持たない専用端点（版の往復も無い）
+  it('suspend は /platform/staff/{id}/suspension を POST する', async () => {
+    await platformStaffApi.suspend(7);
+    expect(apiClient.post).toHaveBeenCalledWith('/platform/staff/7/suspension');
+  });
+  it('resume は /platform/staff/{id}/resumption を POST する', async () => {
+    await platformStaffApi.resume(7);
+    expect(apiClient.post).toHaveBeenCalledWith('/platform/staff/7/resumption');
+  });
+  // 仮パスワードの生値はこの応答にしか現れないので、本体をそのまま返す
+  it('resetPassword は /platform/staff/{id}/password-reset を POST し応答本体を返す', async () => {
+    (apiClient.post as jest.Mock).mockResolvedValueOnce({
+      data: { temporary_password: 'test-temporary-password' },
+    });
+
+    const res = await platformStaffApi.resetPassword(7);
+
+    expect(res).toEqual({ temporary_password: 'test-temporary-password' });
+    expect(apiClient.post).toHaveBeenCalledWith('/platform/staff/7/password-reset');
+  });
 });
 
 describe('platformRoleApi', () => {

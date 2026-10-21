@@ -1,28 +1,27 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import StaffPage from '@/_pages/platform-staff/ui/StaffPage';
-import StoreStaffPage from '@/_pages/store-staff/ui/StoreStaffPage';
 import ServiceIdentitiesPage from '@/_pages/platform-service-identities/ui/ServiceIdentitiesPage';
 import {
   platformStaffApi,
-  storeStaffApi,
   serviceIdentityApi,
-  platformRoleApi,
   platformAuthApi,
   useStoreContext,
 } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1' }) }));
 jest.mock('@/entities/user', () => ({
-  platformStaffApi: { list: jest.fn(), get: jest.fn(), update: jest.fn() },
-  storeStaffApi: { list: jest.fn(), get: jest.fn(), update: jest.fn(), grantableRoles: jest.fn() },
+  platformStaffApi: {
+    list: jest.fn(),
+    get: jest.fn(),
+    update: jest.fn(),
+    grantableRoles: jest.fn(),
+  },
   serviceIdentityApi: {
     list: jest.fn(),
     get: jest.fn(),
     update: jest.fn(),
     grantableRoles: jest.fn(),
   },
-  platformRoleApi: { list: jest.fn() },
   platformAuthApi: { stores: jest.fn() },
   useStoreContext: jest.fn(),
 }));
@@ -51,8 +50,7 @@ const detail = {
   version: 2,
 };
 const cases = [
-  { name: '管理者', Page: StaffPage, api: platformStaffApi },
-  { name: '店舗スタッフ', Page: StoreStaffPage, api: storeStaffApi },
+  { name: '従業員', Page: StaffPage, api: platformStaffApi },
   { name: 'サービスID', Page: ServiceIdentitiesPage, api: serviceIdentityApi },
 ];
 
@@ -67,11 +65,7 @@ describe.each(cases)('$name の詳細ライフサイクル', ({ Page, api }) => 
       loadFailed: false,
       reload: jest.fn(),
     });
-    for (const fetcher of [
-      platformRoleApi.list,
-      storeStaffApi.grantableRoles,
-      serviceIdentityApi.grantableRoles,
-    ]) {
+    for (const fetcher of [platformStaffApi.grantableRoles, serviceIdentityApi.grantableRoles]) {
       (fetcher as jest.Mock).mockResolvedValue([
         { id: 3, name: '経理', system: false, permission_count: 1 },
       ]);

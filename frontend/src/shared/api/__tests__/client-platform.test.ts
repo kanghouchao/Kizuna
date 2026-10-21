@@ -35,94 +35,59 @@ describe('apiClient platform branch', () => {
     window.history.pushState({}, '', originalHref);
   });
 
-  it('injects X-Role/X-Store-ID for /store requests when the current path carries a storeId', async () => {
-    window.history.pushState({}, '', '/store/2/dashboard');
+  const platformSession = (storeId?: string) =>
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      // 混成束ユーザーは console='platform' のままstore-scopedページを開ける
-      if (key === 'platform-role') return 'platform';
+      if (key === 'platform-role') return 'admin';
+      if (key === 'platform-store-id') return storeId;
       return undefined;
     });
-    const headers = await requestTo('/store/me');
-    expect(headers['X-Role']).toBe('store');
-    expect(headers['X-Store-ID']).toBe('2');
-  });
 
-  it('injects X-Role/X-Store-ID for /files requests when the current path carries a storeId', async () => {
-    window.history.pushState({}, '', '/store/2/dashboard');
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
-      if (key === 'platform-role') return 'platform';
-      return undefined;
-    });
-    const headers = await requestTo('/files');
-    expect(headers['X-Role']).toBe('store');
-    expect(headers['X-Store-ID']).toBe('2');
-  });
+  it.each(['/store/me', '/files'])(
+    'injects X-Store-ID from the current-store cookie for %s requests (no X-Role)',
+    async url => {
+      platformSession('2');
+      const headers = await requestTo(url);
+      expect(headers['X-Store-ID']).toBe('2');
+      expect(headers['X-Role']).toBeUndefined();
+    }
+  );
 
-  it('does not inject store headers when the current path has no storeId (/store/entry)', async () => {
-    window.history.pushState({}, '', '/store/entry');
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
-      if (key === 'platform-role') return 'platform';
-      return undefined;
-    });
-    const headers = await requestTo('/store/me');
-    expect(headers['X-Role']).toBeUndefined();
-    expect(headers['X-Store-ID']).toBeUndefined();
-  });
-
-  it('does not inject store headers for /platform requests even when the current path carries a storeId', async () => {
-    window.history.pushState({}, '', '/store/2/dashboard');
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
-      if (key === 'platform-role') return 'platform';
-      return undefined;
-    });
+  it('does not inject X-Store-ID for /platform requests', async () => {
+    platformSession('2');
     const headers = await requestTo('/platform/configs');
-    expect(headers['X-Role']).toBeUndefined();
     expect(headers['X-Store-ID']).toBeUndefined();
   });
 
-  it('updates the "last selected store" cookie after a successful response that carried X-Store-ID', async () => {
-    // バックエンドが X-Store-ID を受理した成功応答＝StoreIdInterceptor の fail-closed 検証を通過した証拠。
-    // このときだけ「前回選択」cookie を更新する（Sidebar の無検証 mount 書き込みを置き換え）。
-    window.history.pushState({}, '', '/store/2/dashboard');
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
-      if (key === 'platform-role') return 'platform';
-      return undefined;
-    });
-
-    await requestTo('/store/me');
-
-    expect(Cookies.set).toHaveBeenCalledWith('platform-store-id', '2', undefined);
+  it('does not inject X-Store-ID while no current store is resolved', async () => {
+    platformSession(undefined);
+    const headers = await requestTo('/store/me');
+    expect(headers['X-Store-ID']).toBeUndefined();
   });
 
-  it('does not update the "last selected store" cookie when the response carried no X-Store-ID', async () => {
-    // /platform 宛や storeId 未確定の応答には X-Store-ID が付かないため cookie は更新しない。
-    window.history.pushState({}, '', '/store/2/dashboard');
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
-      if (key === 'platform-role') return 'platform';
-      return undefined;
-    });
+  it('ignores the URL path: a legacy store id in the location does not become the store context', async () => {
+    window.history.pushState({}, '', '/store/9/orders');
+    platformSession('2');
+    const headers = await requestTo('/store/me');
+    expect(headers['X-Store-ID']).toBe('2');
+  });
 
-    await requestTo('/platform/configs');
-
+  it('does not write the current-store cookie from a response', async () => {
+    platformSession('2');
+    await requestTo('/store/me');
     expect(Cookies.set).not.toHaveBeenCalled();
   });
 
-  it('falls back to the legacy x-mw branch when no platform session is active', async () => {
-    window.history.pushState({}, '', '/store/2/dashboard');
+  it('uses the proxy store cookie (x-mw-store-id) when no platform session is active', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
       if (key === 'x-mw-role') return 'store';
       if (key === 'x-mw-store-id') return '7';
+      if (key === 'platform-store-id') return '2';
       return undefined;
     });
     const headers = await requestTo('/store/me');
-    expect(headers['X-Role']).toBe('store');
     expect(headers['X-Store-ID']).toBe('7');
+    expect(headers['X-Role']).toBeUndefined();
   });
 });

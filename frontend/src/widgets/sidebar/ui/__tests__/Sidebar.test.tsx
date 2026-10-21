@@ -1,11 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import Cookies from 'js-cookie';
 import { Sidebar } from '../Sidebar';
 import { menuApi } from '@/entities/menu';
 
-jest.mock('js-cookie');
-
-let mockPathname = '/store/dashboard';
+let mockPathname = '/store/orders';
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
 }));
@@ -29,101 +26,39 @@ const menuWithStoreAndPlatform = [
 
 describe('Sidebar', () => {
   beforeEach(() => {
-    mockPathname = '/store/dashboard';
+    mockPathname = '/store/orders';
     mockedGetMenus.mockResolvedValue([]);
-    (Cookies.get as jest.Mock).mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  it('store コンソール cookie でも同一 menuApi が呼ばれる', async () => {
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'store' : undefined
-    );
-
-    render(<Sidebar />);
-
-    await waitFor(() => expect(menuApi.getMenus).toHaveBeenCalled());
-    expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
-  });
-
-  it('platform コンソール cookie でも同一 menuApi が呼ばれる', async () => {
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'platform' : undefined
-    );
-
-    render(<Sidebar />);
-
-    await waitFor(() => expect(menuApi.getMenus).toHaveBeenCalled());
-    expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
-  });
-
-  it('path 由来 storeId を店舗リンクに埋め込み、平台リンクは無加工にする', async () => {
-    mockPathname = '/store/2/dashboard';
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'platform' : undefined
-    );
+  it('メニューの path をそのままリンク先にする（店舗級の項目にも店舗 id を埋めない）', async () => {
     mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
 
     render(<Sidebar />);
 
     expect(await screen.findByRole('link', { name: '受注一覧' })).toHaveAttribute(
       'href',
-      '/store/2/orders'
+      '/store/orders'
     );
     expect(screen.getByRole('link', { name: '店舗一覧' })).toHaveAttribute(
       'href',
       '/platform/stores'
     );
+    expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
   });
 
-  it('path に storeId が無くても前回選択 cookie から店舗リンクを解決する', async () => {
-    mockPathname = '/store/entry';
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'platform-role') return 'platform';
-      if (key === 'platform-store-id') return '3';
-      return undefined;
-    });
-    mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
+  it('メニュー取得が失敗したら全員の着地先（ダッシュボード）への導線だけを出す', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockedGetMenus.mockRejectedValue(new Error('network'));
 
     render(<Sidebar />);
 
-    expect(await screen.findByRole('link', { name: '受注一覧' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'ダッシュボード' })).toHaveAttribute(
       'href',
-      '/store/3/orders'
-    );
-  });
-
-  it('path にも cookie にも storeId が無ければ店舗入口画面へ誘導する', async () => {
-    mockPathname = '/store/entry';
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'platform' : undefined
-    );
-    mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
-
-    render(<Sidebar />);
-
-    expect(await screen.findByRole('link', { name: '受注一覧' })).toHaveAttribute(
-      'href',
-      '/store/entry?next=%2Fstore%2Forders'
-    );
-  });
-
-  it('メニュー取得が失敗したときの店舗コンソール導線に storeId を埋めない', async () => {
-    // 障害時に出る唯一の導線なので、/store/{id}/entry へ変換されると 404 になり退路が消える。
-    mockPathname = '/store/5/orders';
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'store' : undefined
-    );
-    mockedGetMenus.mockRejectedValue(new Error('boom'));
-
-    render(<Sidebar />);
-
-    expect(await screen.findByRole('link', { name: '店舗コンソール' })).toHaveAttribute(
-      'href',
-      '/store/entry'
+      '/platform/dashboard'
     );
   });
 
@@ -131,9 +66,6 @@ describe('Sidebar', () => {
   // 具体的なクラス名に依存しないので配色の作り替えを跨いでも意味が変わらない。
   it('現在地の項目だけが他項目と異なる見えになる', async () => {
     mockPathname = '/platform/stores';
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'platform' : undefined
-    );
     mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
 
     render(<Sidebar />);
@@ -146,9 +78,6 @@ describe('Sidebar', () => {
 
   it('現在地でない画面では全項目が同じ見えになる', async () => {
     mockPathname = '/platform/dashboard';
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'platform' : undefined
-    );
     mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
 
     render(<Sidebar />);
@@ -162,9 +91,6 @@ describe('Sidebar', () => {
   // グループ見出しと配下項目の親子関係。折りたたみ機構は現状無く、
   // 全項目が操作なしで見えていることが e2e の前提でもある。
   it('グループ見出しの配下に当該グループの項目が展開されている', async () => {
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'platform' : undefined
-    );
     mockedGetMenus.mockResolvedValue([
       ...menuWithStoreAndPlatform,
       { name: '設定', items: [{ name: '店舗情報', path: '/store/profile', icon: 'SettingsIcon' }] },
@@ -181,14 +107,10 @@ describe('Sidebar', () => {
     expect(within(settingsGroup).getByRole('link', { name: '店舗情報' })).toBeVisible();
   });
 
-  it('コンソール種別に応じた識別ラベルを掲げる', async () => {
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'platform-role' ? 'store' : undefined
-    );
-
+  it('識別ラベルは画面の区別なく Kizuna を掲げる', async () => {
     render(<Sidebar />);
 
-    expect(await screen.findByText('STORE')).toBeVisible();
-    expect(screen.queryByText('PLATFORM')).toBeNull();
+    expect(await screen.findByText('Kizuna')).toBeVisible();
+    await waitFor(() => expect(menuApi.getMenus).toHaveBeenCalled());
   });
 });

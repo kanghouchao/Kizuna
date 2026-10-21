@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { customerApi } from '@/entities/customer';
 import { notify } from '@/shared/notify';
@@ -10,8 +10,6 @@ import { getApiErrorMessage, storePath } from '@/shared/lib';
 /** 新規顧客登録ページ */
 export default function CustomerCreatePage() {
   const router = useRouter();
-  const params = useParams();
-  const storeId = params.storeId as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (data: CustomerFormData) => {
@@ -19,7 +17,7 @@ export default function CustomerCreatePage() {
       setIsSubmitting(true);
       await customerApi.create(toCustomerRequest(data));
       notify.success('顧客を登録しました');
-      router.push(storePath(storeId, '/customers'));
+      router.push(storePath('/customers'));
     } catch (error) {
       notify.error(getApiErrorMessage(error, '顧客の登録に失敗しました'));
     } finally {

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
@@ -48,11 +48,11 @@ interface Query {
 }
 
 export default function MonthlyRemunerationsPage() {
-  const { storeId } = useParams<{ storeId: string }>();
-  return <MonthlyStatement key={storeId} storeId={storeId} />;
+  const storeId = useStoreContext().currentStoreId;
+  return <MonthlyStatement key={storeId} />;
 }
 
-function MonthlyStatement({ storeId }: { storeId: string }) {
+function MonthlyStatement() {
   const form = useForm<Criteria>({
     defaultValues: {
       person: null,
@@ -116,7 +116,7 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
         title={title}
         description="原営業日の日別・月別に発生済み固定報酬を確認します。"
         actions={
-          <Button variant="outline" render={<Link href={storePath(storeId, '/orders')} />}>
+          <Button variant="outline" render={<Link href={storePath('/orders')} />}>
             受注一覧
           </Button>
         }
@@ -238,7 +238,7 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
           statement.failure === 'notFound' ? (
             <RegionError
               message="キャスト本人が見つからないか、閲覧範囲外です。"
-              fallback={{ href: storePath(storeId, '/orders'), label: '受注一覧へ戻る' }}
+              fallback={{ href: storePath('/orders'), label: '受注一覧へ戻る' }}
             />
           ) : query ? (
             `${periodLabel}の完了受注はありません`
@@ -266,7 +266,7 @@ function MonthlyStatement({ storeId }: { storeId: string }) {
                 <TableCell>
                   <Link
                     className="text-primary-strong underline"
-                    href={storePath(storeId, `/orders/${order.order_id}/edit`)}
+                    href={storePath(`/orders/${order.order_id}/edit`)}
                   >
                     {order.order_id}
                   </Link>

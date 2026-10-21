@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
 import { advertisingApi, type Change, categoryLabels, type Cost } from '../api/advertising';
 import { fromCursorPage } from '@/shared/api';
 import { storePath, useCursorList, useResource } from '@/shared/lib';
@@ -16,7 +15,6 @@ import {
 } from '@/shared/ui';
 const actions = { CREATED: '登録', UPDATED: '変更', DELETED: '削除', COPIED: '前月コピー' };
 export function CostHistory({ month }: { month: string }) {
-  const { storeId } = useParams<{ storeId: string }>();
   const list = useCursorList<Change>(async cursor =>
     fromCursorPage(await advertisingApi.changes(month, cursor))
   );
@@ -75,7 +73,7 @@ export function CostHistory({ month }: { month: string }) {
             <RegionError
               message="変更履歴が見つかりません。"
               fallback={{
-                href: storePath(storeId, '/advertising-costs'),
+                href: storePath('/advertising-costs'),
                 label: '広告費一覧へ戻る',
               }}
             />

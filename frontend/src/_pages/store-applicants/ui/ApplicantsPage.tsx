@@ -1,6 +1,5 @@
 'use client';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   applicantApi,
@@ -31,7 +30,6 @@ import {
 } from '@/shared/ui';
 
 export default function ApplicantsPage() {
-  const { storeId } = useParams<{ storeId: string }>();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<ApplicantStatus | ''>('');
   const [canManage, setCanManage] = useState(false);
@@ -57,9 +55,7 @@ export default function ApplicantsPage() {
       description="受付・面接・選考の記録を担当店舗で管理します。"
       actions={
         canManage && (
-          <Button render={<Link href={storePath(storeId, '/applicants/new')} />}>
-            応募者を登録
-          </Button>
+          <Button render={<Link href={storePath('/applicants/new')} />}>応募者を登録</Button>
         )
       }
       search={{
@@ -128,7 +124,7 @@ export default function ApplicantsPage() {
               <TableCell>
                 <Button
                   variant="outline"
-                  render={<Link href={storePath(storeId, `/applicants/${row.id}`)} />}
+                  render={<Link href={storePath(`/applicants/${row.id}`)} />}
                 >
                   詳細
                 </Button>

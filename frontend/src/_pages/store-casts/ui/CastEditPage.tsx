@@ -13,7 +13,6 @@ import { RegionError, Button } from '@/shared/ui';
 export default function CastEditPage() {
   const params = useParams();
   const id = params.id as string;
-  const storeId = params.storeId as string;
   const router = useRouter();
   const {
     data: cast,
@@ -61,7 +60,7 @@ export default function CastEditPage() {
       };
       await castApi.update(id, requestData);
       notify.success('キャスト情報を更新しました');
-      router.push(storePath(storeId, '/casts'));
+      router.push(storePath('/casts'));
     } catch {
       notify.error('キャスト情報の更新に失敗しました');
     } finally {
@@ -84,7 +83,7 @@ export default function CastEditPage() {
           // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="このキャストは見つかりませんでした"
-            fallback={{ href: storePath(storeId, '/casts'), label: 'キャスト一覧へ' }}
+            fallback={{ href: storePath('/casts'), label: 'キャスト一覧へ' }}
           />
         ) : (
           <RegionError

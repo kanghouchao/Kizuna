@@ -17,10 +17,22 @@ jest.mock('@/entities/order', () => ({
   },
 }));
 
-let mockParams = { storeId: '1', id: 'o1' };
+let mockStoreId = '1';
+let mockParams = { id: 'o1' };
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
   useParams: () => mockParams,
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -88,7 +100,8 @@ function preview(overrides: Partial<OrderPointRollbackPreview> = {}): OrderPoint
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockParams = { storeId: '1', id: 'o1' };
+  mockStoreId = '1';
+  mockParams = { id: 'o1' };
   (hasPermission as jest.Mock).mockReturnValue(true);
   mockedGet.mockResolvedValue(completedOrder);
   mockedPreview.mockResolvedValue(preview());
@@ -150,7 +163,8 @@ describe('ポイント巻き戻しのページ', () => {
     const view = render(<OrderPointRollbackPage />);
     expect(await screen.findByText('理由：保存した理由')).toBeInTheDocument();
     mockedPreview.mockImplementation(() => new Promise(() => {}));
-    mockParams = { storeId: '2', id: 'o1' };
+    mockStoreId = '2';
+    mockParams = { id: 'o1' };
     view.rerender(<OrderPointRollbackPage />);
     expect(screen.queryByText('理由：保存した理由')).not.toBeInTheDocument();
     expect(screen.queryByText(/123456789012/)).not.toBeInTheDocument();

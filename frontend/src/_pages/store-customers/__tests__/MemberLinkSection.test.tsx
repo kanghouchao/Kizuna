@@ -34,7 +34,6 @@ function claimsWith(permissions: string[]): TokenClaims {
   return {
     authorities: permissions.map(permission => `PERM_${permission}`),
     userType: 'STAFF',
-    storeBridge: true,
   };
 }
 

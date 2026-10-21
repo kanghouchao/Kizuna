@@ -26,11 +26,11 @@ const renderModal = (props: Partial<StaffCreateModalProps> = {}) => {
     <StaffModal
       mode="create"
       identity="human"
-      title="管理者を追加"
+      title="従業員を追加"
       initialScope="ALL_STORES"
       displayName={{ label: '氏名', required: '氏名を入力してください' }}
-      successMessage="管理者を追加しました"
-      failureMessage="管理者の追加に失敗しました"
+      successMessage="従業員を追加しました"
+      failureMessage="従業員の追加に失敗しました"
       loadRoles={platformRoleApi.list}
       create={platformStaffApi.create}
       stores={stores}
@@ -165,7 +165,7 @@ describe('共通作成モーダル', () => {
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
-    expect(mockedNotify.success).toHaveBeenCalledWith('管理者を追加しました');
+    expect(mockedNotify.success).toHaveBeenCalledWith('従業員を追加しました');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

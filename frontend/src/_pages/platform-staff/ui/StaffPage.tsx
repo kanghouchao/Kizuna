@@ -2,18 +2,22 @@
 
 import { PlusIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import {
-  PlatformStaffResponse,
-  PlatformStore,
-  platformAuthApi,
-  platformStaffApi,
-} from '@/entities/user';
+import { PlatformStaffResponse, platformStaffApi, useStoreContext } from '@/entities/user';
 import { StaffCreateModal, StaffEditModal, roleSetLabel } from '@/features/staff-management';
-import { useKeyedResource, useListPage, useManagedList } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  hasPermission,
+  readTokenClaims,
+  useDeleteAction,
+  useKeyedResource,
+  useListPage,
+} from '@/shared/lib';
+import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
   Button,
+  ConfirmDialog,
   Input,
   RegionError,
   Select,
@@ -28,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
+import { TemporaryPasswordModal } from './TemporaryPasswordModal';
 
 /** 一覧 1 ページあたりの件数 */
 const PAGE_SIZE = 10;
@@ -41,7 +46,10 @@ interface StaffCriteria {
   storeId?: number;
 }
 
-/** 管理者管理ページ。HQ 側ロール保持者の一覧と、一覧内モーダルでの新規作成・編集を行う。 */
+/**
+ * 従業員管理ページ。行使者の店舗集合と交わる従業員を並べ、授権の編集とアカウント状態の操作を行う。
+ * 行ごとの操作可否は応答の editable（サーバの委譲守衛の判定）をそのまま使う。
+ */
 export default function StaffPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [storeFilter, setStoreFilter] = useState(ALL_STORES);
@@ -58,13 +66,22 @@ export default function StaffPage() {
     { search: '' }
   );
   const staff = list.rows;
-  // 店舗目録はページで 1 回だけ取得し、検索欄の絞り込みとモーダル（担当店舗の選択・要約）で共有する
-  const {
-    items: stores,
-    isLoading: storesLoading,
-    failed: storesFailed,
-    refetch: refetchStores,
-  } = useManagedList<PlatformStore>(() => platformAuthApi.stores());
+
+  // 担当店舗の選択肢は行使者自身の授権店舗。付与できる範囲と同じ集合なので、
+  // 選べたものはサーバの店舗部分集合検査も通る。
+  const { stores, loadFailed: storesFailed, reload: reloadStores } = useStoreContext();
+  const storePickerProps = {
+    stores: stores ?? [],
+    storesLoading: stores === null && !storesFailed,
+    storesFailed,
+    onReloadStores: reloadStores,
+  };
+
+  // 停止・再開・パスワード再設定は一覧とは別の権限。強制はサーバ側で、ここは導線を出すかだけを決める。
+  const [canManageAccounts, setCanManageAccounts] = useState(false);
+  useEffect(() => {
+    setCanManageAccounts(hasPermission(readTokenClaims(), 'STAFF_ACCOUNT_MANAGE'));
+  }, []);
 
   const [modal, setModal] = useState<
     { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; id: number }
@@ -79,49 +96,67 @@ export default function StaffPage() {
     setModal({ kind: 'none' });
   };
 
-  // モーダルを開くたびに目録を取り直す（他管理者の店舗追加・削除への追随。現有目録は
-  // 表示したまま、届き次第差し替わる）。開いた瞬間がまだ読み込み中で、その後に失敗が
-  // 確定する時序では、settle 後の失敗を検知して 1 回だけ取り直す（失敗が続く環境で無限に
-  // 叩かない — それ以降の回復は StoreSetPicker の再試行導線が担う）。
-  const modalOpen = modal.kind !== 'none';
-  const prevModalOpenRef = useRef(false);
-  const storesRetriedRef = useRef(false);
-  useEffect(() => {
-    const justOpened = modalOpen && !prevModalOpenRef.current;
-    prevModalOpenRef.current = modalOpen;
-    if (justOpened) {
-      if (storesLoading) {
-        // まだ読み込み中: settle 後の失敗にそなえて自動再試行の権利を残す
-        storesRetriedRef.current = false;
-      } else {
-        // 開幕の取り直し自体を 1 回目と数え、直後に失敗で settle しても連打しない
-        storesRetriedRef.current = true;
-        void refetchStores();
-      }
-      return;
-    }
-    if (modalOpen && !storesLoading && storesFailed && !storesRetriedRef.current) {
-      storesRetriedRef.current = true;
-      void refetchStores();
-    }
-  }, [modalOpen, storesLoading, storesFailed, refetchStores]);
+  // 停止は対象のセッションを即時に失効させるため確認を挟む。拒否の理由（自分自身・
+  // 最後の管理権限保持者・委譲外）はサーバだけが持つので、文言は応答からそのまま出す。
+  const suspension = useDeleteAction<PlatformStaffResponse>({
+    remove: member => platformStaffApi.suspend(member.id ?? 0),
+    successMessage: 'アカウントを停止しました',
+    errorMessage: 'アカウントの停止に失敗しました',
+    onDeleted: list.reload,
+  });
 
-  // 取り直した目録から選択中の店舗が消えたら（他管理者の削除）、トリガー表示が空白のまま
-  // 絞り込みだけが効き続ける見えない状態になるため、「すべての店舗」へ戻して取り直す。
-  // 取得失敗は目録を空にするため、失敗を除かないと 1 回の通信エラーが利用者の絞り込みを
-  // 黙って解除してしまう（「消えた」と「読めなかった」は別物で、後者は目録の事実ではない）。
-  // 背景処理のため入力欄の下書き（searchTerm）は読まず、適用済み条件から店舗だけを外す。
-  useEffect(() => {
-    if (storeFilter === ALL_STORES || storesLoading || storesFailed) return;
-    if (stores.some(store => String(store.id) === storeFilter)) return;
-    setStoreFilter(ALL_STORES);
-    void list.search(prev => ({ ...prev, storeId: undefined }));
-  }, [stores, storesLoading, storesFailed, storeFilter, list]);
+  // 再設定の確認対象と発行された仮パスワードはページに置く — 行に持たせると
+  // 成功後の一覧取り直しで行ごと unmount され、表示が消える。
+  const [resetTargetOpen, setResetTargetOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<PlatformStaffResponse | null>(null);
+  const [issuedOpen, setIssuedOpen] = useState(false);
+  const [issued, setIssued] = useState<{
+    displayName: string;
+    email: string;
+    password: string;
+  } | null>(null);
+
+  // 応答は一度きり表示の仮パスワードを運び、表示枠は 1 つしかない。重なると有効な値が
+  // 失われるため、進行中は全行の入口を塞いで直列化し、最新要求以外の応答も世代守衛で棄てる。
+  const [resetting, setResetting] = useState(false);
+  const resetRequestIdRef = useRef(0);
+
+  const resetPassword = async (member: PlatformStaffResponse) => {
+    setResetTargetOpen(false);
+    setResetting(true);
+    const requestId = ++resetRequestIdRef.current;
+    try {
+      const result = await platformStaffApi.resetPassword(member.id ?? 0);
+      if (requestId !== resetRequestIdRef.current) return;
+      setIssued({
+        displayName: member.display_name ?? '',
+        email: member.email ?? '',
+        password: result.temporary_password,
+      });
+      setIssuedOpen(true);
+    } catch (error) {
+      if (requestId !== resetRequestIdRef.current) return;
+      notify.error(getApiErrorMessage(error, 'パスワードの再設定に失敗しました'));
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  // 再開は元に戻す操作なので確認を挟まない
+  const resume = async (member: PlatformStaffResponse) => {
+    try {
+      await platformStaffApi.resume(member.id ?? 0);
+      notify.success('アカウントを再開しました');
+      void list.reload();
+    } catch (error) {
+      notify.error(getApiErrorMessage(error, 'アカウントの再開に失敗しました'));
+    }
+  };
 
   // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
   const storeFilterOptions = [
     { value: ALL_STORES, label: 'すべての店舗' },
-    ...stores
+    ...(stores ?? [])
       .filter(store => store.id !== undefined)
       .map(store => ({ value: String(store.id), label: store.name ?? String(store.id) })),
   ];
@@ -129,12 +164,12 @@ export default function StaffPage() {
   return (
     <>
       <ListPage
-        title="管理者管理"
-        description="プラットフォーム権限を持つアカウントのロール・担当店舗を管理します。"
+        title="従業員管理"
+        description="従業員のロール・担当店舗・アカウント状態を管理します。"
         actions={
           <Button onClick={() => setModal({ kind: 'create' })}>
             <PlusIcon />
-            管理者を追加
+            従業員を追加
           </Button>
         }
         search={{
@@ -143,7 +178,7 @@ export default function StaffPage() {
             <>
               <div className="w-full md:max-w-xs">
                 <label htmlFor="search" className="sr-only">
-                  管理者を検索
+                  従業員を検索
                 </label>
                 <Input
                   type="text"
@@ -159,9 +194,7 @@ export default function StaffPage() {
                 items={storeFilterOptions}
                 value={storeFilter}
                 onValueChange={(selected, details) => {
-                  // 候補から消えた値の巻き戻し（先頭項目へ倒される）でもここは鳴る。拾うのは
-                  // 利用者が項目を押したときだけ——巻き戻しは上の effect が適用済み条件を
-                  // 保ったまま担うので、下書きの検索語で上書きしてはいけない。
+                  // 候補から消えた値の巻き戻しでもここは鳴る。拾うのは利用者が項目を押したときだけ。
                   if (details.reason !== 'item-press' || selected === null) return;
                   setStoreFilter(selected);
                   void list.search({
@@ -181,13 +214,9 @@ export default function StaffPage() {
                   ))}
                 </SelectContent>
               </Select>
-              {/* 目録が読めないと引き金は店舗名を引けず id を出す。黙って劣化させず、
-                  選択肢の領域として自分の失敗を名乗る（絞り込み自体は解除しない） */}
+              {/* 目録が読めないと引き金は店舗名を引けない。選択肢の領域として自分の失敗を名乗る */}
               {storesFailed && (
-                <RegionError
-                  message="店舗一覧の取得に失敗しました"
-                  onRetry={() => void refetchStores()}
-                />
+                <RegionError message="店舗一覧の取得に失敗しました" onRetry={reloadStores} />
               )}
               <Button type="submit">検索</Button>
               {searchTerm && (
@@ -207,12 +236,12 @@ export default function StaffPage() {
         }}
         state={list}
         emptyMessage={
-          // 店舗の絞り込み中も「登録なし」ではなく「該当なし」（他店舗には管理者が居る可能性がある）
+          // 店舗の絞り込み中も「登録なし」ではなく「該当なし」（他店舗には従業員が居る可能性がある）
           searchTerm || storeId !== undefined
-            ? '該当する管理者が見つかりません'
-            : '管理者が登録されていません'
+            ? '該当する従業員が見つかりません'
+            : '従業員が登録されていません'
         }
-        errorMessage="管理者一覧の取得に失敗しました"
+        errorMessage="従業員一覧の取得に失敗しました"
         onRetry={list.reload}
       >
         <Table>
@@ -251,14 +280,55 @@ export default function StaffPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary-strong"
-                    onClick={() => setModal({ kind: 'edit', id: member.id ?? 0 })}
-                  >
-                    編集
-                  </Button>
+                  {member.editable ? (
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-primary-strong"
+                        onClick={() => setModal({ kind: 'edit', id: member.id ?? 0 })}
+                      >
+                        編集
+                      </Button>
+                      {canManageAccounts && (
+                        <>
+                          {member.enabled ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive-strong"
+                              onClick={() => suspension.ask(member)}
+                            >
+                              停止
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-primary-strong"
+                              onClick={() => void resume(member)}
+                            >
+                              再開
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={resetting}
+                            onClick={() => {
+                              setResetTarget(member);
+                              setResetTargetOpen(true);
+                            }}
+                          >
+                            パスワード再設定
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    // 押せない導線を出すより、権限が及ばないことをその場で名乗る。
+                    <span className="pr-3 text-xs text-muted-foreground">操作権限なし</span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -267,13 +337,10 @@ export default function StaffPage() {
       </ListPage>
 
       {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
-          開くまで mount しないことで、ロール目録の取得を必要になった時点まで遅延させる */}
+          開くまで mount しないことで、可授ロールの取得を必要になった時点まで遅延させる */}
       {modal.kind === 'create' && (
         <StaffCreateModal
-          stores={stores}
-          storesLoading={storesLoading}
-          storesFailed={storesFailed}
-          onReloadStores={() => void refetchStores()}
+          {...storePickerProps}
           onClose={() => closeModal()}
           onCreated={list.reload}
         />
@@ -281,14 +348,38 @@ export default function StaffPage() {
       {modal.kind === 'edit' && (
         <StaffEditModal
           resource={editing}
-          stores={stores}
-          storesLoading={storesLoading}
-          storesFailed={storesFailed}
-          onReloadStores={() => void refetchStores()}
+          {...storePickerProps}
           onClose={closeModal}
           onUpdated={list.reload}
         />
       )}
+
+      <ConfirmDialog
+        open={suspension.open}
+        title="アカウントを停止しますか？"
+        description={`${suspension.target?.display_name ?? ''} のセッションは即時に失効し、ログインできなくなります。アカウントは削除されず、いつでも再開できます。`}
+        confirmLabel="停止する"
+        onConfirm={() => void suspension.confirm()}
+        onClose={suspension.cancel}
+      />
+
+      <ConfirmDialog
+        open={resetTargetOpen}
+        title="パスワードを再設定しますか？"
+        description={`${resetTarget?.display_name ?? ''} のセッションは即時に失効します。仮パスワードは発行直後に一度だけ表示され、閉じると二度と確認できません。`}
+        confirmLabel="再設定する"
+        onConfirm={() => void (resetTarget && resetPassword(resetTarget))}
+        onClose={() => setResetTargetOpen(false)}
+      />
+
+      <TemporaryPasswordModal
+        open={issuedOpen}
+        temporaryPassword={issued?.password ?? ''}
+        displayName={issued?.displayName ?? ''}
+        email={issued?.email ?? ''}
+        onClose={() => setIssuedOpen(false)}
+        onClosed={() => setIssued(null)}
+      />
     </>
   );
 }

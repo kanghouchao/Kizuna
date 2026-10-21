@@ -1,7 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Header } from '../Header';
 import { useMe, useStoreContext } from '@/entities/user';
-import { isStoreDomain } from '@/shared/lib';
 import type { PlatformMeResponse, PlatformStore } from '@/entities/user';
 
 // 現在店舗・授権店舗・切替は店舗コンテキストが担い、その全ケースは StoreContext.test.tsx で検証する。
@@ -18,14 +17,8 @@ jest.mock('@/entities/user', () => {
   };
 });
 
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  isStoreDomain: jest.fn(() => false),
-}));
-
 const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
 const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
-const mockedIsStoreDomain = isStoreDomain as jest.MockedFunction<typeof isStoreDomain>;
 const mockSwitchStore = jest.fn();
 const mockReloadMe = jest.fn();
 const mockedLogout = (jest.requireMock('@/entities/user') as { __logout: jest.Mock }).__logout;
@@ -33,15 +26,14 @@ const mockedLogout = (jest.requireMock('@/entities/user') as { __logout: jest.Mo
 const meFixture = {
   email: 'tanaka.hanako@example.com',
   display_name: '田中花子',
-  store_bridge: false,
   line_linked: false,
 };
 
 function withContext(stores: PlatformStore[] | null, currentStoreId?: string) {
   mockedUseStoreContext.mockReturnValue({
     stores,
-    storeBridge: stores === null ? null : stores.length > 0,
     currentStoreId,
+    currentStore: stores?.find(store => String(store.id) === currentStoreId),
     loadFailed: false,
     reload: jest.fn(),
     switchStore: mockSwitchStore,
@@ -58,10 +50,9 @@ function withMe(me: PlatformMeResponse | null, failure: 'error' | null = null) {
   });
 }
 
-describe('Header 店舗切替の常設化（店舗コンテキスト集約）', () => {
+describe('Header 店舗切替（店舗コンテキスト集約）', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedIsStoreDomain.mockReturnValue(false);
     withMe(meFixture);
     withContext([]);
   });
@@ -83,12 +74,13 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     expect(screen.queryByText('店舗を選択')).not.toBeInTheDocument();
   });
 
-  it('授権店舗が1件なら現在店舗名で店舗切替が表示される', () => {
+  it('授権店舗が1件なら切替は出さず、現在店舗名だけを掲げる', () => {
     withContext([{ id: 1, name: '店舗A' }], '1');
 
     render(<Header />);
 
-    expect(screen.getByRole('button', { name: '店舗A' })).toBeInTheDocument();
+    expect(screen.getByText('店舗A')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '店舗A' })).not.toBeInTheDocument();
   });
 
   it('店舗切替クリックは context の switchStore に店舗 id を委譲する', async () => {
@@ -114,22 +106,8 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
     fireEvent.click(screen.getByRole('button', { name: 'アカウントメニュー' }));
   }
 
-  it('店舗別ドメイン経由ではアカウント設定リンクが currentStoreId を含む店舗ルートを指す', async () => {
-    mockedIsStoreDomain.mockReturnValue(true);
-    withContext([], '2');
-
-    render(<Header />);
-    openAccountMenu();
-
-    expect(await screen.findByRole('menuitem', { name: 'アカウント設定' })).toHaveAttribute(
-      'href',
-      '/store/2/settings/account'
-    );
-  });
-
-  it('店舗別ドメイン経由でも currentStoreId が未確定ならアカウント設定リンクは platform 側へ fallback する', async () => {
-    mockedIsStoreDomain.mockReturnValue(true);
-    withContext([], undefined);
+  it('アカウント設定リンクは常に platform 側の唯一のアカウント設定を指す', async () => {
+    withContext([{ id: 2, name: '店舗B' }], '2');
 
     render(<Header />);
     openAccountMenu();
@@ -151,7 +129,7 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
   });
 
   // 切替 UI 自体の配線は ModeToggle.test.tsx が持つ。ここで押さえるのは
-  // 「両コンソールの共通殻から届く」こと、つまり Header への搭載そのもの。
+  // 「管理画面の全頁に共通の殻から届く」こと、つまり Header への搭載そのもの。
   it('表示モード切替はヘッダーから開ける', async () => {
     withContext([], '1');
 
@@ -199,13 +177,12 @@ describe('Header 店舗切替の常設化（店舗コンテキスト集約）', 
 });
 
 // 利用者表示は /platform/me の共有 seam から読む（display_name は token claim に無い —
-// wire 契約は authorities / userType / storeBridge のみ）。取得・差し替えのライフサイクルは
+// wire 契約は authorities / userType のみ）。取得・差し替えのライフサイクルは
 // MeContext.test.tsx が担い、ここでは seam 出力に対する表示・失敗時の名乗り・再試行の委譲を
 // 検証する。
 describe('Header 利用者表示（/platform/me の共有 seam）', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedIsStoreDomain.mockReturnValue(false);
     withMe(meFixture);
     withContext([]);
   });

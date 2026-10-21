@@ -2,7 +2,7 @@ import Cookies from 'js-cookie';
 
 /**
  * token cookie（JWT）の payload から読む claim。名前と形状はバックエンドの
- * PlatformAuthService.login が鋳造する claim（authorities / userType / storeBridge）との
+ * PlatformAuthService.login が鋳造する claim（authorities / userType）との
  * wire 契約で、勝手に変えられない。
  *
  * JWT は「署名付き・非暗号化」— payload は base64url にすぎず、保持者が自分の claim を
@@ -16,8 +16,6 @@ export interface TokenClaims {
   authorities: string[];
   /** STAFF / CAST / MEMBER。 */
   userType: string | undefined;
-  /** 店舗文脈（X-Store-ID）を確立できるか。 */
-  storeBridge: boolean;
 }
 
 /** base64url（padding 無し）をデコードして UTF-8 文字列を返す。 */
@@ -51,7 +49,6 @@ export function readTokenClaims(): TokenClaims | null {
         ? payload.authorities.filter((entry): entry is string => typeof entry === 'string')
         : [],
       userType: typeof payload.userType === 'string' ? payload.userType : undefined,
-      storeBridge: payload.storeBridge === true,
     };
   } catch {
     return null;

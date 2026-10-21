@@ -19,23 +19,13 @@ export {
   isSafeMemberReturnPath,
   rememberMemberReturnPath,
   takeMemberReturnPath,
-  getPlatformConsole,
+  getPlatformSessionKind,
   getPlatformStoreId,
   isPlatformSession,
-  isStoreConsole,
   setPlatformStore,
   startPlatformSession,
 } from './platform-session';
-export {
-  getStoreIdFromPath,
-  isLegacyStorePath,
-  isRetiredStorePath,
-  isStoreEntryPath,
-  replaceStoreIdInPath,
-  resolveStoreHref,
-  storePath,
-  storeEntryPath,
-} from './store-route';
+export { isLegacyStorePath, storePath } from './store-route';
 export { cn } from './utils';
 export { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, integerRule } from './validation';
 export { isPublicPlatformPath } from './app-area';

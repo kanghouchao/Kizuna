@@ -18,7 +18,17 @@ jest.mock('@/entities/service', () => ({
   },
   serviceKindLabels: { COURSE: 'コース', SPECIAL_SERVICE: '特殊サービス', SURCHARGE: '加算' },
 }));
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1' }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
