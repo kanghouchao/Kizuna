@@ -5,18 +5,18 @@ import lombok.Getter;
 /**
  * 平台既定ロールの目録。{@code t_roles.is_system = true} の行に対応し、名称（自然キー）はここが正本である。
  *
- * <p>既定ロールは API から改廃できない（{@link Role#rename}／{@link Role#replacePermissions} が拒否する）ため、含む権限もコード側の宣言
- * — 各 {@link PermissionCode} の {@code defaultRoles} — が正本になる。播種はその写像を投入するだけで、逆向き（DB → コード）の流れは無い。
+ * <p>既定ロールは改名・削除できない（{@link Role#rename} が拒否する）が権限は編集できる。各 {@link PermissionCode} の {@code
+ * defaultRoles} はロール行を初めて作る時の初期授与で、以後の正本は DB 側にある。
  *
  * <p>利用者が自作するロールはこの enum に現れない。増減は DB データとして自由である。
  */
 @Getter
 public enum SystemRole {
 
-  /** HQ（プラットフォーム）管理者。プラットフォーム側の全権限（サービス ID 専用の TASK_EXECUTE を除く）と跨店参照系を持つ。 */
-  HQ_ADMIN("HQ管理者"),
+  /** グループ管理者。全群級の管理権限（サービス ID 専用の TASK_EXECUTE を除く）と跨店参照系・従業員管理を初期授与として持つ。 */
+  HQ_ADMIN("グループ管理者"),
 
-  /** 店長。店舗側の全権限と跨店参照系を持つ。 */
+  /** 店長。店舗業務の全権限と跨店参照系・従業員管理を初期授与として持つ。 */
   STORE_MANAGER("店長"),
 
   /** 店舗スタッフ。店長から確定系・金額・機微情報・出力の操作を除いた日常業務の権限を持つ。 */

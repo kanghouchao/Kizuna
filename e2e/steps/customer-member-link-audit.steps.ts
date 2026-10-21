@@ -5,8 +5,6 @@ import {
   ADMIN_PASSWORD,
   STORE1_ID,
   STORE_HEADERS,
-  activateEmergencyElevation,
-  revokeEmergencyElevation,
   createCustomer,
   createPermissionRole,
   createPlatformStaffFixture,
@@ -24,20 +22,16 @@ import {
   releaseCustomerMemberLink,
 } from "./store-api";
 
-const { Given, When, Then, After } = createBdd();
+const { Given, When, Then } = createBdd();
 let limitedStaff = "";
 let staff = "",
   auditor = "",
-  elevated = "",
   secret = "",
   otherStore = "";
-let auditorId = 0,
-  elevationId = 0;
 let cases: {
   customer: string;
   first: string;
   second: string;
-  isElevated: boolean;
   codes: string[];
 }[] = [];
 const headers = (token: string) => ({
@@ -57,11 +51,10 @@ const keys = [
 ];
 
 Given(
-  "関連監査専用の担当と昇格セッションが用意されている",
+  "関連監査専用の担当と監査者が用意されている",
   async ({ request, $testInfo }) => {
     $testInfo.setTimeout(120000);
     cases = [];
-    elevationId = 0;
     const suffix = randomUUID();
     secret = `関連監査へ複写しない私的入力-${suffix}`;
     staff = await loginAsStoreAdmin(request);
@@ -75,16 +68,10 @@ Given(
       request,
       owner,
       `関連監査-${suffix}`,
-      ["AUDIT_VIEW", "EMERGENCY_ELEVATE", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
     );
     const email = `link-auditor-${suffix}@example.test`;
-    auditorId = await createPlatformStaffFixture(
-      request,
-      owner,
-      email,
-      password,
-      [role],
-    );
+    await createPlatformStaffFixture(request, owner, email, password, [role]);
     auditor = await loginPlatformUser(request, email, password);
     const limitedRole = await createPermissionRole(
       request,
@@ -110,15 +97,6 @@ Given(
     const day = new Date().toISOString().slice(0, 10);
     await listShifts(request, limitedStaff, day, day);
 
-    const session = await activateEmergencyElevation(
-      request,
-      auditor,
-      STORE1_ID,
-      "関連監査の検証",
-      password,
-    );
-    elevated = session.token;
-    elevationId = session.id;
     const stores = await getAuthorizedStores(request, staff);
     otherStore = String(
       stores.find((store: { id: number }) => String(store.id) !== STORE1_ID)!
@@ -128,12 +106,9 @@ Given(
 );
 
 When(
-  "通常と昇格の担当で関連建立と変更と解除を操作する",
+  "通常担当で関連建立と変更と解除を操作する",
   async ({ request }) => {
-    for (const [token, isElevated] of [
-      [staff, false],
-      [elevated, true],
-    ] as const) {
+    for (const token of [staff]) {
       const customer = await createCustomer(request, token, secret);
       const codes: string[] = [];
       for (let i = 0; i < 2; i++)
@@ -201,7 +176,7 @@ When(
             data: change,
           })
         ).status(),
-      ).toBe(isElevated ? 403 : 404);
+      ).toBe(404);
       await linkMemberToCustomer(request, token, customer, codes[1], {
         expected_link_id: first,
         operation_reason: secret,
@@ -223,7 +198,7 @@ When(
             data: { expected_link_id: second, operation_reason: secret },
           })
         ).status(),
-      ).toBe(isElevated ? 403 : 404);
+      ).toBe(404);
       await releaseCustomerMemberLink(request, token, customer, second, secret);
       expect(
         (
@@ -242,7 +217,7 @@ When(
         expect(row.status).toBe("RELEASED");
         expect(row.release_reason).toBe(secret);
       }
-      cases.push({ customer, first, second, isElevated, codes });
+      cases.push({ customer, first, second, codes });
     }
   },
 );
@@ -267,25 +242,16 @@ Then(
           expect(event.target_type).toBe("CUSTOMER_MEMBER_LINK");
           expect(event.source_type).toBe("CUSTOMER");
           expect(event.actor_type).toBe("STAFF");
-          expect(event.actor_id === auditorId).toBe(item.isElevated);
           expect(event.store_id).toBe(Number(STORE1_ID));
           expect(event.result).toBe("SUCCEEDED");
           const detail = await getAuditEvent(request, auditor, event.id);
           const after = detail.after_values;
-          expect(Object.keys(after).sort()).toEqual(
-            [
-              ...keys,
-              ...(item.isElevated ? ["emergency_elevation_id"] : []),
-            ].sort(),
-          );
+          expect(Object.keys(after).sort()).toEqual([...keys].sort());
           expect(after.customer_id).toBe(item.customer);
           expect(after.reason).toBe("MEMBER_CODE");
           expect(after.member_id).toMatch(/^\d+$/);
           expect(after.linked_by).toBe(String(event.actor_id));
           expect(after.linked_at).toBeTruthy();
-          expect(after.emergency_elevation_id).toBe(
-            item.isElevated ? String(elevationId) : undefined,
-          );
           if (action.endsWith("CREATED")) {
             expect(detail.before_values).toEqual({});
             expect(after.status).toBe("ACTIVE");
@@ -311,17 +277,10 @@ Then(
             ])
               expect(after[key]).toBe(detail.before_values[key]);
           }
-          for (const value of [secret, ...item.codes, elevated])
+          for (const value of [secret, ...item.codes])
             expect(JSON.stringify(detail)).not.toContain(value);
         }
       }
     }
   },
 );
-
-After({ tags: "@link-audit" }, async ({ request }) => {
-  if (elevationId) {
-    await revokeEmergencyElevation(request, auditor, elevationId);
-    elevationId = 0;
-  }
-});

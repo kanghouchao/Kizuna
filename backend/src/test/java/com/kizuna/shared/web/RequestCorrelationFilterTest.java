@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletException;
 import org.apache.logging.log4j.ThreadContext;
@@ -18,7 +20,8 @@ class RequestCorrelationFilterTest {
   void asyncExceptionDispatchKeepsResponseIdAndAlwaysClearsContext(boolean suppliedId)
       throws Exception {
     var store = new StoreContext();
-    var filter = new RequestCorrelationFilter(store);
+    var holder = new StoreScopeHolder();
+    var filter = new RequestCorrelationFilter(store, holder);
     var request = new MockHttpServletRequest();
     var response = new MockHttpServletResponse();
     if (suppliedId) request.addHeader("X-Request-ID", "request-from-client");
@@ -41,15 +44,18 @@ class RequestCorrelationFilterTest {
                       (input, output) -> {
                         assertThat(ThreadContext.get("requestId")).isEqualTo(originalId);
                         store.setStoreId(1L);
+                        holder.install(() -> new StoreScope(true, java.util.Set.of()));
                         throw new ServletException("非同期失敗");
                       }))
           .isInstanceOf(ServletException.class);
       assertThat(response.getHeader("X-Request-ID")).isEqualTo(originalId);
       assertThat(ThreadContext.get("requestId")).isNull();
       assertThat(store.hasStoreId()).isFalse();
+      assertThat(holder.current()).as("作用域の保持器も例外経路で掃除されること").isNull();
     } finally {
       ThreadContext.clearAll();
       store.clear();
+      holder.clear();
     }
   }
 }

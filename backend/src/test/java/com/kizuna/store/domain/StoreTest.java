@@ -1,7 +1,9 @@
 package com.kizuna.store.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.shared.exception.ServiceException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -25,14 +27,13 @@ class StoreTest {
     assertThat(store.getStatus()).isEqualTo(StoreStatus.ACTIVE);
   }
 
-  // 遷移の引き金は店舗コンソールへの着地で、同じ利用者が訪れるたびに呼ばれる。
   @Test
-  @DisplayName("稼働中の店舗を再度稼働させても状態が変わらないこと")
-  void activate_whenAlreadyActive_isIdempotent() {
+  @DisplayName("稼働中の店舗を再度稼働させようとすると 400 で拒むこと（不可逆遷移の繰り返し拒否）")
+  void activate_whenAlreadyActive_isRejected() {
     Store store = new Store("稼働中店舗", "active.kizuna.test", null);
     store.activate();
 
-    store.activate();
+    assertThatThrownBy(store::activate).isInstanceOf(ServiceException.class);
 
     assertThat(store.getStatus()).isEqualTo(StoreStatus.ACTIVE);
   }

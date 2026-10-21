@@ -1,4 +1,6 @@
 package com.kizuna.store.api.dto;
 
-/** 授権店舗一覧の要素（統一ログイン）。JSON キーは id / name。 */
-public record PlatformStoreResponse(Long id, String name) {}
+import com.kizuna.store.domain.StoreStatus;
+
+/** 授権店舗一覧の要素。JSON キーは id / name / status。status は店舗設定が準備中・稼働中を示すために使う。 */
+public record PlatformStoreResponse(Long id, String name, StoreStatus status) {}

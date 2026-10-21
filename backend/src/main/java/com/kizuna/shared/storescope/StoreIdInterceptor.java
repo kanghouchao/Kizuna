@@ -11,13 +11,17 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * 拒否は例外送出で表明し、応答の成形は {@link com.kizuna.shared.exception.CommonExceptionHandler} へ委ねる — ここでは
+ * {@code X-Store-ID} から店舗文脈を確立する。認証済み主体は権限（PERM_）を 1 つ以上持ち、かつ要求ごとに解決した本人の店舗集合が
+ * その店舗を含むときだけ名乗れる（fail-closed）。権限の検査を先に置くのは、招待を受けた CAST は本人の店舗集合に店舗を持つため
+ * 集合の検査だけでは店舗文脈を名乗れてしまうから。未認証（公開サイト）はヘッダだけで店舗を名乗れる。
+ *
+ * <p>拒否は例外送出で表明し、応答の成形は {@link com.kizuna.shared.exception.CommonExceptionHandler} へ委ねる — ここでは
  * response へ直接書かない。同じ status を返す経路が複数のワイヤ形を持つと、呼出側が応答体の形を一つに決められなくなるため。
  */
 @Log4j2
@@ -26,72 +30,42 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class StoreIdInterceptor implements HandlerInterceptor {
 
   private final StoreContext storeContext;
+  private final StoreScopeHolder storeScopeHolder;
 
-  private static final String HEADER_ROLE = "X-Role";
   private static final String HEADER_STORE_ID = "X-Store-ID";
-  private static final String HEADER_ROLE_STORE = "store";
-
-  /**
-   * 平台トークンで店舗文脈（X-Store-ID）を確立できるかを示す claim 名。値はログイン時に STORE
-   * コンソール能力の保持から導出される（PlatformAuthService）。 shared 層は user モジュールへ依存しないため能力目録を参照せず、導出済みの boolean
-   * claim だけを消費する。 {@link StoreBridgeGuard} と共有するためパッケージ可視とする。
-   */
-  static final String CLAIM_STORE_BRIDGE = "storeBridge";
 
   @Override
   public boolean preHandle(
       @NonNull HttpServletRequest request,
       @NonNull HttpServletResponse response,
       @NonNull Object handler) {
-    Jwt claims = authenticatedClaims();
-    StoreScope scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
-    boolean claimsStoreHeaderPresent =
-        HEADER_ROLE_STORE.equals(request.getHeader(HEADER_ROLE))
-            && StringUtils.isNotBlank(request.getHeader(HEADER_STORE_ID));
-    if (scope != null) {
-      // 平台トークンの橋渡し: X-Role: store + 数値 X-Store-ID を要求し、授権店舗集合で検証する（fail-closed）。
-      if (HEADER_ROLE_STORE.equals(request.getHeader(HEADER_ROLE))
-          && StringUtils.isNumeric(request.getHeader(HEADER_STORE_ID))) {
-        // 店舗文脈を名乗れるのは STORE コンソール能力の保持者（storeBridge claim）のみ。CAST/MEMBER/HQ が
-        // 店舗ヘッダを名乗るのは詐称として 403 で拒否する。授権スコープ検証より前に弾き、
-        // isAuthenticated() のみの端点（POST /files 等）への店舗文脈確立の漏れを塞ぐ。
-        if (!Boolean.TRUE.equals(claims.getClaimAsBoolean(CLAIM_STORE_BRIDGE))) {
-          throw new AccessDeniedException("店舗コンソールの権限がありません");
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    boolean authenticated = authentication instanceof JwtAuthenticationToken;
+    String header = request.getHeader(HEADER_STORE_ID);
+    if (StringUtils.isNumeric(header)) {
+      if (authenticated) {
+        if (!PermissionHolderGuard.holdsPermission(authentication)) {
+          throw new AccessDeniedException("店舗文脈を名乗る権限がありません");
         }
-        Long headerValue = tryParseStoreId(request.getHeader(HEADER_STORE_ID));
-        if (headerValue == null) {
-          // 全桁数字だが long 範囲外。
-          throw new ServiceException("店舗 ID の形式が正しくありません");
+        StoreScope scope = storeScopeHolder.current();
+        if (scope == null) {
+          throw new AccessDeniedException("授権店舗集合を解決できません");
         }
-        if (!scope.authorizes(headerValue)) {
+        Long storeId = parseStoreId(header);
+        if (!scope.authorizes(storeId)) {
           throw new AccessDeniedException("この店舗の権限がありません");
         }
-        this.storeContext.setStoreId(headerValue);
+        storeContext.setStoreId(storeId);
         return true;
       }
-      // ヘッダ不備（X-Role 欠落・非数値含む）は店舗文脈なし → 末尾の @StoreOptional 判定へ落とす。
-    } else if (claims != null) {
-      // 認証済みだが storeId claim を持たない（プラットフォーム PlatformAuth 発行、または storeId 無しの legacy）。
-      // ヘッダで店舗を名乗る主張は詐称として 403 で拒否する。詐称ヘッダが無ければ下の
-      // @StoreOptional 判定に委ね、プラットフォームの正当な素通り（例: POST /files の platform 保存）を保つ。
-      if (claimsStoreHeaderPresent) {
-        throw new AccessDeniedException("店舗文脈を名乗る権限がありません");
-      }
-    } else if (claimsStoreHeaderPresent
-        && StringUtils.isNumeric(request.getHeader(HEADER_STORE_ID))) {
-      // 未認証（ログイン前・公開ページ）だけがヘッダのみで店舗を名乗れる。
-      Long headerValue = tryParseStoreId(request.getHeader(HEADER_STORE_ID));
-      if (headerValue == null) {
-        // 全桁数字だが long 範囲外。
-        throw new ServiceException("店舗 ID の形式が正しくありません");
-      }
-      this.storeContext.setStoreId(headerValue);
+      storeContext.setStoreId(parseStoreId(header));
       return true;
     }
-    // JWT claim・ヘッダのいずれからも店舗文脈を解決できなかった。文脈が無いまま素通りさせると
-    // storeFilter が有効化されず @StoreScoped クエリが全店舗の行を返す（fail-open）ため、
-    // @StoreOptional を明示したエンドポイントに限り許可し、それ以外は 403 で拒否する（fail-closed）。
+    if (authenticated && StringUtils.isNotBlank(header)) {
+      throw new AccessDeniedException("店舗文脈を名乗る権限がありません");
+    }
+    // 店舗文脈が無いまま素通しさせると storeFilter が有効化されず @StoreScoped クエリが全店舗の行を返す（fail-open）ため、
+    // @StoreOptional を明示したエンドポイントに限り許可し、それ以外は 403 で拒否する。
     if (handler instanceof HandlerMethod handlerMethod
         && handlerMethod.hasMethodAnnotation(StoreOptional.class)) {
       return true;
@@ -99,21 +73,12 @@ public class StoreIdInterceptor implements HandlerInterceptor {
     throw new AccessDeniedException("店舗文脈が解決できません");
   }
 
-  /**
-   * 認証済みリクエストの JWT claim 集合（resource-server が構築したもの）を返す。 未認証、または非
-   * JwtAuthenticationToken（匿名認証やログイン前など）の場合は null。
-   */
-  private Jwt authenticatedClaims() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return AuthenticatedJwt.from(authentication);
-  }
-
-  /** 全桁数字の文字列を long に変換する。long 範囲を超える場合は null（呼び出し側が 400 を返す）。 */
-  private static Long tryParseStoreId(String numericValue) {
+  /** 全桁数字の文字列を long に変換する。long 範囲を超える場合は 400。 */
+  private static Long parseStoreId(String numericValue) {
     try {
       return Long.parseLong(numericValue);
     } catch (NumberFormatException e) {
-      return null;
+      throw new ServiceException("店舗 ID の形式が正しくありません");
     }
   }
 

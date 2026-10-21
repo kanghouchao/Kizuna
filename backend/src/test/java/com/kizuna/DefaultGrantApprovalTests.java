@@ -26,7 +26,6 @@ import static com.kizuna.user.domain.PermissionCode.ORDER_CORRECT;
 import static com.kizuna.user.domain.PermissionCode.ORDER_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.ORDER_SET_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.PLATFORM_ASSET_MANAGE;
-import static com.kizuna.user.domain.PermissionCode.PLATFORM_MENU_VIEW;
 import static com.kizuna.user.domain.PermissionCode.POINT_ADJUST;
 import static com.kizuna.user.domain.PermissionCode.POINT_EXPIRE;
 import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_ATTACHMENT_MANAGE;
@@ -45,7 +44,6 @@ import static com.kizuna.user.domain.PermissionCode.SERVICE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SHIFT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STAFF_ACCOUNT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_MANAGE;
-import static com.kizuna.user.domain.PermissionCode.STORE_MENU_VIEW;
 import static com.kizuna.user.domain.PermissionCode.STORE_PROFILE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_STAFF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_VIEW;
@@ -72,13 +70,13 @@ import org.junit.jupiter.api.Test;
 /**
  * 平台既定ロールへ与える授権の承認台帳と、コード側宣言（{@link PermissionCode#getDefaultRoles()}）が一致していることを機械検証する。
  *
- * <p>既定ロールの授与は宣言の写像として毎回取り直されるため、宣言をいじるだけで稼働中の DB の授権が増減する。増減はいずれも製品判断なので、「うっかり」では通らないよう 本台帳との照合を 1
- * 段挟む。授与先を増やす・新しい権限に既定授与を付ける・逆に取り下げる、いずれも宣言と同じ PR で下の台帳を書き換える。
+ * <p>既定ロールの初期授与は宣言から播種され、基線 seed もこれと一致する（{@code
+ * PermissionSeedLiteralTests}）。増減はいずれも製品判断なので、「うっかり」では通らないよう 本台帳との照合を 1
+ * 段挟む。授与先を増やす・新しい権限に既定授与を付ける・逆に取り下げる、いずれも宣言と同じ PR で下の台帳と基線を書き換える。
  *
  * <p>包含ではなく完全一致で照合する。台帳に載っていない授与を通してしまうと、後から誤ってそれを落としても台帳に無いので検出できず、守れる範囲が「台帳を書いた時点の授権」に 縮んでしまう。
  *
- * <p>台帳をここに置くのは、これが Liquibase の適用済み changeset ではなく本テストの資産だからである。播種の YAML を書き換えて済ませようとすると checksum
- * 検証に落ちて既存 DB が起動しなくなるため、承認の記録は移行履歴から独立させる。
+ * <p>台帳をここに置くのは、承認の記録を移行履歴から独立させるためである。
  */
 class DefaultGrantApprovalTests {
 
@@ -87,10 +85,9 @@ class DefaultGrantApprovalTests {
       Map.ofEntries(
           Map.entry(STORE_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(ROLE_MANAGE, Set.of(HQ_ADMIN)),
-          Map.entry(STAFF_ACCOUNT_MANAGE, Set.of(HQ_ADMIN)),
-          Map.entry(STORE_STAFF_MANAGE, Set.of(STORE_MANAGER)),
+          Map.entry(STAFF_ACCOUNT_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER)),
+          Map.entry(STORE_STAFF_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER)),
           Map.entry(SYSTEM_CONFIG_MANAGE, Set.of(HQ_ADMIN)),
-          Map.entry(PLATFORM_MENU_VIEW, Set.of(HQ_ADMIN)),
           Map.entry(PLATFORM_ASSET_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(BENEFIT_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(SERVICE_ID_MANAGE, Set.of(HQ_ADMIN)),
@@ -109,7 +106,6 @@ class DefaultGrantApprovalTests {
           Map.entry(CAST_FIELD_DEF_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CAST_FIELD_DEF_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(STORE_PROFILE_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
-          Map.entry(STORE_MENU_VIEW, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(ADVERTISING_COST_VIEW, Set.of(STORE_MANAGER)),
           Map.entry(ADVERTISING_COST_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(ADVERTISING_COST_EXPORT, Set.of(STORE_MANAGER)),

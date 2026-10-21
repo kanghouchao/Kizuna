@@ -1045,7 +1045,7 @@ Then(
     expect(
       (
         await request.get(orderCostBase, {
-          headers: { Authorization: `Bearer ${token}`, "X-Role": "platform" },
+          headers: { Authorization: `Bearer ${token}` },
           params: { month },
         })
       ).status(),

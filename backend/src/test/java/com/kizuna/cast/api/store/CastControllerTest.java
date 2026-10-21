@@ -16,7 +16,8 @@ import com.kizuna.cast.application.CastService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,7 +37,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /** ハンドラ層で閉じている約束（offset ページングの全順序、削除 204）の単体テスト。 */
 @WebMvcTest(CastController.class)
-@Import({CastControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({CastControllerTest.MethodSecurityConfig.class, StoreContext.class, StoreScopeHolder.class})
 class CastControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -54,7 +55,7 @@ class CastControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean private StoreActivationService storeActivationService;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
   @DisplayName("GET /store/casts?sort=name でも id が副キーとして補われること")

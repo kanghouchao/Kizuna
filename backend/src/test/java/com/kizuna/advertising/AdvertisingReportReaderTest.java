@@ -13,25 +13,26 @@ import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.reporting.AdvertisingReportReader;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 class AdvertisingReportReaderTest {
   EntityManager em = mock(EntityManager.class);
   StoreContext context = mock(StoreContext.class);
-  AdvertisingReportReader reader = new AdvertisingReportReader(em, context);
+  StoreScopeHolder holder = new StoreScopeHolder();
+  AdvertisingReportReader reader = new AdvertisingReportReader(em, context, holder);
 
   @AfterEach
   void clear() {
-    SecurityContextHolder.clearContext();
+    holder.clear();
   }
 
   @Test
@@ -108,14 +109,6 @@ class AdvertisingReportReaderTest {
   }
 
   void authorize() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new JwtAuthenticationToken(
-                Jwt.withTokenValue("test")
-                    .header("alg", "none")
-                    .subject("actor")
-                    .claim("storeScopeType", "SPECIFIC_STORES")
-                    .claim("storeIds", List.of(1L))
-                    .build()));
+    holder.install(() -> new StoreScope(false, Set.of(1L)));
   }
 }

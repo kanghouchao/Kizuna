@@ -80,19 +80,29 @@ class RoleTest {
   @Test
   @DisplayName("平台既定ロールは改名できない")
   void systemRoleCannotBeRenamed() {
-    Role role = Role.builder().name("HQ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
+    Role role = Role.builder().name("グループ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
 
     assertThatThrownBy(() -> role.rename("別名")).isInstanceOf(SystemRoleImmutableException.class);
-    assertThat(role.getName()).isEqualTo("HQ管理者");
+    assertThat(role.getName()).isEqualTo("グループ管理者");
   }
 
   @Test
-  @DisplayName("平台既定ロールは権限集合を置き換えられない")
-  void systemRoleCannotReplacePermissions() {
-    Role role = Role.builder().name("HQ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
+  @DisplayName("平台既定ロールでも権限集合は置き換えられる（初期授与は出発点で、運用の正本は DB 側）")
+  void systemRoleCanReplacePermissions() {
+    Role role = Role.builder().name("グループ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
 
-    assertThatThrownBy(() -> role.replacePermissions(Set.of(2L)))
-        .isInstanceOf(SystemRoleImmutableException.class);
-    assertThat(role.getPermissionIds()).containsExactly(1L);
+    role.replacePermissions(Set.of(2L));
+
+    assertThat(role.getPermissionIds()).containsExactly(2L);
+  }
+
+  @Test
+  @DisplayName("同じ名称の指定は改名ではなく、平台既定ロールでも通る")
+  void renamingToTheSameNameIsNotARename() {
+    Role role = Role.builder().name("グループ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
+
+    role.rename("グループ管理者");
+
+    assertThat(role.getName()).isEqualTo("グループ管理者");
   }
 }

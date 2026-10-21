@@ -5,8 +5,6 @@ import {
   ADMIN_PASSWORD,
   STORE1_ID,
   STORE_HEADERS,
-  activateEmergencyElevation,
-  revokeEmergencyElevation,
   createPermissionRole,
   createPlatformStaffFixture,
   createStoreStaffFixture,
@@ -25,20 +23,16 @@ import {
   loginPlatformUser,
 } from "./store-api";
 
-const { Given, When, Then, After } = createBdd();
+const { Given, When, Then } = createBdd();
 let ordinary = "",
   limited = "",
   auditor = "",
-  elevated = "",
   secret = "",
   otherStore = "";
-let ordinaryId = 0,
-  auditorId = 0,
-  elevationId = 0;
+let ordinaryId = 0;
 let cases: {
   id: string;
   actorId: number;
-  elevated: boolean;
   histories: { id: string; actor_id: number; new_status: string }[];
 }[] = [];
 const headers = (token: string, storeId = STORE1_ID) => ({
@@ -68,11 +62,10 @@ const actions = [
 ];
 
 Given(
-  "キャスト監査専用の担当と昇格セッションが用意されている",
+  "キャスト監査専用の担当と監査者が用意されている",
   async ({ request, $testInfo }) => {
     $testInfo.setTimeout(120000);
     cases = [];
-    elevationId = 0;
     const suffix = randomUUID();
     secret = `監査へ複写しない秘密-${suffix}`;
     const manager = await loginAsStoreAdmin(request);
@@ -129,10 +122,10 @@ Given(
       request,
       owner,
       `在籍監査-${suffix}`,
-      ["AUDIT_VIEW", "EMERGENCY_ELEVATE", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
     );
-    const auditEmail = `cast-elevation-${suffix}@example.test`;
-    auditorId = await createPlatformStaffFixture(
+    const auditEmail = `cast-auditor-${suffix}@example.test`;
+    await createPlatformStaffFixture(
       request,
       owner,
       auditEmail,
@@ -140,25 +133,13 @@ Given(
       [auditRole],
     );
     auditor = await loginPlatformUser(request, auditEmail, password);
-    const session = await activateEmergencyElevation(
-      request,
-      auditor,
-      STORE1_ID,
-      "在籍監査の検証",
-      password,
-    );
-    elevated = session.token;
-    elevationId = session.id;
   },
 );
 
 When(
-  "通常と昇格の担当がキャストの六操作と拒否操作を実行する",
+  "通常担当がキャストの六操作と拒否操作を実行する",
   async ({ request }) => {
-    for (const [token, actorId, isElevated] of [
-      [ordinary, ordinaryId, false],
-      [elevated, auditorId, true],
-    ] as const) {
+    for (const [token, actorId] of [[ordinary, ordinaryId]] as const) {
       const id = await createUnpublishedCast(request, token, secret);
       await renameCast(request, token, id, secret);
       await setCastPublication(request, token, id, "UNPUBLISHED");
@@ -192,9 +173,7 @@ When(
           data: mutation.data,
           headers: headers(token, otherStore),
         });
-        expect(hidden.status(), await hidden.text()).toBe(
-          isElevated ? 403 : 404,
-        );
+        expect(hidden.status(), await hidden.text()).toBe(404);
       }
       await renameCast(request, token, id, `${secret}-更新`);
       await setCastPublication(request, token, id, "PUBLISHED");
@@ -220,7 +199,7 @@ When(
       const histories = (await castStatusHistory(request, token, id)).content;
       expect(histories).toHaveLength(4);
       expect(histories.every((row) => row.actor_id === actorId)).toBe(true);
-      cases.push({ id, actorId, elevated: isElevated, histories });
+      cases.push({ id, actorId, histories });
     }
   },
 );
@@ -257,14 +236,10 @@ Then(
           [
             ...keys,
             ...(index === 1 ? ["redacted_fields_changed"] : []),
-            ...(item.elevated ? ["emergency_elevation_id"] : []),
           ].sort(),
         );
         expect(Object.keys(before).sort()).toEqual(
           index === 0 ? [] : [...keys].sort(),
-        );
-        expect(after.emergency_elevation_id).toBe(
-          item.elevated ? String(elevationId) : undefined,
         );
         expect(event.target_type).toBe(
           index === 2 ? "CAST_PROFILE" : "CAST_ENROLLMENT",
@@ -314,16 +289,8 @@ Then(
           if (index === 5) expect(after.ended_at).toBeTruthy();
           else expect(after.ended_at).toBe("");
         }
-        for (const value of [secret, elevated])
-          expect(JSON.stringify(detail)).not.toContain(value);
+        expect(JSON.stringify(detail)).not.toContain(secret);
       }
     }
   },
 );
-
-After({ tags: "@cast-audit" }, async ({ request }) => {
-  if (elevationId) {
-    await revokeEmergencyElevation(request, auditor, elevationId);
-    elevationId = 0;
-  }
-});

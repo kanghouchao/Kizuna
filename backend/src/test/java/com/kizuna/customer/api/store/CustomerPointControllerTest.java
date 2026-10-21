@@ -14,7 +14,8 @@ import com.kizuna.customer.application.CustomerPointService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +39,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * <p>残高の照会は顧客台帳の読みとして CUSTOMER_MANAGE で足りるが、手動調整は残高を人手で動かす確定操作なので 別権限で仕切られていることを固定する。
  */
 @WebMvcTest(CustomerPointController.class)
-@Import({CustomerPointControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  CustomerPointControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class CustomerPointControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -54,7 +59,7 @@ class CustomerPointControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean private StoreActivationService storeActivationService;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
   @DisplayName("残高照会は CUSTOMER_MANAGE で到達できること")

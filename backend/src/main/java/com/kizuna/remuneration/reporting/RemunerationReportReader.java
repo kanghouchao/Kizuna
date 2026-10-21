@@ -8,7 +8,7 @@ import com.kizuna.remuneration.domain.RemunerationAmounts;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.remuneration.AttendanceFacts;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
@@ -21,7 +21,6 @@ import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +31,7 @@ public class RemunerationReportReader {
   private final EntityManager em;
   private final AttendanceFacts attendances;
   private final StoreContext context;
+  private final StoreScopeHolder storeScopeHolder;
 
   public record Term(
       Long storeId,
@@ -55,8 +55,7 @@ public class RemunerationReportReader {
   public RemunerationReportFacts read(
       OperationalFacts orders, LocalDate from, LocalDate to, int limit) {
     var stores = orders.stores().stream().map(OperationalFacts.Store::storeId).toList();
-    var scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+    var scope = storeScopeHolder.current();
     for (var store : stores)
       if (context.hasStoreId()
           ? !store.equals(context.getStoreId())

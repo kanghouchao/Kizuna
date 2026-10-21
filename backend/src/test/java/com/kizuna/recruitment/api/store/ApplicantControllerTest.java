@@ -20,7 +20,8 @@ import com.kizuna.recruitment.domain.ReceptionChannel;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.lang.reflect.RecordComponent;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
@@ -43,7 +44,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @WebMvcTest(ApplicantController.class)
-@Import({ApplicantControllerTest.MethodSecurity.class, StoreContext.class})
+@Import({ApplicantControllerTest.MethodSecurity.class, StoreContext.class, StoreScopeHolder.class})
 class ApplicantControllerTest {
   @TestConfiguration
   @EnableMethodSecurity
@@ -53,7 +54,7 @@ class ApplicantControllerTest {
   @MockitoBean ApplicantService service;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
-  @MockitoBean StoreActivationService activation;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
 
   private static TestActor actor() {
     return new TestActor();

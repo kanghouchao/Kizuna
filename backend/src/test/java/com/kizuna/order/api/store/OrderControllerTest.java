@@ -39,8 +39,9 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -62,7 +63,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** 呼出側の {@code ?sort=} 上書きで一意な副キー id が消えないことの単体テスト（offset ページングの安定性）。 */
 @WebMvcTest(OrderController.class)
-@Import({OrderControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  OrderControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class OrderControllerTest {
 
   @Test
@@ -107,7 +112,7 @@ class OrderControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean private StoreActivationService storeActivationService;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
   @DisplayName("GET /store/orders?sort=businessDate でも id が副キーとして補われること")

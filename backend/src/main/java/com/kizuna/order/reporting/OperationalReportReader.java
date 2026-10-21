@@ -6,6 +6,7 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import jakarta.persistence.EntityManager;
@@ -17,7 +18,6 @@ import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OperationalReportReader {
   private final EntityManager entityManager;
   private final StoreContext context;
+  private final StoreScopeHolder storeScopeHolder;
   private final AppProperties properties;
   private final Clock clock;
 
@@ -46,8 +47,7 @@ public class OperationalReportReader {
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
   public OperationalFacts platform(Long storeId, LocalDate from, LocalDate to) {
-    var scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+    var scope = storeScopeHolder.current();
     if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
     if (storeId != null) {
       if (storeId <= 0) throw new ServiceException("店舗の指定が不正です");

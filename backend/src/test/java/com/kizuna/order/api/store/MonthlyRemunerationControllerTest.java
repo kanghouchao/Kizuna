@@ -15,7 +15,8 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.user.application.StoreScopeResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import java.util.stream.Stream;
@@ -41,7 +42,8 @@ import org.springframework.transaction.PlatformTransactionManager;
   MonthlyRemunerationControllerTest.MethodSecurityConfig.class,
   MonthlyRemunerationService.class,
   RemunerationQuery.class,
-  StoreContext.class
+  StoreContext.class,
+  StoreScopeHolder.class
 })
 @WithMockUser(authorities = "PERM_ORDER_MANAGE")
 class MonthlyRemunerationControllerTest {
@@ -54,7 +56,7 @@ class MonthlyRemunerationControllerTest {
   @MockitoBean private PlatformTransactionManager transactionManager;
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean private StoreActivationService storeActivationService;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @BeforeEach
   void storeExists() {

@@ -5,8 +5,6 @@ import {
   ADMIN_PASSWORD,
   STORE1_ID,
   STORE_HEADERS,
-  activateEmergencyElevation,
-  revokeEmergencyElevation,
   createPermissionRole,
   createPlatformStaffFixture,
   createStoreStaffFixture,
@@ -31,19 +29,15 @@ const { Given, When, Then, After } = createBdd();
 let ordinary = "",
   limited = "",
   auditor = "",
-  elevated = "",
   secret = "",
   otherStore = "",
   manager = "";
-let ordinaryId = 0,
-  auditorId = 0,
-  elevationId = 0;
+let ordinaryId = 0;
 type AuditCase = {
   internal: string;
   external: string;
   id: string;
   actorId: number;
-  elevated: boolean;
   snapshotId: string;
   initialOrder: number;
 };
@@ -65,13 +59,12 @@ const actions = [
 ];
 
 Given(
-  "項目監査専用の担当と昇格セッションが用意されている",
+  "項目監査専用の担当と監査者が用意されている",
   async ({ request, $testInfo }) => {
     $testInfo.setTimeout(120000);
     cases = [];
     definitionIds.clear();
     castIds = [];
-    elevationId = 0;
     const suffix = randomUUID();
     secret = `監査へ複写しない秘密-${suffix}`;
     manager = await loginAsStoreAdmin(request);
@@ -133,10 +126,10 @@ Given(
       request,
       owner,
       `項目監査-${suffix}`,
-      ["AUDIT_VIEW", "EMERGENCY_ELEVATE", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
     );
-    const auditEmail = `field-elevation-${suffix}@example.test`;
-    auditorId = await createPlatformStaffFixture(
+    const auditEmail = `field-auditor-${suffix}@example.test`;
+    await createPlatformStaffFixture(
       request,
       owner,
       auditEmail,
@@ -144,24 +137,12 @@ Given(
       [auditRole],
     );
     auditor = await loginPlatformUser(request, auditEmail, password);
-    const session = await activateEmergencyElevation(
-      request,
-      auditor,
-      STORE1_ID,
-      "項目監査の検証",
-      password,
-    );
-    elevated = session.token;
-    elevationId = session.id;
   },
 );
 When(
-  "通常と昇格の担当が項目定義と関連値を変更し拒否条件も確認する",
+  "通常担当が項目定義と関連値を変更し拒否条件も確認する",
   async ({ request }) => {
-    for (const actor of [
-      { token: ordinary, id: ordinaryId, elevated: false },
-      { token: elevated, id: auditorId, elevated: true },
-    ]) {
+    for (const actor of [{ token: ordinary, id: ordinaryId }]) {
       const suffix = randomUUID().replaceAll("-", "");
       const privateKey = `private_${suffix}`,
         publicKey = `public_${suffix}`;
@@ -217,9 +198,7 @@ When(
           ...mutation,
           headers: headers(actor.token, otherStore),
         });
-        expect(denied.status(), await denied.text()).toBe(
-          actor.elevated ? 403 : 404,
-        );
+        expect(denied.status(), await denied.text()).toBe(404);
       }
       const duplicate = await request.post("/api/store/casts/fields", {
         headers: headers(actor.token),
@@ -276,7 +255,6 @@ When(
         external,
         id,
         actorId: actor.id,
-        elevated: actor.elevated,
         snapshotId: snapshot.id,
         initialOrder: initial.display_order,
       });
@@ -344,7 +322,6 @@ Then(
               [
                 ...(deleted ? ["exists"] : definitionKeys),
                 ...(labelChange ? ["redacted_fields_changed"] : []),
-                ...(item.elevated ? ["emergency_elevation_id"] : []),
               ].sort(),
             );
             expect(after.exists).toBe(deleted ? "false" : "true");
@@ -401,7 +378,6 @@ Then(
             ...side.keys,
             "redacted_fields_changed",
             ...(side.type === "CAST_ENROLLMENT" ? ["snapshot_id"] : []),
-            ...(item.elevated ? ["emergency_elevation_id"] : []),
           ].sort(),
         );
         expect(detail.before_values.version).toBe("1");
@@ -429,11 +405,7 @@ async function checkedDetail(
   expect(event.store_id).toBe(Number(STORE1_ID));
   expect(event.result).toBe("SUCCEEDED");
   const detail = await getAuditEvent(request, auditor, event.id);
-  expect(detail.after_values.emergency_elevation_id).toBe(
-    item.elevated ? String(elevationId) : undefined,
-  );
-  for (const hidden of [secret, elevated])
-    expect(JSON.stringify(detail)).not.toContain(hidden);
+  expect(JSON.stringify(detail)).not.toContain(secret);
   return detail;
 }
 
@@ -475,8 +447,4 @@ async function deleteTracked(
 After({ tags: "@cast-field-audit" }, async ({ request }) => {
   for (const id of definitionIds) await deleteTracked(request, manager, id);
   for (const id of castIds) await deleteCast(request, manager, id);
-  if (elevationId) {
-    await revokeEmergencyElevation(request, auditor, elevationId);
-    elevationId = 0;
-  }
 });

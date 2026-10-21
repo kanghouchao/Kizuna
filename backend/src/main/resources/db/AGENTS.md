@@ -53,9 +53,13 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
   reference `t_orders` (order attribution, receipt tokens, point ledger) are included **after**
   the store layer — placement in `platform/` states ownership, include order states dependency.
 - `reconcile/` is not a release: `runAlways` changesets that re-derive rows from code
-  declarations (permission catalogue from `PermissionCode` / `SystemRole`). Its include stays
-  **last** in `db.changelog-master.yaml`; `ChangelogOrderTests` pins this. Permission additions
-  need only the enum — never hand-seed permission rows.
+  declarations (permission catalogue rows and default-role rows from `PermissionCode` / `SystemRole`).
+  Its include stays **last** in `db.changelog-master.yaml`; `ChangelogOrderTests` pins this.
+  Default-role grants are seeded by reconcile **only when it creates the role row** — never on an
+  existing DB, because administrators may edit default roles. Since the baseline always creates the
+  role rows first, a new DB's default grants come from `seed/01-roles.yaml`: it must hold every
+  catalogue row and every `defaultRoles` grant (`PermissionSeedLiteralTests` pins seed ≡ enum).
+  Adding a permission therefore edits the enum **and** the baseline seed.
 - Every application table is `t_`-prefixed (`t_stores`, `t_casts`, …). The one bare name,
   `event_publication`, belongs to Spring Modulith's event publication registry — do not rename
   it to fit.

@@ -1,7 +1,6 @@
 import { expect } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import {
-  activateEmergencyElevation,
   createShift,
   deleteShift,
   approveShiftRequest,
@@ -13,7 +12,6 @@ import {
   recordAttendance,
   correctAttendance,
   cancelAttendance,
-  revokeEmergencyElevation,
   listAuditEvents,
   getAuditEvent,
   createCast,
@@ -35,18 +33,14 @@ const headers = (token: string) => ({
 });
 let staff = "",
   auditor = "",
-  elevated = "",
   secret = "",
   password = "",
   otherStore = "";
-let elevationId = 0,
-  auditorId = 0;
 type Expected = {
   action: string;
   target: string;
   type: string;
   actor: "STAFF" | "CAST";
-  elevated: boolean;
   source?: string;
   sourceType?: string;
   before?: Record<string, string>;
@@ -56,7 +50,7 @@ let expected: Expected[] = [];
 const secrets: string[] = [];
 
 Given(
-  "シフト監査専用の担当と本人と昇格セッションが用意されている",
+  "シフト監査専用の担当と本人と監査者が用意されている",
   async ({ request, $testInfo }) => {
     $testInfo.setTimeout(120000);
     expected = [];
@@ -70,43 +64,25 @@ Given(
       request,
       owner,
       `シフト監査-${suffix}`,
-      ["AUDIT_VIEW", "EMERGENCY_ELEVATE", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
     );
     const email = `shift-auditor-${suffix}@example.test`;
-    auditorId = await createPlatformStaffFixture(
-      request,
-      owner,
-      email,
-      password,
-      [role],
-    );
+    await createPlatformStaffFixture(request, owner, email, password, [role]);
     auditor = await loginPlatformUser(request, email, password);
-    const session = await activateEmergencyElevation(
-      request,
-      auditor,
-      STORE1_ID,
-      "シフト監査検証",
-      password,
-    );
-    elevated = session.token;
-    elevationId = session.id;
     const stores = await getAuthorizedStores(request, staff);
     otherStore = String(
       stores.find((store: { id: number }) => String(store.id) !== STORE1_ID)!
         .id,
     );
-    secrets.push(secret, password, elevated);
+    secrets.push(secret, password);
   },
 );
 
 When(
   "申請と排班と実績の11入口と拒否と削除の関連解除を操作する",
   async ({ request }) => {
-    for (const [token, isElevated] of [
-      [staff, false],
-      [elevated, true],
-    ] as const) {
-      const suffix = `${Date.now()}-${isElevated}`;
+    for (const token of [staff]) {
+      const suffix = Date.now().toString();
       const cast = await createCast(request, staff, `シフト監査-${suffix}`);
       const invitation = await issueCastInvitation(request, staff, cast);
       const email = `shift-cast-${suffix}@example.test`;
@@ -139,7 +115,6 @@ When(
           target,
           type,
           actor: "STAFF",
-          elevated: isElevated,
           ...extra,
         });
       const submit = async () => {
@@ -149,7 +124,6 @@ When(
         });
         track("SHIFT_REQUEST_SUBMITTED", r.id, "SHIFT_REQUEST", {
           actor: "CAST",
-          elevated: false,
           after: {
             status: "PENDING",
             redacted_fields_changed: "note",
@@ -189,7 +163,6 @@ When(
       });
       track("SHIFT_CHANGE_REQUEST_SUBMITTED", change.id, "SHIFT_REQUEST", {
         actor: "CAST",
-        elevated: false,
         after: { shift_id: shift, redacted_fields_changed: "note" },
       });
       await approveShiftRequest(request, token, change.id);
@@ -281,7 +254,6 @@ When(
       });
       track("SHIFT_CHANGE_REQUEST_SUBMITTED", pending.id, "SHIFT_REQUEST", {
         actor: "CAST",
-        elevated: false,
       });
       await deleteShift(request, token, removedShift);
       for (const id of [removable, pending.id])
@@ -387,7 +359,6 @@ Then(
         expect(event.target_id).toBe(item.target);
         expect(event.target_type).toBe(item.type);
         expect(event.actor_type).toBe(item.actor);
-        expect(event.actor_id === auditorId).toBe(item.elevated);
         expect(event.store_id).toBe(Number(STORE1_ID));
         expect(event.result).toBe("SUCCEEDED");
         expect(event.source_type ?? null).toBe(item.sourceType ?? null);
@@ -397,14 +368,6 @@ Then(
         const detail = await getAuditEvent(request, auditor, event.id);
         expect(detail.before_values).toMatchObject(item.before ?? {});
         expect(detail.after_values).toMatchObject(item.after ?? {});
-        if (item.elevated)
-          expect(detail.after_values.emergency_elevation_id).toBe(
-            String(elevationId),
-          );
-        else
-          expect(detail.after_values).not.toHaveProperty(
-            "emergency_elevation_id",
-          );
         for (const value of secrets)
           expect(JSON.stringify(detail)).not.toContain(value);
         for (const field of [
@@ -420,6 +383,5 @@ Then(
         }
       }
     }
-    await revokeEmergencyElevation(request, auditor, elevationId);
   },
 );

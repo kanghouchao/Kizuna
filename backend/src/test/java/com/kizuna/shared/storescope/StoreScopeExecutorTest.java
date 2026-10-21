@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.shared.exception.ServiceException;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
@@ -12,9 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 /**
  * {@link StoreScopeExecutor} の授権検査・文脈 set→action→clear ライフサイクル（例外時の clear 含む）を実 {@link
@@ -24,35 +22,31 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 class StoreScopeExecutorTest {
 
   private final StoreContext storeContext = new StoreContext();
+  private final StoreScopeHolder storeScopeHolder = new StoreScopeHolder();
 
   /** 店舗存在性ポートの返値をテストごとに切り替える（既定は実在）。 */
   private boolean storeExists = true;
 
   private final StoreScopeExecutor executor =
-      new StoreScopeExecutor(storeContext, storeId -> storeExists);
+      new StoreScopeExecutor(storeContext, storeScopeHolder, storeId -> storeExists);
 
   @AfterEach
   void clearContext() {
-    SecurityContextHolder.clearContext();
+    storeScopeHolder.clear();
     storeContext.clear();
   }
 
-  private void authenticate(String scopeType, Object storeIds) {
-    Jwt.Builder builder =
-        Jwt.withTokenValue("token")
-            .header("alg", "HS256")
-            .subject("user@example.com")
-            .claim("storeScopeType", scopeType);
-    if (storeIds != null) {
-      builder.claim("storeIds", storeIds);
-    }
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(builder.build()));
+  private void authenticate(String scopeType, List<Long> storeIds) {
+    StoreScope scope =
+        "ALL_STORES".equals(scopeType)
+            ? new StoreScope(true, Set.of())
+            : new StoreScope(false, Set.copyOf(storeIds));
+    storeScopeHolder.install(() -> scope);
   }
 
   @Test
   void failsClosedWhenScopeUnresolved() {
-    // 認証コンテキスト未設定 → StoreScope 解決不能
+    // 保持器未設定 → StoreScope 解決不能
     AtomicBoolean ran = new AtomicBoolean(false);
 
     assertThatThrownBy(

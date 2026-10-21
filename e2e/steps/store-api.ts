@@ -7,18 +7,15 @@ import {
 import { PLATFORM_URL } from "../base-url";
 
 // store1 は seed 済み（store_id=1）。store API は Host に加えて
-// X-Role / X-Store-ID ヘッダで店舗文脈を確定する。
+// X-Store-ID ヘッダで店舗文脈を確定する。
 export const STORE1_ID = "1";
-export const STORE_HEADERS = {
-  "X-Role": "store",
-  "X-Store-ID": STORE1_ID,
-};
+export const STORE_HEADERS = { "X-Store-ID": STORE1_ID };
 export const ADMIN_EMAIL = "tanaka.hanako@kizuna.test";
 export const ADMIN_PASSWORD = "pass";
 
 /**
  * 店長ロール（STORE_MANAGER・store1/store2 双方に授権された v0.5.0 シード）の平台ユーザーで
- * ログインし JWT を返す。返却トークンは STORE_HEADERS（X-Role/X-Store-ID）と併用することで
+ * ログインし JWT を返す。返却トークンは STORE_HEADERS（X-Store-ID）と併用することで
  * /store/** に店舗文脈を確立できる（STORE_BRIDGE_ROLES ブリッジ）。/platform/login は CSRF 免除。
  */
 export async function loginAsStoreAdmin(
@@ -380,7 +377,7 @@ export async function issueCastInvitation(
  * キャスト招待を新規登録で受諾し、CAST 用の平台身分を作成する
  * （POST /api/platform/cast-invitations/acceptance, PermitAll）。
  * トークンはパスではなく本文で送る（パスはアクセスログに残るため）。
- * X-Role/X-Store-ID は不要（/platform 配下は StoreIdInterceptor を通らない）。
+ * X-Store-ID は不要（/platform 配下は StoreIdInterceptor を通らない）。
  */
 export async function acceptCastInvitation(
   request: APIRequestContext,
@@ -1057,33 +1054,6 @@ export async function deleteCustomerContact(
   const response = await request.delete(
     `/api/store/customers/${customerId}/contacts/${contactId}`,
     { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` } },
-  );
-  expect(response.status()).toBe(204);
-}
-
-export async function activateEmergencyElevation(
-  request: APIRequestContext,
-  token: string,
-  storeId: string,
-  reason: string,
-  password: string,
-): Promise<{ id: number; token: string }> {
-  const response = await request.post("/api/platform/emergency-elevations", {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { store_id: Number(storeId), reason, password },
-  });
-  expect(response.status()).toBe(201);
-  return response.json();
-}
-
-export async function revokeEmergencyElevation(
-  request: APIRequestContext,
-  token: string,
-  id: number,
-): Promise<void> {
-  const response = await request.post(
-    `/api/platform/emergency-elevations/${id}/revocation`,
-    { headers: { Authorization: `Bearer ${token}` } },
   );
   expect(response.status()).toBe(204);
 }

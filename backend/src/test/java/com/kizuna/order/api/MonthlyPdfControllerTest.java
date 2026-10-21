@@ -31,14 +31,16 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -76,7 +78,8 @@ import org.springframework.transaction.PlatformTransactionManager;
   MonthlyRemunerationService.class,
   PlatformMonthlyRemunerationService.class,
   SelfMonthlyRemunerationService.class,
-  StoreContext.class
+  StoreContext.class,
+  StoreScopeHolder.class
 })
 class MonthlyPdfControllerTest {
   @TestConfiguration
@@ -108,11 +111,12 @@ class MonthlyPdfControllerTest {
   @MockitoBean CastRepository people;
   @MockitoBean SystemConfigService systemConfigService;
   @MockitoBean StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean StoreActivationService storeActivationService;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean PlatformTransactionManager transactionManager;
 
   @BeforeEach
   void data() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(1L)));
     properties.getMonthlyPdf().setMaxBytes(16L * 1024 * 1024);
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(stores.name(1L)).thenReturn("日本語店舗");
@@ -162,12 +166,7 @@ class MonthlyPdfControllerTest {
         get(path + "/monthly-remunerations/pdf")
             .with(
                 jwt()
-                    .jwt(
-                        j ->
-                            j.subject("actor")
-                                .claim("storeBridge", true)
-                                .claim("storeScopeType", "SPECIFIC_STORES")
-                                .claim("storeIds", List.of(1L)))
+                    .jwt(j -> j.subject("actor"))
                     .authorities(new SimpleGrantedAuthority(authority)))
             .param("store_id", "1")
             .param("person_id", "34")

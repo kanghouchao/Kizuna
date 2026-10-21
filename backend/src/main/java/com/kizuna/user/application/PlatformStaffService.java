@@ -4,21 +4,35 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
 import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
+import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
+import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
+import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
+import com.kizuna.user.domain.SelfStopNotAllowedException;
+import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -31,13 +45,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.query.EscapeCharacter;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 管理者（HQ 側ロール保持者）の授権管理ユースケース。対象は本人種別 STAFF のうち HQ 側ロールを 1 つ以上持つ者に限る — CAST/MEMBER
- * は専用フローが、店舗側ロールのみの利用者は店舗スタッフ管理が扱う（ADR 0020）。HQ 側ロールの定義は {@link RoleRepository#findHqRoleIds} が単源。
+ * 従業員管理ユースケース。対象は本人種別 STAFF の全アカウントで、CAST / MEMBER は権限モデルの外なので在否も出さない。
+ *
+ * <p>行使者の店舗集合は要求ごとに解決された作用域（{@link StoreScopeHolder}）から、権限並集は本人の行から取る。User は StoreScopedEntity
+ * ではないため storeFilter の機構は乗らず、店舗境界は本クラスの明示検証が唯一の担保である。
+ *
+ * <p>委譲の守衛は 2 条のみ — 付与するロールの権限並集 ⊆ 行使者の権限並集、対象の店舗集合 ⊆ 行使者の店舗集合。編集・停止・再開・再設定の対象も 同じ 2 条（{@link
+ * #editableBy}）で判定する。同格の相互保護のような硬い規則は置かず、既定ロールの編集で運用が決める。
+ *
+ * <p>残る名指しの守衛は 3 つ: 自分自身の停止と再設定、最後の ROLE_MANAGE 保持者の停止・降格（{@link RoleManageHolderGuard}）、
+ * 管理者（ROLE_MANAGE 保持者）のパスワード代理再設定。
  */
 @Service
 @RequiredArgsConstructor
@@ -46,36 +69,47 @@ public class PlatformStaffService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
+  /** 仮パスワードの生成源。予測可能な乱数だと発行直後の乗っ取りを許すため暗号論的乱数に限る。 */
+  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
   private final BusinessAudit businessAudit;
   private final UserRepository repository;
   private final RoleRepository roleRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
   private final PasswordEncoder passwordEncoder;
+  private final CredentialOperations credentialOperations;
+  private final StoreScopeHolder storeScopeHolder;
+
+  /** 行使者の有効権限並集（ロールの権限 id の和）と店舗集合。 */
+  record Actor(User user, Set<Long> permissionIds, StoreScope scope) {}
 
   @Transactional(readOnly = true)
-  public Page<PlatformStaffResponse> list(String search, Long storeId, Pageable pageable) {
-    Page<User> staff =
-        repository.findAll(staffSpec(search, storeId, roleRepository.findHqRoleIds()), pageable);
-    Set<Long> allRoleIds =
-        staff.getContent().stream()
-            .flatMap(user -> user.getRoleIds().stream())
-            .collect(Collectors.toSet());
-    Map<Long, String> roleNames = roleNamesOf(allRoleIds);
-    return staff.map(user -> toResponse(user, roleNames));
+  public Page<PlatformStaffResponse> list(
+      String search, Long storeId, Pageable pageable, String actorEmail) {
+    Actor actor = actor(actorEmail);
+    Page<User> staff = repository.findAll(staffSpec(search, storeId, actor.scope()), pageable);
+    Map<Long, Role> roles =
+        rolesOf(
+            staff.getContent().stream()
+                .flatMap(user -> user.getRoleIds().stream())
+                .collect(Collectors.toSet()));
+    return staff.map(user -> toResponse(user, roles, actor));
   }
 
   /**
-   * 一覧の対象は本人種別 STAFF かつ HQ 側ロールを 1 つ以上持つ行に限る。検索語は表示名とメールアドレスを横断する部分一致。店舗 id
-   * は「その店舗を担当範囲に含む」行への絞り込みで、ALL_STORES は個別 id を持たないまま全店舗を覆うため常に該当させる。
+   * 一覧の対象は本人種別 STAFF のうち、行使者の店舗集合と交わる者（ALL_STORES の行使者は全員、ALL_STORES の対象は常に該当）。検索語は表示名と
+   * メールアドレスを横断する部分一致。店舗 id は「その店舗を担当範囲に含む」行への絞り込み。
    *
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
    */
-  private static Specification<User> staffSpec(String search, Long storeId, Set<Long> hqRoleIds) {
+  private static Specification<User> staffSpec(String search, Long storeId, StoreScope scope) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
-      predicates.add(new HqRoleMembership(hqRoleIds).holders().toPredicate(root, query, cb));
+      if (!scope.allStores()) {
+        predicates.add(authorizesAnyOf(root, cb, scope.storeIds()));
+      }
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
@@ -85,21 +119,54 @@ public class PlatformStaffService {
                 cb.like(cb.lower(root.get("email")), pattern, escape)));
       }
       if (storeId != null) {
-        // 担当店舗集合は @ElementCollection のため、member of は Hibernate が相関副問い合わせ（exists）へ展開する。
-        // 親行を結合で増やさないので、ページングの件数・境界に影響しない。
-        predicates.add(
-            cb.or(
-                cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
-                cb.isMember(storeId, root.get("storeIds"))));
+        predicates.add(authorizesAnyOf(root, cb, Set.of(storeId)));
       }
       return cb.and(predicates.toArray(new Predicate[0]));
     };
   }
 
+  /** 担当店舗集合は @ElementCollection のため member of は相関副問い合わせへ展開され、親行を増やさずページングを保つ。 */
+  private static Predicate authorizesAnyOf(
+      Root<User> root, CriteriaBuilder cb, Collection<Long> storeIds) {
+    List<Predicate> any = new ArrayList<>();
+    any.add(cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES));
+    for (Long storeId : storeIds) {
+      any.add(cb.isMember(storeId, root.<Set<Long>>get("storeIds")));
+    }
+    return cb.or(any.toArray(new Predicate[0]));
+  }
+
+  /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
+  @Transactional(readOnly = true)
+  public PlatformStaffResponse get(Long id, String actorEmail) {
+    Actor actor = actor(actorEmail);
+    User user = requireVisible(id, actor);
+    return toResponse(user, rolesOf(user.getRoleIds()), actor);
+  }
+
+  /** 行使者が付与できるロールの目録 — 権限集合が行使者の権限並集に収まるもの。判定の単源をサーバに置き、前端に複製させない。 */
+  @Transactional(readOnly = true)
+  public List<RoleSummaryResponse> grantableRoles(String actorEmail) {
+    Actor actor = actor(actorEmail);
+    return roleRepository.findAll().stream()
+        .filter(role -> actor.permissionIds().containsAll(role.getPermissionIds()))
+        .sorted(Comparator.comparing(Role::getName))
+        .map(
+            role ->
+                new RoleSummaryResponse(
+                    role.getId(),
+                    role.getName(),
+                    Boolean.TRUE.equals(role.getSystemRole()),
+                    role.getPermissionIds().size()))
+        .toList();
+  }
+
   @Transactional
-  public PlatformStaffResponse create(PlatformStaffCreateRequest req) {
-    Map<Long, String> roleNames = requireRoles(req.getRoleIds());
-    requireHqRole(req.getRoleIds(), roleRepository.findHqRoleIds());
+  public PlatformStaffResponse create(PlatformStaffCreateRequest req, String actorEmail) {
+    Actor actor = actor(actorEmail);
+    Map<Long, Role> roles = requireRoles(req.getRoleIds());
+    requireGrantable(roles.values(), actor);
+    requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), actor.scope());
     if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
     }
@@ -117,36 +184,28 @@ public class PlatformStaffService {
     user = save(user);
     businessAudit.recordCurrent(
         null,
-        "PLATFORM_STAFF_CREATED",
+        "STAFF_CREATED",
         "USER_GRANTS",
         user.getId().toString(),
         Map.of(),
         BusinessAudit.grants(user));
-    return toResponse(user, roleNames);
+    return toResponse(user, roles, actor);
   }
 
-  /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
-  @Transactional(readOnly = true)
-  public PlatformStaffResponse get(Long id) {
-    User user = requireManagedStaff(id, roleRepository.findHqRoleIds());
-    return toResponse(user, roleNamesOf(user.getRoleIds()));
-  }
-
-  /**
-   * 授権（ロール×店舗集合）だけを更新する。停止・再開はアカウント管理（{@link PlatformStaffAccountService}）の領分で、この面は enabled
-   * を受け取らない。
-   */
+  /** 授権（ロール×店舗集合）だけを更新する。停止・再開は専用の操作で、この面は enabled を受け取らない。 */
   @Transactional
-  public PlatformStaffResponse update(Long id, PlatformStaffUpdateRequest req) {
-    Map<Long, String> roleNames = requireRoles(req.getRoleIds());
-    Set<Long> hqRoleIds = roleRepository.findHqRoleIds();
-    requireHqRole(req.getRoleIds(), hqRoleIds);
-    User user = requireManagedStaff(id, hqRoleIds);
+  public PlatformStaffResponse update(Long id, PlatformStaffUpdateRequest req, String actorEmail) {
+    Actor actor = actor(actorEmail);
+    User user = requireVisible(id, actor);
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
     // ため、応答で往復させた version を明示比対して 409 で拒否する。
     if (!user.getVersion().equals(req.getVersion())) {
-      throw new StaleStaffUpdateException("他の管理者が更新しました。最新の内容を確認してください");
+      throw new StaleStaffUpdateException("他の担当者が更新しました。最新の内容を確認してください");
     }
+    requireEditable(user, actor);
+    Map<Long, Role> roles = requireRoles(req.getRoleIds());
+    requireGrantable(roles.values(), actor);
+    requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), actor.scope());
     // 供給ロールの追加は並行しうるため、ロック前は要求に既存ロールの除去があるかだけで判断する。
     if (user.getEnabled() && !req.getRoleIds().containsAll(user.getRoleIds())) {
       roleManageHolderGuard.requireAfterGrantChange(user, req.getRoleIds());
@@ -157,50 +216,210 @@ public class PlatformStaffService {
     if (!before.equals(BusinessAudit.grants(user)))
       businessAudit.recordCurrent(
           null,
-          "PLATFORM_STAFF_GRANTS_CHANGED",
+          "STAFF_GRANTS_CHANGED",
           "USER_GRANTS",
           user.getId().toString(),
           before,
           BusinessAudit.grants(user));
-    return toResponse(user, roleNames);
+    return toResponse(user, roles, actor);
   }
 
   /**
-   * 管理者管理の対象行を取り出す。
-   *
-   * <p>本人種別がスタッフ以外（CAST/MEMBER）の行と、HQ 側ロールを 1 つも持たない行は、存在しても本 API の対象外として 「見つからない」に倒す（一覧と同じ絞り）。
-   * 対象外と不在を呼出側から区別できないようにするため、両者は同一の応答になる — 店舗側の利用者の在否をこの面から列挙させない。
+   * 停止する。既に停止済みでも 204 で受理し、失効イベントだけは必ず発行する — AFTER_COMMIT の Redis 書込みが失敗したとき、同じ要求の再送で失効を書き直せるようにする
+   * （差分語義だと再送では何も起きず、再開してから止め直す以外に復旧手段が無くなる）。
    */
-  private User requireManagedStaff(Long id, Set<Long> hqRoleIds) {
+  @Transactional
+  public void suspend(Long id, String actorEmail) {
+    Actor actor = actor(actorEmail);
+    User visible = requireVisible(id, actor);
+    // 自分自身を停止すると自らのセッションも即時失効し、以後の操作ができなくなる（サポート経路がない自己ロックアウト）ため拒否する。
+    if (visible.getEmail().equals(actorEmail)) {
+      throw new SelfStopNotAllowedException("自分自身を停止することはできません");
+    }
+    requireEditable(visible, actor);
+    User target = roleManageHolderGuard.loadForSuspension(id);
+    boolean wasEnabled = target.getEnabled();
+    credentialOperations.stop(target);
+    if (wasEnabled) {
+      repository.saveAndFlush(target);
+      businessAudit.record(
+          actorEmail,
+          null,
+          "STAFF_ACCOUNT_SUSPENDED",
+          "USER_GRANTS",
+          id.toString(),
+          null,
+          null,
+          Map.of("enabled", "true"),
+          Map.of("enabled", "false"));
+    }
+  }
+
+  /** 再開する。既に有効でも 204 で受理する（冪等）。停止で増えた版は戻らないため、停止前のセッションは復活せず再ログインを要する。 */
+  @Transactional
+  public void resume(Long id, String actorEmail) {
+    Actor actor = actor(actorEmail);
+    User target = requireVisible(id, actor);
+    requireEditable(target, actor);
+    if (!target.getEnabled()) {
+      target.resume();
+      repository.saveAndFlush(target);
+      businessAudit.recordCurrent(
+          null,
+          "STAFF_ACCOUNT_RESUMED",
+          "USER_GRANTS",
+          id.toString(),
+          Map.of("enabled", "false"),
+          Map.of("enabled", "true"));
+    }
+  }
+
+  /**
+   * 仮パスワードを発行して再設定し、対象の既存セッションを失効させる。生値の戻り値はこの一度だけで、以後どこからも取り出せない。
+   *
+   * <p>直列化点は押さえない。再設定は enabled もロール構成も動かさないので ROLE_MANAGE 保持者の母集団を減らしようがない。行ロックも取らない —
+   * 状態機械の遷移が無く、並行書込みは楽観ロック（@Version）が担う。
+   */
+  @Transactional
+  public String resetPassword(Long id, String actorEmail) {
+    Actor actor = actor(actorEmail);
+    User target = requireVisible(id, actor);
+    // 自己再設定は名指しで拒む。JWT の権限は発行時の写しで降格後も失効まで残るため、降格済みの残存セッションが
+    // 委譲守衛を素通りして口座を恒久奪取できてしまう。
+    if (target.getEmail().equals(actorEmail)) {
+      throw new SelfPasswordResetNotAllowedException("自分自身のパスワードは再設定できません");
+    }
+    if (holdsAny(
+        target.getRoleIds(),
+        roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))) {
+      throw new HqPasswordResetNotAllowedException("管理者のパスワードは再設定できません");
+    }
+    requireEditable(target, actor);
+    String temporaryPassword = temporaryPassword();
+    credentialOperations.changePassword(target, passwordEncoder.encode(temporaryPassword));
+    repository.saveAndFlush(target);
+    businessAudit.record(
+        actorEmail,
+        null,
+        "STAFF_PASSWORD_RESET",
+        "USER_GRANTS",
+        id.toString(),
+        null,
+        null,
+        Map.of(),
+        Map.of("sessions_revoked", "true"));
+    return temporaryPassword;
+  }
+
+  /** 仮パスワード（URL 安全 Base64 の 16 文字）。生値は符号化して保存した後、応答以外のどこにも残さない。 */
+  private String temporaryPassword() {
+    byte[] bytes = new byte[12];
+    SECURE_RANDOM.nextBytes(bytes);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+  }
+
+  /** 行使者の権限並集と店舗集合。作用域を解決できない要求は fail-closed に拒む（店舗境界の唯一の担保がこれである以上、既定で通してはならない）。 */
+  private Actor actor(String actorEmail) {
+    StoreScope scope = storeScopeHolder.current();
+    if (scope == null) {
+      throw new AccessDeniedException("授権店舗集合を解決できません");
+    }
+    User user =
+        repository
+            .findByEmail(actorEmail)
+            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
+    Set<Long> permissionIds =
+        roleRepository.findAllById(user.getRoleIds()).stream()
+            .flatMap(role -> role.getPermissionIds().stream())
+            .collect(Collectors.toUnmodifiableSet());
+    return new Actor(user, permissionIds, scope);
+  }
+
+  /**
+   * 対象行を取り出す。可視性の述語は一覧と同一で、id を直に指しても一覧に出ない行へは届かない — 本人種別がスタッフ以外の行と、行使者の
+   * 店舗集合と交わらない行は、存在しても「見つからない」に倒す。対象外と不在を呼出側から区別させないため、両者は同一の応答になる。
+   */
+  private User requireVisible(Long id, Actor actor) {
     return repository
         .findById(id)
         .filter(user -> user.getUserType() == UserType.STAFF)
-        .filter(user -> new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds()))
-        .orElseThrow(() -> new NotFoundException("管理者が見つかりません: " + id));
+        .filter(user -> intersects(user, actor.scope()))
+        .orElseThrow(() -> new NotFoundException("従業員が見つかりません: " + id));
   }
 
-  /**
-   * 授与後も HQ 側ロール保持者であることを要求する。素通しにすると、作成した直後に一覧から消えるアカウントが作れてしまい、
-   * 店舗側ロールのみへ降ろされた利用者はこの面から二度と辿り着けなくなる（店舗スタッフ管理の領分・ADR 0020）。
-   */
-  private static void requireHqRole(Set<Long> roleIds, Set<Long> hqRoleIds) {
-    if (!new HqRoleMembership(hqRoleIds).holdsAny(roleIds)) {
-      throw new InvalidRoleGrantException("管理者にはプラットフォーム権限を含むロールを 1 つ以上付与してください");
+  private static boolean intersects(User user, StoreScope actorScope) {
+    if (actorScope.allStores() || user.getStoreScopeType() == StoreScopeType.ALL_STORES) {
+      return true;
+    }
+    return user.getStoreIds().stream().anyMatch(actorScope.storeIds()::contains);
+  }
+
+  private void requireEditable(User user, Actor actor) {
+    if (!editableBy(user, actor)) {
+      throw new StaffOutOfDelegationScopeException("このアカウントを操作する権限がありません");
     }
   }
 
-  /** 指定 id のロールが全て実在することを検証し、id→名称の対応を返す（応答組立にも使う）。 */
-  private Map<Long, String> requireRoles(Set<Long> roleIds) {
-    Map<Long, String> names = roleNamesOf(roleIds);
-    if (names.size() != roleIds.size()) {
+  /** 対象の権限並集 ⊆ 行使者の権限並集 かつ 対象の店舗集合 ⊆ 行使者の店舗集合。 */
+  private boolean editableBy(User user, Actor actor) {
+    return editableBy(user, rolesOf(user.getRoleIds()), actor);
+  }
+
+  private static boolean editableBy(User user, Map<Long, Role> roles, Actor actor) {
+    boolean permissionsWithin =
+        user.getRoleIds().stream()
+            .map(roles::get)
+            .filter(role -> role != null)
+            .allMatch(role -> actor.permissionIds().containsAll(role.getPermissionIds()));
+    return permissionsWithin
+        && withinScope(user.getStoreScopeType(), user.getStoreIds(), actor.scope());
+  }
+
+  /** 付与するロールの権限並集が行使者の権限並集に収まること。行使者自身が持たない権限は配れない。 */
+  private static void requireGrantable(Collection<Role> roles, Actor actor) {
+    for (Role role : roles) {
+      if (!actor.permissionIds().containsAll(role.getPermissionIds())) {
+        throw new InvalidRoleGrantException("自分が持たない権限を含むロールは付与できません");
+      }
+    }
+  }
+
+  /** 付与・変更しようとしている店舗集合が行使者の店舗集合に収まること。検証は付与・変更時のみで、既往の付与へは遡らない。 */
+  private static void requireStoresWithinActorScope(
+      StoreScopeType scopeType, Set<Long> storeIds, StoreScope actorScope) {
+    if (!withinScope(scopeType, storeIds, actorScope)) {
+      throw new InvalidStoreScopeException("担当店舗の範囲を超える店舗は指定できません");
+    }
+  }
+
+  /** 店舗集合の包含判定。ALL_STORES の対象を扱えるのは ALL_STORES の行使者だけ（部分集合の自然な帰結）。 */
+  private static boolean withinScope(
+      StoreScopeType scopeType, Set<Long> storeIds, StoreScope actorScope) {
+    if (actorScope.allStores()) {
+      return true;
+    }
+    if (scopeType == StoreScopeType.ALL_STORES) {
+      return false;
+    }
+    return storeIds == null || actorScope.storeIds().containsAll(storeIds);
+  }
+
+  private static boolean holdsAny(Set<Long> roleIds, Set<Long> targetRoleIds) {
+    return roleIds.stream().anyMatch(targetRoleIds::contains);
+  }
+
+  /** 指定 id のロールが全て実在することを検証し、id→ロールの対応を返す（応答組立にも使う）。 */
+  private Map<Long, Role> requireRoles(Set<Long> roleIds) {
+    Map<Long, Role> roles = rolesOf(roleIds);
+    if (roles.size() != roleIds.size()) {
       throw new ServiceException("指定されたロールが存在しません");
     }
-    return names;
+    return roles;
   }
 
-  private Map<Long, String> roleNamesOf(Set<Long> roleIds) {
+  private Map<Long, Role> rolesOf(Set<Long> roleIds) {
     return roleRepository.findAllById(roleIds).stream()
-        .collect(Collectors.toMap(Role::getId, Role::getName));
+        .collect(Collectors.toMap(Role::getId, role -> role));
   }
 
   /**
@@ -219,10 +438,13 @@ public class PlatformStaffService {
             () -> new ServiceException("指定されたロールが存在しません")));
   }
 
-  private static PlatformStaffResponse toResponse(User user, Map<Long, String> roleNames) {
-    List<PlatformStaffResponse.RoleRef> roles =
+  private static PlatformStaffResponse toResponse(User user, Map<Long, Role> roles, Actor actor) {
+    List<PlatformStaffResponse.RoleRef> refs =
         user.getRoleIds().stream()
-            .map(id -> new PlatformStaffResponse.RoleRef(id, roleNames.get(id)))
+            .map(
+                id ->
+                    new PlatformStaffResponse.RoleRef(
+                        id, roles.containsKey(id) ? roles.get(id).getName() : null))
             .sorted(
                 Comparator.comparing(
                     PlatformStaffResponse.RoleRef::name,
@@ -233,9 +455,10 @@ public class PlatformStaffService {
         user.getEmail(),
         user.getDisplayName(),
         user.getEnabled(),
-        roles,
+        refs,
         user.getStoreScopeType(),
         new HashSet<>(user.getStoreIds()),
-        user.getVersion());
+        user.getVersion(),
+        editableBy(user, roles, actor));
   }
 }

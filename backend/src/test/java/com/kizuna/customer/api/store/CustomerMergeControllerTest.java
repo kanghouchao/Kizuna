@@ -22,8 +22,9 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +54,7 @@ import tools.jackson.databind.ObjectMapper;
 @Import({
   CustomerMergeControllerTest.MethodSecurityConfig.class,
   StoreContext.class,
+  StoreScopeHolder.class,
   CommonExceptionHandler.class
 })
 class CustomerMergeControllerTest {
@@ -70,7 +72,7 @@ class CustomerMergeControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean private StoreActivationService storeActivationService;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
   @DisplayName("履歴は向き・相手の行・実行者・移した件数を snake_case で返すこと")

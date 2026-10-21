@@ -2,8 +2,8 @@ package com.kizuna.menu.application;
 
 import com.kizuna.menu.api.dto.MenuVO;
 import com.kizuna.menu.domain.Menu;
+import com.kizuna.shared.security.Authorities;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.user.domain.Authorities;
 import com.kizuna.user.domain.PermissionCode;
 import java.util.Collections;
 import java.util.List;
@@ -18,8 +18,8 @@ final class MenuTreeAssembler {
 
   private MenuTreeAssembler() {}
 
-  static List<MenuVO> assemble(List<Menu> roots) {
-    Set<String> userAuthorities = currentUserAuthorities();
+  static List<MenuVO> assemble(List<Menu> roots, StoreScope scope) {
+    Set<String> userAuthorities = currentUserAuthorities(scope);
     return roots.stream()
         .filter(menu -> visible(menu, userAuthorities))
         .map(menu -> toVO(menu, userAuthorities))
@@ -48,14 +48,22 @@ final class MenuTreeAssembler {
     return new MenuVO(menu.getLabel(), menu.getPath(), menu.getIcon(), children);
   }
 
+  /**
+   * 見出し節（遷移先を持たず子を持つ）は子に見えるものが一つでもあれば出す — 節自身の permission は見ない。葉は permission で判定し、permission
+   * の無い葉は全員に見える。
+   */
   private static boolean visible(Menu menu, Set<String> userAuthorities) {
+    if (menu.getPath() == null && menu.getChildren() != null && !menu.getChildren().isEmpty()) {
+      return menu.getChildren().stream().anyMatch(child -> visible(child, userAuthorities));
+    }
     if (menu.getPermission() == null || menu.getPermission().isEmpty()) {
       return true;
     }
     return userAuthorities.contains(Authorities.permission(menu.getPermission()));
   }
 
-  private static Set<String> currentUserAuthorities() {
+  /** 全店舗を担当しない利用者には、全店舗作用域を要する画面（定期処理・監査）の節を出さない。 */
+  private static Set<String> currentUserAuthorities(StoreScope scope) {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null) {
       return Collections.emptySet();
@@ -64,7 +72,6 @@ final class MenuTreeAssembler {
         auth.getAuthorities().stream()
             .map(GrantedAuthority::getAuthority)
             .collect(Collectors.toSet());
-    var scope = StoreScope.fromAuthentication(auth);
     if (scope == null || !scope.allStores()) {
       authorities.remove(PermissionCode.TASK_MANAGE.authority());
       authorities.remove(PermissionCode.AUDIT_VIEW.authority());
