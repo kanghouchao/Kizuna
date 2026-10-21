@@ -9,11 +9,11 @@ import {
   createCast,
   createCourse,
   createPermissionRole,
-  createPlatformStaffFixture,
+  createStaffFixture,
   getAuthorizedStores,
   getOrderReceptionists,
   loginAsStoreAdmin,
-  loginPlatformUser,
+  loginUser,
   mergeCustomers,
   submitConfirmedStoreRequest,
   STORE1_ID,
@@ -49,7 +49,7 @@ Given(
     secret = `顧客監査へ複写しない私的入力-${suffix}`;
     password = `Customer-${suffix}-fixture`;
     staff = await loginAsStoreAdmin(request);
-    const owner = await loginPlatformUser(request, "admin@kizuna.test", "pass");
+    const owner = await loginUser(request, "admin@kizuna.test", "pass");
     const role = await createPermissionRole(
       request,
       owner,
@@ -57,8 +57,8 @@ Given(
       ["AUDIT_VIEW",],
     );
     const email = `customer-auditor-${suffix}@example.test`;
-    await createPlatformStaffFixture(request, owner, email, password, [role]);
-    auditor = await loginPlatformUser(request, email, password);
+    await createStaffFixture(request, owner, email, password, [role]);
+    auditor = await loginUser(request, email, password);
     const stores = await getAuthorizedStores(request, staff);
     otherStore = String(
       stores.find((store: { id: number }) => String(store.id) !== STORE1_ID)!

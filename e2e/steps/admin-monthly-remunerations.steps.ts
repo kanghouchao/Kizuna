@@ -1,15 +1,15 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 import {
   acceptCastInvitation, acceptExistingCastInvitation, cancelOrder,
   completeAgreedOrder, correctOrderExtension, createAgreedOrder, createCast, createCourse,
   getAuthorizedStores, getOrder, invalidateOrder, issueCastInvitation,
-  loginAsStoreAdmin, loginPlatformUser, STORE1_ID, STORE_HEADERS, suspendCast, withdrawCast,
+  loginAsStoreAdmin, loginUser, STORE1_ID, STORE_HEADERS, suspendCast, withdrawCast,
 } from './store-api';
 
 const { Given, When, Then } = createBdd();
-const base = '/api/platform/monthly-remunerations';
+const base = '/api/admin/monthly-remunerations';
 let manager = '';
 let castToken = '';
 let firstReader = '';
@@ -41,10 +41,10 @@ async function monthly(request: APIRequestContext, token = firstReader, storeId 
   return response.json();
 }
 
-Given('月次平台照会用の本人と異なる授権集合の参照者がいる', async ({ request, $testInfo }) => {
+Given('月次グループ級照会用の本人と異なる授権集合の参照者がいる', async ({ request, $testInfo }) => {
   $testInfo.setTimeout(120000);
   manager = await loginAsStoreAdmin(request);
-  const admin = await loginPlatformUser(request, 'admin@kizuna.test', 'pass');
+  const admin = await loginUser(request, 'admin@kizuna.test', 'pass');
   const stores = await getAuthorizedStores(request, manager);
   storeName = stores.find(s => String(s.id) === STORE1_ID)!.name;
   const other = stores.find(s => String(s.id) !== STORE1_ID)!;
@@ -52,16 +52,16 @@ Given('月次平台照会用の本人と異なる授権集合の参照者がい�
   secondStoreName = other.name;
   const suffix = Date.now().toString();
   password = 'Monthly-' + suffix + '-pass';
-  name = '月次平台・長い源氏名の折り返し確認・' + suffix;
+  name = '月次グループ級・長い源氏名の折り返し確認・' + suffix;
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
   originalDate = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10);
   originalMonth = originalDate.slice(0, 7);
   const first = await createCast(request, manager, name + '-旧名');
-  const email = 'platform-monthly-cast-' + suffix + '@kizuna.test';
+  const email = 'admin-monthly-cast-' + suffix + '@kizuna.test';
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, first), email, password, name);
-  castToken = await loginPlatformUser(request, email, password);
-  const course = await createCourse(request, manager, '月次平台・長いサービス概要の折り返しを確認するコース');
-  originalOrder = await createAgreedOrder(request, manager, first, course, '月次平台顧客', { businessDate: originalDate });
+  castToken = await loginUser(request, email, password);
+  const course = await createCourse(request, manager, '月次グループ級・長いサービス概要の折り返しを確認するコース');
+  originalOrder = await createAgreedOrder(request, manager, first, course, '月次グループ級顧客', { businessDate: originalDate });
   await completeAgreedOrder(request, manager, originalOrder);
   expect((await getOrder(request, manager, STORE1_ID, originalOrder)).completed_at!.slice(0, 7) > originalMonth).toBeTruthy();
   await withdrawCast(request, manager, first);
@@ -83,27 +83,27 @@ Given('月次平台照会用の本人と異なる授権集合の参照者がい�
   await suspendCast(request, manager, foreign, secondStore);
   const onlyForeign = await createCast(request, manager, name + '-他店限定', secondStore);
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, onlyForeign, secondStore),
-    'platform-monthly-foreign-' + suffix + '@kizuna.test', password, '他店限定本人');
-  const role = await request.post('/api/platform/roles', { headers: headers(admin),
-    data: { name: '月次平台参照-' + suffix, permissions: ['ORDER_SET_MANAGE',] } });
+    'admin-monthly-foreign-' + suffix + '@kizuna.test', password, '他店限定本人');
+  const role = await request.post('/api/admin/roles', { headers: headers(admin),
+    data: { name: '月次グループ級参照-' + suffix, permissions: ['ORDER_SET_MANAGE',] } });
   expect(role.status(), await role.text()).toBe(201);
   const roleId = (await role.json()).id;
-  const storeOnlyRole = await request.post('/api/platform/roles', { headers: headers(admin),
+  const storeOnlyRole = await request.post('/api/admin/roles', { headers: headers(admin),
     data: { name: '月次店舗権限のみ-' + suffix, permissions: ['ORDER_MANAGE',] } });
   expect(storeOnlyRole.status(), await storeOnlyRole.text()).toBe(201);
   const storeOnlyRoleId = (await storeOnlyRole.json()).id;
   const tokens: string[] = [];
   for (const [index, scope] of [STORE1_ID, secondStore, 'all', STORE1_ID].entries()) {
-    const email = 'platform-monthly-reader-' + suffix + '-' + index + '@kizuna.test';
+    const email = 'admin-monthly-reader-' + suffix + '-' + index + '@kizuna.test';
     if (index === 0) readerEmail = email;
     if (index === 2) allReaderEmail = email;
-    const created = await request.post('/api/platform/staff', { headers: headers(admin), data: {
+    const created = await request.post('/api/admin/staff', { headers: headers(admin), data: {
       email, password, display_name: '月次参照者-' + suffix + '-' + index,
       role_ids: [index === 3 ? storeOnlyRoleId : roleId], store_scope_type: scope === 'all' ? 'ALL_STORES' : 'SPECIFIC_STORES',
       store_ids: scope === 'all' ? [] : [Number(scope)],
     } });
     expect(created.status(), await created.text()).toBe(201);
-    tokens.push(await loginPlatformUser(request, email, password));
+    tokens.push(await loginUser(request, email, password));
   }
   [firstReader, secondReader, allReader, storeOnlyReader] = tokens;
   const candidates = await request.get(base + '/casts', { headers: headers(firstReader),
@@ -119,13 +119,13 @@ Given('月次平台照会用の本人と異なる授権集合の参照者がい�
   foreignPersonId = (await foreignCandidates.json()).content[0].person_id;
 });
 
-When('平台参照者が店舗と本人と原月を選択する', async ({ page }) => {
-  await page.goto(PLATFORM_URL + '/platform/login');
+When('グループ級参照者が店舗と本人と原月を選択する', async ({ page }) => {
+  await page.goto(APP_URL + '/auth/login');
   await page.getByLabel('メールアドレス', { exact: true }).fill(readerEmail);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).not.toHaveURL(/\/login$/, { timeout: 15000 });
-  await page.goto(PLATFORM_URL + '/platform/orders');
+  await page.goto(APP_URL + '/admin/orders');
   await page.getByRole('link', { name: '月次給与明細', exact: true }).click();
   await page.getByRole('button', { name: '照会', exact: true }).click();
   await expect(page.getByText('店舗を選択してください', { exact: true })).toBeVisible();
@@ -139,7 +139,7 @@ When('平台参照者が店舗と本人と原月を選択する', async ({ page 
   await expect(page.getByLabel('月次報酬合計')).toHaveText('¥14,000');
 });
 
-Then('平台の月次合計は同店の再入店を含み他店と未完了と取消を含まない', async ({ request, page }) => {
+Then('グループ級の月次合計は同店の再入店を含み他店と未完了と取消を含まない', async ({ request, page }) => {
   const first = await monthly(request, firstReader, STORE1_ID, 0, 1);
   const second = await monthly(request, firstReader, STORE1_ID, 1, 1);
   for (const result of [first, second]) {
@@ -153,13 +153,13 @@ Then('平台の月次合計は同店の再入店を含み他店と未完了と�
   expect((await monthly(request, secondReader, secondStore)).total_remuneration).toBe(7000);
 });
 
-When('平台照会の原月受注を訂正して無効化する', async ({ request }) => {
+When('グループ級照会の原月受注を訂正して無効化する', async ({ request }) => {
   await correctOrderExtension(request, manager, originalOrder, '原月の延長報酬を訂正');
   expect((await monthly(request)).total_remuneration).toBe(16000);
   await invalidateOrder(request, manager, originalOrder, '未提供の原月受注を無効化');
 });
 
-Then('平台で原月の最新合計と既存の訂正履歴を確認できる', async ({ request, page }) => {
+Then('グループ級で原月の最新合計と既存の訂正履歴を確認できる', async ({ request, page }) => {
   const result = await monthly(request);
   expect(result.total_remuneration).toBe(7000);
   expect(result.orders.content.find((row: { order_id: string }) => row.order_id === originalOrder))
@@ -176,7 +176,7 @@ Then('平台で原月の最新合計と既存の訂正履歴を確認できる',
   await expect(dialog).toContainText('¥9,000 → ¥0');
 });
 
-Then('月次平台照会は異なる授権集合と直接HTTP要求を検証する', async ({ request }) => {
+Then('月次グループ級照会は異なる授権集合と直接HTTP要求を検証する', async ({ request }) => {
   for (const [token, expected] of [[firstReader, STORE1_ID], [secondReader, secondStore]]) {
     const response = await request.get(base + '/stores', { headers: headers(token), params: { size: 1 } });
     expect(response.status()).toBe(200);
@@ -219,16 +219,16 @@ Then('月次平台照会は異なる授権集合と直接HTTP要求を検証す�
   expect(suspendedCandidates.status()).toBe(200);
   expect((await suspendedCandidates.json()).content.map((person: { person_id: number }) => person.person_id)).toContain(personId);
   // 授権店舗一覧は権限を 1 つ以上持つ全員に開く（STORE_VIEW の有無は問わない）。中身は本人の店舗集合だけ。
-  const ownStores = await request.get('/api/platform/stores/me', { headers: headers(firstReader) });
+  const ownStores = await request.get('/api/admin/stores/me', { headers: headers(firstReader) });
   expect(ownStores.status()).toBe(200);
   expect((await ownStores.json()).map((s: { id: number }) => String(s.id))).toEqual([STORE1_ID]);
   expect((await request.get(base + '/stores', { headers: headers('invalid.jwt') })).status()).toBe(401);
-  const history = await request.get('/api/platform/orders/' + foreignOrder + '/corrections', { headers: headers(firstReader) });
+  const history = await request.get('/api/admin/orders/' + foreignOrder + '/corrections', { headers: headers(firstReader) });
   expect(history.status()).toBe(404);
   const storeBypass = await request.get('/api/store/monthly-remunerations',
     { headers: { ...STORE_HEADERS, ...headers(firstReader) }, params: { person_id: personId, month: originalMonth } });
   expect(storeBypass.status()).toBe(403);
-  const selfBypass = await request.get('/api/platform/me/remunerations/' + originalOrder, { headers: headers(firstReader) });
+  const selfBypass = await request.get('/api/me/remunerations/' + originalOrder, { headers: headers(firstReader) });
   expect(selfBypass.status()).toBe(403);
   for (const [key, value] of [['month', '2026-13'], ['page', '-1'], ['page', '2147483647'],
       ['person_id', '0'], ['store_id', '0']]) {
@@ -252,9 +252,9 @@ Then('月次平台照会は異なる授権集合と直接HTTP要求を検証す�
   expect(malformed.status()).toBe(400);
 });
 
-Then('平台月次画面の明暗と長い名称と狭幅とキーボードを確認できる', async ({ page, $testInfo }) => {
+Then('グループ級月次画面の明暗と長い名称と狭幅とキーボードを確認できる', async ({ page, $testInfo }) => {
   const longStoreName = storeName + '・長い店舗名称の省略表示確認'.repeat(6);
-  const storesPath = '**/api/platform/monthly-remunerations/stores?*';
+  const storesPath = '**/api/admin/monthly-remunerations/stores?*';
   await page.route(storesPath, async route => {
     const response = await route.fetch();
     const data = await response.json();
@@ -275,12 +275,12 @@ Then('平台月次画面の明暗と長い名称と狭幅とキーボードを�
     await expect(page.getByRole('button', { name: '照会', exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByLabel('月次報酬合計')).toHaveText('¥14,000');
-    const file = $testInfo.outputPath('platform-monthly-' + theme + '.png');
+    const file = $testInfo.outputPath('admin-monthly-' + theme + '.png');
     await page.screenshot({ path: file, fullPage: true });
     await $testInfo.attach('月次給与明細-' + theme, { path: file, contentType: 'image/png' });
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  const file = $testInfo.outputPath('platform-monthly-narrow.png');
+  const file = $testInfo.outputPath('admin-monthly-narrow.png');
   await page.screenshot({ path: file, fullPage: true });
   await $testInfo.attach('月次給与明細-狭幅', { path: file, contentType: 'image/png' });
   const historyButton = page.getByRole('button', { name: '訂正履歴', exact: true }).first();
@@ -292,8 +292,8 @@ Then('平台月次画面の明暗と長い名称と狭幅とキーボードを�
   await page.setViewportSize({ width: 1280, height: 900 });
 });
 
-Then('平台月次画面は失敗から再試行でき店舗切替で明細を消す', async ({ page }) => {
-  const path = /\/api\/platform\/monthly-remunerations\?/;
+Then('グループ級月次画面は失敗から再試行でき店舗切替で明細を消す', async ({ page }) => {
+  const path = /\/api\/admin\/monthly-remunerations\?/;
   await page.route(path, route => route.fulfill({ status: 500, json: { error: '検証用の取得失敗' } }));
   await page.getByRole('button', { name: '照会', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('月次給与明細を取得できませんでした');
@@ -308,4 +308,4 @@ Then('平台月次画面は失敗から再試行でき店舗切替で明細を�
   await expect(page.getByRole('combobox', { name: 'キャスト本人', exact: true })).toContainText('源氏名で検索');
 });
 
-Given('月次平台画面の確認者が全店授権である', async () => { readerEmail = allReaderEmail; });
+Given('月次グループ級画面の確認者が全店授権である', async () => { readerEmail = allReaderEmail; });

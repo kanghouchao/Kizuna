@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { PLATFORM_URL } from "../base-url";
+import { APP_URL } from "../base-url";
 import {
   acceptCastInvitation,
   createCourse,
@@ -41,7 +41,7 @@ Given(
   },
 );
 When("本人がサービス条件を開く", async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/platform/login`);
+  await page.goto(`${APP_URL}/auth/login`);
   await page.getByLabel("メールアドレス", { exact: true }).fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
@@ -123,7 +123,7 @@ When(
     const token = await loginAsStoreAdmin(request);
     const courseName = `特殊サービス用コース-${Date.now()}`;
     await createCourse(request, token, courseName, orderStore);
-    await managerPage.goto(`${PLATFORM_URL}/store/orders/create`);
+    await managerPage.goto(`${APP_URL}/store/orders/create`);
     await managerPage.getByLabel("お客様名", { exact: true }).fill(serviceName);
     await managerPage.getByLabel("キャスト *", { exact: true }).click();
     await managerPage.getByPlaceholder("名前で検索").fill(serviceName);
@@ -163,7 +163,7 @@ When(
 
 Then("店長が一覧の要対応から特殊サービスを修復し開始する", async () => {
   const page = managerPage!;
-  await page.goto(`${PLATFORM_URL}/store/orders`);
+  await page.goto(`${APP_URL}/store/orders`);
   const card = page.getByRole("listitem").filter({ hasText: serviceName });
   await expect(card).toContainText("本人拒否・要対応");
   await card.getByRole("button", { name: "編集", exact: true }).click();
@@ -186,7 +186,7 @@ Then("店長が一覧の要対応から特殊サービスを修復し開始す�
   expect(updated.status()).toBe(200);
   await expect(page).toHaveURL(/\/store\/orders\/?$/);
   await page.goto(
-    `${PLATFORM_URL}/store/orders/${specialOrderId}/edit`,
+    `${APP_URL}/store/orders/${specialOrderId}/edit`,
   );
   await expect(page.getByLabel("サービスの進行")).toContainText("処置済み");
   await page

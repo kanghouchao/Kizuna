@@ -18,10 +18,10 @@ import {
   issueCastInvitation,
   acceptCastInvitation,
   createPermissionRole,
-  createPlatformStaffFixture,
+  createStaffFixture,
   getAuthorizedStores,
   loginAsStoreAdmin,
-  loginPlatformUser,
+  loginUser,
   STORE1_ID,
   STORE_HEADERS,
 } from "./store-api";
@@ -59,7 +59,7 @@ Given(
     secret = `監査に複写しない私的入力-${suffix}`;
     password = `Shift-${suffix}-fixture`;
     staff = await loginAsStoreAdmin(request);
-    const owner = await loginPlatformUser(request, "admin@kizuna.test", "pass");
+    const owner = await loginUser(request, "admin@kizuna.test", "pass");
     const role = await createPermissionRole(
       request,
       owner,
@@ -67,8 +67,8 @@ Given(
       ["AUDIT_VIEW",],
     );
     const email = `shift-auditor-${suffix}@example.test`;
-    await createPlatformStaffFixture(request, owner, email, password, [role]);
-    auditor = await loginPlatformUser(request, email, password);
+    await createStaffFixture(request, owner, email, password, [role]);
+    auditor = await loginUser(request, email, password);
     const stores = await getAuthorizedStores(request, staff);
     otherStore = String(
       stores.find((store: { id: number }) => String(store.id) !== STORE1_ID)!
@@ -93,7 +93,7 @@ When(
         password,
         "監査本人",
       );
-      const own = await loginPlatformUser(request, email, password);
+      const own = await loginUser(request, email, password);
       secrets.push(invitation, own, email);
       const date = new Date(Date.now() + 2 * 86400000)
         .toISOString()

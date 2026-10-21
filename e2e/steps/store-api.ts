@@ -5,7 +5,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import { PLATFORM_URL } from "../base-url";
+import { APP_URL } from "../base-url";
 
 // store1 は seed 済み（store_id=1）。store API は Host に加えて
 // X-Store-ID ヘッダで店舗文脈を確定する。
@@ -15,19 +15,19 @@ export const ADMIN_EMAIL = "tanaka.hanako@kizuna.test";
 export const ADMIN_PASSWORD = "pass";
 
 /**
- * 店長ロール（STORE_MANAGER・store1/store2 双方に授権された v0.5.0 シード）の平台ユーザーで
+ * 店長ロール（STORE_MANAGER・store1/store2 双方に授権された v0.5.0 シード）のユーザーで
  * ログインし JWT を返す。返却トークンは STORE_HEADERS（X-Store-ID）と併用することで
- * /store/** に店舗文脈を確立できる。/platform/login は CSRF 免除。
+ * /store/** に店舗文脈を確立できる。/auth/login は CSRF 免除。
  */
 export async function loginAsStoreAdmin(
   request: APIRequestContext,
 ): Promise<string> {
-  const res = await request.post("/api/platform/login", {
+  const res = await request.post("/api/auth/login", {
     data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
   });
   if (!res.ok()) {
     throw new Error(
-      `platform login failed: ${res.status()} ${await res.text()}`,
+      `login failed: ${res.status()} ${await res.text()}`,
     );
   }
   const body = await res.json();
@@ -40,11 +40,11 @@ export async function loginAsStoreAdmin(
  * UI と API（STORE_HEADERS）の店舗文脈を揃える id として STORE1_ID を返す。
  */
 export async function loginViaUiAndEnterStore(page: Page): Promise<string> {
-  await page.goto(`${PLATFORM_URL}/platform/login`);
+  await page.goto(`${APP_URL}/auth/login`);
   await page.getByLabel("メールアドレス", { exact: true }).fill(ADMIN_EMAIL);
   await page.getByLabel("パスワード", { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/admin\/dashboard\/?$/, { timeout: 15000 });
   return STORE1_ID;
 }
 
@@ -396,10 +396,10 @@ export async function issueCastInvitation(
 }
 
 /**
- * キャスト招待を新規登録で受諾し、CAST 用の平台身分を作成する
- * （POST /api/platform/cast-invitations/acceptance, PermitAll）。
+ * キャスト招待を新規登録で受諾し、CAST 用のグループ共通アカウントを作成する
+ * （POST /api/admin/cast-invitations/acceptance, PermitAll）。
  * トークンはパスではなく本文で送る（パスはアクセスログに残るため）。
- * X-Store-ID は不要（/platform 配下は StoreIdInterceptor を通らない）。
+ * X-Store-ID は不要（/admin 配下は StoreIdInterceptor を通らない）。
  */
 export async function acceptCastInvitation(
   request: APIRequestContext,
@@ -408,7 +408,7 @@ export async function acceptCastInvitation(
   password: string,
   displayName: string,
 ): Promise<void> {
-  const res = await request.post("/api/platform/cast-invitations/acceptance", {
+  const res = await request.post("/api/admin/cast-invitations/acceptance", {
     data: {
       token: invitationToken,
       email,
@@ -438,14 +438,14 @@ export async function approveShiftRequest(
   return res.json();
 }
 
-/** 会員を自助登録し会員コードを返す（POST /api/platform/members, 匿名・CSRF 免除）。 */
+/** 会員を自助登録し会員コードを返す（POST /api/admin/members, 匿名・CSRF 免除）。 */
 export async function registerMember(
   request: APIRequestContext,
   email: string,
   password: string,
   displayName: string,
 ): Promise<string> {
-  const res = await request.post("/api/platform/members", {
+  const res = await request.post("/api/admin/members", {
     data: { email, password, display_name: displayName },
   });
   if (!res.ok()) {
@@ -645,7 +645,7 @@ export async function getOrder(
   accrued_remuneration: number;
   fee_lines: { kind: string; amount: number; system_owned: boolean }[];
 }> {
-  const response = await request.get(`${PLATFORM_URL}/api/store/orders/${id}`, {
+  const response = await request.get(`${APP_URL}/api/store/orders/${id}`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -679,12 +679,12 @@ export async function cancelOrder(
   }
 }
 
-export async function loginPlatformUser(
+export async function loginUser(
   request: APIRequestContext,
   email: string,
   password: string,
 ): Promise<string> {
-  const response = await request.post("/api/platform/login", {
+  const response = await request.post("/api/auth/login", {
     data: { email, password },
   });
   expect(response.ok()).toBeTruthy();
@@ -695,7 +695,7 @@ export async function getAuthorizedStores(
   request: APIRequestContext,
   token: string,
 ): Promise<{ id: number; name: string }[]> {
-  const response = await request.get("/api/platform/stores/me", {
+  const response = await request.get("/api/admin/stores/me", {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(response.ok()).toBeTruthy();
@@ -708,7 +708,7 @@ export async function acceptExistingCastInvitation(
   invitation: string,
 ): Promise<void> {
   const response = await request.post(
-    "/api/platform/cast-invitations/acceptance/existing",
+    "/api/admin/cast-invitations/acceptance/existing",
     {
       headers: { Authorization: `Bearer ${token}` },
       data: { token: invitation },
@@ -991,20 +991,20 @@ export async function customerMemberLinkHistory(
 
 /** 使い捨てスタックで、既定ロールを変更せず検証用の権限集合を作る。 */
 export async function createPermissionRole(request: APIRequestContext, token: string, name: string, permissions: string[]): Promise<number> {
-  const response = await request.post('/api/platform/roles', { headers: { Authorization: `Bearer ${token}` }, data: { name, permissions } });
+  const response = await request.post('/api/admin/roles', { headers: { Authorization: `Bearer ${token}` }, data: { name, permissions } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
 
 /** 検証専用スタッフを作り、既存アカウントの授権に影響を与えない。 */
-export async function createPlatformStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds?: number[]): Promise<number> {
-  const response = await request.post('/api/platform/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: storeIds ? 'SPECIFIC_STORES' : 'ALL_STORES', store_ids: storeIds ?? [] } });
+export async function createStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds?: number[]): Promise<number> {
+  const response = await request.post('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: storeIds ? 'SPECIFIC_STORES' : 'ALL_STORES', store_ids: storeIds ?? [] } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
 
 export async function createStoreStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds: number[], storeId: string = STORE1_ID): Promise<number> {
-  const response = await request.post('/api/platform/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
+  const response = await request.post('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
@@ -1097,7 +1097,7 @@ export async function listAuditEvents(
   token: string,
   action: string,
 ): Promise<{ content: AuditEventSummary[]; next_cursor?: string | null }> {
-  const response = await request.get("/api/platform/audit-events", {
+  const response = await request.get("/api/admin/audit-events", {
     headers: { Authorization: `Bearer ${token}` },
     params: { action, size: 100 },
   });
@@ -1114,7 +1114,7 @@ export async function getAuditEvent(
   before_values: Record<string, string>;
   after_values: Record<string, string>;
 }> {
-  const response = await request.get(`/api/platform/audit-events/${id}`, {
+  const response = await request.get(`/api/admin/audit-events/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(response.status()).toBe(200);
@@ -1163,7 +1163,7 @@ export async function submitCastShiftRequest(
     note?: string;
   },
 ): Promise<{ id: string }> {
-  const res = await request.post("/api/platform/me/shift-requests", {
+  const res = await request.post("/api/me/shift-requests", {
     headers: { Authorization: `Bearer ${token}` },
     data,
   });
@@ -1182,7 +1182,7 @@ export async function submitCastShiftChangeRequest(
     note?: string;
   },
 ): Promise<{ id: string }> {
-  const res = await request.post("/api/platform/me/shift-requests/changes", {
+  const res = await request.post("/api/me/shift-requests/changes", {
     headers: { Authorization: `Bearer ${token}` },
     data,
   });
@@ -1287,7 +1287,7 @@ export function getSelfDailyRemunerations(
   request: APIRequestContext,
   options: Parameters<APIRequestContext["get"]>[1],
 ): Promise<APIResponse> {
-  return request.get("/api/platform/me/daily-remunerations", options);
+  return request.get("/api/me/daily-remunerations", options);
 }
 
 export async function deleteService(
@@ -1482,7 +1482,7 @@ export async function decideOwnServiceCondition(
   consent_status: string;
 }> {
   const response = await request.put(
-    `/api/platform/me/service-conditions/${id}/consent`,
+    `/api/me/service-conditions/${id}/consent`,
     {
       headers: { Authorization: `Bearer ${token}` },
       params: { store_id: storeId },
@@ -1497,11 +1497,11 @@ export async function decideOwnServiceCondition(
   return response.json();
 }
 
-export async function getPlatformMe(
+export async function getMe(
   request: APIRequestContext,
   token: string,
 ): Promise<{ email: string; user_type: string }> {
-  const response = await request.get("/api/platform/me", {
+  const response = await request.get("/api/me", {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(response.status()).toBe(200);
@@ -1525,13 +1525,13 @@ export async function listServiceRevisions(
   return response.json();
 }
 
-export async function findPlatformCastUserId(
+export async function findCastUserId(
   request: APIRequestContext,
   token: string,
   displayName: string,
 ): Promise<number> {
   const headers = { Authorization: `Bearer ${token}` };
-  const found = await request.get("/api/platform/casts", {
+  const found = await request.get("/api/admin/casts", {
     headers,
     params: { search: displayName },
   });
@@ -1542,7 +1542,7 @@ export async function findPlatformCastUserId(
   }[];
   const matching = rows.filter((row) => row.display_name === displayName);
   expect(matching).toHaveLength(1);
-  const detail = await request.get(`/api/platform/casts/${matching[0].id}`, {
+  const detail = await request.get(`/api/admin/casts/${matching[0].id}`, {
     headers,
   });
   expect(detail.status()).toBe(200);

@@ -3,17 +3,17 @@ import { createBdd } from 'playwright-bdd';
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { zipEntry } from './report-export';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 import {
   ADMIN_PASSWORD, STORE1_ID, STORE_HEADERS, acceptCastInvitation,
   acceptExistingCastInvitation, createCast, createCourse, createAgreedOrder,
   completeAgreedOrder, correctOrderExtension, invalidateOrder, deleteService, createBonusAward, cancelBonusAward,
   issueCastInvitation, withdrawCast, recordAttendance, createPermissionRole,
-  createPlatformStaffFixture, loginAsStoreAdmin, loginPlatformUser, getAuthorizedStores,
+  createStaffFixture, loginAsStoreAdmin, loginUser, getAuthorizedStores,
 } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
-const base = '/api/platform/operational-reports';
+const base = '/api/admin/operational-reports';
 let manager = '', reader = '', legacy = '', foreign = '', course = '', order = '';
 let bonus = { id: '', version: 0 }, movedBonus = { id: '', version: 0 };
 let person = 0, year = '', privateName = '', privateReason = '', readerEmail = '', readerPassword = '';
@@ -39,7 +39,7 @@ Given('帳票用の歴史在籍に日跨ぎ出勤と受注のない保証日と�
   year = String(1993 - $testInfo.retry);
   course = '';
   manager = await loginAsStoreAdmin(request);
-  const owner = await loginPlatformUser(request, 'admin@kizuna.test', ADMIN_PASSWORD);
+  const owner = await loginUser(request, 'admin@kizuna.test', ADMIN_PASSWORD);
   const suffix = randomUUID(), password = randomUUID();
   readerPassword = password;
   privateName = `出力禁止本人名-${suffix}`;
@@ -53,14 +53,14 @@ Given('帳票用の歴史在籍に日跨ぎ出勤と受注のない保証日と�
       enhanced ? [...common, 'REMUNERATION_VIEW', 'GUARANTEE_MANAGE', 'BONUS_AWARD', 'REMUNERATION_CORRECT'] : common);
     const email = `report-remuneration-${enhanced}-${suffix}@example.test`;
     if (enhanced) readerEmail = email;
-    await createPlatformStaffFixture(request, owner, email, password, [role], [Number(STORE1_ID)]);
-    tokens.push(await loginPlatformUser(request, email, password));
+    await createStaffFixture(request, owner, email, password, [role], [Number(STORE1_ID)]);
+    tokens.push(await loginUser(request, email, password));
   }
   [reader, legacy] = tokens;
   const first = await createCast(request, manager, privateName + '旧');
   const castEmail = `report-cast-${suffix}@example.test`;
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, first), castEmail, password, privateName);
-  const castToken = await loginPlatformUser(request, castEmail, password);
+  const castToken = await loginUser(request, castEmail, password);
   await recordAttendance(request, manager, {
     cast_id: first, actual_start_at: `${year}-08-31T22:00:00`, actual_end_at: `${year}-09-01T01:00:00`,
   });
@@ -206,12 +206,12 @@ Then('報酬込みCSVとExcelは最小根拠と未知金額を一致させる', 
 });
 
 Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱う', async ({ page, $testInfo }) => {
-  await page.goto(PLATFORM_URL + '/platform/login');
+  await page.goto(APP_URL + '/auth/login');
   await page.getByLabel('メールアドレス', { exact: true }).fill(readerEmail);
   await page.getByLabel('パスワード', { exact: true }).fill(readerPassword);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).not.toHaveURL(/\/login$/, { timeout: 15000 });
-  await page.goto(PLATFORM_URL + '/platform/operational-reports');
+  await page.goto(APP_URL + '/admin/operational-reports');
   const from = page.getByLabel('開始営業日'), to = page.getByLabel('終了営業日');
   const toggle = page.getByRole('checkbox', { name: '保証不足分・ボーナスを含める' });
   const submit = page.getByRole('button', { name: '照会', exact: true });
@@ -240,7 +240,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
   const readGate = new Promise<void>(resolve => { releaseRead = resolve; });
   const fetched = new Promise<void>(resolve => { readFetched = resolve; });
   const finished = new Promise<void>(resolve => { readFinished = resolve; });
-  await page.route('**/api/platform/operational-reports?*', async route => {
+  await page.route('**/api/admin/operational-reports?*', async route => {
     const url = new URL(route.request().url());
     if (url.searchParams.get('from') !== `${year}-08-31` || url.searchParams.get('to') !== `${year}-08-31`) {
       await route.continue();
@@ -264,7 +264,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
     await expect(total).toHaveText('500');
   } finally {
     releaseRead();
-    await page.unroute('**/api/platform/operational-reports?*');
+    await page.unroute('**/api/admin/operational-reports?*');
   }
   await submit.click();
   await expect(total).toHaveText('500');
@@ -286,7 +286,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
   const finishedExport = new Promise<void>(resolve => { exportFinished = resolve; });
   const onDownload = () => { downloads++; };
   page.on('download', onDownload);
-  await page.route('**/api/platform/operational-reports/exports?*', async route => {
+  await page.route('**/api/admin/operational-reports/exports?*', async route => {
     exportCount++;
     expect(new URL(route.request().url()).searchParams.get('include_remuneration')).toBe('true');
     const response = await route.fetch();
@@ -311,7 +311,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
     expect(downloads).toBe(0);
   } finally {
     releaseExport();
-    await page.unroute('**/api/platform/operational-reports/exports?*');
+    await page.unroute('**/api/admin/operational-reports/exports?*');
     page.off('download', onDownload);
   }
   await toggle.check();

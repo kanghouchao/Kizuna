@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { createCustomer, loginAsStoreAdmin, loginViaUiAndEnterStore, STORE_HEADERS } from './store-api';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 
 const { Given, When, Then } = createBdd();
 let customerId = '';
@@ -12,7 +12,7 @@ Given('連絡先検証用の顧客編集画面を開く', async ({ page, request
   token = await loginAsStoreAdmin(request);
   customerId = await createCustomer(request, token, `連絡先検証-${Date.now()}`);
   await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/customers/${customerId}/edit`);
+  await page.goto(`${APP_URL}/store/customers/${customerId}/edit`);
   await expect(page.getByText('連絡先はありません', { exact: true })).toBeVisible();
 });
 
@@ -107,7 +107,7 @@ Then('古い連絡先が画面から消える', async ({ page }) => {
 
 Given('新規顧客登録画面を開く', async ({ page }) => {
   await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/customers/create`);
+  await page.goto(`${APP_URL}/store/customers/create`);
 });
 
 When('海外の電話番号を連絡先に指定して顧客を保存する', async ({ page }) => {

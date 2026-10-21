@@ -1,6 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 import { seededCastName } from './cast-detail-404.steps';
 import {
   STORE_HEADERS,
@@ -45,9 +45,9 @@ async function addFieldDefinition(page: Page, rawKey: string, rawLabel: string, 
 }
 
 Given('キャストカスタムフィールド管理画面を開く', async ({ page }) => {
-  // 統一ログイン（/platform/login）は platform ドメインで提供され、店舗業務画面も同じドメイン上で操作する。
+  // 統一ログイン（/auth/login）は アプリドメインで提供され、店舗業務画面も同じドメイン上で操作する。
   await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/casts/fields`);
+  await page.goto(`${APP_URL}/store/casts/fields`);
   await expect(page.getByRole('button', { name: 'フィールドを追加', exact: true })).toBeVisible();
 });
 
@@ -77,7 +77,7 @@ When(
     // {string} のキャスト名は可読性のための基底名の表記。実際の照合は Given が播種した
     // 解決済み一意名で行う（残骸の同基底名の行と衝突させない）。
     currentCastName = seededCastName();
-    await page.goto(`${PLATFORM_URL}/store/casts`);
+    await page.goto(`${APP_URL}/store/casts`);
     const row = page.getByRole('row', { name: new RegExp(currentCastName) });
     await expect(row).toBeVisible({ timeout: 15000 });
     const editLink = row.locator('a[href$="/edit"]');
@@ -124,7 +124,7 @@ Then(
 );
 
 When('キャストカスタムフィールド管理画面で {string} を削除する', async ({ page }, _label: string) => {
-  await page.goto(`${PLATFORM_URL}/store/casts/fields`);
+  await page.goto(`${APP_URL}/store/casts/fields`);
   const row = page.getByRole('row', { name: new RegExp(createdFieldLabel) });
   await expect(row).toBeVisible({ timeout: 15000 });
   await row.getByRole('button', { name: '削除', exact: true }).click();
@@ -176,7 +176,7 @@ When('同じキーを公開フィールドとして再作成する', async ({ pa
 });
 
 Then('再作成したフィールドの値は空で公開プロフィールに表示される', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/casts/${currentCastId}/edit`);
+  await page.goto(`${APP_URL}/store/casts/${currentCastId}/edit`);
   const publicProfile = page.getByRole('region', { name: '公開プロフィール', exact: true });
   await expect(publicProfile.getByLabel(createdFieldLabel, { exact: true })).toHaveValue('');
   await expect(page.getByRole('region', { name: '内部情報', exact: true }).getByLabel(createdFieldLabel, { exact: true })).toHaveCount(0);

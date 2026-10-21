@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { PLATFORM_URL } from "../base-url";
+import { APP_URL } from "../base-url";
 import {
   getSelfDailyRemunerations,
   acceptCastInvitation,
@@ -16,14 +16,14 @@ import {
   invalidateOrder,
   issueCastInvitation,
   loginAsStoreAdmin,
-  loginPlatformUser,
+  loginUser,
   STORE1_ID,
   suspendCast,
   withdrawCast,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
-const base = "/api/platform/me/monthly-remunerations";
+const base = "/api/me/monthly-remunerations";
 const privateName = "本人月次へ返してはいけない顧客";
 let manager = "";
 let token = "";
@@ -85,7 +85,7 @@ Given(
       password,
       "月次本人",
     );
-    token = await loginPlatformUser(request, email, password);
+    token = await loginUser(request, email, password);
     const course = await createCourse(
       request,
       manager,
@@ -179,7 +179,7 @@ Given(
       password,
       "別人",
     );
-    otherToken = await loginPlatformUser(request, otherEmail, password);
+    otherToken = await loginUser(request, otherEmail, password);
     otherOrder = await createAgreedOrder(
       request,
       manager,
@@ -193,7 +193,7 @@ Given(
 );
 
 When("本人が月次給与明細で退店店舗と原月を選ぶ", async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/platform/login`);
+  await page.goto(`${APP_URL}/auth/login`);
   await page.getByLabel("メールアドレス").fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
@@ -286,14 +286,14 @@ Then(
     await expect(page.getByLabel("対象月")).toHaveValue(month);
     await expect(page.getByLabel("月次報酬合計")).toHaveText("¥14,000");
     const history = await request.get(
-      `/api/platform/me/remunerations/${firstOrder}/changes`,
+      `/api/me/remunerations/${firstOrder}/changes`,
       { headers: { Authorization: `Bearer ${token}` }, params: { size: 1 } },
     );
     expect(history.status()).toBe(200);
     const firstPage = await history.json();
     expect(firstPage.content[0].change_type).toBe("COMPLETION_INVALIDATION");
     const next = await request.get(
-      `/api/platform/me/remunerations/${firstOrder}/changes`,
+      `/api/me/remunerations/${firstOrder}/changes`,
       {
         headers: { Authorization: `Bearer ${token}` },
         params: { cursor: firstPage.next_cursor, size: 1 },
@@ -302,7 +302,7 @@ Then(
     expect(next.status()).toBe(200);
     expect((await next.json()).content[0].change_type).toBe("CORRECTION");
     const wrong = await request.get(
-      `/api/platform/me/remunerations/${secondOrder}/changes`,
+      `/api/me/remunerations/${secondOrder}/changes`,
       {
         headers: { Authorization: `Bearer ${token}` },
         params: { cursor: firstPage.next_cursor },
@@ -316,7 +316,7 @@ Then(
   "本人の月次画面は取得失敗から再試行でき狭い画面でも操作できる",
   async ({ page }) => {
     await page.route(
-      "**/api/platform/me/monthly-remunerations?*",
+      "**/api/me/monthly-remunerations?*",
       (route) =>
         route.fulfill({
           status: 500,
@@ -459,7 +459,7 @@ Then(
     expect(
       forged.orders.content.map((r: { order_id: string }) => r.order_id),
     ).toEqual([secondOrder, firstOrder]);
-    const filtered = await request.get("/api/platform/me/remunerations", {
+    const filtered = await request.get("/api/me/remunerations", {
       params: { enrollment_id: otherEnrollment },
       headers,
     });
@@ -468,7 +468,7 @@ Then(
       expect(
         (
           await request.get(
-            `/api/platform/me/remunerations/${otherOrder}${suffix}`,
+            `/api/me/remunerations/${otherOrder}${suffix}`,
             { headers },
           )
         ).status(),
@@ -512,7 +512,7 @@ Then(
     );
     for (const suffix of ["", "/changes"]) {
       const response = await request.get(
-        `/api/platform/me/remunerations/${firstOrder}${suffix}`,
+        `/api/me/remunerations/${firstOrder}${suffix}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       expect(response.status()).toBe(200);
@@ -606,7 +606,7 @@ Then(
     await expect(page.getByLabel("日別報酬合計")).toHaveText(
       `¥${(initialTotal - 7000).toLocaleString("ja-JP")}`,
     );
-    await page.route("**/api/platform/me/daily-remunerations?*", (route) =>
+    await page.route("**/api/me/daily-remunerations?*", (route) =>
       route.fulfill({
         status: 503,
         contentType: "application/json",
@@ -618,7 +618,7 @@ Then(
       page.getByText("日別給与明細を取得できませんでした。"),
     ).toBeVisible();
     await expect(page.getByLabel("日別報酬合計")).toHaveCount(0);
-    await page.unroute("**/api/platform/me/daily-remunerations?*");
+    await page.unroute("**/api/me/daily-remunerations?*");
     await page.getByRole("button", { name: "再試行", exact: true }).click();
     await expect(page.getByLabel("日別報酬合計")).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });

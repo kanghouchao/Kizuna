@@ -6,7 +6,7 @@ import {
   STORE1_ID,
   STORE_HEADERS,
   createPermissionRole,
-  createPlatformStaffFixture,
+  createStaffFixture,
   createStoreStaffFixture,
   createUnpublishedCast,
   renameCast,
@@ -20,7 +20,7 @@ import {
   getAuthorizedStores,
   listShifts,
   loginAsStoreAdmin,
-  loginPlatformUser,
+  loginUser,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
@@ -73,7 +73,7 @@ Given(
     const other = stores.find((store) => String(store.id) !== STORE1_ID);
     expect(other).toBeDefined();
     otherStore = String(other!.id);
-    const owner = await loginPlatformUser(
+    const owner = await loginUser(
       request,
       "admin@kizuna.test",
       ADMIN_PASSWORD,
@@ -94,7 +94,7 @@ Given(
       [ordinaryRole],
       stores.map((store) => store.id),
     );
-    ordinary = await loginPlatformUser(request, ordinaryEmail, password);
+    ordinary = await loginUser(request, ordinaryEmail, password);
     const limitedRole = await createPermissionRole(
       request,
       owner,
@@ -110,7 +110,7 @@ Given(
       [limitedRole],
       [Number(STORE1_ID)],
     );
-    limited = await loginPlatformUser(request, limitedEmail, password);
+    limited = await loginUser(request, limitedEmail, password);
     expect(
       (await getAuthorizedStores(request, limited)).map((store) =>
         String(store.id),
@@ -125,14 +125,14 @@ Given(
       ["AUDIT_VIEW",],
     );
     const auditEmail = `cast-auditor-${suffix}@example.test`;
-    await createPlatformStaffFixture(
+    await createStaffFixture(
       request,
       owner,
       auditEmail,
       password,
       [auditRole],
     );
-    auditor = await loginPlatformUser(request, auditEmail, password);
+    auditor = await loginUser(request, auditEmail, password);
   },
 );
 

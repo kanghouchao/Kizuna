@@ -3,10 +3,10 @@ import { createBdd } from 'playwright-bdd';
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { zipEntry } from './report-export';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 import {
-  ADMIN_PASSWORD, STORE1_ID, STORE_HEADERS, loginAsStoreAdmin, loginPlatformUser,
-  createPermissionRole, createPlatformStaffFixture, getAuthorizedStores,
+  ADMIN_PASSWORD, STORE1_ID, STORE_HEADERS, loginAsStoreAdmin, loginUser,
+  createPermissionRole, createStaffFixture, getAuthorizedStores,
   createAdvertisingCost, updateAdvertisingCost, deleteAdvertisingCost,
   createCast, issueCastInvitation, acceptCastInvitation, recordAttendance,
   createCourse, createAgreedOrder, completeAgreedOrder, createBonusAward, cancelBonusAward, deleteService,
@@ -14,8 +14,8 @@ import {
 } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
-const platform = '/api/platform/operational-reports', store = '/api/store/operational-reports';
-let manager = '', full = '', restricted = '', storeOnly = '', platformOnly = '', viewOnly = '', exportOnly = '', legacy = '', noRemuneration = '';
+const admin = '/api/admin/operational-reports', store = '/api/store/operational-reports';
+let manager = '', full = '', restricted = '', storeOnly = '', adminOnly = '', viewOnly = '', exportOnly = '', legacy = '', noRemuneration = '';
 let year = '', foreign = '', email = '', password = '', course = '', order = '', attendance = '', person = 0;
 let sales = { id: '', version: 0 }, recruitment = { id: '', version: 0 }, bonus = { id: '', version: 0 };
 let archivedCsv = '';
@@ -23,7 +23,7 @@ const secret = '=非公開の媒体・代理店・理由';
 const values = (amount: number, category: AdvertisingCostValues['category'] = 'SALES'): AdvertisingCostValues => ({
   category, amount, media_name: secret, agency_name: secret, plan_name: secret, inquiry_count: null,
 });
-const headers = (token = full, endpoint = platform, storeId = STORE1_ID) => ({
+const headers = (token = full, endpoint = admin, storeId = STORE1_ID) => ({
   ...(endpoint === store ? { ...STORE_HEADERS, 'X-Store-ID': storeId } : {}), Authorization: `Bearer ${token}`,
 });
 const parameters = (overrides: Record<string, string | boolean | number> = {}) => ({
@@ -31,7 +31,7 @@ const parameters = (overrides: Record<string, string | boolean | number> = {}) =
   include_advertising: true, include_remuneration: true, ...overrides,
 });
 async function report(request: APIRequestContext, overrides: Record<string, string | boolean | number> = {}) {
-  const response = await request.get(platform, { headers: headers(), params: parameters(overrides) });
+  const response = await request.get(admin, { headers: headers(), params: parameters(overrides) });
   expect(response.status(), await response.text()).toBe(200);
   return response.json();
 }
@@ -54,7 +54,7 @@ Given('広告費帳票用の二店舗に受注と保証と賞与と月次費用�
   year = String(1924 - $testInfo.retry * 4);
   course = '';
   manager = await loginAsStoreAdmin(request);
-  const owner = await loginPlatformUser(request, 'admin@kizuna.test', ADMIN_PASSWORD);
+  const owner = await loginUser(request, 'admin@kizuna.test', ADMIN_PASSWORD);
   foreign = String((await getAuthorizedStores(request, manager)).find(s => String(s.id) !== STORE1_ID)!.id);
   const suffix = randomUUID();
   password = randomUUID();
@@ -73,11 +73,11 @@ Given('広告費帳票用の二店舗に受注と保証と賞与と月次費用�
       [...(index === 7 ? common.filter(permission => permission !== 'REMUNERATION_VIEW') : common), ...additional]);
     const address = `advertising-report-${index}-${suffix}@example.test`;
     if (index === 0) email = address;
-    await createPlatformStaffFixture(request, owner, address, password, [role],
+    await createStaffFixture(request, owner, address, password, [role],
       index === 1 ? [Number(STORE1_ID)] : [Number(STORE1_ID), Number(foreign)]);
-    tokens.push(await loginPlatformUser(request, address, password));
+    tokens.push(await loginUser(request, address, password));
   }
-  [full, restricted, storeOnly, platformOnly, viewOnly, exportOnly, legacy, noRemuneration] = tokens;
+  [full, restricted, storeOnly, adminOnly, viewOnly, exportOnly, legacy, noRemuneration] = tokens;
   sales = await createAdvertisingCost(request, full, `${year}-02`, values(400));
   recruitment = await createAdvertisingCost(request, full, `${year}-02`, { ...values(600, 'RECRUITMENT'), inquiry_count: 0 });
   await createAdvertisingCost(request, full, `${year}-03`, values(200));
@@ -142,9 +142,9 @@ Then('広告費帳票は整月と閏年と登録なしを日割りせず区別�
 });
 
 Then('広告費帳票は店と本部の閲覧出力権限を独立して検証する', async ({ request }) => {
-  for (const endpoint of [store, platform]) {
-    const allowed = endpoint === store ? storeOnly : platformOnly;
-    const opposite = endpoint === store ? platformOnly : storeOnly;
+  for (const endpoint of [store, admin]) {
+    const allowed = endpoint === store ? storeOnly : adminOnly;
+    const opposite = endpoint === store ? adminOnly : storeOnly;
     for (const token of [legacy, opposite, exportOnly]) {
       for (const condition of [{}, { group_by: 'day' }, { from: `${year}-02-02` }] as Record<string, string>[]) {
         for (const format of [undefined, 'csv', 'xlsx']) {
@@ -182,9 +182,9 @@ Then('広告費帳票は店と本部の閲覧出力権限を独立して検証�
       expect(old.status(), await old.text()).toBe(200);
     }
   }
-  const scoped = await request.get(platform, { headers: headers(restricted), params: parameters() });
+  const scoped = await request.get(admin, { headers: headers(restricted), params: parameters() });
   expect((await scoped.json()).advertising).toEqual(recorded(2, 400, 600));
-  for (const endpoint of [platform, store]) {
+  for (const endpoint of [admin, store]) {
     for (const format of [undefined, 'csv']) {
       expect((await request.get(endpoint + (format ? '/exports' : ''), {
         headers: headers(restricted, endpoint, foreign),
@@ -207,7 +207,7 @@ Then('広告費帳票の四つの選択条件は旧形式と最小根拠を保�
       const columns = 16 + (include_remuneration ? 17 : 0) + (include_advertising ? 10 : 0);
       const sheets = 3 + (include_remuneration ? 2 : 0) + (include_advertising ? 1 : 0);
       for (const format of ['csv', 'xlsx']) {
-        const response = await request.get(platform + '/exports', {
+        const response = await request.get(admin + '/exports', {
           headers: headers(), params: parameters({ ...selection, format, page: 99, size: 1 }),
         });
         expect(response.status(), await response.text()).toBe(200);
@@ -238,7 +238,7 @@ Then('広告費帳票の四つの選択条件は旧形式と最小根拠を保�
     }
   }
   for (const format of ['csv', 'xlsx']) {
-    const response = await request.get(platform + '/exports', {
+    const response = await request.get(admin + '/exports', {
       headers: headers(), params: parameters({ group_by: 'day', include_remuneration: false, format }),
     });
     expect(response.status(), await response.text()).toBe(200);
@@ -255,12 +255,12 @@ Then('広告費帳票の四つの選択条件は旧形式と最小根拠を保�
 });
 
 Then('広告費帳票の画面は条件切替と連打と遅延応答を安全に扱う', async ({ page, $testInfo }) => {
-  await page.goto(PLATFORM_URL + '/platform/login');
+  await page.goto(APP_URL + '/auth/login');
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).not.toHaveURL(/\/login$/, { timeout: 15000 });
-  await page.goto(PLATFORM_URL + '/platform/operational-reports');
+  await page.goto(APP_URL + '/admin/operational-reports');
   const from = page.getByLabel('開始営業日'), to = page.getByLabel('終了営業日');
   const advertising = page.getByRole('checkbox', { name: '広告費を含める' });
   const remuneration = page.getByRole('checkbox', { name: '保証不足分・ボーナスを含める' });
@@ -314,7 +314,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
   const gate = new Promise<void>(resolve => { release = resolve; });
   const received = new Promise<void>(resolve => { fetched = resolve; });
   const completed = new Promise<void>(resolve => { finished = resolve; });
-  await page.route('**/api/platform/operational-reports?*', async route => {
+  await page.route('**/api/admin/operational-reports?*', async route => {
     if (new URL(route.request().url()).searchParams.get('from') !== `${year}-02-01`) return route.continue();
     const response = await route.fetch();
     fetched();
@@ -333,7 +333,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
     await expect(total).toHaveText('200');
   } finally {
     release();
-    await page.unroute('**/api/platform/operational-reports?*');
+    await page.unroute('**/api/admin/operational-reports?*');
   }
   await submit.click();
   await expect(total).toHaveText('200');
@@ -345,7 +345,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
   const exportCompleted = new Promise<void>(resolve => { finishedExport = resolve; });
   const onDownload = () => { downloads++; };
   page.on('download', onDownload);
-  await page.route('**/api/platform/operational-reports/exports?*', async route => {
+  await page.route('**/api/admin/operational-reports/exports?*', async route => {
     count++;
     const url = new URL(route.request().url());
     expect(url.searchParams.get('include_advertising')).toBe('true');
@@ -372,7 +372,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
     expect(downloads).toBe(0);
   } finally {
     releaseExport();
-    await page.unroute('**/api/platform/operational-reports/exports?*');
+    await page.unroute('**/api/admin/operational-reports/exports?*');
     page.off('download', onDownload);
   }
   await advertising.check();
@@ -389,7 +389,7 @@ Then('広告費帳票は受注と保証と賞与と費用を同じ時点で読�
   try {
     await lock.query('BEGIN');
     await lock.query('LOCK TABLE t_orders IN ACCESS EXCLUSIVE MODE');
-    pending = request.get(platform, { headers: headers(), params: parameters({ store_id: STORE1_ID }) });
+    pending = request.get(admin, { headers: headers(), params: parameters({ store_id: STORE1_ID }) });
     await expect.poll(async () => {
       const result = await observer.query(`SELECT count(*)::int n FROM pg_stat_activity
         WHERE wait_event_type='Lock' AND application_name <> 'report-advertising388-bdd' AND query LIKE '%t_orders%'`);
@@ -429,7 +429,7 @@ When('月次費用を原月で訂正して留痕削除する', async ({ request 
 Then('広告費帳票の再照会と再出力だけが原月の変更を反映する', async ({ request }) => {
   expect((await report(request, { store_id: STORE1_ID })).advertising).toEqual(recorded(1, 0, 700));
   expect((await report(request, { from: `${year}-03-01`, to: `${year}-03-31` })).advertising).toEqual(recorded(1, 200));
-  const csv = await request.get(platform + '/exports', { headers: headers(), params: parameters({ format: 'csv' }) });
+  const csv = await request.get(admin + '/exports', { headers: headers(), params: parameters({ format: 'csv' }) });
   expect(csv.status(), await csv.text()).toBe(200);
   const current = (await csv.body()).toString();
   expect(current).toContain(sales.id);
@@ -454,7 +454,7 @@ Then('広告費帳票の全件出力は2001行と精度と取得上限を守る'
       FROM t_advertising_costs CROSS JOIN generate_series(1,2000) n WHERE id=$1`, [seed.id, prefix, secret]);
     expect((await report(request, range)).advertising).toEqual(recorded(2001, 200100));
     for (const format of ['csv', 'xlsx']) {
-      const response = await request.get(platform + '/exports', {
+      const response = await request.get(admin + '/exports', {
         headers: headers(), params: parameters({ ...range, format, page: 99, size: 1 }),
       });
       expect(response.status(), await response.text()).toBe(200);
@@ -480,10 +480,10 @@ Then('広告費帳票の全件出力は2001行と精度と取得上限を守る'
     await db.query('UPDATE t_advertising_costs SET amount=100 WHERE id=$1 OR id LIKE $2', [seed.id, prefix + '%']);
     const excelUnsafe = await createBonusAward(request, full, person, `${year}-06-01`, 1000000000000001, secret);
     try {
-      const csv = await request.get(platform + '/exports', { headers: headers(), params: parameters({ ...range, include_remuneration: true, format: 'csv' }) });
+      const csv = await request.get(admin + '/exports', { headers: headers(), params: parameters({ ...range, include_remuneration: true, format: 'csv' }) });
       expect(csv.status(), await csv.text()).toBe(200);
       expect((await csv.body()).toString()).toContain('1000000000000001');
-      const xlsx = await request.get(platform + '/exports', { headers: headers(), params: parameters({ ...range, include_remuneration: true, format: 'xlsx' }) });
+      const xlsx = await request.get(admin + '/exports', { headers: headers(), params: parameters({ ...range, include_remuneration: true, format: 'xlsx' }) });
       expect(xlsx.status(), await xlsx.text()).toBe(503);
       expect(xlsx.headers()['content-disposition']).toBeUndefined();
     } finally { await cancelBonusAward(request, full, excelUnsafe.id, excelUnsafe.version, secret); }
@@ -491,7 +491,7 @@ Then('広告費帳票の全件出力は2001行と精度と取得上限を守る'
     const overflow = await createBonusAward(request, full, person, `${year}-06-01`, 1, secret);
     try {
       for (const format of [undefined, 'csv', 'xlsx']) {
-        const response = await request.get(platform + (format ? '/exports' : ''), {
+        const response = await request.get(admin + (format ? '/exports' : ''), {
           headers: headers(), params: parameters({ ...range, include_remuneration: true, ...(format ? { format } : {}) }),
         });
         expect(response.status(), await response.text()).toBe(503);
@@ -505,7 +505,7 @@ Then('広告費帳票の全件出力は2001行と精度と取得上限を守る'
       SELECT $2 || lpad(n::text,5,'0'),store_id,month,category,$3,NULL,NULL,NULL,100,false,0,0,created_at,updated_at
       FROM t_advertising_costs CROSS JOIN generate_series(2001,20000) n WHERE id=$1`, [seed.id, prefix, secret]);
     for (const format of [undefined, 'csv', 'xlsx']) {
-      const response = await request.get(platform + (format ? '/exports' : ''), {
+      const response = await request.get(admin + (format ? '/exports' : ''), {
         headers: headers(), params: parameters({ ...range, ...(format ? { format } : {}) }),
       });
       expect(response.status(), await response.text()).toBe(503);
@@ -520,7 +520,7 @@ Then('広告費帳票の全件出力は2001行と精度と取得上限を守る'
     await db.end();
   }
   expect((await report(request, range)).advertising).toEqual(recorded(1, 100));
-  const recovered = await request.get(platform + '/exports', { headers: headers(), params: parameters({ ...range, format: 'xlsx' }) });
+  const recovered = await request.get(admin + '/exports', { headers: headers(), params: parameters({ ...range, format: 'xlsx' }) });
   expect(recovered.status(), await recovered.text()).toBe(200);
 });
 

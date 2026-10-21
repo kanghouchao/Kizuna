@@ -3,12 +3,12 @@ import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { zipEntry } from "./report-export";
-import { PLATFORM_URL } from "../base-url";
+import { APP_URL } from "../base-url";
 import {
   ADMIN_PASSWORD,
   loginViaUiAndEnterStore,
   STORE_HEADERS,
-  loginPlatformUser,
+  loginUser,
   loginAsStoreAdmin,
   getAuthorizedStores,
   createPermissionRole,
@@ -77,12 +77,12 @@ async function selectMonth(page: Page, m: string) {
   ).toBeVisible();
 }
 async function login(page: Page, address = email) {
-  await page.goto(`${PLATFORM_URL}/platform/login`);
+  await page.goto(`${APP_URL}/auth/login`);
   await page.getByLabel("メールアドレス", { exact: true }).fill(address);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/platform\/dashboard\/?$/);
-  await page.goto(`${PLATFORM_URL}/store/advertising-costs`);
+  await expect(page).toHaveURL(/\/admin\/dashboard\/?$/);
+  await page.goto(`${APP_URL}/store/advertising-costs`);
   await expect(page.getByRole("heading", { name: "広告費管理" })).toBeVisible();
   await selectMonth(page, month);
 }
@@ -91,7 +91,7 @@ Given(
   async ({ request, page, $testInfo }) => {
     $testInfo.setTimeout(120000);
     storeId = await loginViaUiAndEnterStore(page);
-    const owner = await loginPlatformUser(
+    const owner = await loginUser(
       request,
       "admin@kizuna.test",
       ADMIN_PASSWORD,
@@ -140,7 +140,7 @@ Given(
           : [Number(storeId), Number(foreign)],
         storeId,
       );
-      tokens.push(await loginPlatformUser(request, address, password));
+      tokens.push(await loginUser(request, address, password));
     }
     [token, reader, exporter, orderReader] = tokens;
   },

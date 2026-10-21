@@ -6,12 +6,12 @@ import {
   createCast,
   createCourse,
   createPermissionRole,
-  createPlatformStaffFixture,
+  createStaffFixture,
   getAuthorizedStores,
   getOrder,
   getOrderReceptionists,
   loginAsStoreAdmin,
-  loginPlatformUser,
+  loginUser,
   registerMember,
   submitConfirmedStoreRequest,
   STORE1_ID,
@@ -59,7 +59,7 @@ Given(
     privateMail = "private-" + suffix + "@example.test";
     privatePassword = "Audit-" + suffix + "-fixture";
     staff = await loginAsStoreAdmin(request);
-    const owner = await loginPlatformUser(request, "admin@kizuna.test", "pass");
+    const owner = await loginUser(request, "admin@kizuna.test", "pass");
     const role = await createPermissionRole(
       request,
       owner,
@@ -67,14 +67,14 @@ Given(
       ["AUDIT_VIEW",],
     );
     const email = "order-auditor-" + suffix + "@example.test";
-    await createPlatformStaffFixture(
+    await createStaffFixture(
       request,
       owner,
       email,
       privatePassword,
       [role],
     );
-    auditor = await loginPlatformUser(request, email, privatePassword);
+    auditor = await loginUser(request, email, privatePassword);
     castId = await createCast(request, staff, "監査対象-" + suffix);
     courseId = await createCourse(request, staff, "監査コース-" + suffix);
     receptionistId = (await getOrderReceptionists(request, staff))[0].id;
@@ -85,7 +85,7 @@ Given(
     );
     const memberEmail = "order-audit-member-" + suffix + "@example.test";
     await registerMember(request, memberEmail, privatePassword, privateText);
-    member = await loginPlatformUser(request, memberEmail, privatePassword);
+    member = await loginUser(request, memberEmail, privatePassword);
   },
 );
 
@@ -120,7 +120,7 @@ async function createOrder(request: APIRequestContext, token: string) {
 }
 
 async function createApplication(request: APIRequestContext) {
-  const response = await request.post("/api/platform/me/order-applications", {
+  const response = await request.post("/api/me/order-applications", {
     headers: bearer(member),
     data: {
       store_id: Number(STORE1_ID),

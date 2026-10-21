@@ -27,7 +27,7 @@ const storeSelect = (page: Page) => page.getByRole('combobox', { name: '店舗',
 const expectStoreSelected = (page: Page) =>
   expect(storeSelect(page)).not.toHaveAttribute('data-placeholder');
 
-// 播種した実体の id / 認証情報。CAST PlatformUser には削除 API が無いためタイムスタンプ付き
+// 播種した実体の id / 認証情報。CAST User には削除 API が無いためタイムスタンプ付き
 // メールアドレスで隔離し残留を許容する（cast_id/shift_id/shift_request_id は明示削除 + FK CASCADE で片付ける）。
 let createdCastId = '';
 let createdCastEmail = '';
@@ -65,7 +65,7 @@ Given('本日の確定シフトを API で作成する', async ({ request }) => 
 });
 
 When('作成したキャストのメールとパスワードでログインする', async ({ page }) => {
-  // 統一ログインのフォーム操作は platform-login.steps.ts の「メール...でログインする」と同型。
+  // 統一ログインのフォーム操作は login.steps.ts の「メール...でログインする」と同型。
   await page.getByLabel('メールアドレス', { exact: true }).fill(createdCastEmail);
   await page.getByLabel('パスワード', { exact: true }).fill(CAST_PASSWORD);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
@@ -118,7 +118,7 @@ When(
     const [response] = await Promise.all([
       page.waitForResponse(
         resp =>
-          resp.url().includes('/platform/me/shift-requests') && resp.request().method() === 'POST',
+          resp.url().includes('/me/shift-requests') && resp.request().method() === 'POST',
         { timeout: 15000 }
       ),
       page.getByRole('button', { name: '提出する' }).click(),
@@ -142,7 +142,7 @@ When('店舗管理者が API で出勤希望を承認する', async ({ request }
   await approveShiftRequest(request, adminToken, createdShiftRequestId);
 });
 
-// 播種した実体を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。CAST PlatformUser には
+// 播種した実体を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。CAST User には
 // 削除 API が無いため残留を許容する（タイムスタンプ付きメールアドレスで以後の run と隔離済み）。
 // t_shift_requests は cast_id の FK CASCADE により cast 削除で自動的に片付く。
 After(async ({ request }) => {

@@ -15,7 +15,7 @@ const yesterdayInTokyo = () =>
 let createdShiftIds: string[] = [];
 let createdCastIds: string[] = [];
 // 一意名で作成し、中断した過去 run の残骸との重複（strict モード違反）を避ける
-//（platform-login.steps.ts と同じ手法）。feature の {string} は可読性のための基底名の表記で、
+//（login.steps.ts と同じ手法）。feature の {string} は可読性のための基底名の表記で、
 // 断言ステップはこの写像で解決済み一意名に引き当てる。
 let resolvedCastNames: Record<string, string> = {};
 

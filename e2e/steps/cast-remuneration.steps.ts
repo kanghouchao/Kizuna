@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { PLATFORM_URL } from '../base-url';
-import { acceptCastInvitation, createAgreedOrder, completeAgreedOrder, createCast, createCourse, invalidateOrder, issueCastInvitation, loginAsStoreAdmin, loginPlatformUser, withdrawCast, STORE1_ID } from './store-api';
+import { APP_URL } from '../base-url';
+import { acceptCastInvitation, createAgreedOrder, completeAgreedOrder, createCast, createCourse, invalidateOrder, issueCastInvitation, loginAsStoreAdmin, loginUser, withdrawCast, STORE1_ID } from './store-api';
 
 const { Given, When, Then } = createBdd();
 let email = '';
@@ -27,11 +27,11 @@ Given('本人と他人の受注を作成し本人の完了受注を無効化し�
   otherId = await createAgreedOrder(request, token, otherCast, courseId, '他人の顧客');
   await completeAgreedOrder(request, token, otherId);
   await withdrawCast(request, token, castId);
-  ownToken = await loginPlatformUser(request, email, password);
+  ownToken = await loginUser(request, email, password);
 });
 
 When('退店した本人がログインして報酬明細を開く', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/platform/login`);
+  await page.goto(`${APP_URL}/auth/login`);
   await page.getByLabel('メールアドレス').fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
@@ -55,14 +55,14 @@ Then('本人の報酬明細から原条件と無効化履歴を確認できる',
 
 Then('顧客個人情報と他人の受注は本人へ返されない', async ({ request }) => {
   const headers = { Authorization: `Bearer ${ownToken}` };
-  const list = await request.get('/api/platform/me/remunerations', { headers });
+  const list = await request.get('/api/me/remunerations', { headers });
   expect(list.ok()).toBeTruthy();
   expect((await list.json()).content.map((row: { order_id: string }) => row.order_id)).toEqual([ownId]);
-  const detail = await request.get(`/api/platform/me/remunerations/${ownId}`, { headers });
+  const detail = await request.get(`/api/me/remunerations/${ownId}`, { headers });
   expect(detail.ok()).toBeTruthy();
   expect(await detail.text()).not.toMatch(/customer|contact|remarks|報酬画面に出してはいけない顧客/);
   for (const suffix of ['', '/changes']) {
-    const denied = await request.get(`/api/platform/me/remunerations/${otherId}${suffix}`, { headers });
+    const denied = await request.get(`/api/me/remunerations/${otherId}${suffix}`, { headers });
     expect(denied.status()).toBe(404);
   }
 });

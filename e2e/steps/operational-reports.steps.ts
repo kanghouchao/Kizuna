@@ -3,13 +3,13 @@ import { createBdd } from 'playwright-bdd';
 import { Client } from 'pg';
 import { zipEntry } from './report-export';
 import { writeFile } from 'node:fs/promises';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 import { createCast, createCourse, createAgreedOrder, completeAgreedOrder, correctOrderExtension,
-  invalidateOrder, cancelOrder, loginAsStoreAdmin, loginPlatformUser, getAuthorizedStores,
+  invalidateOrder, cancelOrder, loginAsStoreAdmin, loginUser, getAuthorizedStores,
   STORE1_ID, STORE_HEADERS } from './store-api';
 
 const { Given, When, Then } = createBdd();
-const base = '/api/platform/operational-reports';
+const base = '/api/admin/operational-reports';
 const params = { from: '1999-09-01', to: '1999-10-31', group_by: 'month' };
 let manager = '', writer = '', viewer = '', secondReader = '', orderId = '', foreign = '', email = '', password = '', prefix = '';
 const headers = (token: string) => ({ Authorization: 'Bearer ' + token });
@@ -23,7 +23,7 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
   params.from = `${1999 - $testInfo.retry}-09-01`;
   params.to = `${1999 - $testInfo.retry}-10-31`;
   manager = await loginAsStoreAdmin(request);
-  const admin = await loginPlatformUser(request, 'admin@kizuna.test', 'pass');
+  const admin = await loginUser(request, 'admin@kizuna.test', 'pass');
   const suffix = String(Date.now()); prefix = 'R388-' + suffix + '-'; password = 'Report-' + suffix + '-pass';
   const stores = await getAuthorizedStores(request, manager);
   foreign = String(stores.find(store => String(store.id) !== STORE1_ID)!.id);
@@ -42,15 +42,15 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
   for (let index = 0; index < 3; index++) {
     const permissions = ['ORDER_SET_MANAGE', 'OPERATIONAL_REPORT_VIEW'];
     if (index !== 1) permissions.push('OPERATIONAL_REPORT_EXPORT');
-    const role = await request.post('/api/platform/roles', { headers: headers(admin), data: { name: prefix + index, permissions } });
+    const role = await request.post('/api/admin/roles', { headers: headers(admin), data: { name: prefix + index, permissions } });
     expect(role.status(), await role.text()).toBe(201);
     const address = prefix + index + '@kizuna.test'; if (index === 0) email = address;
-    const staff = await request.post('/api/platform/staff', { headers: headers(admin), data: {
+    const staff = await request.post('/api/admin/staff', { headers: headers(admin), data: {
       email: address, password, display_name: '帳票担当', role_ids: [(await role.json()).id],
       store_scope_type: 'SPECIFIC_STORES', store_ids: [Number(index === 2 ? foreign : STORE1_ID)],
     } });
     expect(staff.status(), await staff.text()).toBe(201);
-    tokens.push(await loginPlatformUser(request, address, password));
+    tokens.push(await loginUser(request, address, password));
   }
   [writer, viewer, secondReader] = tokens;
   const db = await database();
@@ -65,12 +65,12 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
   } finally { await db.end(); }
 });
 When('運営帳票を画面とCSVとExcelで取得する', async ({ request, page, $testInfo }) => {
-  await page.goto(PLATFORM_URL + '/platform/login');
+  await page.goto(APP_URL + '/auth/login');
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).not.toHaveURL(/\/login$/, { timeout: 15000 });
-  await page.goto(PLATFORM_URL + '/platform/orders');
+  await page.goto(APP_URL + '/admin/orders');
   await page.getByRole('link', { name: '運営金額集計', exact: true }).click();
   await page.getByLabel('開始営業日').fill(params.from); await page.getByLabel('終了営業日').fill(params.to);
   await page.getByRole('button', { name: '照会', exact: true }).click();
