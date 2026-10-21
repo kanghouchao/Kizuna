@@ -52,15 +52,15 @@ E2E は**開発スタック（project `kizuna`）を使いません**。専用�
 
 - `features/**/*.feature` — 日本語 Gherkin のシナリオ
 - `steps/**/*.ts` — ステップ定義
-- `base-url.ts` — 店舗の `BASE_URL` とプラットフォームの `PLATFORM_URL` の既定値
+- `base-url.ts` — 店舗の `BASE_URL` とアプリドメインの `APP_URL` の既定値
 - `playwright.config.ts` — `defineBddConfig` と Playwright 設定
 - `docker-compose.e2e.yml` — E2E 専用の使い捨てフルスタック（DB / Redis / SeaweedFS /
   backend / frontend / gateway ＋ テストランナー）
 
 ブラウザの `baseURL` は環境変数 `BASE_URL`（既定 `http://store1.kizuna.test`）で
-切り替えます。プラットフォーム側は `PLATFORM_URL`（既定 `http://kizuna.test`）です。
+切り替えます。アプリドメイン側は `APP_URL`（既定 `http://kizuna.test`）です。
 スイートは共有店舗の状態を扱うため、`workers: 1`・`fullyParallel: false` で直列実行します。
-store / platform の判別は Host ヘッダで frontend proxy が行うため、
+store / app の判別は Host ヘッダで frontend proxy が行うため、
 gateway サービスに network alias `store1.kizuna.test` / `kizuna.test` を付与しています。
 alias はネットワーク単位なので、スタックを複数立てても互いに干渉しません。
 
