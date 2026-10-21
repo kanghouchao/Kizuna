@@ -14,31 +14,33 @@ import lombok.Getter;
  * <p>各権限の javadoc に操作単位（閲覧・登録・更新・確定・公開・出力 等）を明示する。SecurityContext への発行は {@link
  * Authorities#permission(String)}（{@code PERM_} 接頭辞）を経由する。
  *
- * <p>{@code defaultRoles} は既定ロールの行を<b>初めて作る時</b>に播種する授与で、省略は「どの既定ロールにも与えない」を意味する。既定ロールの権限は
- * 管理者が編集できるため、既存行の授与は起動時に取り直さない — ここを編集しても稼働中の DB の授権は変わらず、基線 seed と本宣言の一致は テストが機械検証する。
+ * <p>{@code defaultRoles} は既定ロールの行を<b>初めて作る時</b>に播種する授与で、省略は「どの既定ロールにも与えない」を意味する。グループ管理者は サービス ID
+ * 専用の TASK_EXECUTE を除く全権限を初期授与として持つ — 委譲の守衛が「行使者の権限の部分集合」なので、根となる管理者が
+ * 全権限を持たないと店長や店舗スタッフを誰も作れない。既定ロールの権限は 管理者が編集できるため、既存行の授与は起動時に取り直さない — ここを編集しても稼働中の DB の授権は変わらず、基線
+ * seed と本宣言の一致は テストが機械検証する。
  */
 @Getter
 public enum PermissionCode {
-  ADVERTISING_COST_VIEW(SystemRole.STORE_MANAGER),
-  ADVERTISING_COST_MANAGE(SystemRole.STORE_MANAGER),
-  ADVERTISING_COST_EXPORT(SystemRole.STORE_MANAGER),
+  ADVERTISING_COST_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
+  ADVERTISING_COST_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
+  ADVERTISING_COST_EXPORT(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
   ADVERTISING_COST_SET_VIEW(SystemRole.HQ_ADMIN),
   ADVERTISING_COST_SET_EXPORT(SystemRole.HQ_ADMIN),
   /** 口コミの閲覧。 */
-  REVIEW_VIEW(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
-  SURVEY_VIEW(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
-  SURVEY_MANAGE(SystemRole.STORE_MANAGER),
-  SURVEY_RECORD(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  REVIEW_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  SURVEY_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  SURVEY_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
+  SURVEY_RECORD(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
   /** 口コミの手動受付・訂正・取り下げと公開許可の記録。 */
-  REVIEW_MANAGE(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  REVIEW_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
   /** 口コミの内部承認・却下。 */
-  REVIEW_MODERATE(SystemRole.STORE_MANAGER),
+  REVIEW_MODERATE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
   /** 業務通知の内容・状態・履歴の閲覧。 */
-  NOTIFICATION_VIEW(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  NOTIFICATION_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
   /** 業務通知の作成。閲覧権限と併用する。 */
-  NOTIFICATION_MANAGE(SystemRole.STORE_MANAGER),
+  NOTIFICATION_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
   /** 業務通知の送信待ち登録と明示再試行。閲覧権限と併用する。 */
-  NOTIFICATION_SEND(SystemRole.STORE_MANAGER),
+  NOTIFICATION_SEND(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
   /** SERVICE による業務通知の配送と運営側からの手動実行。手動実行者として HQ へ授与する。 */
   NOTIFICATION_DELIVER(SystemRole.HQ_ADMIN),
 
@@ -61,19 +63,19 @@ public enum PermissionCode {
   AUDIT_VIEW(SystemRole.HQ_ADMIN),
 
   /** 応募者一覧・非公開詳細の閲覧。 */
-  RECRUITMENT_VIEW(SystemRole.STORE_MANAGER),
+  RECRUITMENT_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 応募者情報と面接状態の登録・更新。 */
-  RECRUITMENT_MANAGE(SystemRole.STORE_MANAGER),
+  RECRUITMENT_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 採用判断の記録。 */
-  RECRUITMENT_DECIDE(SystemRole.STORE_MANAGER),
+  RECRUITMENT_DECIDE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 応募者の非公開添付の閲覧。 */
-  RECRUITMENT_ATTACHMENT_VIEW(SystemRole.STORE_MANAGER),
+  RECRUITMENT_ATTACHMENT_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 応募者の非公開添付の登録・回復。 */
-  RECRUITMENT_ATTACHMENT_MANAGE(SystemRole.STORE_MANAGER),
+  RECRUITMENT_ATTACHMENT_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
   STORE_MANAGE(SystemRole.HQ_ADMIN),
@@ -137,20 +139,20 @@ public enum PermissionCode {
   STORE_STAFF_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
-  ORDER_MANAGE(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  ORDER_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** 店舗サービス設定の閲覧・登録・更新・削除と変更履歴の照会。 */
-  SERVICE_MANAGE(SystemRole.STORE_MANAGER),
+  SERVICE_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 顧客の閲覧・登録・更新・削除（CustomerController）。 */
-  CUSTOMER_MANAGE(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  CUSTOMER_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /**
    * 重複した顧客行の統合の実行（CustomerMergeController）。取り返しのつかない台帳級の操作のため店長限定。
    *
    * <p>統合には取消（undo）が無く、誤統合の修復は統合履歴を根拠とする人手作業になる（ADR 0010）。
    */
-  CUSTOMER_MERGE(SystemRole.STORE_MANAGER),
+  CUSTOMER_MERGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /**
    * 完了した受注の内容訂正（明細行・実績時刻・コーススナップショット）。凍結済みの記録を動かす管理動作のため店長限定。
@@ -160,7 +162,7 @@ public enum PermissionCode {
    * <p>{@code ORDER_MANAGE} を<b>前提とする</b>。訂正の対象を探す一覧も、要求に載せる版を返す詳細も日常権限の側にあり、
    * この権限だけを与えた自作ロールは門へ到達できない（機構で強制する手立ては無く、付与時の約束である）。
    */
-  ORDER_CORRECT(SystemRole.STORE_MANAGER),
+  ORDER_CORRECT(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /**
    * 会員ポイントの手動調整と、誤帰属の訂正（帰属記録の無効化と、その台帳訂正）。準金銭的な確定系操作のため店長限定。
@@ -170,30 +172,30 @@ public enum PermissionCode {
    * <p>受注を宛先とする操作（帰属の訂正・ポイントの巻き戻し）では {@code ORDER_MANAGE} を<b>前提とする</b>。宛先の受注を探す一覧も操作面が
    * 名乗る受注の現況も日常権限の側にあり、この権限だけを与えた自作ロールは操作面へ到達できない（機構で強制する手立ては無く、付与時の約束である）。
    */
-  POINT_ADJUST(SystemRole.STORE_MANAGER),
+  POINT_ADJUST(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 出勤（シフト）の閲覧・登録・更新（ShiftController）。 */
-  SHIFT_MANAGE(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  SHIFT_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   REMUNERATION_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
-  GUARANTEE_MANAGE(SystemRole.STORE_MANAGER),
-  BONUS_AWARD(SystemRole.STORE_MANAGER),
-  REMUNERATION_CORRECT(SystemRole.STORE_MANAGER),
+  GUARANTEE_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
+  BONUS_AWARD(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
+  REMUNERATION_CORRECT(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** キャストの閲覧・登録・更新・削除（CastController — 在籍停止のキャストも対象）。 */
-  CAST_MANAGE(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  CAST_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** キャスト招待の発行（確定系操作 — CastController の招待端点）。 */
-  CAST_INVITE(SystemRole.STORE_MANAGER),
+  CAST_INVITE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** キャストカスタム項目定義の閲覧（CastFieldDefinitionController）。 */
-  CAST_FIELD_DEF_VIEW(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  CAST_FIELD_DEF_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /** キャストカスタム項目定義の登録・更新・削除（CastFieldDefinitionController）。 */
-  CAST_FIELD_DEF_MANAGE(SystemRole.STORE_MANAGER),
+  CAST_FIELD_DEF_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 店舗公開プロフィールの閲覧・更新・公開（StoreProfileController）。 */
-  STORE_PROFILE_MANAGE(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF);
+  STORE_PROFILE_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF);
 
   private final Set<SystemRole> defaultRoles;
 

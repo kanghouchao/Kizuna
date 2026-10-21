@@ -62,7 +62,13 @@ export async function switchStoreInHeader(page: Page, storeName: string): Promis
     await toggle.click();
     await expect(menu).toBeVisible();
   }
-  await menu.getByText(storeName, { exact: true }).click();
+  const item = page.getByRole("menuitem", { name: storeName, exact: true });
+  await expect(item).toBeVisible();
+  // 開いた直後の項目は位置合わせで描き直されることがあり、安定待ちの最中に外れると click が宙に浮く。
+  // 外れた場合は項目を引き直して一度だけやり直す。
+  await item.click({ timeout: 5000 }).catch(() =>
+    page.getByRole("menuitem", { name: storeName, exact: true }).click(),
+  );
   await expect(toggle).toContainText(storeName, { timeout: 15000 });
 }
 

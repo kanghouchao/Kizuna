@@ -36,14 +36,21 @@ apiClient.interceptors.request.use(
     if (csrfToken) {
       (config.headers as AxiosHeaders).set('X-XSRF-TOKEN', csrfToken);
     }
-    // 店舗文脈は X-Store-ID だけで名乗る。平台セッションでは StoreContext が確定させた現在店舗
-    //（platform-store-id cookie）を店舗級の端点にだけ付け、公開店舗サイトでは proxy が焼いた
-    // x-mw-store-id を付ける。受否はバックエンドが授権店舗集合で判定する。
+    // 店舗文脈は X-Store-ID だけで名乗る。管理画面の店舗級ページ（/store 配下）からの店舗級端点にだけ、
+    // StoreContext が確定させた現在店舗（platform-store-id cookie）を付ける。/platform 配下の画面からの
+    // /files 等は店舗文脈を持たない（全店共有領域への保存）。キャスト・会員の portal は cookie が残っていても
+    // 付けない。公開店舗サイトでは proxy が焼いた x-mw-store-id を付ける。受否はバックエンドが授権店舗集合で判定する。
     try {
-      if (getPlatformSessionKind()) {
+      const sessionKind = getPlatformSessionKind();
+      if (sessionKind) {
         const storeId = getPlatformStoreId();
         const url = config.url || '';
-        if (storeId && (url.startsWith('/store') || url.startsWith('/files'))) {
+        if (
+          sessionKind === 'admin' &&
+          storeId &&
+          window.location.pathname.startsWith('/store') &&
+          (url.startsWith('/store') || url.startsWith('/files'))
+        ) {
           (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
         }
       } else {

@@ -35,21 +35,42 @@ describe('apiClient platform branch', () => {
     window.history.pushState({}, '', originalHref);
   });
 
-  const platformSession = (storeId?: string) =>
+  const platformSession = (storeId?: string, kind = 'admin') =>
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'platform-role') return 'admin';
+      if (key === 'platform-role') return kind;
       if (key === 'platform-store-id') return storeId;
       return undefined;
     });
 
   it.each(['/store/me', '/files'])(
-    'injects X-Store-ID from the current-store cookie for %s requests (no X-Role)',
+    'injects X-Store-ID from the current-store cookie for %s requests from a store page (no X-Role)',
     async url => {
+      window.history.pushState({}, '', '/store/orders');
       platformSession('2');
       const headers = await requestTo(url);
       expect(headers['X-Store-ID']).toBe('2');
       expect(headers['X-Role']).toBeUndefined();
+    }
+  );
+
+  it.each(['/store/me', '/files'])(
+    'does not inject X-Store-ID for %s requests from a /platform page (platform assets stay in the shared area)',
+    async url => {
+      window.history.pushState({}, '', '/platform/settings');
+      platformSession('2');
+      const headers = await requestTo(url);
+      expect(headers['X-Store-ID']).toBeUndefined();
+    }
+  );
+
+  it.each(['cast', 'member'])(
+    'does not inject a stale current-store cookie for a %s session',
+    async kind => {
+      window.history.pushState({}, '', '/store/orders');
+      platformSession('2', kind);
+      const headers = await requestTo('/store/me');
+      expect(headers['X-Store-ID']).toBeUndefined();
     }
   );
 
@@ -60,12 +81,13 @@ describe('apiClient platform branch', () => {
   });
 
   it('does not inject X-Store-ID while no current store is resolved', async () => {
+    window.history.pushState({}, '', '/store/orders');
     platformSession(undefined);
     const headers = await requestTo('/store/me');
     expect(headers['X-Store-ID']).toBeUndefined();
   });
 
-  it('ignores the URL path: a legacy store id in the location does not become the store context', async () => {
+  it('ignores the store id in a legacy URL: the cookie, not the path, is the store context', async () => {
     window.history.pushState({}, '', '/store/9/orders');
     platformSession('2');
     const headers = await requestTo('/store/me');
@@ -73,6 +95,7 @@ describe('apiClient platform branch', () => {
   });
 
   it('does not write the current-store cookie from a response', async () => {
+    window.history.pushState({}, '', '/store/orders');
     platformSession('2');
     await requestTo('/store/me');
     expect(Cookies.set).not.toHaveBeenCalled();

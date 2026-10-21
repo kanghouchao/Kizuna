@@ -13,7 +13,7 @@ import lombok.Getter;
 @Getter
 public enum SystemRole {
 
-  /** グループ管理者。全群級の管理権限（サービス ID 専用の TASK_EXECUTE を除く）と跨店参照系・従業員管理を初期授与として持つ。 */
+  /** グループ管理者。サービス ID 専用の TASK_EXECUTE を除く全権限を初期授与として持つ（委譲の根）。 */
   HQ_ADMIN("グループ管理者"),
 
   /** 店長。店舗業務の全権限と跨店参照系・従業員管理を初期授与として持つ。 */
