@@ -35,6 +35,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -308,6 +309,56 @@ class PlatformStaffServiceTest {
 
     assertThat(res.storeScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
     assertThat(res.editable()).isTrue();
+  }
+
+  @Test
+  @DisplayName("ROLE_MANAGE 保持者は自分が持たない権限のロールも配れ、付与可能ロールは全件になる")
+  void roleManageHolderIsExemptFromThePermissionSubsetRule() {
+    // 権限 {ROLE_MANAGE} だけのロールで、店舗業務の権限 {1,2} を含む MANAGER_ROLE は持たない。
+    Role definer = role(13L, "ロール定義者", Set.of(ROLE_MANAGE_PERMISSION));
+    when(roleRepository.findAllById(anyCollection()))
+        .thenAnswer(
+            invocation -> {
+              Collection<Long> ids = invocation.getArgument(0);
+              return Stream.concat(roles().stream(), Stream.of(definer))
+                  .filter(role -> ids.contains(role.getId()))
+                  .toList();
+            });
+    when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of(ADMIN_ROLE, 13L));
+    actor(Set.of(13L), StoreScopeType.ALL_STORES, Set.of());
+    when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
+    when(encoder.encode("rawpass")).thenReturn("ENCODED");
+
+    assertThat(service.grantableRoles(ACTOR))
+        .extracting(RoleSummaryResponse::id)
+        .containsExactlyInAnyOrder(ADMIN_ROLE, MANAGER_ROLE, STAFF_ROLE);
+    PlatformStaffResponse res =
+        service.create(
+            createRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
+    assertThat(res.roles())
+        .extracting(PlatformStaffResponse.RoleRef::id)
+        .containsExactly(MANAGER_ROLE);
+    assertThat(res.editable()).isTrue();
+  }
+
+  @Test
+  @DisplayName("ROLE_MANAGE 保持者でも店舗集合の部分集合は免れない")
+  void roleManageHolderIsStillBoundByTheStoreSet() {
+    actor(Set.of(ADMIN_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    createRequest(
+                        Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
+                    ACTOR))
+        .isInstanceOf(InvalidStoreScopeException.class);
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    createRequest(Set.of(STAFF_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+        .isInstanceOf(InvalidStoreScopeException.class);
+    verify(repository, never()).saveAndFlush(any());
   }
 
   @Test

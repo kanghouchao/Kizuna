@@ -13,6 +13,7 @@ const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${token}` });
 Given('既定権限を持たない口コミ担当者が用意されている', async ({ page, request }) => {
   await loginViaUiAndEnterStore(page);
   const admin = await loginPlatformUser(request, 'admin@kizuna.test', ADMIN_PASSWORD);
+  expect((await request.get('/api/store/reviews', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${admin}` } })).status()).toBe(403);
   const suffix = Date.now().toString();
   email = `review-${suffix}@kizuna.test`;
   password = `Review-${suffix}-fixture`;

@@ -80,8 +80,14 @@ public class PlatformStaffService {
   private final CredentialOperations credentialOperations;
   private final StoreScopeHolder storeScopeHolder;
 
-  /** 行使者の有効権限並集（ロールの権限 id の和）と店舗集合。 */
-  record Actor(User user, Set<Long> permissionIds, StoreScope scope) {}
+  /** 行使者の有効権限並集（ロールの権限 id の和）・ROLE_MANAGE の保持・店舗集合。 */
+  record Actor(User user, Set<Long> permissionIds, boolean definesRoles, StoreScope scope) {
+
+    /** 付与・編集の対象にできる権限集合か。ロールを定義できる者には権限の部分集合を課さない。 */
+    boolean covers(Set<Long> permissionIds) {
+      return definesRoles || this.permissionIds.containsAll(permissionIds);
+    }
+  }
 
   @Transactional(readOnly = true)
   public Page<PlatformStaffResponse> list(
@@ -144,12 +150,12 @@ public class PlatformStaffService {
     return toResponse(user, rolesOf(user.getRoleIds()), actor);
   }
 
-  /** 行使者が付与できるロールの目録 — 権限集合が行使者の権限並集に収まるもの。判定の単源をサーバに置き、前端に複製させない。 */
+  /** 行使者が付与できるロールの目録 — 権限集合が行使者の権限並集に収まるもの（ROLE_MANAGE 保持者は全ロール）。判定の単源をサーバに置く。 */
   @Transactional(readOnly = true)
   public List<RoleSummaryResponse> grantableRoles(String actorEmail) {
     Actor actor = actor(actorEmail);
     return roleRepository.findAll().stream()
-        .filter(role -> actor.permissionIds().containsAll(role.getPermissionIds()))
+        .filter(role -> actor.covers(role.getPermissionIds()))
         .sorted(Comparator.comparing(Role::getName))
         .map(
             role ->
@@ -332,7 +338,11 @@ public class PlatformStaffService {
         roleRepository.findAllById(user.getRoleIds()).stream()
             .flatMap(role -> role.getPermissionIds().stream())
             .collect(Collectors.toUnmodifiableSet());
-    return new Actor(user, permissionIds, scope);
+    boolean definesRoles =
+        holdsAny(
+            user.getRoleIds(),
+            roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()));
+    return new Actor(user, permissionIds, definesRoles, scope);
   }
 
   /**
@@ -360,7 +370,7 @@ public class PlatformStaffService {
     }
   }
 
-  /** 対象の権限並集 ⊆ 行使者の権限並集 かつ 対象の店舗集合 ⊆ 行使者の店舗集合。 */
+  /** 対象の権限並集 ⊆ 行使者の権限並集（ROLE_MANAGE 保持者は免除）かつ 対象の店舗集合 ⊆ 行使者の店舗集合。 */
   private boolean editableBy(User user, Actor actor) {
     return editableBy(user, rolesOf(user.getRoleIds()), actor);
   }
@@ -370,15 +380,15 @@ public class PlatformStaffService {
         user.getRoleIds().stream()
             .map(roles::get)
             .filter(role -> role != null)
-            .allMatch(role -> actor.permissionIds().containsAll(role.getPermissionIds()));
+            .allMatch(role -> actor.covers(role.getPermissionIds()));
     return permissionsWithin
         && withinScope(user.getStoreScopeType(), user.getStoreIds(), actor.scope());
   }
 
-  /** 付与するロールの権限並集が行使者の権限並集に収まること。行使者自身が持たない権限は配れない。 */
+  /** 付与するロールの権限並集が行使者の権限並集に収まること。ロールを定義できる者以外は、自身が持たない権限を配れない。 */
   private static void requireGrantable(Collection<Role> roles, Actor actor) {
     for (Role role : roles) {
-      if (!actor.permissionIds().containsAll(role.getPermissionIds())) {
+      if (!actor.covers(role.getPermissionIds())) {
         throw new InvalidRoleGrantException("自分が持たない権限を含むロールは付与できません");
       }
     }
