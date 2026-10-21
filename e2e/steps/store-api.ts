@@ -57,18 +57,16 @@ export const storeSwitchToggle = (page: Page): Locator =>
 export async function switchStoreInHeader(page: Page, storeName: string): Promise<void> {
   const toggle = storeSwitchToggle(page);
   await expect(toggle).toBeEnabled();
+  // 項目はキーボードで選ぶ。pointer だと開いた直後の位置合わせで項目が外れ、押下が宙に浮くことがある。
   const menu = page.getByRole("menu");
-  if ((await menu.count()) === 0) {
-    await toggle.click();
-    await expect(menu).toBeVisible();
+  if (!(await menu.isVisible())) {
+    await toggle.focus();
+    await toggle.press("Enter");
   }
-  const item = page.getByRole("menuitem", { name: storeName, exact: true });
-  await expect(item).toBeVisible();
-  // 開いた直後の項目は位置合わせで描き直されることがあり、安定待ちの最中に外れると click が宙に浮く。
-  // 外れた場合は項目を引き直して一度だけやり直す。
-  await item.click({ timeout: 5000 }).catch(() =>
-    page.getByRole("menuitem", { name: storeName, exact: true }).click(),
-  );
+  const item = menu.getByRole("menuitem", { name: storeName, exact: true });
+  await expect(item).toBeVisible({ timeout: 15000 });
+  await item.focus();
+  await item.press("Enter");
   await expect(toggle).toContainText(storeName, { timeout: 15000 });
 }
 
@@ -1317,7 +1315,7 @@ export async function createBonusAward(
   requestId: string = crypto.randomUUID(),
 ): Promise<{ id: string; version: number }> {
   const response = await request.post('/api/store/bonus-awards', {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { person_id: personId, award_date: awardDate, amount, reason, request_id: requestId },
   });
   expect(response.status(), await response.text()).toBe(201);
@@ -1334,7 +1332,7 @@ export async function cancelBonusAward(
   requestId: string = crypto.randomUUID(),
 ): Promise<void> {
   const response = await request.post(`/api/store/bonus-awards/${id}/cancellation`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { expected_version: expectedVersion, reason, request_id: requestId },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -1354,7 +1352,7 @@ export async function createAdvertisingCost(
   storeId = STORE1_ID,
 ): Promise<{ id: string; version: number }> {
   const response = await request.post('/api/store/advertising-costs', {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { ...values, month, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(201);
@@ -1366,7 +1364,7 @@ export async function updateAdvertisingCost(
   values: AdvertisingCostValues, reason: string, storeId = STORE1_ID,
 ): Promise<{ id: string; version: number }> {
   const response = await request.put(`/api/store/advertising-costs/${cost.id}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { ...values, version: cost.version, reason, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -1378,7 +1376,7 @@ export async function deleteAdvertisingCost(
   reason: string, storeId = STORE1_ID,
 ): Promise<void> {
   const response = await request.delete(`/api/store/advertising-costs/${cost.id}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { version: cost.version, reason, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(204);
@@ -1388,7 +1386,7 @@ export async function getRemunerationCandidates(
   request: APIRequestContext, token: string, search: string, storeId = STORE1_ID,
 ): Promise<{ content: { person_id: number }[] }> {
   const response = await request.get('/api/store/monthly-remunerations/casts', {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     params: { search },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -1401,7 +1399,7 @@ export async function createRemunerationGuarantee(
   storeId = STORE1_ID,
 ): Promise<void> {
   const response = await request.post('/api/store/remuneration-guarantees', {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { ...data, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(201);

@@ -218,7 +218,10 @@ Then('月次平台照会は異なる授権集合と直接HTTP要求を検証す�
     params: { store_id: secondStore, search: name + '-他店' } });
   expect(suspendedCandidates.status()).toBe(200);
   expect((await suspendedCandidates.json()).content.map((person: { person_id: number }) => person.person_id)).toContain(personId);
-  expect((await request.get('/api/platform/stores/me', { headers: headers(firstReader) })).status()).toBe(403);
+  // 授権店舗一覧は権限を 1 つ以上持つ全員に開く（STORE_VIEW の有無は問わない）。中身は本人の店舗集合だけ。
+  const ownStores = await request.get('/api/platform/stores/me', { headers: headers(firstReader) });
+  expect(ownStores.status()).toBe(200);
+  expect((await ownStores.json()).map((s: { id: number }) => String(s.id))).toEqual([STORE1_ID]);
   expect((await request.get(base + '/stores', { headers: headers('invalid.jwt') })).status()).toBe(401);
   const history = await request.get('/api/platform/orders/' + foreignOrder + '/corrections', { headers: headers(firstReader) });
   expect(history.status()).toBe(404);
