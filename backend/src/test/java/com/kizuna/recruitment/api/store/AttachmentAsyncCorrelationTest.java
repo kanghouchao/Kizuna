@@ -49,7 +49,7 @@ class AttachmentAsyncCorrelationTest {
     var scope = new StoreScopeExecutor(store, holder, id -> true);
     var controller =
         new AttachmentController(service, receiver, store, scope, holder, new AppProperties());
-    var filter = new RequestCorrelationFilter(store);
+    var filter = new RequestCorrelationFilter(store, holder);
     var receivedId = new AtomicReference<String>();
     var storedId = new AtomicReference<String>();
     when(service.preflight(anyString(), nullable(String.class), anyString()))
@@ -91,6 +91,7 @@ class AttachmentAsyncCorrelationTest {
             });
         SecurityContextHolder.clearContext();
         assertThat(ThreadContext.get("requestId")).isNull();
+        assertThat(holder.current()).as("要求スレッドの作用域は filter が掃除すること").isNull();
         var result = worker.submit(task.get().getCallable());
         if (failure) {
           assertThatThrownBy(result::get).hasRootCauseInstanceOf(ServiceUnavailableException.class);

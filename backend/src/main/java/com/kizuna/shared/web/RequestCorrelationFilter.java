@@ -1,6 +1,7 @@
 package com.kizuna.shared.web;
 
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,7 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/** 全リクエストに相関 ID を割り当て、応答後に ThreadContext と店舗文脈を確実に掃除する。 */
+/** 全リクエストに相関 ID を割り当て、応答後に ThreadContext・店舗文脈・店舗作用域の保持器を確実に掃除する。 */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor
@@ -27,6 +28,7 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
       RequestCorrelationFilter.class.getName() + ".id";
 
   private final StoreContext storeContext;
+  private final StoreScopeHolder storeScopeHolder;
 
   @Override
   protected boolean shouldNotFilterAsyncDispatch() {
@@ -54,6 +56,8 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
       ThreadContext.remove("requestId");
       ThreadContext.remove("storeId");
       storeContext.clear();
+      // 非同期処理の初回パスではインターセプタの afterCompletion が呼ばれないため、ここが唯一の掃除口になる。
+      storeScopeHolder.clear();
     }
   }
 }
