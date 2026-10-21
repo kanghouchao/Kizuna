@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CircleCheckIcon, SquarePenIcon, XIcon } from 'lucide-react';
@@ -68,8 +68,6 @@ function CardMeta({ order }: { order: OrderWorkQueueRow }) {
  * <p>取消はモーダルを開かず、カードがその場で理由入力に変わる（二段）。一覧の中で完結させるのが この画面の主張なので、確認だけを外へ出さない。
  */
 export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCardProps) {
-  const params = useParams();
-  const storeId = params.storeId as string;
   const router = useRouter();
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -156,7 +154,7 @@ export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCar
               variant="ghost"
               size="sm"
               disabled={processing}
-              onClick={() => router.push(storePath(storeId, `/orders/${order.id}/edit`))}
+              onClick={() => router.push(storePath(`/orders/${order.id}/edit`))}
             >
               <SquarePenIcon aria-hidden="true" />
               編集

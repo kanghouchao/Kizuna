@@ -3,11 +3,10 @@ import type { AxiosHeaders } from 'axios';
 import Cookies from 'js-cookie';
 import {
   clearPlatformSession,
-  getPlatformConsole,
-  getStoreIdFromPath,
+  getPlatformSessionKind,
+  getPlatformStoreId,
   redirectToLogin,
   rememberMemberReturnPath,
-  setPlatformStore,
 } from '@/shared/lib';
 
 declare module 'axios' {
@@ -37,27 +36,20 @@ apiClient.interceptors.request.use(
     if (csrfToken) {
       (config.headers as AxiosHeaders).set('X-XSRF-TOKEN', csrfToken);
     }
-    // 平台セッションがあれば legacy な x-mw ヘッダ注入をスキップする
+    // 店舗文脈は X-Store-ID だけで名乗る。平台セッションでは StoreContext が確定させた現在店舗
+    //（platform-store-id cookie）を店舗級の端点にだけ付け、公開店舗サイトでは proxy が焼いた
+    // x-mw-store-id を付ける。受否はバックエンドが授権店舗集合で判定する。
     try {
-      const platformConsole = getPlatformConsole();
-      if (platformConsole) {
-        const storeId = getStoreIdFromPath(window.location.pathname);
+      if (getPlatformSessionKind()) {
+        const storeId = getPlatformStoreId();
         const url = config.url || '';
         if (storeId && (url.startsWith('/store') || url.startsWith('/files'))) {
-          (config.headers as AxiosHeaders).set('X-Role', 'store');
           (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
         }
       } else {
-        // proxy が焼いた x-mw cookie から役割と店舗文脈をヘッダへ移す
-        const role = Cookies.get('x-mw-role');
-        if (role) {
-          (config.headers as AxiosHeaders).set('X-Role', role);
-          if (role === 'store') {
-            const storeId = Cookies.get('x-mw-store-id');
-            if (storeId) {
-              (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
-            }
-          }
+        const storeId = Cookies.get('x-mw-store-id');
+        if (storeId) {
+          (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
         }
       }
     } catch {
@@ -71,16 +63,7 @@ apiClient.interceptors.request.use(
 );
 
 apiClient.interceptors.response.use(
-  response => {
-    // 成功応答が X-Store-ID を伴う＝バックエンドが StoreIdInterceptor の fail-closed 検証
-    //（storeBridge + scope.authorizes）を通過して受理した証拠。このときだけ「前回選択」cookie を更新し、
-    // 未検証の URL 由来 id で cookie を汚染しない。
-    const storeId = response.config?.headers?.get('X-Store-ID');
-    if (storeId) {
-      setPlatformStore(Number(storeId));
-    }
-    return response;
-  },
+  response => response,
   error => {
     if (error.response?.status === 401) {
       // 招待受諾のインラインログイン等、呼び出し元が独自にセッションを扱う経路は
@@ -102,17 +85,16 @@ apiClient.interceptors.response.use(
       }
     }
     if (error.response?.status === 403) {
-      // 旧形式（ロール名）の platform-role cookie を持つ有効期限内トークンは能力ベースの認可で
-      // 全端点 403 になるが 401 経路に乗らず、再ログイン導線が無いままデッドロックする。
-      // cookie 値が新形式のセッション種別（platform/store/cast/member）でない場合に限りセッションを破棄して
-      // 再ログインへ促す（新形式のセッションで正当に 403 を受けた場合は何もしない）。
-      const platformConsole = getPlatformConsole();
+      // 旧形式（ロール名・廃止済みのコンソール値）の platform-role cookie を持つ有効期限内トークンは
+      // 403 を受けても 401 経路に乗らず、再ログイン導線が無いままデッドロックする。cookie 値が現行の
+      // セッション種別（admin/cast/member）でない場合に限りセッションを破棄して再ログインへ促す
+      // （現行のセッションで正当に 403 を受けた場合は何もしない）。
+      const sessionKind = getPlatformSessionKind();
       if (
-        platformConsole &&
-        platformConsole !== 'platform' &&
-        platformConsole !== 'store' &&
-        platformConsole !== 'cast' &&
-        platformConsole !== 'member'
+        sessionKind &&
+        sessionKind !== 'admin' &&
+        sessionKind !== 'cast' &&
+        sessionKind !== 'member'
       ) {
         Cookies.remove('token');
         clearPlatformSession();

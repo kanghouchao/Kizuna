@@ -3,8 +3,16 @@ import CastListPage from '../ui/CastsPage';
 import { CastResponse, castApi } from '@/entities/cast';
 import { TokenClaims, readTokenClaims } from '@/shared/lib';
 
-jest.mock('next/navigation', () => ({
-  useParams: () => ({ storeId: '1' }),
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 
 // hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
@@ -34,7 +42,6 @@ function claimsWith(permissions: string[]): TokenClaims {
   return {
     authorities: permissions.map(permission => `PERM_${permission}`),
     userType: 'STAFF',
-    storeBridge: true,
   };
 }
 
@@ -161,7 +168,7 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
     await screen.findByText('花子');
 
     const link = await screen.findByRole('link', { name: 'カスタムフィールド管理' });
-    expect(link).toHaveAttribute('href', '/store/1/casts/fields');
+    expect(link).toHaveAttribute('href', '/store/casts/fields');
   });
 
   it('CAST_FIELD_DEF_MANAGE 能力が無ければ定義管理ページへの入口リンクが表示されないこと', async () => {
@@ -189,7 +196,7 @@ describe('キャスト一覧ページ固有の要素', () => {
     expect(screen.getByText('キャスト情報の登録・編集ができます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規キャスト登録' })).toHaveAttribute(
       'href',
-      '/store/1/casts/create'
+      '/store/casts/create'
     );
   });
 });

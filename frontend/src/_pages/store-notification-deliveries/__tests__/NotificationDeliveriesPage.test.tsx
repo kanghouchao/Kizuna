@@ -5,7 +5,17 @@ import { Delivery, notificationApi } from '@/entities/notification-delivery';
 import { readTokenClaims } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 let mockStoreId = '1';
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: mockStoreId }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/entities/notification-delivery', () => ({
   notificationApi: {
     list: jest.fn(),
@@ -44,7 +54,6 @@ const row: Delivery = {
 const permission = (...names: string[]) =>
   claims.mockReturnValue({
     userType: 'STAFF',
-    storeBridge: true,
     authorities: names.map(p => `PERM_${p}`),
   });
 beforeEach(() => {

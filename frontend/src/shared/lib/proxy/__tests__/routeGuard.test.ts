@@ -105,52 +105,71 @@ describe('routeGuard', () => {
     expect(res).not.toBeNull();
   });
 
-  it('allows access to an id-scoped /store route with token', () => {
-    const req = createRequest('/store/5/orders', true);
+  it('allows access to an id-less /store route with token', () => {
+    const req = createRequest('/store/orders', true, { 'platform-role': 'admin' });
     const res = handleRouteProtection(req, 'store');
 
     expect(res).toBeNull();
   });
 
-  it('allows access to /store/entry with token (no legacy redirect)', () => {
-    const req = createRequest('/store/entry', true);
-    const res = handleRouteProtection(req, 'store');
-
-    expect(NextResponse.redirect).not.toHaveBeenCalled();
-    expect(res).toBeNull();
-  });
-
-  it('redirects a legacy id-less /store path (with token) to /store/entry preserving next', () => {
-    const req = createRequest('/store/orders', true);
+  it('redirects the retired /store/entry to /platform/dashboard', () => {
+    const req = createRequest('/store/entry', true, { 'platform-role': 'admin' });
     const res = handleRouteProtection(req, 'store');
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pathname: '/store/entry',
-        search: '?next=%2Fstore%2Forders',
-      })
+      expect.objectContaining({ pathname: '/platform/dashboard' })
     );
     expect(res).not.toBeNull();
   });
 
-  it('redirects a retired id-bearing store path (with token) to /store/entry', () => {
-    // /store/{id}/dashboard は本 PR 以前の正規の店舗着地 URL でブックマークに残るが、
-    // 数値id配下はレガシー判定の対象外なので、廃止済み判定で拾わないと素の 404 になる。
-    const req = createRequest('/store/5/dashboard', true);
-    const res = handleRouteProtection(req, 'store');
+  it('redirects a legacy id-bearing store path to the id-less path and moves the id to the cookie', () => {
+    const req = createRequest(
+      '/store/5/orders/3/edit',
+      true,
+      { 'platform-role': 'admin' },
+      '?tab=a'
+    );
+    const res = handleRouteProtection(req, 'store') as unknown as {
+      cookies: { set: jest.Mock };
+    };
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: '/store/entry' })
+      expect.objectContaining({ pathname: '/store/orders/3/edit', search: '?tab=a' })
     );
-    expect(res).not.toBeNull();
+    expect(res.cookies.set).toHaveBeenCalledWith('platform-store-id', '5', { path: '/' });
   });
 
-  it('does not treat a live id-bearing store path as retired', () => {
-    const req = createRequest('/store/5/orders', true);
-    const res = handleRouteProtection(req, 'store');
+  it.each(['/store/5', '/store/5/', '/store/5/dashboard', '/store/5/select'])(
+    'redirects a legacy store path without a live page (%s) to /platform/dashboard with the cookie',
+    path => {
+      const res = handleRouteProtection(
+        createRequest(path, true, { 'platform-role': 'admin' }),
+        'store'
+      ) as unknown as { cookies: { set: jest.Mock } };
 
-    expect(NextResponse.redirect).not.toHaveBeenCalled();
-    expect(res).toBeNull();
+      expect(NextResponse.redirect).toHaveBeenCalledWith(
+        expect.objectContaining({ pathname: '/platform/dashboard' })
+      );
+      expect(res.cookies.set).toHaveBeenCalledWith('platform-store-id', '5', { path: '/' });
+    }
+  );
+
+  it('redirects the retired store account settings to the single account settings page', () => {
+    handleRouteProtection(
+      createRequest('/store/5/settings/account', true, { 'platform-role': 'admin' }),
+      'store'
+    );
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/platform/settings/account' })
+    );
+  });
+
+  it('sends a legacy store path without a token to / (no cookie rewrite)', () => {
+    const res = handleRouteProtection(createRequest('/store/5/orders', false), 'store');
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/' }));
+    expect((res as unknown as { cookies: { set: jest.Mock } }).cookies.set).not.toHaveBeenCalled();
   });
 
   it('redirects to /platform/login when accessing /cast without token', () => {
@@ -225,7 +244,7 @@ describe('routeGuard', () => {
     }
   );
 
-  it.each(['store', 'platform', 'cast'])(
+  it.each(['admin', 'cast'])(
     'renders the receipt claim route for a %s console session (the fragment must reach the client)',
     consoleValue => {
       // 別コンソールのセッションが残ったまま QR を開く場面。ここでコンソール整合で差し戻すと、
@@ -240,9 +259,9 @@ describe('routeGuard', () => {
     }
   );
 
-  it('still redirects a store console session away from other /member paths', () => {
+  it('still redirects an admin session away from other /member paths', () => {
     const res = handleRouteProtection(
-      createRequest('/member/visits', true, { 'platform-role': 'store' }),
+      createRequest('/member/visits', true, { 'platform-role': 'admin' }),
       'platform'
     );
 
@@ -293,22 +312,12 @@ describe('routeGuard', () => {
   });
 
   describe('console/area alignment', () => {
-    it('redirects a store-console session on /platform/* to /store/entry', () => {
-      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'store' });
+    it('redirects an admin session on /cast/* to /platform/dashboard', () => {
+      const req = createRequest('/cast/schedule', true, { 'platform-role': 'admin' });
       const res = handleRouteProtection(req, 'platform');
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/store/entry' })
-      );
-      expect(res).not.toBeNull();
-    });
-
-    it('redirects a store-console session on /cast/* to /store/entry', () => {
-      const req = createRequest('/cast/schedule', true, { 'platform-role': 'store' });
-      const res = handleRouteProtection(req, 'platform');
-
-      expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/store/entry' })
+        expect.objectContaining({ pathname: '/platform/dashboard' })
       );
       expect(res).not.toBeNull();
     });
@@ -324,21 +333,11 @@ describe('routeGuard', () => {
     });
 
     it('redirects a cast-console session on /store/* to /cast/schedule', () => {
-      const req = createRequest('/store/5/orders', true, { 'platform-role': 'cast' });
+      const req = createRequest('/store/orders', true, { 'platform-role': 'cast' });
       const res = handleRouteProtection(req, 'platform');
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/cast/schedule' })
-      );
-      expect(res).not.toBeNull();
-    });
-
-    it('redirects a platform-console session on /cast/* to /platform/dashboard', () => {
-      const req = createRequest('/cast/schedule', true, { 'platform-role': 'platform' });
-      const res = handleRouteProtection(req, 'platform');
-
-      expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/platform/dashboard' })
       );
       expect(res).not.toBeNull();
     });
@@ -353,7 +352,7 @@ describe('routeGuard', () => {
       expect(res).not.toBeNull();
     });
 
-    it('redirects a member-console session on /store/* to /member', () => {
+    it('redirects a member-console session on a legacy /store/* path to /member', () => {
       const req = createRequest('/store/5/orders', true, { 'platform-role': 'member' });
       const res = handleRouteProtection(req, 'platform');
 
@@ -381,32 +380,21 @@ describe('routeGuard', () => {
       expect(res).not.toBeNull();
     });
 
-    it('allows a platform-console session on /platform/*', () => {
-      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'platform' });
-      const res = handleRouteProtection(req, 'platform');
+    it.each(['/platform/dashboard', '/store/orders'])(
+      'allows an admin session on %s (one admin screen spans both prefixes)',
+      path => {
+        const res = handleRouteProtection(
+          createRequest(path, true, { 'platform-role': 'admin' }),
+          'platform'
+        );
 
-      expect(NextResponse.redirect).not.toHaveBeenCalled();
-      expect(res).toBeNull();
-    });
+        expect(NextResponse.redirect).not.toHaveBeenCalled();
+        expect(res).toBeNull();
+      }
+    );
 
-    it('allows a platform-console session on an id-scoped /store/* route (store bridge)', () => {
-      const req = createRequest('/store/5/orders', true, { 'platform-role': 'platform' });
-      const res = handleRouteProtection(req, 'platform');
-
-      expect(NextResponse.redirect).not.toHaveBeenCalled();
-      expect(res).toBeNull();
-    });
-
-    it('allows a store-console session on an id-scoped /store/* route', () => {
-      const req = createRequest('/store/5/orders', true, { 'platform-role': 'store' });
-      const res = handleRouteProtection(req, 'store');
-
-      expect(NextResponse.redirect).not.toHaveBeenCalled();
-      expect(res).toBeNull();
-    });
-
-    it('allows a store-console session on the public /platform/login route', () => {
-      const req = createRequest('/platform/login', true, { 'platform-role': 'store' });
+    it('allows a cast-console session on the public /platform/login route', () => {
+      const req = createRequest('/platform/login', true, { 'platform-role': 'cast' });
       const res = handleRouteProtection(req, 'platform');
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
@@ -421,24 +409,19 @@ describe('routeGuard', () => {
       expect(res).toBeNull();
     });
 
-    it('does not guard an unknown (old-format) console cookie value', () => {
-      const req = createRequest('/platform/dashboard', true, { 'platform-role': 'admin' });
-      const res = handleRouteProtection(req, 'platform');
+    it.each(['platform', 'store'])(
+      'does not guard a retired console cookie value (%s)',
+      consoleValue => {
+        const req = createRequest('/cast/schedule', true, { 'platform-role': consoleValue });
+        const res = handleRouteProtection(req, 'platform');
 
-      expect(NextResponse.redirect).not.toHaveBeenCalled();
-      expect(res).toBeNull();
-    });
+        expect(NextResponse.redirect).not.toHaveBeenCalled();
+        expect(res).toBeNull();
+      }
+    );
 
     it('does not crash or guard on a prototype-chain cookie value', () => {
       const req = createRequest('/platform/dashboard', true, { 'platform-role': 'constructor' });
-      const res = handleRouteProtection(req, 'platform');
-
-      expect(NextResponse.redirect).not.toHaveBeenCalled();
-      expect(res).toBeNull();
-    });
-
-    it('allows a store-console session on the shared /platform/settings/account route', () => {
-      const req = createRequest('/platform/settings/account', true, { 'platform-role': 'store' });
       const res = handleRouteProtection(req, 'platform');
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
@@ -453,12 +436,12 @@ describe('routeGuard', () => {
       expect(res).toBeNull();
     });
 
-    it('still guards a store-console session on the non-shared /platform/settings hub', () => {
-      const req = createRequest('/platform/settings', true, { 'platform-role': 'store' });
+    it('still guards a cast-console session on the non-shared /platform/settings hub', () => {
+      const req = createRequest('/platform/settings', true, { 'platform-role': 'cast' });
       const res = handleRouteProtection(req, 'platform');
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/store/entry' })
+        expect.objectContaining({ pathname: '/cast/schedule' })
       );
       expect(res).not.toBeNull();
     });

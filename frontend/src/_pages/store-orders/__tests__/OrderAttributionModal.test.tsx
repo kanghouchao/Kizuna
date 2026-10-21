@@ -4,6 +4,17 @@ import { AttributionCorrectionStep } from '../ui/AttributionCorrectionStep';
 import { OrderAttributionModal } from '../ui/OrderAttributionModal';
 import { OrderArchiveRow, OrderAttribution, orderApi } from '@/entities/order';
 import { TokenClaims, readTokenClaims } from '@/shared/lib';
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 
 // hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
 jest.mock('@/shared/lib', () => ({
@@ -44,7 +55,6 @@ function claimsWith(permissions: string[]): TokenClaims {
   return {
     authorities: permissions.map(permission => `PERM_${permission}`),
     userType: 'STAFF',
-    storeBridge: true,
   };
 }
 

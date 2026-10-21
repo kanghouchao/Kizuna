@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { platformStoreApi } from '@/entities/store';
+import { useStoreContext } from '@/entities/user';
+import { readTokenClaims } from '@/shared/lib';
 import DashboardPage from '../ui/DashboardPage';
 
 jest.mock('@/entities/store', () => ({
@@ -10,9 +12,35 @@ jest.mock('@/entities/store', () => ({
 
 jest.mock('@/entities/user', () => ({
   useAuth: () => ({ logout: jest.fn() }),
+  useStoreContext: jest.fn(),
+}));
+
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: jest.fn(),
 }));
 
 const mockedApi = platformStoreApi as jest.Mocked<typeof platformStoreApi>;
+const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
+const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
+
+const claimsWith = (...authorities: string[]) => ({ authorities, userType: 'STAFF' });
+
+type StoreContextValue = ReturnType<typeof useStoreContext>;
+const storeContext = (overrides: Partial<StoreContextValue>): StoreContextValue => ({
+  stores: [{ id: 1, name: '本店', status: 'PREPARING' }],
+  currentStoreId: '1',
+  currentStore: { id: 1, name: '本店', status: 'PREPARING' },
+  loadFailed: false,
+  reload: jest.fn(),
+  switchStore: jest.fn(),
+  ...overrides,
+});
+
+beforeEach(() => {
+  mockedReadClaims.mockReturnValue(claimsWith('PERM_STORE_MANAGE'));
+  mockedUseStoreContext.mockReturnValue(storeContext({}));
+});
 
 describe('プラットフォームダッシュボード', () => {
   beforeEach(() => {
@@ -45,6 +73,62 @@ describe('プラットフォームダッシュボード', () => {
     expect(screen.queryByText('店舗管理')).not.toBeInTheDocument();
     // 取得できた姿にボタンは 1 つも無い。失敗時の再試行はこの describe の射程外
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('店舗管理の権限が無い者のダッシュボード', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedReadClaims.mockReturnValue(claimsWith('PERM_ORDER_MANAGE'));
+  });
+
+  it('集計を取りに行かず、現在店舗とその稼働状態を出すこと', async () => {
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('本店')).toBeInTheDocument();
+    expect(screen.getByText('準備中')).toBeInTheDocument();
+    expect(screen.queryByText('総店舗数')).not.toBeInTheDocument();
+    expect(mockedApi.getStats).not.toHaveBeenCalled();
+  });
+
+  it('稼働中の店舗は稼働中と出すこと', async () => {
+    mockedUseStoreContext.mockReturnValue(
+      storeContext({ currentStore: { id: 1, name: '本店', status: 'ACTIVE' } })
+    );
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('稼働中')).toBeInTheDocument();
+  });
+
+  it('授権店舗の取得失敗は区画が名乗って再試行できること', async () => {
+    const reload = jest.fn();
+    mockedUseStoreContext.mockReturnValue(
+      storeContext({
+        stores: null,
+        currentStoreId: undefined,
+        currentStore: undefined,
+        loadFailed: true,
+        reload,
+      })
+    );
+
+    render(<DashboardPage />);
+    const region = await screen.findByRole('alert');
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(within(region).getByText('店舗情報の取得に失敗しました')).toBeInTheDocument();
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('授権店舗が無ければそう述べること', async () => {
+    mockedUseStoreContext.mockReturnValue(
+      storeContext({ stores: [], currentStoreId: undefined, currentStore: undefined })
+    );
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('アクセス可能な店舗がありません')).toBeInTheDocument();
   });
 });
 

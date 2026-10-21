@@ -1,6 +1,16 @@
 import { hasPermission } from '@/shared/lib';
 import { chooseCourse, confirmPreview } from '../lib/orderTestSupport';
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1' }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { OrderApplicationConfirmModal } from '../ui/OrderApplicationConfirmModal';
 import { OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';

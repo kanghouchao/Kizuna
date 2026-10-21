@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import {
   Delivery,
@@ -597,7 +597,7 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
   );
 }
 export function NotificationDeliveriesPage() {
-  const params = useParams();
+  const storeId = useStoreContext().currentStoreId;
   const hydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -609,7 +609,5 @@ export function NotificationDeliveriesPage() {
     return <p role="alert">業務通知の閲覧権限がありません</p>;
   const manage = hasPermission(claims, 'NOTIFICATION_MANAGE'),
     send = hasPermission(claims, 'NOTIFICATION_SEND');
-  return (
-    <Workspace key={`${params.storeId}:${manage}:${send}`} canManage={manage} canSend={send} />
-  );
+  return <Workspace key={`${storeId}:${manage}:${send}`} canManage={manage} canSend={send} />;
 }

@@ -100,7 +100,7 @@ export async function resolveStore(request: NextRequest): Promise<{
 }
 
 // 店舗側の StoreProfile から template_key を取得する。
-// 認証トークン不要・キャッシュ無しで、X-Role/X-Store-ID ヘッダのみで動作する公開エンドポイント。
+// 認証トークン不要・キャッシュ無しで、X-Store-ID ヘッダのみで動作する公開エンドポイント。
 // 取得失敗・欠落時は 'default' に回落し、決して throw しない。
 async function fetchTemplateKey(storeId: string): Promise<string> {
   const configApiUrl =
@@ -109,7 +109,6 @@ async function fetchTemplateKey(storeId: string): Promise<string> {
   try {
     const res = await fetch(configApiUrl, {
       headers: {
-        'X-Role': 'store',
         'X-Store-ID': storeId,
       },
     });

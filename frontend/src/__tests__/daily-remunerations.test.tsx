@@ -7,7 +7,17 @@ import {
   selfMonthlyRemunerationApi,
 } from '@/entities/order';
 
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1' }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   dailyRemunerationApi: { store: jest.fn(), self: jest.fn() },

@@ -11,7 +11,6 @@ import type {
   PlatformStaffUpdateRequest,
   ServiceIdentityCreateRequest,
   ServiceIdentityResponse,
-  StoreStaffUpdateRequest,
 } from '@/entities/user';
 import {
   EMAIL_PATTERN,
@@ -34,7 +33,6 @@ import {
   FormLabel,
   FormMessage,
   Input,
-  Label,
   RegionError,
 } from '@/shared/ui';
 import { RolePicker } from './RolePicker';
@@ -79,22 +77,8 @@ type EditOptions<T> = {
   resource: KeyedResource<T>;
   honorific: string;
   onUpdated: () => void;
-} & (
-  | {
-      editStatus: false;
-      update: (
-        id: number,
-        values: PlatformStaffUpdateRequest & { enabled?: never }
-      ) => Promise<unknown>;
-    }
-  | {
-      editStatus: true;
-      update: (
-        id: number,
-        values: StoreStaffUpdateRequest & { enabled: boolean }
-      ) => Promise<unknown>;
-    }
-);
+  update: (id: number, values: PlatformStaffUpdateRequest) => Promise<unknown>;
+};
 type Props<T> = StaffModalProps & {
   loadRoles: () => Promise<RoleSummaryResponse[]>;
   storeLabel?: string;
@@ -106,7 +90,6 @@ interface FormValues {
   display_name: string;
   role_ids: number[];
   storeSet: { storeScopeType: PlatformStoreScopeType; storeIds: number[] };
-  enabled: boolean;
 }
 
 export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
@@ -121,7 +104,6 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
       password: '',
       display_name: '',
       role_ids: [],
-      enabled: false,
       storeSet: {
         storeScopeType: props.mode === 'create' ? props.initialScope : 'SPECIFIC_STORES',
         storeIds: [],
@@ -132,14 +114,12 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
     control,
     handleSubmit,
     reset,
-    setValue,
     formState: { isSubmitting },
   } = form;
   // 検証の非同期完了が重なっても、一度に一つの保存だけを進める。
   const pending = useRef(false);
   const roleIds = useWatch({ control, name: 'role_ids' });
   const storeSet = useWatch({ control, name: 'storeSet' });
-  const enabled = useWatch({ control, name: 'enabled' });
   const {
     items: roles,
     isLoading: rolesLoading,
@@ -157,7 +137,6 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
         storeScopeType: value.store_scope_type ?? 'SPECIFIC_STORES',
         storeIds: value.store_ids ?? [],
       },
-      enabled: value.enabled,
     })
   );
   const ready =
@@ -190,10 +169,7 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
         props.onCreated();
       } else {
         if (staff == null) return;
-        const update = { ...grants, version: staff.version };
-        if (props.editStatus)
-          await props.update(staff.id ?? 0, { ...update, enabled: values.enabled });
-        else await props.update(staff.id ?? 0, update);
+        await props.update(staff.id ?? 0, { ...grants, version: staff.version });
         if (!operation?.isCurrent()) return;
         notify.success('権限を更新しました');
         props.onUpdated();
@@ -373,38 +349,6 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
                   </FormItem>
                 )}
               />
-              {props.mode === 'edit' && props.editStatus && (
-                <>
-                  <div>
-                    <span className="mb-1 block text-sm font-medium text-foreground">状態</span>
-                    <div className="flex items-center gap-4">
-                      <Label className="font-normal">
-                        <input
-                          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          type="radio"
-                          name="store-staff-enabled"
-                          checked={enabled}
-                          onChange={() => setValue('enabled', true)}
-                        />
-                        有効
-                      </Label>
-                      <Label className="font-normal">
-                        <input
-                          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          type="radio"
-                          name="store-staff-enabled"
-                          checked={!enabled}
-                          onChange={() => setValue('enabled', false)}
-                        />
-                        停止
-                      </Label>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      停止してもアカウントは削除されず、過去の操作記録は保持されます。
-                    </p>
-                  </div>
-                </>
-              )}
               {props.mode === 'edit' && (
                 <div>
                   <p className="mb-1 text-sm font-medium text-foreground">この設定の結果</p>

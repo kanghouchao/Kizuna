@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { surveyApi, SurveyCommand, Revision } from '@/entities/survey';
 import {
   readTokenClaims,
@@ -27,7 +27,7 @@ export function SurveysPage() {
     () => true,
     () => false
   );
-  const { storeId } = useParams<{ storeId: string }>();
+  const storeId = useStoreContext().currentStoreId;
   if (!mounted) return <p>読み込み中...</p>;
   const claims = readTokenClaims();
   if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'SURVEY_VIEW'))

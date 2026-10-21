@@ -10,4 +10,8 @@ export const storeProfileApi = {
     const response = await apiClient.put('/store/config', data);
     return response.data;
   },
+  // 現在店舗（X-Store-ID）を準備中から稼働中へ移す。既に稼働中なら 400。
+  activate: async (): Promise<void> => {
+    await apiClient.post('/store/config/activation');
+  },
 };

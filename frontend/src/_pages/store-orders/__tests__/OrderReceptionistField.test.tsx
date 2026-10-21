@@ -5,7 +5,17 @@ import { Form } from '@/shared/ui';
 import { OrderReceptionistField } from '../ui/OrderReceptionistField';
 
 let mockStoreId = '1';
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: mockStoreId }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/entities/order', () => ({ orderApi: { listReceptionists: jest.fn() } }));
 const list = jest.mocked(orderApi.listReceptionists);
 const submit = jest.fn();

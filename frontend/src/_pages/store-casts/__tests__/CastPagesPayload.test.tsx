@@ -23,7 +23,18 @@ jest.mock('@/entities/cast', () => ({
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
-  useParams: () => ({ storeId: '1', id: 'cast-1' }),
+  useParams: () => ({ id: 'cast-1' }),
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -246,7 +257,7 @@ describe('キャスト編集の取得失敗', () => {
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
     expect(within(region).getByRole('link', { name: 'キャスト一覧へ' })).toHaveAttribute(
       'href',
-      '/store/1/casts'
+      '/store/casts'
     );
   });
 });

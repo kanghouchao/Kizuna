@@ -14,9 +14,8 @@ export function isPublicPlatformPath(path: string): boolean {
 }
 
 /**
- * コンソール種別に依らず到達させる共有 platform ルート（自アカウント設定）。
- * 平台ドメイン上の店舗コンソールは Header からここへリンクするため、
- * コンソール/エリア整合ガードの対象外にする。
+ * セッション種別に依らず到達させる共有 platform ルート（自アカウント設定）。
+ * 種別/エリア整合ガードの対象外にする。
  */
 export function isSharedPlatformPath(path: string): boolean {
   return path === '/platform/settings/account' || path.startsWith('/platform/settings/account/');

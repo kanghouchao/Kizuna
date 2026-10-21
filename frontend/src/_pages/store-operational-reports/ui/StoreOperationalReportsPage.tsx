@@ -1,10 +1,10 @@
 'use client';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { Form } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 import { useOperationalReportPage, ReportSearch, ReportTable } from '@/widgets/operational-report';
 export default function StoreOperationalReportsPage() {
-  const { storeId } = useParams<{ storeId: string }>();
+  const storeId = useStoreContext().currentStoreId;
   return <ReportPage key={storeId} />;
 }
 function ReportPage() {

@@ -177,11 +177,11 @@ describe('storeResolver', () => {
     const result = await resolveStore(req);
 
     expect(result.storeData?.templateKey).toBe('modern');
-    // 追撃 fetch は X-Role: store + X-Store-ID ヘッダで行う
+    // 追撃 fetch は X-Store-ID ヘッダだけで行う
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('config/public'),
       expect.objectContaining({
-        headers: expect.objectContaining({ 'X-Role': 'store', 'X-Store-ID': 't1' }),
+        headers: { 'X-Store-ID': 't1' },
       })
     );
   });

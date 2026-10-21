@@ -5,7 +5,7 @@ import { ExistingLoginForm } from '../ExistingLoginForm';
 import { castInvitationAcceptanceApi } from '@/entities/cast';
 import { platformAuthApi } from '@/entities/user';
 import {
-  getPlatformConsole,
+  getPlatformSessionKind,
   getPlatformStoreId,
   setPlatformStore,
   startPlatformSession,
@@ -42,7 +42,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
   beforeEach(() => {
     jest.clearAllMocks();
     // 招待を開く前に別ロールで平台にログイン済みだった状況を再現する
-    startPlatformSession('STORE_MANAGER');
+    startPlatformSession('admin');
     setPlatformStore('7');
   });
 
@@ -98,7 +98,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
 
-    expect(getPlatformConsole()).toBeUndefined();
+    expect(getPlatformSessionKind()).toBeUndefined();
     expect(getPlatformStoreId()).toBeUndefined();
     expect(tokenDuringAcceptance).toBe('cast-jwt');
   });
@@ -122,7 +122,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
 
     expect(Cookies.get('token')).toBeUndefined();
-    expect(getPlatformConsole()).toBeUndefined();
+    expect(getPlatformSessionKind()).toBeUndefined();
     expect(getPlatformStoreId()).toBeUndefined();
   });
 
@@ -142,7 +142,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     expect(mockedAcceptanceApi.acceptAsExistingUser).not.toHaveBeenCalled();
     expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(getPlatformConsole()).toBe('STORE_MANAGER');
+    expect(getPlatformSessionKind()).toBe('admin');
     expect(getPlatformStoreId()).toBe('7');
   });
 
@@ -172,7 +172,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     expect(onSuccess).not.toHaveBeenCalled();
     expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(getPlatformConsole()).toBe('STORE_MANAGER');
+    expect(getPlatformSessionKind()).toBe('admin');
     expect(getPlatformStoreId()).toBe('7');
   });
 });
@@ -180,7 +180,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 it('同店の重複受諾409では理由を通知して入力と旧セッションを維持する', async () => {
   const error = jest.spyOn(notify, 'error').mockReturnValue('notification-id');
   Cookies.set('token', 'previous-token');
-  startPlatformSession('STORE_MANAGER');
+  startPlatformSession('admin');
   setPlatformStore('7');
   mockedAuthApi.login.mockResolvedValue({ token: 'cast-token', expires_at: Date.now() + 3600000 });
   mockedAcceptanceApi.acceptAsExistingUser.mockRejectedValue({
@@ -197,7 +197,7 @@ it('同店の重複受諾409では理由を通知して入力と旧セッショ�
   expect(screen.getByLabelText('メールアドレス')).toHaveValue('cast@kizuna.test');
   expect(screen.getByRole('button', { name: 'ログインして受諾する' })).toBeEnabled();
   expect(Cookies.get('token')).toBe('previous-token');
-  expect(getPlatformConsole()).toBe('STORE_MANAGER');
+  expect(getPlatformSessionKind()).toBe('admin');
   expect(getPlatformStoreId()).toBe('7');
   expect(onSuccess).not.toHaveBeenCalled();
   error.mockRestore();

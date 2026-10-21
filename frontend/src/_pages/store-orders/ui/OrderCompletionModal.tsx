@@ -3,7 +3,7 @@
 import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
@@ -98,7 +98,7 @@ export function OrderCompletionModal({
   } = form;
 
   const orderId = order?.id ?? '';
-  const storeId = useParams()?.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   // 合計はサーバが行から導出する。ここで足すのは、見込みの取得と利用ポイントの上限判定に要る
   // 「ポイント利用が入る前の総和」を手元で持つためだけ。
 

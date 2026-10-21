@@ -4,7 +4,6 @@ import { useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
-  PermissionConsole,
   PermissionResponse,
   PlatformPermission,
   RoleResponse,
@@ -41,38 +40,9 @@ interface RoleFormModalProps {
   onSaved: () => void;
 }
 
-// 見出しの訳語と並び順。目録に載る console はここから引くが、
-// 表示する組は目録側から作る — この表に無い console が来ても権限を落とさないため
-// （表で組を作ると、バックエンドが Console を増やした日にその権限が静かに消える）。
-const CONSOLE_LABELS: Record<PermissionConsole, string> = {
-  PLATFORM: 'プラットフォーム',
-  STORE: '店舗',
-  SHARED: '共通',
-};
-const CONSOLE_ORDER: PermissionConsole[] = ['PLATFORM', 'STORE', 'SHARED'];
-
-/** 権限目録を console ごとの組へ畳む。未知の console は末尾に、コードそのままの見出しで残す。 */
-function groupByConsole(
-  catalog: PermissionResponse[]
-): { key: string; label: string; items: PermissionResponse[] }[] {
-  const buckets = new Map<string, PermissionResponse[]>();
-  for (const entry of catalog) {
-    const consoleKey = entry.console ?? '';
-    const bucket = buckets.get(consoleKey);
-    if (bucket) bucket.push(entry);
-    else buckets.set(consoleKey, [entry]);
-  }
-  const rank = (key: string) => {
-    const index = CONSOLE_ORDER.indexOf(key as PermissionConsole);
-    return index === -1 ? CONSOLE_ORDER.length : index;
-  };
-  return [...buckets.entries()]
-    .sort(([a], [b]) => rank(a) - rank(b))
-    .map(([key, items]) => ({
-      key,
-      label: CONSOLE_LABELS[key as PermissionConsole] ?? key,
-      items,
-    }));
+/** 権限目録をコードの辞書順に並べる。接頭辞（ORDER_ / STORE_ …）が近い権限が隣り合う。 */
+function sortByCode(catalog: PermissionResponse[]): PermissionResponse[] {
+  return [...catalog].sort((a, b) => (a.code ?? '').localeCompare(b.code ?? ''));
 }
 
 /**
@@ -238,9 +208,9 @@ export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: Rol
                 name="permissions"
                 rules={{ validate: value => value.length > 0 || '権限を 1 つ以上選択してください' }}
                 render={({ field }) => {
-                  const groups = groupByConsole(catalog);
+                  const permissions = sortByCode(catalog);
                   // 焦点は組の先頭が受ける
-                  const firstCode = groups[0]?.items.find(entry => entry.code !== undefined)?.code;
+                  const firstCode = permissions.find(entry => entry.code !== undefined)?.code;
                   const toggle = (code: PlatformPermission) => {
                     field.onChange(
                       field.value.includes(code)
@@ -284,32 +254,23 @@ export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: Rol
                                 onRetry={() => void refetchCatalog()}
                               />
                             ) : (
-                              groups.map(group => {
-                                return (
-                                  <div key={group.key}>
-                                    <p className="mb-1 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                                      {group.label}
-                                    </p>
-                                    <div className="space-y-1">
-                                      {group.items.map(entry => {
-                                        const code = entry.code;
-                                        if (code === undefined) return null;
-                                        return (
-                                          <Label key={code} className="font-normal">
-                                            <input
-                                              type="checkbox"
-                                              checked={field.value.includes(code)}
-                                              onChange={() => toggle(code)}
-                                              ref={code === firstCode ? field.ref : undefined}
-                                            />
-                                            {code}
-                                          </Label>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                );
-                              })
+                              <div className="space-y-1">
+                                {permissions.map(entry => {
+                                  const code = entry.code;
+                                  if (code === undefined) return null;
+                                  return (
+                                    <Label key={code} className="font-normal">
+                                      <input
+                                        type="checkbox"
+                                        checked={field.value.includes(code)}
+                                        onChange={() => toggle(code)}
+                                        ref={code === firstCode ? field.ref : undefined}
+                                      />
+                                      {code}
+                                    </Label>
+                                  );
+                                })}
+                              </div>
                             )}
                           </div>
                         </FormControl>

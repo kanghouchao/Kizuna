@@ -4,7 +4,8 @@ import OrderEditPage from '../ui/OrderEditPage';
 import { Order, orderApi } from '@/entities/order';
 
 const mockPush = jest.fn();
-let mockParams = { storeId: '1', id: 'o1' };
+let mockStoreId = '1';
+let mockParams = { id: 'o1' };
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -23,6 +24,17 @@ jest.mock('@/entities/order', () => ({
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useParams: () => mockParams,
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -76,7 +88,8 @@ function confirmedOrder(overrides: Partial<Order> = {}): Order {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockParams = { storeId: '1', id: 'o1' };
+  mockStoreId = '1';
+  mockParams = { id: 'o1' };
   mockedOrderApi.listReceptionists.mockResolvedValue([]);
   mockedOrderApi.listCastCandidates.mockResolvedValue([]);
 });
@@ -277,7 +290,7 @@ describe('受注の編集ページ', () => {
       confirmation_token: 'confirmed',
     });
     // 保存し終えたこの頁に留まる理由は無い。出口は一覧
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/orders'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/orders'));
   });
 
   it('キャンセルは保存せずに一覧へ戻ること', async () => {
@@ -289,7 +302,7 @@ describe('受注の編集ページ', () => {
     fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
 
     expect(mockedOrderApi.update).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/store/1/orders');
+    expect(mockPush).toHaveBeenCalledWith('/store/orders');
   });
 
   it('保存の最中は出口を塞ぐこと', async () => {
@@ -347,7 +360,7 @@ describe('受注の編集ページ', () => {
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
     expect(within(region).getByRole('link', { name: 'オーダー一覧へ' })).toHaveAttribute(
       'href',
-      '/store/1/orders'
+      '/store/orders'
     );
   });
 
@@ -410,7 +423,8 @@ test('対象変更直後から旧フォームを隠し、新しい詳細で初�
   );
   const { rerender } = render(<OrderEditPage />);
   await screen.findByLabelText('人数');
-  mockParams = { storeId: '2', id: 'o2' };
+  mockStoreId = '2';
+  mockParams = { id: 'o2' };
   rerender(<OrderEditPage />);
   expect(screen.queryByLabelText('人数')).not.toBeInTheDocument();
   await act(async () =>

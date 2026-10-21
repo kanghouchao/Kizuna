@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useFormContext } from 'react-hook-form';
 import { CourseCandidate, OrderCourse, orderApi } from '@/entities/order';
 import { useKeyedResource } from '@/shared/lib';
@@ -35,7 +35,7 @@ export function OrderCourseField({
   const { control, setValue } = useFormContext<
     FeePreviewValues & { course_id: string; course_revision_id: string }
   >();
-  const storeId = useParams()?.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);

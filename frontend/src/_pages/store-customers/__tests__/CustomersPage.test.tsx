@@ -31,7 +31,17 @@ jest.mock('@/shared/notify', () => ({
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
-  useParams: () => ({ storeId: '1' }),
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 
 const mockedCustomerApi = customerApi as jest.Mocked<typeof customerApi>;
@@ -218,7 +228,7 @@ describe('顧客一覧ページ固有の要素', () => {
     expect(screen.getByText('顧客情報の登録・編集ができます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規顧客登録' })).toHaveAttribute(
       'href',
-      '/store/1/customers/create'
+      '/store/customers/create'
     );
   });
 
@@ -275,7 +285,7 @@ describe('顧客一覧ページ固有の要素', () => {
 
   it('統合権限が無ければ重複候補への導線を出さないこと', async () => {
     // 強制はサーバ側。ここは押しても 403 になる導線を描かないための出し分け
-    mockedReadClaims.mockReturnValue({ authorities: [], userType: 'STAFF', storeBridge: true });
+    mockedReadClaims.mockReturnValue({ authorities: [], userType: 'STAFF' });
 
     render(<CustomersPage />);
     await screen.findByText('顧客が登録されていません');
@@ -287,7 +297,6 @@ describe('顧客一覧ページ固有の要素', () => {
     mockedReadClaims.mockReturnValue({
       authorities: ['PERM_CUSTOMER_MANAGE', 'PERM_CUSTOMER_MERGE'],
       userType: 'STAFF',
-      storeBridge: true,
     });
 
     render(<CustomersPage />);
@@ -295,7 +304,7 @@ describe('顧客一覧ページ固有の要素', () => {
 
     expect(screen.getByRole('link', { name: '重複候補' })).toHaveAttribute(
       'href',
-      '/store/1/customers/duplicates'
+      '/store/customers/duplicates'
     );
   });
 });
@@ -353,7 +362,6 @@ describe('顧客一覧からの統合', () => {
     mockedReadClaims.mockReturnValue({
       authorities: ['PERM_CUSTOMER_MERGE', 'PERM_CUSTOMER_MANAGE'],
       userType: 'STAFF',
-      storeBridge: true,
     });
     mockedCustomerApi.list.mockResolvedValue({
       rows: listRows,
@@ -379,7 +387,7 @@ describe('顧客一覧からの統合', () => {
 
   it('統合権限が無ければ選択列を出さないこと', async () => {
     // 強制はサーバ側（読み口も実行も CUSTOMER_MERGE）。ここは押しても 403 になる導線を描かない
-    mockedReadClaims.mockReturnValue({ authorities: [], userType: 'STAFF', storeBridge: true });
+    mockedReadClaims.mockReturnValue({ authorities: [], userType: 'STAFF' });
 
     render(<CustomersPage />);
     await screen.findByText('山田太郎');

@@ -8,6 +8,7 @@ import {
   RoleResponse,
   RoleSummaryResponse,
   RoleUpdateRequest,
+  StaffAccountPasswordResetResponse,
 } from '../model/types';
 
 export const platformStaffApi = {
@@ -39,6 +40,23 @@ export const platformStaffApi = {
   },
   update: async (id: number, data: PlatformStaffUpdateRequest): Promise<PlatformStaffResponse> => {
     const response = await apiClient.put(`/platform/staff/${id}`, data);
+    return response.data;
+  },
+  /** 行使者が授与できるロール（権限が行使者の部分集合のもの）だけを返す。 */
+  grantableRoles: async (): Promise<RoleSummaryResponse[]> => {
+    const response = await apiClient.get('/platform/staff/grantable-roles');
+    return response.data;
+  },
+  /** 停止する。対象のセッションは即時に失効する。 */
+  suspend: async (id: number): Promise<void> => {
+    await apiClient.post(`/platform/staff/${id}/suspension`);
+  },
+  resume: async (id: number): Promise<void> => {
+    await apiClient.post(`/platform/staff/${id}/resumption`);
+  },
+  /** 仮パスワードを発行して再設定する。生値は戻り値にしか現れず、対象のセッションは即時に失効する。 */
+  resetPassword: async (id: number): Promise<StaffAccountPasswordResetResponse> => {
+    const response = await apiClient.post(`/platform/staff/${id}/password-reset`);
     return response.data;
   },
 };

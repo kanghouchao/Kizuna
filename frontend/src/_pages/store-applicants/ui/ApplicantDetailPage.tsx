@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useEffect, useState } from 'react';
 import {
   allowedApplicantTransitions,
@@ -26,7 +27,8 @@ import { ApplicantInterviewForm } from './ApplicantInterviewForm';
 import { ApplicantHistoryPanel } from './ApplicantHistoryPanel';
 import { ApplicantTransitionForm } from './ApplicantTransitionForm';
 export default function ApplicantDetailPage() {
-  const { storeId, id } = useParams<{ storeId: string; id: string }>();
+  const { id } = useParams<{ id: string }>();
+  const storeId = useStoreContext().currentStoreId;
   const resource = useResource(() => applicantApi.get(id), [id]);
   const policy = useResource(() => applicantApi.policy());
   const [canManage, setCanManage] = useState(false);
@@ -90,7 +92,7 @@ export default function ApplicantDetailPage() {
             再読み込み
           </Button>
         )}
-        <Button variant="outline" render={<Link href={storePath(storeId, '/applicants')} />}>
+        <Button variant="outline" render={<Link href={storePath('/applicants')} />}>
           一覧へ
         </Button>
       </div>
@@ -110,7 +112,7 @@ export default function ApplicantDetailPage() {
         {resource.failure === 'notFound' ? (
           <RegionError
             message="応募者が見つかりませんでした"
-            fallback={{ href: storePath(storeId, '/applicants'), label: '一覧へ' }}
+            fallback={{ href: storePath('/applicants'), label: '一覧へ' }}
           />
         ) : (
           <RegionError

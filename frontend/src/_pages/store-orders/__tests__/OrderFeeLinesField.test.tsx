@@ -9,7 +9,17 @@ jest.mock('@/entities/order', () => ({
   orderApi: { surchargeCandidates: jest.fn() },
 }));
 
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: '1' }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 
 function Harness({ submit }: { submit: jest.Mock }) {
   const form = useForm<{ fee_lines: OrderFeeLineInput[] }>({ defaultValues: { fee_lines: [] } });

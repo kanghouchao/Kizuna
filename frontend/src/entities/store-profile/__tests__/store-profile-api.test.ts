@@ -1,4 +1,5 @@
 import { storeProfileApi } from '@/entities/store-profile';
+import { apiClient } from '@/shared/api';
 
 jest.mock('@/shared/api/client', () => ({
   __esModule: true,
@@ -16,5 +17,9 @@ describe('storeProfileApi', () => {
   });
   it('update は /store/config を PUT する', async () => {
     expect(await storeProfileApi.update({})).toEqual({ ok: true, url: '/store/config' });
+  });
+  it('activate は /store/config/activation を本文無しで POST する', async () => {
+    await expect(storeProfileApi.activate()).resolves.toBeUndefined();
+    expect(apiClient.post).toHaveBeenCalledWith('/store/config/activation');
   });
 });

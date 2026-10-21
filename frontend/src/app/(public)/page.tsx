@@ -2,8 +2,6 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { loadTemplatePage } from '@/_pages/store-site';
-import { PlatformConsole, resolvePlatformDestination } from '@/entities/user';
-import { storeEntryPath } from '@/shared/lib';
 
 /**
  * ページメタデータの生成
@@ -41,28 +39,22 @@ export default async function Home() {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
 
-  // 平台セッションがあれば、コンソール値に応じて自動遷移する（cookie 値は platform/store/cast/member）
-  const platformConsole = cookieStore.get('platform-role')?.value;
-  if (platformConsole) {
+  // 平台セッションがあれば、セッション種別に応じて自動遷移する（cookie 値は admin/cast/member）
+  const sessionKind = cookieStore.get('platform-role')?.value;
+  if (sessionKind) {
     const platformToken = cookieStore.get('token')?.value;
     if (!platformToken) {
       // token 失効後も platform-role cookie が残っていると /store・/platform のガードと無限リダイレクトになるため、先に検出する
       redirect('/platform/login');
     }
-    if (platformConsole === 'cast') {
-      redirect('/cast/schedule/');
-    }
-    if (platformConsole === 'member') {
-      redirect('/member/');
-    }
-    const destination = resolvePlatformDestination(platformConsole as PlatformConsole);
-    if (destination === 'platform') {
+    if (sessionKind === 'admin') {
       redirect('/platform/dashboard/');
     }
-    if (destination === 'store') {
-      // 着地先はメニュー由来のため server 側では決められない。入口ルートに委ねる
-      // （前回選択の店舗も入口が cookie から拾う）。
-      redirect(storeEntryPath());
+    if (sessionKind === 'cast') {
+      redirect('/cast/schedule/');
+    }
+    if (sessionKind === 'member') {
+      redirect('/member/');
     }
   }
 

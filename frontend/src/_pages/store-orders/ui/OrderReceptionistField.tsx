@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useFormContext } from 'react-hook-form';
 import { orderApi } from '@/entities/order';
 import { useResource } from '@/shared/lib';
@@ -28,7 +28,7 @@ const receptionistLabel = (id: string, name?: string) => name?.trim() || `受付
 
 export function OrderReceptionistField(props: OrderReceptionistFieldProps) {
   const { control } = useFormContext<{ receptionist_id: string }>();
-  const { storeId } = useParams();
+  const storeId = useStoreContext().currentStoreId;
   const { data, isLoading, failure, reload } = useResource(
     () => orderApi.listReceptionists(),
     [storeId]

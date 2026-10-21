@@ -33,10 +33,6 @@ function meResponse(overrides: Partial<PlatformMeResponse>): PlatformMeResponse 
     display_name: '本人',
     user_type: 'STAFF',
     permissions: [],
-    console: 'none',
-    store_bridge: false,
-    store_scope_type: 'ALL_STORES',
-    store_ids: [],
     line_linked: false,
     ...overrides,
   };
@@ -51,7 +47,7 @@ async function submitLoginForm() {
   fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
 }
 
-describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
+describe('PlatformLoginForm の利用者種別による分岐', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.login.mockResolvedValue({
@@ -66,8 +62,29 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
     Cookies.remove('platform-store-id');
   });
 
+  it('user_type=STAFF は admin セッションを開始し /platform/dashboard/ へ遷移する', async () => {
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'STAFF' }));
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/dashboard/'));
+    expect(Cookies.get('platform-role')).toBe('admin');
+    expect(Cookies.get('token')).toBe('jwt-token');
+  });
+
+  it('user_type が想定外ならセッションを破棄し遷移しない', async () => {
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: undefined }));
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockedNotifyError).toHaveBeenCalled());
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(Cookies.get('platform-role')).toBeUndefined();
+    expect(Cookies.get('token')).toBeUndefined();
+  });
+
   it('user_type=CAST は cast セッションを開始し /cast/schedule/ へ遷移する', async () => {
-    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'CAST', console: 'none' }));
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'CAST' }));
 
     await submitLoginForm();
 
@@ -78,7 +95,7 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
   });
 
   it('会員が公式サイトの予約導線から弾かれていた場合、その画面へ戻ること', async () => {
-    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER' }));
     Cookies.set('member-return-path', '/member/reservations/new?store=store1.kizuna.test');
 
     await submitLoginForm();
@@ -92,7 +109,7 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
   it('伝票の QR から来ていた場合、トークン（フラグメント）ごと申領画面へ戻ること', async () => {
     // フラグメントはサーバへ送られないため cookie には無い。申領に要るトークンはこれしか無く、
     // 落とすと戻れても申領できない画面に着地する
-    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER' }));
     Cookies.set('member-return-path', '/member/receipts');
     sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
 
@@ -105,7 +122,7 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
   it('会員以外がログインしたら、預かっていた戻り先とトークンを捨てること', async () => {
     // 同じタブで後からログインした会員がその戻り先へ運ばれると、申領画面は開いた時点で
     // 取り込むため「他人の伝票を無確認で申領する」経路になる
-    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'CAST', console: 'none' }));
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'CAST' }));
     Cookies.set('member-return-path', '/member/receipts');
     sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
 
@@ -132,7 +149,7 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
   });
 
   it('戻り先に外部 URL が仕込まれていても既定のホームへ遷移すること', async () => {
-    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER' }));
     Cookies.set('member-return-path', 'https://evil.test/');
 
     await submitLoginForm();
@@ -141,7 +158,7 @@ describe('PlatformLoginForm CAST/MEMBER 分岐（#328）', () => {
   });
 
   it('user_type=MEMBER は member セッションを開始し /member/ へ遷移する', async () => {
-    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER', console: 'none' }));
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER' }));
 
     await submitLoginForm();
 

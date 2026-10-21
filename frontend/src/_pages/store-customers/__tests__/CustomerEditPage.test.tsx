@@ -34,11 +34,22 @@ jest.mock('@/entities/order', () => ({
   orderApi: { list: jest.fn() },
 }));
 
-const currentParams = { storeId: '1', id: 'cus-1' };
+const currentParams = { id: 'cus-1' };
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useParams: () => currentParams,
+}));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -54,7 +65,6 @@ function claimsWith(permissions: string[]): TokenClaims {
   return {
     authorities: permissions.map(permission => `PERM_${permission}`),
     userType: 'STAFF',
-    storeBridge: true,
   };
 }
 
@@ -137,7 +147,7 @@ describe('顧客編集ページの取得失敗', () => {
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
     expect(within(region).getByRole('link', { name: '顧客一覧へ' })).toHaveAttribute(
       'href',
-      '/store/1/customers'
+      '/store/customers'
     );
   });
 

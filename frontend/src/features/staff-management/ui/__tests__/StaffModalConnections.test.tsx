@@ -1,24 +1,15 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import {
-  platformRoleApi,
-  platformStaffApi,
-  storeStaffApi,
-  serviceIdentityApi,
-} from '@/entities/user';
-import type { StoreStaffResponse } from '@/entities/user';
+import { platformStaffApi, serviceIdentityApi } from '@/entities/user';
+import type { PlatformStaffResponse, ServiceIdentityResponse } from '@/entities/user';
 import { useKeyedResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { StaffCreateModal } from '../StaffCreateModal';
 import { StaffEditModal } from '../StaffEditModal';
-import { StoreStaffCreateModal } from '../StoreStaffCreateModal';
-import { StoreStaffEditModal } from '../StoreStaffEditModal';
 import { ServiceIdentityCreateModal } from '../ServiceIdentityCreateModal';
 import { ServiceIdentityEditModal } from '../ServiceIdentityEditModal';
 
 jest.mock('@/entities/user', () => ({
-  platformRoleApi: { list: jest.fn() },
-  platformStaffApi: { create: jest.fn(), update: jest.fn() },
-  storeStaffApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
+  platformStaffApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
   serviceIdentityApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
 }));
 jest.mock('@/shared/notify', () => ({
@@ -27,18 +18,10 @@ jest.mock('@/shared/notify', () => ({
 
 const cases = [
   {
-    name: '管理者作成',
+    name: '従業員作成',
     Create: StaffCreateModal,
     api: platformStaffApi,
-    roles: platformRoleApi.list,
-    service: false,
-    scope: 'ALL_STORES',
-  },
-  {
-    name: '店舗スタッフ作成',
-    Create: StoreStaffCreateModal,
-    api: storeStaffApi,
-    roles: storeStaffApi.grantableRoles,
+    roles: platformStaffApi.grantableRoles,
     service: false,
     scope: 'SPECIFIC_STORES',
   },
@@ -51,17 +34,10 @@ const cases = [
     scope: 'SPECIFIC_STORES',
   },
   {
-    name: '管理者編集',
+    name: '従業員編集',
     Edit: StaffEditModal,
     api: platformStaffApi,
-    roles: platformRoleApi.list,
-    service: false,
-  },
-  {
-    name: '店舗スタッフ編集',
-    Edit: StoreStaffEditModal,
-    api: storeStaffApi,
-    roles: storeStaffApi.grantableRoles,
+    roles: platformStaffApi.grantableRoles,
     service: false,
   },
   {
@@ -83,45 +59,29 @@ const props = {
 };
 
 function Harness({ entry }: { entry: (typeof cases)[number] }) {
-  const resource = useKeyedResource<StoreStaffResponse>(['subject', 42], async () => ({
+  return entry.Create ? <entry.Create {...props} /> : <EditHarness entry={entry} />;
+}
+
+function EditHarness({ entry }: { entry: (typeof cases)[number] }) {
+  const subject = {
     id: 42,
-    email: 'staff@example.com',
     display_name: '対象名',
     enabled: true,
-    editable: true,
     roles: [{ id: 3, name: '担当者' }],
     store_scope_type: 'SPECIFIC_STORES' as const,
     store_ids: [],
     version: 7,
+  };
+  const staff = useKeyedResource<PlatformStaffResponse>(['staff', 42], async () => ({
+    ...subject,
+    email: 'staff@example.com',
+    editable: true,
   }));
-  return entry.Create ? (
-    <entry.Create {...props} />
-  ) : entry.Edit ? (
-    entry.Edit === StoreStaffEditModal ? (
-      <StoreStaffEditModal {...props} resource={resource} />
-    ) : (
-      <ReadOnlyEdit entry={entry} />
-    )
-  ) : null;
-}
-
-function ReadOnlyEdit({ entry }: { entry: (typeof cases)[number] }) {
-  const resource = useKeyedResource<import('@/entities/user').ServiceIdentityResponse>(
-    ['subject', 42],
-    async () => ({
-      id: 42,
-      display_name: '対象名',
-      enabled: true,
-      roles: [{ id: 3, name: '担当者' }],
-      store_scope_type: 'SPECIFIC_STORES',
-      store_ids: [],
-      version: 7,
-    })
-  );
+  const service = useKeyedResource<ServiceIdentityResponse>(['service', 42], async () => subject);
   return entry.Edit === StaffEditModal ? (
-    <StaffEditModal {...props} resource={resource} />
+    <StaffEditModal {...props} resource={staff} />
   ) : (
-    <ServiceIdentityEditModal {...props} resource={resource} />
+    <ServiceIdentityEditModal {...props} resource={service} />
   );
 }
 
@@ -182,8 +142,8 @@ it.each(cases)('$name は固有の API と項目で保存する', async entry =>
       screen.getByText(new RegExp(`対象名${entry.service ? '' : 'さん'}は`))
     ).toBeInTheDocument();
   }
-  if (entry.Edit !== StoreStaffEditModal)
-    expect(screen.queryByLabelText('停止')).not.toBeInTheDocument();
+  // 停止・再開は一覧の行操作が担い、編集モーダルには状態の入力を置かない
+  expect(screen.queryByLabelText('停止')).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText('個別店舗'));
   fireEvent.click(screen.getByLabelText('店舗A'));
   fireEvent.click(screen.getByRole('button', { name: entry.Create ? '追加する' : '保存する' }));
@@ -201,25 +161,7 @@ it.each(cases)('$name は固有の API と項目で保存する', async entry =>
       expect(entry.api.update).toHaveBeenCalledWith(42, {
         ...grants,
         version: 7,
-        ...(entry.Edit === StoreStaffEditModal ? { enabled: true } : {}),
       })
     );
   }
-});
-it('店舗スタッフは停止への変更も同じ更新要求で送る', async () => {
-  const entry = cases.find(entry => entry.Edit === StoreStaffEditModal)!;
-  await prepare(entry);
-  expect(screen.getByLabelText('有効')).toBeChecked();
-  fireEvent.click(screen.getByLabelText('停止'));
-  fireEvent.click(screen.getByLabelText('全店舗'));
-  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await waitFor(() =>
-    expect(storeStaffApi.update).toHaveBeenCalledWith(42, {
-      role_ids: [3],
-      store_scope_type: 'ALL_STORES',
-      store_ids: [],
-      version: 7,
-      enabled: false,
-    })
-  );
 });

@@ -12,7 +12,6 @@ const mockedMe = platformAuthApi.me as jest.MockedFunction<typeof platformAuthAp
 const meFixture: PlatformMeResponse = {
   email: 'tanaka.hanako@example.com',
   display_name: '田中花子',
-  store_bridge: false,
   line_linked: false,
 };
 

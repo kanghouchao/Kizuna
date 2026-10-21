@@ -3,6 +3,17 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { notify } from '@/shared/notify';
 import { OrderCompletionModal } from '../ui/OrderCompletionModal';
 import { Order, OrderWorkQueueRow, orderApi } from '@/entities/order';
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: '1',
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない

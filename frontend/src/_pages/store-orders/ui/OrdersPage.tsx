@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
@@ -69,9 +68,6 @@ function toCriteria(draft: SearchDraft, sortKey: OrderSortKey, desc: boolean): O
 }
 
 export default function OrderListPage() {
-  const params = useParams();
-  const storeId = params.storeId as string;
-
   // 完了後訂正は ORDER_CORRECT（店長）限定。導線の表示制御だけで、強制はサーバ側 @PreAuthorize。
   // token claim を効果で読むのは、claim が描画前に読めない環境で出し分けが揺れないようにするため。
   const [canCorrect, setCanCorrect] = useState(false);
@@ -183,20 +179,17 @@ export default function OrderListPage() {
         actions={
           <>
             {canReport && (
-              <Button
-                variant="outline"
-                render={<Link href={storePath(storeId, '/operational-reports')} />}
-              >
+              <Button variant="outline" render={<Link href={storePath('/operational-reports')} />}>
                 運営金額集計
               </Button>
             )}
             <Button
               variant="outline"
-              render={<Link href={storePath(storeId, '/orders/monthly-remunerations')} />}
+              render={<Link href={storePath('/orders/monthly-remunerations')} />}
             >
               月次給与明細
             </Button>
-            <Button render={<Link href={storePath(storeId, '/orders/create')} />}>
+            <Button render={<Link href={storePath('/orders/create')} />}>
               <PlusIcon aria-hidden="true" />
               新規オーダー登録
             </Button>
@@ -356,7 +349,6 @@ export default function OrderListPage() {
         <OrderArchiveSection
           title="完了"
           status="COMPLETED"
-          storeId={storeId}
           criteria={criteria}
           reloadToken={archived.COMPLETED}
           onCorrectAttribution={setCorrecting}
@@ -365,7 +357,6 @@ export default function OrderListPage() {
         <OrderArchiveSection
           title="取消"
           status="CANCELLED"
-          storeId={storeId}
           criteria={criteria}
           reloadToken={archived.CANCELLED}
           onCorrectAttribution={setCorrecting}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { orderApi, OrderCorrectionSnapshot, ORDER_FEE_LINE_KIND_LABELS } from '@/entities/order';
-import { useCursorList } from '@/shared/lib';
+import { storePath, useCursorList } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -102,7 +102,7 @@ export function OrderCorrectionHistory({ orderId, scope }: Props) {
         {...(status === 404
           ? {
               fallback: {
-                href: scope === 'platform' ? '/platform/orders' : '/store/entry',
+                href: scope === 'platform' ? '/platform/orders' : storePath('/orders'),
                 label: '一覧へ戻る',
               },
             }

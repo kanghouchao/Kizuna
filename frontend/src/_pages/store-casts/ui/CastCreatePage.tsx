@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { CastForm, CastFormData } from './CastForm';
 import { CastCreateRequest, castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
@@ -10,8 +10,6 @@ import { storePath } from '@/shared/lib';
 /** 新規キャスト登録ページ */
 export default function CastCreatePage() {
   const router = useRouter();
-  const params = useParams();
-  const storeId = params.storeId as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (data: CastFormData) => {
@@ -31,7 +29,7 @@ export default function CastCreatePage() {
       };
       await castApi.create(requestData);
       notify.success('キャストを登録しました');
-      router.push(storePath(storeId, '/casts'));
+      router.push(storePath('/casts'));
     } catch {
       notify.error('キャストの登録に失敗しました');
     } finally {

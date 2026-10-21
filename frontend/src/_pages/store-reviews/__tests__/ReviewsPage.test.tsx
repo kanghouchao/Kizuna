@@ -4,7 +4,17 @@ import { reviewApi, Review } from '@/entities/review';
 import { notify } from '@/shared/notify';
 import { readTokenClaims } from '@/shared/lib';
 let mockStoreId = '1';
-jest.mock('next/navigation', () => ({ useParams: () => ({ storeId: mockStoreId }) }));
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({
+    stores: [{ id: 1, name: 'テスト店舗' }],
+    currentStoreId: mockStoreId,
+    currentStore: { id: 1, name: 'テスト店舗' },
+    loadFailed: false,
+    reload: jest.fn(),
+    switchStore: jest.fn(),
+  }),
+}));
 jest.mock('@/entities/review', () => ({
   reviewApi: { list: jest.fn(), get: jest.fn(), history: jest.fn(), write: jest.fn() },
 }));
@@ -42,7 +52,6 @@ const row: Review = {
 const permission = (...names: string[]) =>
   claims.mockReturnValue({
     userType: 'STAFF',
-    storeBridge: true,
     authorities: names.map(p => `PERM_${p}`),
   });
 beforeEach(() => {

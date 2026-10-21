@@ -8,7 +8,6 @@ export function ServiceIdentityEditModal(props: StaffEditModalProps<ServiceIdent
       mode="edit"
       loadRoles={serviceIdentityApi.grantableRoles}
       update={serviceIdentityApi.update}
-      editStatus={false}
       honorific=""
       storeLabel="対象店舗"
     />

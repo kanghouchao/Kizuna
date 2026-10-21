@@ -23,8 +23,6 @@ const PAGE_SIZE = 10;
 interface OrderArchiveSectionProps {
   title: string;
   status: OrderStatus;
-  /** 訂正ページの組み立てに要る。店舗の経路は shared/lib の storePath だけが組む。 */
-  storeId: string;
   criteria: OrderListCriteria;
   /**
    * この群へ受注が移ってくるたびに増える値。変わったら取り直す。
@@ -65,12 +63,10 @@ function OutcomeLine({ order }: { order: OrderArchiveRow }) {
 
 function ArchiveRow({
   order,
-  storeId,
   onCorrectAttribution,
   canCorrect,
 }: {
   order: OrderArchiveRow;
-  storeId: string;
   onCorrectAttribution: (order: OrderArchiveRow) => void;
   canCorrect: boolean;
 }) {
@@ -78,11 +74,7 @@ function ArchiveRow({
   return (
     <div className="flex items-start justify-between gap-4 border-b px-4 py-3 last:border-b-0">
       <div className="min-w-0 space-y-1">
-        <OrderCorrectionHistoryDialog
-          key={`${storeId}:${order.id}`}
-          orderId={order.id!}
-          scope="store"
-        />
+        <OrderCorrectionHistoryDialog key={order.id} orderId={order.id!} scope="store" />
         <div className="flex flex-wrap items-center gap-2">
           {label === null ? (
             <span className="text-muted-foreground">お客様名なし</span>
@@ -98,7 +90,7 @@ function ArchiveRow({
         </div>
         {order.completion_invalidated && <p className="font-medium">誤完了・無効化済み</p>}
         {order.replacement_for_order_id && (
-          <Link href={storePath(storeId, `/orders/${order.replacement_for_order_id}/edit`)}>
+          <Link href={storePath(`/orders/${order.replacement_for_order_id}/edit`)}>
             再提供の元受注
           </Link>
         )}
@@ -114,9 +106,7 @@ function ArchiveRow({
           <Button
             variant="ghost"
             size="sm"
-            render={
-              <Link href={storePath(storeId, `/orders/${order.id}/completion-invalidation`)} />
-            }
+            render={<Link href={storePath(`/orders/${order.id}/completion-invalidation`)} />}
           >
             {order.completion_invalidated ? '無効化詳細・再提供' : '誤完了の無効化'}
           </Button>
@@ -124,7 +114,7 @@ function ArchiveRow({
           <Button
             variant="ghost"
             size="sm"
-            render={<Link href={storePath(storeId, `/orders/${order.id}/point-rollback`)} />}
+            render={<Link href={storePath(`/orders/${order.id}/point-rollback`)} />}
           >
             ポイント救済
           </Button>
@@ -132,7 +122,7 @@ function ArchiveRow({
             <Button
               variant="ghost"
               size="sm"
-              render={<Link href={storePath(storeId, `/orders/${order.id}/correction`)} />}
+              render={<Link href={storePath(`/orders/${order.id}/correction`)} />}
             >
               <PencilLineIcon aria-hidden="true" />
               訂正
@@ -163,7 +153,6 @@ function ArchiveRow({
 export function OrderArchiveSection({
   title,
   status,
-  storeId,
   criteria,
   reloadToken,
   onCorrectAttribution,
@@ -234,7 +223,6 @@ export function OrderArchiveSection({
               <ArchiveRow
                 key={order.id}
                 order={order}
-                storeId={storeId}
                 onCorrectAttribution={onCorrectAttribution}
                 canCorrect={canCorrect}
               />

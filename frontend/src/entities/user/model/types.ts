@@ -23,10 +23,8 @@ export type PlatformPermission =
   | 'STAFF_ACCOUNT_MANAGE'
   | 'STORE_STAFF_MANAGE'
   | 'SYSTEM_CONFIG_MANAGE'
-  | 'PLATFORM_MENU_VIEW'
   | 'PLATFORM_ASSET_MANAGE'
   | 'BENEFIT_MANAGE'
-  | 'EMERGENCY_ELEVATE'
   | 'SERVICE_ID_MANAGE'
   | 'TASK_MANAGE'
   | 'TASK_EXECUTE'
@@ -72,12 +70,11 @@ export type PlatformPermission =
   | 'RECRUITMENT_MANAGE'
   | 'RECRUITMENT_DECIDE'
   | 'RECRUITMENT_ATTACHMENT_VIEW'
-  | 'RECRUITMENT_ATTACHMENT_MANAGE'
-  | 'STORE_MENU_VIEW';
+  | 'RECRUITMENT_ATTACHMENT_MANAGE';
 
-// ログイン後の着地先（サーバ側が権限目録から導出する — /me の console）。
-// 小文字 3 値。権限目録（/platform/permissions）の console は大文字 3 値の別型（PermissionConsole）。
-export type PlatformConsole = 'platform' | 'store' | 'none';
+// 平台セッションの種別（platform-role cookie の値）。従業員は本人種別 STAFF で単一の管理画面 admin に入り、
+// CAST / MEMBER はそれぞれの portal に入る。値はサーバの /me の user_type から画面側が決める。
+export type PlatformSessionKind = 'admin' | 'cast' | 'member';
 
 // 平台ユーザーの店舗作用域種別
 export type PlatformStoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';
@@ -94,12 +91,6 @@ export interface PlatformMeResponse {
   display_name?: string;
   user_type?: PlatformUserType;
   permissions?: PlatformPermission[];
-  console?: PlatformConsole;
-  // 店舗文脈（X-Store-ID）を確立できるか。JWT storeBridge claim と同源でサーバ側が権限目録から導出する。
-  // Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
-  store_bridge: boolean;
-  store_scope_type?: PlatformStoreScopeType;
-  store_ids?: number[];
   // LINE アカウントと連携済みか。Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
   line_linked: boolean;
 }
@@ -109,20 +100,19 @@ export interface PlatformMeUpdateRequest {
   display_name: string;
 }
 
+// 店舗の稼働状態。準備中の店舗は店長が店舗設定から明示的に稼働中へ移す。
+export type StoreStatus = 'PREPARING' | 'ACTIVE';
+
 // 平台の授権店舗一覧の1件
 export interface PlatformStore {
   id?: number;
   name?: string;
+  status?: StoreStatus;
 }
-
-// 権限目録（/platform/permissions）の所属コンソール。大文字 3 値で、
-// /me の console（小文字 3 値の PlatformConsole）とはキー名が同じでも値域が別物。
-export type PermissionConsole = 'PLATFORM' | 'STORE' | 'SHARED';
 
 // 権限目録の1件（ロール編集 UI の選択肢）
 export interface PermissionResponse {
   code?: PlatformPermission;
-  console?: PermissionConsole;
 }
 
 // ロールへの参照（スタッフ応答の埋め込み）。
@@ -168,22 +158,25 @@ export interface RoleUpdateRequest {
   version: number;
 }
 
-// スタッフ（ロール×店舗集合）の応答。
+// 従業員（ロール×店舗集合）の応答。
 // リクエストは role_ids（id の配列）なのに応答は roles（id と名称の対）という非対称に注意。
+// editable は委譲守衛（対象の権限並集と店舗集合が行使者の部分集合か）のサーバ側判定で、行使者ごとに変わる。
+// 一覧に出るか（行使者の店舗集合と交わるか）とは別の軸で、false の行は見えるが編集・停止・再設定できない。
 export interface PlatformStaffResponse {
   id?: number;
   email?: string;
   display_name?: string;
-  // enabled と version は Java 側が primitive のため、キーは必ず応答に含まれる。
+  // enabled / version / editable は Java 側が primitive のため、キーは必ず応答に含まれる。
   enabled: boolean;
   roles?: RoleRef[];
   store_scope_type?: PlatformStoreScopeType;
   store_ids?: number[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
+  editable: boolean;
 }
 
-// スタッフ新規作成リクエスト
+// 従業員新規作成リクエスト
 export interface PlatformStaffCreateRequest {
   email: string;
   password: string;
@@ -194,7 +187,7 @@ export interface PlatformStaffCreateRequest {
   store_ids?: number[];
 }
 
-// スタッフ授権編集リクエスト。停止・再開はアカウント管理の専用端点が担うのでここには無い
+// 従業員の授権編集リクエスト。停止・再開は専用端点（suspension / resumption）が担うのでここには無い
 // （サーバは未知のキーを 400 で弾くため、enabled を混ぜると更新そのものが通らない）。
 export interface PlatformStaffUpdateRequest {
   role_ids: number[];
@@ -257,53 +250,6 @@ export interface StaffAccountPasswordResetResponse {
   temporary_password: string;
 }
 
-// アカウント面の一覧 1 件。停止・再開はどちらも冪等で版を往復しないため version を持たず、
-// ロールは表示専用（この面からは授権を動かせない）。
-export interface StaffAccountSummaryResponse {
-  id?: number;
-  email?: string;
-  display_name?: string;
-  // enabled は Java 側が primitive のため、キーは必ず応答に含まれる。
-  enabled: boolean;
-  roles?: RoleRef[];
-}
-
-// 店舗スタッフ（店舗側ロールのみを持つアカウント）の応答。
-// editable は防提権守衛 G3 のサーバ側判定で、行使者ごとに変わる。
-// 表示可否（一覧に出るか）とは別の軸で、false の行は見えるが編集・停止できない。
-export interface StoreStaffResponse {
-  id?: number;
-  email?: string;
-  display_name?: string;
-  // enabled / version / editable は Java 側が primitive のため、キーは必ず応答に含まれる。
-  enabled: boolean;
-  roles?: RoleRef[];
-  store_scope_type?: PlatformStoreScopeType;
-  store_ids?: number[];
-  version: number;
-  editable: boolean;
-}
-
-// 店舗スタッフ新規作成リクエスト
-export interface StoreStaffCreateRequest {
-  email: string;
-  password: string;
-  display_name: string;
-  role_ids: number[];
-  store_scope_type: PlatformStoreScopeType;
-  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
-  store_ids?: number[];
-}
-
-// 店舗スタッフ授権編集リクエスト（enabled: 未指定=現状維持、false=停止、true=再開）
-export interface StoreStaffUpdateRequest {
-  role_ids: number[];
-  store_scope_type: PlatformStoreScopeType;
-  store_ids?: number[];
-  enabled?: boolean;
-  version: number;
-}
-
 // LINE ログインの公開設定。enabled=false のとき入口自体を描画しない。
 export interface LineConfigResponse {
   // Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
@@ -329,58 +275,4 @@ export interface LineRegisterRequest {
   registration_ticket: string;
   display_name: string;
   email: string;
-}
-
-// 店長設定（店舗管理ページの節）の一覧 1 件。
-// この面が扱うのは「この店舗の店長か否か」だけなので、ロール・担当店舗集合は返らない。
-export interface StoreManagerResponse {
-  id?: number;
-  email?: string;
-  display_name?: string;
-  // Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
-  enabled: boolean;
-}
-
-// 任命できる既存アカウントの候補 1 件。母集団が有効なアカウントに限られるため状態は持たない。
-export interface StoreManagerCandidateResponse {
-  id?: number;
-  email?: string;
-  display_name?: string;
-}
-
-// 店長任命リクエスト。user_id を送れば既存アカウントの任命、
-// 残り 3 項目を送れば新規作成しての任命で、混在・欠落はいずれも 400。
-export type StoreManagerAppointRequest =
-  { user_id: number } | { email: string; password: string; display_name: string };
-
-// 緊急昇格の発動リクエスト。パスワード再入力は発動の直前関門（セッション奪取だけでは越えられない）
-export interface EmergencyElevationActivationRequest {
-  store_id: number;
-  reason: string;
-  password: string;
-}
-
-// 緊急昇格の発動レスポンス。昇格トークンの生値はこの応答にしか現れない（履歴からは取り直せない）
-export interface EmergencyElevationActivationResponse {
-  id?: number;
-  token?: string;
-  // Java 側が primitive の long のため、キーは必ず応答に含まれる
-  expires_at: number;
-}
-
-// 履歴一覧の実効状態。記録の状態列は期限切れを持たず、期限の比較はサーバの読み口が行う
-export type EmergencyElevationStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED';
-
-// 緊急昇格の履歴一覧 1 件。撤回欄は未撤回の行でキーごと欠落する（non_null 方針）
-export interface EmergencyElevationSummary {
-  id?: number;
-  activated_by_name?: string;
-  target_store_id?: number;
-  store_name?: string;
-  reason?: string;
-  activated_at?: string;
-  expires_at?: string;
-  status?: EmergencyElevationStatus;
-  revoked_by_name?: string;
-  revoked_at?: string;
 }

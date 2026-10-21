@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { Review, ReviewCommand, ReviewSearch, reviewApi } from '@/entities/review';
 import {
   readTokenClaims,
@@ -39,7 +39,7 @@ export function ReviewsPage() {
     () => true,
     () => false
   );
-  const { storeId } = useParams<{ storeId: string }>();
+  const storeId = useStoreContext().currentStoreId;
   if (!mounted) return <p>読み込み中...</p>;
   const claims = readTokenClaims();
   if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'REVIEW_VIEW'))

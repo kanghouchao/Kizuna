@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { serviceApi, ServiceSummary, ServiceKind, serviceKindLabels } from '@/entities/service';
 import {
   getApiErrorMessage,
@@ -33,7 +33,7 @@ import { ServiceEditor } from './ServiceEditor';
 import { ServiceHistory } from './ServiceHistory';
 
 export default function ServicesPage() {
-  const { storeId } = useParams<{ storeId: string }>();
+  const storeId = useStoreContext().currentStoreId;
   return <AuthorizedServices key={storeId} />;
 }
 function AuthorizedServices() {

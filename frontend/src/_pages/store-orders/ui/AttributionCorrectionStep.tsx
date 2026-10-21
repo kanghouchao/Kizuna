@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { OrderAttributionCorrection, orderApi } from '@/entities/order';
@@ -54,7 +54,7 @@ export function AttributionCorrectionStep({
   onBusyChange,
   onDone,
 }: AttributionCorrectionStepProps) {
-  const storeId = useParams()?.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   const resource = useKeyedResource<OrderAttributionCorrection>(
     ['attributionCorrection', storeId, orderId, attributionId],
     () => orderApi.attributionCorrection(orderId, attributionId)

@@ -27,6 +27,7 @@ const staff = (override: Partial<PlatformStaffResponse> = {}): PlatformStaffResp
   store_scope_type: 'ALL_STORES',
   store_ids: [],
   version: 7,
+  editable: true,
   ...override,
 });
 
@@ -38,7 +39,6 @@ const renderModal = (props: Partial<StaffEditModalProps<PlatformStaffResponse>> 
     return (
       <StaffModal
         mode="edit"
-        editStatus={false}
         honorific="さん"
         loadRoles={platformRoleApi.list}
         update={platformStaffApi.update}
@@ -91,7 +91,7 @@ describe('共通授権編集モーダル', () => {
     });
   });
 
-  // 停止・再開はアカウント管理の面だけが持つ。ここに欄が戻ると、サーバが未知のキーを
+  // 停止・再開は従業員一覧の行操作だけが持つ。ここに欄が戻ると、サーバが未知のキーを
   // 400 で弾くため授権の更新そのものが通らなくなる。
   it('状態を切り替える欄を持たない', async () => {
     renderModal();

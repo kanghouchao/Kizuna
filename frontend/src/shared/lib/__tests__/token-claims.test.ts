@@ -17,13 +17,12 @@ describe('readTokenClaims', () => {
     Cookies.remove('token');
   });
 
-  it('token cookie の payload から authorities / userType / storeBridge を読む', () => {
+  it('token cookie の payload から authorities / userType を読む', () => {
     Cookies.set(
       'token',
       jwt({
         authorities: ['PERM_CAST_INVITE', 'PERM_ORDER_MANAGE'],
         userType: 'STAFF',
-        storeBridge: true,
         sub: 'staff@kizuna.test',
       })
     );
@@ -32,7 +31,6 @@ describe('readTokenClaims', () => {
       subject: 'staff@kizuna.test',
       authorities: ['PERM_CAST_INVITE', 'PERM_ORDER_MANAGE'],
       userType: 'STAFF',
-      storeBridge: true,
     });
   });
 
@@ -68,12 +66,11 @@ describe('readTokenClaims', () => {
   });
 
   it('claim の欠落・型違いは安全側の既定値に倒す', () => {
-    Cookies.set('token', jwt({ authorities: 'PERM_X', storeBridge: 'yes' }));
+    Cookies.set('token', jwt({ authorities: 'PERM_X', userType: 1 }));
 
     expect(readTokenClaims()).toEqual({
       authorities: [],
       userType: undefined,
-      storeBridge: false,
     });
   });
 
@@ -86,7 +83,7 @@ describe('readTokenClaims', () => {
 
 describe('hasPermission', () => {
   it('権限コードを PERM_ 接頭辞付きの claim 表現で照合する', () => {
-    const claims = { authorities: ['PERM_CAST_INVITE'], userType: 'STAFF', storeBridge: true };
+    const claims = { authorities: ['PERM_CAST_INVITE'], userType: 'STAFF' };
 
     expect(hasPermission(claims, 'CAST_INVITE')).toBe(true);
     expect(hasPermission(claims, 'CAST_FIELD_DEF_MANAGE')).toBe(false);

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useStoreContext } from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { OrderPointRollbackResult, orderApi } from '@/entities/order';
@@ -54,12 +55,12 @@ function Billing({ before, offset, after }: { before: number; offset: number; af
 
 export default function OrderPointRollbackPage() {
   const params = useParams();
-  const storeId = params.storeId as string;
+  const storeId = useStoreContext().currentStoreId;
   const orderId = params.id as string;
-  return <RollbackPage key={`${storeId}:${orderId}`} storeId={storeId} orderId={orderId} />;
+  return <RollbackPage key={`${storeId}:${orderId}`} orderId={orderId} />;
 }
 
-function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }) {
+function RollbackPage({ orderId }: { orderId: string }) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   useEffect(() => {
     const claims = readTokenClaims();
@@ -86,7 +87,7 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
           }
         }
       : null,
-    [allowed, orderId, storeId]
+    [allowed, orderId]
   );
   const form = useForm<RollbackFormValues>({ defaultValues: { reason: '' } });
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -126,7 +127,7 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
     return (
       <RegionError
         message="受注管理（ORDER_MANAGE）と POINT_ADJUST を持つポイント救済担当者へ依頼してください。この画面が専用のポイント巻き戻し入口です。"
-        fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
+        fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
       />
     );
 
@@ -149,13 +150,13 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
       {failure === 'notFound' && (
         <RegionError
           message="この受注は見つかりませんでした。"
-          fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
+          fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
         />
       )}
       {order && order.status !== 'COMPLETED' && (
         <RegionError
           message="完了した受注だけがポイントを巻き戻せます。"
-          fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
+          fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
         />
       )}
       {history && (
@@ -194,9 +195,7 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
             <div className="space-y-3">
               <p>この受注は既に巻き戻し済みです。二度目は受け付けません。</p>
               <Button
-                render={
-                  <Link href={storePath(storeId, `/orders/${orderId}/completion-invalidation`)} />
-                }
+                render={<Link href={storePath(`/orders/${orderId}/completion-invalidation`)} />}
               >
                 誤完了の無効化へ
               </Button>
@@ -270,7 +269,7 @@ function RollbackPage({ storeId, orderId }: { storeId: string; orderId: string }
           )}
         </>
       )}
-      <Button variant="outline" render={<Link href={storePath(storeId, '/orders')} />}>
+      <Button variant="outline" render={<Link href={storePath('/orders')} />}>
         オーダー一覧へ
       </Button>
       <ConfirmDialog

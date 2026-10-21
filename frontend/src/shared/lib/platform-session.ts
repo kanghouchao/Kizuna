@@ -1,14 +1,14 @@
 import Cookies from 'js-cookie';
 
-// cookie 名は互換のため platform-role のまま。値は固定ロール名ではなく
-// コンソール値（platform / store — /me の console、サーバ側が能力目録から導出）を保存する。
+// cookie 名は互換のため platform-role のまま。値はセッション種別（admin / cast / member —
+// ログイン時に /me の user_type から決める）を保存する。
 const PLATFORM_ROLE_COOKIE = 'platform-role';
 const PLATFORM_STORE_ID_COOKIE = 'platform-store-id';
 // proxy 側（routeGuard）はサーバ応答の Set-Cookie で書き、クライアント側は js-cookie で読み書きする。
 export const MEMBER_RETURN_PATH_COOKIE = 'member-return-path';
 
 /** 平台セッションの cookie 読み書きの唯一の入口。 */
-export function getPlatformConsole(): string | undefined {
+export function getPlatformSessionKind(): string | undefined {
   return Cookies.get(PLATFORM_ROLE_COOKIE);
 }
 
@@ -17,10 +17,10 @@ export function getPlatformStoreId(): string | undefined {
 }
 
 /** expiresAt（epoch millis）を渡すと token cookie と同じ有効期限を設定し、cookie 間の失効ズレを防ぐ。 */
-export function startPlatformSession(platformConsole: string, expiresAt?: number): void {
+export function startPlatformSession(sessionKind: string, expiresAt?: number): void {
   Cookies.set(
     PLATFORM_ROLE_COOKIE,
-    platformConsole,
+    sessionKind,
     expiresAt ? { expires: new Date(expiresAt) } : undefined
   );
 }
@@ -48,12 +48,7 @@ export function clearPlatformSession(): void {
 
 /** platform-role cookie の存在で平台セッションかどうかを判定する（fail-closed ではなく単なる存在確認）。 */
 export function isPlatformSession(): boolean {
-  return !!getPlatformConsole();
-}
-
-/** 店舗コンソールかどうか。旧形式（ロール名）の cookie 値は false になる（fail-closed — 要再ログイン）。 */
-export function isStoreConsole(platformConsole: string | undefined): boolean {
-  return platformConsole === 'store';
+  return !!getPlatformSessionKind();
 }
 
 /**
