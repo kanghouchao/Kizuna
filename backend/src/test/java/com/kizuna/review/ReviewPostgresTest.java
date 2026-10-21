@@ -154,9 +154,11 @@ class ReviewPostgresTest {
             suffix + "-other.invalid");
     actorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'受付担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'受付担当','PLATFORM_USER') returning id",
             Long.class,
             email);
+    jdbc.update(
+        "insert into t_platform_users(user_id,store_scope_type) values (?,'ALL_STORES')", actorId);
     roleId =
         jdbc.queryForObject(
             "insert into t_roles(name,is_system) values (?,false) returning id",
@@ -182,7 +184,8 @@ class ReviewPostgresTest {
   @Test
   void activeElevationRechecksActorStoreExpiryAndRevocationBeforeReplay() throws Exception {
     jdbc.update("delete from t_user_roles where user_id=?", actorId);
-    jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", actorId);
+    jdbc.update(
+        "update t_platform_users set store_scope_type='SPECIFIC_STORES' where user_id=?", actorId);
     read("", 403);
     Long elevation =
         jdbc.queryForObject(
@@ -216,7 +219,7 @@ class ReviewPostgresTest {
     assertThat(send("", input, 200).get("operation").get("replayed").asBoolean()).isTrue();
     assertThat(
             jdbc.queryForObject(
-                "select count(*) from t_audit_events where store_id=? and target_id=? and actor_id=? and actor_type='STAFF' and after_values->>'emergency_elevation_id'=?",
+                "select count(*) from t_audit_events where store_id=? and target_id=? and actor_id=? and actor_type='PLATFORM_USER' and after_values->>'emergency_elevation_id'=?",
                 Integer.class,
                 storeId,
                 id,
@@ -249,9 +252,11 @@ class ReviewPostgresTest {
         elevation);
     Long another =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'別担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'別担当','PLATFORM_USER') returning id",
             Long.class,
             UUID.randomUUID() + "@example.invalid");
+    jdbc.update(
+        "insert into t_platform_users(user_id,store_scope_type) values (?,'ALL_STORES')", another);
     jdbc.update("update t_emergency_elevations set activated_by=? where id=?", another, elevation);
     read("", 403);
     send("", input, 403);

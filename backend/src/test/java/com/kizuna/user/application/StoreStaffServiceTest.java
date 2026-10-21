@@ -2,7 +2,9 @@ package com.kizuna.user.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -11,6 +13,8 @@ import static org.mockito.Mockito.when;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.StoreStaffCreateRequest;
 import com.kizuna.user.api.dto.StoreStaffResponse;
@@ -18,6 +22,8 @@ import com.kizuna.user.api.dto.StoreStaffUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
@@ -28,11 +34,16 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,8 +69,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * 店舗スタッフ管理の防提権守衛（ADR 0020 の G1〜G3）を固定する。行使者の事実は JWT（authorities と授権店舗集合）、対象の現況は DB という分担で、 ここでは JWT
- * 側を組んで境界の内外を撃ち分ける。
+ * 店舗スタッフ管理の防提権守衛（ADR 0020 の G1〜G3）を固定する。行使者の事実は JWT（authorities）と保持器（授権店舗集合）、対象の現況は DB
+ * という分担で、ここでは行使者側を組んで境界の内外を撃ち分ける。
  */
 @ExtendWith(MockitoExtension.class)
 class StoreStaffServiceTest {
@@ -93,14 +104,49 @@ class StoreStaffServiceTest {
   @Mock private PasswordEncoder encoder;
   @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
   @Mock private StoreContext storeContext;
+  @Spy private StoreScopeHolder storeScopeHolder = new StoreScopeHolder();
 
   @InjectMocks private StoreStaffService service;
 
   @Captor private ArgumentCaptor<User> userCaptor;
 
+  @Mock private PlatformUserRepository platformUserRepository;
+
+  @Captor private ArgumentCaptor<PlatformUser> scopeCaptor;
+
+  /** id → 店舗作用域の行。{@link #scope} が登録し、下の既定スタブが引く。 */
+  private final Map<Long, PlatformUser> scopes = new HashMap<>();
+
+  @BeforeEach
+  void stubScopeLookups() {
+    lenient()
+        .when(platformUserRepository.findByUserId(any()))
+        .thenAnswer(invocation -> Optional.ofNullable(scopes.get(invocation.<Long>getArgument(0))));
+    lenient()
+        .when(platformUserRepository.findByUserIdIn(any()))
+        .thenAnswer(
+            invocation ->
+                invocation.<Collection<Long>>getArgument(0).stream()
+                    .map(scopes::get)
+                    .filter(Objects::nonNull)
+                    .toList());
+    lenient()
+        .when(platformUserRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
+
+  /** 保存済みユーザーに店舗作用域の行を結ぶ。 */
+  private PlatformUser scope(User user, StoreScopeType scopeType, Set<Long> storeIds) {
+    PlatformUser scope =
+        PlatformUser.builder().user(user).storeScopeType(scopeType).storeIds(storeIds).build();
+    scopes.put(user.getId(), scope);
+    return scope;
+  }
+
   @AfterEach
   void clearActor() {
     SecurityContextHolder.clearContext();
+    storeScopeHolder.clear();
   }
 
   /** 店長（STORE_STAFF_MANAGE のみ・特定店舗担当）を行使者に据える。 */
@@ -113,15 +159,15 @@ class StoreStaffServiceTest {
     givenActor(true, "ALL_STORES", null);
   }
 
+  /** 行使者の授権店舗集合は要求ごとの解決器が保持器へ差し込む値で、トークンには載らない。 */
   private void givenActor(boolean roleManage, String scopeType, List<Long> storeIds) {
     Jwt.Builder builder =
-        Jwt.withTokenValue("token")
-            .header("alg", "none")
-            .subject("actor@kizuna.test")
-            .claim("storeScopeType", scopeType);
-    if (storeIds != null) {
-      builder.claim("storeIds", storeIds);
-    }
+        Jwt.withTokenValue("token").header("alg", "none").subject("actor@kizuna.test");
+    StoreScope scope =
+        "ALL_STORES".equals(scopeType)
+            ? new StoreScope(true, Set.of())
+            : new StoreScope(false, Set.copyOf(storeIds));
+    storeScopeHolder.install(() -> scope);
     List<SimpleGrantedAuthority> authorities =
         roleManage
             ? List.of(
@@ -176,11 +222,10 @@ class StoreStaffServiceTest {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
-            .storeScopeType(scopeType)
-            .storeIds(storeIds)
             .build();
     user.setId(id);
     ReflectionTestUtils.setField(user, "version", 0L);
+    scope(user, scopeType, storeIds);
     return user;
   }
 
@@ -585,7 +630,7 @@ class StoreStaffServiceTest {
 
   @ParameterizedTest
   @CsvSource({
-    "fk_t_user_stores_store,指定された店舗が存在しません",
+    "fk_t_platform_user_stores_store,指定された店舗が存在しません",
     "fk_t_user_roles_role,指定されたロールが存在しません",
     "uq_t_users_email,このメールアドレスは既に登録されています"
   })
@@ -598,10 +643,16 @@ class StoreStaffServiceTest {
             StoreScopeType.SPECIFIC_STORES,
             Set.of(CONTEXT_STORE));
     when(repository.findById(1L)).thenReturn(Optional.of(target));
-    when(repository.saveAndFlush(target))
-        .thenThrow(
-            new DataIntegrityViolationException(
-                "保存失敗", new ConstraintViolationException("制約違反", new SQLException(), constraint)));
+    var violation =
+        new DataIntegrityViolationException(
+            "保存失敗", new ConstraintViolationException("制約違反", new SQLException(), constraint));
+    // 店舗 FK は店舗集合（PlatformUser）の保存で、それ以外はユーザー行の保存で鳴る。
+    if (constraint.startsWith("fk_t_platform_user_stores")) {
+      when(repository.saveAndFlush(target)).thenReturn(target);
+      when(platformUserRepository.saveAndFlush(any())).thenThrow(violation);
+    } else {
+      when(repository.saveAndFlush(target)).thenThrow(violation);
+    }
     givenHqSideRoles();
     givenStaffManageRoles();
     givenRoleNames();

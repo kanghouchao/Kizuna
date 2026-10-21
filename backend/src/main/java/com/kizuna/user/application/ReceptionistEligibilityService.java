@@ -1,6 +1,7 @@
 package com.kizuna.user.application;
 
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -20,11 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ReceptionistEligibilityService {
   private final UserRepository userRepository;
+  private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
 
   public List<ReceptionistCandidate> listCandidates(Long storeId) {
     Set<Long> roleIds = roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
     // 他店舗・停止中・非 PLATFORM_USER を DB で除外し、無関係な利用者のロール集合を読み込まない。
+    // 店舗の授権は HQL 側で判定済みだが、真の条件は呼び出し側の述語が持つ（UserRepository の契約）。
     return userRepository
         .findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.PLATFORM_USER, storeId)
         .stream()
@@ -49,11 +52,14 @@ public class ReceptionistEligibilityService {
         .isPresent();
   }
 
-  // 受付資格は現在のアカウントと保持ロールで判断する。緊急昇格や JWT の権限は資格を与えない。
+  // 受付資格は現在のアカウント・保持ロール・店舗作用域で判断する。緊急昇格や JWT の権限は資格を与えない。
   private boolean isEligible(User user, Long storeId, Set<Long> roleIds) {
     return user.getUserType() == UserType.PLATFORM_USER
         && user.getEnabled()
-        && user.authorizes(storeId)
-        && !Collections.disjoint(user.getRoleIds(), roleIds);
+        && !Collections.disjoint(user.getRoleIds(), roleIds)
+        && platformUserRepository
+            .findByUserId(user.getId())
+            .filter(scope -> scope.authorizes(storeId))
+            .isPresent();
   }
 }

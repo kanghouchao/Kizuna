@@ -19,15 +19,12 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -74,7 +71,7 @@ public class CastInvitationAcceptanceService {
         invitation.getExpiresAt());
   }
 
-  /** 新規登録で受諾する。CAST・SPECIFIC_STORES{招待店舗} の身分を作成し、档案へ紐づけて招待を受諾済みにする。 */
+  /** 新規登録で受諾する。CAST の身分を作成し、档案へ紐づけて招待を受諾済みにする（所属は在籍が表し、店舗作用域は持たない）。 */
   @StoreScopeExempt(reason = TOKEN_IS_THE_BOUNDARY)
   @Transactional
   public CastAcceptanceResponse acceptAsNewUser(String token, CastInvitationAcceptRequest request) {
@@ -94,17 +91,12 @@ public class CastInvitationAcceptanceService {
                 .displayName(request.getDisplayName())
                 .enabled(true)
                 .userType(UserType.CAST)
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                .storeIds(Set.of(invitation.getStoreId()))
                 .build());
     link(cast, user.getId());
     return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
   }
 
-  /**
-   * 既存の CAST アカウントで受諾する。SPECIFIC_STORES は所属店舗集合に招待店舗を冪等 union し、ALL_STORES
-   * は全店アクセス権をそのまま保持する（降格しない）。 いずれも档案へ紐づけて招待を受諾済みにする。
-   */
+  /** 既存の CAST アカウントで受諾する。档案へ紐づけて招待を受諾済みにする（所属は在籍が表し、店舗作用域は書かない）。 */
   @StoreScopeExempt(reason = TOKEN_IS_THE_BOUNDARY)
   @Transactional
   public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
@@ -113,8 +105,7 @@ public class CastInvitationAcceptanceService {
     CastEnrollment cast = requireCastForUpdate(invitation.getCastId());
     claim(invitation);
 
-    // 身分は档案・招待の後に押さえる（順序は ADR 0016）。ロック取得後の新鮮な読み込みで storeIds の
-    // read-modify-write を直列化し、並行受諾の取りこぼしを防ぐ。非CAST・不在ユーザーの防御的拒否は
+    // 身分は档案・招待の後に押さえる（順序は ADR 0016）。非CAST・不在ユーザーの防御的拒否は
     // RuntimeException でトランザクションごとロールバックされ、招待は消費されない。
     User user =
         userRepository
@@ -127,15 +118,6 @@ public class CastInvitationAcceptanceService {
         .findIdsByUserIdAndStoreId(user.getId(), invitation.getStoreId())
         .isEmpty()) {
       throw new ConflictException("この店舗には既に有効な在籍があります");
-    }
-
-    // ALL_STORES は既に全店アクセス権を持つため、SPECIFIC_STORES へ降格させない（不変条件で storeIds は空）。
-    // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する（束・精算範囲は触らない — CAST は保持しない）。
-    if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES) {
-      Set<Long> storeIds = new HashSet<>(user.getStoreIds());
-      storeIds.add(invitation.getStoreId());
-      user.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
-      userRepository.save(user);
     }
     link(cast, user.getId());
     return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
@@ -187,7 +169,7 @@ public class CastInvitationAcceptanceService {
   /**
    * 受諾で書き換える档案を、招待行を押さえる前に押さえて引く。
    *
-   * <p>押さえる順序は ADR 0016 に従う。受諾は身分の所属店舗も書くので、その手前で店舗行も押さえてある （{@link
+   * <p>押さえる順序は ADR 0016 に従う。受諾は在籍行を書くので、その手前で店舗行も押さえてある （{@link
    * StoreRepository#lockAgainstDeletion}）。照会（{@link #view}）は書かないのでこの口を通らない。
    */
   private CastEnrollment requireCastForUpdate(String castId) {

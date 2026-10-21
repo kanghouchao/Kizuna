@@ -175,13 +175,19 @@ class NotificationPostgresTest {
             suffix + "-other.invalid");
     operatorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'通知担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'通知担当','PLATFORM_USER') returning id",
             Long.class,
             email);
+    jdbc.update(
+        "insert into t_platform_users(user_id,store_scope_type) values (?,'ALL_STORES')",
+        operatorId);
     serviceId =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type) values ('通知SERVICE','SERVICE','ALL_STORES') returning id",
+            "insert into t_users(display_name,user_type) values ('通知SERVICE','SERVICE') returning id",
             Long.class);
+    jdbc.update(
+        "insert into t_platform_users(user_id,store_scope_type) values (?,'ALL_STORES')",
+        serviceId);
     Long role =
         jdbc.queryForObject(
             "insert into t_roles(name,is_system) values (?,false) returning id",
@@ -675,8 +681,13 @@ class NotificationPostgresTest {
   @Test
   void serviceCandidatesRespectTaskPermissionsAndTargetStoreWithoutGrantingExecution() {
     var options = context.getBean(TaskOptions.class);
-    jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", serviceId);
-    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", serviceId, storeId);
+    jdbc.update(
+        "update t_platform_users set store_scope_type='SPECIFIC_STORES' where user_id=?",
+        serviceId);
+    jdbc.update(
+        "insert into t_platform_user_stores(platform_user_id,store_id) values ((select id from t_platform_users where user_id=?),?)",
+        serviceId,
+        storeId);
     assertThat(options.candidates("NOTIFICATION_DELIVER", storeId, 0, 100).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
         .contains(serviceId);

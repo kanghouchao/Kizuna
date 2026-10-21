@@ -14,8 +14,8 @@ public enum UserType {
   /**
    * ロールで授権される本人種別か。
    *
-   * <p>授権の述語（ロール授与の不変条件・authority の発行）専用であり、人のスタッフ管理面の対象判定には使えない — あちらは SERVICE を含めない
-   * PLATFORM_USER 限定である（サービスIDはスタッフのアカウント管理面に現れない）。
+   * <p>授権の述語（ロール授与の不変条件・authority の発行）専用であり、人のスタッフ管理面の対象判定には使えない — あちらは SERVICE を含めない PLATFORM_USER
+   * 限定である（サービスIDはスタッフのアカウント管理面に現れない）。
    */
   public boolean holdsRoles() {
     return this == PLATFORM_USER || this == SERVICE;

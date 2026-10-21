@@ -12,6 +12,8 @@ import com.kizuna.user.api.dto.ServiceIdentitySummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleServiceIdentityUpdateException;
@@ -52,6 +54,7 @@ public class ServiceIdentityService {
   private final BusinessAudit businessAudit;
   private final CredentialOperations credentialOperations;
   private final UserRepository repository;
+  private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
 
   @Transactional(readOnly = true)
@@ -62,15 +65,25 @@ public class ServiceIdentityService {
             identities.getContent().stream()
                 .flatMap(user -> user.getRoleIds().stream())
                 .collect(Collectors.toSet()));
+    Map<Long, PlatformUser> scopes =
+        platformUserRepository
+            .findByUserIdIn(identities.getContent().stream().map(User::getId).toList())
+            .stream()
+            .collect(Collectors.toMap(PlatformUser::getUserId, scope -> scope));
     return identities.map(
-        user ->
-            new ServiceIdentitySummaryResponse(
-                user.getId(),
-                user.getDisplayName(),
-                user.getEnabled(),
-                rolesOf(user, roleNames),
-                user.getStoreScopeType(),
-                new HashSet<>(user.getStoreIds())));
+        user -> {
+          PlatformUser scope = scopes.get(user.getId());
+          if (scope == null) {
+            throw new IllegalStateException("店舗作用域が存在しません: " + user.getId());
+          }
+          return new ServiceIdentitySummaryResponse(
+              user.getId(),
+              user.getDisplayName(),
+              user.getEnabled(),
+              rolesOf(user, roleNames),
+              scope.getStoreScopeType(),
+              new HashSet<>(scope.getStoreIds()));
+        });
   }
 
   /**
@@ -96,7 +109,7 @@ public class ServiceIdentityService {
   @Transactional(readOnly = true)
   public ServiceIdentityResponse get(Long id) {
     User user = requireServiceIdentity(id);
-    return toResponse(user, roleNamesOf(user.getRoleIds()));
+    return toResponse(user, requireScope(user), roleNamesOf(user.getRoleIds()));
   }
 
   @Transactional
@@ -108,18 +121,23 @@ public class ServiceIdentityService {
             .enabled(true)
             .userType(UserType.SERVICE)
             .roleIds(req.getRoleIds())
-            .storeScopeType(req.getStoreScopeType())
-            .storeIds(req.getStoreIds())
             .build();
     user = save(user);
+    PlatformUser scope =
+        saveScope(
+            PlatformUser.builder()
+                .user(user)
+                .storeScopeType(req.getStoreScopeType())
+                .storeIds(req.getStoreIds())
+                .build());
     businessAudit.recordCurrent(
         null,
         "SERVICE_ID_CREATED",
         "SERVICE_ID",
         user.getId().toString(),
         Map.of(),
-        BusinessAudit.grants(user));
-    return toResponse(user, roleNames);
+        BusinessAudit.grants(user, scope));
+    return toResponse(user, scope, roleNames);
   }
 
   /** 授権（ロール×店舗集合）だけを更新する。停止・再開は専用端点の領分で、この面は enabled を受け取らない。 */
@@ -132,18 +150,21 @@ public class ServiceIdentityService {
     if (!user.getVersion().equals(req.getVersion())) {
       throw new StaleServiceIdentityUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
-    var before = BusinessAudit.grants(user);
-    user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
+    PlatformUser scope = requireScope(user);
+    var before = BusinessAudit.grants(user, scope);
+    user.reassignRoles(req.getRoleIds());
+    scope.reassignStores(req.getStoreScopeType(), req.getStoreIds());
     user = save(user);
-    if (!before.equals(BusinessAudit.grants(user)))
+    scope = saveScope(scope);
+    if (!before.equals(BusinessAudit.grants(user, scope)))
       businessAudit.recordCurrent(
           null,
           "SERVICE_ID_GRANTS_CHANGED",
           "SERVICE_ID",
           user.getId().toString(),
           before,
-          BusinessAudit.grants(user));
-    return toResponse(user, roleNames);
+          BusinessAudit.grants(user, scope));
+    return toResponse(user, scope, roleNames);
   }
 
   /**
@@ -153,7 +174,8 @@ public class ServiceIdentityService {
   @Transactional
   public void suspend(Long id) {
     User user = requireServiceIdentityForUpdate(id);
-    var before = BusinessAudit.grants(user);
+    PlatformUser scope = requireScope(user);
+    var before = BusinessAudit.grants(user, scope);
     boolean wasEnabled = user.getEnabled();
     credentialOperations.stop(user);
     if (wasEnabled) {
@@ -164,7 +186,7 @@ public class ServiceIdentityService {
           "SERVICE_ID",
           user.getId().toString(),
           before,
-          BusinessAudit.grants(user));
+          BusinessAudit.grants(user, scope));
     }
   }
 
@@ -172,7 +194,8 @@ public class ServiceIdentityService {
   @Transactional
   public void resume(Long id) {
     User user = requireServiceIdentityForUpdate(id);
-    var before = BusinessAudit.grants(user);
+    PlatformUser scope = requireScope(user);
+    var before = BusinessAudit.grants(user, scope);
     if (!user.getEnabled()) {
       user.resume();
       repository.saveAndFlush(user);
@@ -182,7 +205,7 @@ public class ServiceIdentityService {
           "SERVICE_ID",
           user.getId().toString(),
           before,
-          BusinessAudit.grants(user));
+          BusinessAudit.grants(user, scope));
     }
   }
 
@@ -229,27 +252,40 @@ public class ServiceIdentityService {
   }
 
   /**
-   * 保存時の整合性違反を制約名で分類する。店舗 FK 違反（存在しない店舗 id）は店舗エラー、ロール FK 違反（requireCustomRoles 通過後の並行ロール削除）は
-   * ロール不存在エラーへ変換する（いずれも 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
+   * 保存時の整合性違反を制約名で分類する。ロール FK 違反（requireCustomRoles 通過後の並行ロール削除）は
+   * ロール不存在エラーへ変換する（400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
    */
   private User save(User user) {
     return IntegrityViolations.translateOnFailure(
         () -> repository.saveAndFlush(user),
-        Map.of(
-            DbConstraint.FK_T_USER_STORES_STORE,
-            () -> new InvalidStoreScopeException("指定された店舗が存在しません"),
-            DbConstraint.FK_T_USER_ROLES_ROLE,
-            () -> new ServiceException("指定されたロールが存在しません")));
+        Map.of(DbConstraint.FK_T_USER_ROLES_ROLE, () -> new ServiceException("指定されたロールが存在しません")));
   }
 
-  private static ServiceIdentityResponse toResponse(User user, Map<Long, String> roleNames) {
+  /** 店舗集合の保存。店舗 FK 違反（存在しない店舗 id）は店舗エラー（400）へ変換する。 */
+  private PlatformUser saveScope(PlatformUser scope) {
+    return IntegrityViolations.translateOnFailure(
+        () -> platformUserRepository.saveAndFlush(scope),
+        Map.of(
+            DbConstraint.FK_T_PLATFORM_USER_STORES_STORE,
+            () -> new InvalidStoreScopeException("指定された店舗が存在しません")));
+  }
+
+  /** 店舗作用域の行。ロールで授権される種別に行が無いのは不整合なので、大きく失敗させる。 */
+  private PlatformUser requireScope(User user) {
+    return platformUserRepository
+        .findByUserId(user.getId())
+        .orElseThrow(() -> new IllegalStateException("店舗作用域が存在しません: " + user.getId()));
+  }
+
+  private static ServiceIdentityResponse toResponse(
+      User user, PlatformUser scope, Map<Long, String> roleNames) {
     return new ServiceIdentityResponse(
         user.getId(),
         user.getDisplayName(),
         user.getEnabled(),
         rolesOf(user, roleNames),
-        user.getStoreScopeType(),
-        new HashSet<>(user.getStoreIds()),
+        scope.getStoreScopeType(),
+        new HashSet<>(scope.getStoreIds()),
         user.getVersion());
   }
 

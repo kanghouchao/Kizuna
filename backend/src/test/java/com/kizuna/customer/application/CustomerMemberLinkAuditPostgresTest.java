@@ -20,7 +20,6 @@ import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -499,7 +498,6 @@ class CustomerMemberLinkAuditPostgresTest {
               .userType(UserType.PLATFORM_USER)
               .enabled(true)
               .roleIds(Set.of(1L))
-              .storeScopeType(StoreScopeType.ALL_STORES)
               .build();
       actor.setId(9L);
       when(r.findByEmail(anyString())).thenReturn(Optional.of(actor));

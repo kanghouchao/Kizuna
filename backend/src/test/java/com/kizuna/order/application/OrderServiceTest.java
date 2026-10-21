@@ -85,6 +85,8 @@ import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ReceptionistEligibilityService;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -93,8 +95,10 @@ import com.kizuna.user.domain.UserType;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
@@ -145,10 +149,12 @@ class OrderServiceTest {
   @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   private final RoleRepository roleRepository = Mockito.mock(RoleRepository.class);
+  private final PlatformUserRepository platformUserRepository =
+      Mockito.mock(PlatformUserRepository.class);
 
   @Spy
   private ReceptionistEligibilityService receptionistEligibilityService =
-      new ReceptionistEligibilityService(userRepository, roleRepository);
+      new ReceptionistEligibilityService(userRepository, platformUserRepository, roleRepository);
 
   @Mock StoreContext storeContext;
   @Mock BusinessDateService businessDateService;
@@ -234,6 +240,21 @@ class OrderServiceTest {
   /** 受付担当ヘルパーが持つ既定ロール id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
   private static final long STAFF_ROLE_ID = 30L;
 
+  /** 受付担当ヘルパーが作った利用者 → 店舗作用域の行。id は後から差し替えられるので実体で引く。 */
+  private final Map<User, PlatformUser> receptionistScopes = new IdentityHashMap<>();
+
+  @BeforeEach
+  void stubReceptionistScopes() {
+    lenient()
+        .when(platformUserRepository.findByUserId(any()))
+        .thenAnswer(
+            invocation ->
+                receptionistScopes.entrySet().stream()
+                    .filter(e -> Objects.equals(e.getKey().getId(), invocation.getArgument(0)))
+                    .map(Map.Entry::getValue)
+                    .findFirst());
+  }
+
   @BeforeEach
   void stubReceptionistRole() {
     // 受付担当検証・受付候補一覧はいずれも「ORDER_MANAGE を含むロール id 集合」を照会する。happy path 用に
@@ -250,16 +271,23 @@ class OrderServiceTest {
   }
 
   private User receptionist(UserType userType, StoreScopeType scopeType, Set<Long> storeIds) {
-    return User.builder()
-        .email("receptionist@kizuna.test")
-        .password("pw")
-        .displayName("受付担当")
-        .enabled(true)
-        .userType(userType)
-        .roleIds(userType == UserType.PLATFORM_USER ? Set.of(STAFF_ROLE_ID) : Set.of())
-        .storeScopeType(scopeType)
-        .storeIds(storeIds)
-        .build();
+    User user =
+        User.builder()
+            .email("receptionist@kizuna.test")
+            .password("pw")
+            .displayName("受付担当")
+            .enabled(true)
+            .userType(userType)
+            .roleIds(userType == UserType.PLATFORM_USER ? Set.of(STAFF_ROLE_ID) : Set.of())
+            .build();
+    // 店舗作用域の行はロールで授権される種別だけが持つ（CAST は行を持たず、どの店舗も授権しない）。
+    if (userType.holdsRoles()) {
+      user.setId(1_000L + receptionistScopes.size());
+      receptionistScopes.put(
+          user,
+          PlatformUser.builder().user(user).storeScopeType(scopeType).storeIds(storeIds).build());
+    }
+    return user;
   }
 
   /** 現店舗(store_id=1)を授権し ORDER_MANAGE 権限を持つ受付担当者。 */
@@ -490,7 +518,8 @@ class OrderServiceTest {
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
     when(userRepository.findById(1L))
         .thenReturn(
-            Optional.of(receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+            Optional.of(
+                receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
@@ -549,8 +578,6 @@ class OrderServiceTest {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(31L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
             .build();
     when(userRepository.findById(1L)).thenReturn(Optional.of(staffWithoutOrderManage));
 
@@ -680,7 +707,8 @@ class OrderServiceTest {
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(userRepository.findByEmail(ACTOR_EMAIL))
         .thenReturn(
-            Optional.of(receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+            Optional.of(
+                receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
@@ -1007,7 +1035,8 @@ class OrderServiceTest {
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
     when(userRepository.findById(2L))
         .thenReturn(
-            Optional.of(receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+            Optional.of(
+                receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -1657,7 +1686,8 @@ class OrderServiceTest {
     stubBusinessDate();
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
-    User otherStoreActor = receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    User otherStoreActor =
+        receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
     otherStoreActor.setId(7L);
     when(userRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(otherStoreActor));
     stubOrderCreation();
@@ -2829,7 +2859,8 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     User first = staffAuthorizedForCurrentStore(10L, "あさひ");
     User second = staffAuthorizedForCurrentStore(11L, "ひかり");
-    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.PLATFORM_USER, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.PLATFORM_USER, STORE_ID))
         .thenReturn(List.of(first, second));
 
     List<OrderReceptionistResponse> result = service.listReceptionists();
@@ -2846,7 +2877,8 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     User disabled = staffAuthorizedForCurrentStore(10L, "停止済み");
     disabled.stop();
-    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.PLATFORM_USER, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.PLATFORM_USER, STORE_ID))
         .thenReturn(List.of(disabled));
 
     assertThat(service.listReceptionists()).isEmpty();
@@ -2855,9 +2887,11 @@ class OrderServiceTest {
   @Test
   void listReceptionistsExcludesStaffAuthorizedForDifferentStore() {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    User otherStore = receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    User otherStore =
+        receptionist(UserType.PLATFORM_USER, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
     otherStore.setId(10L);
-    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.PLATFORM_USER, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.PLATFORM_USER, STORE_ID))
         .thenReturn(List.of(otherStore));
 
     assertThat(service.listReceptionists()).isEmpty();
@@ -2868,7 +2902,8 @@ class OrderServiceTest {
     when(storeContext.getStoreId()).thenReturn(STORE_ID);
     User cast = receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of());
     cast.setId(10L);
-    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.PLATFORM_USER, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.PLATFORM_USER, STORE_ID))
         .thenReturn(List.of(cast));
 
     assertThat(service.listReceptionists()).isEmpty();
@@ -2910,11 +2945,10 @@ class OrderServiceTest {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(31L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
             .build();
     noPermission.setId(10L);
-    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.PLATFORM_USER, STORE_ID))
+    when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(
+            UserType.PLATFORM_USER, STORE_ID))
         .thenReturn(List.of(noPermission));
 
     assertThat(service.listReceptionists()).isEmpty();

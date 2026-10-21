@@ -10,10 +10,11 @@ import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleStaffUpdateException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -48,6 +49,7 @@ public class PlatformStaffService {
 
   private final BusinessAudit businessAudit;
   private final UserRepository repository;
+  private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
   private final PasswordEncoder passwordEncoder;
@@ -61,7 +63,8 @@ public class PlatformStaffService {
             .flatMap(user -> user.getRoleIds().stream())
             .collect(Collectors.toSet());
     Map<Long, String> roleNames = roleNamesOf(allRoleIds);
-    return staff.map(user -> toResponse(user, roleNames));
+    Map<Long, PlatformUser> scopes = scopesOf(staff.getContent());
+    return staff.map(user -> toResponse(user, requireScope(scopes, user), roleNames));
   }
 
   /**
@@ -85,12 +88,7 @@ public class PlatformStaffService {
                 cb.like(cb.lower(root.get("email")), pattern, escape)));
       }
       if (storeId != null) {
-        // 担当店舗集合は @ElementCollection のため、member of は Hibernate が相関副問い合わせ（exists）へ展開する。
-        // 親行を結合で増やさないので、ページングの件数・境界に影響しない。
-        predicates.add(
-            cb.or(
-                cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
-                cb.isMember(storeId, root.get("storeIds"))));
+        predicates.add(StoreAuthorization.authorizes(storeId).toPredicate(root, query, cb));
       }
       return cb.and(predicates.toArray(new Predicate[0]));
     };
@@ -111,25 +109,30 @@ public class PlatformStaffService {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(req.getRoleIds())
-            .storeScopeType(req.getStoreScopeType())
-            .storeIds(req.getStoreIds())
             .build();
     user = save(user);
+    PlatformUser scope =
+        saveScope(
+            PlatformUser.builder()
+                .user(user)
+                .storeScopeType(req.getStoreScopeType())
+                .storeIds(req.getStoreIds())
+                .build());
     businessAudit.recordCurrent(
         null,
         "PLATFORM_STAFF_CREATED",
         "USER_GRANTS",
         user.getId().toString(),
         Map.of(),
-        BusinessAudit.grants(user));
-    return toResponse(user, roleNames);
+        BusinessAudit.grants(user, scope));
+    return toResponse(user, scope, roleNames);
   }
 
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
   public PlatformStaffResponse get(Long id) {
     User user = requireManagedStaff(id, roleRepository.findHqRoleIds());
-    return toResponse(user, roleNamesOf(user.getRoleIds()));
+    return toResponse(user, requireScope(user), roleNamesOf(user.getRoleIds()));
   }
 
   /**
@@ -151,18 +154,21 @@ public class PlatformStaffService {
     if (user.getEnabled() && !req.getRoleIds().containsAll(user.getRoleIds())) {
       roleManageHolderGuard.requireAfterGrantChange(user, req.getRoleIds());
     }
-    var before = BusinessAudit.grants(user);
-    user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
+    PlatformUser scope = requireScope(user);
+    var before = BusinessAudit.grants(user, scope);
+    user.reassignRoles(req.getRoleIds());
+    scope.reassignStores(req.getStoreScopeType(), req.getStoreIds());
     user = save(user);
-    if (!before.equals(BusinessAudit.grants(user)))
+    scope = saveScope(scope);
+    if (!before.equals(BusinessAudit.grants(user, scope)))
       businessAudit.recordCurrent(
           null,
           "PLATFORM_STAFF_GRANTS_CHANGED",
           "USER_GRANTS",
           user.getId().toString(),
           before,
-          BusinessAudit.grants(user));
-    return toResponse(user, roleNames);
+          BusinessAudit.grants(user, scope));
+    return toResponse(user, scope, roleNames);
   }
 
   /**
@@ -204,8 +210,8 @@ public class PlatformStaffService {
   }
 
   /**
-   * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（存在しない店舗 id）は店舗エラー、ロール FK
-   * 違反（requireRoles 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
+   * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、ロール FK 違反（requireRoles
+   * 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
    */
   private User save(User user) {
     return IntegrityViolations.translateOnFailure(
@@ -213,13 +219,41 @@ public class PlatformStaffService {
         Map.of(
             DbConstraint.UQ_T_USERS_EMAIL,
             () -> new DuplicateStaffEmailException("このメールアドレスは既に登録されています"),
-            DbConstraint.FK_T_USER_STORES_STORE,
-            () -> new InvalidStoreScopeException("指定された店舗が存在しません"),
             DbConstraint.FK_T_USER_ROLES_ROLE,
             () -> new ServiceException("指定されたロールが存在しません")));
   }
 
-  private static PlatformStaffResponse toResponse(User user, Map<Long, String> roleNames) {
+  /** 店舗集合の保存。店舗 FK 違反（存在しない店舗 id）は店舗エラー（400）へ変換する。 */
+  private PlatformUser saveScope(PlatformUser scope) {
+    return IntegrityViolations.translateOnFailure(
+        () -> platformUserRepository.saveAndFlush(scope),
+        Map.of(
+            DbConstraint.FK_T_PLATFORM_USER_STORES_STORE,
+            () -> new InvalidStoreScopeException("指定された店舗が存在しません")));
+  }
+
+  /** 店舗作用域の行。ロールで授権される種別に行が無いのは不整合なので、大きく失敗させる。 */
+  private PlatformUser requireScope(User user) {
+    return platformUserRepository
+        .findByUserId(user.getId())
+        .orElseThrow(() -> new IllegalStateException("店舗作用域が存在しません: " + user.getId()));
+  }
+
+  private Map<Long, PlatformUser> scopesOf(List<User> users) {
+    return platformUserRepository.findByUserIdIn(users.stream().map(User::getId).toList()).stream()
+        .collect(Collectors.toMap(PlatformUser::getUserId, scope -> scope));
+  }
+
+  private static PlatformUser requireScope(Map<Long, PlatformUser> scopes, User user) {
+    PlatformUser scope = scopes.get(user.getId());
+    if (scope == null) {
+      throw new IllegalStateException("店舗作用域が存在しません: " + user.getId());
+    }
+    return scope;
+  }
+
+  private static PlatformStaffResponse toResponse(
+      User user, PlatformUser scope, Map<Long, String> roleNames) {
     List<PlatformStaffResponse.RoleRef> roles =
         user.getRoleIds().stream()
             .map(id -> new PlatformStaffResponse.RoleRef(id, roleNames.get(id)))
@@ -234,8 +268,8 @@ public class PlatformStaffService {
         user.getDisplayName(),
         user.getEnabled(),
         roles,
-        user.getStoreScopeType(),
-        new HashSet<>(user.getStoreIds()),
+        scope.getStoreScopeType(),
+        new HashSet<>(scope.getStoreIds()),
         user.getVersion());
   }
 }

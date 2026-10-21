@@ -25,7 +25,9 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeExecutor;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -45,7 +47,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @WebMvcTest(AttachmentController.class)
-@Import({AttachmentControllerTest.MethodSecurity.class, StoreContext.class, AppProperties.class})
+@Import({
+  AttachmentControllerTest.MethodSecurity.class,
+  StoreContext.class,
+  StoreScopeHolder.class,
+  AppProperties.class
+})
 class AttachmentControllerTest {
   @Test
   void exactOperationIncludesAllStatesOnlyBehindWritePermission() throws Exception {
@@ -125,6 +132,7 @@ class AttachmentControllerTest {
   @MockitoBean StoreScopeExecutor scope;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean StoreActivationService activation;
 
   private static RequestPostProcessor actor(SimpleGrantedAuthority... authorities) {

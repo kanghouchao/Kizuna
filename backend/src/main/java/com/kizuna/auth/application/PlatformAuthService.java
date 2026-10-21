@@ -11,11 +11,9 @@ import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -41,9 +39,10 @@ import org.springframework.transaction.annotation.Transactional;
  * DisabledException が投げられる（enabled 判定がパスワード照合に先行するため、無効化アカウントでのパスワード正誤オラクルを塞ぐ）。列挙耐性・タイミング均一化も
  * フレームワークの既定挙動が担う。いずれの例外も {@code AuthenticationException} 系のため 401 で応答される。
  *
- * <p>authorities の発行: ロールで授権される種別（PLATFORM_USER / SERVICE）は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER
- * は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
- * SERVICE は共通の発行守衛が拒否するため、この発行に到達しない。
+ * <p>authorities の発行: ロールで授権される種別（PLATFORM_USER / SERVICE）は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST /
+ * MEMBER は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER}
+ * のみを発行する。ロールの変更は次回ログインから反映される（会話中は失効しない既定挙動）。 店舗作用域（担当店舗集合）はトークンに載せず、要求ごとに DB
+ * から解決する（StoreScopeHolder）。 SERVICE は共通の発行守衛が拒否するため、この発行に到達しない。
  */
 @Service
 @RequiredArgsConstructor
@@ -79,6 +78,8 @@ public class PlatformAuthService {
   /**
    * 緊急昇格中の身分に対してトークンを発行する。基底の claim は通常発行と同一の組み立てを通し、昇格が変える点だけを 上書きする。期限は記録の {@code expiresAt}
    * をそのまま渡す — 別々に 60 分を数えると監査で復元した区間と実効区間が 食い違う。資格情報の版は現在値のまま据え置き、撤回で版が進めば昇格トークンも同時に失効する（ADR 0022）。
+   *
+   * <p>対象店舗はトークンに載せない。{@code elevationId} だけを錨として載せ、要求ごとの解決器が発動記録を照合して対象店舗を作用域にする — 撤回も次の要求から効く。
    */
   @Transactional(readOnly = true)
   public Token issueElevatedTokenFor(User user, EmergencyElevation elevation) {
@@ -86,10 +87,6 @@ public class PlatformAuthService {
     Map<String, Object> claims = baseClaims(user, permissions);
     claims.put("authorities", elevatedAuthorities(user, permissions));
     claims.put("storeBridge", true);
-    claims.put("storeScopeType", StoreScopeType.SPECIFIC_STORES.name());
-    claims.put("storeIds", List.of(elevation.getTargetStoreId()));
-    // 昇格中の操作を発動記録へ結び付けるための錨。今は誰も検証しないが、この claim が無いと
-    // 昇格中に何をしたかを後から記録へ辿れない。
     claims.put("elevationId", elevation.getId());
     return jwtIssuer.issue(user.getEmail(), claims, elevation.getExpiresAt().toInstant());
   }
@@ -111,8 +108,6 @@ public class PlatformAuthService {
     // 店舗文脈（X-Store-ID）を確立できるか。STORE コンソール権限の保持者のみ true（SHARED は含めない —
     // HQ の跨店参照は店舗文脈を確立せず、僭称ヘッダは従来どおり 403）。StoreIdInterceptor が消費する。
     claims.put("storeBridge", hasStoreConsole(permissions));
-    claims.put("storeScopeType", user.getStoreScopeType().name());
-    claims.put("storeIds", new ArrayList<>(user.getStoreIds()));
     // 発行時点の資格情報の版。検証時に現在の版と相等比較され、パスワード変更・再設定・停止で
     // 即時に不一致となる（ADR 0022）。
     claims.put("credentialVersion", user.getCredentialVersion());
@@ -177,8 +172,6 @@ public class PlatformAuthService {
         permissions.stream().map(Enum::name).sorted().toList(),
         consoleOf(user, permissions),
         hasStoreConsole(permissions),
-        user.getStoreScopeType().name(),
-        user.getStoreIds().stream().sorted().toList(),
         user.getLineUserId() != null);
   }
 
@@ -203,7 +196,8 @@ public class PlatformAuthService {
 
   private static List<String> buildAuthorities(User user, Set<PermissionCode> permissions) {
     return switch (user.getUserType()) {
-      case PLATFORM_USER, SERVICE -> permissions.stream().map(PermissionCode::authority).sorted().toList();
+      case PLATFORM_USER, SERVICE ->
+          permissions.stream().map(PermissionCode::authority).sorted().toList();
       case CAST -> List.of("ROLE_CAST");
       case MEMBER -> List.of("ROLE_MEMBER");
     };

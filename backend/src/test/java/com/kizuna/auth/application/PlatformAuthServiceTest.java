@@ -101,8 +101,6 @@ class PlatformAuthServiceTest {
         .enabled(true)
         .userType(UserType.PLATFORM_USER)
         .roleIds(Set.of(HQ_ROLE_ID))
-        .storeScopeType(StoreScopeType.ALL_STORES)
-        .storeIds(Set.of())
         .build();
   }
 
@@ -128,8 +126,6 @@ class PlatformAuthServiceTest {
         .enabled(true)
         .userType(UserType.PLATFORM_USER)
         .roleIds(Set.of(STORE_ROLE_ID))
-        .storeScopeType(scopeType)
-        .storeIds(scopeType == StoreScopeType.ALL_STORES ? Set.of() : Set.of(1L))
         .build();
   }
 
@@ -161,8 +157,8 @@ class PlatformAuthServiceTest {
     // HQ 束の STORE_VIEW は SHARED なので店舗文脈は確立できない（ADR 0021 の撤退）。
     assertThat(claims.get("storeBridge")).isEqualTo(false);
     assertThat(claims).doesNotContainKey("role");
-    assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
-    assertThat(claims.get("storeIds")).isEqualTo(List.of());
+    // 店舗作用域はトークンに載せない（要求ごとに DB から解決する）。
+    assertThat(claims).doesNotContainKeys("storeScopeType", "storeIds");
     // 発行時点の資格情報の版が claim に載る（ADR 0022 — 検証側が相等比較する前提値）。
     assertThat(claims.get("credentialVersion")).isEqualTo(0L);
   }
@@ -183,8 +179,7 @@ class PlatformAuthServiceTest {
     List<String> authorities = (List<String>) claims.get("authorities");
     assertThat(authorities).isEqualTo(List.of("PERM_ORDER_MANAGE", "PERM_STORE_VIEW"));
     assertThat(claims.get("storeBridge")).isEqualTo(true);
-    assertThat(claims.get("storeScopeType")).isEqualTo("SPECIFIC_STORES");
-    assertThat(claims.get("storeIds")).isEqualTo(List.of(1L));
+    assertThat(claims).doesNotContainKeys("storeScopeType", "storeIds");
   }
 
   @Test
@@ -227,8 +222,6 @@ class PlatformAuthServiceTest {
             .displayName("キャスト")
             .enabled(true)
             .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
             .build();
     stubSuccessfulAuthentication("cast@kizuna.test", "pass", cast);
     when(jwtIssuer.issue(eq("cast@kizuna.test"), any())).thenReturn(new Token("t", 1L));
@@ -300,9 +293,8 @@ class PlatformAuthServiceTest {
     assertThat(authorities).contains("PERM_STORE_MANAGE", "PERM_ROLE_MANAGE");
     assertThat(authorities).isSorted().doesNotHaveDuplicates();
     assertThat(claims.get("storeBridge")).isEqualTo(true);
-    // ALL_STORES の HQ 管理者でも、昇格中の作用域は宛先の 1 店舗へ絞られる。
-    assertThat(claims.get("storeScopeType")).isEqualTo("SPECIFIC_STORES");
-    assertThat(claims.get("storeIds")).isEqualTo(List.of(42L));
+    // 対象店舗はトークンに載せず、昇格記録の id だけを錨として載せる（作用域は要求ごとに記録を照合して解決する）。
+    assertThat(claims).doesNotContainKeys("storeScopeType", "storeIds");
     assertThat(claims.get("elevationId")).isEqualTo(99L);
     // 版は据え置き — 昇格トークンも通常のセッションと同じ失効機構に載る（撤回で同時に失効する）。
     assertThat(claims.get("credentialVersion")).isEqualTo(0L);
@@ -340,7 +332,6 @@ class PlatformAuthServiceTest {
     // 昇格固有の claim は通常発行には現れない（組み立てが共有でも上書きは昇格経路だけの責務）。
     assertThat(claims).doesNotContainKey("elevationId");
     assertThat(claims.get("storeBridge")).isEqualTo(false);
-    assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
   }
 
   @Test
@@ -413,8 +404,6 @@ class PlatformAuthServiceTest {
             .displayName("キャスト")
             .enabled(true)
             .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
             .build();
     when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(cast));
 

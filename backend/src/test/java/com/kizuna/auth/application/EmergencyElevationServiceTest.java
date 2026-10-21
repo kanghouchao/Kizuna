@@ -23,7 +23,6 @@ import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
 import com.kizuna.user.domain.EmergencyElevationView;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -71,8 +70,6 @@ class EmergencyElevationServiceTest {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(10L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
             .build();
     user.setId(id);
     return user;

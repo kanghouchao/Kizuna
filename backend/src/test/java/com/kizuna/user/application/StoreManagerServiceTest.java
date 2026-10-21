@@ -2,6 +2,8 @@ package com.kizuna.user.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +15,8 @@ import com.kizuna.user.api.dto.StoreManagerAppointRequest;
 import com.kizuna.user.api.dto.StoreManagerResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -20,9 +24,14 @@ import com.kizuna.user.domain.SystemRole;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,6 +82,39 @@ class StoreManagerServiceTest {
 
   @Captor private ArgumentCaptor<User> userCaptor;
 
+  @Mock private PlatformUserRepository platformUserRepository;
+
+  @Captor private ArgumentCaptor<PlatformUser> scopeCaptor;
+
+  /** id → 店舗作用域の行。{@link #scope} が登録し、下の既定スタブが引く。 */
+  private final Map<Long, PlatformUser> scopes = new HashMap<>();
+
+  @BeforeEach
+  void stubScopeLookups() {
+    lenient()
+        .when(platformUserRepository.findByUserId(any()))
+        .thenAnswer(invocation -> Optional.ofNullable(scopes.get(invocation.<Long>getArgument(0))));
+    lenient()
+        .when(platformUserRepository.findByUserIdIn(any()))
+        .thenAnswer(
+            invocation ->
+                invocation.<Collection<Long>>getArgument(0).stream()
+                    .map(scopes::get)
+                    .filter(Objects::nonNull)
+                    .toList());
+    lenient()
+        .when(platformUserRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
+
+  /** 保存済みユーザーに店舗作用域の行を結ぶ。 */
+  private PlatformUser scope(User user, StoreScopeType scopeType, Set<Long> storeIds) {
+    PlatformUser scope =
+        PlatformUser.builder().user(user).storeScopeType(scopeType).storeIds(storeIds).build();
+    scopes.put(user.getId(), scope);
+    return scope;
+  }
+
   private void givenStore() {
     when(storeExistenceCheck.exists(STORE)).thenReturn(true);
   }
@@ -111,11 +153,10 @@ class StoreManagerServiceTest {
             .enabled(enabled)
             .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
-            .storeScopeType(scopeType)
-            .storeIds(storeIds)
             .build();
     user.setId(id);
     ReflectionTestUtils.setField(user, "version", 0L);
+    scope(user, scopeType, storeIds);
     return user;
   }
 
@@ -194,7 +235,8 @@ class StoreManagerServiceTest {
     assertThat(userCaptor.getValue().getRoleIds())
         .as("既存のロールは残したまま店長ロールを足すこと")
         .containsExactlyInAnyOrder(CLERK_ROLE, MANAGER_ROLE);
-    assertThat(userCaptor.getValue().getStoreIds())
+    verify(platformUserRepository).saveAndFlush(scopeCaptor.capture());
+    assertThat(scopeCaptor.getValue().getStoreIds())
         .as("既存の担当店舗は残したまま当該店舗を足すこと")
         .containsExactlyInAnyOrder(STORE, OTHER_STORE);
   }
@@ -211,8 +253,8 @@ class StoreManagerServiceTest {
 
     service.appoint(STORE, appointExisting(5L));
 
-    verify(repository).saveAndFlush(userCaptor.capture());
-    assertThat(userCaptor.getValue().getStoreIds()).containsExactlyInAnyOrder(STORE, OTHER_STORE);
+    verify(platformUserRepository).saveAndFlush(scopeCaptor.capture());
+    assertThat(scopeCaptor.getValue().getStoreIds()).containsExactlyInAnyOrder(STORE, OTHER_STORE);
   }
 
   @Test
@@ -326,8 +368,11 @@ class StoreManagerServiceTest {
     User created = userCaptor.getValue();
     assertThat(created.getUserType()).isEqualTo(UserType.PLATFORM_USER);
     assertThat(created.getRoleIds()).containsExactly(MANAGER_ROLE);
-    assertThat(created.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(created.getStoreIds()).containsExactly(STORE);
+    verify(platformUserRepository).saveAndFlush(scopeCaptor.capture());
+    assertThat(scopeCaptor.getValue().getUserId()).isEqualTo(100L);
+    assertThat(scopeCaptor.getValue().getStoreScopeType())
+        .isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(scopeCaptor.getValue().getStoreIds()).containsExactly(STORE);
     assertThat(created.getEnabled()).isTrue();
     assertThat(created.getPassword()).as("素のパスワードを保存しないこと").isEqualTo("hash");
   }
@@ -372,15 +417,13 @@ class StoreManagerServiceTest {
             StoreScopeType.SPECIFIC_STORES,
             Set.of(STORE, OTHER_STORE),
             true));
-    givenSaveEchoes();
 
     service.dismiss(STORE, 5L);
 
-    verify(repository).saveAndFlush(userCaptor.capture());
-    assertThat(userCaptor.getValue().getStoreIds()).containsExactly(OTHER_STORE);
-    assertThat(userCaptor.getValue().getRoleIds())
-        .as("外積のためロールを剥がすと他店の店長職まで消える — 解任は店舗集合しか触らないこと")
-        .containsExactly(MANAGER_ROLE);
+    verify(platformUserRepository).saveAndFlush(scopeCaptor.capture());
+    assertThat(scopeCaptor.getValue().getStoreIds()).containsExactly(OTHER_STORE);
+    verify(repository, never()).saveAndFlush(ArgumentMatchers.any());
+    assertThat(scopes.get(5L).getStoreIds()).containsExactly(OTHER_STORE);
   }
 
   @Test
@@ -439,8 +482,9 @@ class StoreManagerServiceTest {
     assertThat(demoted.getRoleIds())
         .as("店長ロールだけを店舗スタッフロールへ入れ替え、他のロールは保持すること")
         .containsExactlyInAnyOrder(STAFF_ROLE, CLERK_ROLE);
-    assertThat(demoted.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(demoted.getStoreIds()).as("担当店舗集合には触れないこと").containsExactly(STORE);
+    assertThat(scopes.get(5L).getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(scopes.get(5L).getStoreIds()).as("担当店舗集合には触れないこと").containsExactly(STORE);
+    verify(platformUserRepository, never()).saveAndFlush(ArgumentMatchers.any());
   }
 
   @Test
@@ -457,8 +501,8 @@ class StoreManagerServiceTest {
     verify(repository).saveAndFlush(userCaptor.capture());
     User demoted = userCaptor.getValue();
     assertThat(demoted.getRoleIds()).containsExactly(STAFF_ROLE);
-    assertThat(demoted.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
-    assertThat(demoted.getStoreIds()).isEmpty();
+    assertThat(scopes.get(5L).getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
+    assertThat(scopes.get(5L).getStoreIds()).isEmpty();
   }
 
   // 降格は担当店舗を一切動かさないので、複数店を担当する店長を降ろすと無関係な店舗の職位まで落ちる。

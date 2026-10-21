@@ -10,6 +10,8 @@ import com.kizuna.user.api.dto.StoreManagerCandidateResponse;
 import com.kizuna.user.api.dto.StoreManagerResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -62,6 +64,7 @@ public class StoreManagerService {
 
   private final BusinessAudit businessAudit;
   private final UserRepository repository;
+  private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
   private final StoreExistenceCheck storeExistenceCheck;
@@ -132,26 +135,32 @@ public class StoreManagerService {
         repository
             .findByIdForUpdate(userId)
             .orElseThrow(() -> new ServiceException("このアカウントは店長に任命できません"));
-    if (user.getRoleIds().contains(managerRoleId) && user.authorizes(storeId)) {
+    PlatformUser scope =
+        platformUserRepository
+            .findByUserId(user.getId())
+            .orElseThrow(() -> new ServiceException("このアカウントは店長に任命できません"));
+    if (user.getRoleIds().contains(managerRoleId) && scope.authorizes(storeId)) {
       throw new ServiceException("このアカウントは既にこの店舗の店長です");
     }
-    if (!isCandidate(user, roleRepository.findHqRoleIds())) {
+    if (!isCandidate(user, scope, roleRepository.findHqRoleIds())) {
       throw new ServiceException("このアカウントは店長に任命できません");
     }
-    var before = BusinessAudit.grants(user);
+    var before = BusinessAudit.grants(user, scope);
     Set<Long> roleIds = new HashSet<>(user.getRoleIds());
     roleIds.add(managerRoleId);
-    Set<Long> storeIds = new HashSet<>(user.getStoreIds());
+    Set<Long> storeIds = new HashSet<>(scope.getStoreIds());
     storeIds.add(storeId);
-    user.reassignGrants(roleIds, StoreScopeType.SPECIFIC_STORES, storeIds);
+    user.reassignRoles(roleIds);
+    scope.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
     user = save(user);
+    scope = saveScope(scope);
     businessAudit.recordCurrent(
         storeId,
         "STORE_MANAGER_APPOINTED",
         "USER_GRANTS",
         user.getId().toString(),
         before,
-        BusinessAudit.grants(user));
+        BusinessAudit.grants(user, scope));
     return toResponse(user);
   }
 
@@ -171,17 +180,22 @@ public class StoreManagerService {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(managerRoleId))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(storeId))
             .build();
     user = save(user);
+    PlatformUser scope =
+        saveScope(
+            PlatformUser.builder()
+                .user(user)
+                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeIds(Set.of(storeId))
+                .build());
     businessAudit.recordCurrent(
         storeId,
         "STORE_MANAGER_CREATED",
         "USER_GRANTS",
         user.getId().toString(),
         Map.of(),
-        BusinessAudit.grants(user));
+        BusinessAudit.grants(user, scope));
     return toResponse(user);
   }
 
@@ -194,24 +208,25 @@ public class StoreManagerService {
   public void dismiss(Long storeId, Long userId) {
     requireStore(storeId);
     User user = requireManagerOf(storeId, userId, requireStoreManagerRole().getId());
-    if (user.getStoreScopeType() == StoreScopeType.ALL_STORES) {
+    PlatformUser scope = requireScope(user);
+    if (scope.getStoreScopeType() == StoreScopeType.ALL_STORES) {
       throw new InvalidStoreScopeException("全店舗を担当しているため解任できません。" + DISMISSAL_ALTERNATIVES);
     }
-    if (user.getStoreIds().size() == 1) {
+    if (scope.getStoreIds().size() == 1) {
       throw new InvalidStoreScopeException("最後の担当店舗のため解任できません。" + DISMISSAL_ALTERNATIVES);
     }
-    var before = BusinessAudit.grants(user);
-    Set<Long> storeIds = new HashSet<>(user.getStoreIds());
+    var before = BusinessAudit.grants(user, scope);
+    Set<Long> storeIds = new HashSet<>(scope.getStoreIds());
     storeIds.remove(storeId);
-    user.reassignGrants(user.getRoleIds(), StoreScopeType.SPECIFIC_STORES, storeIds);
-    user = save(user);
+    scope.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
+    scope = saveScope(scope);
     businessAudit.recordCurrent(
         storeId,
         "STORE_MANAGER_DISMISSED",
         "USER_GRANTS",
         user.getId().toString(),
         before,
-        BusinessAudit.grants(user));
+        BusinessAudit.grants(user, scope));
   }
 
   /**
@@ -226,15 +241,16 @@ public class StoreManagerService {
     requireStore(storeId);
     Long managerRoleId = requireStoreManagerRole().getId();
     User user = requireManagerOf(storeId, userId, managerRoleId);
-    if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
-        && user.getStoreIds().size() > 1) {
+    PlatformUser scope = requireScope(user);
+    if (scope.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
+        && scope.getStoreIds().size() > 1) {
       throw new InvalidStoreScopeException("複数の店舗を担当しているため降格できません。この店舗の店長から外すには解任してください");
     }
-    var before = BusinessAudit.grants(user);
+    var before = BusinessAudit.grants(user, scope);
     Set<Long> roleIds = new HashSet<>(user.getRoleIds());
     roleIds.remove(managerRoleId);
     roleIds.add(requireStoreStaffRole().getId());
-    user.reassignGrants(roleIds, user.getStoreScopeType(), user.getStoreIds());
+    user.reassignRoles(roleIds);
     user = save(user);
     businessAudit.recordCurrent(
         storeId,
@@ -242,7 +258,7 @@ public class StoreManagerService {
         "USER_GRANTS",
         user.getId().toString(),
         before,
-        BusinessAudit.grants(user));
+        BusinessAudit.grants(user, scope));
   }
 
   /** 解任・降格が指す対象。両者で同一の述語・同一の例外にするのは、片方だけ緩むと「この店舗の店長か」を隠している 述語から他人のアカウントの在否が漏れるためである。 */
@@ -251,8 +267,20 @@ public class StoreManagerService {
         .findByIdForUpdate(userId)
         .filter(target -> target.getUserType() == UserType.PLATFORM_USER)
         .filter(target -> target.getRoleIds().contains(managerRoleId))
-        .filter(target -> target.authorizes(storeId))
+        .filter(
+            target ->
+                platformUserRepository
+                    .findByUserId(target.getId())
+                    .filter(scope -> scope.authorizes(storeId))
+                    .isPresent())
         .orElseThrow(() -> new NotFoundException("この店舗の店長が見つかりません: " + userId));
+  }
+
+  /** 店舗作用域の行。ロールで授権される種別に行が無いのは不整合なので、大きく失敗させる。 */
+  private PlatformUser requireScope(User user) {
+    return platformUserRepository
+        .findByUserId(user.getId())
+        .orElseThrow(() -> new IllegalStateException("店舗作用域が存在しません: " + user.getId()));
   }
 
   /** 店長の導出条件。任命記録を持たないので、ロールの保持と担当範囲の 2 条件がそのまま述語になる。 */
@@ -261,9 +289,7 @@ public class StoreManagerService {
         cb.and(
             cb.equal(root.get("userType"), UserType.PLATFORM_USER),
             cb.isMember(managerRoleId, root.<Set<Long>>get("roleIds")),
-            cb.or(
-                cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
-                cb.isMember(storeId, root.get("storeIds"))));
+            StoreAuthorization.authorizes(storeId).toPredicate(root, query, cb));
   }
 
   /**
@@ -278,14 +304,14 @@ public class StoreManagerService {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.PLATFORM_USER));
       predicates.add(cb.isTrue(root.get("enabled")));
-      predicates.add(cb.equal(root.get("storeScopeType"), StoreScopeType.SPECIFIC_STORES));
+      predicates.add(StoreAuthorization.specificStores().toPredicate(root, query, cb));
       predicates.add(new HqRoleMembership(hqRoleIds).nonHolders().toPredicate(root, query, cb));
       // 既にこの店舗の店長である者だけを外す。他店の店長は候補に残す（任命でこの店舗が担当へ加わる）。
       predicates.add(
           cb.not(
               cb.and(
                   cb.isMember(managerRoleId, root.<Set<Long>>get("roleIds")),
-                  cb.isMember(storeId, root.<Set<Long>>get("storeIds")))));
+                  StoreAuthorization.authorizes(storeId).toPredicate(root, query, cb))));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
@@ -299,10 +325,10 @@ public class StoreManagerService {
   }
 
   /** 候補の母集団に属するか（「既にこの店舗の店長でない」は呼出側が先に判定する）。 */
-  private static boolean isCandidate(User user, Set<Long> hqRoleIds) {
+  private static boolean isCandidate(User user, PlatformUser scope, Set<Long> hqRoleIds) {
     return user.getUserType() == UserType.PLATFORM_USER
         && Boolean.TRUE.equals(user.getEnabled())
-        && user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
+        && scope.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
         && !new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds());
   }
 
@@ -332,16 +358,22 @@ public class StoreManagerService {
   }
 
   /**
-   * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（事前検証と保存の間に
-   * 店舗が消えるレース）は店舗エラーへ変換する（いずれも 400）。ロール FK は既定ロールが削除不能なので写像を持たない。
+   * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラーへ変換する（400）。 ロール FK は既定ロールが削除不能なので写像を持たない。
    */
   private User save(User user) {
     return IntegrityViolations.translateOnFailure(
         () -> repository.saveAndFlush(user),
         Map.of(
             DbConstraint.UQ_T_USERS_EMAIL,
-            () -> new DuplicateStaffEmailException("このメールアドレスは既に登録されています"),
-            DbConstraint.FK_T_USER_STORES_STORE,
+            () -> new DuplicateStaffEmailException("このメールアドレスは既に登録されています")));
+  }
+
+  /** 店舗集合の保存。店舗 FK 違反（事前検証と保存の間に店舗が消えるレース）は店舗エラー（400）へ変換する。 */
+  private PlatformUser saveScope(PlatformUser scope) {
+    return IntegrityViolations.translateOnFailure(
+        () -> platformUserRepository.saveAndFlush(scope),
+        Map.of(
+            DbConstraint.FK_T_PLATFORM_USER_STORES_STORE,
             () -> new InvalidStoreScopeException("指定された店舗が存在しません")));
   }
 

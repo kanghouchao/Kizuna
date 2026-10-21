@@ -4,7 +4,7 @@ databaseChangeLog:
       author: kanghouchao
       # 授権モデル「ロール × 権限」の基座（RBAC）。権限目録はコード定義（PermissionCode enum）を
       # t_permissions へ播種したものが正本で、書き込み API を持たない。ロールは平台既定（is_system）と
-      # 利用者自作の 2 種で、担当店舗集合はロールではなくユーザー側（t_user_stores）が持つ。
+      # 利用者自作の 2 種で、担当店舗集合はロールではなく平台ユーザー側（t_platform_user_stores）が持つ。
       preConditions:
         - dbms:
             type: postgresql

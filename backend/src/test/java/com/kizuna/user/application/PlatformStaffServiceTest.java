@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -20,6 +21,8 @@ import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleStaffUpdateException;
@@ -28,10 +31,15 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -79,6 +87,39 @@ class PlatformStaffServiceTest {
 
   @Captor private ArgumentCaptor<User> userCaptor;
 
+  @Mock private PlatformUserRepository platformUserRepository;
+
+  @Captor private ArgumentCaptor<PlatformUser> scopeCaptor;
+
+  /** id → 店舗作用域の行。{@link #scope} が登録し、下の既定スタブが引く。 */
+  private final Map<Long, PlatformUser> scopes = new HashMap<>();
+
+  @BeforeEach
+  void stubScopeLookups() {
+    lenient()
+        .when(platformUserRepository.findByUserId(any()))
+        .thenAnswer(invocation -> Optional.ofNullable(scopes.get(invocation.<Long>getArgument(0))));
+    lenient()
+        .when(platformUserRepository.findByUserIdIn(any()))
+        .thenAnswer(
+            invocation ->
+                invocation.<Collection<Long>>getArgument(0).stream()
+                    .map(scopes::get)
+                    .filter(Objects::nonNull)
+                    .toList());
+    lenient()
+        .when(platformUserRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
+
+  /** 保存済みユーザーに店舗作用域の行を結ぶ。 */
+  private PlatformUser scope(User user, StoreScopeType scopeType, Set<Long> storeIds) {
+    PlatformUser scope =
+        PlatformUser.builder().user(user).storeScopeType(scopeType).storeIds(storeIds).build();
+    scopes.put(user.getId(), scope);
+    return scope;
+  }
+
   /** HQ 側ロールの解決を差し込む。既定では HQ_ROLE と ROLE_MANAGE_ROLE だけが HQ 側。 */
   private void givenHqSideRoles() {
     when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE, ROLE_MANAGE_ROLE));
@@ -100,12 +141,11 @@ class PlatformStaffServiceTest {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
-            .storeScopeType(scopeType)
-            .storeIds(storeIds)
             .build();
     user.setId(id);
     // 永続化済みエンティティを模す（DB の version 列は 0 で初期化される）。
     ReflectionTestUtils.setField(user, "version", 0L);
+    scope(user, scopeType, storeIds);
     return user;
   }
 
@@ -117,8 +157,6 @@ class PlatformStaffServiceTest {
             .displayName("キャスト")
             .enabled(true)
             .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
             .build();
     user.setId(id);
     return user;
@@ -210,9 +248,13 @@ class PlatformStaffServiceTest {
     assertThat(saved.getEnabled()).isTrue();
     assertThat(saved.getUserType()).isEqualTo(UserType.PLATFORM_USER);
     assertThat(saved.getRoleIds()).containsExactly(HQ_ROLE);
-    assertThat(saved.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(saved.getStoreIds()).containsExactly(1L);
+    verify(platformUserRepository).saveAndFlush(scopeCaptor.capture());
+    assertThat(scopeCaptor.getValue().getUserId()).isEqualTo(9L);
+    assertThat(scopeCaptor.getValue().getStoreScopeType())
+        .isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(scopeCaptor.getValue().getStoreIds()).containsExactly(1L);
     assertThat(res.id()).isEqualTo(9L);
+    assertThat(res.storeIds()).containsExactly(1L);
     assertThat(res.roles()).containsExactly(new PlatformStaffResponse.RoleRef(HQ_ROLE, "HQ管理者"));
     assertThat(res.enabled()).isTrue();
     assertThat(res.version()).as("作成応答も version を持つこと").isZero();
@@ -265,13 +307,20 @@ class PlatformStaffServiceTest {
     when(repository.findByEmail("fk@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
     when(repository.saveAndFlush(any()))
+        .thenAnswer(
+            invocation -> {
+              User saved = invocation.getArgument(0);
+              saved.setId(9L);
+              return saved;
+            });
+    when(platformUserRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
                 new ConstraintViolationException(
                     "save failed",
                     new SQLException("insert or update violates foreign key constraint"),
-                    "fk_t_user_stores_store")));
+                    "fk_t_platform_user_stores_store")));
 
     assertThatThrownBy(() -> service.create(req)).isInstanceOf(InvalidStoreScopeException.class);
   }
@@ -383,8 +432,9 @@ class PlatformStaffServiceTest {
                 Set.of(HQ_ROLE, MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)));
 
     assertThat(existing.getRoleIds()).containsExactlyInAnyOrder(HQ_ROLE, MANAGER_ROLE);
-    assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(existing.getStoreIds()).containsExactly(1L);
+    assertThat(scopes.get(3L).getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(scopes.get(3L).getStoreIds()).containsExactly(1L);
+    assertThat(res.storeIds()).containsExactly(1L);
     assertThat(res.id()).isEqualTo(3L);
     assertThat(res.roles())
         .containsExactly(
@@ -468,14 +518,15 @@ class PlatformStaffServiceTest {
     givenHqSideRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
     when(repository.findById(7L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing))
+    when(repository.saveAndFlush(existing)).thenReturn(existing);
+    when(platformUserRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
                 new ConstraintViolationException(
                     "save failed",
                     new SQLException("insert or update violates foreign key constraint"),
-                    "fk_t_user_stores_store")));
+                    "fk_t_platform_user_stores_store")));
 
     assertThatThrownBy(
             () ->

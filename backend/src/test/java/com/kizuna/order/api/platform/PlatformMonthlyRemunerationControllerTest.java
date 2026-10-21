@@ -1,5 +1,6 @@
 package com.kizuna.order.api.platform;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_SELF;
@@ -16,12 +17,16 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,7 +56,8 @@ import org.springframework.transaction.PlatformTransactionManager;
   PlatformMonthlyRemunerationControllerTest.MethodSecurityConfig.class,
   PlatformMonthlyRemunerationService.class,
   PlatformMonthlyRemunerationStores.class,
-  StoreContext.class
+  StoreContext.class,
+  StoreScopeHolder.class
 })
 class PlatformMonthlyRemunerationControllerTest {
   @TestConfiguration
@@ -70,12 +76,17 @@ class PlatformMonthlyRemunerationControllerTest {
   @MockitoBean private RemunerationQuery query;
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
   private TypedQuery<String> names;
+
+  /** 行使者の授権店舗集合。要求ごとの解決器を模し、各テストが差し替える。 */
+  private StoreScope currentScope = new StoreScope(false, Set.of(1L));
 
   @BeforeEach
   @SuppressWarnings("unchecked")
   void data() {
+    when(storeScopeResolver.resolve(any())).thenAnswer(ignored -> currentScope);
     names = mock(TypedQuery.class, RETURNS_SELF);
     when(entityManager.createQuery(anyString(), eq(String.class))).thenReturn(names);
     when(names.getResultStream()).thenAnswer(ignored -> Stream.of("店舗名"));
@@ -83,12 +94,7 @@ class PlatformMonthlyRemunerationControllerTest {
 
   private MockHttpServletRequestBuilder request(String suffix) {
     return get("/platform/monthly-remunerations" + suffix)
-        .with(
-            jwt()
-                .jwt(
-                    j ->
-                        j.claim("storeScopeType", "SPECIFIC_STORES").claim("storeIds", List.of(1L)))
-                .authorities(new SimpleGrantedAuthority("PERM_ORDER_SET_MANAGE")));
+        .with(jwt().authorities(new SimpleGrantedAuthority("PERM_ORDER_SET_MANAGE")));
   }
 
   @ParameterizedTest
@@ -141,10 +147,9 @@ class PlatformMonthlyRemunerationControllerTest {
   @Test
   @DisplayName("授権作用域が解決不能なら候補一覧を拒否する")
   void unresolvedScope() throws Exception {
-    mvc.perform(
-            request("/stores")
-                .with(jwt().authorities(new SimpleGrantedAuthority("PERM_ORDER_SET_MANAGE"))))
-        .andExpect(status().isForbidden());
+    // 店舗作用域の行を持たない主体（CAST / MEMBER 等）は解決器が null を返し、fail-closed に拒まれる。
+    currentScope = null;
+    mvc.perform(request("/stores")).andExpect(status().isForbidden());
   }
 
   @Test
@@ -199,13 +204,11 @@ class PlatformMonthlyRemunerationControllerTest {
     when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(count);
     when(rows.getResultList()).thenReturn(List.of(row));
     when(count.getSingleResult()).thenReturn(1L);
-    mvc.perform(
-            request("/stores")
-                .with(
-                    jwt()
-                        .jwt(j -> j.claim("storeScopeType", scope).claim("storeIds", List.of(1L)))
-                        .authorities(new SimpleGrantedAuthority("PERM_ORDER_SET_MANAGE")))
-                .param("search", search))
+    currentScope =
+        "ALL_STORES".equals(scope)
+            ? new StoreScope(true, Set.of())
+            : new StoreScope(false, Set.of(1L));
+    mvc.perform(request("/stores").param("search", search))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].store_id").value(1))
         .andExpect(jsonPath("$.content[0].store_name").value("店舗名"))

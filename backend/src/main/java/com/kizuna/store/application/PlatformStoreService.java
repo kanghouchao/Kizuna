@@ -1,6 +1,7 @@
 package com.kizuna.store.application;
 
 import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.api.dto.PlatformStoreResponse;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -9,12 +10,11 @@ import java.util.List;
 import java.util.stream.StreamSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 平台 principal（授権店舗集合）の店舗一覧ユースケース（統一ログイン）。 StoreScope を解決できない場合は fail-closed に {@link
+ * 平台 principal（授権店舗集合）の店舗一覧ユースケース（統一ログイン）。保持器から授権店舗集合を解決できない場合は fail-closed に {@link
  * AccessDeniedException} を投げる。
  */
 @Service
@@ -22,12 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlatformStoreService {
 
   private final StoreRepository storeRepository;
+  private final StoreScopeHolder storeScopeHolder;
 
   /** 授権店舗を id 昇順で返す。ALL_STORES は全店、SPECIFIC_STORES は授権集合のみ。 */
   @Transactional(readOnly = true)
   public List<PlatformStoreResponse> listAuthorizedStores() {
-    StoreScope scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+    StoreScope scope = storeScopeHolder.current();
     if (scope == null) {
       throw new AccessDeniedException("授権店舗集合を解決できません");
     }

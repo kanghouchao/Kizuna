@@ -9,8 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +28,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** 指名候補の出勤参照が会員本人にだけ開いていることの単体テスト。 */
 @WebMvcTest(PlatformShiftController.class)
-@Import({PlatformShiftControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  PlatformShiftControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class PlatformShiftControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -44,6 +50,7 @@ class PlatformShiftControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
 
   @Test

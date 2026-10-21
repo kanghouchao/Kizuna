@@ -94,7 +94,8 @@ class PointExpiryPostgresTest {
     operator =
         new AuditActor(
             jdbc.queryForObject(
-                "select id from t_users where user_type='STAFF' order by id limit 1", Long.class),
+                "select id from t_users where user_type='PLATFORM_USER' order by id limit 1",
+                Long.class),
             "PLATFORM_USER",
             "検証担当");
   }
@@ -103,8 +104,9 @@ class PointExpiryPostgresTest {
   void prepare() {
     jdbc.update("delete from t_point_usage_allocations");
     jdbc.update("delete from t_point_entries");
+    jdbc.update("update t_users set enabled=true where id=?", serviceId);
     jdbc.update(
-        "update t_users set enabled=true, store_scope_type='ALL_STORES' where id=?", serviceId);
+        "update t_platform_users set store_scope_type='ALL_STORES' where user_id=?", serviceId);
     jdbc.update(
         "insert into t_user_roles(user_id,role_id) values (?,?) on conflict do nothing",
         serviceId,
@@ -379,14 +381,15 @@ class PointExpiryPostgresTest {
                           second
                               .getBean(JdbcTemplate.class)
                               .update(
-                                  "update t_users set store_scope_type='SPECIFIC_STORES' where id=?",
+                                  "update t_platform_users set store_scope_type='SPECIFIC_STORES' where user_id=?",
                                   serviceId);
                           identities.requireService(serviceId, PermissionCode.POINT_EXPIRE, null);
                         }))
         .isInstanceOf(AccessDeniedException.class);
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(command()))
         .isInstanceOf(AccessDeniedException.class);
-    jdbc.update("update t_users set store_scope_type='ALL_STORES' where id=?", serviceId);
+    jdbc.update(
+        "update t_platform_users set store_scope_type='ALL_STORES' where user_id=?", serviceId);
     jdbc.update("delete from t_user_roles where user_id=? and role_id=?", serviceId, expiryRole);
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(command()))
         .isInstanceOf(AccessDeniedException.class);
@@ -421,7 +424,7 @@ class PointExpiryPostgresTest {
                                   "update t_users set enabled=false where id=?", serviceId);
                           case "scope" ->
                               external.update(
-                                  "update t_users set store_scope_type='SPECIFIC_STORES' where id=?",
+                                  "update t_platform_users set store_scope_type='SPECIFIC_STORES' where user_id=?",
                                   serviceId);
                           case "role" ->
                               external.update(
@@ -436,8 +439,9 @@ class PointExpiryPostgresTest {
                         identities.requireService(serviceId, PermissionCode.POINT_EXPIRE, null);
                       }))
           .isInstanceOf(AccessDeniedException.class);
+      external.update("update t_users set enabled=true where id=?", serviceId);
       external.update(
-          "update t_users set enabled=true, store_scope_type='ALL_STORES' where id=?", serviceId);
+          "update t_platform_users set store_scope_type='ALL_STORES' where user_id=?", serviceId);
       external.update(
           "insert into t_user_roles(user_id,role_id) values (?,?) on conflict do nothing",
           serviceId,
@@ -520,7 +524,8 @@ class PointExpiryPostgresTest {
   void manualExecutionAndRetryRequireCurrentStaffPermissionAndRejectForgedActorType() {
     var executor = first.getBean(TaskExecutor.class);
     var request = command();
-    assertThatThrownBy(() -> executor.execute(request, new AuditActor(serviceId, "PLATFORM_USER", "偽装")))
+    assertThatThrownBy(
+            () -> executor.execute(request, new AuditActor(serviceId, "PLATFORM_USER", "偽装")))
         .isInstanceOf(AccessDeniedException.class);
     jdbc.update(
         "delete from t_user_roles where user_id=? and role_id=?", operator.id(), expiryRole);
@@ -645,7 +650,7 @@ class PointExpiryPostgresTest {
     String key = UUID.randomUUID().toString();
     long user =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type,email,password) values ('検証会員','MEMBER','SPECIFIC_STORES',?,?) returning id",
+            "insert into t_users(display_name,user_type,email,password) values ('検証会員','MEMBER',?,?) returning id",
             Long.class,
             key + "@example.test",
             HASH);
@@ -672,9 +677,11 @@ class PointExpiryPostgresTest {
   private long service(String name, long... roles) {
     long id =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type) values (?,'SERVICE','ALL_STORES') returning id",
+            "insert into t_users(display_name,user_type) values (?,'SERVICE') returning id",
             Long.class,
             name);
+    jdbc.update(
+        "insert into t_platform_users(user_id,store_scope_type) values (?,'ALL_STORES')", id);
     for (long role : roles)
       jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", id, role);
     return id;

@@ -12,7 +12,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.config.RedisConfig;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.CredentialOperations;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -190,10 +189,6 @@ class CredentialRevocationPostgresTest {
                         type == UserType.PLATFORM_USER
                             ? Set.of(jdbc.queryForObject("select min(id) from t_roles", Long.class))
                             : Set.of())
-                    .storeScopeType(
-                        type == UserType.MEMBER
-                            ? StoreScopeType.SPECIFIC_STORES
-                            : StoreScopeType.ALL_STORES)
                     .build()));
   }
 

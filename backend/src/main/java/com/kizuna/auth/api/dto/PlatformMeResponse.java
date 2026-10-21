@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * GET /platform/me の応答。JSON キーは Jackson 設定により snake_case（display_name / user_type / store_bridge /
- * store_scope_type / store_ids）。
+ * line_linked）。店舗作用域（担当店舗集合）は載せない — トークンにも載せず要求ごとに解決する値で、前端は授権店舗一覧を 別端点から取る。
  *
  * <p>{@code permissions} は保持ロールの権限並集（enum 名の昇順）。{@code console} はログイン後の着地先（platform / store /
  * none）で、権限目録から導出する — フロントエンドに権限→コンソールの対応表を複製させない。
@@ -22,6 +22,4 @@ public record PlatformMeResponse(
     List<String> permissions,
     String console,
     boolean storeBridge,
-    String storeScopeType,
-    List<Long> storeIds,
     boolean lineLinked) {}

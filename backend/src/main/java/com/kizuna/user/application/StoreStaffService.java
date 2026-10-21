@@ -6,6 +6,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.StoreStaffCreateRequest;
 import com.kizuna.user.api.dto.StoreStaffResponse;
@@ -14,6 +15,8 @@ import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
@@ -37,7 +40,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,7 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 店舗スタッフの授権管理ユースケース。対象は本人種別 PLATFORM_USER のうち店舗側ロールしか持たない者に限る — HQ 側ロールを 1 つでも持つ者は管理者管理（ROLE_MANAGE
  * 門）が扱い、この面には在否すら出さない（ADR 0020）。
  *
- * <p>行使者の担当店舗集合は JWT から、対象の現況は DB から取る。User は StoreScopedEntity ではないため storeFilter
+ * <p>行使者の担当店舗集合は要求ごとに解決された保持器から、対象の現況は DB から取る。User は StoreScopedEntity ではないため storeFilter
  * / @StoreSetScoped（ADR 0002）の機構は乗らず、店舗境界は本クラスの明示検証が唯一の担保である。
  *
  * <p>防提権守衛（ADR 0020）: G1 付与できるのは店舗側ロールかつ委譲権限（STORE_STAFF_MANAGE）を含まないもの、G2 対象の店舗集合 ⊆ 行使者の担当店舗集合、G3
@@ -68,10 +70,12 @@ public class StoreStaffService {
 
   private final BusinessAudit businessAudit;
   private final UserRepository repository;
+  private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
   private final CredentialOperations credentialOperations;
   private final StoreContext storeContext;
+  private final StoreScopeHolder storeScopeHolder;
 
   @Transactional(readOnly = true)
   public Page<StoreStaffResponse> list(String search, Pageable pageable) {
@@ -85,7 +89,9 @@ public class StoreStaffService {
                 .collect(Collectors.toSet()));
     Set<Long> delegationRoleIds = delegationRoleIds();
     StoreScope scope = actorScope();
-    return staff.map(user -> toResponse(user, roleNames, delegationRoleIds, scope));
+    Map<Long, PlatformUser> scopes = scopesOf(staff.getContent());
+    return staff.map(
+        user -> toResponse(user, requireScope(scopes, user), roleNames, delegationRoleIds, scope));
   }
 
   /**
@@ -100,10 +106,7 @@ public class StoreStaffService {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.PLATFORM_USER));
       predicates.add(new HqRoleMembership(hqRoleIds).nonHolders().toPredicate(root, query, cb));
-      predicates.add(
-          cb.or(
-              cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
-              cb.isMember(storeId, root.get("storeIds"))));
+      predicates.add(StoreAuthorization.authorizes(storeId).toPredicate(root, query, cb));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
@@ -120,7 +123,12 @@ public class StoreStaffService {
   @Transactional(readOnly = true)
   public StoreStaffResponse get(Long id) {
     User user = requireManagedStaff(id, roleRepository.findHqRoleIds());
-    return toResponse(user, roleNamesOf(user.getRoleIds()), delegationRoleIds(), actorScope());
+    return toResponse(
+        user,
+        requireScope(user),
+        roleNamesOf(user.getRoleIds()),
+        delegationRoleIds(),
+        actorScope());
   }
 
   @Transactional
@@ -142,18 +150,23 @@ public class StoreStaffService {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(req.getRoleIds())
-            .storeScopeType(req.getStoreScopeType())
-            .storeIds(req.getStoreIds())
             .build();
     user = save(user);
+    PlatformUser target =
+        saveScope(
+            PlatformUser.builder()
+                .user(user)
+                .storeScopeType(req.getStoreScopeType())
+                .storeIds(req.getStoreIds())
+                .build());
     businessAudit.recordCurrent(
         null,
         "STORE_STAFF_CREATED",
         "USER_GRANTS",
         user.getId().toString(),
         Map.of(),
-        BusinessAudit.grants(user));
-    return toResponse(user, roleNames, delegationRoleIds, scope);
+        BusinessAudit.grants(user, target));
+    return toResponse(user, target, roleNames, delegationRoleIds, scope);
   }
 
   @Transactional
@@ -162,7 +175,8 @@ public class StoreStaffService {
     User user = requireManagedStaff(id, hqRoleIds);
     Set<Long> delegationRoleIds = delegationRoleIds();
     StoreScope scope = actorScope();
-    if (!editableBy(user, delegationRoleIds, scope)) {
+    PlatformUser target = requireScope(user);
+    if (!editableBy(user, target, delegationRoleIds, scope)) {
       throw new StaffOutOfDelegationScopeException("このアカウントを編集する権限がありません");
     }
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
@@ -176,8 +190,9 @@ public class StoreStaffService {
     requireStoreConsoleReach(req.getRoleIds(), roleRepository.findStoreConsoleRoleIds());
     requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), scope);
     Map<Long, String> roleNames = requireRoles(req.getRoleIds());
-    var before = BusinessAudit.grants(user);
-    user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
+    var before = BusinessAudit.grants(user, target);
+    user.reassignRoles(req.getRoleIds());
+    target.reassignStores(req.getStoreScopeType(), req.getStoreIds());
     if (Boolean.FALSE.equals(req.getEnabled())) {
       credentialOperations.stop(user);
     }
@@ -185,15 +200,16 @@ public class StoreStaffService {
       user.resume();
     }
     user = save(user);
-    if (!before.equals(BusinessAudit.grants(user)))
+    target = saveScope(target);
+    if (!before.equals(BusinessAudit.grants(user, target)))
       businessAudit.recordCurrent(
           null,
           "STORE_STAFF_GRANTS_CHANGED",
           "USER_GRANTS",
           user.getId().toString(),
           before,
-          BusinessAudit.grants(user));
-    return toResponse(user, roleNames, delegationRoleIds, scope);
+          BusinessAudit.grants(user, target));
+    return toResponse(user, target, roleNames, delegationRoleIds, scope);
   }
 
   /** 行使者が付与できるロールの目録。防提権述語（店舗側ロールであること・委譲権限を含まないこと）をサーバ側の単源に置き、 前端に判定を複製させないための読み口である。 */
@@ -226,7 +242,12 @@ public class StoreStaffService {
         .findById(id)
         .filter(user -> user.getUserType() == UserType.PLATFORM_USER)
         .filter(user -> !new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds()))
-        .filter(user -> user.authorizes(contextStoreId))
+        .filter(
+            user ->
+                platformUserRepository
+                    .findByUserId(user.getId())
+                    .filter(scope -> scope.authorizes(contextStoreId))
+                    .isPresent())
         .orElseThrow(() -> new NotFoundException("スタッフが見つかりません: " + id));
   }
 
@@ -273,11 +294,12 @@ public class StoreStaffService {
    * G3: 編集・停止できる対象か。委譲権限の実効保持者（店長等）は同僚として一覧には出すが、停止は事実上の解任なので触らせない。 現在の店舗集合が行使者の集合に収まることも要求する —
    * さもないと、担当外の店を含むアカウントは「その店を落とす」形でしか 保存できず、善意の編集が他店の授権を壊す。
    */
-  private static boolean editableBy(User user, Set<Long> delegationRoleIds, StoreScope actorScope) {
+  private static boolean editableBy(
+      User user, PlatformUser target, Set<Long> delegationRoleIds, StoreScope actorScope) {
     if (holdsAny(user.getRoleIds(), delegationRoleIds)) {
       return false;
     }
-    return withinScope(user.getStoreScopeType(), user.getStoreIds(), actorScope);
+    return withinScope(target.getStoreScopeType(), target.getStoreIds(), actorScope);
   }
 
   /** 店舗集合の包含判定。ALL_STORES の対象を扱えるのは ALL_STORES の行使者だけ（部分集合の自然な帰結）。 */
@@ -293,9 +315,8 @@ public class StoreStaffService {
   }
 
   /** 行使者の担当店舗集合。解決できない要求は fail-closed に拒む（店舗境界の唯一の担保がこれである以上、既定で通してはならない）。 */
-  private static StoreScope actorScope() {
-    StoreScope scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+  private StoreScope actorScope() {
+    StoreScope scope = storeScopeHolder.current();
     if (scope == null) {
       throw new AccessDeniedException("授権店舗集合を解決できません");
     }
@@ -321,8 +342,8 @@ public class StoreStaffService {
   }
 
   /**
-   * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（存在しない店舗 id）は店舗エラー、ロール FK
-   * 違反（requireRoles 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。
+   * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、ロール FK 違反（requireRoles
+   * 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。
    */
   private User save(User user) {
     return IntegrityViolations.translateOnFailure(
@@ -330,14 +351,45 @@ public class StoreStaffService {
         Map.of(
             DbConstraint.UQ_T_USERS_EMAIL,
             () -> new DuplicateStaffEmailException("このメールアドレスは既に登録されています"),
-            DbConstraint.FK_T_USER_STORES_STORE,
-            () -> new InvalidStoreScopeException("指定された店舗が存在しません"),
             DbConstraint.FK_T_USER_ROLES_ROLE,
             () -> new ServiceException("指定されたロールが存在しません")));
   }
 
+  /** 店舗集合の保存。店舗 FK 違反（存在しない店舗 id）は店舗エラー（400）へ変換する。 */
+  private PlatformUser saveScope(PlatformUser scope) {
+    return IntegrityViolations.translateOnFailure(
+        () -> platformUserRepository.saveAndFlush(scope),
+        Map.of(
+            DbConstraint.FK_T_PLATFORM_USER_STORES_STORE,
+            () -> new InvalidStoreScopeException("指定された店舗が存在しません")));
+  }
+
+  /** 店舗作用域の行。ロールで授権される種別に行が無いのは不整合なので、大きく失敗させる。 */
+  private PlatformUser requireScope(User user) {
+    return platformUserRepository
+        .findByUserId(user.getId())
+        .orElseThrow(() -> new IllegalStateException("店舗作用域が存在しません: " + user.getId()));
+  }
+
+  private Map<Long, PlatformUser> scopesOf(List<User> users) {
+    return platformUserRepository.findByUserIdIn(users.stream().map(User::getId).toList()).stream()
+        .collect(Collectors.toMap(PlatformUser::getUserId, scope -> scope));
+  }
+
+  private static PlatformUser requireScope(Map<Long, PlatformUser> scopes, User user) {
+    PlatformUser scope = scopes.get(user.getId());
+    if (scope == null) {
+      throw new IllegalStateException("店舗作用域が存在しません: " + user.getId());
+    }
+    return scope;
+  }
+
   private static StoreStaffResponse toResponse(
-      User user, Map<Long, String> roleNames, Set<Long> delegationRoleIds, StoreScope actorScope) {
+      User user,
+      PlatformUser target,
+      Map<Long, String> roleNames,
+      Set<Long> delegationRoleIds,
+      StoreScope actorScope) {
     List<StoreStaffResponse.RoleRef> roles =
         user.getRoleIds().stream()
             .map(id -> new StoreStaffResponse.RoleRef(id, roleNames.get(id)))
@@ -352,9 +404,9 @@ public class StoreStaffService {
         user.getDisplayName(),
         user.getEnabled(),
         roles,
-        user.getStoreScopeType(),
-        new HashSet<>(user.getStoreIds()),
+        target.getStoreScopeType(),
+        new HashSet<>(target.getStoreIds()),
         user.getVersion(),
-        editableBy(user, delegationRoleIds, actorScope));
+        editableBy(user, target, delegationRoleIds, actorScope));
   }
 }

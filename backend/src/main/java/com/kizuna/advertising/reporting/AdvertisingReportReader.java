@@ -3,13 +3,12 @@ package com.kizuna.advertising.reporting;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdvertisingReportReader {
   private final EntityManager em;
   private final StoreContext context;
+  private final StoreScopeHolder storeScopeHolder;
 
   public record Cost(
       Long storeId,
@@ -33,8 +33,7 @@ public class AdvertisingReportReader {
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
   public AdvertisingReportFacts read(
       boolean platform, List<Long> stores, String from, String to, int limit) {
-    var scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+    var scope = storeScopeHolder.current();
     for (var store : stores)
       if (platform
           ? scope == null || !scope.authorizes(store)

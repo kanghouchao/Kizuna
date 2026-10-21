@@ -23,7 +23,6 @@ import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -86,7 +85,6 @@ class CastFieldAuditTest {
             .displayName("監査担当")
             .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .build();
     actor.setId(9L);
     when(users.findByEmail("operator@example.test")).thenReturn(Optional.of(actor));

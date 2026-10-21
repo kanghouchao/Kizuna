@@ -21,7 +21,6 @@ import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -155,7 +154,6 @@ class CastAuditPostgresTest {
                         .userType(UserType.PLATFORM_USER)
                         .enabled(true)
                         .roleIds(Set.of(1L))
-                        .storeScopeType(StoreScopeType.ALL_STORES)
                         .build())
                 .getId());
   }

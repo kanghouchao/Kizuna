@@ -7,12 +7,10 @@ import com.kizuna.member.api.dto.MemberHomeResponse;
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,8 +35,6 @@ class MemberSelfServiceTest {
             .displayName("会員 花子")
             .enabled(true)
             .userType(UserType.MEMBER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of())
             .build();
     user.setId(id);
     return user;

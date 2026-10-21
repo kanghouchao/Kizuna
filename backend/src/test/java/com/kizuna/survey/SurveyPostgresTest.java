@@ -133,9 +133,11 @@ class SurveyPostgresTest {
             suffix + "-other.invalid");
     actorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'受付担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'受付担当','PLATFORM_USER') returning id",
             Long.class,
             email);
+    jdbc.update(
+        "insert into t_platform_users(user_id,store_scope_type) values (?,'ALL_STORES')", actorId);
     roleId =
         jdbc.queryForObject(
             "insert into t_roles(name,is_system) values (?,false) returning id",
@@ -397,7 +399,8 @@ class SurveyPostgresTest {
   void emergencyElevationMustStillMatchCurrentActorStoreTimeAndStatusBeforeReplay()
       throws Exception {
     jdbc.update("delete from t_user_roles where user_id=?", actorId);
-    jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", actorId);
+    jdbc.update(
+        "update t_platform_users set store_scope_type='SPECIFIC_STORES' where user_id=?", actorId);
     read("/store/surveys", 403);
     Long elevation =
         jdbc.queryForObject(
@@ -436,7 +439,8 @@ class SurveyPostgresTest {
         elevation);
     read(base, 403);
     jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", actorId, roleId);
-    jdbc.update("update t_users set store_scope_type='ALL_STORES' where id=?", actorId);
+    jdbc.update(
+        "update t_platform_users set store_scope_type='ALL_STORES' where user_id=?", actorId);
     read(base, 403);
   }
 

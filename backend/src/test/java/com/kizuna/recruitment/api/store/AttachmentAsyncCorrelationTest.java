@@ -15,11 +15,13 @@ import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeExecutor;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.RequestCorrelationFilter;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
-import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,8 +45,10 @@ class AttachmentAsyncCorrelationTest {
     var receiver = mock(AttachmentBodyReceiver.class);
     var admission = mock(AttachmentBodyReceiver.Admission.class);
     var store = new StoreContext();
-    var scope = new StoreScopeExecutor(store, id -> true);
-    var controller = new AttachmentController(service, receiver, store, scope, new AppProperties());
+    var holder = new StoreScopeHolder();
+    var scope = new StoreScopeExecutor(store, holder, id -> true);
+    var controller =
+        new AttachmentController(service, receiver, store, scope, holder, new AppProperties());
     var filter = new RequestCorrelationFilter(store);
     var receivedId = new AtomicReference<String>();
     var storedId = new AtomicReference<String>();
@@ -66,16 +70,12 @@ class AttachmentAsyncCorrelationTest {
                   true,
                   new AttachmentSummaryResponse("image", "image/png", 3, OffsetDateTime.now()));
             });
-    var jwt =
-        Jwt.withTokenValue("synthetic")
-            .header("alg", "none")
-            .subject("actor")
-            .claim("storeScopeType", "SPECIFIC_STORES")
-            .claim("storeIds", List.of(1L))
-            .build();
+    var jwt = Jwt.withTokenValue("synthetic").header("alg", "none").subject("actor").build();
     try (var worker = Executors.newSingleThreadExecutor()) {
       for (int attempt = 0; attempt < 2; attempt++) {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+        // 要求スレッドで解決済みの作用域。作業スレッドへ運ばれなければ runInStore が fail-closed に拒む。
+        holder.install(() -> new StoreScope(false, Set.of(1L)));
         var task = new AtomicReference<WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>>>();
         var request = new MockHttpServletRequest();
         var response = new MockHttpServletResponse();
@@ -108,14 +108,17 @@ class AttachmentAsyncCorrelationTest {
         assertThat(worker.submit(() -> ThreadContext.getImmutableContext()).get())
             .doesNotContainKeys("requestId", "storeId");
         assertThat(worker.submit(store::hasStoreId).get()).isFalse();
+        assertThat(worker.submit(holder::current).get()).as("作業スレッドの作用域は作業後に消えていること").isNull();
         assertThat(
                 worker.submit(() -> SecurityContextHolder.getContext().getAuthentication()).get())
             .isNull();
+        holder.clear();
       }
     } finally {
       SecurityContextHolder.clearContext();
       ThreadContext.clearAll();
       store.clear();
+      holder.clear();
     }
   }
 }

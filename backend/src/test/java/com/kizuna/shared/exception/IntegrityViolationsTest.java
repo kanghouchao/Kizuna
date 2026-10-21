@@ -105,7 +105,8 @@ class IntegrityViolationsTest {
   void selectsMappingOfTheViolatedConstraintOnly() {
     DataIntegrityViolationException ex =
         new DataIntegrityViolationException(
-            "save failed", hibernateViolation(DbConstraint.FK_T_USER_STORES_STORE.sqlName()));
+            "save failed",
+            hibernateViolation(DbConstraint.FK_T_PLATFORM_USER_STORES_STORE.sqlName()));
 
     RuntimeException translated =
         IntegrityViolations.translate(
@@ -113,7 +114,7 @@ class IntegrityViolationsTest {
             Map.of(
                 DbConstraint.UQ_T_USERS_EMAIL,
                 () -> new ConflictException("メール重複"),
-                DbConstraint.FK_T_USER_STORES_STORE,
+                DbConstraint.FK_T_PLATFORM_USER_STORES_STORE,
                 () -> new ServiceException("店舗が存在しません")));
 
     assertThat(translated).isInstanceOf(ServiceException.class).hasMessage("店舗が存在しません");

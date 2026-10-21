@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -14,6 +15,8 @@ import com.kizuna.user.api.dto.StaffAccountRoleRef;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
@@ -22,13 +25,20 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -70,6 +80,39 @@ class PlatformStaffAccountServiceTest {
 
   @InjectMocks private PlatformStaffAccountService service;
 
+  @Mock private PlatformUserRepository platformUserRepository;
+
+  @Captor private ArgumentCaptor<PlatformUser> scopeCaptor;
+
+  /** id → 店舗作用域の行。{@link #scope} が登録し、下の既定スタブが引く。 */
+  private final Map<Long, PlatformUser> scopes = new HashMap<>();
+
+  @BeforeEach
+  void stubScopeLookups() {
+    lenient()
+        .when(platformUserRepository.findByUserId(any()))
+        .thenAnswer(invocation -> Optional.ofNullable(scopes.get(invocation.<Long>getArgument(0))));
+    lenient()
+        .when(platformUserRepository.findByUserIdIn(any()))
+        .thenAnswer(
+            invocation ->
+                invocation.<Collection<Long>>getArgument(0).stream()
+                    .map(scopes::get)
+                    .filter(Objects::nonNull)
+                    .toList());
+    lenient()
+        .when(platformUserRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
+
+  /** 保存済みユーザーに店舗作用域の行を結ぶ。 */
+  private PlatformUser scope(User user, StoreScopeType scopeType, Set<Long> storeIds) {
+    PlatformUser scope =
+        PlatformUser.builder().user(user).storeScopeType(scopeType).storeIds(storeIds).build();
+    scopes.put(user.getId(), scope);
+    return scope;
+  }
+
   private Role role(long id, String name) {
     Role role = Role.builder().name(name).permissionIds(Set.of(1L)).build();
     role.setId(id);
@@ -85,10 +128,9 @@ class PlatformStaffAccountServiceTest {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
             .build();
     user.setId(id);
+    scope(user, StoreScopeType.ALL_STORES, Set.of());
     return user;
   }
 
@@ -100,8 +142,6 @@ class PlatformStaffAccountServiceTest {
             .displayName("キャスト")
             .enabled(true)
             .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
             .build();
     user.setId(id);
     return user;

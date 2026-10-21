@@ -10,6 +10,8 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -32,13 +34,20 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 class ReviewActorsTest {
   private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-10-07T00:00:00Z");
   private final UserRepository users = mock(UserRepository.class);
+  private final PlatformUserRepository platformUsers = mock(PlatformUserRepository.class);
   private final RoleRepository roles = mock(RoleRepository.class);
   private final StoreContext store = mock(StoreContext.class);
   private final EmergencyElevationRepository elevations = mock(EmergencyElevationRepository.class);
   private final User user = mock(User.class);
+  private final PlatformUser scope = mock(PlatformUser.class);
   private final ReviewActors actors =
       new ReviewActors(
-          users, roles, store, elevations, Clock.fixed(NOW.toInstant(), ZoneOffset.UTC));
+          users,
+          platformUsers,
+          roles,
+          store,
+          elevations,
+          Clock.fixed(NOW.toInstant(), ZoneOffset.UTC));
 
   @BeforeEach
   void setup() {
@@ -61,7 +70,8 @@ class ReviewActorsTest {
   @Test
   void ordinaryAccessRequiresCurrentStoreViewAndOperationGrants() {
     denied();
-    when(user.authorizes(2L)).thenReturn(true);
+    when(platformUsers.findByUserId(1L)).thenReturn(Optional.of(scope));
+    when(scope.authorizes(2L)).thenReturn(true);
     denied();
     when(roles.findIdsByPermissionCode("REVIEW_VIEW")).thenReturn(Set.of(3L));
     denied();
@@ -95,7 +105,8 @@ class ReviewActorsTest {
 
   @Test
   void expiredRevokedFutureAndForeignElevationsFailBeforeNormalGrantFallback() {
-    when(user.authorizes(2L)).thenReturn(true);
+    when(platformUsers.findByUserId(1L)).thenReturn(Optional.of(scope));
+    when(scope.authorizes(2L)).thenReturn(true);
     when(roles.findIdsByPermissionCode("REVIEW_VIEW")).thenReturn(Set.of(3L));
     when(roles.findIdsByPermissionCode("REVIEW_MANAGE")).thenReturn(Set.of(3L));
     token(10L, "actor");

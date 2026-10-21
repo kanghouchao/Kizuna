@@ -23,7 +23,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -157,7 +156,6 @@ class OrderBusinessContactTest {
             .password(UUID.randomUUID().toString())
             .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .build();
     actor.setId(1L);
     when(users.findByEmail("actor@kizuna.test")).thenReturn(Optional.of(actor));

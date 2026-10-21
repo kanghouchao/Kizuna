@@ -28,11 +28,15 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +61,8 @@ import org.springframework.transaction.PlatformTransactionManager;
   OperationalReportService.class,
   ReportSnapshot.class,
   ReportRenderer.class,
-  StoreContext.class
+  StoreContext.class,
+  StoreScopeHolder.class
 })
 class OperationalReportControllerTest {
   @TestConfiguration
@@ -83,10 +88,12 @@ class OperationalReportControllerTest {
   @MockitoBean AdvertisingReportReader advertising;
   @MockitoBean SystemConfigService systemConfigService;
   @MockitoBean StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean StoreActivationService storeActivationService;
 
   @BeforeEach
   void setup() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(1L)));
     properties.getOperationalReport().setMaxBytes(16L * 1024 * 1024);
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var facts =
@@ -109,12 +116,7 @@ class OperationalReportControllerTest {
             .param("to", "2026-09-30")
             .with(
                 jwt()
-                    .jwt(
-                        j ->
-                            j.subject("actor")
-                                .claim("storeBridge", true)
-                                .claim("storeScopeType", "SPECIFIC_STORES")
-                                .claim("storeIds", List.of(1L)))
+                    .jwt(j -> j.subject("actor").claim("storeBridge", true))
                     .authorities(
                         Arrays.stream(permissions)
                             .map(p -> new SimpleGrantedAuthority("PERM_" + p))

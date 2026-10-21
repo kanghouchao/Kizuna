@@ -15,7 +15,6 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -24,7 +23,6 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -126,8 +124,6 @@ class MemberVisitServiceTest {
             .displayName("会員 花子")
             .enabled(true)
             .userType(UserType.MEMBER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of())
             .build();
     user.setId(USER_ID);
     Mockito.lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));

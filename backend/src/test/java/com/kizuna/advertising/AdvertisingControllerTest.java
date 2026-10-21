@@ -28,7 +28,9 @@ import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collection;
@@ -54,7 +56,11 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
   AdvertisingMediaController.class,
   AdvertisingOrderCostController.class
 })
-@Import({AdvertisingControllerTest.MethodSecurity.class, StoreContext.class})
+@Import({
+  AdvertisingControllerTest.MethodSecurity.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class AdvertisingControllerTest {
   @TestConfiguration
   @EnableMethodSecurity
@@ -67,6 +73,7 @@ class AdvertisingControllerTest {
   @MockitoBean AdvertisingExportService exports;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean StoreActivationService activation;
 
   private static TestActor actor() {

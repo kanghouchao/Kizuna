@@ -39,7 +39,8 @@ class PlatformJwtIssuerTest {
 
     Token token =
         issuer.issue(
-            "user@kizuna.test", Map.of("authorities", List.of("PERM_TEST"), "userType", "PLATFORM_USER"));
+            "user@kizuna.test",
+            Map.of("authorities", List.of("PERM_TEST"), "userType", "PLATFORM_USER"));
 
     SecretKey key = new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
     NimbusJwtDecoder decoder =

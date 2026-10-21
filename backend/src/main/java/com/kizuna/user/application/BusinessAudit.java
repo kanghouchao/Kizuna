@@ -4,6 +4,7 @@ import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditChange;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import java.util.HashMap;
@@ -96,7 +97,7 @@ public class BusinessAudit {
             values));
   }
 
-  public static Map<String, String> grants(User user) {
+  public static Map<String, String> grants(User user, PlatformUser scope) {
     return Map.of(
         "user_type",
         user.getUserType().name(),
@@ -105,9 +106,9 @@ public class BusinessAudit {
         "role_ids",
         ids(user.getRoleIds()),
         "store_scope_type",
-        user.getStoreScopeType().name(),
+        scope.getStoreScopeType().name(),
         "store_ids",
-        ids(user.getStoreIds()));
+        ids(scope.getStoreIds()));
   }
 
   public static String ids(Set<Long> ids) {

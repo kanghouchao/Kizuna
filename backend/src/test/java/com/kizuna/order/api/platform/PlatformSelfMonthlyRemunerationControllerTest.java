@@ -20,8 +20,10 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
@@ -49,7 +51,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import({
   PlatformSelfMonthlyRemunerationControllerTest.MethodSecurityConfig.class,
   SelfMonthlyRemunerationService.class,
-  StoreContext.class
+  StoreContext.class,
+  StoreScopeHolder.class
 })
 @WithMockUser(username = "cast@example.test", roles = "CAST")
 class PlatformSelfMonthlyRemunerationControllerTest {
@@ -65,6 +68,7 @@ class PlatformSelfMonthlyRemunerationControllerTest {
   @MockitoBean private RemunerationQuery monthlyQuery;
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
   @MockitoBean private PlatformTransactionManager transactionManager;
 

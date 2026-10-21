@@ -11,7 +11,9 @@ import com.kizuna.cast.application.PlatformCastService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -24,7 +26,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PlatformCastController.class)
-@Import({PlatformCastControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  PlatformCastControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class PlatformCastControllerTest {
   @TestConfiguration
   @EnableMethodSecurity
@@ -34,6 +40,7 @@ class PlatformCastControllerTest {
   @MockitoBean PlatformCastService service;
   @MockitoBean SystemConfigService systemConfigService;
   @MockitoBean StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean StoreActivationService storeActivationService;
 
   @Test

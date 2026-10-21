@@ -3,6 +3,7 @@ package com.kizuna.user.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,8 @@ import com.kizuna.user.api.dto.ServiceIdentityResponse;
 import com.kizuna.user.api.dto.ServiceIdentityRoleRef;
 import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
@@ -24,9 +27,14 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +61,39 @@ class ServiceIdentityServiceTest {
 
   @InjectMocks private ServiceIdentityService service;
 
+  @Mock private PlatformUserRepository platformUserRepository;
+
+  @Captor private ArgumentCaptor<PlatformUser> scopeCaptor;
+
+  /** id → 店舗作用域の行。{@link #scope} が登録し、下の既定スタブが引く。 */
+  private final Map<Long, PlatformUser> scopes = new HashMap<>();
+
+  @BeforeEach
+  void stubScopeLookups() {
+    lenient()
+        .when(platformUserRepository.findByUserId(any()))
+        .thenAnswer(invocation -> Optional.ofNullable(scopes.get(invocation.<Long>getArgument(0))));
+    lenient()
+        .when(platformUserRepository.findByUserIdIn(any()))
+        .thenAnswer(
+            invocation ->
+                invocation.<Collection<Long>>getArgument(0).stream()
+                    .map(scopes::get)
+                    .filter(Objects::nonNull)
+                    .toList());
+    lenient()
+        .when(platformUserRepository.saveAndFlush(any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
+
+  /** 保存済みユーザーに店舗作用域の行を結ぶ。 */
+  private PlatformUser scope(User user, StoreScopeType scopeType, Set<Long> storeIds) {
+    PlatformUser scope =
+        PlatformUser.builder().user(user).storeScopeType(scopeType).storeIds(storeIds).build();
+    scopes.put(user.getId(), scope);
+    return scope;
+  }
+
   @Captor private ArgumentCaptor<User> userCaptor;
 
   private Role role(long id, String name, boolean systemRole) {
@@ -68,11 +109,10 @@ class ServiceIdentityServiceTest {
             .enabled(true)
             .userType(UserType.SERVICE)
             .roleIds(roleIds)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
             .build();
     user.setId(id);
     ReflectionTestUtils.setField(user, "version", 0L);
+    scope(user, StoreScopeType.SPECIFIC_STORES, Set.of(1L));
     return user;
   }
 
@@ -117,6 +157,10 @@ class ServiceIdentityServiceTest {
     assertThat(saved.getPassword()).isNull();
     assertThat(saved.getEnabled()).isTrue();
     assertThat(saved.getRoleIds()).containsExactly(CUSTOM_ROLE);
+    verify(platformUserRepository).saveAndFlush(scopeCaptor.capture());
+    assertThat(scopeCaptor.getValue().getUserId()).isEqualTo(100L);
+    assertThat(scopeCaptor.getValue().getStoreIds()).containsExactly(1L);
+    assertThat(res.storeIds()).containsExactly(1L);
     assertThat(res.displayName()).isEqualTo("夜間バッチ");
     assertThat(res.roles()).extracting(ServiceIdentityRoleRef::name).containsExactly("バッチ実行");
   }
@@ -154,7 +198,7 @@ class ServiceIdentityServiceTest {
 
     ServiceIdentityResponse res = service.update(5L, updateRequest(Set.of(CUSTOM_ROLE), 0L));
 
-    assertThat(existing.getStoreIds()).containsExactly(2L);
+    assertThat(scopes.get(5L).getStoreIds()).containsExactly(2L);
     assertThat(res.storeIds()).containsExactly(2L);
   }
 
@@ -193,8 +237,6 @@ class ServiceIdentityServiceTest {
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(CUSTOM_ROLE))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
             .build();
     when(repository.findById(6L)).thenReturn(Optional.of(staff));
 

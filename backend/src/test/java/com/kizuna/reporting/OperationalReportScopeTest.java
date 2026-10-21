@@ -8,50 +8,36 @@ import com.kizuna.order.reporting.OperationalReportReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 class OperationalReportScopeTest {
   AppProperties properties = new AppProperties();
   EntityManager manager = mock(EntityManager.class);
+  StoreScopeHolder holder = new StoreScopeHolder();
   OperationalReportReader reader =
-      new OperationalReportReader(manager, mock(StoreContext.class), properties, Clock.systemUTC());
+      new OperationalReportReader(
+          manager, mock(StoreContext.class), holder, properties, Clock.systemUTC());
 
   @AfterEach
   void clear() {
-    SecurityContextHolder.clearContext();
+    holder.clear();
   }
 
   @Test
   void unresolvedEmptyAndForeignStoreAreRejectedBeforeQuery() {
     assertDenied(null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new JwtAuthenticationToken(
-                Jwt.withTokenValue("test")
-                    .header("alg", "none")
-                    .subject("actor")
-                    .claim("storeScopeType", "SPECIFIC_STORES")
-                    .claim("storeIds", List.of())
-                    .build()));
+    holder.install(() -> null);
     assertDenied(null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new JwtAuthenticationToken(
-                Jwt.withTokenValue("test")
-                    .header("alg", "none")
-                    .subject("actor")
-                    .claim("storeScopeType", "SPECIFIC_STORES")
-                    .claim("storeIds", List.of(1L))
-                    .build()));
+    holder.install(() -> new StoreScope(false, Set.of(1L)));
     assertDenied(2L);
     assertDenied(Long.MAX_VALUE);
     verifyNoInteractions(manager);
@@ -59,14 +45,7 @@ class OperationalReportScopeTest {
 
   @Test
   void configurationHardLimitRejectsBeforeDatabaseAccess() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new JwtAuthenticationToken(
-                Jwt.withTokenValue("test")
-                    .header("alg", "none")
-                    .subject("actor")
-                    .claim("storeScopeType", "ALL_STORES")
-                    .build()));
+    holder.install(() -> new StoreScope(true, Set.of()));
     for (int maximum : List.of(0, 100_001)) {
       properties.getOperationalReport().setMaxOrders(maximum);
       assertThatThrownBy(

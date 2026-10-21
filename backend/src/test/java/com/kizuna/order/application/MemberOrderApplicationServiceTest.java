@@ -30,7 +30,6 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -91,8 +90,6 @@ class MemberOrderApplicationServiceTest {
             .enabled(true)
             .userType(UserType.MEMBER)
             .roleIds(Set.of())
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of())
             .build();
     user.setId(USER_ID);
     lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));

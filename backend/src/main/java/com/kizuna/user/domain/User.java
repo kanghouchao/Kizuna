@@ -19,7 +19,8 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.BatchSize;
 
 /**
- * プラットフォーム共通ユーザー集約。email でログインし、授権は「ロール × 担当店舗集合」で表す。
+ * プラットフォーム共通ユーザー集約。email でログインし、資格情報・本人種別・ロール集合を持つ。担当店舗集合は {@link PlatformUser}
+ * が別に持つ（トークンに載せず要求ごとに解決するため）。
  *
  * <p>本人種別（{@link UserType}）が {@link UserType#holdsRoles()} のユーザーだけがロールを持ち、CAST / MEMBER
  * は権限モデルに入らない。ロールは跨集約 ID 参照（{@link Role}）。停止は {@link
@@ -28,9 +29,6 @@ import org.hibernate.annotations.BatchSize;
  * <p>不変条件（構築時と再割当時に検証、違反は 400 系ドメイン例外）:
  *
  * <ul>
- *   <li>店舗集合: {@code SPECIFIC_STORES} は非空（MEMBER のみ空を許容 — 登録時点で紐づけ店舗を持たないため）、{@code ALL_STORES}
- *       は空かつ MEMBER には授権不可（{@code authorizes} が無条件 true になる fail-open を塞ぐ）（{@link
- *       InvalidStoreScopeException}）
  *   <li>ロール: PLATFORM_USER / SERVICE は 1 ロール以上、CAST/MEMBER は空（{@link InvalidRoleGrantException}）
  *   <li>資格情報: SERVICE は email・password・LINE 連携をいずれも持たず、他の種別は email・password が必須（{@link
  *       InvalidCredentialAssignmentException}）
@@ -73,24 +71,14 @@ public class User extends BaseEntity {
   @Column(name = "user_type", nullable = false, length = 20)
   private UserType userType;
 
-  // 2 つの EAGER ElementCollection（本フィールド・storeIds）は既定では
-  // 親エンティティ1行ごとに個別 SELECT を発行する。複数ユーザーを一括取得する経路(受付候補一覧等)で
-  // 行数分の副問い合わせが積み上がらないよう、@BatchSize で IN 句によるまとめ取得に切り替える。
+  // EAGER ElementCollection は既定では親エンティティ 1 行ごとに個別 SELECT を発行する。複数ユーザーを
+  // 一括取得する経路(受付候補一覧等)で行数分の副問い合わせが積み上がらないよう、@BatchSize で IN 句による
+  // まとめ取得に切り替える。
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(name = "t_user_roles", joinColumns = @JoinColumn(name = "user_id"))
   @Column(name = "role_id")
   @BatchSize(size = 25)
   private Set<Long> roleIds = new HashSet<>();
-
-  @Enumerated(EnumType.STRING)
-  @Column(name = "store_scope_type", nullable = false, length = 20)
-  private StoreScopeType storeScopeType;
-
-  @ElementCollection(fetch = FetchType.EAGER)
-  @CollectionTable(name = "t_user_stores", joinColumns = @JoinColumn(name = "user_id"))
-  @Column(name = "store_id")
-  @BatchSize(size = 25)
-  private Set<Long> storeIds = new HashSet<>();
 
   @Builder
   public User(
@@ -100,13 +88,9 @@ public class User extends BaseEntity {
       boolean enabled,
       UserType userType,
       Set<Long> roleIds,
-      StoreScopeType storeScopeType,
-      Set<Long> storeIds,
       String lineUserId) {
     Set<Long> roles = roleIds == null ? Set.of() : roleIds;
-    Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(userType, roles);
-    validateScope(userType, storeScopeType, stores);
     validateCredentials(userType, email, password, lineUserId);
     this.email = email == null ? null : email.toLowerCase(Locale.ROOT);
     this.password = password;
@@ -115,27 +99,18 @@ public class User extends BaseEntity {
     this.enabled = enabled;
     this.userType = userType;
     this.roleIds = new HashSet<>(roles);
-    this.storeScopeType = storeScopeType;
-    this.storeIds = new HashSet<>(stores);
   }
 
-  /** 授権（ロール・担当店舗集合）を再割当てする。構築時と同一の不変条件を検証する（本人属性は変更しない）。 */
-  public void reassignGrants(Set<Long> roleIds, StoreScopeType storeScopeType, Set<Long> storeIds) {
+  /**
+   * ロール集合を再割当てする。構築時と同一の不変条件を検証する（本人属性は変更しない）。
+   *
+   * <p>同じ内容でも集合を必ず新しいインスタンスへ置き換える。集合の差し替えで版が進み、授権編集面の陳腐化検査（応答で往復した version
+   * の照合）が店舗集合だけの変更でも効くようにするため — 店舗集合は別集約で、この行だけでは版が進まない。
+   */
+  public void reassignRoles(Set<Long> roleIds) {
     Set<Long> roles = roleIds == null ? Set.of() : roleIds;
-    Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(this.userType, roles);
-    validateScope(this.userType, storeScopeType, stores);
     this.roleIds = new HashSet<>(roles);
-    this.storeScopeType = storeScopeType;
-    this.storeIds = new HashSet<>(stores);
-  }
-
-  /** 担当店舗集合のみを再割当てする（CAST の招待受諾が所属店舗を冪等 union する用途。ロールは変更しない）。 */
-  public void reassignStores(StoreScopeType storeScopeType, Set<Long> storeIds) {
-    Set<Long> stores = storeIds == null ? Set.of() : storeIds;
-    validateScope(this.userType, storeScopeType, stores);
-    this.storeScopeType = storeScopeType;
-    this.storeIds = new HashSet<>(stores);
   }
 
   /** 停止する（enabled=false）。行は削除せず、過去の実行主体の記録を保持する。版も増やし、発行済みセッションを即時失効させる。 */
@@ -207,25 +182,5 @@ public class User extends BaseEntity {
     if (email == null || password == null) {
       throw new InvalidCredentialAssignmentException("email・パスワードは必須です");
     }
-  }
-
-  private static void validateScope(
-      UserType userType, StoreScopeType storeScopeType, Set<Long> stores) {
-    if (userType == UserType.MEMBER && storeScopeType == StoreScopeType.ALL_STORES) {
-      throw new InvalidStoreScopeException("MEMBER に ALL_STORES を授権できません");
-    }
-    if (storeScopeType == StoreScopeType.SPECIFIC_STORES
-        && stores.isEmpty()
-        && userType != UserType.MEMBER) {
-      throw new InvalidStoreScopeException("SPECIFIC_STORES の授権には少なくとも 1 つの店舗が必要です");
-    }
-    if (storeScopeType == StoreScopeType.ALL_STORES && !stores.isEmpty()) {
-      throw new InvalidStoreScopeException("ALL_STORES の授権に個別店舗を指定できません");
-    }
-  }
-
-  /** 指定店舗を授権するか。ALL_STORES は常に true、SPECIFIC_STORES は店舗集合のメンバーのみ true。 */
-  public boolean authorizes(Long storeId) {
-    return storeScopeType == StoreScopeType.ALL_STORES || storeIds.contains(storeId);
   }
 }

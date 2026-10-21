@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.recording.AuditChange;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.user.domain.PlatformUser;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -47,8 +48,6 @@ class BusinessAuditTest {
             .userType(UserType.PLATFORM_USER)
             .enabled(true)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
             .build();
     actor.setId(10L);
     when(users.findByEmail("operator@kizuna.test")).thenReturn(Optional.of(actor));
@@ -80,6 +79,11 @@ class BusinessAuditTest {
             .userType(UserType.SERVICE)
             .enabled(true)
             .roleIds(Set.of(1L))
+            .build();
+    user.setId(2L);
+    var scope =
+        PlatformUser.builder()
+            .user(user)
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(stores)
             .build();
@@ -93,7 +97,7 @@ class BusinessAuditTest {
             "2",
             null,
             null,
-            BusinessAudit.grants(user),
+            BusinessAudit.grants(user, scope),
             Map.of());
     assertThat(event.beforeValues().get("store_ids").split(",")).hasSize(2000);
     assertThat(event.beforeValues().get("store_ids")).endsWith(",2000");

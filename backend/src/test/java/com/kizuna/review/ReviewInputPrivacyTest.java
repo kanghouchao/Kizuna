@@ -14,7 +14,9 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.logging.log4j.LogManager;
@@ -35,7 +37,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ReviewController.class)
-@Import({ReviewInputPrivacyTest.MethodSecurity.class, StoreContext.class})
+@Import({ReviewInputPrivacyTest.MethodSecurity.class, StoreContext.class, StoreScopeHolder.class})
 class ReviewInputPrivacyTest {
   @TestConfiguration
   @EnableMethodSecurity
@@ -45,6 +47,7 @@ class ReviewInputPrivacyTest {
   @MockitoBean ReviewService reviews;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean StoreActivationService activation;
 
   @Test

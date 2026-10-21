@@ -26,8 +26,10 @@ import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Set;
@@ -49,7 +51,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** 予約受付箱（申請の一覧・確定・謝絶）の授権と契約の単体テスト。 */
 @WebMvcTest(OrderApplicationController.class)
-@Import({OrderApplicationControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  OrderApplicationControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class OrderApplicationControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -70,6 +76,7 @@ class OrderApplicationControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
 
   @Test

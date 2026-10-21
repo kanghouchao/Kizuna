@@ -28,7 +28,6 @@ import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.LineAlreadyLinkedException;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -88,8 +87,6 @@ class LineAuthServiceTest {
         .displayName("会員太郎")
         .enabled(true)
         .userType(UserType.MEMBER)
-        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-        .storeIds(Set.of())
         .build();
   }
 

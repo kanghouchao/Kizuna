@@ -11,7 +11,9 @@ import com.kizuna.order.application.MemberReceiptClaimService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,7 +34,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * <p>帰属先は認証主体に固定されるため、この経路が会員以外へ開くと、伝票を拾った店舗スタッフが他人の来店を 自分の記録として起こせてしまう。
  */
 @WebMvcTest(PlatformMemberReceiptController.class)
-@Import({PlatformMemberReceiptControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  PlatformMemberReceiptControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class PlatformMemberReceiptControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -55,6 +61,7 @@ class PlatformMemberReceiptControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
 
   @Test

@@ -42,8 +42,8 @@ public enum DbConstraint {
   /** t_user_roles → t_roles の FK。授与中のロールの削除を止める。 */
   FK_T_USER_ROLES_ROLE("fk_t_user_roles_role"),
 
-  /** t_user_stores → t_stores の FK。 */
-  FK_T_USER_STORES_STORE("fk_t_user_stores_store"),
+  /** t_platform_user_stores → t_stores の FK。実在しない店舗 id を店舗集合に書く要求を 400 へ落とす。 */
+  FK_T_PLATFORM_USER_STORES_STORE("fk_t_platform_user_stores_store"),
 
   /** t_cast_invitations → t_cast_enrollments の FK。 */
   FK_T_CAST_INVITATIONS_CAST("fk_t_cast_invitations_cast"),

@@ -36,7 +36,6 @@ import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -150,8 +149,6 @@ class RemunerationPostgresTest {
                   .userType(UserType.CAST)
                   .enabled(true)
                   .roleIds(Set.of())
-                  .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                  .storeIds(Set.of(storeId))
                   .build();
           em.persist(actor);
           var person = Cast.builder().userId(actor.getId()).build();

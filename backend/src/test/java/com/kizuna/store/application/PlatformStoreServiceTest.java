@@ -7,6 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.api.dto.PlatformStoreResponse;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -19,38 +21,31 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 @ExtendWith(MockitoExtension.class)
 class PlatformStoreServiceTest {
 
   @Mock StoreRepository storeRepository;
 
+  private final StoreScopeHolder holder = new StoreScopeHolder();
   private PlatformStoreService service;
 
   @BeforeEach
   void setUp() {
-    service = new PlatformStoreService(storeRepository);
+    service = new PlatformStoreService(storeRepository, holder);
   }
 
   @AfterEach
   void clearContext() {
-    SecurityContextHolder.clearContext();
+    holder.clear();
   }
 
-  private void authenticate(String scopeType, Object storeIds) {
-    Jwt.Builder builder =
-        Jwt.withTokenValue("token")
-            .header("alg", "HS256")
-            .subject("user@example.com")
-            .claim("storeScopeType", scopeType);
-    if (storeIds != null) {
-      builder.claim("storeIds", storeIds);
-    }
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(builder.build()));
+  private void authenticate(String scopeType, List<Long> storeIds) {
+    StoreScope scope =
+        "ALL_STORES".equals(scopeType)
+            ? new StoreScope(true, Set.of())
+            : new StoreScope(false, Set.copyOf(storeIds));
+    holder.install(() -> scope);
   }
 
   private Store store(long id, String name) {
@@ -87,7 +82,7 @@ class PlatformStoreServiceTest {
 
   @Test
   void scopeUnresolved_throwsAccessDenied() {
-    // 認証コンテキスト未設定 → StoreScope 解決不能（fail-closed）。
+    // 保持器未設定 → StoreScope 解決不能（fail-closed）。
     assertThatThrownBy(() -> service.listAuthorizedStores())
         .isInstanceOf(AccessDeniedException.class);
   }

@@ -16,7 +16,6 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -77,8 +76,6 @@ class OrderAttributionCorrectionServiceTest {
             .displayName("店長 花子")
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(STORE_ID))
             .roleIds(Set.of(1L))
             .build();
     actor.setId(ACTOR_ID);

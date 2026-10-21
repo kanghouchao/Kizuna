@@ -21,7 +21,6 @@ import com.kizuna.member.domain.MemberIdentityView;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -54,7 +53,6 @@ class CustomerMemberLinkAuditTest {
             .userType(UserType.PLATFORM_USER)
             .enabled(true)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .build();
     actor.setId(9L);
     when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));

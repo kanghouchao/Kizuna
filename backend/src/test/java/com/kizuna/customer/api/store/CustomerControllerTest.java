@@ -16,7 +16,9 @@ import com.kizuna.customer.application.CustomerService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,7 +38,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** ハンドラ層で閉じている約束（offset ページングの全順序、生成 201 / 削除 204）の単体テスト。 */
 @WebMvcTest(CustomerController.class)
-@Import({CustomerControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  CustomerControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class CustomerControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -52,6 +58,7 @@ class CustomerControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
 
   @Test

@@ -1,5 +1,6 @@
 /**
- * user モジュールのドメイン層。User 集約（ロール×店舗集合の授権）・Role 集約・ Permission 目録とそれらのリポジトリ。
+ * user モジュールのドメイン層。User 集約（資格情報・本人種別・ロール集合）・PlatformUser 集約（店舗作用域）・Role 集約・ Permission
+ * 目録とそれらのリポジトリ。
  *
  * <p>named interface として公開しているのは過渡措置: auth の認証・昇格処理をはじめ cast/customer/member/point/shift
  * がユーザー集約とリポジトリを、各モジュールの授権判定が PermissionCode・StoreScopeType・UserType を直接参照しているため。ID 参照化と読み側

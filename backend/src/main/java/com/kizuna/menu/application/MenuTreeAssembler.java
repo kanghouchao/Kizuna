@@ -18,8 +18,8 @@ final class MenuTreeAssembler {
 
   private MenuTreeAssembler() {}
 
-  static List<MenuVO> assemble(List<Menu> roots) {
-    Set<String> userAuthorities = currentUserAuthorities();
+  static List<MenuVO> assemble(List<Menu> roots, StoreScope scope) {
+    Set<String> userAuthorities = currentUserAuthorities(scope);
     return roots.stream()
         .filter(menu -> visible(menu, userAuthorities))
         .map(menu -> toVO(menu, userAuthorities))
@@ -55,7 +55,8 @@ final class MenuTreeAssembler {
     return userAuthorities.contains(Authorities.permission(menu.getPermission()));
   }
 
-  private static Set<String> currentUserAuthorities() {
+  /** 全店舗を担当しない利用者には、全店舗作用域を要する画面（定期処理・監査）の節を出さない。 */
+  private static Set<String> currentUserAuthorities(StoreScope scope) {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null) {
       return Collections.emptySet();
@@ -64,7 +65,6 @@ final class MenuTreeAssembler {
         auth.getAuthorities().stream()
             .map(GrantedAuthority::getAuthority)
             .collect(Collectors.toSet());
-    var scope = StoreScope.fromAuthentication(auth);
     if (scope == null || !scope.allStores()) {
       authorities.remove(PermissionCode.TASK_MANAGE.authority());
       authorities.remove(PermissionCode.AUDIT_VIEW.authority());

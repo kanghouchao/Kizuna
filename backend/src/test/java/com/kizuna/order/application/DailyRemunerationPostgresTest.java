@@ -21,7 +21,6 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -113,8 +112,6 @@ class DailyRemunerationPostgresTest {
                   .userType(UserType.CAST)
                   .enabled(true)
                   .roleIds(Set.of())
-                  .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                  .storeIds(Set.of(storeId))
                   .build();
           em.persist(actor);
           var person = Cast.builder().userId(actor.getId()).build();

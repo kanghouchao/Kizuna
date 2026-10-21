@@ -25,8 +25,10 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
 import com.kizuna.user.application.BusinessAudit;
+import com.kizuna.user.application.StoreScopeResolver;
 import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +56,7 @@ import tools.jackson.databind.ObjectMapper;
   CustomerContactService.class,
   CustomerMapperImpl.class,
   StoreContext.class,
+  StoreScopeHolder.class,
   CustomerSearchControllerTest.Security.class
 })
 @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"})
@@ -76,6 +79,7 @@ class CustomerSearchControllerTest {
   @MockitoBean BusinessAudit businessAudit;
   @MockitoBean SystemConfigService config;
   @MockitoBean StoreExistenceCheck stores;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean StoreActivationService activation;
 
   @BeforeEach

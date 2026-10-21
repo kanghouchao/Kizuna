@@ -9,7 +9,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -17,7 +16,6 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,8 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 会員の自助登録ユースケース。メール + パスワード + 表示名で MEMBER 身分と会員集約（一意の会員コード付き）を単一トランザクションで作成する。
  *
- * <p>登録入口から生まれる身分は会員のみ（キャスト = 招待受諾、スタッフ = 管理者作成が成立経路）。作成する MEMBER は SPECIFIC_STORES +
- * 空集合（登録時点で紐づけ店舗なし）で、どの店舗も授権しない。
+ * <p>登録入口から生まれる身分は会員のみ（キャスト = 招待受諾、スタッフ = 管理者作成が成立経路）。MEMBER は店舗作用域（PlatformUser）を 持たず、どの店舗も授権しない。
  */
 @Service
 @RequiredArgsConstructor
@@ -58,8 +55,6 @@ public class MemberRegistrationService {
                 .displayName(request.getDisplayName())
                 .enabled(true)
                 .userType(UserType.MEMBER)
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                .storeIds(Set.of())
                 .build());
     Member member =
         memberRepository.save(
@@ -93,8 +88,6 @@ public class MemberRegistrationService {
                 .displayName(displayName)
                 .enabled(true)
                 .userType(UserType.MEMBER)
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                .storeIds(Set.of())
                 .lineUserId(lineUserId)
                 .build());
     // flush まで行い、会員行の制約違反も呼び出し元が登録チケットを消費する前に顕在化させる

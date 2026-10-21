@@ -16,10 +16,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.api.dto.StoreVO;
 import com.kizuna.store.application.PlatformStoreService;
 import com.kizuna.store.application.StoreActivationService;
 import com.kizuna.store.application.StoreRegistryService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,7 +41,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** 平台店舗 API のうち、ハンドラ層で閉じている約束（ページングの全順序・要求本文の検査）の単体テスト。 */
 @WebMvcTest(PlatformStoreController.class)
-@Import({PlatformStoreControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  PlatformStoreControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class PlatformStoreControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -56,6 +62,7 @@ class PlatformStoreControllerTest {
   // HandlerInterceptor として @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
 
   @Test

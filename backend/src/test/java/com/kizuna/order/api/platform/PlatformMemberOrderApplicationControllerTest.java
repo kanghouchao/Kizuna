@@ -14,8 +14,10 @@ import com.kizuna.order.application.MemberOrderApplicationService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +37,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @WebMvcTest(PlatformMemberOrderApplicationController.class)
 @Import({
   PlatformMemberOrderApplicationControllerTest.MethodSecurityConfig.class,
-  StoreContext.class
+  StoreContext.class,
+  StoreScopeHolder.class
 })
 class PlatformMemberOrderApplicationControllerTest {
 
@@ -57,6 +60,7 @@ class PlatformMemberOrderApplicationControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
 
   @Test

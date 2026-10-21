@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.user.domain.InvalidCredentialAssignmentException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserType;
@@ -74,8 +73,6 @@ class CredentialOperationsTest {
         .password(type == UserType.SERVICE ? null : "hash")
         .enabled(true)
         .roleIds(type.holdsRoles() ? Set.of(1L) : Set.of())
-        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-        .storeIds(Set.of(1L))
         .build();
   }
 }

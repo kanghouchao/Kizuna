@@ -26,6 +26,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class StoreIdInterceptor implements HandlerInterceptor {
 
   private final StoreContext storeContext;
+  private final StoreScopeHolder storeScopeHolder;
 
   private static final String HEADER_ROLE = "X-Role";
   private static final String HEADER_STORE_ID = "X-Store-ID";
@@ -44,8 +45,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
       @NonNull HttpServletResponse response,
       @NonNull Object handler) {
     Jwt claims = authenticatedClaims();
-    StoreScope scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+    StoreScope scope = storeScopeHolder.current();
     boolean claimsStoreHeaderPresent =
         HEADER_ROLE_STORE.equals(request.getHeader(HEADER_ROLE))
             && StringUtils.isNotBlank(request.getHeader(HEADER_STORE_ID));
@@ -72,7 +72,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
       }
       // ヘッダ不備（X-Role 欠落・非数値含む）は店舗文脈なし → 末尾の @StoreOptional 判定へ落とす。
     } else if (claims != null) {
-      // 認証済みだが storeId claim を持たない（プラットフォーム PlatformAuth 発行、または storeId 無しの legacy）。
+      // 認証済みだが授権店舗集合を解決できない（店舗作用域を持たない CAST / MEMBER、または解決器未設定）。
       // ヘッダで店舗を名乗る主張は詐称として 403 で拒否する。詐称ヘッダが無ければ下の
       // @StoreOptional 判定に委ね、プラットフォームの正当な素通り（例: POST /files の platform 保存）を保つ。
       if (claimsStoreHeaderPresent) {

@@ -3,6 +3,8 @@ package com.kizuna.user.application;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ServiceExecutionIdentityService {
   private final UserRepository users;
+  private final PlatformUserRepository platformUsers;
   private final RoleRepository roles;
 
   // 呼出側の分離レベルや一次キャッシュに依存せず、確定済みの授権を読み直す。
@@ -35,11 +38,12 @@ public class ServiceExecutionIdentityService {
       isolation = Isolation.READ_COMMITTED)
   public AuditActor requireService(Long id, PermissionCode permission, Long storeId) {
     var user = users.findById(id).orElseThrow(ServiceExecutionIdentityService::denied);
+    var scope = scopeOf(user);
     if (user.getUserType() != UserType.SERVICE
         || !Boolean.TRUE.equals(user.getEnabled())
         || !(storeId == null
-            ? user.getStoreScopeType() == StoreScopeType.ALL_STORES
-            : user.authorizes(storeId))
+            ? scope.getStoreScopeType() == StoreScopeType.ALL_STORES
+            : scope.authorizes(storeId))
         || !hasPermission(user, permission)) {
       throw denied();
     }
@@ -59,11 +63,18 @@ public class ServiceExecutionIdentityService {
   private AuditActor requireOperator(User user, PermissionCode permission) {
     if (user.getUserType() != UserType.PLATFORM_USER
         || !Boolean.TRUE.equals(user.getEnabled())
-        || user.getStoreScopeType() != StoreScopeType.ALL_STORES
+        || scopeOf(user).getStoreScopeType() != StoreScopeType.ALL_STORES
         || !hasPermission(user, permission)) {
       throw denied();
     }
     return actor(user);
+  }
+
+  /** 店舗作用域の行。ロールで授権される種別に行が無いのは不整合なので、拒否に倒す。 */
+  private PlatformUser scopeOf(User user) {
+    return platformUsers
+        .findByUserId(user.getId())
+        .orElseThrow(ServiceExecutionIdentityService::denied);
   }
 
   public record Candidate(Long id, String displayName) {}
@@ -86,10 +97,8 @@ public class ServiceExecutionIdentityService {
                   cb.equal(root.get("userType"), UserType.SERVICE),
                   cb.isTrue(root.get("enabled")),
                   storeId == null
-                      ? cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES)
-                      : cb.or(
-                          cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
-                          cb.isMember(storeId, root.get("storeIds"))),
+                      ? StoreAuthorization.allStores().toPredicate(root, query, cb)
+                      : StoreAuthorization.authorizes(storeId).toPredicate(root, query, cb),
                   root.join("roleIds").in(roleIds),
                   root.join("roleIds").in(taskRoleIds));
             },

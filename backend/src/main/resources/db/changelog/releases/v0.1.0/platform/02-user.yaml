@@ -2,15 +2,15 @@ databaseChangeLog:
   - changeSet:
       id: platform-v0100-002-user-schema
       author: kanghouchao
-      # プラットフォーム共通ユーザー（User）。身分は全プラットフォーム級で、
-      # データの見える範囲は「授権店舗集合（StoreScope）」で決まる。
+      # プラットフォーム共通ユーザー（User）。身分は全プラットフォーム級で、資格情報・本人種別・
+      # ロール集合を持つ。データの見える範囲（授権店舗集合）は t_platform_users が別に持つ。
       preConditions:
         - dbms:
             type: postgresql
       changes:
         - createTable:
             tableName: t_users
-            remarks: プラットフォーム共通ユーザー（ロール × 授権店舗集合で授権する）
+            remarks: プラットフォーム共通ユーザー（資格情報・本人種別・ロール集合。店舗集合は t_platform_users）
             columns:
               - column:
                   name: id
@@ -63,12 +63,6 @@ databaseChangeLog:
                     nullable: false
                   remarks: 本人種別（PLATFORM_USER/SERVICE/CAST/MEMBER）
               - column:
-                  name: store_scope_type
-                  type: VARCHAR(20)
-                  constraints:
-                    nullable: false
-                  remarks: 授権店舗範囲種別（ALL_STORES / SPECIFIC_STORES）
-              - column:
                   # 1 つの LINE アカウントが複数の身分に結び付くと、なりすまし経路になるため一意。
                   name: line_user_id
                   type: VARCHAR(64)
@@ -96,11 +90,66 @@ databaseChangeLog:
                     nullable: false
                   remarks: 楽観ロック用バージョン
         - createTable:
-            tableName: t_user_stores
+            # 平台ユーザー（PLATFORM_USER / SERVICE）の店舗作用域。トークンに載せず要求ごとに読む行で、
+            # CAST / MEMBER は行を持たない（作成経路とドメイン不変条件が守る）。
+            tableName: t_platform_users
+            remarks: 平台ユーザーの店舗作用域（t_users と 1:1。PLATFORM_USER / SERVICE のみ行を持つ）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_platform_users
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_platform_users_user
+                  remarks: 主体のユーザー（1:1）
+              - column:
+                  name: store_scope_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 授権店舗範囲種別（ALL_STORES / SPECIFIC_STORES）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # ユーザー行は停止しても消えない（削除経路なし）ので、従属行を道連れにする CASCADE で足りる。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_platform_users_user
+            baseTableName: t_platform_users
+            baseColumnNames: user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: CASCADE
+        - createTable:
+            tableName: t_platform_user_stores
             remarks: 授権店舗集合（store_scope_type=SPECIFIC_STORES 時のみ行を持つ）
             columns:
               - column:
-                  name: user_id
+                  name: platform_user_id
                   type: BIGINT
                   constraints:
                     nullable: false
@@ -110,21 +159,22 @@ databaseChangeLog:
                   constraints:
                     nullable: false
         - addPrimaryKey:
-            tableName: t_user_stores
-            columnNames: user_id,store_id
-            constraintName: pk_t_user_stores
+            tableName: t_platform_user_stores
+            columnNames: platform_user_id,store_id
+            constraintName: pk_t_platform_user_stores
         - addForeignKeyConstraint:
-            constraintName: fk_t_user_stores_user
-            baseTableName: t_user_stores
-            baseColumnNames: user_id
-            referencedTableName: t_users
+            constraintName: fk_t_platform_user_stores_platform_user
+            baseTableName: t_platform_user_stores
+            baseColumnNames: platform_user_id
+            referencedTableName: t_platform_users
             referencedColumnNames: id
             onDelete: CASCADE
         - addForeignKeyConstraint:
             # 店舗削除には全店舗スコープ表が CASCADE で従う。残存する空集合は
-            # authorizes() が全 false になる fail-closed 挙動。
-            constraintName: fk_t_user_stores_store
-            baseTableName: t_user_stores
+            # authorizes() が全 false になる fail-closed 挙動。挿入方向（実在しない店舗 id）は
+            # DbConstraint 写像が業務例外へ落とす。
+            constraintName: fk_t_platform_user_stores_store
+            baseTableName: t_platform_user_stores
             baseColumnNames: store_id
             referencedTableName: t_stores
             referencedColumnNames: id

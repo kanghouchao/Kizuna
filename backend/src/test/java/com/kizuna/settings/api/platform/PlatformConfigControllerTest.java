@@ -16,7 +16,9 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,7 +34,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PlatformConfigController.class)
-@Import({PlatformConfigControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  PlatformConfigControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class PlatformConfigControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -47,6 +53,7 @@ class PlatformConfigControllerTest {
   // StoreExistenceInterceptor（HandlerInterceptor）の依存。@WebMvcTest は HandlerInterceptor を
   // 取り込むため、MaintenanceModeInterceptor の SystemConfigService と同様にポートのモックを用意する。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService storeActivationService;
 
   @Test

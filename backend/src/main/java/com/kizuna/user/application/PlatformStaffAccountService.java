@@ -6,11 +6,12 @@ import com.kizuna.user.api.dto.StaffAccountRoleRef;
 import com.kizuna.user.api.dto.StaffAccountSummaryResponse;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.PermissionRepository;
+import com.kizuna.user.domain.PlatformUser;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -35,7 +36,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * アカウント管理ユースケース。対象は本人種別 PLATFORM_USER の全アカウントで、ロール構成（HQ 側／店舗側）を問わない — CAST/MEMBER は権限モデルの外なので在否も出さない。
+ * アカウント管理ユースケース。対象は本人種別 PLATFORM_USER の全アカウントで、ロール構成（HQ 側／店舗側）を問わない — CAST/MEMBER
+ * は権限モデルの外なので在否も出さない。
  *
  * <p>授権は一切書かない。停止・再開とパスワード再設定だけを扱い、ロールと店舗集合は表示にしか現れない。
  */
@@ -51,6 +53,7 @@ public class PlatformStaffAccountService {
 
   private final BusinessAudit businessAudit;
   private final UserRepository repository;
+  private final PlatformUserRepository platformUserRepository;
   private final RoleRepository roleRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
   private final PasswordEncoder passwordEncoder;
@@ -75,8 +78,8 @@ public class PlatformStaffAccountService {
   }
 
   /**
-   * 対象は本人種別 PLATFORM_USER の全行（ロール構成で絞らない）。検索語は表示名とメールアドレスを横断する部分一致。店舗 id は「その店舗を担当範囲に含む」行への絞り込みで、ALL_STORES
-   * は個別 id を持たないまま全店舗を覆うため常に該当させる。
+   * 対象は本人種別 PLATFORM_USER の全行（ロール構成で絞らない）。検索語は表示名とメールアドレスを横断する部分一致。店舗 id
+   * は「その店舗を担当範囲に含む」行への絞り込みで、ALL_STORES は個別 id を持たないまま全店舗を覆うため常に該当させる。
    *
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
@@ -94,12 +97,7 @@ public class PlatformStaffAccountService {
                 cb.like(cb.lower(root.get("email")), pattern, escape)));
       }
       if (storeId != null) {
-        // 担当店舗集合は @ElementCollection のため、member of は Hibernate が相関副問い合わせ（exists）へ展開する。
-        // 親行を結合で増やさないので、ページングの件数・境界に影響しない。
-        predicates.add(
-            cb.or(
-                cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
-                cb.isMember(storeId, root.get("storeIds"))));
+        predicates.add(StoreAuthorization.authorizes(storeId).toPredicate(root, query, cb));
       }
       return cb.and(predicates.toArray(new Predicate[0]));
     };
@@ -108,14 +106,18 @@ public class PlatformStaffAccountService {
   @Transactional(readOnly = true)
   public StaffAccountResponse get(Long id) {
     User user = requireStaffAccount(id);
+    PlatformUser scope =
+        platformUserRepository
+            .findByUserId(user.getId())
+            .orElseThrow(() -> new IllegalStateException("店舗作用域が存在しません: " + id));
     return new StaffAccountResponse(
         user.getId(),
         user.getEmail(),
         user.getDisplayName(),
         user.getEnabled(),
         rolesOf(user, roleNamesOf(user.getRoleIds())),
-        user.getStoreScopeType(),
-        new HashSet<>(user.getStoreIds()));
+        scope.getStoreScopeType(),
+        new HashSet<>(scope.getStoreIds()));
   }
 
   /**

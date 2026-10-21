@@ -20,8 +20,10 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.StoreActivationService;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +47,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import({
   DailyRemunerationControllerTest.Security.class,
   DailyRemunerationService.class,
-  StoreContext.class
+  StoreContext.class,
+  StoreScopeHolder.class
 })
 @WithMockUser(
     username = "cast@example.test",
@@ -62,6 +65,7 @@ class DailyRemunerationControllerTest {
   @MockitoBean private CastRepository people;
   @MockitoBean private SystemConfigService settings;
   @MockitoBean private StoreExistenceCheck storeExistence;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private StoreActivationService activation;
   @MockitoBean private PlatformTransactionManager transactions;
 

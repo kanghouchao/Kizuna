@@ -15,13 +15,11 @@ import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.util.Optional;
-import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,8 +56,6 @@ class MemberRegistrationServiceTest {
             .displayName("会員 花子")
             .enabled(true)
             .userType(UserType.MEMBER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of())
             .build();
     user.setId(id);
     return user;
@@ -82,8 +78,6 @@ class MemberRegistrationServiceTest {
     User user = userCaptor.getValue();
     assertThat(user.getUserType()).isEqualTo(UserType.MEMBER);
     assertThat(user.getRoleIds()).isEmpty();
-    assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(user.getStoreIds()).isEmpty();
     assertThat(user.getPassword()).isEqualTo("encoded");
     Member member = memberCaptor.getValue();
     assertThat(member.getUserId()).isEqualTo(10L);
@@ -139,8 +133,6 @@ class MemberRegistrationServiceTest {
     User user = userCaptor.getValue();
     assertThat(user.getUserType()).isEqualTo(UserType.MEMBER);
     assertThat(user.getLineUserId()).isEqualTo("U-line-1");
-    assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(user.getStoreIds()).isEmpty();
     assertThat(memberCaptor.getValue().getMemberCode()).matches("\\d{12}");
     // 平文パスワードは利用者が知り得ない乱数（パスワードログイン経路を持たせない）。
     ArgumentCaptor<String> rawPassword = ArgumentCaptor.forClass(String.class);

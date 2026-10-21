@@ -5,6 +5,7 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReviewActors {
   private final UserRepository users;
+  private final PlatformUserRepository platformUsers;
   private final RoleRepository roles;
   private final StoreContext store;
   private final EmergencyElevationRepository elevations;
@@ -33,12 +35,20 @@ public class ReviewActors {
         || user.getUserType() != UserType.PLATFORM_USER
         || !Boolean.TRUE.equals(user.getEnabled())) throw denied();
     if (!elevated(user, action)
-        && (!user.authorizes(store.getStoreId())
+        && (!authorizes(user, store.getStoreId())
             || Collections.disjoint(
                 user.getRoleIds(), roles.findIdsByPermissionCode(PermissionCode.REVIEW_VIEW.name()))
             || Collections.disjoint(
                 user.getRoleIds(), roles.findIdsByPermissionCode(action.name())))) throw denied();
     return new AuditActor(user.getId(), UserType.PLATFORM_USER.name(), user.getDisplayName());
+  }
+
+  /** 店舗作用域は本人の行（PlatformUser）から毎回読む。行が無い種別（CAST / MEMBER）は何も授権しない。 */
+  private boolean authorizes(User user, Long storeId) {
+    return platformUsers
+        .findByUserId(user.getId())
+        .filter(scope -> scope.authorizes(storeId))
+        .isPresent();
   }
 
   /** 昇格による店舗権限は通常ロールと独立するため、発動記録の主体・店舗・有効区間を毎回照合する。 */

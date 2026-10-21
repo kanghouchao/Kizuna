@@ -25,7 +25,6 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -398,8 +397,6 @@ class CustomerMergeServiceTest {
             .displayName("田中花子")
             .enabled(true)
             .userType(UserType.PLATFORM_USER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(STORE_ID))
             .roleIds(Set.of(1L))
             .build();
     actor.setId(ACTOR_ID);
