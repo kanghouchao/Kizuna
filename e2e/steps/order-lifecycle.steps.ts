@@ -130,9 +130,28 @@ Then('取消した受注が「対応が要る」群から消える', async ({ pa
 });
 
 Then('取消アーカイブに理由 {string} の行が現れる', async ({ page }, reason: string) => {
-  await page.getByRole('button', { name: /^取消 \d+ 件$/ }).click();
-  // 結末を確かめるために詳細を開かなくて済むよう、行が理由・実行者・時刻を名乗る
-  await expect(page.getByText(reason, { exact: false })).toBeVisible({ timeout: 15000 });
+  const toggle = page.getByRole('button', { name: /^取消 \d+ 件$/ });
+  await toggle.click();
+  // 結末を確かめるために詳細を開かなくて済むよう、行が理由・実行者・時刻を名乗る。アーカイブは古い順の
+  // 固定ページ（10 件）なので、共有店舗に先行シナリオの取消が積み上がると新しい行は後ろのページに出る。
+  // 行が描画済みのときだけ次ページへ進む（読み込み中に押すとページを飛ばす）。
+  const section = toggle.locator('..');
+  const row = section.getByText(reason, { exact: false });
+  const next = section.getByRole('button', { name: '次のページ', exact: true });
+  await expect
+    .poll(
+      async () => {
+        if (await row.count()) return true;
+        const loaded =
+          (await section.getByText('読み込み中...').count()) === 0 &&
+          (await section.getByRole('button', { name: '訂正履歴', exact: true }).count()) > 0;
+        if (loaded && (await next.count()) === 1 && (await next.isEnabled())) await next.click();
+        return false;
+      },
+      { timeout: 30000 }
+    )
+    .toBe(true);
+  await expect(row).toBeVisible();
 });
 
 When('カードから完了モーダルを開き会計 {string} 円で完了する', async ({ page }, fee: string) => {
