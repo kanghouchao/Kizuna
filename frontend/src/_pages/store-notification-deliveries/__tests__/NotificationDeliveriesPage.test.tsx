@@ -43,7 +43,7 @@ const row: Delivery = {
 };
 const permission = (...names: string[]) =>
   claims.mockReturnValue({
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: true,
     authorities: names.map(p => `PERM_${p}`),
   });

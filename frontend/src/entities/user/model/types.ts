@@ -13,7 +13,7 @@ export interface LoginResponse {
 
 // 本人種別。バックエンド user/domain/UserType.java には SERVICE（対話ログイン不可の
 // サービスID）もあるが、ログイン応答・/me には現れないため意図的に載せない（fail-closed）。
-export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
+export type UserType = 'PLATFORM_USER' | 'CAST' | 'MEMBER';
 
 // 権限コード（バックエンド user/domain/PermissionCode.java と対応）。
 // ワイヤ上は接頭辞なしの素の enum 名で、PERM_ 形式は JWT の authorities 内部だけに存在する。
@@ -92,14 +92,12 @@ export interface PlatformLoginRequest {
 export interface PlatformMeResponse {
   email?: string;
   display_name?: string;
-  user_type?: PlatformUserType;
+  user_type?: UserType;
   permissions?: PlatformPermission[];
   console?: PlatformConsole;
   // 店舗文脈（X-Store-ID）を確立できるか。JWT storeBridge claim と同源でサーバ側が権限目録から導出する。
   // Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
   store_bridge: boolean;
-  store_scope_type?: PlatformStoreScopeType;
-  store_ids?: number[];
   // LINE アカウントと連携済みか。Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
   line_linked: boolean;
 }

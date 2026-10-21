@@ -36,7 +36,7 @@ const mockedSetPlatformStore = setPlatformStore as jest.MockedFunction<typeof se
 
 const staffClaims = (storeBridge: boolean): TokenClaims => ({
   authorities: ['PERM_ORDER_MANAGE'],
-  userType: 'STAFF',
+  userType: 'PLATFORM_USER',
   storeBridge,
 });
 

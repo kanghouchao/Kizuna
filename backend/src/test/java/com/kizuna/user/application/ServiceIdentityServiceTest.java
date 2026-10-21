@@ -191,7 +191,7 @@ class ServiceIdentityServiceTest {
             .password("hash")
             .displayName("職員")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(CUSTOM_ROLE))
             .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())

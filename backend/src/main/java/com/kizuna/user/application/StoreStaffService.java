@@ -43,7 +43,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 店舗スタッフの授権管理ユースケース。対象は本人種別 STAFF のうち店舗側ロールしか持たない者に限る — HQ 側ロールを 1 つでも持つ者は管理者管理（ROLE_MANAGE
+ * 店舗スタッフの授権管理ユースケース。対象は本人種別 PLATFORM_USER のうち店舗側ロールしか持たない者に限る — HQ 側ロールを 1 つでも持つ者は管理者管理（ROLE_MANAGE
  * 門）が扱い、この面には在否すら出さない（ADR 0020）。
  *
  * <p>行使者の担当店舗集合は JWT から、対象の現況は DB から取る。User は StoreScopedEntity ではないため storeFilter
@@ -89,7 +89,7 @@ public class StoreStaffService {
   }
 
   /**
-   * 一覧の対象は本人種別 STAFF かつ HQ 側ロールを 1 つも持たない行のうち、店舗コンテキストの店を担当範囲に含むものに限る。ALL_STORES は個別 id
+   * 一覧の対象は本人種別 PLATFORM_USER かつ HQ 側ロールを 1 つも持たない行のうち、店舗コンテキストの店を担当範囲に含むものに限る。ALL_STORES は個別 id
    * を持たないまま全店舗を覆うため常に該当させる。検索語は表示名とメールアドレスを横断する部分一致。
    *
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
@@ -98,7 +98,7 @@ public class StoreStaffService {
   private static Specification<User> staffSpec(String search, Long storeId, Set<Long> hqRoleIds) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
-      predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
+      predicates.add(cb.equal(root.get("userType"), UserType.PLATFORM_USER));
       predicates.add(new HqRoleMembership(hqRoleIds).nonHolders().toPredicate(root, query, cb));
       predicates.add(
           cb.or(
@@ -140,7 +140,7 @@ public class StoreStaffService {
             .password(passwordEncoder.encode(req.getPassword()))
             .displayName(req.getDisplayName())
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(req.getRoleIds())
             .storeScopeType(req.getStoreScopeType())
             .storeIds(req.getStoreIds())
@@ -224,7 +224,7 @@ public class StoreStaffService {
     Long contextStoreId = storeContext.getStoreId();
     return repository
         .findById(id)
-        .filter(user -> user.getUserType() == UserType.STAFF)
+        .filter(user -> user.getUserType() == UserType.PLATFORM_USER)
         .filter(user -> !new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds()))
         .filter(user -> user.authorizes(contextStoreId))
         .orElseThrow(() -> new NotFoundException("スタッフが見つかりません: " + id));

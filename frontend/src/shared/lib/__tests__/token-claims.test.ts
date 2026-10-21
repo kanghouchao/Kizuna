@@ -22,7 +22,7 @@ describe('readTokenClaims', () => {
       'token',
       jwt({
         authorities: ['PERM_CAST_INVITE', 'PERM_ORDER_MANAGE'],
-        userType: 'STAFF',
+        userType: 'PLATFORM_USER',
         storeBridge: true,
         sub: 'staff@kizuna.test',
       })
@@ -31,7 +31,7 @@ describe('readTokenClaims', () => {
     expect(readTokenClaims()).toEqual({
       subject: 'staff@kizuna.test',
       authorities: ['PERM_CAST_INVITE', 'PERM_ORDER_MANAGE'],
-      userType: 'STAFF',
+      userType: 'PLATFORM_USER',
       storeBridge: true,
     });
   });
@@ -86,7 +86,7 @@ describe('readTokenClaims', () => {
 
 describe('hasPermission', () => {
   it('権限コードを PERM_ 接頭辞付きの claim 表現で照合する', () => {
-    const claims = { authorities: ['PERM_CAST_INVITE'], userType: 'STAFF', storeBridge: true };
+    const claims = { authorities: ['PERM_CAST_INVITE'], userType: 'PLATFORM_USER', storeBridge: true };
 
     expect(hasPermission(claims, 'CAST_INVITE')).toBe(true);
     expect(hasPermission(claims, 'CAST_FIELD_DEF_MANAGE')).toBe(false);

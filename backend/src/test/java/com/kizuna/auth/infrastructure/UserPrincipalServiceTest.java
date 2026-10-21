@@ -33,7 +33,7 @@ class UserPrincipalServiceTest {
             .password("stored-hash")
             .displayName("HQ管理者")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(10L))
             .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())

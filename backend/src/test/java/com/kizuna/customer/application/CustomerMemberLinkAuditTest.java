@@ -51,7 +51,7 @@ class CustomerMemberLinkAuditTest {
             .email("operator@example.test")
             .displayName("監査担当")
             .password(UUID.randomUUID().toString())
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .enabled(true)
             .roleIds(Set.of(1L))
             .storeScopeType(StoreScopeType.ALL_STORES)

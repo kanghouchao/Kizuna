@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * アカウント管理 API（本人種別 STAFF の全アカウントの閲覧・停止・再開・パスワード再設定）。全操作 STAFF_ACCOUNT_MANAGE 権限限定。
+ * アカウント管理 API（本人種別 PLATFORM_USER の全アカウントの閲覧・停止・再開・パスワード再設定）。全操作 STAFF_ACCOUNT_MANAGE 権限限定。
  *
  * <p>授権を書く口はこの面に存在しない。ロールと店舗集合の変更は管理者管理（/platform/staff）と店舗スタッフ管理が引き続き担う。
  */

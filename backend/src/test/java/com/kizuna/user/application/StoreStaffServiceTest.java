@@ -174,7 +174,7 @@ class StoreStaffServiceTest {
             .password("hash")
             .displayName("表示名")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
             .storeScopeType(scopeType)
             .storeIds(storeIds)

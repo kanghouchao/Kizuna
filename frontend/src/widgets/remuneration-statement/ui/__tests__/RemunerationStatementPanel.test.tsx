@@ -51,7 +51,7 @@ beforeEach(() => {
   window.history.replaceState({}, '', storePath('1', '/orders/monthly-remunerations'));
   jest
     .mocked(readTokenClaims)
-    .mockReturnValue({ subject: 'actor', authorities: [], userType: 'STAFF', storeBridge: true });
+    .mockReturnValue({ subject: 'actor', authorities: [], userType: 'PLATFORM_USER', storeBridge: true });
   statement.mockResolvedValue(data);
 });
 it('未終了時は既知小計を示し完全合計を捏造しない', async () => {
@@ -185,7 +185,7 @@ const allowBonus = () => {
   jest.mocked(readTokenClaims).mockReturnValue({
     subject: 'actor',
     authorities: ['PERM_BONUS_AWARD'],
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: true,
   });
   jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
@@ -361,7 +361,7 @@ it('別の操作者や店舗には未確認内容を見せず、元の作用域�
   jest.mocked(readTokenClaims).mockReturnValue({
     subject: 'other',
     authorities: ['PERM_BONUS_AWARD'],
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: true,
   });
   view.rerender(

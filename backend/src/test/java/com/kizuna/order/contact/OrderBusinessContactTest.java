@@ -155,7 +155,7 @@ class OrderBusinessContactTest {
         User.builder()
             .email("actor@kizuna.test")
             .password(UUID.randomUUID().toString())
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(1L))
             .storeScopeType(StoreScopeType.ALL_STORES)
             .build();

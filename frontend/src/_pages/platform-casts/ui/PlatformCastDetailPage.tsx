@@ -57,7 +57,7 @@ function PersonDetail({ id }: { id: number }) {
             </div>
             <div>
               <dt className="text-sm text-muted-foreground">アカウントID</dt>
-              <dd>{data.platform_user_id}</dd>
+              <dd>{data.user_id}</dd>
             </div>
             <div>
               <dt className="text-sm text-muted-foreground">表示名</dt>

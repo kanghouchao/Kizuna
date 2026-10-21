@@ -477,7 +477,7 @@ class CustomerContactAuditPostgresTest {
               .password(UUID.randomUUID().toString())
               .displayName("連絡先担当")
               .enabled(true)
-              .userType(UserType.STAFF)
+              .userType(UserType.PLATFORM_USER)
               .roleIds(Set.of(1L))
               .storeScopeType(StoreScopeType.ALL_STORES)
               .build();

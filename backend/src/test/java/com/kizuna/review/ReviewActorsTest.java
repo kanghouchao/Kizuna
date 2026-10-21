@@ -46,7 +46,7 @@ class ReviewActorsTest {
     when(user.getId()).thenReturn(1L);
     when(user.getEmail()).thenReturn("actor");
     when(user.getDisplayName()).thenReturn("担当者");
-    when(user.getUserType()).thenReturn(UserType.STAFF);
+    when(user.getUserType()).thenReturn(UserType.PLATFORM_USER);
     when(user.getEnabled()).thenReturn(true);
     when(store.hasStoreId()).thenReturn(true);
     when(store.getStoreId()).thenReturn(2L);
@@ -88,7 +88,7 @@ class ReviewActorsTest {
     when(user.getEnabled()).thenReturn(true);
     when(user.getUserType()).thenReturn(UserType.SERVICE);
     denied();
-    when(user.getUserType()).thenReturn(UserType.STAFF);
+    when(user.getUserType()).thenReturn(UserType.PLATFORM_USER);
     when(store.hasStoreId()).thenReturn(false);
     denied();
   }

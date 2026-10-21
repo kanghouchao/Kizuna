@@ -232,7 +232,7 @@ class OrderAuditPostgresTest {
               .password(UUID.randomUUID().toString())
               .displayName("受注担当")
               .enabled(true)
-              .userType(UserType.STAFF)
+              .userType(UserType.PLATFORM_USER)
               .roleIds(Set.of(1L))
               .storeScopeType(StoreScopeType.ALL_STORES)
               .build();

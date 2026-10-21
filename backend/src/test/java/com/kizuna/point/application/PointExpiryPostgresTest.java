@@ -95,7 +95,7 @@ class PointExpiryPostgresTest {
         new AuditActor(
             jdbc.queryForObject(
                 "select id from t_users where user_type='STAFF' order by id limit 1", Long.class),
-            "STAFF",
+            "PLATFORM_USER",
             "検証担当");
   }
 
@@ -520,7 +520,7 @@ class PointExpiryPostgresTest {
   void manualExecutionAndRetryRequireCurrentStaffPermissionAndRejectForgedActorType() {
     var executor = first.getBean(TaskExecutor.class);
     var request = command();
-    assertThatThrownBy(() -> executor.execute(request, new AuditActor(serviceId, "STAFF", "偽装")))
+    assertThatThrownBy(() -> executor.execute(request, new AuditActor(serviceId, "PLATFORM_USER", "偽装")))
         .isInstanceOf(AccessDeniedException.class);
     jdbc.update(
         "delete from t_user_roles where user_id=? and role_id=?", operator.id(), expiryRole);

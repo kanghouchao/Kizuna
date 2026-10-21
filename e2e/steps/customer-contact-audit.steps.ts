@@ -323,7 +323,7 @@ Then(
         const item = matches[index],
           event = events[index];
         expect(event.target_id).toBe(item.target);
-        expect(event.actor_type).toBe("STAFF");
+        expect(event.actor_type).toBe("PLATFORM_USER");
         expect(event.actor_id === auditorId).toBe(item.elevated);
         expect(event.store_id).toBe(Number(STORE1_ID));
         expect(event.result).toBe("SUCCEEDED");

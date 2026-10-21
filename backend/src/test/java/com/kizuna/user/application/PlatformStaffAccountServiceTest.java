@@ -83,7 +83,7 @@ class PlatformStaffAccountServiceTest {
             .password("hash")
             .displayName("表示名")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
             .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())

@@ -31,7 +31,7 @@ import org.hibernate.annotations.BatchSize;
  *   <li>店舗集合: {@code SPECIFIC_STORES} は非空（MEMBER のみ空を許容 — 登録時点で紐づけ店舗を持たないため）、{@code ALL_STORES}
  *       は空かつ MEMBER には授権不可（{@code authorizes} が無条件 true になる fail-open を塞ぐ）（{@link
  *       InvalidStoreScopeException}）
- *   <li>ロール: STAFF / SERVICE は 1 ロール以上、CAST/MEMBER は空（{@link InvalidRoleGrantException}）
+ *   <li>ロール: PLATFORM_USER / SERVICE は 1 ロール以上、CAST/MEMBER は空（{@link InvalidRoleGrantException}）
  *   <li>資格情報: SERVICE は email・password・LINE 連携をいずれも持たず、他の種別は email・password が必須（{@link
  *       InvalidCredentialAssignmentException}）
  * </ul>
@@ -185,7 +185,7 @@ public class User extends BaseEntity {
 
   private static void validateRoleGrant(UserType userType, Set<Long> roles) {
     if (userType.holdsRoles() && roles.isEmpty()) {
-      throw new InvalidRoleGrantException("STAFF / SERVICE には少なくとも 1 つのロールが必要です");
+      throw new InvalidRoleGrantException("PLATFORM_USER / SERVICE には少なくとも 1 つのロールが必要です");
     }
     if (!userType.holdsRoles() && !roles.isEmpty()) {
       throw new InvalidRoleGrantException("CAST / MEMBER にロールを授与できません");

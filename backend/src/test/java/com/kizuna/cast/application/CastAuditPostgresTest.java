@@ -152,7 +152,7 @@ class CastAuditPostgresTest {
                         .email(email)
                         .password(UUID.randomUUID().toString())
                         .displayName("監査担当")
-                        .userType(UserType.STAFF)
+                        .userType(UserType.PLATFORM_USER)
                         .enabled(true)
                         .roleIds(Set.of(1L))
                         .storeScopeType(StoreScopeType.ALL_STORES)
@@ -365,7 +365,7 @@ class CastAuditPostgresTest {
     for (var actor : actors.subList(1, actors.size())) {
       assertThat(actor)
           .containsEntry("actor_id", elevatedId)
-          .containsEntry("actor_type", "STAFF")
+          .containsEntry("actor_type", "PLATFORM_USER")
           .containsEntry("store_id", storeId)
           .containsEntry("elevation", "77");
     }

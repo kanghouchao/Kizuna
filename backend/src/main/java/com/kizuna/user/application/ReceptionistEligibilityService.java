@@ -24,9 +24,9 @@ public class ReceptionistEligibilityService {
 
   public List<ReceptionistCandidate> listCandidates(Long storeId) {
     Set<Long> roleIds = roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
-    // 他店舗・停止中・非 STAFF を DB で除外し、無関係な利用者のロール集合を読み込まない。
+    // 他店舗・停止中・非 PLATFORM_USER を DB で除外し、無関係な利用者のロール集合を読み込まない。
     return userRepository
-        .findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, storeId)
+        .findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.PLATFORM_USER, storeId)
         .stream()
         .filter(user -> isEligible(user, storeId, roleIds))
         .map(user -> new ReceptionistCandidate(user.getId(), user.getDisplayName()))
@@ -51,7 +51,7 @@ public class ReceptionistEligibilityService {
 
   // 受付資格は現在のアカウントと保持ロールで判断する。緊急昇格や JWT の権限は資格を与えない。
   private boolean isEligible(User user, Long storeId, Set<Long> roleIds) {
-    return user.getUserType() == UserType.STAFF
+    return user.getUserType() == UserType.PLATFORM_USER
         && user.getEnabled()
         && user.authorizes(storeId)
         && !Collections.disjoint(user.getRoleIds(), roleIds);

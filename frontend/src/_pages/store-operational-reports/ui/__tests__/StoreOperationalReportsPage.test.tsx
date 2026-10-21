@@ -48,7 +48,7 @@ beforeEach(() => {
   mockStoreId = '1';
   jest.mocked(readTokenClaims).mockReturnValue({
     authorities: ['PERM_ORDER_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: false,
   });
 });
@@ -106,7 +106,7 @@ function grantRemuneration() {
       'PERM_OPERATIONAL_REPORT_EXPORT',
       'PERM_REMUNERATION_VIEW',
     ],
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: true,
   });
 }
@@ -359,7 +359,7 @@ test('store does not accept platform advertising permission', async () => {
       'PERM_OPERATIONAL_REPORT_VIEW',
       'PERM_ADVERTISING_COST_SET_VIEW',
     ],
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: true,
   });
   fetch.mockResolvedValue(report(0));

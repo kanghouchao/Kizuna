@@ -83,7 +83,7 @@ public class StoreManagerService {
   }
 
   /**
-   * 任命できる既存アカウントの候補。母集団は「有効な STAFF で、店舗側ロールしか持たず、担当店舗を個別指定していて、まだこの店舗の店長でない」者。
+   * 任命できる既存アカウントの候補。母集団は「有効な PLATFORM_USER で、店舗側ロールしか持たず、担当店舗を個別指定していて、まだこの店舗の店長でない」者。
    *
    * <p>HQ 側ロール保持者を外すのは ADR 0020 の母集団分割（管理者管理の領分）による。ALL_STORES を外すのは、任命しても解任できない 店長ができてしまうためである —
    * 空の店舗集合から当該店舗を除去する形が存在しない。
@@ -169,7 +169,7 @@ public class StoreManagerService {
             .password(passwordEncoder.encode(req.getPassword()))
             .displayName(req.getDisplayName())
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(managerRoleId))
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(storeId))
@@ -249,7 +249,7 @@ public class StoreManagerService {
   private User requireManagerOf(Long storeId, Long userId, Long managerRoleId) {
     return repository
         .findByIdForUpdate(userId)
-        .filter(target -> target.getUserType() == UserType.STAFF)
+        .filter(target -> target.getUserType() == UserType.PLATFORM_USER)
         .filter(target -> target.getRoleIds().contains(managerRoleId))
         .filter(target -> target.authorizes(storeId))
         .orElseThrow(() -> new NotFoundException("この店舗の店長が見つかりません: " + userId));
@@ -259,7 +259,7 @@ public class StoreManagerService {
   private static Specification<User> managerSpec(Long storeId, Long managerRoleId) {
     return (root, query, cb) ->
         cb.and(
-            cb.equal(root.get("userType"), UserType.STAFF),
+            cb.equal(root.get("userType"), UserType.PLATFORM_USER),
             cb.isMember(managerRoleId, root.<Set<Long>>get("roleIds")),
             cb.or(
                 cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
@@ -276,7 +276,7 @@ public class StoreManagerService {
       Long storeId, Long managerRoleId, Set<Long> hqRoleIds, String search) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
-      predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
+      predicates.add(cb.equal(root.get("userType"), UserType.PLATFORM_USER));
       predicates.add(cb.isTrue(root.get("enabled")));
       predicates.add(cb.equal(root.get("storeScopeType"), StoreScopeType.SPECIFIC_STORES));
       predicates.add(new HqRoleMembership(hqRoleIds).nonHolders().toPredicate(root, query, cb));
@@ -300,7 +300,7 @@ public class StoreManagerService {
 
   /** 候補の母集団に属するか（「既にこの店舗の店長でない」は呼出側が先に判定する）。 */
   private static boolean isCandidate(User user, Set<Long> hqRoleIds) {
-    return user.getUserType() == UserType.STAFF
+    return user.getUserType() == UserType.PLATFORM_USER
         && Boolean.TRUE.equals(user.getEnabled())
         && user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
         && !new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds());

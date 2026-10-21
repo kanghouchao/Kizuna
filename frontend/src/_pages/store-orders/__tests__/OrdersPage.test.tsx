@@ -158,7 +158,7 @@ function stubArchive(status: OrderArchiveRow['status'], ...rows: OrderArchiveRow
 function claimsWith(permissions: string[]): TokenClaims {
   return {
     authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: true,
   };
 }

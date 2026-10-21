@@ -55,7 +55,7 @@ class CustomerAuditTest {
         User.builder()
             .email("operator@example.test")
             .displayName("顧客担当")
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .enabled(true)
             .password(UUID.randomUUID().toString())
             .roleIds(Set.of(1L))

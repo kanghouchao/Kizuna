@@ -59,7 +59,7 @@ class TaskExecutorTest {
   private final StoreContext scope = new StoreContext();
   private final Clock clock = Clock.fixed(Instant.parse("2026-10-07T01:00:00Z"), ZoneOffset.UTC);
   private final AuditActor service = new AuditActor(10L, "SERVICE", "実行主体");
-  private final AuditActor operator = new AuditActor(20L, "STAFF", "操作担当");
+  private final AuditActor operator = new AuditActor(20L, "PLATFORM_USER", "操作担当");
   private TaskLifecycle lifecycle;
   private TaskExecutor executor;
 

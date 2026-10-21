@@ -118,7 +118,7 @@ class CredentialRevocationPostgresTest {
   @ParameterizedTest
   @EnumSource(
       value = UserType.class,
-      names = {"STAFF", "CAST", "MEMBER"})
+      names = {"PLATFORM_USER", "CAST", "MEMBER"})
   void committedStopRejectsOldJwtAfterRedisWriteFailureAndResume(UserType type) throws Exception {
     var user = createUser(type);
     var token = token(user, 0);
@@ -187,7 +187,7 @@ class CredentialRevocationPostgresTest {
                     .enabled(true)
                     .userType(type)
                     .roleIds(
-                        type == UserType.STAFF
+                        type == UserType.PLATFORM_USER
                             ? Set.of(jdbc.queryForObject("select min(id) from t_roles", Long.class))
                             : Set.of())
                     .storeScopeType(

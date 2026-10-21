@@ -98,7 +98,7 @@ class PlatformStaffServiceTest {
             .password("hash")
             .displayName("表示名")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
             .storeScopeType(scopeType)
             .storeIds(storeIds)
@@ -208,7 +208,7 @@ class PlatformStaffServiceTest {
     assertThat(saved.getPassword()).isEqualTo("ENCODED");
     assertThat(saved.getDisplayName()).isEqualTo("表示名");
     assertThat(saved.getEnabled()).isTrue();
-    assertThat(saved.getUserType()).isEqualTo(UserType.STAFF);
+    assertThat(saved.getUserType()).isEqualTo(UserType.PLATFORM_USER);
     assertThat(saved.getRoleIds()).containsExactly(HQ_ROLE);
     assertThat(saved.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(saved.getStoreIds()).containsExactly(1L);

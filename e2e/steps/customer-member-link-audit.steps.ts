@@ -266,7 +266,7 @@ Then(
         for (const event of matches) {
           expect(event.target_type).toBe("CUSTOMER_MEMBER_LINK");
           expect(event.source_type).toBe("CUSTOMER");
-          expect(event.actor_type).toBe("STAFF");
+          expect(event.actor_type).toBe("PLATFORM_USER");
           expect(event.actor_id === auditorId).toBe(item.isElevated);
           expect(event.store_id).toBe(Number(STORE1_ID));
           expect(event.result).toBe("SUCCEEDED");

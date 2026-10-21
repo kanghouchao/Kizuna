@@ -36,7 +36,7 @@ jest.mock('../ui/StoreManagerSection', () => ({
 
 /** authorities claim だけを載せた token cookie を置く（署名は検証されない — 表示制御の入力）。 */
 const givenTokenWith = (authorities: string[]) => {
-  const payload = Buffer.from(JSON.stringify({ authorities, userType: 'STAFF' }))
+  const payload = Buffer.from(JSON.stringify({ authorities, userType: 'PLATFORM_USER' }))
     .toString('base64')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')

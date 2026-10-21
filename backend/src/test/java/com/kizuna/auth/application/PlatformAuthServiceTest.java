@@ -99,7 +99,7 @@ class PlatformAuthServiceTest {
         .password("stored-hash")
         .displayName("HQ管理者")
         .enabled(true)
-        .userType(UserType.STAFF)
+        .userType(UserType.PLATFORM_USER)
         .roleIds(Set.of(HQ_ROLE_ID))
         .storeScopeType(StoreScopeType.ALL_STORES)
         .storeIds(Set.of())
@@ -126,7 +126,7 @@ class PlatformAuthServiceTest {
         .password("stored-hash")
         .displayName(displayName)
         .enabled(true)
-        .userType(UserType.STAFF)
+        .userType(UserType.PLATFORM_USER)
         .roleIds(Set.of(STORE_ROLE_ID))
         .storeScopeType(scopeType)
         .storeIds(scopeType == StoreScopeType.ALL_STORES ? Set.of() : Set.of(1L))
@@ -157,7 +157,7 @@ class PlatformAuthServiceTest {
                 "PERM_STORE_MANAGE",
                 "PERM_STORE_VIEW",
                 "PERM_SYSTEM_CONFIG_MANAGE"));
-    assertThat(claims.get("userType")).isEqualTo("STAFF");
+    assertThat(claims.get("userType")).isEqualTo("PLATFORM_USER");
     // HQ 束の STORE_VIEW は SHARED なので店舗文脈は確立できない（ADR 0021 の撤退）。
     assertThat(claims.get("storeBridge")).isEqualTo(false);
     assertThat(claims).doesNotContainKey("role");
@@ -351,7 +351,7 @@ class PlatformAuthServiceTest {
     Optional<PlatformMeResponse> res = authService.me("admin@kizuna.test");
 
     assertThat(res).isPresent();
-    assertThat(res.get().userType()).isEqualTo("STAFF");
+    assertThat(res.get().userType()).isEqualTo("PLATFORM_USER");
     assertThat(res.get().console()).isEqualTo("platform");
     assertThat(res.get().permissions())
         .contains("STORE_MANAGE", "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE");

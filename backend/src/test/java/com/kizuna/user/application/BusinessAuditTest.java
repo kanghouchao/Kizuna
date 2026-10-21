@@ -44,7 +44,7 @@ class BusinessAuditTest {
             .email("operator@kizuna.test")
             .password("encoded")
             .displayName("監査担当")
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .enabled(true)
             .roleIds(Set.of(1L))
             .storeScopeType(StoreScopeType.ALL_STORES)
@@ -83,7 +83,7 @@ class BusinessAuditTest {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(stores)
             .build();
-    var actor = new com.kizuna.audit.recording.AuditActor(1L, "STAFF", "監査担当");
+    var actor = new com.kizuna.audit.recording.AuditActor(1L, "PLATFORM_USER", "監査担当");
     var event =
         new AuditChange(
             actor,

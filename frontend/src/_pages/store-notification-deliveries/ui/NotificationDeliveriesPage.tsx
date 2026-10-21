@@ -605,7 +605,7 @@ export function NotificationDeliveriesPage() {
   );
   const claims = hydrated ? readTokenClaims() : null;
   if (!hydrated) return <p>読み込み中...</p>;
-  if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'NOTIFICATION_VIEW'))
+  if (claims?.userType !== 'PLATFORM_USER' || !hasPermission(claims, 'NOTIFICATION_VIEW'))
     return <p role="alert">業務通知の閲覧権限がありません</p>;
   const manage = hasPermission(claims, 'NOTIFICATION_MANAGE'),
     send = hasPermission(claims, 'NOTIFICATION_SEND');

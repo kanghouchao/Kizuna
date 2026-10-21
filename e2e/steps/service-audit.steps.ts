@@ -459,7 +459,7 @@ Then(
           const detail = await getAuditEvent(request, auditor, row.id);
           expect(row).toMatchObject({
             actor_id: item.actorId,
-            actor_type: "STAFF",
+            actor_type: "PLATFORM_USER",
             store_id: Number(storeId),
             target_type: "SERVICE",
             source_type: "SERVICE_REVISION",

@@ -425,7 +425,7 @@ async function checkedDetail(
   item: AuditCase,
 ) {
   expect(event.actor_id).toBe(item.actorId);
-  expect(event.actor_type).toBe("STAFF");
+  expect(event.actor_type).toBe("PLATFORM_USER");
   expect(event.store_id).toBe(Number(STORE1_ID));
   expect(event.result).toBe("SUCCEEDED");
   const detail = await getAuditEvent(request, auditor, event.id);

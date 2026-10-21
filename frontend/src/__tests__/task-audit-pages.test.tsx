@@ -137,7 +137,7 @@ test('監査詳細の取得失敗は一覧の値で埋めず領域内で再取�
     id: 1,
     occurred_at: '2026-10-07T01:00:00Z',
     actor_id: 3,
-    actor_type: 'STAFF',
+    actor_type: 'PLATFORM_USER',
     actor_name: '担当',
     store_id: null,
     action: 'ROLE_CHANGED',

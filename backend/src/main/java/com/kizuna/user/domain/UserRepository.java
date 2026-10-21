@@ -57,14 +57,14 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   Optional<User> findByIdForUpdate(@Param("id") Long id);
 
   /**
-   * 本人種別 STAFF の行に限り email を返す（アカウント面の対象絞りと自己停止判定の事前検査）。
+   * 本人種別 PLATFORM_USER の行に限り email を返す（アカウント面の対象絞りと自己停止判定の事前検査）。
    *
    * <p>実体でなく列を返す。実体を読み込んだうえで同じ行を {@link #findByIdForUpdate} で押さえるとロックの昇格が版の照合を伴い、
    * 直列化点で待っている間に他者が停止を確定させただけで 409 に落ちる — 冪等であるべき停止がそこで壊れる。
    */
   @Query(
       "select u.email from User u where u.id = :id"
-          + " and u.userType = com.kizuna.user.domain.UserType.STAFF")
+          + " and u.userType = com.kizuna.user.domain.UserType.PLATFORM_USER")
   Optional<String> findStaffEmailById(@Param("id") Long id);
 
   /**
@@ -78,12 +78,12 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
    * <p>母集団の全行を押さえるのは、計数だけでは最後の 2 人が同時に相互降級したとき双方が検査を通り 0 になるため（ADR 0020）。id
    * 昇順は獲得順序を揃えて待ちを環にしない。実体でなく id を返すのは、実体で受けるとロックの獲得が版の照合を伴い、 書きもしない他人の行の版が進んだだけで授権の更新が 409 に落ちるため。
    *
-   * <p>母集団はログインして管理面を行使できる STAFF に限る。SERVICE もロールを持つが対話ログインできず、 最後の管理権限保持者としては数えられない。
+   * <p>母集団はログインして管理面を行使できる PLATFORM_USER に限る。SERVICE もロールを持つが対話ログインできず、 最後の管理権限保持者としては数えられない。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       "select u.id from User u where u.enabled = true"
-          + " and u.userType = com.kizuna.user.domain.UserType.STAFF"
+          + " and u.userType = com.kizuna.user.domain.UserType.PLATFORM_USER"
           + " and exists (select 1 from User h join h.roleIds rid"
           + " where h.id = u.id and rid in :roleIds)"
           + " order by u.id")
@@ -92,7 +92,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   /** 同じ母集団を押さえずに読む。{@link #lockEnabledRoleHolderIds} の後に呼ぶと、新しいスナップショットで実際の顔ぶれが返る。 */
   @Query(
       "select u.id from User u where u.enabled = true"
-          + " and u.userType = com.kizuna.user.domain.UserType.STAFF"
+          + " and u.userType = com.kizuna.user.domain.UserType.PLATFORM_USER"
           + " and exists (select 1 from User h join h.roleIds rid"
           + " where h.id = u.id and rid in :roleIds)")
   List<Long> findEnabledRoleHolderIds(@Param("roleIds") Collection<Long> roleIds);

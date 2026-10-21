@@ -44,7 +44,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(readTokenClaims).mockReturnValue({
     authorities: ['PERM_ORDER_SET_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: false,
   });
 });
@@ -111,7 +111,7 @@ test.each([
           ? ['PERM_ADVERTISING_COST_SET_EXPORT']
           : ['PERM_ADVERTISING_COST_EXPORT']),
       ],
-      userType: 'STAFF',
+      userType: 'PLATFORM_USER',
       storeBridge: false,
     });
     const data = report(0);

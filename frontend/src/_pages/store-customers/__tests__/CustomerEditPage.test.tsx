@@ -53,7 +53,7 @@ const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readToken
 function claimsWith(permissions: string[]): TokenClaims {
   return {
     authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
+    userType: 'PLATFORM_USER',
     storeBridge: true,
   };
 }

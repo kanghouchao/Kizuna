@@ -7,7 +7,7 @@ export interface PlatformCastSummaryResponse {
 }
 
 export interface PlatformCastResponse extends PlatformCastSummaryResponse {
-  platform_user_id: number;
+  user_id: number;
   birth_date: string | null;
 }
 

@@ -29,7 +29,7 @@ it('本人詳細を取得する', async () => {
     display_name: '花',
     real_name: null,
     birth_date: null,
-    platform_user_id: 4,
+    user_id: 4,
   };
   jest.mocked(apiClient.get).mockResolvedValueOnce({ data: person });
   expect(await platformCastApi.get(1)).toEqual(person);

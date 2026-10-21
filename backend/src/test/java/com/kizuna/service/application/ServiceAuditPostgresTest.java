@@ -121,7 +121,7 @@ class ServiceAuditPostgresTest {
     settings = context.getBean(ServiceSettingsService.class);
     own = context.getBean(OwnServiceConditionService.class);
     transactions = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
-    staffId = actor(STAFF, UserType.STAFF);
+    staffId = actor(STAFF, UserType.PLATFORM_USER);
     castId = actor(CAST, UserType.CAST);
     jdbc.execute(
         "alter table t_service_consents add constraint uq_test_consent unique(store_id,enrollment_id,service_id)");
@@ -157,7 +157,7 @@ class ServiceAuditPostgresTest {
                         .displayName("検証担当")
                         .userType(type)
                         .enabled(true)
-                        .roleIds(type == UserType.STAFF ? Set.of(1L) : Set.of())
+                        .roleIds(type == UserType.PLATFORM_USER ? Set.of(1L) : Set.of())
                         .storeScopeType(StoreScopeType.ALL_STORES)
                         .build())
                 .getId());

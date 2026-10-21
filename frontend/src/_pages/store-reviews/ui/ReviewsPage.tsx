@@ -42,7 +42,7 @@ export function ReviewsPage() {
   const { storeId } = useParams<{ storeId: string }>();
   if (!mounted) return <p>読み込み中...</p>;
   const claims = readTokenClaims();
-  if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'REVIEW_VIEW'))
+  if (claims?.userType !== 'PLATFORM_USER' || !hasPermission(claims, 'REVIEW_VIEW'))
     return <div role="alert">口コミの閲覧権限がありません</div>;
   return (
     <Reviews

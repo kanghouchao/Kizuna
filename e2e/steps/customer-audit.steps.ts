@@ -307,7 +307,7 @@ Then("実変更と削除後の顧客監査だけが安全に照会できる", as
         item = matches[i];
       expect(event.target_id).toBe(item.target);
       expect(event.target_type).toBe("CUSTOMER");
-      expect(event.actor_type).toBe("STAFF");
+      expect(event.actor_type).toBe("PLATFORM_USER");
       expect(event.actor_id === auditorId).toBe(item.elevated);
       expect(event.store_id).toBe(Number(STORE1_ID));
       expect(event.result).toBe("SUCCEEDED");

@@ -241,7 +241,7 @@ Then(
         expect(events).toHaveLength(1);
         const event = events[0];
         expect(event.actor_id).toBe(item.actorId);
-        expect(event.actor_type).toBe("STAFF");
+        expect(event.actor_type).toBe("PLATFORM_USER");
         expect(event.store_id).toBe(Number(STORE1_ID));
         expect(event.result).toBe("SUCCEEDED");
         const detail = await getAuditEvent(request, auditor, event.id);

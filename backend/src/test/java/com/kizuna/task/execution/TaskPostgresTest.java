@@ -63,7 +63,7 @@ class TaskPostgresTest {
   private AnnotationConfigApplicationContext second;
   private JdbcTemplate jdbc;
   private static final AuditActor SERVICE = new AuditActor(100L, "SERVICE", "検証処理");
-  private static final AuditActor OPERATOR = new AuditActor(200L, "STAFF", "検証担当");
+  private static final AuditActor OPERATOR = new AuditActor(200L, "PLATFORM_USER", "検証担当");
 
   @BeforeAll
   void connect() {

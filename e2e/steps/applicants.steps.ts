@@ -467,7 +467,7 @@ Then("応募者の監査には操作主体と状態だけが記録される", as
     for (const row of rows) {
       expect(row.store_id).toBe(storeId);
       expect(row.actor_id).toBeTruthy();
-      expect(row.actor_type).toBe("STAFF");
+      expect(row.actor_type).toBe("PLATFORM_USER");
       expect(row.result).toBe("SUCCEEDED");
       expect(Object.keys(row.after_values).sort()).toEqual([
         "status",

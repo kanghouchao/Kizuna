@@ -12,9 +12,9 @@ import Cookies from 'js-cookie';
 export interface TokenClaims {
   /** 操作者ごとの画面内状態を分離する既存の JWT subject。 */
   subject?: string;
-  /** STAFF は PERM_ 接頭辞の権限並集、CAST / MEMBER は ROLE_CAST / ROLE_MEMBER の標識。 */
+  /** PLATFORM_USER は PERM_ 接頭辞の権限並集、CAST / MEMBER は ROLE_CAST / ROLE_MEMBER の標識。 */
   authorities: string[];
-  /** STAFF / CAST / MEMBER。 */
+  /** PLATFORM_USER / CAST / MEMBER。 */
   userType: string | undefined;
   /** 店舗文脈（X-Store-ID）を確立できるか。 */
   storeBridge: boolean;

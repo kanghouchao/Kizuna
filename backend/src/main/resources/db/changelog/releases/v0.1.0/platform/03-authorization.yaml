@@ -129,7 +129,7 @@ databaseChangeLog:
             onDelete: RESTRICT
         - createTable:
             tableName: t_user_roles
-            remarks: ユーザーへのロール授与（STAFF は 1 ロール以上。兼務=複数ロール）
+            remarks: ユーザーへのロール授与（PLATFORM_USER は 1 ロール以上。兼務=複数ロール）
             columns:
               - column:
                   name: user_id

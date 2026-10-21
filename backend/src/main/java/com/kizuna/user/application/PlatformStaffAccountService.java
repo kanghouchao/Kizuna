@@ -35,7 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * アカウント管理ユースケース。対象は本人種別 STAFF の全アカウントで、ロール構成（HQ 側／店舗側）を問わない — CAST/MEMBER は権限モデルの外なので在否も出さない。
+ * アカウント管理ユースケース。対象は本人種別 PLATFORM_USER の全アカウントで、ロール構成（HQ 側／店舗側）を問わない — CAST/MEMBER は権限モデルの外なので在否も出さない。
  *
  * <p>授権は一切書かない。停止・再開とパスワード再設定だけを扱い、ロールと店舗集合は表示にしか現れない。
  */
@@ -75,7 +75,7 @@ public class PlatformStaffAccountService {
   }
 
   /**
-   * 対象は本人種別 STAFF の全行（ロール構成で絞らない）。検索語は表示名とメールアドレスを横断する部分一致。店舗 id は「その店舗を担当範囲に含む」行への絞り込みで、ALL_STORES
+   * 対象は本人種別 PLATFORM_USER の全行（ロール構成で絞らない）。検索語は表示名とメールアドレスを横断する部分一致。店舗 id は「その店舗を担当範囲に含む」行への絞り込みで、ALL_STORES
    * は個別 id を持たないまま全店舗を覆うため常に該当させる。
    *
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
@@ -84,7 +84,7 @@ public class PlatformStaffAccountService {
   private static Specification<User> accountSpec(String search, Long storeId) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
-      predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
+      predicates.add(cb.equal(root.get("userType"), UserType.PLATFORM_USER));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
@@ -213,7 +213,7 @@ public class PlatformStaffAccountService {
   private User requireStaffAccount(Long id) {
     return repository
         .findById(id)
-        .filter(user -> user.getUserType() == UserType.STAFF)
+        .filter(user -> user.getUserType() == UserType.PLATFORM_USER)
         .orElseThrow(() -> notFound(id));
   }
 

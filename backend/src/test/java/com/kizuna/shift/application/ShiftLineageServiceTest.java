@@ -113,7 +113,7 @@ class ShiftLineageServiceTest {
             .password("encoded")
             .displayName(displayName)
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .roleIds(Set.of(1L))

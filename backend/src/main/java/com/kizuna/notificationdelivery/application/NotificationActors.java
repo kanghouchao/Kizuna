@@ -21,7 +21,7 @@ public class NotificationActors {
   public AuditActor require(String email, PermissionCode action) {
     var user = users.findByEmail(email).orElseThrow(NotificationActors::denied);
     if (!store.hasStoreId()
-        || user.getUserType() != UserType.STAFF
+        || user.getUserType() != UserType.PLATFORM_USER
         || !Boolean.TRUE.equals(user.getEnabled())
         || !user.authorizes(store.getStoreId())
         || Collections.disjoint(
@@ -29,7 +29,7 @@ public class NotificationActors {
             roles.findIdsByPermissionCode(PermissionCode.NOTIFICATION_VIEW.name()))
         || Collections.disjoint(user.getRoleIds(), roles.findIdsByPermissionCode(action.name())))
       throw denied();
-    return new AuditActor(user.getId(), "STAFF", user.getDisplayName());
+    return new AuditActor(user.getId(), UserType.PLATFORM_USER.name(), user.getDisplayName());
   }
 
   private static AccessDeniedException denied() {

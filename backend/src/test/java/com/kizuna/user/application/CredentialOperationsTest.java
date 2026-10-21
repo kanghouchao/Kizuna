@@ -22,7 +22,7 @@ class CredentialOperationsTest {
   @ParameterizedTest
   @EnumSource(
       value = UserType.class,
-      names = {"STAFF", "CAST", "MEMBER"})
+      names = {"PLATFORM_USER", "CAST", "MEMBER"})
   void repeatedStopNotifiesTheSameVersion(UserType type) {
     User user = user(type);
     operations.stop(user);
@@ -47,7 +47,7 @@ class CredentialOperationsTest {
 
   @Test
   void passwordChangeAndExplicitInvalidationNotifyAdvancedVersions() {
-    User user = user(UserType.STAFF);
+    User user = user(UserType.PLATFORM_USER);
     operations.changePassword(user, "encoded");
     assertThat(user.getPassword()).isEqualTo("encoded");
     operations.invalidateSessions(user);

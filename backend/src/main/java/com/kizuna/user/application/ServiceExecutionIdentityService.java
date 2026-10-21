@@ -57,7 +57,7 @@ public class ServiceExecutionIdentityService {
   }
 
   private AuditActor requireOperator(User user, PermissionCode permission) {
-    if (user.getUserType() != UserType.STAFF
+    if (user.getUserType() != UserType.PLATFORM_USER
         || !Boolean.TRUE.equals(user.getEnabled())
         || user.getStoreScopeType() != StoreScopeType.ALL_STORES
         || !hasPermission(user, permission)) {

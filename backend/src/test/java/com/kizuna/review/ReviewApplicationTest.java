@@ -90,7 +90,7 @@ class ReviewApplicationTest {
             actors,
             audit,
             Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC));
-    when(actors.require(anyString(), any())).thenReturn(new AuditActor(1L, "STAFF", "担当者"));
+    when(actors.require(anyString(), any())).thenReturn(new AuditActor(1L, "PLATFORM_USER", "担当者"));
     when(rows.saveAndFlush(any()))
         .thenAnswer(
             call -> {

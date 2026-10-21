@@ -205,7 +205,7 @@ Then('口コミ監査が昇格主体と許可状態を保持し昇格撤回後�
     const events = (await listAuditEvents(request, auditorToken, action)).content.filter(event => event.target_id === elevatedReviewId);
     expect(events).toHaveLength(1);
     expect(events[0].actor_id).toBe(elevationActor);
-    expect(events[0].actor_type).toBe('STAFF');
+    expect(events[0].actor_type).toBe('PLATFORM_USER');
     const detail = await getAuditEvent(request, auditorToken, events[0].id);
     expect(detail.after_values.emergency_elevation_id).toBe(String(reviewElevationId));
     expect(JSON.stringify(detail)).not.toContain('緊急調査中の口コミ');

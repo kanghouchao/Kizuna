@@ -33,7 +33,7 @@ Store paths are assembled only in `shared/lib/store-route` (`storePath`, `storeE
 
 ## Code and checks
 
-- Components/types use PascalCase; internal variables/functions follow TypeScript conventions. API **property names** remain snake_case. Store-facing identifiers use Store; the unified account is PlatformUser.
+- Components/types use PascalCase; internal variables/functions follow TypeScript conventions. API **property names** remain snake_case. Store-facing identifiers use Store; the unified account is User.
 - PermissionCode in `entities/user/model/types.ts` mirrors the backend enum manually; update both when adding a permission. There is no parity test.
 - A disabled Steiger rule needs a Japanese reason in `steiger.config.mjs` (the mandatory-comment exception). Keep `_pages` excessive-slicing suppression scoped to pages.
 - Docker lint runs format:check, lint, lint:fsd, typecheck. Run all four for local verification. Coverage and final Taskfile/PR checks are documented in [CONTRIBUTING.md](../CONTRIBUTING.md).

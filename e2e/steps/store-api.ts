@@ -1554,5 +1554,5 @@ export async function findPlatformCastUserId(
     headers,
   });
   expect(detail.status()).toBe(200);
-  return (await detail.json()).platform_user_id;
+  return (await detail.json()).user_id;
 }

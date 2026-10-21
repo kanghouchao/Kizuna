@@ -32,7 +32,7 @@ databaseChangeLog:
               - column: { name: password, value: "${initialAdminPasswordHash}" }
               - column: { name: display_name, value: "HQ管理者" }
               - column: { name: enabled, valueBoolean: true }
-              - column: { name: user_type, value: STAFF }
+              - column: { name: user_type, value: PLATFORM_USER }
               - column: { name: store_scope_type, value: ALL_STORES }
         - insert:
             tableName: t_user_roles

@@ -42,7 +42,7 @@ class RoleManageHolderGuardTest {
             .password("hash")
             .displayName("管理者")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(10L))
             .build();
     target.setId(1L);
@@ -69,7 +69,7 @@ class RoleManageHolderGuardTest {
             .password("hash")
             .displayName("管理者")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(10L))
             .build();
     target.setId(1L);
@@ -230,7 +230,7 @@ class RoleManageHolderGuardTest {
             .password("hash")
             .displayName("管理者")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
             .build();
     target.setId(1L);

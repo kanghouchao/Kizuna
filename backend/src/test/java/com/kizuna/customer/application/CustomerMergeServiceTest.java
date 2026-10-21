@@ -397,7 +397,7 @@ class CustomerMergeServiceTest {
             .password("encoded")
             .displayName("田中花子")
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(STORE_ID))
             .roleIds(Set.of(1L))

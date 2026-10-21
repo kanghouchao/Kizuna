@@ -130,7 +130,7 @@ class CastInvitationAcceptanceServiceTest {
             .displayName("既存キャスト")
             .enabled(true)
             .userType(userType)
-            .roleIds(userType == UserType.STAFF ? Set.of(99L) : Set.of())
+            .roleIds(userType == UserType.PLATFORM_USER ? Set.of(99L) : Set.of())
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(storeIds)
             .build();
@@ -427,7 +427,7 @@ class CastInvitationAcceptanceServiceTest {
             any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     when(userRepository.findByEmailForUpdate("staff@example.com"))
-        .thenReturn(Optional.of(user(8L, UserType.STAFF, Set.of(1L))));
+        .thenReturn(Optional.of(user(8L, UserType.PLATFORM_USER, Set.of(1L))));
 
     assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "staff@example.com"))
         .isInstanceOf(AccessDeniedException.class);

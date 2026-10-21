@@ -543,7 +543,7 @@ class NotificationPostgresTest {
             storeId,
             LocalDate.now(),
             LocalDate.now());
-    var actor = new AuditActor(operatorId, "STAFF", "通知担当");
+    var actor = new AuditActor(operatorId, "PLATFORM_USER", "通知担当");
     assertThatThrownBy(() -> context.getBean(TaskExecutor.class).execute(command, actor))
         .isInstanceOf(AccessDeniedException.class);
   }

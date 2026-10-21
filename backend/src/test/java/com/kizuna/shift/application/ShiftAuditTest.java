@@ -85,7 +85,7 @@ class ShiftAuditTest {
             .password(UUID.randomUUID().toString())
             .enabled(true)
             .displayName("担当")
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(Set.of(1L))
             .storeScopeType(StoreScopeType.ALL_STORES)
             .build();

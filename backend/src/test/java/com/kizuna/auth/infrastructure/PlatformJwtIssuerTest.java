@@ -39,7 +39,7 @@ class PlatformJwtIssuerTest {
 
     Token token =
         issuer.issue(
-            "user@kizuna.test", Map.of("authorities", List.of("PERM_TEST"), "userType", "STAFF"));
+            "user@kizuna.test", Map.of("authorities", List.of("PERM_TEST"), "userType", "PLATFORM_USER"));
 
     SecretKey key = new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
     NimbusJwtDecoder decoder =
@@ -69,7 +69,7 @@ class PlatformJwtIssuerTest {
         new PlatformJwtIssuer(new JwtEncoderConfig().jwtEncoder(appProperties), appProperties);
     Instant exp = Instant.now().plusSeconds(60);
 
-    Token token = issuer.issue("user@kizuna.test", Map.of("userType", "STAFF"), exp);
+    Token token = issuer.issue("user@kizuna.test", Map.of("userType", "PLATFORM_USER"), exp);
 
     // 大域既定（1 時間）ではなく渡した期限で発行される。秒への切り捨ては JWT 仕様側の丸めである。
     assertThat(token.expiresAt()).isEqualTo(exp.toEpochMilli());

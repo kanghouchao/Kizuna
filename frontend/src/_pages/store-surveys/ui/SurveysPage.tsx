@@ -30,7 +30,7 @@ export function SurveysPage() {
   const { storeId } = useParams<{ storeId: string }>();
   if (!mounted) return <p>読み込み中...</p>;
   const claims = readTokenClaims();
-  if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'SURVEY_VIEW'))
+  if (claims?.userType !== 'PLATFORM_USER' || !hasPermission(claims, 'SURVEY_VIEW'))
     return <div role="alert">アンケートの閲覧権限がありません</div>;
   return (
     <Surveys

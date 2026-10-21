@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
  * DisabledException が投げられる（enabled 判定がパスワード照合に先行するため、無効化アカウントでのパスワード正誤オラクルを塞ぐ）。列挙耐性・タイミング均一化も
  * フレームワークの既定挙動が担う。いずれの例外も {@code AuthenticationException} 系のため 401 で応答される。
  *
- * <p>authorities の発行: ロールで授権される種別（STAFF / SERVICE）は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER
+ * <p>authorities の発行: ロールで授権される種別（PLATFORM_USER / SERVICE）は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER
  * は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
  * SERVICE は共通の発行守衛が拒否するため、この発行に到達しない。
  */
@@ -203,7 +203,7 @@ public class PlatformAuthService {
 
   private static List<String> buildAuthorities(User user, Set<PermissionCode> permissions) {
     return switch (user.getUserType()) {
-      case STAFF, SERVICE -> permissions.stream().map(PermissionCode::authority).sorted().toList();
+      case PLATFORM_USER, SERVICE -> permissions.stream().map(PermissionCode::authority).sorted().toList();
       case CAST -> List.of("ROLE_CAST");
       case MEMBER -> List.of("ROLE_MEMBER");
     };
@@ -216,7 +216,7 @@ public class PlatformAuthService {
 
   /** ログイン後の着地先。PLATFORM 権限保持者は platform 優先（兼務者のコンソール切替導線は別票）。 */
   private static String consoleOf(User user, Set<PermissionCode> permissions) {
-    if (user.getUserType() != UserType.STAFF) {
+    if (user.getUserType() != UserType.PLATFORM_USER) {
       return "none";
     }
     boolean platform =

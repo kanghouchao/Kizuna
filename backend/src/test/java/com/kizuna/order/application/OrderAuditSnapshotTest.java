@@ -50,7 +50,7 @@ class OrderAuditSnapshotTest {
             "公開しない任意コース名");
     var event =
         new AuditChange(
-            new AuditActor(1L, "STAFF", "担当"),
+            new AuditActor(1L, "PLATFORM_USER", "担当"),
             1L,
             "ORDER_UPDATED",
             "ORDER",

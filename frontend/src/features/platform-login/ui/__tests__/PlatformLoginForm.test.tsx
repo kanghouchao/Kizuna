@@ -31,12 +31,10 @@ function meResponse(overrides: Partial<PlatformMeResponse>): PlatformMeResponse 
   return {
     email: 'user@kizuna.test',
     display_name: '本人',
-    user_type: 'STAFF',
+    user_type: 'PLATFORM_USER',
     permissions: [],
     console: 'none',
     store_bridge: false,
-    store_scope_type: 'ALL_STORES',
-    store_ids: [],
     line_linked: false,
     ...overrides,
   };

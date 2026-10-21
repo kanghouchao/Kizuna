@@ -45,7 +45,7 @@ type Expected = {
   action: string;
   target: string;
   type: string;
-  actor: "STAFF" | "CAST";
+  actor: "PLATFORM_USER" | "CAST";
   elevated: boolean;
   source?: string;
   sourceType?: string;
@@ -138,7 +138,7 @@ When(
           action,
           target,
           type,
-          actor: "STAFF",
+          actor: "PLATFORM_USER",
           elevated: isElevated,
           ...extra,
         });

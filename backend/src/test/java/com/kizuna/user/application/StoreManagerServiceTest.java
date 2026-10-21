@@ -109,7 +109,7 @@ class StoreManagerServiceTest {
             .password("hash")
             .displayName("表示名")
             .enabled(enabled)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(roleIds)
             .storeScopeType(scopeType)
             .storeIds(storeIds)
@@ -324,7 +324,7 @@ class StoreManagerServiceTest {
 
     verify(repository).saveAndFlush(userCaptor.capture());
     User created = userCaptor.getValue();
-    assertThat(created.getUserType()).isEqualTo(UserType.STAFF);
+    assertThat(created.getUserType()).isEqualTo(UserType.PLATFORM_USER);
     assertThat(created.getRoleIds()).containsExactly(MANAGER_ROLE);
     assertThat(created.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(created.getStoreIds()).containsExactly(STORE);

@@ -36,7 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 管理者（HQ 側ロール保持者）の授権管理ユースケース。対象は本人種別 STAFF のうち HQ 側ロールを 1 つ以上持つ者に限る — CAST/MEMBER
+ * 管理者（HQ 側ロール保持者）の授権管理ユースケース。対象は本人種別 PLATFORM_USER のうち HQ 側ロールを 1 つ以上持つ者に限る — CAST/MEMBER
  * は専用フローが、店舗側ロールのみの利用者は店舗スタッフ管理が扱う（ADR 0020）。HQ 側ロールの定義は {@link RoleRepository#findHqRoleIds} が単源。
  */
 @Service
@@ -65,7 +65,7 @@ public class PlatformStaffService {
   }
 
   /**
-   * 一覧の対象は本人種別 STAFF かつ HQ 側ロールを 1 つ以上持つ行に限る。検索語は表示名とメールアドレスを横断する部分一致。店舗 id
+   * 一覧の対象は本人種別 PLATFORM_USER かつ HQ 側ロールを 1 つ以上持つ行に限る。検索語は表示名とメールアドレスを横断する部分一致。店舗 id
    * は「その店舗を担当範囲に含む」行への絞り込みで、ALL_STORES は個別 id を持たないまま全店舗を覆うため常に該当させる。
    *
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
@@ -74,7 +74,7 @@ public class PlatformStaffService {
   private static Specification<User> staffSpec(String search, Long storeId, Set<Long> hqRoleIds) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
-      predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
+      predicates.add(cb.equal(root.get("userType"), UserType.PLATFORM_USER));
       predicates.add(new HqRoleMembership(hqRoleIds).holders().toPredicate(root, query, cb));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
@@ -109,7 +109,7 @@ public class PlatformStaffService {
             .password(passwordEncoder.encode(req.getPassword()))
             .displayName(req.getDisplayName())
             .enabled(true)
-            .userType(UserType.STAFF)
+            .userType(UserType.PLATFORM_USER)
             .roleIds(req.getRoleIds())
             .storeScopeType(req.getStoreScopeType())
             .storeIds(req.getStoreIds())
@@ -174,7 +174,7 @@ public class PlatformStaffService {
   private User requireManagedStaff(Long id, Set<Long> hqRoleIds) {
     return repository
         .findById(id)
-        .filter(user -> user.getUserType() == UserType.STAFF)
+        .filter(user -> user.getUserType() == UserType.PLATFORM_USER)
         .filter(user -> new HqRoleMembership(hqRoleIds).holdsAny(user.getRoleIds()))
         .orElseThrow(() -> new NotFoundException("管理者が見つかりません: " + id));
   }

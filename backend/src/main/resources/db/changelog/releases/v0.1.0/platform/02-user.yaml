@@ -61,7 +61,7 @@ databaseChangeLog:
                   type: VARCHAR(20)
                   constraints:
                     nullable: false
-                  remarks: 本人種別（STAFF/SERVICE/CAST/MEMBER）
+                  remarks: 本人種別（PLATFORM_USER/SERVICE/CAST/MEMBER）
               - column:
                   name: store_scope_type
                   type: VARCHAR(20)
