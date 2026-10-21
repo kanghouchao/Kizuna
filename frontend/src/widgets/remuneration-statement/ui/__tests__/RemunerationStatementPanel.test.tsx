@@ -49,14 +49,12 @@ const data: Statement = {
 beforeEach(() => {
   jest.clearAllMocks();
   window.history.replaceState({}, '', storePath('1', '/orders/monthly-remunerations'));
-  jest
-    .mocked(readTokenClaims)
-    .mockReturnValue({
-      subject: 'actor',
-      authorities: [],
-      userType: 'PLATFORM_USER',
-      storeBridge: true,
-    });
+  jest.mocked(readTokenClaims).mockReturnValue({
+    subject: 'actor',
+    authorities: [],
+    userType: 'PLATFORM_USER',
+    storeBridge: true,
+  });
   statement.mockResolvedValue(data);
 });
 it('未終了時は既知小計を示し完全合計を捏造しない', async () => {
