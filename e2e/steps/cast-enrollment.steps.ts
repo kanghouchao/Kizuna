@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 import { createCast, issueCastInvitation, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
 
 const { Given, When, Then } = createBdd();
@@ -9,7 +9,7 @@ Given('在籍操作用のキャスト編集画面を開く', async ({ page, requ
   await loginViaUiAndEnterStore(page);
   const token = await loginAsStoreAdmin(request);
   const id = await createCast(request, token, `在籍操作-${Date.now()}`);
-  await page.goto(`${PLATFORM_URL}/store/casts/${id}/edit`);
+  await page.goto(`${APP_URL}/store/casts/${id}/edit`);
   await expect(page.getByText('在籍状態: 在籍中', { exact: true })).toBeVisible();
 });
 
@@ -50,13 +50,13 @@ Given('招待発行済みのキャスト編集画面を開く', async ({ page, r
   invitedCastName = `招待不可-${Date.now()}`;
   const id = await createCast(request, token, invitedCastName);
   withdrawnInvitation = await issueCastInvitation(request, token, id);
-  await page.goto(`${PLATFORM_URL}/store/casts/${id}/edit`);
+  await page.goto(`${APP_URL}/store/casts/${id}/edit`);
   await expect(page.getByText('在籍状態: 在籍中', { exact: true })).toBeVisible();
 });
 
 Then('管理一覧は招待不可を表示し招待ページは受諾を案内しない', async ({ page }) => {
   await expect(page.getByText('在籍状態: 退店', { exact: true })).toBeVisible();
-  await page.goto(`${PLATFORM_URL}/store/casts`);
+  await page.goto(`${APP_URL}/store/casts`);
   await page.getByPlaceholder('名前で検索...').fill(invitedCastName);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   const row = page.getByRole('row').filter({ hasText: invitedCastName });
@@ -64,7 +64,7 @@ Then('管理一覧は招待不可を表示し招待ページは受諾を案内�
   await expect(row.getByRole('button', { name: '招待を発行' })).toHaveCount(0);
   await expect(row.getByRole('button', { name: '再発行' })).toHaveCount(0);
   await page.context().clearCookies();
-  await page.goto(`${PLATFORM_URL}/platform/invite#${encodeURIComponent(withdrawnInvitation)}`);
+  await page.goto(`${APP_URL}/auth/invite#${encodeURIComponent(withdrawnInvitation)}`);
   await expect(page.getByText('この招待は利用できません。店舗の担当者にご確認ください。')).toBeVisible();
   await expect(page.getByRole('button', { name: '新規登録して受諾' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '既存アカウントでログイン' })).toHaveCount(0);

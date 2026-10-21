@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { BASE_URL, PLATFORM_URL } from "../base-url";
+import { BASE_URL, APP_URL } from "../base-url";
 import {
   acceptCastInvitation,
   createCast,
@@ -10,7 +10,7 @@ import {
   loginViaUiAndEnterStore,
   deleteCast,
   getAuthorizedStores,
-  loginPlatformUser,
+  loginUser,
   acceptExistingCastInvitation,
   withdrawCast,
 } from "./store-api";
@@ -55,7 +55,7 @@ Given("公開切替用のキャスト編集画面を開く", async ({ page, requ
   castName = `公開切替-${randomUUID()}`;
   castId = await createCast(request, adminToken, castName, store);
   storefrontCast = { id: castId, storeId: store };
-  await page.goto(`${PLATFORM_URL}/store/casts/${castId}/edit`);
+  await page.goto(`${APP_URL}/store/casts/${castId}/edit`);
   await expect(page.getByRole("heading", { name: "在籍履歴", level: 2 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "内部情報の編集履歴", level: 2 })).toBeVisible();
   await expect(
@@ -128,7 +128,7 @@ Given(
       password,
       "店舗選択キャスト",
     );
-    const token = await loginPlatformUser(request, email, password);
+    const token = await loginUser(request, email, password);
     const second = await createCast(
       request,
       adminToken,
@@ -162,7 +162,7 @@ Given(
 async function acceptThroughUi(page: Page) {
   await page.context().clearCookies();
   await page.goto(
-    `${PLATFORM_URL}/platform/invite#${encodeURIComponent(invitation)}`,
+    `${APP_URL}/auth/invite#${encodeURIComponent(invitation)}`,
   );
   await page.getByRole("button", { name: "既存アカウントでログイン" }).click();
   await page.getByLabel("メールアドレス").fill(email);
@@ -186,7 +186,7 @@ When(
 
 async function portalStores(page: Page) {
   await page.context().clearCookies();
-  await page.goto(`${PLATFORM_URL}/platform/login`);
+  await page.goto(`${APP_URL}/auth/login`);
   await page.getByLabel("メールアドレス").fill(email);
   await page.getByLabel("パスワード").fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

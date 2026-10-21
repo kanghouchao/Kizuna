@@ -4,7 +4,7 @@ import { createBdd } from 'playwright-bdd';
 const { When, Then } = createBdd();
 
 // 作成する氏名はシナリオごとに一意化する（過去 run の残骸との重複＝strict モード違反を避ける。
-// platform-login.steps.ts の createCast 手法に倣う）。
+// login.steps.ts の createCast 手法に倣う）。
 // メールは氏名と別に採番する（type="email" のネイティブ検証は local-part に日本語を許さないため、
 // 氏名をそのままメールへ流用できない）。
 let createdStaffName = '';
@@ -64,7 +64,7 @@ async function addStaffInStore(page: Page, baseName: string, roleLabels: string[
 // 遷移をサイドバーのリンク経由にすることで、メニュー行そのものの可視性も同時に固定する。
 When('従業員管理画面を開く', async ({ page }) => {
   await page.locator('aside').getByRole('link', { name: '従業員管理', exact: true }).click();
-  await expect(page).toHaveURL(/\/platform\/staff\/?$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/admin\/staff\/?$/, { timeout: 15000 });
   await expect(page.getByRole('button', { name: '従業員を追加', exact: true })).toBeVisible();
 });
 
@@ -130,7 +130,7 @@ When(
   '作成した従業員のメールとパスワード {string} でログインする',
   async ({ page }, password: string) => {
     // 直前の「従業員を追加する」ステップで採番した一意メール（createdStaffEmail）でログインする。
-    // 統一ログインのフォーム操作は platform-login.steps.ts の「メール...でログインする」と同型。
+    // 統一ログインのフォーム操作は login.steps.ts の「メール...でログインする」と同型。
     await page.getByLabel('メールアドレス', { exact: true }).fill(createdStaffEmail);
     await page.getByLabel('パスワード', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'ログイン', exact: true }).click();

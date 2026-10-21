@@ -1,7 +1,7 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
-import { PLATFORM_URL } from "../base-url";
+import { APP_URL } from "../base-url";
 import {
   ADMIN_PASSWORD,
   STORE1_ID,
@@ -17,9 +17,9 @@ import {
   withdrawCast,
   recordAttendance,
   createPermissionRole,
-  createPlatformStaffFixture,
+  createStaffFixture,
   loginAsStoreAdmin,
-  loginPlatformUser,
+  loginUser,
   getAuthorizedStores,
 } from "./store-api";
 const { Given, When, Then, After } = createBdd();
@@ -56,7 +56,7 @@ Given(
   async ({ request, $testInfo }) => {
     $testInfo.setTimeout(120000);
     manager = await loginAsStoreAdmin(request);
-    const owner = await loginPlatformUser(
+    const owner = await loginUser(
       request,
       "admin@kizuna.test",
       ADMIN_PASSWORD,
@@ -82,7 +82,7 @@ Given(
         "REMUNERATION_CORRECT",
       ],
     );
-    await createPlatformStaffFixture(
+    await createStaffFixture(
       request,
       owner,
       staffEmail,
@@ -90,7 +90,7 @@ Given(
       [role],
       [Number(STORE1_ID)],
     );
-    token = await loginPlatformUser(request, staffEmail, password);
+    token = await loginUser(request, staffEmail, password);
     otherStore = String(
       (await getAuthorizedStores(request, manager)).find(
         (s) => String(s.id) !== STORE1_ID,
@@ -115,7 +115,7 @@ Given(
       password,
       name,
     );
-    castToken = await loginPlatformUser(request, castEmail, password);
+    castToken = await loginUser(request, castEmail, password);
     courseId = await createCourse(request, manager, "保証根拠コース");
     const order = await createAgreedOrder(
       request,
@@ -154,13 +154,13 @@ Given(
 When(
   "権限のある担当が画面で日額とボーナスを記録する",
   async ({ page, request, $testInfo }) => {
-    await page.goto(PLATFORM_URL + "/platform/login");
+    await page.goto(APP_URL + "/auth/login");
     await page.getByLabel("メールアドレス", { exact: true }).fill(staffEmail);
     await page.getByLabel("パスワード", { exact: true }).fill(password);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
-    await page.waitForURL((url) => url.pathname !== "/platform/login");
+    await page.waitForURL((url) => url.pathname !== "/auth/login");
     await page.goto(
-      `${PLATFORM_URL}/store/orders/monthly-remunerations`,
+      `${APP_URL}/store/orders/monthly-remunerations`,
     );
     await page.getByRole("combobox", { name: "キャスト本人" }).click();
     await page.getByPlaceholder("源氏名で検索").fill(name);
@@ -295,43 +295,43 @@ When("担当がボーナスを訂正して誤記として取り消す", async ({
 });
 Then(
   "本人も原月の最新内訳を安全に参照できる",
-  async ({ request, browser, page: platformPage, $testInfo }) => {
-    await platformPage.goto(
-      PLATFORM_URL + "/platform/orders/monthly-remunerations",
+  async ({ request, browser, page: adminPage, $testInfo }) => {
+    await adminPage.goto(
+      APP_URL + "/admin/orders/monthly-remunerations",
     );
-    await platformPage
+    await adminPage
       .getByRole("combobox", { name: "店舗", exact: true })
       .click();
-    await platformPage.getByRole("option").first().click();
-    await platformPage
+    await adminPage.getByRole("option").first().click();
+    await adminPage
       .getByRole("combobox", { name: "キャスト本人", exact: true })
       .click();
-    await platformPage.getByPlaceholder("源氏名で検索").fill(name);
-    await platformPage.getByRole("option", { name, exact: false }).click();
-    await platformPage.getByLabel("対象月").fill(month);
-    await platformPage
+    await adminPage.getByPlaceholder("源氏名で検索").fill(name);
+    await adminPage.getByRole("option", { name, exact: false }).click();
+    await adminPage.getByLabel("対象月").fill(month);
+    await adminPage
       .getByRole("button", { name: "照会", exact: true })
       .click();
-    await platformPage
+    await adminPage
       .getByRole("button", { name: "保証・ボーナスを含む月次明細" })
       .click();
     await expect(
-      platformPage.getByText("¥10,000", { exact: true }).first(),
+      adminPage.getByText("¥10,000", { exact: true }).first(),
     ).toBeVisible();
     await expect(
-      platformPage.getByRole("button", { name: "ボーナスを記録" }),
+      adminPage.getByRole("button", { name: "ボーナスを記録" }),
     ).toHaveCount(0);
-    await platformPage
+    await adminPage
       .getByRole("heading", { name: "受注報酬・保証・ボーナス", exact: true })
       .scrollIntoViewIfNeeded();
-    await platformPage.screenshot({
+    await adminPage.screenshot({
       animations: "disabled",
-      path: $testInfo.outputPath("remuneration-platform.png"),
+      path: $testInfo.outputPath("remuneration-admin.png"),
       fullPage: true,
     });
     await withdrawCast(request, manager, secondEnrollment);
     const response = await request.get(
-      "/api/platform/me/remuneration-statements",
+      "/api/me/remuneration-statements",
       {
         headers: { Authorization: `Bearer ${castToken}` },
         params: { store_id: STORE1_ID, person_id: 999999, month },
@@ -348,12 +348,12 @@ Then(
       viewport: { width: 390, height: 844 },
     });
     const page = await context.newPage();
-    await page.goto(PLATFORM_URL + "/platform/login");
+    await page.goto(APP_URL + "/auth/login");
     await page.getByLabel("メールアドレス", { exact: true }).fill(castEmail);
     await page.getByLabel("パスワード", { exact: true }).fill(password);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
     await page.waitForURL(/\/cast\//);
-    await page.goto(PLATFORM_URL + "/cast/remunerations/monthly");
+    await page.goto(APP_URL + "/cast/remunerations/monthly");
     await page.getByRole("combobox", { name: "店舗" }).click();
     await page.getByRole("option").first().click();
     await page.getByLabel("対象月").fill(month);
@@ -455,7 +455,7 @@ Then("授権外店舗と無権限の内訳操作は拒否される", async ({ re
   });
   expect(managed.status(), await managed.text()).toBe(200);
   // 店舗スタッフには REMUNERATION_VIEW の既定授与が無い。
-  const staff = await loginPlatformUser(
+  const staff = await loginUser(
     request,
     "yamada.jiro@kizuna.test",
     ADMIN_PASSWORD,
@@ -465,12 +465,12 @@ Then("授権外店舗と無権限の内訳操作は拒否される", async ({ re
     params: { person_id: personId, month },
   });
   expect(unprivileged.status()).toBe(403);
-  const platform = await request.get("/api/platform/remuneration-statements", {
+  const admin = await request.get("/api/admin/remuneration-statements", {
     headers: { Authorization: `Bearer ${token}` },
     params: { person_id: personId, store_id: STORE1_ID, month },
   });
-  expect(platform.status(), await platform.text()).toBe(200);
-  const foreign = await request.get("/api/platform/remuneration-statements", {
+  expect(admin.status(), await admin.text()).toBe(200);
+  const foreign = await request.get("/api/admin/remuneration-statements", {
     headers: { Authorization: `Bearer ${token}` },
     params: { person_id: personId, store_id: otherStore, month },
   });
@@ -495,13 +495,13 @@ After({ tags: "@remuneration-components" }, async ({ request }) => {
 });
 
 When("ボーナスが保存された直後に応答を失う", async ({ page, request }) => {
-  await page.goto(PLATFORM_URL + "/platform/login");
+  await page.goto(APP_URL + "/auth/login");
   await page.getByLabel("メールアドレス", { exact: true }).fill(staffEmail);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await page.waitForURL((url) => url.pathname !== "/platform/login");
+  await page.waitForURL((url) => url.pathname !== "/auth/login");
   await page.goto(
-    `${PLATFORM_URL}/store/orders/monthly-remunerations`,
+    `${APP_URL}/store/orders/monthly-remunerations`,
   );
   await selectPerson(page, name);
   await page.getByLabel("対象月").fill(month);

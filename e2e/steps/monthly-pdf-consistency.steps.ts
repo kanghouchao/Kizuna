@@ -3,7 +3,7 @@ import { createBdd } from 'playwright-bdd';
 import { Client } from 'pg';
 import { acceptCastInvitation, issueCastInvitation, createCast, createCourse,
   createAgreedOrder, completeAgreedOrder, getOrder, invalidateOrder,
-  loginAsStoreAdmin, loginPlatformUser, STORE_HEADERS, STORE1_ID } from './store-api';
+  loginAsStoreAdmin, loginUser, STORE_HEADERS, STORE1_ID } from './store-api';
 
 const { Given, When, Then } = createBdd();
 let manager = '';
@@ -13,7 +13,7 @@ let prefix = '';
 let month = '';
 let beforePdf: Buffer;
 let correction: Record<string, unknown>;
-const base = '/api/platform/me/monthly-remunerations/pdf';
+const base = '/api/me/monthly-remunerations/pdf';
 
 async function database() {
   if (process.env.PGHOST !== 'database') throw new Error('専用 E2E DB でのみ実行できます');
@@ -50,7 +50,7 @@ Given('月次PDFの本人に二千件を超える完了受注がある', async (
   const email = `pdf982-${suffix}@kizuna.test`;
   const password = `Cast-${suffix}-pass`;
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, cast), email, password, '印刷禁止の本人アカウント名');
-  token = await loginPlatformUser(request, email, password);
+  token = await loginUser(request, email, password);
   const course = await createCourse(request, manager, '日本語全件サービス');
   orderId = await createAgreedOrder(request, manager, cast, course, '印刷禁止の顧客名');
   await completeAgreedOrder(request, manager, orderId);

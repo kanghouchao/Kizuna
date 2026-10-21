@@ -12,7 +12,7 @@ let createdCastName = '';
 
 Given('店舗 {string} にキャスト {string} を作成する', async ({ request }, _store: string, baseName: string) => {
   // 一意名で作成し、中断した過去 run の残骸との重複（strict モード違反）を避ける
-  //（platform-login.steps.ts と同じ手法）。{string} は可読性のための基底名の表記で、
+  //（login.steps.ts と同じ手法）。{string} は可読性のための基底名の表記で、
   // 後続ステップの照合は解決済みの createdCastName / seededCastName() を使う。
   createdCastName = `${baseName}-${Date.now()}`;
   const token = await loginAsStoreAdmin(request);

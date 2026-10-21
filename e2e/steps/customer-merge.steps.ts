@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { addCustomerContact, preferCustomerContact, createCustomer, loginAsStoreAdmin, loginViaUiAndEnterStore, updateCustomer } from './store-api';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 
 const { Given, When, Then } = createBdd();
 let survivingId = '';
@@ -23,7 +23,7 @@ Given('統合の比較用に長い注意事項と同値連絡先を持つ二顧�
   await loginViaUiAndEnterStore(page);
 });
 When('顧客一覧の二行から統合資料を選ぶ', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/customers`);
+  await page.goto(`${APP_URL}/store/customers`);
   await page.getByPlaceholder('名前・電話・メール・LINE ID で検索...').fill(marker);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   for (const suffix of ['甲', '乙']) await page.getByRole('checkbox', { name: `${marker}${suffix} を見比べる` }).click();
@@ -82,7 +82,7 @@ When('最新資料を再確認して統合を確定する', async ({ page }) => 
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 Then('統合前後の資料と連絡先の移動を監査で確認できる', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/customers/${survivingId}/edit`);
+  await page.goto(`${APP_URL}/store/customers/${survivingId}/edit`);
   await page.getByRole('button', { name: '監査記録を確認' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(reason, { exact: true })).toBeVisible();

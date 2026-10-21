@@ -2,14 +2,14 @@ import { expect, type APIRequestContext } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
-import { PLATFORM_URL } from "../base-url";
+import { APP_URL } from "../base-url";
 import {
   ADMIN_PASSWORD,
   STORE1_ID,
   STORE_HEADERS,
   createPermissionRole,
   loginAsStoreAdmin,
-  loginPlatformUser,
+  loginUser,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
@@ -50,7 +50,7 @@ Given(
     const suffix = randomUUID();
     applicantName = `応募検証-${suffix}`;
     managerToken = await loginAsStoreAdmin(request);
-    const ownerLogin = await request.post("/api/platform/login", {
+    const ownerLogin = await request.post("/api/auth/login", {
       data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD },
     });
     expect(ownerLogin.status()).toBe(200);
@@ -68,7 +68,7 @@ Given(
     );
     const email = `recruitment-${suffix}@example.invalid`;
     const password = randomUUID();
-    const created = await request.post("/api/platform/staff", {
+    const created = await request.post("/api/admin/staff", {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` },
       data: {
         email,
@@ -80,21 +80,21 @@ Given(
       },
     });
     expect(created.status(), await created.text()).toBe(201);
-    const login = await request.post("/api/platform/login", {
+    const login = await request.post("/api/auth/login", {
       data: { email, password },
     });
     expect(login.status()).toBe(200);
     token = (await login.json()).token;
-    await page.goto(`${PLATFORM_URL}/platform/login`);
+    await page.goto(`${APP_URL}/auth/login`);
     await page.getByLabel("メールアドレス", { exact: true }).fill(email);
     await page.getByLabel("パスワード", { exact: true }).fill(password);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
-    await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 20000 });
+    await expect(page).toHaveURL(/\/admin\/dashboard\/?$/, { timeout: 20000 });
   },
 );
 
 When("応募者の受付と面接を画面で登録する", async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/applicants`);
+  await page.goto(`${APP_URL}/store/applicants`);
   await page.getByRole("link", { name: "応募者を登録" }).click();
   await page.getByLabel("氏名", { exact: true }).fill(applicantName);
   await page.getByLabel("電話番号", { exact: true }).fill("09000000000");
@@ -156,7 +156,7 @@ Then(
         document.documentElement.classList.toggle("dark", value === "dark");
       }, theme);
       await page.goto(
-        `${PLATFORM_URL}/store/applicants/${applicantId}`,
+        `${APP_URL}/store/applicants/${applicantId}`,
       );
       await page.setViewportSize({ width: 1280, height: 960 });
       await expect(
@@ -172,7 +172,7 @@ Then(
         path: $testInfo.outputPath(`applicant-detail-${theme}.png`),
         fullPage: true,
       });
-      await page.goto(`${PLATFORM_URL}/store/applicants`);
+      await page.goto(`${APP_URL}/store/applicants`);
       await expect(
         page.getByRole("heading", { name: "応募者管理", exact: true }),
       ).toBeVisible();
@@ -185,7 +185,7 @@ Then(
         fullPage: true,
       });
       await page.goto(
-        `${PLATFORM_URL}/store/applicants/${applicantId}`,
+        `${APP_URL}/store/applicants/${applicantId}`,
       );
     }
     await page.setViewportSize({ width: 390, height: 844 });
@@ -285,7 +285,7 @@ Then(
     expect(created.status(), await created.text()).toBe(201);
     applicantId = (await created.json()).id;
     // 店舗スタッフは CAST_MANAGE を持つが採用権限は既定授与されない。
-    const staffToken = await loginPlatformUser(
+    const staffToken = await loginUser(
       request,
       "yamada.jiro@kizuna.test",
       ADMIN_PASSWORD,
@@ -294,7 +294,7 @@ Then(
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` },
     });
     expect(denied.status()).toBe(403);
-    const outsideStore = await request.get("/api/platform/stores/me", {
+    const outsideStore = await request.get("/api/admin/stores/me", {
       headers: { Authorization: `Bearer ${managerToken}` },
     });
     expect(outsideStore.status()).toBe(200);

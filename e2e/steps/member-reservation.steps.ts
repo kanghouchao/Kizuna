@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { BASE_URL, PLATFORM_URL } from "../base-url";
+import { BASE_URL, APP_URL } from "../base-url";
 import {
   createCast,
   createCustomer,
@@ -31,7 +31,7 @@ const MEMBER_PASSWORD = "pass12345";
 // 申請の必須項目。店舗が知る名前はこれだけで、会員の登録情報（表示名・メール）は店舗へ渡らない。
 const DECLARED_NAME = "名乗り太郎";
 
-// 播種した実体の id / 認証情報。MEMBER PlatformUser には削除 API が無いためタイムスタンプ付き
+// 播種した実体の id / 認証情報。MEMBER User には削除 API が無いためタイムスタンプ付き
 // メールアドレスで隔離し残留を許容する（顧客・キャスト・シフト・受注は明示削除する）。
 let memberEmail = "";
 // 会員コードはこの run のシナリオを一意に指す鍵。inbox は店舗共有で他の未処理申請が先に並ぶため、
@@ -133,7 +133,7 @@ When("店舗公式サイトのトップを開く", async ({ page }) => {
 });
 
 When("WEB予約ボタンを押す", async ({ page }) => {
-  // 公式サイトは店舗ドメイン、ポータルは平台ドメインで別オリジンのため、ページ遷移そのものを待つ。
+  // 公式サイトは店舗ドメイン、ポータルはアプリドメインで別オリジンのため、ページ遷移そのものを待つ。
   await page.getByRole("link", { name: "WEB予約" }).first().click();
   await page.waitForURL(/\/member\/reservations\/new/, { timeout: 15000 });
 });
@@ -169,7 +169,7 @@ When("人数 {string} で予約を申請する", async ({ page }, pax: string) =
   await Promise.all([
     page.waitForResponse(
       (resp) =>
-        resp.url().includes("/platform/me/order-applications") &&
+        resp.url().includes("/me/order-applications") &&
         resp.request().method() === "POST",
       { timeout: 15000 },
     ),
@@ -192,7 +192,7 @@ Then(
 
 When("店舗管理者が受付箱で予約を確定する", async ({ page, request }) => {
   const storeId = await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/orders`);
+  await page.goto(`${APP_URL}/store/orders`);
   const adminToken = await loginAsStoreAdmin(request);
   const courseName = `申請確定コース-${Date.now()}`;
   await createCourse(request, adminToken, courseName, storeId);
@@ -226,12 +226,12 @@ When("店舗管理者が受付箱で予約を確定する", async ({ page, reque
 
 When("予約一覧を開き直す", async ({ page }) => {
   // 管理画面へ入った後は会員セッションが失われるため、会員として入り直す。
-  await page.goto(`${PLATFORM_URL}/platform/login`);
+  await page.goto(`${APP_URL}/auth/login`);
   await page.getByLabel("メールアドレス", { exact: true }).fill(memberEmail);
   await page.getByLabel("パスワード", { exact: true }).fill(MEMBER_PASSWORD);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await expect(page).toHaveURL(/\/member\/?$/, { timeout: 15000 });
-  await page.goto(`${PLATFORM_URL}/member/reservations/`);
+  await page.goto(`${APP_URL}/member/reservations/`);
 });
 
 When("予約を取り下げる", async ({ page }) => {
@@ -246,7 +246,7 @@ When("予約を取り下げる", async ({ page }) => {
   ]);
 });
 
-// 播種した実体を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。MEMBER PlatformUser には
+// 播種した実体を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。MEMBER User には
 // 削除 API が無いため残留を許容する（タイムスタンプ付きメールアドレスで以後の run と隔離済み）。
 // 受注は顧客・キャストを参照する（FK RESTRICT）ため、必ず受注 → シフト → キャスト → 顧客の順で消す。
 After(async ({ request }) => {

@@ -5,7 +5,7 @@ import {
   ADMIN_PASSWORD,
   STORE_HEADERS,
   createPermissionRole,
-  createPlatformStaffFixture,
+  createStaffFixture,
   createStoreStaffFixture,
   createUnpublishedCast,
   issueCastInvitation,
@@ -14,8 +14,8 @@ import {
   createSpecialService,
   getServiceSetting,
   listCastFieldDefinitions,
-  getPlatformMe,
-  findPlatformCastUserId,
+  getMe,
+  findCastUserId,
   listServiceRevisions,
   updateServiceSetting,
   deleteServiceSetting,
@@ -25,7 +25,7 @@ import {
   getAuthorizedStores,
   loginAsStoreAdmin,
   loginViaUiAndEnterStore,
-  loginPlatformUser,
+  loginUser,
   type ServiceSettingChange,
 } from "./store-api";
 
@@ -88,7 +88,7 @@ Given(
     const foreignStore = stores.find((store) => String(store.id) !== storeId);
     if (!foreignStore) throw new Error("検証対象と異なる店舗が必要です");
     otherStore = String(foreignStore.id);
-    const owner = await loginPlatformUser(
+    const owner = await loginUser(
       request,
       "admin@kizuna.test",
       ADMIN_PASSWORD,
@@ -109,7 +109,7 @@ Given(
       stores.map((store) => store.id),
       storeId,
     );
-    ordinary = await loginPlatformUser(request, email, password);
+    ordinary = await loginUser(request, email, password);
     const limitedRole = await createPermissionRole(
       request,
       owner,
@@ -126,7 +126,7 @@ Given(
       [Number(storeId)],
       storeId,
     );
-    limited = await loginPlatformUser(request, limitedEmail, password);
+    limited = await loginUser(request, limitedEmail, password);
     expect(
       (await getAuthorizedStores(request, limited)).map((store) =>
         String(store.id),
@@ -140,14 +140,14 @@ Given(
       ["AUDIT_VIEW", "CAST_PERSON_VIEW"],
     );
     const auditEmail = `service-auditor-${suffix}@example.test`;
-    await createPlatformStaffFixture(
+    await createStaffFixture(
       request,
       owner,
       auditEmail,
       password,
       [auditRole],
     );
-    auditor = await loginPlatformUser(request, auditEmail, password);
+    auditor = await loginUser(request, auditEmail, password);
     enrollment = await createUnpublishedCast(request, manager, secret, storeId);
     const invitation = await issueCastInvitation(
       request,
@@ -163,12 +163,12 @@ Given(
       password,
       `本人-${suffix}`,
     );
-    castToken = await loginPlatformUser(request, castEmail, password);
-    expect(await getPlatformMe(request, castToken)).toMatchObject({
+    castToken = await loginUser(request, castEmail, password);
+    expect(await getMe(request, castToken)).toMatchObject({
       email: castEmail,
       user_type: "CAST",
     });
-    castId = await findPlatformCastUserId(request, auditor, `本人-${suffix}`);
+    castId = await findCastUserId(request, auditor, `本人-${suffix}`);
   },
 );
 
@@ -312,7 +312,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
         })
       ).status(),
     ).toBe(404);
-    const consentPath = `/api/platform/me/service-conditions/${id}/consent`;
+    const consentPath = `/api/me/service-conditions/${id}/consent`;
     const consent = {
       terms_version: 2,
       consent_version: 1,

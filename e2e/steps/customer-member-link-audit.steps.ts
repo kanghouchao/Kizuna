@@ -7,7 +7,7 @@ import {
   STORE_HEADERS,
   createCustomer,
   createPermissionRole,
-  createPlatformStaffFixture,
+  createStaffFixture,
   createStoreStaffFixture,
   currentCustomerMemberLink,
   customerMemberLinkHistory,
@@ -17,7 +17,7 @@ import {
   listAuditEvents,
   listShifts,
   loginAsStoreAdmin,
-  loginPlatformUser,
+  loginUser,
   registerMember,
   releaseCustomerMemberLink,
 } from "./store-api";
@@ -58,7 +58,7 @@ Given(
     const suffix = randomUUID();
     secret = `関連監査へ複写しない私的入力-${suffix}`;
     staff = await loginAsStoreAdmin(request);
-    const owner = await loginPlatformUser(
+    const owner = await loginUser(
       request,
       "admin@kizuna.test",
       ADMIN_PASSWORD,
@@ -71,8 +71,8 @@ Given(
       ["AUDIT_VIEW",],
     );
     const email = `link-auditor-${suffix}@example.test`;
-    await createPlatformStaffFixture(request, owner, email, password, [role]);
-    auditor = await loginPlatformUser(request, email, password);
+    await createStaffFixture(request, owner, email, password, [role]);
+    auditor = await loginUser(request, email, password);
     const limitedRole = await createPermissionRole(
       request,
       owner,
@@ -88,7 +88,7 @@ Given(
       [limitedRole],
       [Number(STORE1_ID)],
     );
-    limitedStaff = await loginPlatformUser(request, limitedEmail, password);
+    limitedStaff = await loginUser(request, limitedEmail, password);
     const limitedStores = await getAuthorizedStores(request, limitedStaff);
     expect(
       limitedStores.map((store: { id: number }) => String(store.id)),

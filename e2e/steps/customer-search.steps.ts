@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { addCustomerContact, createCustomer, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 
 const { Given, When, Then } = createBdd();
 let value = '';
@@ -21,7 +21,7 @@ Given('非優先連絡先を共有する顧客が同じ店舗にいる', async (
 });
 
 When('顧客一覧で非優先メールを検索する', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/customers`);
+  await page.goto(`${APP_URL}/store/customers`);
   await page.getByPlaceholder('名前・電話・メール・LINE ID で検索...').fill(value);
   await page.getByRole('button', { name: '検索', exact: true }).click();
 });
@@ -42,7 +42,7 @@ Then('一致したメールと顧客名を確認できる', async ({ page }) => 
 });
 
 When('重複候補で共有連絡先を検索する', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/customers/duplicates`);
+  await page.goto(`${APP_URL}/store/customers/duplicates`);
   await page.getByLabel('連絡先で検索').fill(value);
   await page.getByRole('button', { name: '検索', exact: true }).click();
 });

@@ -1,11 +1,11 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 
 const { When, Then } = createBdd();
 
-const ROLES_URL = `${PLATFORM_URL}/platform/roles`;
-const STAFF_URL = `${PLATFORM_URL}/platform/staff`;
+const ROLES_URL = `${APP_URL}/admin/roles`;
+const STAFF_URL = `${APP_URL}/admin/staff`;
 
 // 作成するロール名はシナリオごとに一意化する（失敗した過去 run の残骸との重複＝strict モード違反を
 // 避ける。staff-management.steps.ts の採番手法に倣う）。

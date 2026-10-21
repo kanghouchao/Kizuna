@@ -1,16 +1,16 @@
 import { expect, Locator, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { PLATFORM_URL } from '../base-url';
+import { APP_URL } from '../base-url';
 import { createCast, deleteCast, loginAsStoreAdmin, storeSwitchToggle, switchStoreInHeader } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
-// 統一ログインは platform ドメイン（kizuna.test）で提供され、店舗業務画面も同じドメイン上で
-// X-Store-ID 注入により操作する。cookie はオリジン別に分離されるため、遷移先は常に PLATFORM_URL を用いる。
-const PLATFORM_LOGIN_URL = `${PLATFORM_URL}/platform/login`;
+// 統一ログインは アプリドメイン（kizuna.test）で提供され、店舗業務画面も同じドメイン上で
+// X-Store-ID 注入により操作する。cookie はオリジン別に分離されるため、遷移先は常に APP_URL を用いる。
+const LOGIN_URL = `${APP_URL}/auth/login`;
 
 // 店舗業務 URL は店舗 id を持たず、表示店舗はヘッダの店舗切替が決める。
-const CASTS_URL = `${PLATFORM_URL}/store/casts`;
+const CASTS_URL = `${APP_URL}/store/casts`;
 
 // 播種したキャストの id / 一意名。scenario 2 の Given でのみ設定し、断言と後始末で共有する。
 let createdCastId = '';
@@ -31,7 +31,7 @@ async function openStoreSwitch(page: Page): Promise<Locator> {
 }
 
 Given('統一ログイン画面を開く', async ({ page }) => {
-  await page.goto(PLATFORM_LOGIN_URL);
+  await page.goto(LOGIN_URL);
   await expect(page.getByRole('button', { name: 'ログイン', exact: true })).toBeVisible();
 });
 
@@ -53,7 +53,7 @@ When(
 
 Then('ダッシュボードへ遷移する', async ({ page }) => {
   // ロールや授権店舗によらず、すべての従業員の着地先はダッシュボードである。
-  await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/admin\/dashboard\/?$/, { timeout: 15000 });
 });
 
 Then(
@@ -96,7 +96,7 @@ Then('キャスト一覧に {string} が表示されない', async ({ page }, _l
 
 // 播種した cast を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。
 // 復元 hook 自身が独立してログインし直すため、テスト側の状態に依存しない。ベストエフォート。
-After({ tags: '@platform-login-store-switch' }, async ({ request }) => {
+After({ tags: '@login-store-switch' }, async ({ request }) => {
   if (!createdCastId) return;
   const token = await loginAsStoreAdmin(request);
   await deleteCast(request, token, createdCastId).catch(() => {});

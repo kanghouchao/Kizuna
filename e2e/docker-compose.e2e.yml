@@ -117,7 +117,7 @@ services:
       LIQUIBASE_CONTEXTS: demo
       # HMAC-SHA256 の要件（RFC 7518）で 256bit 以上必要（秘密鍵は raw bytes として解釈される）
       APP_JWT_SECRET: ${APP_JWT_SECRET:-e2e-test-secret-0123456789abcdef}
-      # gateway の network alias と一致させる。frontend/backend はこの値で platform ドメインと
+      # gateway の network alias と一致させる。frontend/backend はこの値で アプリドメインと
       # 店舗ドメインを判別するため、alias とずれると店舗として解決されて全シナリオが崩れる。
       APP_DOMAIN: kizuna.test
     depends_on:
@@ -148,7 +148,7 @@ services:
     networks:
       - network
     environment:
-      STORE_LOOKUP_API_URL: http://backend:8080/platform/stores/lookup
+      STORE_LOOKUP_API_URL: http://backend:8080/admin/stores/lookup
       STORE_CONFIG_API_URL: http://backend:8080/store/config/public
       APP_DOMAIN: kizuna.test
     depends_on:

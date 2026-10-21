@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext } from "@playwright/test";
-import { PLATFORM_URL } from "../base-url";
+import { APP_URL } from "../base-url";
 import { createBdd } from "playwright-bdd";
 import {
   getSelfDailyRemunerations,
@@ -17,7 +17,7 @@ import {
   getAuthorizedStores,
   getOrder,
   acceptExistingCastInvitation,
-  loginPlatformUser,
+  loginUser,
   withdrawCast,
   invalidateOrder,
   cancelOrder,
@@ -66,7 +66,7 @@ Given("月次明細の本人に完了受注と未完了受注がある", async (
 
 When("店長が月次給与明細で本人と対象月を選ぶ", async ({ page }) => {
   await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/orders`);
+  await page.goto(`${APP_URL}/store/orders`);
   await page.getByRole("link", { name: "月次給与明細", exact: true }).click();
   await page.getByRole("combobox", { name: "キャスト本人" }).click();
   await page.getByPlaceholder("源氏名で検索").fill(name);
@@ -143,7 +143,7 @@ Given(
       password,
       name,
     );
-    castToken = await loginPlatformUser(request, email, password);
+    castToken = await loginUser(request, email, password);
     const course = await createCourse(request, managerToken, "月末コース");
     originalOrderId = await createAgreedOrder(
       request,
@@ -277,7 +277,7 @@ Then(
     ).toBeTruthy();
     await loginViaUiAndEnterStore(page);
     await page.goto(
-      `${PLATFORM_URL}/store/orders/monthly-remunerations`,
+      `${APP_URL}/store/orders/monthly-remunerations`,
     );
     await page.getByRole("combobox", { name: "キャスト本人" }).click();
     await page.getByPlaceholder("源氏名で検索").fill(`${name}-旧名`);
@@ -351,7 +351,7 @@ let foreignPersonId = 0;
 let staffPersonId = 0;
 Given("店舗スタッフと別店舗だけに在籍する本人がいる", async ({ request }) => {
   managerToken = await loginAsStoreAdmin(request);
-  staffToken = await loginPlatformUser(
+  staffToken = await loginUser(
     request,
     "yamada.jiro@kizuna.test",
     "pass",
@@ -377,7 +377,7 @@ Given("店舗スタッフと別店舗だけに在籍する本人がいる", asyn
     password,
     "他店本人",
   );
-  castToken = await loginPlatformUser(request, email, password);
+  castToken = await loginUser(request, email, password);
   const candidates = await request.get(
     "/api/store/monthly-remunerations/casts",
     {
@@ -499,7 +499,7 @@ Then(
 When("店長が日別給与明細で原営業日を照会する", async ({ page }) => {
   await loginViaUiAndEnterStore(page);
   await page.goto(
-    `${PLATFORM_URL}/store/orders/monthly-remunerations`,
+    `${APP_URL}/store/orders/monthly-remunerations`,
   );
   await page.getByRole("button", { name: "日別", exact: true }).click();
   await page.getByRole("combobox", { name: "キャスト本人" }).click();

@@ -1,12 +1,12 @@
 import { expect, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { PLATFORM_URL } from "../base-url";
+import { APP_URL } from "../base-url";
 import {
   ADMIN_PASSWORD,
   STORE_HEADERS,
   createPermissionRole,
-  createPlatformStaffFixture,
-  loginPlatformUser,
+  createStaffFixture,
+  loginUser,
   loginViaUiAndEnterStore,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
@@ -35,7 +35,7 @@ Given(
   "既定権限を持たないアンケート担当者を用意する",
   async ({ page, request }) => {
     await loginViaUiAndEnterStore(page);
-    const owner = await loginPlatformUser(
+    const owner = await loginUser(
       request,
       "admin@kizuna.test",
       ADMIN_PASSWORD,
@@ -62,8 +62,8 @@ Given(
 
       ],
     );
-    await createPlatformStaffFixture(request, owner, email, secret, [role]);
-    token = await loginPlatformUser(request, email, secret);
+    await createStaffFixture(request, owner, email, secret, [role]);
+    token = await loginUser(request, email, secret);
     expect(
       (
         await request.get("/api/store/surveys", { headers: STORE_HEADERS })
@@ -82,12 +82,12 @@ When(
   "設問を作成し通信結果不明から同じ要求で復帰して受付を開始する",
   async ({ page, $testInfo }) => {
     await page.context().clearCookies();
-    await page.goto(`${PLATFORM_URL}/platform/login`);
+    await page.goto(`${APP_URL}/auth/login`);
     await page.getByLabel("メールアドレス", { exact: true }).fill(email);
     await page.getByLabel("パスワード", { exact: true }).fill(secret);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
-    await expect(page).toHaveURL(/\/platform\/dashboard/, { timeout: 15000 });
-    await page.goto(`${PLATFORM_URL}/store/surveys`);
+    await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
+    await page.goto(`${APP_URL}/store/surveys`);
     await page
       .getByRole("button", { name: "アンケートを作成", exact: true })
       .click();
