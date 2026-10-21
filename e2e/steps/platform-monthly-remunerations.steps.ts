@@ -85,11 +85,11 @@ Given('月次平台照会用の本人と異なる授権集合の参照者がい�
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, onlyForeign, secondStore),
     'platform-monthly-foreign-' + suffix + '@kizuna.test', password, '他店限定本人');
   const role = await request.post('/api/platform/roles', { headers: headers(admin),
-    data: { name: '月次平台参照-' + suffix, permissions: ['ORDER_SET_MANAGE', 'PLATFORM_MENU_VIEW'] } });
+    data: { name: '月次平台参照-' + suffix, permissions: ['ORDER_SET_MANAGE',] } });
   expect(role.status(), await role.text()).toBe(201);
   const roleId = (await role.json()).id;
   const storeOnlyRole = await request.post('/api/platform/roles', { headers: headers(admin),
-    data: { name: '月次店舗権限のみ-' + suffix, permissions: ['ORDER_MANAGE', 'PLATFORM_MENU_VIEW'] } });
+    data: { name: '月次店舗権限のみ-' + suffix, permissions: ['ORDER_MANAGE',] } });
   expect(storeOnlyRole.status(), await storeOnlyRole.text()).toBe(201);
   const storeOnlyRoleId = (await storeOnlyRole.json()).id;
   const tokens: string[] = [];

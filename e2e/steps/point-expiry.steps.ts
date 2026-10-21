@@ -19,7 +19,7 @@ Given('失効処理用の主体と権限不足の主体が用意されている'
   const suffix = Date.now().toString();
   password = 'Expiry-' + suffix + '-fixture';
   email = 'expiry-' + suffix + '@kizuna.test';
-  const role = await createPermissionRole(request, admin, '失効運用-' + suffix, ['TASK_MANAGE', 'POINT_EXPIRE', 'AUDIT_VIEW', 'PLATFORM_MENU_VIEW']);
+  const role = await createPermissionRole(request, admin, '失効運用-' + suffix, ['TASK_MANAGE', 'POINT_EXPIRE', 'AUDIT_VIEW',]);
   await createPlatformStaffFixture(request, admin, email, password, [role]);
   const viewerRole = await createPermissionRole(request, admin, '失効閲覧-' + suffix, ['TASK_MANAGE']);
   const viewerEmail = 'expiry-view-' + suffix + '@kizuna.test';

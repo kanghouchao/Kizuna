@@ -68,7 +68,7 @@ Given(
       request,
       owner,
       `関連監査-${suffix}`,
-      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW",],
     );
     const email = `link-auditor-${suffix}@example.test`;
     await createPlatformStaffFixture(request, owner, email, password, [role]);
@@ -77,7 +77,7 @@ Given(
       request,
       owner,
       `関連参照-${suffix}`,
-      ["SHIFT_MANAGE", "STORE_VIEW", "STORE_MENU_VIEW"],
+      ["SHIFT_MANAGE", "STORE_VIEW",],
     );
     const limitedEmail = `link-reader-${suffix}@example.test`;
     await createStoreStaffFixture(

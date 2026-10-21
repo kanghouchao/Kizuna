@@ -3,16 +3,12 @@ import { createBdd } from 'playwright-bdd';
 
 const { Then } = createBdd();
 
-// このシナリオが使う他ステップ（統一ログイン画面を開く / メール...でログインする /
-// 中央ダッシュボードへ遷移する / 管理者管理画面を開く / 氏名...で管理者を追加する /
-// 作成した管理者のメールとパスワード...でログインする / サイドバーの...リンクをクリックする /
-// URL が...で終わる）は playwright-bdd が steps/**/*.ts を横断解決するため再定義しない。
+// このシナリオが使う他ステップ（ログイン・従業員追加・サイドバー遷移）は playwright-bdd が
+// steps/**/*.ts を横断解決するため再定義しない。
 
 Then('受注一覧が権限エラーなく表示される', async ({ page }) => {
-  // #413 の直接回帰確認: 混成束ユーザーは console が 'platform' に解決されるが、apiClient は
-  // パス由来（/store/{id}/orders）の X-Store-ID を注入するため受注一覧 API が 403 にならず 200 を返す。
-  // 新形式セッションの正当な 403 はページ遷移を起こさない（client.ts の設計）ため、URL 断言だけでは
-  // 403 を検出できない。現在の受注一覧を再取得し、GET /store/orders 応答が 200 であることを直接確認する。
+  // 正当な 403 はページ遷移を起こさないため、URL 断言だけでは権限エラーを検出できない。
+  // 受注一覧を再取得し、X-Store-ID が注入された GET /store/orders 応答が 200 であることを直接確認する。
   const [response] = await Promise.all([
     page.waitForResponse(
       resp => resp.url().includes('/store/orders') && resp.request().method() === 'GET',

@@ -7,7 +7,6 @@ import { adjustCustomerPoints, createCustomer, linkMemberToCustomer, loginAsStor
 const { Given, When, Then } = createBdd();
 let marker = '';
 let customerId = '';
-let storeId = '';
 const longLandmark = '駅の北口から郵便局を通り過ぎて右側の建物。'.repeat(10);
 
 Given('一覧検証用の未関連・零残高・残高ありの顧客がいる', async ({ page, request }) => {
@@ -22,8 +21,8 @@ Given('一覧検証用の未関連・零残高・残高ありの顧客がいる'
       await adjustCustomerPoints(request, token, id, balance, '一覧検証');
     }
   }
-  storeId = await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers`);
+  await loginViaUiAndEnterStore(page);
+  await page.goto(`${PLATFORM_URL}/store/customers`);
   await page.getByPlaceholder('名前・電話・メール・LINE ID で検索...').fill(marker);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await expect(page.locator('tbody tr')).toHaveCount(3);
@@ -76,7 +75,7 @@ Then('顧客一覧を狭幅と両テーマでキーボード操作でき取得�
 });
 
 When('顧客の長い目印を編集して保存する', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers/${customerId}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/customers/${customerId}/edit`);
   await page.getByRole('textbox', { name: '目印', exact: true }).fill(longLandmark);
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -100,7 +99,7 @@ When('顧客の長い目印を編集して保存する', async ({ page }) => {
 });
 
 Then('目印を再表示して空欄へ更新できる', async ({ page }) => {
-  const path = `${PLATFORM_URL}/store/${storeId}/customers/${customerId}/edit`;
+  const path = `${PLATFORM_URL}/store/customers/${customerId}/edit`;
   await page.goto(path);
   await expect(page.getByRole('textbox', { name: '目印', exact: true })).toHaveValue(longLandmark);
   await page.getByRole('textbox', { name: '目印', exact: true }).fill('');

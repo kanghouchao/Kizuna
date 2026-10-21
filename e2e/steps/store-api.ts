@@ -2,6 +2,7 @@ import {
   expect,
   type APIRequestContext,
   type APIResponse,
+  type Locator,
   type Page,
 } from "@playwright/test";
 import { PLATFORM_URL } from "../base-url";
@@ -16,7 +17,7 @@ export const ADMIN_PASSWORD = "pass";
 /**
  * 店長ロール（STORE_MANAGER・store1/store2 双方に授権された v0.5.0 シード）の平台ユーザーで
  * ログインし JWT を返す。返却トークンは STORE_HEADERS（X-Store-ID）と併用することで
- * /store/** に店舗文脈を確立できる（STORE_BRIDGE_ROLES ブリッジ）。/platform/login は CSRF 免除。
+ * /store/** に店舗文脈を確立できる。/platform/login は CSRF 免除。
  */
 export async function loginAsStoreAdmin(
   request: APIRequestContext,
@@ -34,18 +35,35 @@ export async function loginAsStoreAdmin(
 }
 
 /**
- * 統一ログイン UI から店長（ADMIN_EMAIL・2 店舗授権）で入り、業務画面へ着地する共通手順。
- * 着地先は /store/entry がメニューから解決するため画面を固定せず、着地 URL から storeId を
- * 読み取って返す（seed id をハードコードしない）。授権店舗は id 昇順で先頭が Sample。
+ * 統一ログイン UI から店長（ADMIN_EMAIL・2 店舗授権）で入り、ダッシュボードへの着地を待つ共通手順。
+ * 店舗業務 URL は店舗 id を持たず、現在店舗は授権店舗の先頭（Sample = STORE1_ID）が自動選択されるため、
+ * UI と API（STORE_HEADERS）の店舗文脈を揃える id として STORE1_ID を返す。
  */
 export async function loginViaUiAndEnterStore(page: Page): Promise<string> {
   await page.goto(`${PLATFORM_URL}/platform/login`);
   await page.getByLabel("メールアドレス", { exact: true }).fill(ADMIN_EMAIL);
   await page.getByLabel("パスワード", { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  // 選択画面は無い。入口が授権店舗の先頭（Sample）とメニュー先頭の業務画面を自動解決する。
-  await expect(page).toHaveURL(/\/store\/\d+\//, { timeout: 15000 });
-  return new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? "";
+  await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 15000 });
+  return STORE1_ID;
+}
+
+// ヘッダのドロップダウンのうち店舗切替だけはアクセシブル名が現在店舗名（動的値）で aria-label を
+// 持たないため、その欠如で一意に特定する。授権店舗が 1 店舗だけなら描画されない。
+export const storeSwitchToggle = (page: Page): Locator =>
+  page.locator("header button[aria-haspopup]:not([aria-label])");
+
+/** ヘッダの店舗切替で現在店舗を変える。切替は URL を変えないため、トグルの店舗名で完了を待つ。 */
+export async function switchStoreInHeader(page: Page, storeName: string): Promise<void> {
+  const toggle = storeSwitchToggle(page);
+  await expect(toggle).toBeEnabled();
+  const menu = page.getByRole("menu");
+  if ((await menu.count()) === 0) {
+    await toggle.click();
+    await expect(menu).toBeVisible();
+  }
+  await menu.getByText(storeName, { exact: true }).click();
+  await expect(toggle).toContainText(storeName, { timeout: 15000 });
 }
 
 /**
@@ -982,7 +1000,7 @@ export async function createPlatformStaffFixture(request: APIRequestContext, tok
 }
 
 export async function createStoreStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds: number[], storeId: string = STORE1_ID): Promise<number> {
-  const response = await request.post('/api/store/staff-members', { headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
+  const response = await request.post('/api/platform/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
@@ -1293,7 +1311,7 @@ export async function createBonusAward(
   requestId: string = crypto.randomUUID(),
 ): Promise<{ id: string; version: number }> {
   const response = await request.post('/api/store/bonus-awards', {
-    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     data: { person_id: personId, award_date: awardDate, amount, reason, request_id: requestId },
   });
   expect(response.status(), await response.text()).toBe(201);
@@ -1310,7 +1328,7 @@ export async function cancelBonusAward(
   requestId: string = crypto.randomUUID(),
 ): Promise<void> {
   const response = await request.post(`/api/store/bonus-awards/${id}/cancellation`, {
-    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     data: { expected_version: expectedVersion, reason, request_id: requestId },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -1330,7 +1348,7 @@ export async function createAdvertisingCost(
   storeId = STORE1_ID,
 ): Promise<{ id: string; version: number }> {
   const response = await request.post('/api/store/advertising-costs', {
-    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     data: { ...values, month, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(201);
@@ -1342,7 +1360,7 @@ export async function updateAdvertisingCost(
   values: AdvertisingCostValues, reason: string, storeId = STORE1_ID,
 ): Promise<{ id: string; version: number }> {
   const response = await request.put(`/api/store/advertising-costs/${cost.id}`, {
-    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     data: { ...values, version: cost.version, reason, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -1354,7 +1372,7 @@ export async function deleteAdvertisingCost(
   reason: string, storeId = STORE1_ID,
 ): Promise<void> {
   const response = await request.delete(`/api/store/advertising-costs/${cost.id}`, {
-    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     data: { version: cost.version, reason, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(204);
@@ -1364,7 +1382,7 @@ export async function getRemunerationCandidates(
   request: APIRequestContext, token: string, search: string, storeId = STORE1_ID,
 ): Promise<{ content: { person_id: number }[] }> {
   const response = await request.get('/api/store/monthly-remunerations/casts', {
-    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     params: { search },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -1377,7 +1395,7 @@ export async function createRemunerationGuarantee(
   storeId = STORE1_ID,
 ): Promise<void> {
   const response = await request.post('/api/store/remuneration-guarantees', {
-    headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     data: { ...data, request_id: crypto.randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(201);

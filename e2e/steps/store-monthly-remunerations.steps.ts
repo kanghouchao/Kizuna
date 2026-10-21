@@ -65,8 +65,8 @@ Given("月次明細の本人に完了受注と未完了受注がある", async (
 });
 
 When("店長が月次給与明細で本人と対象月を選ぶ", async ({ page }) => {
-  const storeId = await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await loginViaUiAndEnterStore(page);
+  await page.goto(`${PLATFORM_URL}/store/orders`);
   await page.getByRole("link", { name: "月次給与明細", exact: true }).click();
   await page.getByRole("combobox", { name: "キャスト本人" }).click();
   await page.getByPlaceholder("源氏名で検索").fill(name);
@@ -275,9 +275,9 @@ Then(
     expect(
       rows.every((row) => row.business_date === originalDate),
     ).toBeTruthy();
-    const storeId = await loginViaUiAndEnterStore(page);
+    await loginViaUiAndEnterStore(page);
     await page.goto(
-      `${PLATFORM_URL}/store/${storeId}/orders/monthly-remunerations`,
+      `${PLATFORM_URL}/store/orders/monthly-remunerations`,
     );
     await page.getByRole("combobox", { name: "キャスト本人" }).click();
     await page.getByPlaceholder("源氏名で検索").fill(`${name}-旧名`);
@@ -497,9 +497,9 @@ Then(
 );
 
 When("店長が日別給与明細で原営業日を照会する", async ({ page }) => {
-  const storeId = await loginViaUiAndEnterStore(page);
+  await loginViaUiAndEnterStore(page);
   await page.goto(
-    `${PLATFORM_URL}/store/${storeId}/orders/monthly-remunerations`,
+    `${PLATFORM_URL}/store/orders/monthly-remunerations`,
   );
   await page.getByRole("button", { name: "日別", exact: true }).click();
   await page.getByRole("combobox", { name: "キャスト本人" }).click();

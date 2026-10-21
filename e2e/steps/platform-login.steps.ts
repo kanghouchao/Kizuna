@@ -1,30 +1,16 @@
 import { expect, Locator, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { PLATFORM_URL } from '../base-url';
-import { createCast, deleteCast, loginAsStoreAdmin } from './store-api';
+import { createCast, deleteCast, loginAsStoreAdmin, storeSwitchToggle, switchStoreInHeader } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
-// 統一ログインは platform ドメイン（kizuna.test）で提供され、店舗ロールのセッションも
-// 平台 cookie + X-Store-ID 注入で platform ドメイン上のまま /store/* を操作する（#324 D8/D9）。
-// cookie はオリジン別に分離されるため、ログイン後の遷移先も含め常に PLATFORM_URL を用いる。
+// 統一ログインは platform ドメイン（kizuna.test）で提供され、店舗業務画面も同じドメイン上で
+// X-Store-ID 注入により操作する。cookie はオリジン別に分離されるため、遷移先は常に PLATFORM_URL を用いる。
 const PLATFORM_LOGIN_URL = `${PLATFORM_URL}/platform/login`;
 
-// ルート移設（#413）で店舗管理画面 URL に storeId が必須になったため、キャスト一覧 URL は
-// 固定文字列をやめ、現在ページの /store/{id}/ から storeId を都度読み取って組み立てる
-//（seed id をハードコードしない — 計画決定ログ #5）。
-function currentStoreId(page: Page): string {
-  return new URL(page.url()).pathname.match(/\/store\/(\d+)/)?.[1] ?? '';
-}
-function castsUrl(page: Page): string {
-  return `${PLATFORM_URL}/store/${currentStoreId(page)}/casts`;
-}
-
-// Header のドロップダウン（表示モード・店舗切替・アカウントメニュー）はいずれも aria-haspopup を
-// 持つ。うち店舗切替だけはアクセシブル名が現在店舗名（動的値）で aria-label を持たないため、
-// その欠如で一意に特定する。
-const storeSwitchToggle = (page: Page): Locator =>
-  page.locator('header button[aria-haspopup]:not([aria-label])');
+// 店舗業務 URL は店舗 id を持たず、表示店舗はヘッダの店舗切替が決める。
+const CASTS_URL = `${PLATFORM_URL}/store/casts`;
 
 // 播種したキャストの id / 一意名。scenario 2 の Given でのみ設定し、断言と後始末で共有する。
 let createdCastId = '';
@@ -65,22 +51,9 @@ When(
   }
 );
 
-When('パス {string} を直接開く', async ({ page }, path: string) => {
-  // アドレスバー直打ち相当。SPA 内遷移ではなくフルロードでルート守衛（proxy）を通す。
-  await page.goto(`${PLATFORM_URL}${path}`, { waitUntil: 'domcontentloaded' });
-});
-
-Then('中央ダッシュボードへ遷移する', async ({ page }) => {
+Then('ダッシュボードへ遷移する', async ({ page }) => {
+  // ロールや授権店舗によらず、すべての従業員の着地先はダッシュボードである。
   await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 15000 });
-});
-
-Then('店舗業務画面へ遷移する', async ({ page }) => {
-  // 店舗コンソールの着地先は /store/entry がメニューから解決する。どの画面になるかは
-  // 権限とメニュー順で変わるため、特定ページを固定せず「店舗文脈が確立された URL」だけを断言する
-  //（ここに /orders 等を焼き込むと、種子の sort_order 変更だけで理由の見えない赤になる）。
-  await expect(page).toHaveURL(/\/store\/\d+\//, { timeout: 15000 });
-  // 中継点に留まっていないこと（解決に失敗すると entry のままになる）。
-  await expect(page).not.toHaveURL(/\/store\/entry/);
 });
 
 Then(
@@ -92,44 +65,27 @@ Then(
   }
 );
 
-Then('店舗切替に {string} が表示される', async ({ page }, storeName: string) => {
-  const menu = await openStoreSwitch(page);
-  await expect(menu.getByText(storeName, { exact: true })).toBeVisible();
-});
-
 Then('店舗切替が表示されない', async ({ page }) => {
   // ヘッダの描画完了を待ってから欠如を断言する（未描画のまま 0 件になる空振りを避ける）。
   await expect(page.getByRole('button', { name: 'アカウントメニュー' })).toBeVisible();
   await expect(storeSwitchToggle(page)).toHaveCount(0);
 });
 
-Then('店舗切替に {string} が表示されない', async ({ page }, storeName: string) => {
-  // 直前の「表示される」ステップで開いたメニューに対して、非授権店舗が項目に無いことを断言する。
-  const menu = await openStoreSwitch(page);
-  await expect(menu.getByText(storeName, { exact: true })).toHaveCount(0);
-});
-
 Then('キャスト一覧に {string} が表示される', async ({ page }, _label: string) => {
   // {string} は可読性のための表記。実際の照合は一意名（createdCastName）で行う。
-  await page.goto(castsUrl(page), { waitUntil: 'domcontentloaded' });
+  await page.goto(CASTS_URL, { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('名前で検索...').fill(createdCastName);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await expect(page.getByText(createdCastName, { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
 When('店舗を {string} に切り替える', async ({ page }, storeName: string) => {
-  const previousStoreId = currentStoreId(page);
-  const menu = await openStoreSwitch(page);
-  await menu.getByText(storeName, { exact: true }).click();
-  // handleStoreSelect は setPlatformStore(id) 後、現在地の storeId を差し替えて router.push する
-  //（旧実装の window.location.reload は #413 で廃止）。URL の店舗 segment が別 id へ変わる＝
-  // 新しい店舗文脈が有効になったことを待つ。
-  await expect.poll(() => currentStoreId(page), { timeout: 15000 }).not.toBe(previousStoreId);
+  await switchStoreInHeader(page, storeName);
 });
 
 Then('キャスト一覧に {string} が表示されない', async ({ page }, _label: string) => {
   // 対象の源氏名で検索し、他のキャストの有無によらず店舗境界を検証する。
-  await page.goto(castsUrl(page), { waitUntil: 'domcontentloaded' });
+  await page.goto(CASTS_URL, { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('名前で検索...').fill(createdCastName);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await expect(page.getByText('キャストが登録されていません', { exact: true })).toBeVisible({

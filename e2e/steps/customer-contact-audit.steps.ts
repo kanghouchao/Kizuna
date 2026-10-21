@@ -62,7 +62,7 @@ Given(
       request,
       owner,
       `連絡先監査-${suffix}`,
-      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW",],
     );
     const email = `contact-auditor-${suffix}@example.test`;
     await createPlatformStaffFixture(request, owner, email, password, [role]);

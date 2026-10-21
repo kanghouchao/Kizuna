@@ -4,7 +4,6 @@ import { addCustomerContact, createCustomer, loginAsStoreAdmin, loginViaUiAndEnt
 import { PLATFORM_URL } from '../base-url';
 
 const { Given, When, Then } = createBdd();
-let storeId = '';
 let value = '';
 let names: string[] = [];
 
@@ -18,11 +17,11 @@ Given('非優先連絡先を共有する顧客が同じ店舗にいる', async (
     await addCustomerContact(request, token, id, 'EMAIL', value);
     await addCustomerContact(request, token, id, 'LINE', value);
   }
-  storeId = await loginViaUiAndEnterStore(page);
+  await loginViaUiAndEnterStore(page);
 });
 
 When('顧客一覧で非優先メールを検索する', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers`);
+  await page.goto(`${PLATFORM_URL}/store/customers`);
   await page.getByPlaceholder('名前・電話・メール・LINE ID で検索...').fill(value);
   await page.getByRole('button', { name: '検索', exact: true }).click();
 });
@@ -43,7 +42,7 @@ Then('一致したメールと顧客名を確認できる', async ({ page }) => 
 });
 
 When('重複候補で共有連絡先を検索する', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers/duplicates`);
+  await page.goto(`${PLATFORM_URL}/store/customers/duplicates`);
   await page.getByLabel('連絡先で検索').fill(value);
   await page.getByRole('button', { name: '検索', exact: true }).click();
 });

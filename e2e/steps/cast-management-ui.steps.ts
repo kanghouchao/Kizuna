@@ -55,7 +55,7 @@ Given("公開切替用のキャスト編集画面を開く", async ({ page, requ
   castName = `公開切替-${randomUUID()}`;
   castId = await createCast(request, adminToken, castName, store);
   storefrontCast = { id: castId, storeId: store };
-  await page.goto(`${PLATFORM_URL}/store/${store}/casts/${castId}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/casts/${castId}/edit`);
   await expect(page.getByRole("heading", { name: "在籍履歴", level: 2 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "内部情報の編集履歴", level: 2 })).toBeVisible();
   await expect(

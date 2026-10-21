@@ -26,7 +26,7 @@ function ownCard(page: Page) {
   return page.getByRole('listitem').filter({ hasText: customerName });
 }
 
-Given('店舗コンソールへ入り受注一覧を開く', async ({ page, request }) => {
+Given('管理画面へ入り受注一覧を開く', async ({ page, request }) => {
   storeId = await loginViaUiAndEnterStore(page);
   const token = await loginAsStoreAdmin(request);
   createdCastName = `受注ライフサイクル-${Date.now()}`;
@@ -36,12 +36,12 @@ Given('店舗コンソールへ入り受注一覧を開く', async ({ page, requ
   courseId = await createCourse(request, token, courseName, storeId);
   courseVersion = 1;
   adoptedPrice = 12000;
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.goto(`${PLATFORM_URL}/store/orders`);
   await expect(page.getByRole('heading', { name: 'オーダー一覧', exact: true })).toBeVisible();
 });
 
 async function registerPhoneOrder(page: Page, chooseCustomer?: () => Promise<void>) {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/create`);
+  await page.goto(`${PLATFORM_URL}/store/orders/create`);
   await page.getByRole('textbox', { name: 'お客様名', exact: true }).fill(customerName);
   if (chooseCustomer) await chooseCustomer();
   await page.getByLabel('営業日', { exact: true }).fill(todayInTokyo());
@@ -74,14 +74,14 @@ async function registerPhoneOrder(page: Page, chooseCustomer?: () => Promise<voi
 When('電話受付の受注を登録する', async ({ page }) => registerPhoneOrder(page));
 
 Then('登録した受注が「対応が要る」群に確定として現れる', async ({ page }) => {
-  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`), { timeout: 15000 });
+  await expect(page).toHaveURL(/\/store\/orders\/?$/, { timeout: 15000 });
   // 電話口で受けると決めた時点で可否は判断済み。画面上でもう一度確定し直す段は無い
   await expect(ownCard(page).getByText('確定', { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
 When('受注の編集ページを開き人数を {string} に直して保存する', async ({ page }, pax: string) => {
   await ownCard(page).getByRole('button', { name: '編集', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/${createdOrderId}/edit$`), {
+  await expect(page).toHaveURL(new RegExp(`/store/orders/${createdOrderId}/edit$`), {
     timeout: 15000,
   });
   // 開くたびに 1 件を読み直すので、播かれるまで待ってから書き換える
@@ -98,7 +98,7 @@ When('受注の編集ページを開き人数を {string} に直して保存す�
     page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
   ]);
   // 保存の出口は一覧。戻り着くまで待たないと、次の段がまだ編集ページを相手にする
-  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`), { timeout: 15000 });
+  await expect(page).toHaveURL(/\/store\/orders\/?$/, { timeout: 15000 });
 });
 
 Then('カードの内容が人数 {string} に変わる', async ({ page }, pax: string) => {
@@ -173,14 +173,14 @@ When('設定コースを改定して受注へ適用する', async ({ page, reque
   });
   expect(updated.status()).toBe(200);
   courseVersion = 2;
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/orders/${createdOrderId}/edit`);
   await page.getByRole('combobox', { name: 'コース', exact: true }).click();
   await page.getByLabel('コースを検索').fill(courseName);
   await page.getByRole('option', { name: new RegExp(courseName) }).click();
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText(/固定報酬: ¥11,000/)).toBeVisible();
   await page.getByRole('button', { name: 'この内容を確認して保存' }).click();
-  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`));
+  await expect(page).toHaveURL(/\/store\/orders\/?$/);
   adoptedPrice = 18000;
 });
 
@@ -191,7 +191,7 @@ When('設定を削除して過去のコースへ理由付きで訂正する', as
   });
   expect(deleted.status()).toBe(204);
   courseId = '';
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/correction`);
+  await page.goto(`${PLATFORM_URL}/store/orders/${createdOrderId}/correction`);
   await page.getByRole('combobox', { name: '訂正する過去の版' }).click();
   await page.getByLabel('コースを検索').fill(courseName);
   await page.getByRole('option', { name: new RegExp(`${courseName}.*版1.*削除済み`) }).click();
@@ -214,7 +214,7 @@ When('設定を削除して過去のコースへ理由付きで訂正する', as
 });
 
 Then('店舗から同じ訂正の費用と報酬を照会できる', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/orders/${createdOrderId}/edit`);
   await page.getByRole('button', { name: '訂正履歴', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '訂正履歴', exact: true });
   await expect(dialog.getByText('実際に提供した60分コースへ訂正')).toBeVisible();
@@ -302,7 +302,7 @@ When('有料と無料の延長・設定加算・固定割引を追加する', as
   await expect(dialog.getByText(/総時間: 105分/)).toBeVisible();
   await expect(dialog.getByText('請求額: ¥1,000', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`));
+  await expect(page).toHaveURL(/\/store\/orders\/?$/);
 });
 
 Then('再表示した受注に各回の延長と加算の採用条件が残る', async ({ page }) => {
@@ -356,7 +356,7 @@ Given('3000ポイントを利用した請求7000円の完了受注がある', as
 });
 
 When('専用入口で理由 {string} を確認して巻き戻す', async ({ page }, reason: string) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.goto(`${PLATFORM_URL}/store/orders`);
   await page.getByLabel('お客様名', { exact: true }).fill(customerName);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await page.getByRole('button', { name: /^完了 \d+ 件$/ }).click();
@@ -486,7 +486,7 @@ When('顧客の選択を {string} にして三種類の受付時連絡先を保�
 });
 
 Then('顧客の選択を保ったまま受付時連絡先だけを編集できる', async ({ page, request }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/orders/${createdOrderId}/edit`);
   await expect(page.getByLabel('メール', { exact: true })).toHaveValue('Once@example.com');
   await page.getByLabel('メール', { exact: true }).fill('edited@example.com');
   await page.getByLabel('LINE ID', { exact: true }).fill('編集用の長いLINE表示'.repeat(15));
@@ -508,7 +508,7 @@ Then('顧客の選択を保ったまま受付時連絡先だけを編集でき�
     page.waitForResponse(resp => resp.url().endsWith(`/api/store/orders/${createdOrderId}`) && resp.request().method() === 'PUT'),
     page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
   ]);
-  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`));
+  await expect(page).toHaveURL(/\/store\/orders\/?$/);
   const token = await loginAsStoreAdmin(request);
   const saved = await getOrder(request, token, storeId, createdOrderId);
   expect(saved.customer_id).toBe(selectedCustomerId);
@@ -553,7 +553,7 @@ When('公開サイトで業務と販促に同意して申請する', async ({ pa
 
 Then('受付箱で連絡先を補正して顧客未設定で確定でき原文が残る', async ({ page, request }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.goto(`${PLATFORM_URL}/store/orders`);
   await page.getByRole('listitem').filter({ hasText: customerName }).getByRole('button', { name: '確定', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('メール', { exact: true })).toHaveValue('Guest@EXAMPLE.COM');
@@ -602,7 +602,7 @@ When('メールの今回限りの許可と根拠を記録して受注を登録�
 });
 
 Then('受注の許可と根拠を狭幅と両テーマで確認し履歴を開ける', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/orders/${createdOrderId}/edit`);
   await expect(page.getByText('電話受付：今回の予約についてメール連絡を希望', { exact: true })).toBeVisible();
   await expect(page.getByText('現在の判定：業務連絡可。送信・再送直前に再判定します。')).toBeVisible();
   for (const theme of ['light', 'dark']) {
@@ -655,15 +655,15 @@ Then('許可の保存に失敗しても入力を保持して再試行できる',
   await page.unroute(path);
   await page.getByRole('button',{name:'保存',exact:true}).click();
   await page.getByRole('button',{name:'この内容を確認して保存',exact:true}).click();
-  await expect(page).toHaveURL(new RegExp(`/store/${storeId}/orders/?$`));
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders/${createdOrderId}/edit`);
+  await expect(page).toHaveURL(/\/store\/orders\/?$/);
+  await page.goto(`${PLATFORM_URL}/store/orders/${createdOrderId}/edit`);
   await expect(page.getByText('電話で撤回：連絡を希望しないとの申出',{exact:true})).toBeVisible();
   await expect(page.getByText('現在の判定：業務連絡不可。',{exact:true})).toBeVisible();
 });
 
 Then('店舗で販促同意を明示取り込みし失敗後も入力を保って確定できる', async ({ page, request }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.goto(`${PLATFORM_URL}/store/orders`);
   await page.getByRole('listitem').filter({ hasText: customerName }).getByRole('button', { name: '確定', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '予約申請を確定' });
   await expect(dialog.getByText('販促同意：選択済み')).toBeVisible();

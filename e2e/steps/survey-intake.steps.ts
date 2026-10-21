@@ -19,7 +19,6 @@ const firstChoice = "紙面の選択欄に記載された最初の選択肢で�
 let email = "",
   secret = "",
   token = "",
-  storeId = "",
   surveyId = "",
   revisionId = "",
   answerId = "";
@@ -35,7 +34,7 @@ async function confirm(page: Page) {
 Given(
   "既定権限を持たないアンケート担当者を用意する",
   async ({ page, request }) => {
-    storeId = await loginViaUiAndEnterStore(page);
+    await loginViaUiAndEnterStore(page);
     const owner = await loginPlatformUser(
       request,
       "admin@kizuna.test",
@@ -59,8 +58,8 @@ Given(
         "SURVEY_VIEW",
         "SURVEY_MANAGE",
         "SURVEY_RECORD",
-        "PLATFORM_MENU_VIEW",
-        "STORE_MENU_VIEW",
+
+
       ],
     );
     await createPlatformStaffFixture(request, owner, email, secret, [role]);
@@ -88,7 +87,7 @@ When(
     await page.getByLabel("パスワード", { exact: true }).fill(secret);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
     await expect(page).toHaveURL(/\/platform\/dashboard/, { timeout: 15000 });
-    await page.goto(`${PLATFORM_URL}/store/${storeId}/surveys`);
+    await page.goto(`${PLATFORM_URL}/store/surveys`);
     await page
       .getByRole("button", { name: "アンケートを作成", exact: true })
       .click();

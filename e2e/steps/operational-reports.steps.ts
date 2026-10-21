@@ -40,7 +40,7 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
   await completeAgreedOrder(request, manager, otherOrder, foreign);
   const tokens: string[] = [];
   for (let index = 0; index < 3; index++) {
-    const permissions = ['ORDER_SET_MANAGE', 'PLATFORM_MENU_VIEW', 'OPERATIONAL_REPORT_VIEW'];
+    const permissions = ['ORDER_SET_MANAGE', 'OPERATIONAL_REPORT_VIEW'];
     if (index !== 1) permissions.push('OPERATIONAL_REPORT_EXPORT');
     const role = await request.post('/api/platform/roles', { headers: headers(admin), data: { name: prefix + index, permissions } });
     expect(role.status(), await role.text()).toBe(201);

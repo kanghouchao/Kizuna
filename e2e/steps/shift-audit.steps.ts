@@ -64,7 +64,7 @@ Given(
       request,
       owner,
       `シフト監査-${suffix}`,
-      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW",],
     );
     const email = `shift-auditor-${suffix}@example.test`;
     await createPlatformStaffFixture(request, owner, email, password, [role]);
