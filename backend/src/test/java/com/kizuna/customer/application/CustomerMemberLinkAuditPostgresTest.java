@@ -228,29 +228,23 @@ class CustomerMemberLinkAuditPostgresTest {
   }
 
   @Test
-  void elevationMetadataComesFromContextForBothReplacementEvents() {
+  void actorAndStoreComeFromContextForBothReplacementEvents() {
     String customer = customer();
     String first = links.link(customer, memberCode(), null, "秘密", "operator@example.test").id();
     var jwt =
         Jwt.withTokenValue(UUID.randomUUID().toString())
             .header("alg", "HS256")
             .subject("operator@example.test")
-            .claim("elevationId", 77L)
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     links.link(customer, memberCode(), first, "秘密の変更", "operator@example.test");
     var events =
         jdbc.queryForList(
-            "select actor_id,store_id,after_values ->> 'emergency_elevation_id' as elevation from t_audit_events where source_id=? order by id",
-            customer);
+            "select actor_id,store_id from t_audit_events where source_id=? order by id", customer);
     assertThat(events).hasSize(3);
-    assertThat(events.get(0)).containsEntry("elevation", null);
     for (var event : events.subList(1, 3)) {
-      assertThat(event)
-          .containsEntry("actor_id", 9L)
-          .containsEntry("store_id", 1L)
-          .containsEntry("elevation", "77");
+      assertThat(event).containsEntry("actor_id", 9L).containsEntry("store_id", 1L);
     }
   }
 

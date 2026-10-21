@@ -50,8 +50,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.JsonNode;
@@ -391,53 +389,6 @@ class SurveyPostgresTest {
       read(path, 403);
     jdbc.update("update t_users set enabled=true,user_type='SERVICE' where id=?", actorId);
     read(answer, 403);
-  }
-
-  @Test
-  void emergencyElevationMustStillMatchCurrentActorStoreTimeAndStatusBeforeReplay()
-      throws Exception {
-    jdbc.update("delete from t_user_roles where user_id=?", actorId);
-    jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", actorId);
-    read("/store/surveys", 403);
-    Long elevation =
-        jdbc.queryForObject(
-            "insert into t_emergency_elevations(activated_by,target_store_id,reason,activated_at,expires_at,status) values (?,?,'調査理由',now()-interval '1 minute',now()+interval '20 minutes','ACTIVE') returning id",
-            Long.class,
-            actorId,
-            storeId);
-    var jwt =
-        Jwt.withTokenValue("isolated-test")
-            .header("alg", "none")
-            .subject(email)
-            .claim("elevationId", elevation)
-            .build();
-    auth = new JwtAuthenticationToken(jwt, auth.getAuthorities());
-    SecurityContextHolder.getContext().setAuthentication(auth);
-    String base = openedRevision();
-    send(base + "/responses", receipt("elevated"), 201);
-    send(base + "/responses", receipt("elevated"), 200);
-    store.setStoreId(otherStore);
-    read(base, 403);
-    send(base + "/responses", receipt("elevated"), 403);
-    store.setStoreId(storeId);
-    jdbc.update(
-        "update t_emergency_elevations set expires_at=now()-interval '1 second' where id=?",
-        elevation);
-    read(base, 403);
-    send(base + "/responses", receipt("elevated"), 403);
-    jdbc.update(
-        "update t_emergency_elevations set expires_at=now()+interval '20 minutes',status='REVOKED',revoked_by=?,revoked_at=now() where id=?",
-        actorId,
-        elevation);
-    read(base, 403);
-    send(base + "/responses", receipt("elevated"), 403);
-    jdbc.update(
-        "update t_emergency_elevations set status='ACTIVE',revoked_by=null,revoked_at=null,activated_at=now()+interval '1 minute' where id=?",
-        elevation);
-    read(base, 403);
-    jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", actorId, roleId);
-    jdbc.update("update t_users set store_scope_type='ALL_STORES' where id=?", actorId);
-    read(base, 403);
   }
 
   @Test

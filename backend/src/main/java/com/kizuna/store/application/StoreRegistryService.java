@@ -52,8 +52,6 @@ public class StoreRegistryService {
           () -> new ConflictException("非公開添付の記録が存在する店舗は削除できません"),
           DbConstraint.FK_T_APPLICANT_UPLOADS_APPLICANT_STORE,
           () -> new ConflictException("非公開添付の記録が存在する店舗は削除できません"),
-          DbConstraint.FK_T_EMERGENCY_ELEVATIONS_STORE,
-          () -> new ServiceException("緊急昇格の記録が存在する店舗は削除できません"),
           DbConstraint.FK_T_SERVICES_STORE,
           () -> new ServiceException("サービス設定が存在する店舗は削除できません"),
           DbConstraint.FK_T_SERVICE_REVISIONS_STORE,

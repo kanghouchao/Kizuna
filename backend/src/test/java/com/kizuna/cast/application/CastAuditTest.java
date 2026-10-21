@@ -267,19 +267,17 @@ class CastAuditTest {
   }
 
   @Test
-  void elevationUsesExistingSinkMetadataAndRefusedTransitionAddsNothing() {
+  void sinkMetadataComesFromContextAndRefusedTransitionAddsNothing() {
     existing();
     var jwt =
         Jwt.withTokenValue(UUID.randomUUID().toString())
             .header("alg", "HS256")
             .subject("operator@example.test")
-            .claim("elevationId", 77L)
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     lifecycle.suspend("enrollment", "operator@example.test");
     assertThat(recorded).hasSize(1);
-    assertThat(recorded.getFirst().getAfterValues()).containsEntry("emergency_elevation_id", "77");
     assertThat(recorded.getFirst().getActorId()).isEqualTo(9L);
     assertThat(recorded.getFirst().getStoreId()).isEqualTo(1L);
     assertThatThrownBy(() -> lifecycle.suspend("enrollment", "operator@example.test"))

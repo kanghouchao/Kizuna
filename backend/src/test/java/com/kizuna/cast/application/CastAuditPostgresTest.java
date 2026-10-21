@@ -84,9 +84,9 @@ class CastAuditPostgresTest {
   private TransactionTemplate transactions;
   private Long storeId;
   private Long ordinaryId;
-  private Long elevatedId;
+  private Long secondId;
   private static final String ORDINARY = "ordinary@example.test";
-  private static final String ELEVATED = "elevated@example.test";
+  private static final String SECOND = "second@example.test";
 
   @BeforeAll
   void connect() {
@@ -103,7 +103,7 @@ class CastAuditPostgresTest {
                     .saveAndFlush(new Store("検証店", UUID.randomUUID() + ".example.test", null))
                     .getId());
     ordinaryId = actor(ORDINARY);
-    elevatedId = actor(ELEVATED);
+    secondId = actor(SECOND);
     for (String table :
         List.of(
             "t_cast_profiles",
@@ -334,40 +334,36 @@ class CastAuditPostgresTest {
   }
 
   @Test
-  void elevatedChangesKeepActualActorsVersionsAndHistorySources() {
+  void secondActorChangesKeepActualActorsVersionsAndHistorySources() {
     String id = create();
     String profile = profileId(id);
     var jwt =
         Jwt.withTokenValue(UUID.randomUUID().toString())
             .header("alg", "HS256")
-            .subject(ELEVATED)
-            .claim("elevationId", 77L)
+            .subject(SECOND)
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     var request = new CastUpdateRequest();
-    request.setName("昇格で変更する秘密名");
-    casts.update(id, request, ELEVATED);
+    request.setName("別担当で変更する秘密名");
+    casts.update(id, request, SECOND);
     casts.changePublication(id, CastPublicationStatus.PUBLISHED);
-    lifecycle.suspend(id, ELEVATED);
-    lifecycle.resume(id, ELEVATED);
-    lifecycle.withdraw(id, ELEVATED);
+    lifecycle.suspend(id, SECOND);
+    lifecycle.resume(id, SECOND);
+    lifecycle.withdraw(id, SECOND);
     assertVersions(id, 3, 2);
     var actors =
         jdbc.queryForList(
-            "select actor_id,actor_type,store_id,after_values ->> 'emergency_elevation_id' as elevation from t_audit_events where target_id in (?,?) order by id",
+            "select actor_id,actor_type,store_id from t_audit_events where target_id in (?,?) order by id",
             id,
             profile);
     assertThat(actors).hasSize(6);
-    assertThat(actors.getFirst())
-        .containsEntry("actor_id", ordinaryId)
-        .containsEntry("elevation", null);
+    assertThat(actors.getFirst()).containsEntry("actor_id", ordinaryId);
     for (var actor : actors.subList(1, actors.size())) {
       assertThat(actor)
-          .containsEntry("actor_id", elevatedId)
+          .containsEntry("actor_id", secondId)
           .containsEntry("actor_type", "STAFF")
-          .containsEntry("store_id", storeId)
-          .containsEntry("elevation", "77");
+          .containsEntry("store_id", storeId);
     }
     var history =
         jdbc.queryForList(
@@ -380,16 +376,16 @@ class CastAuditPostgresTest {
           .containsEntry("new", Integer.toString(i + 1))
           .containsEntry("enrollment_id", id)
           .containsEntry("source_type", "CAST_ENROLLMENT_STATUS_HISTORY")
-          .containsEntry("actor_id", elevatedId);
+          .containsEntry("actor_id", secondId);
     }
     assertThat(history)
         .extracting(row -> row.get("new_status"))
         .containsExactly("SUSPENDED", "ENROLLED", "WITHDRAWN");
     assertThat(history.getLast().get("ended")).isNotNull().isNotEqualTo("");
     assertThat(lifecycle.history(id, null, 20).content()).hasSize(4);
-    assertThatThrownBy(() -> lifecycle.suspend(id, ELEVATED)).isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> lifecycle.resume(id, ELEVATED)).isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> lifecycle.withdraw(id, ELEVATED)).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> lifecycle.suspend(id, SECOND)).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> lifecycle.resume(id, SECOND)).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> lifecycle.withdraw(id, SECOND)).isInstanceOf(ServiceException.class);
     assertThat(auditCount(id, profile)).isEqualTo(6);
   }
 
