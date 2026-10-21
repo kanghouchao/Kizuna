@@ -1,19 +1,19 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
-import { platformRoleApi, platformStaffApi } from '@/entities/user';
+import { roleApi, staffApi } from '@/entities/user';
 import { StaffModal, type StaffCreateModalProps } from '../StaffModal';
 
 jest.mock('@/entities/user', () => ({
-  platformRoleApi: { list: jest.fn() },
-  platformStaffApi: { create: jest.fn() },
+  roleApi: { list: jest.fn() },
+  staffApi: { create: jest.fn() },
 }));
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;
-const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
+const mockedStaffApi = staffApi as jest.Mocked<typeof staffApi>;
+const mockedRoleApi = roleApi as jest.Mocked<typeof roleApi>;
 const mockedNotify = notify as jest.Mocked<typeof notify>;
 
 const stores = [{ id: 9, name: '店舗A' }];
@@ -31,8 +31,8 @@ const renderModal = (props: Partial<StaffCreateModalProps> = {}) => {
       displayName={{ label: '氏名', required: '氏名を入力してください' }}
       successMessage="従業員を追加しました"
       failureMessage="従業員の追加に失敗しました"
-      loadRoles={platformRoleApi.list}
-      create={platformStaffApi.create}
+      loadRoles={roleApi.list}
+      create={staffApi.create}
       stores={stores}
       storesLoading={false}
       storesFailed={false}

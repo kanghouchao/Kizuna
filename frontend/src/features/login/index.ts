@@ -1,3 +1,3 @@
-export { default as PlatformLoginForm } from './ui/PlatformLoginForm';
-export { completePlatformLogin } from './model/completePlatformLogin';
-export type { PlatformLoginCompletion } from './model/completePlatformLogin';
+export { default as LoginForm } from './ui/LoginForm';
+export { completeLogin } from './model/completeLogin';
+export type { LoginCompletion } from './model/completeLogin';

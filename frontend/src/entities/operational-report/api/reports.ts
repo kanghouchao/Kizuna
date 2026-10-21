@@ -47,7 +47,7 @@ export interface OperationalReport extends ReportCriteria {
   advertising?: ReportAdvertising;
   rows: Page<ReportRow>;
 }
-export type ReportScope = 'store' | 'platform';
+export type ReportScope = 'store' | 'admin';
 export async function fetchReport(scope: ReportScope, criteria: ReportCriteria, page: number) {
   return (
     await apiClient.get<OperationalReport>(`/${scope}/operational-reports`, {

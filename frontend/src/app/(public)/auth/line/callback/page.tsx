@@ -1,1 +1,1 @@
-export { LineCallbackPage as default } from '@/_pages/platform-line-callback';
+export { LineCallbackPage as default } from '@/_pages/auth-line-callback';

@@ -21,10 +21,10 @@ interface LineAuthorizationRecord {
 }
 
 /**
- * この host で LINE 入口を出してよいか。コールバック URL はチャネルに登録した平台 origin だけが有効なため、
+ * この host で LINE 入口を出してよいか。コールバック URL はチャネルに登録したアプリ origin だけが有効なため、
  * 店舗ドメイン（公開専用、proxy が role=store の cookie を立てる）では入口ごと出さない。
  */
-export function isLinePlatformHost(): boolean {
+export function isLineAppHost(): boolean {
   return Cookies.get('x-mw-role') !== 'store';
 }
 
@@ -45,7 +45,7 @@ function randomToken(): string {
 
 /** LINE 側に登録するコールバック URL。認可要求と引き換え要求で同一値でなければならない。 */
 export function lineCallbackRedirectUri(): string {
-  return `${window.location.origin}/platform/line/callback`;
+  return `${window.location.origin}/auth/line/callback`;
 }
 
 /**

@@ -496,7 +496,7 @@ export interface OrderCreateRequest {
   confirmation_token?: string;
   /**
    * 受付担当。**省略すると実行者本人が受付担当として記録される**（サーバが確定操作と同じ適格述語で
-   * 解決し、適格でなければ 400）。画面の既定が「自分」なのはこのため — JWT にも /platform/me にも
+   * 解決し、適格でなければ 400）。画面の既定が「自分」なのはこのため — JWT にも /me にも
    * 利用者 id が無いので、画面の側で「自分」を選択値として組み立てることはできない。
    */
   receptionist_id?: number;
@@ -734,7 +734,7 @@ export interface OrderReceiptTokenIssue {
   receipt_token: string;
 }
 
-// 会員本人の予約申請1件（GET /platform/me/order-applications）。店舗の顧客台帳の項目は含まない。
+// 会員本人の予約申請1件（GET /me/order-applications）。店舗の顧客台帳の項目は含まない。
 export interface MemberOrderApplication {
   id?: string;
   store_id?: number;
@@ -748,7 +748,7 @@ export interface MemberOrderApplication {
   expired: boolean;
 }
 
-// 会員本人の来店1件（GET /platform/me/visits）。確定した来店の記録で、申請の追跡（MemberOrderApplication）とは別。
+// 会員本人の来店1件（GET /me/visits）。確定した来店の記録で、申請の追跡（MemberOrderApplication）とは別。
 // 会計金額・利用ポイント・顧客台帳の項目は含まない。
 export interface MemberVisit {
   /** 来店日（受注の業務日）。 */
@@ -761,14 +761,14 @@ export interface MemberVisit {
   granted_points: number;
 }
 
-// 伝票トークンの申領の結果（POST /platform/me/receipts）。
+// 伝票トークンの申領の結果（POST /me/receipts）。
 // 来店の内容は来店履歴（MemberVisit）が返すもので、この応答には乗らない。
 export interface MemberReceiptClaim {
   /** Java 側が primitive の long のため、キーは必ず応答に含まれる。付与も特典も無い伝票では 0。 */
   granted_points: number;
 }
 
-// 会員本人の予約申請（POST /platform/me/order-applications）。受付担当・顧客はサーバ側（確定時）が決める。
+// 会員本人の予約申請（POST /me/order-applications）。受付担当・顧客はサーバ側（確定時）が決める。
 export interface MemberOrderApplicationCreateRequest {
   store_id: number;
   business_date: string;
@@ -885,7 +885,7 @@ export interface OrderCorrectionHistoryEntry {
   before: OrderCorrectionSnapshot;
   after: OrderCorrectionSnapshot;
 }
-export interface PlatformOrder {
+export interface AdminOrder {
   completion_invalidated: boolean;
   replacement_for_order_id?: string;
   total_fee: number;

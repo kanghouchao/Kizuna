@@ -1,12 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { platformCastApi } from '@/entities/cast';
-import { PlatformCastDetailPage } from '../ui/PlatformCastDetailPage';
+import { adminCastApi } from '@/entities/cast';
+import { AdminCastDetailPage } from '../ui/AdminCastDetailPage';
 
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: '3' }) }));
 jest.mock('@/entities/cast', () => ({
-  platformCastApi: { get: jest.fn(), enrollments: jest.fn() },
+  adminCastApi: { get: jest.fn(), enrollments: jest.fn() },
 }));
-const api = jest.mocked(platformCastApi);
+const api = jest.mocked(adminCastApi);
 beforeEach(() => jest.clearAllMocks());
 
 it('本人属性と店舗ごとの在籍を読み取り専用で表示する', async () => {
@@ -40,7 +40,7 @@ it('本人属性と店舗ごとの在籍を読み取り専用で表示する', a
     pageCount: 1,
     total: 2,
   });
-  render(<PlatformCastDetailPage />);
+  render(<AdminCastDetailPage />);
   expect(await screen.findByText('花子')).toBeInTheDocument();
   expect(await screen.findByText('大阪店')).toBeInTheDocument();
   expect(screen.getByText('退店')).toBeInTheDocument();
@@ -51,12 +51,9 @@ it('本人属性と店舗ごとの在籍を読み取り専用で表示する', a
 
 it('本人が存在しないとき一覧へ戻れる', async () => {
   api.get.mockRejectedValueOnce({ response: { status: 404 } });
-  render(<PlatformCastDetailPage />);
+  render(<AdminCastDetailPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('キャスト本人が見つかりません');
-  expect(screen.getByRole('link', { name: '一覧に戻る' })).toHaveAttribute(
-    'href',
-    '/platform/casts'
-  );
+  expect(screen.getByRole('link', { name: '一覧に戻る' })).toHaveAttribute('href', '/admin/casts');
   expect(api.enrollments).not.toHaveBeenCalled();
 });
 
@@ -69,7 +66,7 @@ it('本人取得を再試行して空の在籍を表示する', async () => {
     birth_date: '1995-04-03',
   });
   api.enrollments.mockResolvedValueOnce({ rows: [], page: 0, pageCount: 0, total: 0 });
-  render(<PlatformCastDetailPage />);
+  render(<AdminCastDetailPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('閲覧権限');
   fireEvent.click(screen.getByRole('button', { name: '再試行' }));
   expect(await screen.findByText('店舗在籍がありません')).toBeInTheDocument();
@@ -99,7 +96,7 @@ it('在籍領域だけを再試行しページ送りできる', async () => {
     pageCount: 2,
     total: 21,
   });
-  render(<PlatformCastDetailPage />);
+  render(<AdminCastDetailPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('店舗在籍を取得できません');
   fireEvent.click(screen.getByRole('button', { name: '再試行' }));
   expect(await screen.findByText('在籍停止')).toBeInTheDocument();

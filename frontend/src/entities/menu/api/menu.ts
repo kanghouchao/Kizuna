@@ -3,7 +3,7 @@ import { MenuVO } from '../model/types';
 
 export const menuApi = {
   getMenus: async (): Promise<MenuVO[]> => {
-    const response = await apiClient.get('/platform/menus/me');
+    const response = await apiClient.get('/admin/menus/me');
     return response.data;
   },
 };

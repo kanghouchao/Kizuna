@@ -1,22 +1,22 @@
 import Cookies from 'js-cookie';
-import { LoginResponse, platformAuthApi } from '@/entities/user';
-import { clearPlatformSession, startPlatformSession, takeMemberReturnPath } from '@/shared/lib';
+import { LoginResponse, authApi } from '@/entities/user';
+import { clearSession, startSession, takeMemberReturnPath } from '@/shared/lib';
 
 /** ログイン完了の結果。unsupported は着地先の無い利用者種別で、セッションは破棄済み。 */
-export type PlatformLoginCompletion = { status: 'ok'; path: string } | { status: 'unsupported' };
+export type LoginCompletion = { status: 'ok'; path: string } | { status: 'unsupported' };
 
 /**
- * ログイン応答から平台セッションを確立し、着地先パスを返す。
+ * ログイン応答からセッションを確立し、着地先パスを返す。
  * パスワードログインと LINE ログインが共有する唯一の後処理で、遷移自体は呼び出し元が行う。
  */
-export async function completePlatformLogin({
+export async function completeLogin({
   token,
   expires_at,
-}: LoginResponse): Promise<PlatformLoginCompletion> {
+}: LoginResponse): Promise<LoginCompletion> {
   // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
   Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
 
-  const me = await platformAuthApi.me();
+  const me = await authApi.me();
 
   // 戻り先はどの利用者種別でログインしても取り出して捨てる。会員以外のログインで残すと、同じタブで
   // 後からログインした会員がその戻り先へ運ばれる — 申領画面は開いた時点で伝票を取り込むため、
@@ -29,23 +29,23 @@ export async function completePlatformLogin({
 
   // 従業員は一つの管理画面へ入り、着地は全員ダッシュボード（集計カードは権限で出し分ける）。
   if (me.user_type === 'STAFF') {
-    startPlatformSession('admin', expires_at);
-    return { status: 'ok', path: '/platform/dashboard/' };
+    startSession('admin', expires_at);
+    return { status: 'ok', path: '/admin/dashboard/' };
   }
 
   if (me.user_type === 'CAST') {
-    startPlatformSession('cast', expires_at);
+    startSession('cast', expires_at);
     return { status: 'ok', path: '/cast/schedule/' };
   }
 
   if (me.user_type === 'MEMBER') {
-    startPlatformSession('member', expires_at);
+    startSession('member', expires_at);
     // 会員ポータル内で弾かれてログインへ回された場合はその画面へ戻す（白名単を通った相対パスのみ）。
     return { status: 'ok', path: memberReturnPath ?? '/member/' };
   }
 
   // 想定外の user_type: 着地先が無いためセッションを破棄する
   Cookies.remove('token');
-  clearPlatformSession();
+  clearSession();
   return { status: 'unsupported' };
 }

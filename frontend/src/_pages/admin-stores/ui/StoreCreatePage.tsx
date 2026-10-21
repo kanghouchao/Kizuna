@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Loader2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { CreateStoreRequest, isStoreDomain, platformStoreApi } from '@/entities/store';
+import { CreateStoreRequest, isStoreDomain, adminStoreApi } from '@/entities/store';
 import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 
@@ -58,9 +58,9 @@ export default function CreateStorePage() {
     setIsSubmitting(true);
 
     try {
-      await platformStoreApi.create(formData);
+      await adminStoreApi.create(formData);
       notify.success('店舗を作成しました。店舗一覧に戻ります');
-      router.push('/platform/stores');
+      router.push('/admin/stores');
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -156,11 +156,7 @@ export default function CreateStorePage() {
 
             {/* 提交按钮 */}
             <div className="flex justify-end space-x-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push('/platform/stores')}
-              >
+              <Button type="button" variant="outline" onClick={() => router.push('/admin/stores')}>
                 キャンセル
               </Button>
               <Button type="submit" disabled={isSubmitting}>

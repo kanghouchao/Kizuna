@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { notify } from '@/shared/notify';
-import { platformLineApi } from '@/entities/user';
-import { isLinePlatformHost, startLineAuthorization } from '@/shared/lib';
+import { lineApi } from '@/entities/user';
+import { isLineAppHost, startLineAuthorization } from '@/shared/lib';
 
 /**
  * 統一ログイン画面の LINE ログイン入口。
@@ -15,11 +15,11 @@ export function LineLoginButton() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    // 店舗ドメイン上ではコールバック URL がチャネル登録の平台 origin と食い違い認可が成立しないため、入口を出さない
-    if (!isLinePlatformHost()) return;
+    // 店舗ドメイン上ではコールバック URL がチャネル登録のアプリ origin と食い違い認可が成立しないため、入口を出さない
+    if (!isLineAppHost()) return;
     const load = async () => {
       try {
-        const config = await platformLineApi.config();
+        const config = await lineApi.config();
         if (config.enabled && config.channel_id) {
           setChannelId(config.channel_id);
         }

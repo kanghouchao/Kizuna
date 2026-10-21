@@ -1,11 +1,11 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { platformStoreApi } from '@/entities/store';
+import { adminStoreApi } from '@/entities/store';
 import { useStoreContext } from '@/entities/user';
 import { readTokenClaims } from '@/shared/lib';
 import DashboardPage from '../ui/DashboardPage';
 
 jest.mock('@/entities/store', () => ({
-  platformStoreApi: {
+  adminStoreApi: {
     getStats: jest.fn(),
   },
 }));
@@ -20,7 +20,7 @@ jest.mock('@/shared/lib', () => ({
   readTokenClaims: jest.fn(),
 }));
 
-const mockedApi = platformStoreApi as jest.Mocked<typeof platformStoreApi>;
+const mockedApi = adminStoreApi as jest.Mocked<typeof adminStoreApi>;
 const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
 
@@ -42,7 +42,7 @@ beforeEach(() => {
   mockedUseStoreContext.mockReturnValue(storeContext({}));
 });
 
-describe('プラットフォームダッシュボード', () => {
+describe('ダッシュボード', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedApi.getStats.mockResolvedValue({ total: 12 });
@@ -132,7 +132,7 @@ describe('店舗管理の権限が無い者のダッシュボード', () => {
   });
 });
 
-describe('プラットフォームダッシュボードの取得失敗', () => {
+describe('ダッシュボードの取得失敗', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   type MonthlyRemunerationCast,
-  type PlatformMonthlyRemunerationStore,
-  platformMonthlyRemunerationApi,
+  type AdminMonthlyRemunerationStore,
+  adminMonthlyRemunerationApi,
 } from '@/entities/order';
 import { RemunerationStatementPanel } from '@/widgets/remuneration-statement';
 import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
@@ -34,7 +34,7 @@ import { OrderCorrectionHistoryModal } from '@/widgets/order-correction-history'
 import { CandidatePicker } from './CandidatePicker';
 
 interface Criteria {
-  store: PlatformMonthlyRemunerationStore | null;
+  store: AdminMonthlyRemunerationStore | null;
   person: MonthlyRemunerationCast | null;
   month: string;
 }
@@ -44,9 +44,9 @@ interface Query {
   page: number;
 }
 
-export default function PlatformMonthlyRemunerationsPage() {
+export default function AdminMonthlyRemunerationsPage() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [store, setStore] = useState<PlatformMonthlyRemunerationStore | null>(null);
+  const [store, setStore] = useState<AdminMonthlyRemunerationStore | null>(null);
   useEffect(() => setAllowed(hasPermission(readTokenClaims(), 'ORDER_SET_MANAGE')), []);
   if (allowed === null) return <p role="status">権限を確認中...</p>;
   if (!allowed) return <p role="alert">月次給与明細を閲覧する権限がありません。</p>;
@@ -62,8 +62,8 @@ function MonthlyStatement({
   store,
   onStoreChange,
 }: {
-  store: PlatformMonthlyRemunerationStore | null;
-  onStoreChange: (store: PlatformMonthlyRemunerationStore) => void;
+  store: AdminMonthlyRemunerationStore | null;
+  onStoreChange: (store: AdminMonthlyRemunerationStore) => void;
 }) {
   const form = useForm<Criteria>({
     defaultValues: {
@@ -79,7 +79,7 @@ function MonthlyStatement({
   const statement = useResource(
     query && store
       ? () =>
-          platformMonthlyRemunerationApi.monthly(
+          adminMonthlyRemunerationApi.monthly(
             store.store_id,
             query.personId,
             query.month,
@@ -109,7 +109,7 @@ function MonthlyStatement({
         title="月次給与明細"
         description="授権された一店舗・一人・一か月の発生済み固定報酬を確認します。"
         actions={
-          <Button variant="outline" render={<Link href="/platform/orders" />}>
+          <Button variant="outline" render={<Link href="/admin/orders" />}>
             受注照会
           </Button>
         }
@@ -133,7 +133,7 @@ function MonthlyStatement({
                             onStoreChange(value);
                           }}
                           triggerRef={field.ref}
-                          fetcher={platformMonthlyRemunerationApi.stores}
+                          fetcher={adminMonthlyRemunerationApi.stores}
                           itemId={item => item.store_id}
                           itemLabel={item => item.store_name}
                           placeholder="店舗名で検索"
@@ -158,7 +158,7 @@ function MonthlyStatement({
                           onChange={field.onChange}
                           disabled={!store}
                           fetcher={(search, page) =>
-                            platformMonthlyRemunerationApi.casts(store!.store_id, search, page)
+                            adminMonthlyRemunerationApi.casts(store!.store_id, search, page)
                           }
                           itemId={item => item.person_id}
                           itemLabel={item => item.name}
@@ -201,7 +201,7 @@ function MonthlyStatement({
               {pdfResult && (
                 <MonthlyPdfActions
                   criteria={{
-                    scope: 'platform',
+                    scope: 'admin',
                     storeId: pdfResult.store_id,
                     personId: pdfResult.person_id,
                     month: pdfResult.month,
@@ -238,7 +238,7 @@ function MonthlyStatement({
           statement.failure === 'notFound' ? (
             <RegionError
               message="店舗またはキャスト本人が見つからないか、閲覧範囲外です。"
-              fallback={{ href: '/platform/orders', label: '受注照会へ戻る' }}
+              fallback={{ href: '/admin/orders', label: '受注照会へ戻る' }}
             />
           ) : query ? (
             '対象月の完了受注はありません'
@@ -290,14 +290,14 @@ function MonthlyStatement({
       </ListPage>
       {query && store && (
         <RemunerationStatementPanel
-          scope={{ scope: 'platform', personId: query.personId, storeId: store.store_id }}
+          scope={{ scope: 'admin', personId: query.personId, storeId: store.store_id }}
           month={query.month}
         />
       )}
       {history && (
         <OrderCorrectionHistoryModal
           orderId={history.orderId}
-          scope="platform"
+          scope="admin"
           open={history.open}
           onOpenChange={open => setHistory(current => current && { ...current, open })}
         />

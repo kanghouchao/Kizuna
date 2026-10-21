@@ -10,19 +10,19 @@ beforeEach(() => {
 });
 it('本人照会には本人IDを送らず店と月と各ページを指定する', async () => {
   await remunerationApi.statement({ scope: 'self', storeId: 7 }, '2026-09', 2, 3);
-  expect(get).toHaveBeenCalledWith('/platform/me/remuneration-statements', {
+  expect(get).toHaveBeenCalledWith('/me/remuneration-statements', {
     params: { store_id: 7, month: '2026-09', order_page: 2, bonus_page: 3, size: 20 },
   });
 });
-it('店舗と平台はそれぞれの境界で本人を指定する', async () => {
+it('店舗とグループ級はそれぞれの境界で本人を指定する', async () => {
   await remunerationApi.statement({ scope: 'store', personId: 4 }, '2026-09', 0, 0);
   expect(get).toHaveBeenLastCalledWith(
     '/store/remuneration-statements',
     expect.objectContaining({ params: expect.objectContaining({ person_id: 4 }) })
   );
-  await remunerationApi.statement({ scope: 'platform', storeId: 7, personId: 4 }, '2026-09', 0, 0);
+  await remunerationApi.statement({ scope: 'admin', storeId: 7, personId: 4 }, '2026-09', 0, 0);
   expect(get).toHaveBeenLastCalledWith(
-    '/platform/remuneration-statements',
+    '/admin/remuneration-statements',
     expect.objectContaining({ params: expect.objectContaining({ person_id: 4, store_id: 7 }) })
   );
 });

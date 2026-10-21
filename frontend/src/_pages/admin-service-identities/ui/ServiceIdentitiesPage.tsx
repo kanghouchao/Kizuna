@@ -3,10 +3,10 @@
 import { PlusIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
-  PlatformStore,
+  AuthorizedStore,
   ServiceIdentityResponse,
   ServiceIdentitySummaryResponse,
-  platformAuthApi,
+  authApi,
   serviceIdentityApi,
 } from '@/entities/user';
 import {
@@ -59,7 +59,7 @@ export default function ServiceIdentitiesPage() {
     isLoading: storesLoading,
     failed: storesFailed,
     refetch: refetchStores,
-  } = useManagedList<PlatformStore>(() => platformAuthApi.stores());
+  } = useManagedList<AuthorizedStore>(() => authApi.stores());
 
   const [modal, setModal] = useState<
     { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; id: number }

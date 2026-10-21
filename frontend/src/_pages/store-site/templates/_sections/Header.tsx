@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getPlatformDomain } from '@/shared/lib';
+import { getAppDomain } from '@/shared/lib';
 
 interface HeaderProps {
   storeName: string;
@@ -22,14 +22,14 @@ const navLinks = [
 
 export default function Header({ storeName, logoUrl }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  // 会員ポータルは平台ドメイン側にあるため、自サイトのドメインを引き継いで店舗を伝える。
+  // 会員ポータルはアプリドメイン側にあるため、自サイトのドメインを引き継いで店舗を伝える。
   // ポータル側はこのドメインを公開照会に突き合わせて店舗を解決するので、店舗 ID は URL に載せない。
   const [reservationHref, setReservationHref] = useState<string | null>(null);
 
   useEffect(() => {
     const { protocol, hostname } = window.location;
     setReservationHref(
-      `${protocol}//${getPlatformDomain()}/member/reservations/new?store=${encodeURIComponent(hostname)}`
+      `${protocol}//${getAppDomain()}/member/reservations/new?store=${encodeURIComponent(hostname)}`
     );
   }, []);
 
@@ -96,7 +96,7 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
 
               {/* ログインボタン（sm以上で表示） */}
               <Link
-                href="/platform/login"
+                href="/auth/login"
                 className="hidden sm:block text-[9px] tracking-[0.3em] border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[var(--storefront-accent)] px-4 py-1.5 md:px-5 md:py-2 hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-all duration-300"
                 style={{ fontFamily: 'var(--storefront-font-display)' }}
               >
@@ -191,7 +191,7 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
 
           {/* ログインボタン（xs） */}
           <Link
-            href="/platform/login"
+            href="/auth/login"
             onClick={closeMenu}
             className="text-[10px] tracking-[0.4em] border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[var(--storefront-accent)] px-8 py-3 hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-all duration-300"
             style={{ fontFamily: 'var(--storefront-font-display)' }}

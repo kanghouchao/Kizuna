@@ -36,7 +36,7 @@ export const serverClient = {
    */
   resolveUrl(path: string): string {
     const backendUrl =
-      process.env.STORE_LOOKUP_API_URL?.replace('/platform/stores/lookup', '') ||
+      process.env.STORE_LOOKUP_API_URL?.replace('/admin/stores/lookup', '') ||
       'http://backend:8080';
 
     // pathがスラッシュで始まっていない場合の補正

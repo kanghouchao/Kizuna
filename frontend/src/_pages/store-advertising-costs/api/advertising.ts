@@ -1,5 +1,5 @@
 import { apiClient, type Page, type CursorPage } from '@/shared/api';
-import { getPlatformStoreId, readTokenClaims } from '@/shared/lib';
+import { getCurrentStoreId, readTokenClaims } from '@/shared/lib';
 export type Category = 'SALES' | 'RECRUITMENT';
 export interface CostValues {
   category: Category;
@@ -167,7 +167,7 @@ export const advertisingApi = {
       data: body,
       transformRequest: [
         (data, headers) => {
-          if (readTokenClaims()?.subject !== op.subject || getPlatformStoreId() !== op.store)
+          if (readTokenClaims()?.subject !== op.subject || getCurrentStoreId() !== op.store)
             throw new Error('元の店舗に戻って操作結果を確認してください。');
           headers['X-Store-ID'] = op.store;
           return JSON.stringify(data);

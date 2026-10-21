@@ -1,13 +1,13 @@
 'use client';
-import { platformStaffApi, type PlatformStaffResponse } from '@/entities/user';
+import { staffApi, type StaffResponse } from '@/entities/user';
 import { StaffModal, type StaffEditModalProps } from './StaffModal';
-export function StaffEditModal(props: StaffEditModalProps<PlatformStaffResponse>) {
+export function StaffEditModal(props: StaffEditModalProps<StaffResponse>) {
   return (
     <StaffModal
       {...props}
       mode="edit"
-      loadRoles={platformStaffApi.grantableRoles}
-      update={platformStaffApi.update}
+      loadRoles={staffApi.grantableRoles}
+      update={staffApi.update}
       honorific="さん"
     />
   );

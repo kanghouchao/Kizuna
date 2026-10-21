@@ -31,10 +31,10 @@ describe('storeResolver', () => {
     process.env = originalEnv;
   });
 
-  it('identifies platform role for admin domains', async () => {
+  it('identifies app role for the app domain', async () => {
     const req = createRequest('kizuna.test');
     const result = await resolveStore(req);
-    expect(result.role).toBe('platform');
+    expect(result.role).toBe('app');
     expect(result.storeData).toBeUndefined();
   });
 
@@ -154,7 +154,7 @@ describe('storeResolver', () => {
     expect(result.storeData?.storeId).toBe('api-store-id');
   });
 
-  it('fetches template_key from store config when platform response lacks it', async () => {
+  it('fetches template_key from store config when the admin lookup response lacks it', async () => {
     // 現実のバックエンド応答（StoreVO）は template_key を返さない
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('config/public')) {

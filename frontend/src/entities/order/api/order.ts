@@ -3,7 +3,7 @@ import type {
   CourseCandidate,
   OrderCustomerCandidate,
   OrderCorrectionHistoryEntry,
-  PlatformOrder,
+  AdminOrder,
   SurchargeCandidate,
   OrderPreview,
   SpecialServiceCandidate,
@@ -98,13 +98,13 @@ export const orderApi = {
     );
     return response.data;
   },
-  platformList: async (page: number) => {
-    const response = await apiClient.get('/platform/orders', {
+  adminList: async (page: number) => {
+    const response = await apiClient.get('/admin/orders', {
       params: { page, size: 20, sort: 'createdAt,desc' },
     });
-    return fromSpringPage<PlatformOrder>(response.data);
+    return fromSpringPage<AdminOrder>(response.data);
   },
-  correctionHistory: async (scope: 'store' | 'platform', id: string, cursor?: string) => {
+  correctionHistory: async (scope: 'store' | 'admin', id: string, cursor?: string) => {
     const response = await apiClient.get(`/${scope}/orders/${requireId(id, '受注')}/corrections`, {
       params: { cursor, size: 20 },
     });
@@ -449,20 +449,20 @@ export const guestOrderApplicationApi = {
   },
 };
 
-/** 会員本人の予約申請 API。店舗文脈を要さない（/platform/me 配下）。 */
+/** 会員本人の予約申請 API。店舗文脈を要さない（/me 配下）。 */
 export const memberOrderApplicationApi = {
   list: async (params?: CursorParams): Promise<CursorPageResult<MemberOrderApplication>> => {
-    const response = await apiClient.get('/platform/me/order-applications', { params });
+    const response = await apiClient.get('/me/order-applications', { params });
     return fromCursorPage(response.data);
   },
   create: async (data: MemberOrderApplicationCreateRequest): Promise<MemberOrderApplication> => {
-    const response = await apiClient.post('/platform/me/order-applications', data);
+    const response = await apiClient.post('/me/order-applications', data);
     return response.data;
   },
   /** 未処理の申請を取り下げる（WITHDRAWN）。確定・謝絶の後は 400 で撥ねられる。 */
   withdraw: async (id: string | undefined): Promise<MemberOrderApplication> => {
     const response = await apiClient.post(
-      `/platform/me/order-applications/${requireId(id, '予約申請')}/withdrawal`
+      `/me/order-applications/${requireId(id, '予約申請')}/withdrawal`
     );
     return response.data;
   },
@@ -471,7 +471,7 @@ export const memberOrderApplicationApi = {
 /** 会員本人の来店履歴 API。申請の追跡（memberOrderApplicationApi）とは別の読み口で、確定した来店だけを返す。 */
 export const memberVisitApi = {
   list: async (params?: CursorParams): Promise<CursorPageResult<MemberVisit>> => {
-    const response = await apiClient.get('/platform/me/visits', { params });
+    const response = await apiClient.get('/me/visits', { params });
     return fromCursorPage(response.data);
   },
 };
@@ -479,7 +479,7 @@ export const memberVisitApi = {
 /** 会員本人の伝票トークン申領 API。トークンは本体で送る（パスや問い合わせ文字列はアクセスログに残る）。 */
 export const memberReceiptApi = {
   claim: async (token: string): Promise<MemberReceiptClaim> => {
-    const response = await apiClient.post('/platform/me/receipts', { token });
+    const response = await apiClient.post('/me/receipts', { token });
     return response.data;
   },
 };

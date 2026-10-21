@@ -2,9 +2,9 @@ import axios from 'axios';
 import type { AxiosHeaders } from 'axios';
 import Cookies from 'js-cookie';
 import {
-  clearPlatformSession,
-  getPlatformSessionKind,
-  getPlatformStoreId,
+  clearSession,
+  getSessionKind,
+  getCurrentStoreId,
   redirectToLogin,
   rememberMemberReturnPath,
 } from '@/shared/lib';
@@ -37,13 +37,13 @@ apiClient.interceptors.request.use(
       (config.headers as AxiosHeaders).set('X-XSRF-TOKEN', csrfToken);
     }
     // 店舗文脈は X-Store-ID だけで名乗る。管理画面の店舗級ページ（/store 配下）からの店舗級端点にだけ、
-    // StoreContext が確定させた現在店舗（platform-store-id cookie）を付ける。/platform 配下の画面からの
+    // StoreContext が確定させた現在店舗（current-store-id cookie）を付ける。/admin 配下の画面からの
     // /files 等は店舗文脈を持たない（全店共有領域への保存）。キャスト・会員の portal は cookie が残っていても
     // 付けない。公開店舗サイトでは proxy が焼いた x-mw-store-id を付ける。受否はバックエンドが授権店舗集合で判定する。
     try {
-      const sessionKind = getPlatformSessionKind();
+      const sessionKind = getSessionKind();
       if (sessionKind) {
-        const storeId = getPlatformStoreId();
+        const storeId = getCurrentStoreId();
         const url = config.url || '';
         if (
           sessionKind === 'admin' &&
@@ -92,11 +92,11 @@ apiClient.interceptors.response.use(
       }
     }
     if (error.response?.status === 403) {
-      // 旧形式（ロール名・廃止済みのコンソール値）の platform-role cookie を持つ有効期限内トークンは
+      // 旧形式（ロール名・廃止済みのコンソール値）の session-kind cookie を持つ有効期限内トークンは
       // 403 を受けても 401 経路に乗らず、再ログイン導線が無いままデッドロックする。cookie 値が現行の
       // セッション種別（admin/cast/member）でない場合に限りセッションを破棄して再ログインへ促す
       // （現行のセッションで正当に 403 を受けた場合は何もしない）。
-      const sessionKind = getPlatformSessionKind();
+      const sessionKind = getSessionKind();
       if (
         sessionKind &&
         sessionKind !== 'admin' &&
@@ -104,7 +104,7 @@ apiClient.interceptors.response.use(
         sessionKind !== 'member'
       ) {
         Cookies.remove('token');
-        clearPlatformSession();
+        clearSession();
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           redirectToLogin('expired');
         }

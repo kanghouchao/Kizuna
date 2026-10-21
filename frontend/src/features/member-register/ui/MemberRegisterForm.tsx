@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import { memberApi, MemberRegisterRequest } from '@/entities/member';
-import { platformAuthApi } from '@/entities/user';
+import { authApi } from '@/entities/user';
 import {
   EMAIL_PATTERN,
   EMAIL_PATTERN_MESSAGE,
   getApiErrorMessage,
-  startPlatformSession,
+  startSession,
   takeMemberReturnPath,
 } from '@/shared/lib';
 
@@ -37,13 +37,13 @@ export function MemberRegisterForm() {
     }
     try {
       // 登録直後のログインは本フローがセッションを扱うため、グローバルな 401 リダイレクトから除外する。
-      const { token, expires_at } = await platformAuthApi.login(
+      const { token, expires_at } = await authApi.login(
         { email: values.email, password: values.password },
         { skipAuthRedirect: true }
       );
       // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
       Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
-      startPlatformSession('member', expires_at);
+      startSession('member', expires_at);
       // 会員ポータルで弾かれた人がこの登録画面へ回ってくる経路がある（伝票の QR を未登録で開いた等）。
       // 預かった戻り先は会員セッションが立った時点で必ず消費する — 残すと、同じタブで後からログインした
       // 別の会員がその戻り先へ運ばれる。
@@ -51,7 +51,7 @@ export function MemberRegisterForm() {
     } catch {
       // 登録自体は完了している。自動ログインだけが失敗した稀な場合はログイン画面から再開させる。
       notify.success('登録が完了しました。ログインしてください');
-      router.push('/platform/login');
+      router.push('/auth/login');
     }
   };
 

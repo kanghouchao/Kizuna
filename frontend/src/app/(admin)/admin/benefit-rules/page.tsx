@@ -1,1 +1,1 @@
-export { BenefitRulesPage as default } from '@/_pages/platform-benefit-rules';
+export { BenefitRulesPage as default } from '@/_pages/admin-benefit-rules';

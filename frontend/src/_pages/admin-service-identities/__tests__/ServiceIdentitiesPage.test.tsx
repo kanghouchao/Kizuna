@@ -3,7 +3,7 @@ import { PageResult } from '@/shared/api';
 import {
   ServiceIdentityResponse,
   ServiceIdentitySummaryResponse,
-  platformAuthApi,
+  authApi,
   serviceIdentityApi,
 } from '@/entities/user';
 import { notify } from '@/shared/notify';
@@ -16,7 +16,7 @@ jest.mock('@/entities/user', () => ({
     suspend: jest.fn(),
     resume: jest.fn(),
   },
-  platformAuthApi: {
+  authApi: {
     stores: jest.fn(),
   },
 }));
@@ -66,7 +66,7 @@ jest.mock('@/shared/notify', () => ({
 }));
 
 const mockedApi = serviceIdentityApi as jest.Mocked<typeof serviceIdentityApi>;
-const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
+const mockedAuthApi = authApi as jest.Mocked<typeof authApi>;
 
 const identity = (
   override: Partial<ServiceIdentitySummaryResponse>

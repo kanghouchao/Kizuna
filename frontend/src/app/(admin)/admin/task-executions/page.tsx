@@ -1,1 +1,1 @@
-export { default } from '@/_pages/platform-task-executions';
+export { default } from '@/_pages/admin-task-executions';

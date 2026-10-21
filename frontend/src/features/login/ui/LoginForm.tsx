@@ -4,30 +4,30 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
-import { platformAuthApi, PlatformLoginRequest } from '@/entities/user';
+import { authApi, LoginRequest } from '@/entities/user';
 import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
-import { completePlatformLogin } from '../model/completePlatformLogin';
+import { completeLogin } from '../model/completeLogin';
 
 /** 統一ログイン動作。ログイン成功後はロールに応じて自動的に適切なコンソールへ遷移する。 */
-export default function PlatformLoginForm() {
+export default function LoginForm() {
   const router = useRouter();
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<PlatformLoginRequest>({ defaultValues: { email: '', password: '' } });
+  } = useForm<LoginRequest>({ defaultValues: { email: '', password: '' } });
 
-  const onSubmit = async (data: PlatformLoginRequest) => {
+  const onSubmit = async (data: LoginRequest) => {
     Cookies.remove('token');
     try {
-      const completion = await completePlatformLogin(await platformAuthApi.login(data));
+      const completion = await completeLogin(await authApi.login(data));
       if (completion.status === 'unsupported') {
         notify.error('この利用者種別のポータルは準備中です');
         return;
       }
       router.push(completion.path);
     } catch (error) {
-      console.error('Platform login failed:', error);
+      console.error('Login failed:', error);
       notify.error(
         getApiErrorMessage(error, 'ログインに失敗しました。しばらくしてから再度お試しください')
       );

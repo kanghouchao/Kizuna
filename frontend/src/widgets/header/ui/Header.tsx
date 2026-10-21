@@ -21,7 +21,7 @@ export function Header() {
   const { stores, currentStore, switchStore } = useStoreContext();
 
   // 表示名は token claim に無い（wire 契約は authorities / userType のみ）ため、
-  // /platform/me の共有 seam（管理画面シェルに搭載）から読む。アカウント設定ページの
+  // /me の共有 seam（管理画面シェルに搭載）から読む。アカウント設定ページの
   // プロフィール更新は同じ seam の setMe で差し替わるため、この表示も再取得なしで追随する。
   const { me, failure: meFailure, reload: reloadMe } = useMe();
 
@@ -103,7 +103,7 @@ export function Header() {
               <CircleUserRoundIcon className="size-8" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-48">
-              <DropdownMenuItem render={<Link href="/platform/settings/account" />}>
+              <DropdownMenuItem render={<Link href="/admin/settings/account" />}>
                 アカウント設定
               </DropdownMenuItem>
               {/* 原語の destructive 変種は淡色地の上で既定の赤を使い明モードで 4.5 を割るため、

@@ -7,7 +7,7 @@ import {
   benefitRuleRepeatPolicyLabel,
   benefitRuleTypeLabel,
 } from '@/entities/benefit-rule';
-import { PlatformStore, platformAuthApi } from '@/entities/user';
+import { AuthorizedStore, authApi } from '@/entities/user';
 import { getApiErrorMessage, isConflict, useListPage, useManagedList } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
@@ -61,7 +61,7 @@ export default function BenefitRulesPage() {
     isLoading: storesLoading,
     failed: storesFailed,
     refetch: refetchStores,
-  } = useManagedList<PlatformStore>(() => platformAuthApi.stores());
+  } = useManagedList<AuthorizedStore>(() => authApi.stores());
 
   // null = 閉じている、'new' = 新規作成、数値 = その規則の編集
   const [editing, setEditing] = useState<number | 'new' | null>(null);

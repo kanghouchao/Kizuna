@@ -1,1 +1,1 @@
-export { default as PlatformOperationalReportsPage } from './ui/PlatformOperationalReportsPage';
+export { default as AdminOperationalReportsPage } from './ui/AdminOperationalReportsPage';

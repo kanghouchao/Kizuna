@@ -1,2 +1,2 @@
-import { PlatformOrdersPage } from '@/_pages/platform-orders';
-export default PlatformOrdersPage;
+import { AdminOrdersPage } from '@/_pages/admin-orders';
+export default AdminOrdersPage;

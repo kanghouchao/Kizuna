@@ -4,7 +4,7 @@ import {
   SelfMonthlyRemunerationStore,
 } from '../model/selfMonthlyRemuneration';
 
-const base = '/platform/me/monthly-remunerations';
+const base = '/me/monthly-remunerations';
 
 export const selfMonthlyRemunerationApi = {
   async stores(page: number): Promise<PageResult<SelfMonthlyRemunerationStore>> {

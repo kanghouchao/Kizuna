@@ -1,10 +1,10 @@
-import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
+import { AuthorizedStore, StoreScopeType } from '@/entities/user';
 
 /** 担当店舗の表示文字列（「全店舗」または店舗名をカンマ区切り）。 */
 export function storeSetLabel(
-  storeScopeType: PlatformStoreScopeType | undefined,
+  storeScopeType: StoreScopeType | undefined,
   storeIds: number[] | undefined,
-  stores: PlatformStore[]
+  stores: AuthorizedStore[]
 ): string {
   if (storeScopeType === 'ALL_STORES') return '全店舗';
   const selected = storeIds ?? [];

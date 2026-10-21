@@ -360,7 +360,7 @@ test('advertising view requires its export permission even when not applicable',
   fireEvent.click(screen.getByRole('button', { name: '照会' }));
   expect(await screen.findByRole('button', { name: 'CSV 全件出力' })).toBeInTheDocument();
 });
-test('store does not accept platform advertising permission', async () => {
+test('store does not accept group-wide advertising permission', async () => {
   jest.mocked(readTokenClaims).mockReturnValue({
     authorities: [
       'PERM_ORDER_MANAGE',

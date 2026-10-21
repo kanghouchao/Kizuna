@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
-import { Store, platformStoreApi } from '@/entities/store';
+import { Store, adminStoreApi } from '@/entities/store';
 import StoresPage from '../ui/StoresPage';
 import StoreCreatePage from '../ui/StoreCreatePage';
 import StoreEditPage from '../ui/StoreEditPage';
@@ -10,7 +10,7 @@ const mockPush = jest.fn();
 jest.mock('@/entities/store', () => ({
   // ドメイン形式の判定は本物を使う（リンク化の可否そのものを検証したいため）
   ...jest.requireActual('@/entities/store'),
-  platformStoreApi: {
+  adminStoreApi: {
     getList: jest.fn(),
     getById: jest.fn(),
     create: jest.fn(),
@@ -28,7 +28,7 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockedApi = platformStoreApi as jest.Mocked<typeof platformStoreApi>;
+const mockedApi = adminStoreApi as jest.Mocked<typeof adminStoreApi>;
 
 const store = (override: Partial<Store>): Store => ({
   id: '1',
@@ -257,7 +257,7 @@ describe('店舗管理 3 画面の挙動', () => {
       domain: 'gamma.example.com',
       email: 'gamma@example.com',
     });
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/stores'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
   });
 
   it('新規作成はドメイン形式が不正なら送信せずエラーを表示すること', async () => {
@@ -299,7 +299,7 @@ describe('店舗管理 3 画面の挙動', () => {
         email: 'delta@example.com',
       })
     );
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/stores'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
   });
 
   // 上のケースは name を変えて email が素通りすることしか見ていない。
@@ -360,7 +360,7 @@ describe('店舗管理 3 画面の挙動', () => {
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
     expect(within(region).getByRole('link', { name: '店舗一覧へ' })).toHaveAttribute(
       'href',
-      '/platform/stores'
+      '/admin/stores'
     );
   });
 });
@@ -379,7 +379,7 @@ describe('店舗一覧ページ固有の要素', () => {
     expect(screen.getByText('システム内の全ての店舗を管理します')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '店舗を追加' }));
-    expect(mockPush).toHaveBeenCalledWith('/platform/stores/create');
+    expect(mockPush).toHaveBeenCalledWith('/admin/stores/create');
   });
 
   // 検索語の変更だけでは取得は走らないため、送信そのものを捉えるには「現在ページが先頭へ戻る」

@@ -4,16 +4,16 @@ import Cookies from 'js-cookie';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
-import { PlatformLoginRequest, platformAuthApi } from '@/entities/user';
+import { LoginRequest, authApi } from '@/entities/user';
 import {
   EMAIL_PATTERN,
   EMAIL_PATTERN_MESSAGE,
-  clearPlatformSession,
+  clearSession,
   getApiErrorMessage,
-  getPlatformSessionKind,
-  getPlatformStoreId,
-  setPlatformStore,
-  startPlatformSession,
+  getSessionKind,
+  getCurrentStoreId,
+  setCurrentStore,
+  startSession,
 } from '@/shared/lib';
 
 interface ExistingLoginFormProps {
@@ -31,24 +31,24 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<PlatformLoginRequest>({ defaultValues: { email: '', password: '' } });
+  } = useForm<LoginRequest>({ defaultValues: { email: '', password: '' } });
 
-  const submit = async (values: PlatformLoginRequest) => {
+  const submit = async (values: LoginRequest) => {
     let newTokenWritten = false;
     // ログイン成功で旧セッションを消す前に退避しておく。受諾API失敗時にこれが無いと、
-    // clearPlatformSession() 済みの旧 platform-role(セッション種別)/platform-store-id に戻れず訪問者がログアウト状態に落ちる。
-    const previousSessionKind = getPlatformSessionKind();
-    const previousStoreId = getPlatformStoreId();
+    // clearSession() 済みの旧 session-kind(セッション種別)/current-store-id に戻れず訪問者がログアウト状態に落ちる。
+    const previousSessionKind = getSessionKind();
+    const previousStoreId = getCurrentStoreId();
     const previousToken = Cookies.get('token');
     try {
       // グローバル401ハンドラ（apiClient）に token 除去+リダイレクトをやらせない。ここでの401（パスワード誤り/
       // アカウント無効化）は下の catch 節で自前のセッション退避・復元を行うため、先に画面遷移されると無意味になる。
-      const { token: authToken, expires_at } = await platformAuthApi.login(values, {
+      const { token: authToken, expires_at } = await authApi.login(values, {
         skipAuthRedirect: true,
       });
-      // 招待を開く前に別ロールで平台にログイン済みだった場合、旧セッションの platform-role/platform-store-id が
+      // 招待を開く前に別ロールでログイン済みだった場合、旧セッションの session-kind/current-store-id が
       // 残ったままだと apiClient やルート遷移が旧ロールの文脈を CAST の token に対して使ってしまう。
-      clearPlatformSession();
+      clearSession();
       Cookies.set('token', authToken ?? '', { expires: new Date(expires_at) });
       newTokenWritten = true;
       const response = await castInvitationAcceptanceApi.acceptAsExistingUser(token);
@@ -64,10 +64,10 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
         // 受諾APIの失敗（招待の失効/競合、通信断など）。旧セッションが存在した場合はここで復元する。
         // 未ログイン訪問者だった場合（退避値が無い）は何もしない
         if (previousSessionKind) {
-          startPlatformSession(previousSessionKind);
+          startSession(previousSessionKind);
         }
         if (previousStoreId) {
-          setPlatformStore(previousStoreId);
+          setCurrentStore(previousStoreId);
         }
         if (previousToken) {
           Cookies.set('token', previousToken);

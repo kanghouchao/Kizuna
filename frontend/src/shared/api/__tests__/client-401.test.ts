@@ -2,17 +2,17 @@ import Cookies from 'js-cookie';
 
 // mock navigation helper before importing client so that interceptor uses the mock
 const redirectMock = jest.fn();
-const clearPlatformSessionMock = jest.fn();
+const clearSessionMock = jest.fn();
 const rememberMemberReturnPathMock = jest.fn();
-let platformConsoleValue: string | undefined;
+let sessionKindValue: string | undefined;
 jest.mock('@/shared/lib', () => ({
   // 引数をそのまま渡す。握り潰すと理由コードが未配線でもテストが緑のままになる。
   redirectToLogin: (reason?: string) => redirectMock(reason),
-  clearPlatformSession: () => clearPlatformSessionMock(),
+  clearSession: () => clearSessionMock(),
   rememberMemberReturnPath: (value: string, fragment?: string) =>
     rememberMemberReturnPathMock(value, fragment),
-  getPlatformSessionKind: () => platformConsoleValue,
-  getPlatformStoreId: () => undefined,
+  getSessionKind: () => sessionKindValue,
+  getCurrentStoreId: () => undefined,
 }));
 
 import { apiClient } from '@/shared/api';
@@ -23,7 +23,7 @@ describe('apiClient 401/403 interceptor', () => {
   const originalHref = window.location.href;
   beforeEach(() => {
     jest.clearAllMocks();
-    platformConsoleValue = undefined;
+    sessionKindValue = undefined;
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 'tkn';
       return undefined;
@@ -57,7 +57,7 @@ describe('apiClient 401/403 interceptor', () => {
   it('clears token and redirects on 401', async () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(401, () => apiClient.get('/platform/me'));
+    await withRejectingAdapter(401, () => apiClient.get('/me'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
     // assert that our navigation helper was called (no real navigation in jsdom)
@@ -70,7 +70,7 @@ describe('apiClient 401/403 interceptor', () => {
     // 覚えないとログイン後に店舗つきの申請画面へ戻れない。
     window.history.pushState({}, '', '/member/reservations/new?store=store1.kizuna.test');
 
-    await withRejectingAdapter(401, () => apiClient.get('/platform/me/orders'));
+    await withRejectingAdapter(401, () => apiClient.get('/me/orders'));
 
     expect(rememberMemberReturnPathMock).toHaveBeenCalledWith(
       '/member/reservations/new?store=store1.kizuna.test',
@@ -83,57 +83,57 @@ describe('apiClient 401/403 interceptor', () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
     await withRejectingAdapter(401, () =>
-      apiClient.post('/platform/login', {}, { skipAuthRedirect: true } as never)
+      apiClient.post('/auth/login', {}, { skipAuthRedirect: true } as never)
     );
 
     expect(removeSpy).not.toHaveBeenCalledWith('token');
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it('clears session and redirects on 403 when the platform-role cookie holds a legacy role value (旧トークンのデッドロック回避)', async () => {
-    platformConsoleValue = 'STORE_MANAGER';
+  it('clears session and redirects on 403 when the session-kind cookie holds a legacy role value (旧トークンのデッドロック回避)', async () => {
+    sessionKindValue = 'STORE_MANAGER';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
     await withRejectingAdapter(403, () => apiClient.get('/store/orders'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
-    expect(clearPlatformSessionMock).toHaveBeenCalled();
+    expect(clearSessionMock).toHaveBeenCalled();
     // 401 と同じ理由コード。こちらのトークンは期限内で、古いのは cookie の形式である。
     expect(redirectMock).toHaveBeenCalledWith('expired');
   });
 
   it.each(['platform', 'store'])(
-    'clears session on 403 when the platform-role cookie holds the retired console value %s',
+    'clears session on 403 when the session-kind cookie holds the retired console value %s',
     async value => {
-      platformConsoleValue = value;
+      sessionKindValue = value;
       const removeSpy = jest.spyOn(Cookies, 'remove');
 
       await withRejectingAdapter(403, () => apiClient.get('/store/orders'));
 
       expect(removeSpy).toHaveBeenCalledWith('token');
-      expect(clearPlatformSessionMock).toHaveBeenCalled();
+      expect(clearSessionMock).toHaveBeenCalled();
     }
   );
 
-  it('does nothing on 403 when the platform-role cookie holds the admin session value (正当な権限不足はセッションを壊さない)', async () => {
-    platformConsoleValue = 'admin';
+  it('does nothing on 403 when the session-kind cookie holds the admin session value (正当な権限不足はセッションを壊さない)', async () => {
+    sessionKindValue = 'admin';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(403, () => apiClient.get('/platform/stores'));
+    await withRejectingAdapter(403, () => apiClient.get('/admin/stores'));
 
     expect(removeSpy).not.toHaveBeenCalledWith('token');
-    expect(clearPlatformSessionMock).not.toHaveBeenCalled();
+    expect(clearSessionMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it('does nothing on 403 when the platform-role cookie holds the member session value (会員の正当な 403 はセッションを壊さない)', async () => {
-    platformConsoleValue = 'member';
+  it('does nothing on 403 when the session-kind cookie holds the member session value (会員の正当な 403 はセッションを壊さない)', async () => {
+    sessionKindValue = 'member';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(403, () => apiClient.get('/platform/staff'));
+    await withRejectingAdapter(403, () => apiClient.get('/admin/staff'));
 
     expect(removeSpy).not.toHaveBeenCalledWith('token');
-    expect(clearPlatformSessionMock).not.toHaveBeenCalled();
+    expect(clearSessionMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
   });
 });

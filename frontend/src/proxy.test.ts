@@ -8,7 +8,7 @@ jest.mock('./shared/lib/proxy/storeResolver', () => ({
   resolveStore: jest.fn(),
   // 既定値と異なる値にして、cookie が proxy 内の literal ではなく実行時 env 由来の
   // 定数から来ていることを断言できるようにする
-  PLATFORM_DOMAIN: 'platform.example',
+  APP_DOMAIN: 'app.example',
 }));
 
 jest.mock('./shared/lib/proxy/routeGuard', () => ({
@@ -57,7 +57,7 @@ describe('proxy integration', () => {
   });
 
   it('delegates to routeGuard and returns redirect if needed', async () => {
-    mockResolveStore.mockResolvedValue({ role: 'platform' });
+    mockResolveStore.mockResolvedValue({ role: 'app' });
     const redirectResponse = { status: 307 };
     mockHandleRouteProtection.mockReturnValue(redirectResponse);
 
@@ -65,7 +65,7 @@ describe('proxy integration', () => {
     const res = await proxy(req);
 
     expect(mockResolveStore).toHaveBeenCalledWith(req);
-    expect(mockHandleRouteProtection).toHaveBeenCalledWith(req, 'platform');
+    expect(mockHandleRouteProtection).toHaveBeenCalledWith(req, 'app');
     expect(res).toBe(redirectResponse);
   });
 
@@ -91,14 +91,14 @@ describe('proxy integration', () => {
     expect(res.cookies.get('x-mw-store-domain')?.value).toBe('store.test');
   });
 
-  it('平台ドメインを cookie でクライアントへ渡す', async () => {
+  it('アプリドメインを cookie でクライアントへ渡す', async () => {
     // NEXT_PUBLIC_* はビルド時インライン置換のため実行時 env が届かない。
     // 店舗ドメインから会員ポータルへ渡す絶対 URL の根拠はこの cookie だけ
-    mockResolveStore.mockResolvedValue({ role: 'platform' });
+    mockResolveStore.mockResolvedValue({ role: 'app' });
     mockHandleRouteProtection.mockReturnValue(null);
 
     const res = (await proxy(createRequest()))!;
 
-    expect(res.cookies.get('x-mw-platform-domain')?.value).toBe('platform.example');
+    expect(res.cookies.get('x-mw-app-domain')?.value).toBe('app.example');
   });
 });

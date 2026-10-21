@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { platformCastApi, PlatformCastEnrollmentResponse } from '@/entities/cast';
+import { adminCastApi, AdminCastEnrollmentResponse } from '@/entities/cast';
 import { useListPage, useResource } from '@/shared/lib';
 import {
   Button,
@@ -20,14 +20,14 @@ import { ListPage } from '@/widgets/list-page';
 
 const statusLabels = { ENROLLED: '在籍中', SUSPENDED: '在籍停止', WITHDRAWN: '退店' };
 
-export function PlatformCastDetailPage() {
+export function AdminCastDetailPage() {
   const { id } = useParams<{ id: string }>();
   return <PersonDetail key={id} id={Number(id)} />;
 }
 
 function PersonDetail({ id }: { id: number }) {
-  const person = useResource(() => platformCastApi.get(id), [id]);
-  const back = { href: '/platform/casts', label: '一覧に戻る' };
+  const person = useResource(() => adminCastApi.get(id), [id]);
+  const back = { href: '/admin/casts', label: '一覧に戻る' };
   if (person.isLoading) return <p role="status">読み込み中...</p>;
   if (person.failure === 'notFound')
     return <RegionError message="キャスト本人が見つかりません" fallback={back} />;
@@ -80,8 +80,8 @@ function PersonDetail({ id }: { id: number }) {
 }
 
 function Enrollments({ id }: { id: number }) {
-  const list = useListPage<PlatformCastEnrollmentResponse>(page =>
-    platformCastApi.enrollments(id, { page, size: 20 })
+  const list = useListPage<AdminCastEnrollmentResponse>(page =>
+    adminCastApi.enrollments(id, { page, size: 20 })
   );
   return (
     <ListPage

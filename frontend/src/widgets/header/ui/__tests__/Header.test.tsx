@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Header } from '../Header';
 import { useMe, useStoreContext } from '@/entities/user';
-import type { PlatformMeResponse, PlatformStore } from '@/entities/user';
+import type { MeResponse, AuthorizedStore } from '@/entities/user';
 
 // 現在店舗・授権店舗・切替は店舗コンテキストが担い、その全ケースは StoreContext.test.tsx で検証する。
 // 自分の情報も同じく共有 seam（MeContext.test.tsx）が担う。ここでは context 出力に対する
@@ -29,7 +29,7 @@ const meFixture = {
   line_linked: false,
 };
 
-function withContext(stores: PlatformStore[] | null, currentStoreId?: string) {
+function withContext(stores: AuthorizedStore[] | null, currentStoreId?: string) {
   mockedUseStoreContext.mockReturnValue({
     stores,
     currentStoreId,
@@ -40,7 +40,7 @@ function withContext(stores: PlatformStore[] | null, currentStoreId?: string) {
   });
 }
 
-function withMe(me: PlatformMeResponse | null, failure: 'error' | null = null) {
+function withMe(me: MeResponse | null, failure: 'error' | null = null) {
   mockedUseMe.mockReturnValue({
     me,
     isLoading: me === null && failure === null,
@@ -106,7 +106,7 @@ describe('Header 店舗切替（店舗コンテキスト集約）', () => {
     fireEvent.click(screen.getByRole('button', { name: 'アカウントメニュー' }));
   }
 
-  it('アカウント設定リンクは常に platform 側の唯一のアカウント設定を指す', async () => {
+  it('アカウント設定リンクは常に 唯一のアカウント設定を指す', async () => {
     withContext([{ id: 2, name: '店舗B' }], '2');
 
     render(<Header />);
@@ -114,7 +114,7 @@ describe('Header 店舗切替（店舗コンテキスト集約）', () => {
 
     expect(await screen.findByRole('menuitem', { name: 'アカウント設定' })).toHaveAttribute(
       'href',
-      '/platform/settings/account'
+      '/admin/settings/account'
     );
   });
 
@@ -176,11 +176,11 @@ describe('Header 店舗切替（店舗コンテキスト集約）', () => {
   });
 });
 
-// 利用者表示は /platform/me の共有 seam から読む（display_name は token claim に無い —
+// 利用者表示は /me の共有 seam から読む（display_name は token claim に無い —
 // wire 契約は authorities / userType のみ）。取得・差し替えのライフサイクルは
 // MeContext.test.tsx が担い、ここでは seam 出力に対する表示・失敗時の名乗り・再試行の委譲を
 // 検証する。
-describe('Header 利用者表示（/platform/me の共有 seam）', () => {
+describe('Header 利用者表示（/me の共有 seam）', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     withMe(meFixture);

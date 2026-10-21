@@ -3,13 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Cookies from 'js-cookie';
 import { ExistingLoginForm } from '../ExistingLoginForm';
 import { castInvitationAcceptanceApi } from '@/entities/cast';
-import { platformAuthApi } from '@/entities/user';
-import {
-  getPlatformSessionKind,
-  getPlatformStoreId,
-  setPlatformStore,
-  startPlatformSession,
-} from '@/shared/lib';
+import { authApi } from '@/entities/user';
+import { getSessionKind, getCurrentStoreId, setCurrentStore, startSession } from '@/shared/lib';
 
 jest.mock('@/entities/cast', () => {
   const actual = jest.requireActual('@/entities/cast');
@@ -26,8 +21,8 @@ jest.mock('@/entities/user', () => {
   const actual = jest.requireActual('@/entities/user');
   return {
     ...actual,
-    platformAuthApi: {
-      ...actual.platformAuthApi,
+    authApi: {
+      ...actual.authApi,
       login: jest.fn(),
     },
   };
@@ -36,23 +31,23 @@ jest.mock('@/entities/user', () => {
 const mockedAcceptanceApi = castInvitationAcceptanceApi as jest.Mocked<
   typeof castInvitationAcceptanceApi
 >;
-const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
+const mockedAuthApi = authApi as jest.Mocked<typeof authApi>;
 
-describe('ExistingLoginForm 旧プラットフォームセッションのcookie消去', () => {
+describe('ExistingLoginForm 旧セッションのcookie消去', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // 招待を開く前に別ロールで平台にログイン済みだった状況を再現する
-    startPlatformSession('admin');
-    setPlatformStore('7');
+    // 招待を開く前に別ロールでログイン済みだった状況を再現する
+    startSession('admin');
+    setCurrentStore('7');
   });
 
   afterEach(() => {
-    Cookies.remove('platform-role');
-    Cookies.remove('platform-store-id');
+    Cookies.remove('session-kind');
+    Cookies.remove('current-store-id');
     Cookies.remove('token');
   });
 
-  it('platformAuthApi.login を skipAuthRedirect: true で呼び、招待ログインの401をグローバルセッション処理から除外する', async () => {
+  it('authApi.login を skipAuthRedirect: true で呼び、招待ログインの401をグローバルセッション処理から除外する', async () => {
     mockedAuthApi.login.mockResolvedValue({
       token: 'cast-jwt',
       expires_at: Date.now() + 60 * 60 * 1000,
@@ -75,7 +70,7 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
     );
   });
 
-  it('ログイン成功時、新しい token を設定する前に旧セッションの platform-role / platform-store-id を消去する', async () => {
+  it('ログイン成功時、新しい token を設定する前に旧セッションの session-kind / current-store-id を消去する', async () => {
     let tokenDuringAcceptance: string | undefined;
     mockedAuthApi.login.mockResolvedValue({
       token: 'cast-jwt',
@@ -98,12 +93,12 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
 
-    expect(getPlatformSessionKind()).toBeUndefined();
-    expect(getPlatformStoreId()).toBeUndefined();
+    expect(getSessionKind()).toBeUndefined();
+    expect(getCurrentStoreId()).toBeUndefined();
     expect(tokenDuringAcceptance).toBe('cast-jwt');
   });
 
-  it('受諾成功後、一時的に設定した CAST token を消去する（token だけが残ると platform/store へ誤誘導される）', async () => {
+  it('受諾成功後、一時的に設定した CAST token を消去する（token だけが残ると /admin・/store へ誤誘導される）', async () => {
     mockedAuthApi.login.mockResolvedValue({
       token: 'cast-jwt',
       expires_at: Date.now() + 60 * 60 * 1000,
@@ -122,8 +117,8 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
 
     expect(Cookies.get('token')).toBeUndefined();
-    expect(getPlatformSessionKind()).toBeUndefined();
-    expect(getPlatformStoreId()).toBeUndefined();
+    expect(getSessionKind()).toBeUndefined();
+    expect(getCurrentStoreId()).toBeUndefined();
   });
 
   it('ログイン自体が失敗した場合、新 token を書き込んでいないので既存の token cookie を消去しない', async () => {
@@ -142,11 +137,11 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     expect(mockedAcceptanceApi.acceptAsExistingUser).not.toHaveBeenCalled();
     expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(getPlatformSessionKind()).toBe('admin');
-    expect(getPlatformStoreId()).toBe('7');
+    expect(getSessionKind()).toBe('admin');
+    expect(getCurrentStoreId()).toBe('7');
   });
 
-  it('ログイン成功後に受諾APIが失敗した場合、消去済みの旧セッション（platform-role/platform-store-id/token）を復元する（でないと訪問者がログアウト状態に落ちる）', async () => {
+  it('ログイン成功後に受諾APIが失敗した場合、消去済みの旧セッション（session-kind/current-store-id/token）を復元する（でないと訪問者がログアウト状態に落ちる）', async () => {
     Cookies.set('token', 'existing-jwt');
     mockedAuthApi.login.mockResolvedValue({
       token: 'cast-jwt',
@@ -172,16 +167,16 @@ describe('ExistingLoginForm 旧プラットフォームセッションのcookie�
 
     expect(onSuccess).not.toHaveBeenCalled();
     expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(getPlatformSessionKind()).toBe('admin');
-    expect(getPlatformStoreId()).toBe('7');
+    expect(getSessionKind()).toBe('admin');
+    expect(getCurrentStoreId()).toBe('7');
   });
 });
 
 it('同店の重複受諾409では理由を通知して入力と旧セッションを維持する', async () => {
   const error = jest.spyOn(notify, 'error').mockReturnValue('notification-id');
   Cookies.set('token', 'previous-token');
-  startPlatformSession('admin');
-  setPlatformStore('7');
+  startSession('admin');
+  setCurrentStore('7');
   mockedAuthApi.login.mockResolvedValue({ token: 'cast-token', expires_at: Date.now() + 3600000 });
   mockedAcceptanceApi.acceptAsExistingUser.mockRejectedValue({
     response: { status: 409, data: { message: 'この店舗には既に有効な在籍があります' } },
@@ -197,11 +192,11 @@ it('同店の重複受諾409では理由を通知して入力と旧セッショ�
   expect(screen.getByLabelText('メールアドレス')).toHaveValue('cast@kizuna.test');
   expect(screen.getByRole('button', { name: 'ログインして受諾する' })).toBeEnabled();
   expect(Cookies.get('token')).toBe('previous-token');
-  expect(getPlatformSessionKind()).toBe('admin');
-  expect(getPlatformStoreId()).toBe('7');
+  expect(getSessionKind()).toBe('admin');
+  expect(getCurrentStoreId()).toBe('7');
   expect(onSuccess).not.toHaveBeenCalled();
   error.mockRestore();
   Cookies.remove('token');
-  Cookies.remove('platform-role');
-  Cookies.remove('platform-store-id');
+  Cookies.remove('session-kind');
+  Cookies.remove('current-store-id');
 });

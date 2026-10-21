@@ -2,7 +2,7 @@ import Cookies from 'js-cookie';
 
 /**
  * token cookie（JWT）の payload から読む claim。名前と形状はバックエンドの
- * PlatformAuthService.login が鋳造する claim（authorities / userType）との
+ * AuthService.login が鋳造する claim（authorities / userType）との
  * wire 契約で、勝手に変えられない。
  *
  * JWT は「署名付き・非暗号化」— payload は base64url にすぎず、保持者が自分の claim を

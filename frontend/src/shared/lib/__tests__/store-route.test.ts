@@ -15,7 +15,7 @@ describe('store-route', () => {
       }
     );
 
-    it.each(['/store', '/store/orders', '/store/entry', '/store/5abc', '/platform/5/orders'])(
+    it.each(['/store', '/store/orders', '/store/entry', '/store/5abc', '/admin/5/orders'])(
       '%s は旧形式ではない',
       path => {
         expect(isLegacyStorePath(path)).toBe(false);

@@ -18,7 +18,7 @@ async function requestTo(url: string) {
   return res.config.headers;
 }
 
-describe('apiClient platform branch', () => {
+describe('apiClient session branch', () => {
   const originalHref = window.location.href;
 
   beforeEach(() => {
@@ -35,11 +35,11 @@ describe('apiClient platform branch', () => {
     window.history.pushState({}, '', originalHref);
   });
 
-  const platformSession = (storeId?: string, kind = 'admin') =>
+  const session = (storeId?: string, kind = 'admin') =>
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
-      if (key === 'platform-role') return kind;
-      if (key === 'platform-store-id') return storeId;
+      if (key === 'session-kind') return kind;
+      if (key === 'current-store-id') return storeId;
       return undefined;
     });
 
@@ -47,7 +47,7 @@ describe('apiClient platform branch', () => {
     'injects X-Store-ID from the current-store cookie for %s requests from a store page (no X-Role)',
     async url => {
       window.history.pushState({}, '', '/store/orders');
-      platformSession('2');
+      session('2');
       const headers = await requestTo(url);
       expect(headers['X-Store-ID']).toBe('2');
       expect(headers['X-Role']).toBeUndefined();
@@ -55,10 +55,10 @@ describe('apiClient platform branch', () => {
   );
 
   it.each(['/store/me', '/files'])(
-    'does not inject X-Store-ID for %s requests from a /platform page (platform assets stay in the shared area)',
+    'does not inject X-Store-ID for %s requests from a /admin page (group-wide assets stay in the shared area)',
     async url => {
-      window.history.pushState({}, '', '/platform/settings');
-      platformSession('2');
+      window.history.pushState({}, '', '/admin/settings');
+      session('2');
       const headers = await requestTo(url);
       expect(headers['X-Store-ID']).toBeUndefined();
     }
@@ -68,45 +68,45 @@ describe('apiClient platform branch', () => {
     'does not inject a stale current-store cookie for a %s session',
     async kind => {
       window.history.pushState({}, '', '/store/orders');
-      platformSession('2', kind);
+      session('2', kind);
       const headers = await requestTo('/store/me');
       expect(headers['X-Store-ID']).toBeUndefined();
     }
   );
 
-  it('does not inject X-Store-ID for /platform requests', async () => {
-    platformSession('2');
-    const headers = await requestTo('/platform/configs');
+  it('does not inject X-Store-ID for /admin requests', async () => {
+    session('2');
+    const headers = await requestTo('/admin/configs');
     expect(headers['X-Store-ID']).toBeUndefined();
   });
 
   it('does not inject X-Store-ID while no current store is resolved', async () => {
     window.history.pushState({}, '', '/store/orders');
-    platformSession(undefined);
+    session(undefined);
     const headers = await requestTo('/store/me');
     expect(headers['X-Store-ID']).toBeUndefined();
   });
 
   it('ignores the store id in a legacy URL: the cookie, not the path, is the store context', async () => {
     window.history.pushState({}, '', '/store/9/orders');
-    platformSession('2');
+    session('2');
     const headers = await requestTo('/store/me');
     expect(headers['X-Store-ID']).toBe('2');
   });
 
   it('does not write the current-store cookie from a response', async () => {
     window.history.pushState({}, '', '/store/orders');
-    platformSession('2');
+    session('2');
     await requestTo('/store/me');
     expect(Cookies.set).not.toHaveBeenCalled();
   });
 
-  it('uses the proxy store cookie (x-mw-store-id) when no platform session is active', async () => {
+  it('uses the proxy store cookie (x-mw-store-id) when no session is active', async () => {
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'token') return 't';
       if (key === 'x-mw-role') return 'store';
       if (key === 'x-mw-store-id') return '7';
-      if (key === 'platform-store-id') return '2';
+      if (key === 'current-store-id') return '2';
       return undefined;
     });
     const headers = await requestTo('/store/me');

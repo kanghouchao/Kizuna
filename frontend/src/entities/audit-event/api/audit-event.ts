@@ -4,11 +4,11 @@ export const auditEventApi = {
   list: async (cursor?: string, action?: string): Promise<CursorPageResult<AuditEventSummary>> =>
     fromCursorPage(
       (
-        await apiClient.get('/platform/audit-events', {
+        await apiClient.get('/admin/audit-events', {
           params: { cursor, action: action || undefined },
         })
       ).data
     ),
   get: async (id: number): Promise<AuditEventResponse> =>
-    (await apiClient.get(`/platform/audit-events/${id}`)).data,
+    (await apiClient.get(`/admin/audit-events/${id}`)).data,
 };

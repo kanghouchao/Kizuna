@@ -13,13 +13,13 @@ jest.mock('@/entities/menu', () => ({
 
 const mockedGetMenus = menuApi.getMenus as jest.Mock;
 
-// 店舗スコープ項目と平台項目を1つずつ持つメニュー（href 解決の検証用）。
-const menuWithStoreAndPlatform = [
+// 店舗スコープ項目とグループ級項目を1つずつ持つメニュー（href 解決の検証用）。
+const menuWithStoreAndAdmin = [
   {
     name: 'メイン',
     items: [
       { name: '受注一覧', path: '/store/orders', icon: 'HouseIcon' },
-      { name: '店舗一覧', path: '/platform/stores', icon: 'HouseIcon' },
+      { name: '店舗一覧', path: '/admin/stores', icon: 'HouseIcon' },
     ],
   },
 ];
@@ -35,7 +35,7 @@ describe('Sidebar', () => {
   });
 
   it('メニューの path をそのままリンク先にする（店舗級の項目にも店舗 id を埋めない）', async () => {
-    mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
+    mockedGetMenus.mockResolvedValue(menuWithStoreAndAdmin);
 
     render(<Sidebar />);
 
@@ -43,10 +43,7 @@ describe('Sidebar', () => {
       'href',
       '/store/orders'
     );
-    expect(screen.getByRole('link', { name: '店舗一覧' })).toHaveAttribute(
-      'href',
-      '/platform/stores'
-    );
+    expect(screen.getByRole('link', { name: '店舗一覧' })).toHaveAttribute('href', '/admin/stores');
     expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
   });
 
@@ -58,15 +55,15 @@ describe('Sidebar', () => {
 
     expect(await screen.findByRole('link', { name: 'ダッシュボード' })).toHaveAttribute(
       'href',
-      '/platform/dashboard'
+      '/admin/dashboard'
     );
   });
 
   // 現在地の項目だけが他と異なる見えを持つ、という関係だけを見る。
   // 具体的なクラス名に依存しないので配色の作り替えを跨いでも意味が変わらない。
   it('現在地の項目だけが他項目と異なる見えになる', async () => {
-    mockPathname = '/platform/stores';
-    mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
+    mockPathname = '/admin/stores';
+    mockedGetMenus.mockResolvedValue(menuWithStoreAndAdmin);
 
     render(<Sidebar />);
 
@@ -77,8 +74,8 @@ describe('Sidebar', () => {
   });
 
   it('現在地でない画面では全項目が同じ見えになる', async () => {
-    mockPathname = '/platform/dashboard';
-    mockedGetMenus.mockResolvedValue(menuWithStoreAndPlatform);
+    mockPathname = '/admin/dashboard';
+    mockedGetMenus.mockResolvedValue(menuWithStoreAndAdmin);
 
     render(<Sidebar />);
 
@@ -92,7 +89,7 @@ describe('Sidebar', () => {
   // 全項目が操作なしで見えていることが e2e の前提でもある。
   it('グループ見出しの配下に当該グループの項目が展開されている', async () => {
     mockedGetMenus.mockResolvedValue([
-      ...menuWithStoreAndPlatform,
+      ...menuWithStoreAndAdmin,
       { name: '設定', items: [{ name: '店舗情報', path: '/store/profile', icon: 'SettingsIcon' }] },
     ]);
 

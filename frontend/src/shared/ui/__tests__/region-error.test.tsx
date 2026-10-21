@@ -24,7 +24,7 @@ describe('RegionError', () => {
       <RegionError
         className="mt-4"
         message="この店舗は見つかりませんでした。"
-        fallback={{ href: '/platform/stores', label: '店舗一覧へ' }}
+        fallback={{ href: '/admin/stores', label: '店舗一覧へ' }}
       />
     );
 
@@ -32,7 +32,7 @@ describe('RegionError', () => {
     expect(within(region).queryByRole('button')).not.toBeInTheDocument();
     expect(within(region).getByRole('link', { name: '店舗一覧へ' })).toHaveAttribute(
       'href',
-      '/platform/stores'
+      '/admin/stores'
     );
     // 外側の配置は呼び出し側だけが決める。
     expect(region).toHaveClass('mt-4');

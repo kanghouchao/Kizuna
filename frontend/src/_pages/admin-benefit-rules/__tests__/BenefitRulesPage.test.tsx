@@ -11,7 +11,7 @@ jest.mock('@/entities/benefit-rule', () => ({
 }));
 
 jest.mock('@/entities/user', () => ({
-  platformAuthApi: { stores: jest.fn(async () => []) },
+  authApi: { stores: jest.fn(async () => []) },
 }));
 
 jest.mock('../ui/BenefitRuleFormModal', () => {

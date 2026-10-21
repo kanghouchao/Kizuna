@@ -13,7 +13,7 @@ import {
   TaskType,
   TaskStoreOption,
 } from '../model/types';
-const path = '/platform/task-executions';
+const path = '/admin/task-executions';
 export const taskExecutionApi = {
   taskTypes: async (): Promise<TaskType[]> => (await apiClient.get(`${path}/task-types`)).data,
   stores: async (page: number): Promise<PageResult<TaskStoreOption>> =>

@@ -41,7 +41,7 @@ interface Fields {
   include_remuneration: boolean;
   include_advertising: boolean;
 }
-export function useOperationalReportPage(scope: 'store' | 'platform') {
+export function useOperationalReportPage(scope: 'store' | 'admin') {
   const [access, setAccess] = useState({
     ready: false,
     view: false,
@@ -99,7 +99,7 @@ export function useOperationalReportPage(scope: 'store' | 'platform') {
         from: values.from,
         to: values.to,
         group_by: values.group_by,
-        ...(scope === 'platform' && values.store ? { store_id: Number(values.store) } : {}),
+        ...(scope === 'admin' && values.store ? { store_id: Number(values.store) } : {}),
         ...(access.remuneration && values.include_remuneration
           ? { include_remuneration: true }
           : {}),
@@ -167,7 +167,7 @@ export function ReportSearch({ model }: { model: ReportModel }) {
             </FormItem>
           )}
         />
-        {scope === 'platform' && (
+        {scope === 'admin' && (
           <FormField
             control={form.control}
             name="store"

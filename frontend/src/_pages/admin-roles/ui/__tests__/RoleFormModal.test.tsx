@@ -1,11 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import type { RoleResponse } from '@/entities/user';
-import { platformRoleApi } from '@/entities/user';
+import { roleApi } from '@/entities/user';
 import { RoleFormModal } from '../RoleFormModal';
 
 jest.mock('@/entities/user', () => ({
-  platformRoleApi: {
+  roleApi: {
     get: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
@@ -17,7 +17,7 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
+const mockedRoleApi = roleApi as jest.Mocked<typeof roleApi>;
 const mockedNotify = notify as jest.Mocked<typeof notify>;
 
 const role = (override: Partial<RoleResponse> = {}): RoleResponse => ({

@@ -1,1 +1,1 @@
-export { default as PlatformLoginPage } from './ui/PlatformLoginPage';
+export { default as LoginPage } from './ui/LoginPage';

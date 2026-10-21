@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemberReservationNewPage } from '../MemberReservationNewPage';
 import { memberOrderApplicationApi } from '@/entities/order';
 import { shiftApi } from '@/entities/shift';
-import { platformStoreApi } from '@/entities/store';
+import { adminStoreApi } from '@/entities/store';
 
 const mockPush = jest.fn();
 let searchParams = new URLSearchParams();
@@ -19,10 +19,10 @@ jest.mock('@/entities/shift', () => ({
   shiftApi: { confirmedCasts: jest.fn() },
 }));
 jest.mock('@/entities/store', () => ({
-  platformStoreApi: { lookupByDomain: jest.fn() },
+  adminStoreApi: { lookupByDomain: jest.fn() },
 }));
 
-const mockedLookup = platformStoreApi.lookupByDomain as jest.Mock;
+const mockedLookup = adminStoreApi.lookupByDomain as jest.Mock;
 const mockedCasts = shiftApi.confirmedCasts as jest.Mock;
 const mockedCreate = memberOrderApplicationApi.create as jest.Mock;
 

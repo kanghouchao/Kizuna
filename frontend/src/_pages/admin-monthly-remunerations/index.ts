@@ -1,1 +1,1 @@
-export { default } from './ui/PlatformMonthlyRemunerationsPage';
+export { default } from './ui/AdminMonthlyRemunerationsPage';

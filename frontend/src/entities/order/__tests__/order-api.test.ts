@@ -195,7 +195,7 @@ describe('orderApplicationApi', () => {
 });
 
 describe('memberOrderApplicationApi', () => {
-  it('list は /platform/me/order-applications を GET し、カーソルページを正規化する', async () => {
+  it('list は /me/order-applications を GET し、カーソルページを正規化する', async () => {
     // 続きが無いときサーバは next_cursor を省く（null 非出力方針）
     mockedGet.mockResolvedValueOnce({ data: { content: [{ id: 'a1' }] } });
 
@@ -203,27 +203,27 @@ describe('memberOrderApplicationApi', () => {
       rows: [{ id: 'a1' }],
       nextCursor: null,
     });
-    expect(mockedGet).toHaveBeenCalledWith('/platform/me/order-applications', {
+    expect(mockedGet).toHaveBeenCalledWith('/me/order-applications', {
       params: undefined,
     });
   });
-  it('create は /platform/me/order-applications を POST する', async () => {
+  it('create は /me/order-applications を POST する', async () => {
     expect(await memberOrderApplicationApi.create({} as never)).toEqual({
       ok: true,
-      url: '/platform/me/order-applications',
+      url: '/me/order-applications',
     });
   });
   it('withdraw は取り下げの子リソースを POST する', async () => {
     expect(await memberOrderApplicationApi.withdraw('a1')).toEqual({
       ok: true,
-      url: '/platform/me/order-applications/a1/withdrawal',
+      url: '/me/order-applications/a1/withdrawal',
     });
   });
 });
 
 describe('memberVisitApi', () => {
   it('list は来店履歴を GET し、カーソルページを正規化する', async () => {
-    // 申請の追跡（/platform/me/order-applications）とは別の読み口で、確定した来店だけを返す
+    // 申請の追跡（/me/order-applications）とは別の読み口で、確定した来店だけを返す
     mockedGet.mockResolvedValueOnce({
       data: { content: [{ granted_points: 120 }], next_cursor: 'c1' },
     });
@@ -232,7 +232,7 @@ describe('memberVisitApi', () => {
       rows: [{ granted_points: 120 }],
       nextCursor: 'c1',
     });
-    expect(mockedGet).toHaveBeenCalledWith('/platform/me/visits', {
+    expect(mockedGet).toHaveBeenCalledWith('/me/visits', {
       params: { cursor: 'c0', size: 20 },
     });
   });
@@ -245,13 +245,13 @@ describe('memberVisitApi', () => {
 });
 
 describe('memberReceiptApi', () => {
-  it('claim は /platform/me/receipts を POST し、トークンを本体で送る', async () => {
+  it('claim は /me/receipts を POST し、トークンを本体で送る', async () => {
     // パスや問い合わせ文字列に載せると、90 日有効の生値がアクセスログに残る
     const mockedPost = apiClient.post as jest.Mock;
     mockedPost.mockResolvedValueOnce({ data: { granted_points: 120 } });
 
     await expect(memberReceiptApi.claim('tok3n')).resolves.toEqual({ granted_points: 120 });
-    expect(mockedPost).toHaveBeenCalledWith('/platform/me/receipts', { token: 'tok3n' });
+    expect(mockedPost).toHaveBeenCalledWith('/me/receipts', { token: 'tok3n' });
   });
 });
 

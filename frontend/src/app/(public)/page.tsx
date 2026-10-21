@@ -39,16 +39,16 @@ export default async function Home() {
   const cookieStore = await cookies();
   const role = cookieStore.get('x-mw-role')?.value;
 
-  // 平台セッションがあれば、セッション種別に応じて自動遷移する（cookie 値は admin/cast/member）
-  const sessionKind = cookieStore.get('platform-role')?.value;
+  // セッションがあれば、セッション種別に応じて自動遷移する（cookie 値は admin/cast/member）
+  const sessionKind = cookieStore.get('session-kind')?.value;
   if (sessionKind) {
-    const platformToken = cookieStore.get('token')?.value;
-    if (!platformToken) {
-      // token 失効後も platform-role cookie が残っていると /store・/platform のガードと無限リダイレクトになるため、先に検出する
-      redirect('/platform/login');
+    const sessionToken = cookieStore.get('token')?.value;
+    if (!sessionToken) {
+      // token 失効後も session-kind cookie が残っていると /store・/admin のガードと無限リダイレクトになるため、先に検出する
+      redirect('/auth/login');
     }
     if (sessionKind === 'admin') {
-      redirect('/platform/dashboard/');
+      redirect('/admin/dashboard/');
     }
     if (sessionKind === 'cast') {
       redirect('/cast/schedule/');
@@ -58,10 +58,10 @@ export default async function Home() {
     }
   }
 
-  // Platform ドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
-  if (role === 'platform') {
+  // アプリドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
+  if (role === 'app') {
     const token = cookieStore.get('token')?.value;
-    redirect(token ? '/platform/dashboard/' : '/platform/login');
+    redirect(token ? '/admin/dashboard/' : '/auth/login');
   }
 
   // Store ドメイン（店舗フロント側）の場合、模版を表示

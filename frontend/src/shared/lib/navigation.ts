@@ -22,7 +22,7 @@ let navigatorFn: NavigatorFn = defaultNavigator;
  * クライアント遷移（AuthContext の logout）の二つに分かれているため。
  */
 export function loginPath(reason?: string) {
-  return reason ? `/platform/login?reason=${encodeURIComponent(reason)}` : '/platform/login';
+  return reason ? `/auth/login?reason=${encodeURIComponent(reason)}` : '/auth/login';
 }
 
 /** ログイン画面へ差し戻す。理由の扱いは loginPath と同じ。 */

@@ -10,7 +10,7 @@ it('本人要求へ他人のIDや画面ページを送らない', async () => {
   const pdf = new Blob(['pdf'], { type: 'application/pdf' });
   get.mockResolvedValue({ data: pdf });
   expect(await fetchMonthlyPdf({ scope: 'self', storeId: 1, month: '2026-09' }, signal)).toBe(pdf);
-  expect(get).toHaveBeenCalledWith('/platform/me/monthly-remunerations/pdf', {
+  expect(get).toHaveBeenCalledWith('/me/monthly-remunerations/pdf', {
     params: { store_id: 1, month: '2026-09' },
     responseType: 'blob',
     headers: { Accept: 'application/pdf, application/json' },
@@ -34,7 +34,7 @@ it.each([undefined, new Blob(['Bad gateway'], { type: 'text/html' })])(
   async data => {
     get.mockRejectedValue({ response: { data } });
     await expect(
-      fetchMonthlyPdf({ scope: 'platform', storeId: 1, personId: 2, month: '2026-09' }, signal)
+      fetchMonthlyPdf({ scope: 'admin', storeId: 1, personId: 2, month: '2026-09' }, signal)
     ).rejects.toThrow('通信状態を確認');
   }
 );

@@ -12,7 +12,7 @@ interface AdminShellProps {
 }
 
 /**
- * 全従業員に共通の一つの管理画面シェル。/platform と /store はマウント接頭辞にすぎず、
+ * 全従業員に共通の一つの管理画面シェル。/admin と /store はマウント接頭辞にすぎず、
  * どちらの layout もこれを描く。店舗コンテキストと本人情報はここで1つだけ搭載する。
  */
 export function AdminShell({ sidebar, header, children }: AdminShellProps) {

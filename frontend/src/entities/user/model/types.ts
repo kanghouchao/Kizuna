@@ -13,11 +13,11 @@ export interface LoginResponse {
 
 // 本人種別。バックエンド user/domain/UserType.java には SERVICE（対話ログイン不可の
 // サービスID）もあるが、ログイン応答・/me には現れないため意図的に載せない（fail-closed）。
-export type PlatformUserType = 'STAFF' | 'CAST' | 'MEMBER';
+export type UserType = 'STAFF' | 'CAST' | 'MEMBER';
 
 // 権限コード（バックエンド user/domain/PermissionCode.java と対応）。
 // ワイヤ上は接頭辞なしの素の enum 名で、PERM_ 形式は JWT の authorities 内部だけに存在する。
-export type PlatformPermission =
+export type PermissionCode =
   | 'STORE_MANAGE'
   | 'ROLE_MANAGE'
   | 'STAFF_ACCOUNT_MANAGE'
@@ -72,39 +72,39 @@ export type PlatformPermission =
   | 'RECRUITMENT_ATTACHMENT_VIEW'
   | 'RECRUITMENT_ATTACHMENT_MANAGE';
 
-// 平台セッションの種別（platform-role cookie の値）。従業員は本人種別 STAFF で単一の管理画面 admin に入り、
+// セッションの種別（session-kind cookie の値）。従業員は本人種別 STAFF で単一の管理画面 admin に入り、
 // CAST / MEMBER はそれぞれの portal に入る。値はサーバの /me の user_type から画面側が決める。
-export type PlatformSessionKind = 'admin' | 'cast' | 'member';
+export type SessionKind = 'admin' | 'cast' | 'member';
 
-// 平台ユーザーの店舗作用域種別
-export type PlatformStoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';
+// ユーザーの店舗作用域種別
+export type StoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';
 
-// 平台ログインリクエスト
-export interface PlatformLoginRequest {
+// ログインリクエスト
+export interface LoginRequest {
   email: string;
   password: string;
 }
 
-// 平台 /me レスポンス
-export interface PlatformMeResponse {
+// /me レスポンス
+export interface MeResponse {
   email?: string;
   display_name?: string;
-  user_type?: PlatformUserType;
-  permissions?: PlatformPermission[];
+  user_type?: UserType;
+  permissions?: PermissionCode[];
   // LINE アカウントと連携済みか。Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
   line_linked: boolean;
 }
 
-// 平台自己プロフィール更新リクエスト
-export interface PlatformMeUpdateRequest {
+// 自己プロフィール更新リクエスト
+export interface MeUpdateRequest {
   display_name: string;
 }
 
 // 店舗の稼働状態。準備中の店舗は店長が店舗設定から明示的に稼働中へ移す。
 export type StoreStatus = 'PREPARING' | 'ACTIVE';
 
-// 平台の授権店舗一覧の1件
-export interface PlatformStore {
+// 授権店舗一覧の1件
+export interface AuthorizedStore {
   id?: number;
   name?: string;
   status?: StoreStatus;
@@ -112,7 +112,7 @@ export interface PlatformStore {
 
 // 権限目録の1件（ロール編集 UI の選択肢）
 export interface PermissionResponse {
-  code?: PlatformPermission;
+  code?: PermissionCode;
 }
 
 // ロールへの参照（スタッフ応答の埋め込み）。
@@ -126,20 +126,20 @@ export interface RoleRef {
 export interface RoleSummaryResponse {
   id?: number;
   name?: string;
-  // 平台既定ロール。改名・権限変更・削除がいずれも拒否される。
+  // 既定ロール。改名・権限変更・削除がいずれも拒否される。
   // system と permission_count は Java 側が primitive のため、キーは必ず応答に含まれる。
   system: boolean;
   permission_count: number;
 }
 
-// ロール詳細（GET /platform/roles/{id} と作成・更新の応答）
+// ロール詳細（GET /admin/roles/{id} と作成・更新の応答）
 export interface RoleResponse {
   id?: number;
   name?: string;
-  // 平台既定ロール。改名・権限変更・削除がいずれも拒否される。
+  // 既定ロール。改名・権限変更・削除がいずれも拒否される。
   // system と version は Java 側が primitive のため、キーは必ず応答に含まれる。
   system: boolean;
-  permissions?: PlatformPermission[];
+  permissions?: PermissionCode[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
 }
@@ -147,13 +147,13 @@ export interface RoleResponse {
 // ロール新規作成リクエスト
 export interface RoleCreateRequest {
   name: string;
-  permissions: PlatformPermission[];
+  permissions: PermissionCode[];
 }
 
 // ロール更新リクエスト
 export interface RoleUpdateRequest {
   name: string;
-  permissions: PlatformPermission[];
+  permissions: PermissionCode[];
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
   version: number;
 }
@@ -162,14 +162,14 @@ export interface RoleUpdateRequest {
 // リクエストは role_ids（id の配列）なのに応答は roles（id と名称の対）という非対称に注意。
 // editable は委譲守衛（対象の権限並集と店舗集合が行使者の部分集合か）のサーバ側判定で、行使者ごとに変わる。
 // 一覧に出るか（行使者の店舗集合と交わるか）とは別の軸で、false の行は見えるが編集・停止・再設定できない。
-export interface PlatformStaffResponse {
+export interface StaffResponse {
   id?: number;
   email?: string;
   display_name?: string;
   // enabled / version / editable は Java 側が primitive のため、キーは必ず応答に含まれる。
   enabled: boolean;
   roles?: RoleRef[];
-  store_scope_type?: PlatformStoreScopeType;
+  store_scope_type?: StoreScopeType;
   store_ids?: number[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
@@ -177,21 +177,21 @@ export interface PlatformStaffResponse {
 }
 
 // 従業員新規作成リクエスト
-export interface PlatformStaffCreateRequest {
+export interface StaffCreateRequest {
   email: string;
   password: string;
   display_name: string;
   role_ids: number[];
-  store_scope_type: PlatformStoreScopeType;
+  store_scope_type: StoreScopeType;
   // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
   store_ids?: number[];
 }
 
 // 従業員の授権編集リクエスト。停止・再開は専用端点（suspension / resumption）が担うのでここには無い
 // （サーバは未知のキーを 400 で弾くため、enabled を混ぜると更新そのものが通らない）。
-export interface PlatformStaffUpdateRequest {
+export interface StaffUpdateRequest {
   role_ids: number[];
-  store_scope_type: PlatformStoreScopeType;
+  store_scope_type: StoreScopeType;
   // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
   store_ids?: number[];
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
@@ -206,12 +206,12 @@ export interface ServiceIdentitySummaryResponse {
   // enabled は Java 側が primitive のため、キーは必ず応答に含まれる。
   enabled: boolean;
   roles?: RoleRef[];
-  store_scope_type?: PlatformStoreScopeType;
+  store_scope_type?: StoreScopeType;
   store_ids?: number[];
 }
 
 // サービスID（本人種別 SERVICE・資格情報なし）の詳細応答（GET /{id} と作成・更新の応答）。
-// email を持たないこと以外は PlatformStaffResponse と同形で、
+// email を持たないこと以外は StaffResponse と同形で、
 // リクエストの role_ids と応答の roles の非対称も同じ。
 export interface ServiceIdentityResponse {
   id?: number;
@@ -219,7 +219,7 @@ export interface ServiceIdentityResponse {
   // enabled と version は Java 側が primitive のため、キーは必ず応答に含まれる。
   enabled: boolean;
   roles?: RoleRef[];
-  store_scope_type?: PlatformStoreScopeType;
+  store_scope_type?: StoreScopeType;
   store_ids?: number[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
@@ -229,7 +229,7 @@ export interface ServiceIdentityResponse {
 export interface ServiceIdentityCreateRequest {
   display_name: string;
   role_ids: number[];
-  store_scope_type: PlatformStoreScopeType;
+  store_scope_type: StoreScopeType;
   // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
   store_ids?: number[];
 }
@@ -238,7 +238,7 @@ export interface ServiceIdentityCreateRequest {
 // （サーバは未知のキーを 400 で弾くため、enabled を混ぜると更新そのものが通らない）。
 export interface ServiceIdentityUpdateRequest {
   role_ids: number[];
-  store_scope_type: PlatformStoreScopeType;
+  store_scope_type: StoreScopeType;
   // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
   store_ids?: number[];
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）

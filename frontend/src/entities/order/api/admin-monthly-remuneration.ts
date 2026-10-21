@@ -1,18 +1,15 @@
 import { apiClient, fromSpringPage, type Page, type PageResult } from '@/shared/api';
 import type { MonthlyRemunerationCast } from '../model/monthlyRemuneration';
 import type {
-  PlatformMonthlyRemuneration,
-  PlatformMonthlyRemunerationStore,
-} from '../model/platformMonthlyRemuneration';
-const base = '/platform/monthly-remunerations';
-export const platformMonthlyRemunerationApi = {
-  async stores(
-    search: string,
-    page: number
-  ): Promise<PageResult<PlatformMonthlyRemunerationStore>> {
+  AdminMonthlyRemuneration,
+  AdminMonthlyRemunerationStore,
+} from '../model/adminMonthlyRemuneration';
+const base = '/admin/monthly-remunerations';
+export const adminMonthlyRemunerationApi = {
+  async stores(search: string, page: number): Promise<PageResult<AdminMonthlyRemunerationStore>> {
     return fromSpringPage(
       (
-        await apiClient.get<Page<PlatformMonthlyRemunerationStore>>(base + '/stores', {
+        await apiClient.get<Page<AdminMonthlyRemunerationStore>>(base + '/stores', {
           params: { search, page, size: 20 },
         })
       ).data
@@ -36,9 +33,9 @@ export const platformMonthlyRemunerationApi = {
     personId: number,
     month: string,
     page: number
-  ): Promise<PlatformMonthlyRemuneration> {
+  ): Promise<AdminMonthlyRemuneration> {
     return (
-      await apiClient.get<PlatformMonthlyRemuneration>(base, {
+      await apiClient.get<AdminMonthlyRemuneration>(base, {
         params: { store_id: storeId, person_id: personId, month, page, size: 20 },
       })
     ).data;

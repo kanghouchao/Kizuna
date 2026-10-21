@@ -7,10 +7,10 @@ import {
   LoginResponse,
 } from '../model/types';
 
-export const platformLineApi = {
+export const lineApi = {
   /** LINE ログインの公開設定（匿名）。enabled=false なら入口を描画しない。 */
   config: async (): Promise<LineConfigResponse> => {
-    const response = await apiClient.get('/platform/line/config');
+    const response = await apiClient.get('/auth/line/config');
     return response.data;
   },
   /**
@@ -18,20 +18,20 @@ export const platformLineApi = {
    * 呼び出し元がセッションと失敗表示を自前で扱うため、グローバルな 401 ハンドリングから除外する。
    */
   login: async (data: LineAuthorizationRequest): Promise<LineLoginResponse> => {
-    const response = await apiClient.post('/platform/line/login', data, {
+    const response = await apiClient.post('/auth/line/login', data, {
       skipAuthRedirect: true,
     });
     return response.data;
   },
   /** 登録チケットで会員を作成し、そのままログインする（公開・匿名）。 */
   register: async (data: LineRegisterRequest): Promise<LoginResponse> => {
-    const response = await apiClient.post('/platform/line/register', data, {
+    const response = await apiClient.post('/auth/line/register', data, {
       skipAuthRedirect: true,
     });
     return response.data;
   },
   /** 既存アカウントへ LINE を連携する。409 は連携済み ないし 当該 LINE が他アカウントに使用済み。 */
   link: async (data: LineAuthorizationRequest): Promise<void> => {
-    await apiClient.post('/platform/me/line', data);
+    await apiClient.post('/me/line', data);
   },
 };

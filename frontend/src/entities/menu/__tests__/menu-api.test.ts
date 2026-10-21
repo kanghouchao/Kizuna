@@ -11,7 +11,7 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('menu api', () => {
-  it('menuApi.getMenus は /platform/menus/me を GET する', async () => {
-    expect(await menuApi.getMenus()).toEqual({ ok: true, url: '/platform/menus/me' });
+  it('menuApi.getMenus は /admin/menus/me を GET する', async () => {
+    expect(await menuApi.getMenus()).toEqual({ ok: true, url: '/admin/menus/me' });
   });
 });

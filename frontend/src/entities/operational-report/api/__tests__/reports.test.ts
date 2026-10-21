@@ -30,8 +30,8 @@ test('query preserves null, zero and known subtotal without client recalculation
     },
   };
   get.mockResolvedValueOnce({ data: response });
-  expect(await fetchReport('platform', criteria, 2)).toBe(response);
-  expect(get).toHaveBeenCalledWith('/platform/operational-reports', {
+  expect(await fetchReport('admin', criteria, 2)).toBe(response);
+  expect(get).toHaveBeenCalledWith('/admin/operational-reports', {
     params: { ...criteria, page: 2, size: 20 },
   });
 });

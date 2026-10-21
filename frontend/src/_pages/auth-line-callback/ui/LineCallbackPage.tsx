@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
-import { LineAuthorizationRequest, platformAuthApi, platformLineApi } from '@/entities/user';
-import { completePlatformLogin } from '@/features/platform-login';
+import { LineAuthorizationRequest, authApi, lineApi } from '@/entities/user';
+import { completeLogin } from '@/features/login';
 import {
   consumeLineAuthorization,
   getApiErrorMessage,
   lineCallbackRedirectUri,
-  startPlatformSession,
+  startSession,
   takeMemberReturnPath,
 } from '@/shared/lib';
 import { AuthLayout } from '@/shared/ui';
@@ -23,8 +23,8 @@ type Stage = 'processing' | 'register' | 'error';
 type BackTo = 'login' | 'settings';
 
 const BACK_LINKS: Record<BackTo, { href: string; label: string }> = {
-  login: { href: '/platform/login', label: 'ログイン画面へ戻る' },
-  settings: { href: '/platform/settings/account', label: 'アカウント設定へ戻る' },
+  login: { href: '/auth/login', label: 'ログイン画面へ戻る' },
+  settings: { href: '/admin/settings/account', label: 'アカウント設定へ戻る' },
 };
 
 /**
@@ -52,14 +52,14 @@ export default function LineCallbackPage() {
     };
 
     const runLogin = async (request: LineAuthorizationRequest) => {
-      const response = await platformLineApi.login(request);
+      const response = await lineApi.login(request);
       if (!response.registered) {
         setRegistrationTicket(response.registration_ticket ?? '');
         setLineDisplayName(response.display_name ?? '');
         setStage('register');
         return;
       }
-      const completion = await completePlatformLogin(response);
+      const completion = await completeLogin(response);
       if (completion.status === 'unsupported') {
         fail('この利用者種別のポータルは準備中です', 'login');
         return;
@@ -71,7 +71,7 @@ export default function LineCallbackPage() {
     const runLink = async (request: LineAuthorizationRequest, subject: string | undefined) => {
       // 発起主体と現在のログインが一致するときだけ連携する。外部認可の往復中に別アカウントへ
       // 切り替わっていた場合、そのまま送ると意図しないアカウントに LINE が恒久的に付く（解除は未提供）。
-      const me = await platformAuthApi.me();
+      const me = await authApi.me();
       if (!subject || me.email !== subject) {
         fail(
           'LINE連携を開始したアカウントと現在のログインが一致しません。アカウント設定からやり直してください',
@@ -80,13 +80,13 @@ export default function LineCallbackPage() {
         return;
       }
       try {
-        await platformLineApi.link(request);
+        await lineApi.link(request);
       } catch (error) {
         // 409 には「本人が連携済み」「他の身分が連携済み」の二つの原因があり、区別はサーバーの文言が正
         fail(getApiErrorMessage(error, 'LINE連携に失敗しました'), 'settings');
         return;
       }
-      router.replace('/platform/settings/account');
+      router.replace('/admin/settings/account');
     };
 
     const run = async () => {
@@ -128,14 +128,14 @@ export default function LineCallbackPage() {
 
   const submitRegistration = async (values: LineRegisterValues) => {
     try {
-      const { token, expires_at } = await platformLineApi.register({
+      const { token, expires_at } = await lineApi.register({
         registration_ticket: registrationTicket,
         display_name: values.display_name,
         email: values.email,
       });
       // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
       Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
-      startPlatformSession('member', expires_at);
+      startSession('member', expires_at);
       // 会員ポータルで弾かれた人が LINE 登録へ回ってくる経路がある（伝票の QR を未登録で開いた等）。
       // 預かった戻り先は会員セッションが立った時点で必ず消費する — 残すと、同じタブで後からログインした
       // 別の会員がその戻り先へ運ばれる。

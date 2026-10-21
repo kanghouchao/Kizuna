@@ -161,7 +161,7 @@ export default function CastSection({ casts }: CastSectionProps) {
         {/* もっと見るボタン */}
         <div className="text-center mt-10 md:mt-14">
           <Link
-            href="/platform/login"
+            href="/auth/login"
             className="inline-block border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] text-[var(--storefront-accent)] text-[9px] tracking-[0.4em] uppercase px-8 md:px-10 py-3 hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-all duration-300"
             style={{ fontFamily: 'var(--storefront-font-display)' }}
           >
