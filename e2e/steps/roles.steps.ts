@@ -69,12 +69,17 @@ Then('ロール一覧から {string} が消える', async ({ page }, _label: str
 });
 
 Then(
-  '{string} の編集ボタンと削除ボタンが無効である',
+  '{string} の削除ボタンは無効で、編集モーダルでは名称だけが固定されている',
   async ({ page }, systemRoleName: string) => {
-    // 平台既定ロールは改名・権限変更・削除がサーバ側で拒否されるため、導線自体が無効化されている。
+    // 既定ロールは権限を編集できる。改名と削除はサーバ側で拒否されるため、導線の側で塞いである。
     const row = page.getByRole('row', { name: new RegExp(systemRoleName) });
     await expect(row).toBeVisible({ timeout: 15000 });
-    await expect(row.getByRole('button', { name: '編集', exact: true })).toBeDisabled();
     await expect(row.getByRole('button', { name: '削除', exact: true })).toBeDisabled();
+    await row.getByRole('button', { name: '編集', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: `${systemRoleName} を編集` });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('ロール名', { exact: true })).toBeDisabled();
+    await dialog.getByRole('button', { name: 'キャンセル', exact: true }).click();
+    await expect(dialog).toBeHidden();
   }
 );
