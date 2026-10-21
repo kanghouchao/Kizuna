@@ -8,8 +8,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 /**
- * DaoAuthenticationProvider が扱う認証主体。JWT claims（authorities / storeBridge 等）は認証成功後に呼び出し側が {@link
- * User} から算出するため、ここでの authorities は空のまま返す。
+ * DaoAuthenticationProvider が扱う認証主体。JWT claims（authorities 等）は認証成功後に呼び出し側が {@link User}
+ * から算出するため、ここでの authorities は空のまま返す。
  */
 @Getter
 public class UserPrincipal implements UserDetails {

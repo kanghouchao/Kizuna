@@ -7,6 +7,7 @@ import com.kizuna.order.infrastructure.PlatformMonthlyRemunerationStores;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import com.kizuna.shared.web.CursorPage;
 import java.time.YearMonth;
@@ -14,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlatformMonthlyRemunerationService {
   private final RemunerationQuery query;
   private final PlatformMonthlyRemunerationStores stores;
+  private final StoreScopeHolder storeScopeHolder;
 
   @StoreSetScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -65,8 +66,7 @@ public class PlatformMonthlyRemunerationService {
   }
 
   private StoreScope scope() {
-    var scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+    var scope = storeScopeHolder.current();
     if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
     return scope;
   }

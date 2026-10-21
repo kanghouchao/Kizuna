@@ -13,7 +13,6 @@ import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -38,8 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
  * フレームワークの既定挙動が担う。いずれの例外も {@code AuthenticationException} 系のため 401 で応答される。
  *
  * <p>authorities の発行: ロールで授権される種別（STAFF / SERVICE）は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER
- * は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。授権変更は次回ログインから反映される（会話中は失効しない既定挙動）。
- * SERVICE は共通の発行守衛が拒否するため、この発行に到達しない。
+ * は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。権限の変更は次回ログインから反映される（会話中は失効しない既定挙動）。 店舗集合は
+ * claim に載せず要求ごとに DB から解決する（StoreScopeResolver）。SERVICE は共通の発行守衛が拒否するため、この発行に到達しない。
  */
 @Service
 @RequiredArgsConstructor
@@ -86,11 +85,6 @@ public class PlatformAuthService {
     Map<String, Object> claims = new HashMap<>();
     claims.put("authorities", buildAuthorities(user, permissions));
     claims.put("userType", user.getUserType().name());
-    // 店舗文脈（X-Store-ID）を確立できるか。STORE コンソール権限の保持者のみ true（SHARED は含めない —
-    // HQ の跨店参照は店舗文脈を確立せず、僭称ヘッダは従来どおり 403）。StoreIdInterceptor が消費する。
-    claims.put("storeBridge", hasStoreConsole(permissions));
-    claims.put("storeScopeType", user.getStoreScopeType().name());
-    claims.put("storeIds", new ArrayList<>(user.getStoreIds()));
     // 発行時点の資格情報の版。検証時に現在の版と相等比較され、パスワード変更・再設定・停止で
     // 即時に不一致となる（ADR 0022）。
     claims.put("credentialVersion", user.getCredentialVersion());
@@ -136,10 +130,6 @@ public class PlatformAuthService {
         user.getDisplayName(),
         user.getUserType().name(),
         permissions.stream().map(Enum::name).sorted().toList(),
-        consoleOf(user, permissions),
-        hasStoreConsole(permissions),
-        user.getStoreScopeType().name(),
-        user.getStoreIds().stream().sorted().toList(),
         user.getLineUserId() != null);
   }
 
@@ -168,24 +158,5 @@ public class PlatformAuthService {
       case CAST -> List.of("ROLE_CAST");
       case MEMBER -> List.of("ROLE_MEMBER");
     };
-  }
-
-  /** 入場資格の述語は {@link PermissionCode#grantsStoreConsole()} が単源（付与時の検証と共有する）。 */
-  private static boolean hasStoreConsole(Set<PermissionCode> permissions) {
-    return permissions.stream().anyMatch(PermissionCode::grantsStoreConsole);
-  }
-
-  /** ログイン後の着地先。PLATFORM 権限保持者は platform 優先（兼務者のコンソール切替導線は別票）。 */
-  private static String consoleOf(User user, Set<PermissionCode> permissions) {
-    if (user.getUserType() != UserType.STAFF) {
-      return "none";
-    }
-    boolean platform =
-        permissions.stream()
-            .anyMatch(permission -> permission.getConsole() == PermissionCode.Console.PLATFORM);
-    if (platform) {
-      return "platform";
-    }
-    return hasStoreConsole(permissions) ? "store" : "none";
   }
 }

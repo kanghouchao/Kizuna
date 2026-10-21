@@ -38,15 +38,10 @@ public class PlatformStoreController {
   private final PlatformStoreService platformStoreService;
   private final StoreRegistryService storeRegistryService;
 
-  // 授権店舗一覧は跨店参照能力（PERM_STORE_VIEW）だけでなく、店舗コンソール資格（storeBridge）保持者にも開く。
-  // 店舗コンソールに着地するが STORE_VIEW を持たない混成束ユーザーが自店舗を解決できるようにするため。
-  // SERVICE_ID_MANAGE にも開くのは、サービスIDの授権フォームが対象店舗の選択肢をここから引くため
-  // （STORE_VIEW を伴わない自作ロールでも導線が成立する）。
-  // 応答は呼出者本人の授権店舗（id + name）のみ（PlatformStoreService.listAuthorizedStores が StoreScope で濾過）。
+  // 授権店舗一覧はロールで授権される全員（権限を 1 つ以上持つ者）に開く。店舗切替と各授権フォームの選択肢がここから引くため、
+  // 個別の権限では仕切らない。応答は呼出者本人の授権店舗のみ（PlatformStoreService.listAuthorizedStores が店舗集合で濾過）。
   @GetMapping("/me")
-  @PreAuthorize(
-      "hasAuthority('PERM_STORE_VIEW')"
-          + " or hasAuthority('PERM_SERVICE_ID_MANAGE') or @storeBridge.check(authentication)")
+  @PreAuthorize("@permissionHolder.check(authentication)")
   public ResponseEntity<List<PlatformStoreResponse>> listAuthorized() {
     return ResponseEntity.ok(platformStoreService.listAuthorizedStores());
   }

@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  * ロール管理ユースケース（RBAC）。権限は目録（{@link Permission}）に実在するコードのみを受け付け、応答も id ではなくコードで返す — 権限目録は播種で固定される正本であり
  * API 面に id を露出しない。
  *
- * <p>平台既定ロールは変更・削除を拒否し（400）、授与中のロールの削除は 409 で拒否する。
+ * <p>平台既定ロールは改名・削除を拒否し（400）、授与中のロールの削除は 409 で拒否する。
  */
 @Service
 @RequiredArgsConstructor
@@ -89,9 +89,9 @@ public class RoleService {
     if (!role.getVersion().equals(req.getVersion())) {
       throw new StaleRoleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
-    // 同一ロールへの並行する権限追加は、そのロール行の @Version が保存時に検出する。
-    if (!Boolean.TRUE.equals(role.getSystemRole())
-        && !req.getPermissions().contains(ROLE_MANAGE)
+    // 同一ロールへの並行する権限追加は、そのロール行の @Version が保存時に検出する。既定ロールも権限を編集できるので
+    // 不減零の検査から外さない。
+    if (!req.getPermissions().contains(ROLE_MANAGE)
         && roleRepository.findIdsByPermissionCode(ROLE_MANAGE).contains(role.getId())) {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
     }

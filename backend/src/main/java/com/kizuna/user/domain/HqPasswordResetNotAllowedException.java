@@ -3,9 +3,8 @@ package com.kizuna.user.domain;
 import com.kizuna.shared.exception.ServiceException;
 
 /**
- * HQ 側ロール保持者へパスワード再設定を試みたことを表すドメイン例外。ServiceException 継承により HTTP 400 で応答される。
- *
- * <p>実行主体は必ず HQ 側ロールを持つため、自分自身への再設定もこの境界に含まれて拒否される。
+ * 管理者（ROLE_MANAGE 保持者）へパスワード再設定を試みたことを表すドメイン例外。ServiceException 継承により HTTP 400 で応答される。
+ * 管理者の口座は代理では奪えない — 本人の再設定だけが経路である。
  */
 public class HqPasswordResetNotAllowedException extends ServiceException {
 

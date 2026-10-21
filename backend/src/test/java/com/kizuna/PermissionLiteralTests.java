@@ -2,7 +2,7 @@ package com.kizuna;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.user.domain.Authorities;
+import com.kizuna.shared.security.Authorities;
 import com.kizuna.user.domain.PermissionCode;
 import java.nio.file.Files;
 import java.nio.file.Path;

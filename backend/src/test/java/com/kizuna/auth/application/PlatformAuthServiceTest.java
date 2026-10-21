@@ -110,7 +110,6 @@ class PlatformAuthServiceTest {
             PermissionCode.STORE_MANAGE,
             PermissionCode.ROLE_MANAGE,
             PermissionCode.SYSTEM_CONFIG_MANAGE,
-            PermissionCode.PLATFORM_MENU_VIEW,
             PermissionCode.PLATFORM_ASSET_MANAGE,
             PermissionCode.STORE_VIEW,
             PermissionCode.ORDER_SET_MANAGE));
@@ -148,23 +147,20 @@ class PlatformAuthServiceTest {
             List.of(
                 "PERM_ORDER_SET_MANAGE",
                 "PERM_PLATFORM_ASSET_MANAGE",
-                "PERM_PLATFORM_MENU_VIEW",
                 "PERM_ROLE_MANAGE",
                 "PERM_STORE_MANAGE",
                 "PERM_STORE_VIEW",
                 "PERM_SYSTEM_CONFIG_MANAGE"));
     assertThat(claims.get("userType")).isEqualTo("STAFF");
-    // HQ 束の STORE_VIEW は SHARED なので店舗文脈は確立できない（ADR 0021 の撤退）。
-    assertThat(claims.get("storeBridge")).isEqualTo(false);
     assertThat(claims).doesNotContainKey("role");
-    assertThat(claims.get("storeScopeType")).isEqualTo("ALL_STORES");
-    assertThat(claims.get("storeIds")).isEqualTo(List.of());
+    // 店舗集合は claim に載せない — 要求ごとに DB から解決する。
+    assertThat(claims).doesNotContainKeys("storeBridge", "storeScopeType", "storeIds");
     // 発行時点の資格情報の版が claim に載る（ADR 0022 — 検証側が相等比較する前提値）。
     assertThat(claims.get("credentialVersion")).isEqualTo(0L);
   }
 
   @Test
-  void login_staffWithStorePermissions_setsStoreBridgeTrue() {
+  void login_staffWithStorePermissions_issuesOnlyPermissionAuthorities() {
     User staff = storeStaff("staff@kizuna.test", "店舗スタッフ", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("staff@kizuna.test", "pass", staff);
     stubRolePermissions(
@@ -178,44 +174,10 @@ class PlatformAuthServiceTest {
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
     assertThat(authorities).isEqualTo(List.of("PERM_ORDER_MANAGE", "PERM_STORE_VIEW"));
-    assertThat(claims.get("storeBridge")).isEqualTo(true);
-    assertThat(claims.get("storeScopeType")).isEqualTo("SPECIFIC_STORES");
-    assertThat(claims.get("storeIds")).isEqualTo(List.of(1L));
   }
 
   @Test
-  void login_staffWithOnlyStoreMenuMarker_doesNotSetStoreBridge() {
-    User staff = storeStaff("menu@kizuna.test", "店舗メニュー標識のみ", StoreScopeType.SPECIFIC_STORES);
-    stubSuccessfulAuthentication("menu@kizuna.test", "pass", staff);
-    stubRolePermissions(STORE_ROLE_ID, "店舗メニュー標識のみ", Set.of(PermissionCode.STORE_MENU_VIEW));
-    when(jwtIssuer.issue(eq("menu@kizuna.test"), any())).thenReturn(new Token("t", 1L));
-
-    authService.login("menu@kizuna.test", "pass");
-
-    verify(jwtIssuer).issue(eq("menu@kizuna.test"), claimsCaptor.capture());
-    Map<String, Object> claims = claimsCaptor.getValue();
-    // 標識権限（STORE_MENU_VIEW）単独では店舗文脈を確立できない。
-    assertThat(claims.get("storeBridge")).isEqualTo(false);
-  }
-
-  @Test
-  void login_staffWithOperationalStorePermissionAndMenuMarker_setsStoreBridgeTrue() {
-    User staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
-    stubSuccessfulAuthentication("manager@kizuna.test", "pass", staff);
-    stubRolePermissions(
-        STORE_ROLE_ID, "店長", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_MENU_VIEW));
-    when(jwtIssuer.issue(eq("manager@kizuna.test"), any())).thenReturn(new Token("t", 1L));
-
-    authService.login("manager@kizuna.test", "pass");
-
-    verify(jwtIssuer).issue(eq("manager@kizuna.test"), claimsCaptor.capture());
-    Map<String, Object> claims = claimsCaptor.getValue();
-    // 実運用の STORE 権限（ORDER_MANAGE）を保持するため、標識との併存でも店舗文脈を確立できる。
-    assertThat(claims.get("storeBridge")).isEqualTo(true);
-  }
-
-  @Test
-  void login_cast_issuesRoleCastOnlyWithoutStoreBridge() {
+  void login_cast_issuesRoleCastOnly() {
     User cast =
         User.builder()
             .email("cast@kizuna.test")
@@ -237,7 +199,6 @@ class PlatformAuthServiceTest {
     List<String> authorities = (List<String>) claims.get("authorities");
     assertThat(authorities).isEqualTo(List.of("ROLE_CAST"));
     assertThat(claims.get("userType")).isEqualTo("CAST");
-    assertThat(claims.get("storeBridge")).isEqualTo(false);
   }
 
   @Test
@@ -258,7 +219,7 @@ class PlatformAuthServiceTest {
   }
 
   @Test
-  void me_staff_returnsPermissionsAndDerivedConsole() {
+  void me_staff_returnsPermissions() {
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
     stubHqRole();
 
@@ -266,60 +227,12 @@ class PlatformAuthServiceTest {
 
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("STAFF");
-    assertThat(res.get().console()).isEqualTo("platform");
     assertThat(res.get().permissions())
         .contains("STORE_MANAGE", "ROLE_MANAGE", "SYSTEM_CONFIG_MANAGE");
-    // HQ は店舗の面から撤退しており、店舗文脈の確立資格になる STORE 権限を既定では持たない（ADR 0021）。
-    assertThat(res.get().storeBridge()).isFalse();
   }
 
   @Test
-  void me_staffWithStoreConsolePermission_returnsStoreBridgeTrue() {
-    User staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
-    when(userRepository.findByEmail("manager@kizuna.test")).thenReturn(Optional.of(staff));
-    stubRolePermissions(
-        STORE_ROLE_ID, "店長", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
-
-    Optional<PlatformMeResponse> res = authService.me("manager@kizuna.test");
-
-    assertThat(res).isPresent();
-    // 実運用の STORE コンソール権限（ORDER_MANAGE）保持者は JWT storeBridge claim と同源で true を返す。
-    assertThat(res.get().storeBridge()).isTrue();
-  }
-
-  @Test
-  void me_hybridStaffWithPlatformAndStorePermissions_returnsPlatformConsoleAndStoreBridgeTrue() {
-    // 混成ロール（PLATFORM 権限と実運用 STORE 権限の併持）: 着地は platform 優先のまま store_bridge=true。
-    User staff = storeStaff("hybrid@kizuna.test", "兼務者", StoreScopeType.SPECIFIC_STORES);
-    when(userRepository.findByEmail("hybrid@kizuna.test")).thenReturn(Optional.of(staff));
-    stubRolePermissions(
-        STORE_ROLE_ID, "兼務ロール", Set.of(PermissionCode.STORE_MANAGE, PermissionCode.ORDER_MANAGE));
-
-    Optional<PlatformMeResponse> res = authService.me("hybrid@kizuna.test");
-
-    assertThat(res).isPresent();
-    assertThat(res.get().console()).isEqualTo("platform");
-    assertThat(res.get().storeBridge()).isTrue();
-  }
-
-  @Test
-  void me_staffWithOnlySharedPermissions_returnsStoreBridgeFalse() {
-    User staff = storeStaff("shared@kizuna.test", "跨店参照のみ", StoreScopeType.ALL_STORES);
-    when(userRepository.findByEmail("shared@kizuna.test")).thenReturn(Optional.of(staff));
-    stubRolePermissions(
-        STORE_ROLE_ID,
-        "跨店参照のみ",
-        Set.of(PermissionCode.STORE_VIEW, PermissionCode.ORDER_SET_MANAGE));
-
-    Optional<PlatformMeResponse> res = authService.me("shared@kizuna.test");
-
-    assertThat(res).isPresent();
-    // SHARED 権限（跨店参照）は STORE コンソール権限ではないため店舗文脈を確立できない → false。
-    assertThat(res.get().storeBridge()).isFalse();
-  }
-
-  @Test
-  void me_cast_returnsNoneConsoleWithoutPermissions() {
+  void me_cast_returnsNoPermissions() {
     User cast =
         User.builder()
             .email("cast@kizuna.test")
@@ -336,24 +249,7 @@ class PlatformAuthServiceTest {
 
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("CAST");
-    assertThat(res.get().console()).isEqualTo("none");
     assertThat(res.get().permissions()).isEmpty();
-  }
-
-  @Test
-  void me_staffWithOnlyStoreMenuMarker_returnsNoneConsole() {
-    User staff = storeStaff("menu@kizuna.test", "店舗メニュー標識のみ", StoreScopeType.SPECIFIC_STORES);
-    when(userRepository.findByEmail("menu@kizuna.test")).thenReturn(Optional.of(staff));
-    stubRolePermissions(STORE_ROLE_ID, "店舗メニュー標識のみ", Set.of(PermissionCode.STORE_MENU_VIEW));
-
-    Optional<PlatformMeResponse> res = authService.me("menu@kizuna.test");
-
-    assertThat(res).isPresent();
-    // 標識のみのロールは店舗コンソールに着地しない（fail-closed）。
-    assertThat(res.get().console()).isEqualTo("none");
-    assertThat(res.get().permissions()).containsExactly("STORE_MENU_VIEW");
-    // 標識権限（STORE_MENU_VIEW）単独では店舗文脈を確立できないため false。
-    assertThat(res.get().storeBridge()).isFalse();
   }
 
   @Test

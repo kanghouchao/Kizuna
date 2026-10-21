@@ -2,7 +2,7 @@
 
 ## Module structure (Spring Modulith)
 
-Each module under `com.kizuna` follows the DDD four layers — `domain/` / `application/` (use-case services = the transaction boundary) / `infrastructure/` / `api/` (`dto/` + MapStruct mappers, plus `platform/` and `store/` controllers **each only when that scope is actually exposed**: a single-scope module is normal, not incomplete); `shared/` is the OPEN shared kernel.
+Each module under `com.kizuna` follows the DDD four layers — `domain/` / `application/` (use-case services = the transaction boundary) / `infrastructure/` / `api/` (`dto/` + MapStruct mappers, plus `platform/` and `store/` controllers — mount directories with no authorization meaning; a module exposing only one of them is normal, not incomplete); `shared/` is the OPEN shared kernel.
 
 ### Layer / module rules
 
@@ -10,14 +10,14 @@ Each module under `com.kizuna` follows the DDD four layers — `domain/` / `appl
 - **Cross-aggregate references are by ID only** (`Order.customerId`, etc.). DB foreign keys are kept. Object assembly happens in the application layer; lists and details use projections (e.g. `OrderView` + JPQL join — reference entity names by FQCN to avoid HQL reserved-word collisions).
 - **Synchronous references between modules** go only through packages exposed via `@NamedInterface` (document transitional exceptions in package-info.java). Events use `@ApplicationModuleListener` + the event publication registry (`event_publication` table, spring-modulith-starter-jdbc).
 - **Application services are concrete classes by default** (FooService = class). An interface + Impl split is introduced only when a second adapter actually exists, or when a consumer in another module mocks it (current cases: SystemConfigService, FileStorageService). Do not introduce single-implementation interfaces.
-- **Platform / Store are authorization scopes, not module boundaries** — resolved by the `api/platform` and `api/store` adapter layers, `StoreIdInterceptor`'s header-driven mount surface, and Spring Security.
+- **`api/platform` and `api/store` are mount directories, not authorization scopes.** Authorization has exactly two axes: permissions (`@PreAuthorize` on `PERM_*` authorities) and the caller's store set ∩ current store. The store set is resolved per request from the DB (`StoreScopeResolver` → `StoreScopeHolder`, installed by `StoreScopeInstallingInterceptor` on every path), never carried in the JWT. `/store/**` and `/files/**` establish the current store from `X-Store-ID` (`StoreIdInterceptor`: the caller must hold at least one `PERM_*` authority and the store must be in its resolved set; anonymous callers may name a store for the public site). There is no platform/store "side", no console qualification, and no emergency elevation.
 - **Store isolation is a Hibernate filter switched on per method**: `@StoreScoped` on an application-service method makes the `StoreFilterEnable` aspect enable `storeFilter` on the current Session for the store in `StoreContext` (set by `StoreIdInterceptor` on `/store/**`; on `/platform/**` wrap the call in `StoreScopeExecutor.runInStore`). It silently turns off in two ways: the aspect must run inside the transaction (OSIV is off — see the `@Order` note on `StoreFilterEnable`), and a self-invocation of a `@StoreScoped` method bypasses the proxy. Every `StoreScopedEntity` declares its filters statically, pinned by `StoreIsolationTests`.
 
 ## Code Conventions
 
 - **Naming**: classes, methods, and variables are CamelCase. DB columns (snake_case) are mapped by JPA; API JSON keys (snake_case) are mapped by Jackson.
 - **Store-side vocabulary uses the Store prefix**: StoreVO, StoreProfile
-- **Adding a `PermissionCode`** is more than the enum: bump the literal count assertion in `PermissionCodeTest`, add the code to the hand-maintained union in `frontend/src/entities/user/model/types.ts` (no parity test exists), and let `reconcile/` seed the `t_permissions` row — never hand-seed it.
+- **Adding a `PermissionCode`** is more than the enum: bump the literal count assertion in `PermissionCodeTest`, add the code to the hand-maintained union in `frontend/src/entities/user/model/types.ts` (no parity test exists), add the catalogue row and the default-role grant rows to the baseline `seed/01-roles.yaml` (pre-launch the baseline is edited in place; `PermissionSeedLiteralTests` pins seed ≡ enum), and record the grant in `DefaultGrantApprovalTests`. `reconcile/` only inserts missing catalogue rows and seeds grants when it creates a default-role row for the first time — it never rewrites grants on an existing DB, because administrators may edit default roles.
 - **Imports**: no inline FQCN usage, no wildcard imports (`*`); one explicit import per class.
 - **Constructor injection**: dependencies come in via the constructor. A pure field-assignment constructor must be replaced by Lombok `@RequiredArgsConstructor`; hand-writing a constructor is allowed only when it performs real construction logic beyond assignment (e.g. building a configured `TransactionTemplate`).
 - **Formatting**: Spotless + Google Java Format on JDK 25. The version and daemon JVM are pinned in the build configuration; use the Taskfile for final verification.
@@ -28,7 +28,7 @@ Each module under `com.kizuna` follows the DDD four layers — `domain/` / `appl
 - **Logging**: keep the `req=<id> store=<id>` format.
 - **Modulith docs**: `ModularityTests` generates local documentation under `backend/docs/modulith/`; generated output is not committed.
 - **Optional filter queries**: the JPQL `(:param is null or ...)` pattern can cause a runtime 500 due to PostgreSQL parameter type inference (see `CustomerService.searchSpec`). Build variable filter conditions with a `Specification` instead.
-- **Manual API verification**: when hitting a store-scoped endpoint directly with curl, the `X-Role: store` and `X-Store-ID: <id>` headers are required (see `StoreIdInterceptor`). Without them the request is treated as having no store context — endpoints without `@StoreOptional` return 403.
+- **Manual API verification**: when hitting a store-scoped endpoint directly with curl, the `X-Store-ID: <id>` header is required (see `StoreIdInterceptor`); `X-Role` is ignored. Without it the request is treated as having no store context — endpoints without `@StoreOptional` return 403.
 
 ## API contract
 
@@ -61,7 +61,7 @@ For each anonymous endpoint, check all four concerns:
 1. Declare `@PermitAll` on the handler.
 2. For anonymous writes, add the **actual method plus path** to `SecurityConfig.CSRF_IGNORED_MATCHERS`. A path-only matcher also exempts authenticated sibling methods. Bearer-header requests already have their own CSRF exemption.
 3. If stale Bearer credentials must be ignored, add the **method plus path** to `PlatformBearerTokenResolver.BEARER_EXEMPT_MATCHERS`. Do not exempt optional-authentication handlers that inspect `Principal`: doing so discards valid credentials too. Test anonymous access with a broken Bearer, not just without credentials.
-4. `/store/**` and `/files/**` still need `X-Role: store` and `X-Store-ID` through `StoreIdInterceptor`. Only handlers intentionally independent of store context declare `@StoreOptional`.
+4. `/store/**` and `/files/**` still need `X-Store-ID` through `StoreIdInterceptor`. Only handlers intentionally independent of store context declare `@StoreOptional`.
 
 Store reads use `@StoreScoped` row isolation. A handwritten `where store_id = ?` is not a substitute. If a path must bypass the mechanism, document and test its explicit ownership control. The layer rules above describe transaction/proxy requirements.
 

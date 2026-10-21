@@ -25,7 +25,7 @@ public class PermissionController {
   public ResponseEntity<List<PermissionResponse>> list() {
     return ResponseEntity.ok(
         Arrays.stream(PermissionCode.values())
-            .map(code -> new PermissionResponse(code.name(), code.getConsole().name()))
+            .map(code -> new PermissionResponse(code.name()))
             .sorted(Comparator.comparing(PermissionResponse::code))
             .toList());
   }

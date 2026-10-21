@@ -19,8 +19,9 @@ import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @Import({
   CustomerMemberLinkControllerTest.MethodSecurityConfig.class,
   StoreContext.class,
+  StoreScopeHolder.class,
   CommonExceptionHandler.class
 })
 class CustomerMemberLinkControllerTest {
@@ -61,7 +63,7 @@ class CustomerMemberLinkControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean private StoreActivationService storeActivationService;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
   @DisplayName("現況の照会は紐づけ済みなら会員コードを返すこと")

@@ -3,94 +3,133 @@ package com.kizuna.user.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
 import com.kizuna.user.api.dto.PlatformStaffResponse;
 import com.kizuna.user.api.dto.PlatformStaffUpdateRequest;
+import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
+import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
-import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
+import com.kizuna.user.domain.SelfStopNotAllowedException;
+import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
-import java.sql.SQLException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Page;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+/** 委譲守衛（権限並集と店舗集合の部分集合）と名指しの守衛（自己停止・自己再設定・管理者の再設定）の単体テスト。 */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PlatformStaffServiceTest {
 
-  /** HQ 側ロール（Console.PLATFORM の権限を含む）。管理者管理が扱える唯一の種類。 */
-  private static final long HQ_ROLE = 10L;
-
-  /** 店舗側ロール（構成権限がすべて STORE / SHARED）。単独では管理者管理の対象にならない。 */
-  private static final long MANAGER_ROLE = 11L;
-
-  /** ROLE_MANAGE を含む HQ 側ロール。不減零（G5）の母集団を作るのに使う。 */
-  private static final long ROLE_MANAGE_ROLE = 12L;
-
+  private static final String ACTOR = "actor@kizuna.test";
   private static final Pageable PAGEABLE = PageRequest.of(0, 20);
+
+  /** 権限 id。ADMIN_ROLE は {1,2,3,ROLE_MANAGE}、MANAGER_ROLE は {1,2}、STAFF_ROLE は {1}。 */
+  private static final long ROLE_MANAGE_PERMISSION = 99L;
+
+  private static final long ADMIN_ROLE = 10L;
+  private static final long MANAGER_ROLE = 11L;
+  private static final long STAFF_ROLE = 12L;
 
   @Mock private BusinessAudit businessAudit;
   @Mock private UserRepository repository;
-
   @Mock private RoleRepository roleRepository;
-
   @Mock private RoleManageHolderGuard roleManageHolderGuard;
-
   @Mock private PasswordEncoder encoder;
+  @Mock private CredentialOperations credentialOperations;
+  private final StoreScopeHolder holder = new StoreScopeHolder();
 
-  @Mock private ApplicationEventPublisher eventPublisher;
-
-  @InjectMocks private PlatformStaffService service;
+  private PlatformStaffService service;
 
   @Captor private ArgumentCaptor<User> userCaptor;
 
-  /** HQ 側ロールの解決を差し込む。既定では HQ_ROLE と ROLE_MANAGE_ROLE だけが HQ 側。 */
-  private void givenHqSideRoles() {
-    when(roleRepository.findHqRoleIds()).thenReturn(Set.of(HQ_ROLE, ROLE_MANAGE_ROLE));
+  @BeforeEach
+  void setUp() {
+    service =
+        new PlatformStaffService(
+            businessAudit,
+            repository,
+            roleRepository,
+            roleManageHolderGuard,
+            encoder,
+            credentialOperations,
+            holder);
+    when(roleRepository.findAllById(anyCollection()))
+        .thenAnswer(
+            invocation -> {
+              Collection<Long> ids = invocation.getArgument(0);
+              return roles().stream().filter(role -> ids.contains(role.getId())).toList();
+            });
+    when(roleRepository.findAll()).thenReturn(roles());
+    when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of(ADMIN_ROLE));
+    when(repository.saveAndFlush(any()))
+        .thenAnswer(
+            invocation -> {
+              User saved = invocation.getArgument(0);
+              if (saved.getId() == null) saved.setId(9L);
+              ReflectionTestUtils.setField(saved, "version", 0L);
+              return saved;
+            });
   }
 
-  private Role role(long id, String name) {
-    Role role = Role.builder().name(name).permissionIds(Set.of(1L)).build();
+  @AfterEach
+  void tearDown() {
+    holder.clear();
+  }
+
+  private static Role role(long id, String name, Set<Long> permissionIds) {
+    Role role = Role.builder().name(name).systemRole(true).permissionIds(permissionIds).build();
     role.setId(id);
     return role;
   }
 
-  private User staff(
+  private static List<Role> roles() {
+    return List.of(
+        role(ADMIN_ROLE, "グループ管理者", Set.of(1L, 2L, 3L, ROLE_MANAGE_PERMISSION)),
+        role(MANAGER_ROLE, "店長", Set.of(1L, 2L)),
+        role(STAFF_ROLE, "店舗スタッフ", Set.of(1L)));
+  }
+
+  private static User staff(
       long id, String email, Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
     User user =
         User.builder()
@@ -104,35 +143,37 @@ class PlatformStaffServiceTest {
             .storeIds(storeIds)
             .build();
     user.setId(id);
-    // 永続化済みエンティティを模す（DB の version 列は 0 で初期化される）。
     ReflectionTestUtils.setField(user, "version", 0L);
     return user;
   }
 
-  private User castUser(long id, String email) {
-    User user =
-        User.builder()
-            .email(email)
-            .password("hash")
-            .displayName("キャスト")
-            .enabled(true)
-            .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
-    user.setId(id);
-    return user;
+  /** 行使者を差し込む。店舗集合は保持器（要求ごとの解決器）に、権限はロールから。 */
+  private User actor(Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
+    User actor = staff(1L, ACTOR, roleIds, scopeType, storeIds);
+    when(repository.findByEmail(ACTOR)).thenReturn(Optional.of(actor));
+    holder.install(
+        () ->
+            scopeType == StoreScopeType.ALL_STORES
+                ? new StoreScope(true, Set.of())
+                : new StoreScope(false, storeIds));
+    return actor;
   }
 
-  private PlatformStaffCreateRequest createRequest(
-      String email,
-      String password,
-      Set<Long> roleIds,
-      StoreScopeType scopeType,
-      Set<Long> storeIds) {
+  private User manager(Set<Long> stores) {
+    return actor(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, stores);
+  }
+
+  private User target(long id, Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
+    User target = staff(id, "target" + id + "@kizuna.test", roleIds, scopeType, storeIds);
+    when(repository.findById(id)).thenReturn(Optional.of(target));
+    return target;
+  }
+
+  private static PlatformStaffCreateRequest createRequest(
+      Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
     PlatformStaffCreateRequest req = new PlatformStaffCreateRequest();
-    req.setEmail(email);
-    req.setPassword(password);
+    req.setEmail("new@kizuna.test");
+    req.setPassword("rawpass");
     req.setDisplayName("表示名");
     req.setRoleIds(roleIds);
     req.setStoreScopeType(scopeType);
@@ -140,539 +181,292 @@ class PlatformStaffServiceTest {
     return req;
   }
 
-  private PlatformStaffUpdateRequest updateRequest(
+  private static PlatformStaffUpdateRequest updateRequest(
       Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
     PlatformStaffUpdateRequest req = new PlatformStaffUpdateRequest();
     req.setRoleIds(roleIds);
     req.setStoreScopeType(scopeType);
     req.setStoreIds(storeIds);
-    // staff() ヘルパの現行 version と一致させる（版の往復）。
     req.setVersion(0L);
     return req;
   }
 
   @Test
-  void list_returnsStaffWithResolvedRoleNames() {
-    List<User> staff =
-        List.of(
-            staff(1L, "hq@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()),
-            staff(
-                2L,
-                "mgr@kizuna.test",
-                Set.of(MANAGER_ROLE),
-                StoreScopeType.SPECIFIC_STORES,
-                Set.of(1L)));
-    when(repository.findAll(ArgumentMatchers.<Specification<User>>any(), eq(PAGEABLE)))
-        .thenReturn(new PageImpl<>(staff, PAGEABLE, staff.size()));
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE, MANAGER_ROLE)))
-        .thenReturn(List.of(role(HQ_ROLE, "HQ管理者"), role(MANAGER_ROLE, "店長")));
-
-    Page<PlatformStaffResponse> result = service.list(null, null, PAGEABLE);
-
-    assertThat(result.getTotalElements()).isEqualTo(2);
-    assertThat(result.getContent().get(0).roles())
-        .containsExactly(new PlatformStaffResponse.RoleRef(HQ_ROLE, "HQ管理者"));
-    assertThat(result.getContent().get(1).roles())
-        .containsExactly(new PlatformStaffResponse.RoleRef(MANAGER_ROLE, "店長"));
-    assertThat(result.getContent().get(1).storeIds()).containsExactly(1L);
+  @DisplayName("作用域を解決できない行使者は fail-closed に 403")
+  void unresolvedActorScopeIsDenied() {
+    assertThatThrownBy(() -> service.list(null, null, PAGEABLE, ACTOR))
+        .isInstanceOf(AccessDeniedException.class);
+    verify(repository, never()).findAll(ArgumentMatchers.<Specification<User>>any(), eq(PAGEABLE));
   }
 
   @Test
-  void create_encodesPasswordAndSavesStaffWithRoles() {
-    PlatformStaffCreateRequest req =
-        createRequest(
-            "new@kizuna.test",
-            "rawpass",
-            Set.of(HQ_ROLE),
-            StoreScopeType.SPECIFIC_STORES,
-            Set.of(1L));
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
-    when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.saveAndFlush(userCaptor.capture()))
-        .thenAnswer(
-            invocation -> {
-              User saved = invocation.getArgument(0);
-              saved.setId(9L);
-              ReflectionTestUtils.setField(saved, "version", 0L);
-              return saved;
-            });
-
-    PlatformStaffResponse res = service.create(req);
-
-    verify(encoder).encode("rawpass");
-    User saved = userCaptor.getValue();
-    assertThat(saved.getEmail()).isEqualTo("new@kizuna.test");
-    assertThat(saved.getPassword()).isEqualTo("ENCODED");
-    assertThat(saved.getDisplayName()).isEqualTo("表示名");
-    assertThat(saved.getEnabled()).isTrue();
-    assertThat(saved.getUserType()).isEqualTo(UserType.STAFF);
-    assertThat(saved.getRoleIds()).containsExactly(HQ_ROLE);
-    assertThat(saved.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(saved.getStoreIds()).containsExactly(1L);
-    assertThat(res.id()).isEqualTo(9L);
-    assertThat(res.roles()).containsExactly(new PlatformStaffResponse.RoleRef(HQ_ROLE, "HQ管理者"));
-    assertThat(res.enabled()).isTrue();
-    assertThat(res.version()).as("作成応答も version を持つこと").isZero();
-  }
-
-  @Test
-  void create_duplicateEmail_throwsAndDoesNotSave() {
-    PlatformStaffCreateRequest req =
-        createRequest(
-            "dup@kizuna.test", "rawpass", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findByEmail("dup@kizuna.test"))
-        .thenReturn(
-            Optional.of(
-                staff(
-                    5L, "dup@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())));
-
-    assertThatThrownBy(() -> service.create(req)).isInstanceOf(DuplicateStaffEmailException.class);
-
-    verify(repository, never()).save(any());
-  }
-
-  @Test
-  void create_unknownRole_throwsWithoutLookupOrEncode() {
-    PlatformStaffCreateRequest req =
-        createRequest(
-            "new@kizuna.test", "rawpass", Set.of(999L), StoreScopeType.ALL_STORES, Set.of());
-    when(roleRepository.findAllById(Set.of(999L))).thenReturn(List.of());
-
-    assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("ロール");
-
-    verify(repository, never()).findByEmail(any());
-    verifyNoInteractions(encoder);
-  }
-
-  @Test
-  void create_unknownStoreId_convertsToInvalidStoreScope() {
-    PlatformStaffCreateRequest req =
-        createRequest(
-            "fk@kizuna.test",
-            "rawpass",
-            Set.of(HQ_ROLE),
-            StoreScopeType.SPECIFIC_STORES,
-            Set.of(999L));
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findByEmail("fk@kizuna.test")).thenReturn(Optional.empty());
-    when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.saveAndFlush(any()))
-        .thenThrow(
-            new DataIntegrityViolationException(
-                "save failed",
-                new ConstraintViolationException(
-                    "save failed",
-                    new SQLException("insert or update violates foreign key constraint"),
-                    "fk_t_user_stores_store")));
-
-    assertThatThrownBy(() -> service.create(req)).isInstanceOf(InvalidStoreScopeException.class);
-  }
-
-  @Test
-  void create_propagatesUnrelatedDataIntegrityViolation() {
-    // email 一意・店舗 FK 以外の整合性違反はサービスで握りつぶさず、そのまま伝播すること。
-    // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
-    // サービス層で 400 に変換すると想定外の実装欠陥まで「店舗が存在しません」に化けてしまう。
-    PlatformStaffCreateRequest req =
-        createRequest(
-            "fk@kizuna.test",
-            "rawpass",
-            Set.of(HQ_ROLE),
-            StoreScopeType.SPECIFIC_STORES,
-            Set.of(1L));
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findByEmail("fk@kizuna.test")).thenReturn(Optional.empty());
-    when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    DataIntegrityViolationException violation =
-        new DataIntegrityViolationException(
-            "save failed",
-            new ConstraintViolationException(
-                "save failed",
-                new SQLException("null value violates not-null constraint"),
-                "display_name"));
-    when(repository.saveAndFlush(any())).thenThrow(violation);
-
-    assertThatThrownBy(() -> service.create(req)).isSameAs(violation);
-  }
-
-  @Test
-  void create_roleFkViolation_convertsToMissingRole() {
-    // requireRoles 通過後にロールが並行削除され、t_user_roles への授与行挿入が FK に当たるレース
-    // （RoleService.delete の事前検証は未授与ロールの削除を許すため実在する経路）。
-    // 事前検証と同じ 400（ロール不存在）へ分類する。
-    PlatformStaffCreateRequest req =
-        createRequest(
-            "role-race@kizuna.test",
-            "rawpass",
-            Set.of(HQ_ROLE),
-            StoreScopeType.SPECIFIC_STORES,
-            Set.of(1L));
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findByEmail("role-race@kizuna.test")).thenReturn(Optional.empty());
-    when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.saveAndFlush(any()))
-        .thenThrow(
-            new DataIntegrityViolationException(
-                "save failed",
-                new ConstraintViolationException(
-                    "save failed",
-                    new SQLException("insert or update violates foreign key constraint"),
-                    "fk_t_user_roles_role")));
-
-    assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("ロールが存在しません");
-  }
-
-  @Test
-  void create_duplicateEmailUniqueViolation_convertsToDuplicateEmail() {
-    // 事前 findByEmail を通過した後に DB 一意制約で敗者が弾かれるレース。店舗エラーではなく重複エラーへ分類する。
-    PlatformStaffCreateRequest req =
-        createRequest(
-            "race@kizuna.test",
-            "rawpass",
-            Set.of(HQ_ROLE),
-            StoreScopeType.SPECIFIC_STORES,
-            Set.of(1L));
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findByEmail("race@kizuna.test")).thenReturn(Optional.empty());
-    when(encoder.encode("rawpass")).thenReturn("ENCODED");
-    when(repository.saveAndFlush(any()))
-        .thenThrow(
-            new DataIntegrityViolationException(
-                "save failed",
-                new ConstraintViolationException(
-                    "save failed",
-                    new SQLException("duplicate key value violates unique constraint"),
-                    "uq_t_users_email")));
-
-    assertThatThrownBy(() -> service.create(req)).isInstanceOf(DuplicateStaffEmailException.class);
-  }
-
-  @Test
-  void update_reassignsRolesAndScopesAndSaves() {
-    User existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE, MANAGER_ROLE)))
-        .thenReturn(List.of(role(HQ_ROLE, "HQ管理者"), role(MANAGER_ROLE, "店長")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    // saveAndFlush は flush 時に version を増加させる（実挙動の模倣）。
-    when(repository.saveAndFlush(existing))
-        .thenAnswer(
-            i -> {
-              ReflectionTestUtils.setField(existing, "version", existing.getVersion() + 1);
-              return existing;
-            });
-
-    PlatformStaffResponse res =
-        service.update(
-            3L,
-            updateRequest(
-                Set.of(HQ_ROLE, MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)));
-
-    assertThat(existing.getRoleIds()).containsExactlyInAnyOrder(HQ_ROLE, MANAGER_ROLE);
-    assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
-    assertThat(existing.getStoreIds()).containsExactly(1L);
-    assertThat(res.id()).isEqualTo(3L);
-    assertThat(res.roles())
-        .containsExactly(
-            new PlatformStaffResponse.RoleRef(HQ_ROLE, "HQ管理者"),
-            new PlatformStaffResponse.RoleRef(MANAGER_ROLE, "店長"));
-    assertThat(res.version()).as("応答は保存後の増加した version を返すこと").isEqualTo(1L);
-  }
-
-  @Test
-  void update_staleVersion_throwsConflictWithoutSaving() {
-    // 陳腐化した編集フォームの提出（version 不一致）は reassign 前に 409 系例外で拒否する。
-    User existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    ReflectionTestUtils.setField(existing, "version", 5L);
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE, MANAGER_ROLE)))
-        .thenReturn(List.of(role(HQ_ROLE, "HQ管理者"), role(MANAGER_ROLE, "店長")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    PlatformStaffUpdateRequest req =
-        updateRequest(Set.of(HQ_ROLE, MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
-    req.setVersion(4L);
-
-    assertThatThrownBy(() -> service.update(3L, req))
-        .isInstanceOf(StaleStaffUpdateException.class)
-        .isInstanceOf(ConflictException.class)
-        .hasMessage("他の管理者が更新しました。最新の内容を確認してください");
-
-    // 授権は再割当されず、保存も行われない。
-    assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
-    verify(repository, never()).saveAndFlush(any());
-  }
-
-  @Test
-  void update_unknownId_throwsNotFoundWithoutSaving() {
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(404L)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(
-            () ->
-                service.update(
-                    404L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
-        .isInstanceOf(NotFoundException.class);
-    verify(repository, never()).save(any());
-  }
-
-  @Test
-  void update_targetIsNonStaff_throwsNotFoundWithoutSaving() {
-    // CAST/MEMBER はスタッフ管理の可視対象外。id を直接指定してもスタッフへ昇格させず、不在と同じ応答にする（本人種別検証）。
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(8L)).thenReturn(Optional.of(castUser(8L, "cast@kizuna.test")));
-
-    assertThatThrownBy(
-            () ->
-                service.update(
-                    8L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
-        .isInstanceOf(NotFoundException.class);
-    verify(repository, never()).save(any());
-  }
-
-  @Test
-  void update_unknownRole_throwsWithoutLookup() {
-    when(roleRepository.findAllById(Set.of(999L))).thenReturn(List.of());
-
-    assertThatThrownBy(
-            () ->
-                service.update(
-                    3L, updateRequest(Set.of(999L), StoreScopeType.ALL_STORES, Set.of())))
-        .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("ロール");
-
-    verify(repository, never()).findById(any());
-    verify(repository, never()).save(any());
-  }
-
-  @Test
-  void update_unknownStoreId_convertsToInvalidStoreScope() {
-    User existing =
-        staff(7L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(7L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing))
-        .thenThrow(
-            new DataIntegrityViolationException(
-                "save failed",
-                new ConstraintViolationException(
-                    "save failed",
-                    new SQLException("insert or update violates foreign key constraint"),
-                    "fk_t_user_stores_store")));
-
-    assertThatThrownBy(
-            () ->
-                service.update(
-                    7L,
-                    updateRequest(Set.of(HQ_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(999L))))
-        .isInstanceOf(InvalidStoreScopeException.class);
-  }
-
-  @Test
-  void update_duplicateEmailUniqueViolation_convertsToDuplicateEmail() {
-    User existing =
-        staff(9L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(9L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing))
-        .thenThrow(
-            new DataIntegrityViolationException(
-                "save failed",
-                new ConstraintViolationException(
-                    "save failed",
-                    new SQLException("duplicate key value violates unique constraint"),
-                    "uq_t_users_email")));
-
-    assertThatThrownBy(
-            () ->
-                service.update(
-                    9L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L))))
-        .isInstanceOf(DuplicateStaffEmailException.class);
-  }
-
-  @Test
-  void create_withoutHqSideRole_isRejectedWithoutSaving() {
-    PlatformStaffCreateRequest req =
-        createRequest(
-            "store-only@kizuna.test",
-            "rawpass",
+  @DisplayName("一覧は行使者の店舗集合に交わる者を返し、行ごとの editable は部分集合判定で決まる")
+  void listMarksEditableBySubsetOfPermissionsAndStores() {
+    manager(Set.of(1L));
+    User peer =
+        staff(
+            2L,
+            "peer@kizuna.test",
             Set.of(MANAGER_ROLE),
             StoreScopeType.SPECIFIC_STORES,
             Set.of(1L));
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(MANAGER_ROLE)))
-        .thenReturn(List.of(role(MANAGER_ROLE, "店長")));
+    User admin =
+        staff(3L, "admin@kizuna.test", Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    User twoStores =
+        staff(
+            4L,
+            "two@kizuna.test",
+            Set.of(STAFF_ROLE),
+            StoreScopeType.SPECIFIC_STORES,
+            Set.of(1L, 2L));
+    when(repository.findAll(ArgumentMatchers.<Specification<User>>any(), eq(PAGEABLE)))
+        .thenReturn(new PageImpl<>(List.of(peer, admin, twoStores), PAGEABLE, 3));
 
-    assertThatThrownBy(() -> service.create(req))
-        .isInstanceOf(InvalidRoleGrantException.class)
-        .hasMessage("管理者にはプラットフォーム権限を含むロールを 1 つ以上付与してください");
+    var page = service.list(null, null, PAGEABLE, ACTOR);
 
-    verify(repository, never()).saveAndFlush(any());
-    verifyNoInteractions(encoder);
+    assertThat(page.getContent())
+        .extracting(PlatformStaffResponse::editable)
+        .containsExactly(true, false, false);
+    assertThat(page.getContent().get(1).roles())
+        .containsExactly(new PlatformStaffResponse.RoleRef(ADMIN_ROLE, "グループ管理者"));
   }
 
   @Test
-  void update_toStoreSideRolesOnly_isRejectedWithoutSaving() {
-    // 一覧から消えるだけの静黙な降格にしない。店舗側へ降ろす操作は店舗スタッフ管理の領分で、この面では拒否する。
-    User existing =
-        staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(MANAGER_ROLE)))
-        .thenReturn(List.of(role(MANAGER_ROLE, "店長")));
+  @DisplayName("付与できるロールは権限集合が行使者の権限並集に収まるものだけ")
+  void grantableRolesAreSubsetsOfActorPermissions() {
+    manager(Set.of(1L));
+
+    List<RoleSummaryResponse> roles = service.grantableRoles(ACTOR);
+
+    assertThat(roles)
+        .extracting(RoleSummaryResponse::id)
+        .containsExactlyInAnyOrder(MANAGER_ROLE, STAFF_ROLE);
+  }
+
+  @Test
+  @DisplayName("作成: 行使者が持たない権限を含むロールは付与できない")
+  void createRejectsRoleBeyondActorPermissions() {
+    manager(Set.of(1L));
 
     assertThatThrownBy(
             () ->
-                service.update(
-                    3L,
-                    updateRequest(
-                        Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L))))
+                service.create(
+                    createRequest(Set.of(ADMIN_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+                    ACTOR))
         .isInstanceOf(InvalidRoleGrantException.class);
-
-    assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
     verify(repository, never()).saveAndFlush(any());
   }
 
   @Test
-  void update_targetHoldsOnlyStoreSideRoles_throwsNotFoundWithoutSaving() {
-    // 店舗側ロールのみの利用者は本 API の対象外。id 直指定でも在否を漏らさず不在と同じ応答にする。
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(4L))
+  @DisplayName("作成: 行使者の店舗集合を越える店舗（全店舗を含む）は付与できない")
+  void createRejectsStoresBeyondActorScope() {
+    manager(Set.of(1L));
+
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    createRequest(
+                        Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
+                    ACTOR))
+        .isInstanceOf(InvalidStoreScopeException.class);
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    createRequest(Set.of(STAFF_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+        .isInstanceOf(InvalidStoreScopeException.class);
+    verify(repository, never()).saveAndFlush(any());
+  }
+
+  @Test
+  @DisplayName("作成: 自分と同じロール（同格）は配れる — 同格の相互保護は置かない")
+  void createAllowsGrantingActorsOwnRole() {
+    manager(Set.of(1L));
+    when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
+    when(encoder.encode("rawpass")).thenReturn("ENCODED");
+
+    PlatformStaffResponse res =
+        service.create(
+            createRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
+
+    verify(repository).saveAndFlush(userCaptor.capture());
+    assertThat(userCaptor.getValue().getPassword()).isEqualTo("ENCODED");
+    assertThat(userCaptor.getValue().getRoleIds()).containsExactly(MANAGER_ROLE);
+    assertThat(res.editable()).isTrue();
+    assertThat(res.id()).isEqualTo(9L);
+  }
+
+  @Test
+  @DisplayName("作成: ALL_STORES の行使者は全店舗の対象も自分の全権限も配れる")
+  void allStoresActorCanGrantEverythingItHolds() {
+    actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
+    when(encoder.encode("rawpass")).thenReturn("ENCODED");
+
+    PlatformStaffResponse res =
+        service.create(
+            createRequest(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
+
+    assertThat(res.storeScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
+    assertThat(res.editable()).isTrue();
+  }
+
+  @Test
+  @DisplayName("作成: 重複メールと不存在ロールは 400")
+  void createRejectsDuplicateEmailAndUnknownRole() {
+    manager(Set.of(1L));
+    when(repository.findByEmail("new@kizuna.test"))
         .thenReturn(
             Optional.of(
                 staff(
-                    4L,
-                    "store-staff@kizuna.test",
-                    Set.of(MANAGER_ROLE),
+                    5L,
+                    "new@kizuna.test",
+                    Set.of(STAFF_ROLE),
                     StoreScopeType.SPECIFIC_STORES,
                     Set.of(1L))));
-
     assertThatThrownBy(
             () ->
-                service.update(
-                    4L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
+                service.create(
+                    createRequest(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+                    ACTOR))
+        .isInstanceOf(DuplicateStaffEmailException.class);
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    createRequest(Set.of(999L), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("ロール");
+  }
+
+  @Test
+  @DisplayName("取得・更新: 行使者の店舗集合と交わらない対象は存在しても 404（不在と区別させない）")
+  void invisibleTargetIsNotFound() {
+    manager(Set.of(1L));
+    target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+
+    assertThatThrownBy(() -> service.get(2L, ACTOR)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.suspend(2L, ACTOR)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.resetPassword(2L, ACTOR))
         .isInstanceOf(NotFoundException.class);
+  }
 
+  @Test
+  @DisplayName("更新: 見えるが権限か店舗集合が行使者を超える対象は 400（委譲の境界）")
+  void updateRejectsTargetBeyondDelegation() {
+    manager(Set.of(1L));
+    target(2L, Set.of(ADMIN_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    target(3L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L));
+
+    for (long id : List.of(2L, 3L)) {
+      assertThatThrownBy(
+              () ->
+                  service.update(
+                      id,
+                      updateRequest(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+                      ACTOR))
+          .isInstanceOf(StaffOutOfDelegationScopeException.class);
+      assertThatThrownBy(() -> service.suspend(id, ACTOR))
+          .isInstanceOf(StaffOutOfDelegationScopeException.class);
+      assertThatThrownBy(() -> service.resume(id, ACTOR))
+          .isInstanceOf(StaffOutOfDelegationScopeException.class);
+    }
     verify(repository, never()).saveAndFlush(any());
   }
 
   @Test
-  void update_demotionOfLastRoleManageHolder_isRejected() {
-    // 降格そのものは許すが、母集団が 0 になるならこの守衛が先に立つ。
-    User existing =
-        staff(
-            3L,
-            "last-admin@kizuna.test",
-            Set.of(ROLE_MANAGE_ROLE),
-            StoreScopeType.ALL_STORES,
-            Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    doThrow(new LastRoleManageHolderException("最後の管理権限保持者を停止・降格することはできません"))
-        .when(roleManageHolderGuard)
-        .requireAfterGrantChange(existing, Set.of(HQ_ROLE));
+  @DisplayName("更新: 版の不一致は 409、通れば授権を書き換えて監査する")
+  void updateChecksVersionAndReassigns() {
+    manager(Set.of(1L, 2L));
+    User target = target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
 
-    assertThatThrownBy(
-            () ->
-                service.update(
-                    3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of())))
-        .isInstanceOf(LastRoleManageHolderException.class);
-
-    assertThat(existing.getRoleIds()).containsExactly(ROLE_MANAGE_ROLE);
-    verify(repository, never()).saveAndFlush(any());
-  }
-
-  @Test
-  void update_demotingRoleManageHolderWhileAnotherRemains_isAllowed() {
-    // 守衛が「降格そのもの」を塞いでいないことの対照。母集団が残るなら通す。
-    User existing =
-        staff(
-            3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
-
-    service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()));
-
-    assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
-    verify(roleManageHolderGuard).requireAfterGrantChange(existing, Set.of(HQ_ROLE));
-  }
-
-  @Test
-  void update_thatCannotShrinkTheHolderSet_doesNotSerialize() {
-    // 母集団を減らさない更新まで母集団の全行を押さえると、無関係な授権変更同士が待ち合う。
-    User existing =
-        staff(
-            3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(ROLE_MANAGE_ROLE)))
-        .thenReturn(List.of(role(ROLE_MANAGE_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
+    PlatformStaffUpdateRequest stale =
+        updateRequest(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    stale.setVersion(5L);
+    assertThatThrownBy(() -> service.update(2L, stale, ACTOR))
+        .isInstanceOf(StaleStaffUpdateException.class);
 
     service.update(
-        3L, updateRequest(Set.of(ROLE_MANAGE_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)));
+        2L,
+        updateRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
+        ACTOR);
 
-    verifyNoInteractions(roleManageHolderGuard);
+    assertThat(target.getRoleIds()).containsExactly(MANAGER_ROLE);
+    assertThat(target.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
+    verify(businessAudit)
+        .recordCurrent(
+            eq(null), eq("STAFF_GRANTS_CHANGED"), eq("USER_GRANTS"), eq("2"), any(), any());
   }
 
   @Test
-  void update_removingAnyExistingRoleCallsTheGuardEvenWithoutKnownManagementGrants() {
-    User existing =
-        staff(
-            3L,
-            "target@kizuna.test",
-            Set.of(HQ_ROLE, MANAGER_ROLE),
-            StoreScopeType.ALL_STORES,
-            Set.of());
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
+  @DisplayName("更新: ロールの除去は不減零の守衛を通す")
+  void updateRunsRoleManageHolderGuardWhenRemovingRoles() {
+    actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    User target = target(2L, Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
 
-    service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()));
+    service.update(
+        2L, updateRequest(Set.of(MANAGER_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
 
-    verify(roleManageHolderGuard).requireAfterGrantChange(existing, Set.of(HQ_ROLE));
+    verify(roleManageHolderGuard).requireAfterGrantChange(target, Set.of(MANAGER_ROLE));
   }
 
   @Test
-  void update_disabledTargetCanLoseRolesWithoutCallingTheGuard() {
-    User existing =
-        staff(
-            3L,
-            "target@kizuna.test",
-            Set.of(HQ_ROLE, ROLE_MANAGE_ROLE),
-            StoreScopeType.ALL_STORES,
-            Set.of());
-    existing.stop();
-    givenHqSideRoles();
-    when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
-    when(repository.findById(3L)).thenReturn(Optional.of(existing));
-    when(repository.saveAndFlush(existing)).thenReturn(existing);
+  @DisplayName("停止: 自分自身は拒否、対象は直列化点越しに読み直して停止し監査する")
+  void suspendRefusesSelfAndStopsOthers() {
+    User me = actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    when(repository.findById(1L)).thenReturn(Optional.of(me));
+    assertThatThrownBy(() -> service.suspend(1L, ACTOR))
+        .isInstanceOf(SelfStopNotAllowedException.class);
 
-    service.update(3L, updateRequest(Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()));
+    User target = target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    when(roleManageHolderGuard.loadForSuspension(2L)).thenReturn(target);
 
-    assertThat(existing.getRoleIds()).containsExactly(HQ_ROLE);
-    verifyNoInteractions(roleManageHolderGuard);
+    service.suspend(2L, ACTOR);
+
+    verify(credentialOperations).stop(target);
+    verify(businessAudit)
+        .record(
+            eq(ACTOR),
+            eq(null),
+            eq("STAFF_ACCOUNT_SUSPENDED"),
+            eq("USER_GRANTS"),
+            eq("2"),
+            eq(null),
+            eq(null),
+            any(),
+            any());
+  }
+
+  @Test
+  @DisplayName("再開: 停止中なら再開して監査、有効なら何もしない（冪等）")
+  void resumeIsIdempotent() {
+    manager(Set.of(1L));
+    User target = target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    target.stop();
+
+    service.resume(2L, ACTOR);
+    service.resume(2L, ACTOR);
+
+    assertThat(target.getEnabled()).isTrue();
+    verify(repository).saveAndFlush(target);
+  }
+
+  @Test
+  @DisplayName("再設定: 自分自身と管理者（ROLE_MANAGE 保持者）は拒否、通れば仮パスワードを返す")
+  void resetPasswordGuards() {
+    User me = actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    when(repository.findById(1L)).thenReturn(Optional.of(me));
+    assertThatThrownBy(() -> service.resetPassword(1L, ACTOR))
+        .isInstanceOf(SelfPasswordResetNotAllowedException.class);
+
+    target(2L, Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    assertThatThrownBy(() -> service.resetPassword(2L, ACTOR))
+        .isInstanceOf(HqPasswordResetNotAllowedException.class);
+
+    User target = target(3L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    when(encoder.encode(any())).thenReturn("ENCODED");
+
+    String temporary = service.resetPassword(3L, ACTOR);
+
+    assertThat(temporary).hasSize(16);
+    verify(credentialOperations).changePassword(target, "ENCODED");
   }
 }

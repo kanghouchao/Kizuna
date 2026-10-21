@@ -11,8 +11,8 @@ import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.RemunerationAmounts;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeExempt;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import com.kizuna.shift.remuneration.AttendanceFacts;
@@ -24,7 +24,6 @@ import java.util.HashMap;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +36,7 @@ public class RemunerationStatementService {
   private final OrderRemunerationFacts orders;
   private final AttendanceFacts attendances;
   private final StoreContext stores;
+  private final StoreScopeHolder storeScopeHolder;
   private final ActorIdentityService actors;
 
   @StoreScoped
@@ -50,8 +50,7 @@ public class RemunerationStatementService {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public RemunerationStatementResponse platform(
       Long store, Long person, String month, int orderPage, int bonusPage, int size) {
-    var scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+    var scope = storeScopeHolder.current();
     if (scope == null || !scope.authorizes(store)) throw new AccessDeniedException("授権店舗集合に含まれません");
     return read(store, person, month, orderPage, bonusPage, size);
   }

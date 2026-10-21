@@ -8,13 +8,12 @@ import org.aspectj.lang.annotation.Aspect;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 /**
  * {@code @StoreSetScoped} が付いたメソッドで Hibernate の storeSetFilter を有効化する Aspect（集合作用域）。
  *
- * <p>認証済み平台トークンの授権店舗集合を {@link StoreScope} で解決し、SPECIFIC_STORES の場合のみ storeSetFilter（{@code
+ * <p>要求ごとに解決された授権店舗集合を {@link StoreScopeHolder} から取り、SPECIFIC_STORES の場合のみ storeSetFilter（{@code
  * store_id in (:storeIds)}）を有効化する。ALL_STORES はフィルタ無効＝全店可視。授権集合を解決できない呼び出しは fail-closed に {@link
  * AccessDeniedException} で拒否する。{@link StoreFilterEnable} と同型の {@code @Order} 指定（トランザクション advisor
  * との相対順序）を逐字踏襲する。
@@ -26,11 +25,11 @@ import org.springframework.stereotype.Component;
 public class StoreSetFilterEnable {
 
   private final EntityManager entityManager;
+  private final StoreScopeHolder storeScopeHolder;
 
   @Around(value = "@annotation(com.kizuna.shared.storescope.StoreSetScoped)")
   public Object enableStoreSetFilter(ProceedingJoinPoint pjp) throws Throwable {
-    StoreScope scope =
-        StoreScope.fromAuthentication(SecurityContextHolder.getContext().getAuthentication());
+    StoreScope scope = storeScopeHolder.current();
     if (scope == null) {
       // fail-closed: 授権集合を解決できない呼び出しは進ませない
       throw new AccessDeniedException("店舗集合スコープを解決できません");

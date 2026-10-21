@@ -1,8 +1,6 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import {
-  activateEmergencyElevation,
-  revokeEmergencyElevation,
   listAuditEvents,
   getAuditEvent,
   createCast,
@@ -23,10 +21,7 @@ import {
 const { Given, When, Then } = createBdd();
 let staff = "";
 let auditor = "";
-let elevated = "";
 let member = "";
-let elevationId = 0;
-let auditorId = 0;
 let castId = "";
 let courseId = "";
 let receptionistId = 0;
@@ -48,14 +43,13 @@ type Expected = {
   action: string;
   before: string | null;
   after: string;
-  elevated: boolean;
   source?: string;
 };
 let expected: Expected[] = [];
 let receiptSecrets: string[] = [];
 
 Given(
-  "受注監査専用の担当と昇格セッションが用意されている",
+  "受注監査専用の担当と監査者が用意されている",
   async ({ request, $testInfo }) => {
     $testInfo.setTimeout(120000);
     expected = [];
@@ -70,10 +64,10 @@ Given(
       request,
       owner,
       "受注監査-" + suffix,
-      ["AUDIT_VIEW", "EMERGENCY_ELEVATE", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
     );
     const email = "order-auditor-" + suffix + "@example.test";
-    auditorId = await createPlatformStaffFixture(
+    await createPlatformStaffFixture(
       request,
       owner,
       email,
@@ -81,15 +75,6 @@ Given(
       [role],
     );
     auditor = await loginPlatformUser(request, email, privatePassword);
-    const session = await activateEmergencyElevation(
-      request,
-      auditor,
-      STORE1_ID,
-      "受注監査の検証",
-      privatePassword,
-    );
-    elevated = session.token;
-    elevationId = session.id;
     castId = await createCast(request, staff, "監査対象-" + suffix);
     courseId = await createCourse(request, staff, "監査コース-" + suffix);
     receptionistId = (await getOrderReceptionists(request, staff))[0].id;
@@ -104,11 +89,7 @@ Given(
   },
 );
 
-async function createOrder(
-  request: APIRequestContext,
-  token: string,
-  isElevated: boolean,
-) {
+async function createOrder(request: APIRequestContext, token: string) {
   const data = {
     cast_id: castId,
     course_id: courseId,
@@ -134,7 +115,6 @@ async function createOrder(
     action: "ORDER_CREATED",
     before: null,
     after: "CONFIRMED",
-    elevated: isElevated,
   });
   return created;
 }
@@ -155,13 +135,10 @@ async function createApplication(request: APIRequestContext) {
 }
 
 When(
-  "通常と昇格の担当で受注の作成から申請決定までを操作する",
+  "通常担当で受注の作成から申請決定までを操作する",
   async ({ request }) => {
-    for (const [token, isElevated] of [
-      [staff, false],
-      [elevated, true],
-    ] as const) {
-      const created = await createOrder(request, token, isElevated);
+    for (const token of [staff]) {
+      const created = await createOrder(request, token);
       const initial = await getOrder(request, token, STORE1_ID, created.id);
       const update = {
         expected_version: initial.version,
@@ -183,7 +160,6 @@ When(
         action: "ORDER_UPDATED",
         before: "CONFIRMED",
         after: "CONFIRMED",
-        elevated: isElevated,
       });
       const stale = await request.put(`/api/store/orders/${created.id}`, {
         headers: storeHeaders(token),
@@ -204,7 +180,6 @@ When(
         action: "ORDER_STARTED",
         before: "CONFIRMED",
         after: "IN_SERVICE",
-        elevated: isElevated,
       });
       const started = await getOrder(request, token, STORE1_ID, created.id);
       const completed = await (
@@ -222,7 +197,6 @@ When(
         action: "ORDER_COMPLETED",
         before: "IN_SERVICE",
         after: "COMPLETED",
-        elevated: isElevated,
       });
       const refused = await request.post(
         `/api/store/orders/${created.id}/cancellation`,
@@ -230,7 +204,7 @@ When(
       );
       expect(refused.status()).toBe(400);
 
-      const cancelled = await createOrder(request, token, isElevated);
+      const cancelled = await createOrder(request, token);
       const forbidden = await request.post(
         `/api/store/orders/${cancelled.id}/cancellation`,
         { headers: storeHeaders(auditor), data: { reason: privateText } },
@@ -243,7 +217,7 @@ When(
           data: { reason: privateText },
         },
       );
-      expect(crossStore.status()).toBe(isElevated ? 403 : 404);
+      expect(crossStore.status()).toBe(404);
       const cancellation = await request.post(
         `/api/store/orders/${cancelled.id}/cancellation`,
         { headers: storeHeaders(token), data: { reason: privateText } },
@@ -254,7 +228,6 @@ When(
         action: "ORDER_CANCELLED",
         before: "CONFIRMED",
         after: "CANCELLED",
-        elevated: isElevated,
       });
 
       const application = await createApplication(request);
@@ -277,14 +250,12 @@ When(
         action: "ORDER_APPLICATION_CONFIRMED",
         before: "PENDING",
         after: "CONFIRMED",
-        elevated: isElevated,
       });
       expected.push({
         target: confirmed.id,
         action: "ORDER_CREATED",
         before: null,
         after: "CONFIRMED",
-        elevated: isElevated,
         source: application,
       });
       const declinedId = await createApplication(request);
@@ -298,7 +269,6 @@ When(
         action: "ORDER_APPLICATION_DECLINED",
         before: "PENDING",
         after: "DECLINED",
-        elevated: isElevated,
       });
     }
   },
@@ -317,7 +287,6 @@ Then(
       expect(event.actor_type).toBe("STAFF");
       expect(event.store_id).toBe(Number(STORE1_ID));
       expect(event.result).toBe("SUCCEEDED");
-      expect(event.actor_id === auditorId).toBe(item.elevated);
       if (item.source) {
         expect(event.source_type).toBe("ORDER_APPLICATION");
         expect(event.source_id).toBe(item.source);
@@ -326,11 +295,6 @@ Then(
       if (item.before === null) expect(detail.before_values).toEqual({});
       else expect(detail.before_values.status).toBe(item.before);
       expect(detail.after_values.status).toBe(item.after);
-      if (item.elevated)
-        expect(detail.after_values.emergency_elevation_id).toBe(
-          String(elevationId),
-        );
-      else expect(detail.after_values.emergency_elevation_id).toBeUndefined();
       if (item.action === "ORDER_UPDATED") {
         expect(detail.before_values.pax).toBe("2");
         expect(detail.after_values.pax).toBe("3");
@@ -354,11 +318,9 @@ Then(
         privateText,
         privateMail,
         privatePassword,
-        elevated,
         ...receiptSecrets,
       ])
         expect(serialized).not.toContain(secret);
     }
-    await revokeEmergencyElevation(request, auditor, elevationId);
   },
 );

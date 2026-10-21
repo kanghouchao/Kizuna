@@ -1,8 +1,6 @@
 import { expect } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import {
-  activateEmergencyElevation,
-  revokeEmergencyElevation,
   listAuditEvents,
   getAuditEvent,
   createCustomer,
@@ -29,24 +27,20 @@ const headers = (token: string) => ({
 });
 let staff = "",
   auditor = "",
-  elevated = "",
   password = "",
   secret = "",
   otherStore = "";
-let auditorId = 0,
-  elevationId = 0;
 type Expected = {
   target: string;
   action: string;
   before: Record<string, string>;
   after: Record<string, string>;
-  elevated: boolean;
 };
 let expected: Expected[] = [];
 let nestedCustomers: string[] = [];
 
 Given(
-  "顧客監査専用の担当と昇格セッションが用意されている",
+  "顧客監査専用の担当と監査者が用意されている",
   async ({ request, $testInfo }) => {
     $testInfo.setTimeout(120000);
     expected = [];
@@ -60,26 +54,11 @@ Given(
       request,
       owner,
       `顧客監査-${suffix}`,
-      ["AUDIT_VIEW", "EMERGENCY_ELEVATE", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
     );
     const email = `customer-auditor-${suffix}@example.test`;
-    auditorId = await createPlatformStaffFixture(
-      request,
-      owner,
-      email,
-      password,
-      [role],
-    );
+    await createPlatformStaffFixture(request, owner, email, password, [role]);
     auditor = await loginPlatformUser(request, email, password);
-    const session = await activateEmergencyElevation(
-      request,
-      auditor,
-      STORE1_ID,
-      "顧客監査の検証",
-      password,
-    );
-    elevated = session.token;
-    elevationId = session.id;
     const stores = await getAuthorizedStores(request, staff);
     otherStore = String(
       stores.find((store: { id: number }) => String(store.id) !== STORE1_ID)!
@@ -89,15 +68,12 @@ Given(
 );
 
 When(
-  "通常と昇格の担当で顧客作成と編集と削除を操作する",
+  "通常担当で顧客作成と編集と削除を操作する",
   async ({ request }) => {
     const cast = await createCast(request, staff, "顧客監査担当");
     const course = await createCourse(request, staff, "顧客監査コース");
     const receptionist = (await getOrderReceptionists(request, staff))[0].id;
-    for (const [token, isElevated] of [
-      [staff, false],
-      [elevated, true],
-    ] as const) {
+    for (const token of [staff]) {
       const mark = (
         target: string,
         action: string,
@@ -109,7 +85,6 @@ When(
           action: `CUSTOMER_${action}`,
           before,
           after,
-          elevated: isElevated,
         });
       const created = (id: string) =>
         mark(
@@ -191,14 +166,14 @@ When(
             data: { name: secret },
           })
         ).status(),
-      ).toBe(isElevated ? 403 : 404);
+      ).toBe(404);
       expect(
         (
           await request.delete(path, {
             headers: { ...headers(token), "X-Store-ID": otherStore },
           })
         ).status(),
-      ).toBe(isElevated ? 403 : 404);
+      ).toBe(404);
       await deleteCustomer(request, token, customer);
       mark(
         customer,
@@ -308,20 +283,14 @@ Then("実変更と削除後の顧客監査だけが安全に照会できる", as
       expect(event.target_id).toBe(item.target);
       expect(event.target_type).toBe("CUSTOMER");
       expect(event.actor_type).toBe("STAFF");
-      expect(event.actor_id === auditorId).toBe(item.elevated);
       expect(event.store_id).toBe(Number(STORE1_ID));
       expect(event.result).toBe("SUCCEEDED");
       expect(event.source_type ?? null).toBeNull();
       expect(event.source_id ?? null).toBeNull();
       const detail = await getAuditEvent(request, auditor, event.id);
       expect(detail.before_values).toEqual(item.before);
-      expect(detail.after_values).toEqual({
-        ...item.after,
-        ...(item.elevated
-          ? { emergency_elevation_id: String(elevationId) }
-          : {}),
-      });
-      for (const value of [secret, password, elevated])
+      expect(detail.after_values).toEqual(item.after);
+      for (const value of [secret, password])
         expect(JSON.stringify(detail)).not.toContain(value);
     }
   }
@@ -339,6 +308,5 @@ Then("実変更と削除後の顧客監査だけが安全に照会できる", as
     expect(matches[0].event.source_id).toBeTruthy();
     expect(JSON.stringify(matches[0])).not.toContain(secret);
   }
-  expect(expected).toHaveLength(14);
-  await revokeEmergencyElevation(request, auditor, elevationId);
+  expect(expected).toHaveLength(7);
 });

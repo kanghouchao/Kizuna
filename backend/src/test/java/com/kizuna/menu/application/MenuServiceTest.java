@@ -7,12 +7,16 @@ import static org.mockito.Mockito.when;
 import com.kizuna.menu.api.dto.MenuVO;
 import com.kizuna.menu.domain.Menu;
 import com.kizuna.menu.domain.MenuRepository;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -28,12 +32,14 @@ class MenuServiceTest {
   @Mock private MenuRepository menuRepository;
   @Mock private SecurityContext securityContext;
   @Mock private Authentication authentication;
+  @Spy private StoreScopeHolder storeScopeHolder = new StoreScopeHolder();
 
   @InjectMocks private MenuService menuService;
 
   @AfterEach
   void tearDown() {
     SecurityContextHolder.clearContext();
+    storeScopeHolder.clear();
   }
 
   /** 遷移先を持つ葉。path の無い節は可視な子が無ければ木から落ちるため、葉には必ず path を持たせる。 */
@@ -104,6 +110,27 @@ class MenuServiceTest {
     assertThat(result).hasSize(1);
     assertThat(result.get(0).getItems()).hasSize(1);
     assertThat(result.get(0).getItems().get(0).getName()).isEqualTo("キャスト管理");
+  }
+
+  @Test
+  void getMyMenus_groupHeadingIgnoresItsOwnPermissionWhenAChildIsVisible() {
+    SecurityContextHolder.setContext(securityContext);
+    when(securityContext.getAuthentication()).thenReturn(authentication);
+    doReturn(List.of(new SimpleGrantedAuthority("PERM_CAST_MANAGE")))
+        .when(authentication)
+        .getAuthorities();
+
+    Menu root = new Menu();
+    root.setLabel("HRM");
+    root.setPermission("SOMETHING_NOBODY_HOLDS"); // 節の permission は見ない — 子に見えるものがあれば出す
+    root.setChildren(List.of(menu("キャスト管理", "CAST_MANAGE")));
+
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(root));
+
+    List<MenuVO> result = menuService.getMyMenus();
+
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getItems()).extracting(MenuVO::getName).containsExactly("キャスト管理");
   }
 
   @Test
@@ -214,13 +241,17 @@ class MenuServiceTest {
     assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
   }
 
+  /** 作用域はトークンでなく保持器（要求ごとの解決器）が持つ。null は解決不能（CAST / MEMBER 等）。 */
   private void authenticateTaskOperator(String scopeType) {
     var builder =
-        Jwt.withTokenValue("menu-fixture")
-            .header("alg", "none")
-            .subject("operator@kizuna.test")
-            .claim("storeIds", List.of(1L));
-    if (scopeType != null) builder.claim("storeScopeType", scopeType);
+        Jwt.withTokenValue("menu-fixture").header("alg", "none").subject("operator@kizuna.test");
+    StoreScope scope =
+        scopeType == null
+            ? null
+            : "ALL_STORES".equals(scopeType)
+                ? new StoreScope(true, Set.of())
+                : new StoreScope(false, Set.of(1L));
+    storeScopeHolder.install(() -> scope);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new JwtAuthenticationToken(

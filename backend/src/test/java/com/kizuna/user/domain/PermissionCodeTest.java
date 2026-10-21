@@ -2,10 +2,8 @@ package com.kizuna.user.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.shared.security.Authorities;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,131 +15,22 @@ class PermissionCodeTest {
     assertThat(PermissionCode.ORDER_MANAGE.authority()).isEqualTo("PERM_ORDER_MANAGE");
     assertThat(PermissionCode.STORE_MANAGE.authority())
         .isEqualTo(Authorities.permission(PermissionCode.STORE_MANAGE.name()));
+    assertThat(Authorities.isPermission(PermissionCode.STORE_MANAGE.authority())).isTrue();
+    assertThat(Authorities.isPermission("ROLE_CAST")).isFalse();
   }
 
+  // 目録の増減は wire 契約（frontend の union・基線 seed）に波及する製品判断なので、字面の個数で止める。
   @Test
-  @DisplayName("PLATFORM コンソールの権限はプラットフォーム管理系の 15 個")
-  void platformPermissions() {
-    assertThat(byConsole(PermissionCode.Console.PLATFORM))
-        .containsExactlyInAnyOrder(
-            PermissionCode.ADVERTISING_COST_SET_VIEW,
-            PermissionCode.ADVERTISING_COST_SET_EXPORT,
-            PermissionCode.STORE_MANAGE,
-            PermissionCode.CAST_PERSON_VIEW,
-            PermissionCode.ROLE_MANAGE,
-            PermissionCode.STAFF_ACCOUNT_MANAGE,
-            PermissionCode.SYSTEM_CONFIG_MANAGE,
-            PermissionCode.PLATFORM_MENU_VIEW,
-            PermissionCode.PLATFORM_ASSET_MANAGE,
-            PermissionCode.BENEFIT_MANAGE,
-            PermissionCode.SERVICE_ID_MANAGE,
-            PermissionCode.TASK_MANAGE,
-            PermissionCode.TASK_EXECUTE,
-            PermissionCode.AUDIT_VIEW,
-            PermissionCode.POINT_EXPIRE);
-  }
-
-  @Test
-  @DisplayName("SHARED コンソールの権限は跨店参照系の 6 個")
-  void sharedPermissions() {
-    assertThat(byConsole(PermissionCode.Console.SHARED))
-        .containsExactlyInAnyOrder(
-            PermissionCode.STORE_VIEW,
-            PermissionCode.ORDER_SET_MANAGE,
-            PermissionCode.OPERATIONAL_REPORT_VIEW,
-            PermissionCode.OPERATIONAL_REPORT_EXPORT,
-            PermissionCode.NOTIFICATION_DELIVER,
-            PermissionCode.REMUNERATION_VIEW);
-  }
-
-  @Test
-  @DisplayName("STORE コンソールの権限は店舗業務系の 34 個")
-  void storePermissions() {
-    assertThat(byConsole(PermissionCode.Console.STORE))
-        .containsExactlyInAnyOrder(
-            PermissionCode.ADVERTISING_COST_VIEW,
-            PermissionCode.ADVERTISING_COST_MANAGE,
-            PermissionCode.ADVERTISING_COST_EXPORT,
-            PermissionCode.SURVEY_VIEW,
-            PermissionCode.SURVEY_MANAGE,
-            PermissionCode.SURVEY_RECORD,
-            PermissionCode.REVIEW_VIEW,
-            PermissionCode.REVIEW_MANAGE,
-            PermissionCode.REVIEW_MODERATE,
-            PermissionCode.NOTIFICATION_VIEW,
-            PermissionCode.NOTIFICATION_MANAGE,
-            PermissionCode.NOTIFICATION_SEND,
-            PermissionCode.STORE_STAFF_MANAGE,
-            PermissionCode.ORDER_MANAGE,
-            PermissionCode.SERVICE_MANAGE,
-            PermissionCode.CUSTOMER_MANAGE,
-            PermissionCode.CUSTOMER_MERGE,
-            PermissionCode.ORDER_CORRECT,
-            PermissionCode.POINT_ADJUST,
-            PermissionCode.SHIFT_MANAGE,
-            PermissionCode.GUARANTEE_MANAGE,
-            PermissionCode.BONUS_AWARD,
-            PermissionCode.REMUNERATION_CORRECT,
-            PermissionCode.CAST_MANAGE,
-            PermissionCode.CAST_INVITE,
-            PermissionCode.CAST_FIELD_DEF_VIEW,
-            PermissionCode.CAST_FIELD_DEF_MANAGE,
-            PermissionCode.STORE_PROFILE_MANAGE,
-            PermissionCode.STORE_MENU_VIEW,
-            PermissionCode.RECRUITMENT_VIEW,
-            PermissionCode.RECRUITMENT_MANAGE,
-            PermissionCode.RECRUITMENT_DECIDE,
-            PermissionCode.RECRUITMENT_ATTACHMENT_VIEW,
-            PermissionCode.RECRUITMENT_ATTACHMENT_MANAGE);
-  }
-
-  @Test
-  @DisplayName("店舗コンソールの入場資格は STORE の権限から標識権限を除いたもの")
-  void storeConsoleCodesExcludeTheMenuMarkerAndSharedPermissions() {
-    // 着地の判定と付与時の検証が共有する述語の定義そのもの。標識権限だけ、あるいは SHARED だけのロールを
-    // 資格ありに数えると、作成はできるのにログイン後どこへも着地できないアカウントが通ってしまう。
-    assertThat(PermissionCode.STORE_MENU_VIEW.grantsStoreConsole()).isFalse();
-    assertThat(PermissionCode.STORE_VIEW.grantsStoreConsole()).isFalse();
-    assertThat(PermissionCode.ORDER_MANAGE.grantsStoreConsole()).isTrue();
-    assertThat(PermissionCode.storeConsoleCodes())
-        .contains(PermissionCode.ORDER_MANAGE.name(), PermissionCode.STORE_STAFF_MANAGE.name())
-        .doesNotContain(
-            PermissionCode.STORE_MENU_VIEW.name(),
-            PermissionCode.STORE_VIEW.name(),
-            PermissionCode.ORDER_SET_MANAGE.name(),
-            PermissionCode.ROLE_MANAGE.name());
-  }
-
-  @Test
-  @DisplayName("権限目録は 55 個で全てコンソール分類を持つ")
+  @DisplayName("権限目録は 53 個")
   void catalogIsComplete() {
-    assertThat(PermissionCode.values()).hasSize(55);
-    assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getConsole))
+    assertThat(PermissionCode.values()).hasSize(53);
+  }
+
+  @Test
+  @DisplayName("サービス ID 専用の TASK_EXECUTE は既定ロールへ授与しない")
+  void serviceOnlyPermissionHasNoDefaultRole() {
+    assertThat(PermissionCode.TASK_EXECUTE.getDefaultRoles()).isEmpty();
+    assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getDefaultRoles))
         .doesNotContainNull();
-  }
-
-  @Test
-  void advertisingPlatformReadPermissionsHaveNoStoreBridge() {
-    for (var permission :
-        List.of(
-            PermissionCode.ADVERTISING_COST_SET_VIEW, PermissionCode.ADVERTISING_COST_SET_EXPORT)) {
-      assertThat(permission.grantsStoreConsole()).isFalse();
-    }
-    assertThat(PermissionCode.ADVERTISING_COST_VIEW.grantsStoreConsole()).isTrue();
-    assertThat(PermissionCode.ADVERTISING_COST_EXPORT.grantsStoreConsole()).isTrue();
-  }
-
-  @Test
-  void manualTaskPermissionsHaveNoStoreBridge() {
-    for (var permission :
-        List.of(PermissionCode.POINT_EXPIRE, PermissionCode.NOTIFICATION_DELIVER)) {
-      assertThat(permission.grantsStoreConsole()).isFalse();
-    }
-  }
-
-  private Set<PermissionCode> byConsole(PermissionCode.Console console) {
-    return Arrays.stream(PermissionCode.values())
-        .filter(permission -> permission.getConsole() == console)
-        .collect(Collectors.toSet());
   }
 }

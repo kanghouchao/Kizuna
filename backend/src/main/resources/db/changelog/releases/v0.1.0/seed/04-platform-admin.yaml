@@ -38,4 +38,4 @@ databaseChangeLog:
             tableName: t_user_roles
             columns:
               - column: { name: user_id, valueComputed: "(SELECT id FROM t_users WHERE email = 'admin@kizuna.test')" }
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'HQ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }

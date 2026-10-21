@@ -1,5 +1,6 @@
 package com.kizuna.store.domain;
 
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -38,12 +39,11 @@ public class Store extends BaseEntity {
     this.email = email;
   }
 
-  /**
-   * 稼働中へ遷移する。
-   *
-   * <p>既に稼働中なら何もしない。遷移の引き金は店舗側利用者の店舗コンソール着地で、同じ利用者が繰り返し訪れるたびに 呼ばれるため、冪等でなければならない。
-   */
+  /** 稼働中へ遷移する。店長の明示操作であり、不可逆な遷移なので繰り返しは 400 で拒む。 */
   public void activate() {
+    if (this.status == StoreStatus.ACTIVE) {
+      throw new ServiceException("この店舗は既に稼働中です");
+    }
     this.status = StoreStatus.ACTIVE;
   }
 }

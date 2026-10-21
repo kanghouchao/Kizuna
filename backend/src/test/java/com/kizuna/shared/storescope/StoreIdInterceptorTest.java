@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.shared.exception.ServiceException;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,29 +23,20 @@ import org.springframework.web.method.HandlerMethod;
 class StoreIdInterceptorTest {
 
   private StoreContext storeContext;
+  private StoreScopeHolder storeScopeHolder;
   private StoreIdInterceptor interceptor;
 
   @BeforeEach
   void setUp() {
     storeContext = new StoreContext();
-    interceptor = new StoreIdInterceptor(storeContext);
+    storeScopeHolder = new StoreScopeHolder();
+    interceptor = new StoreIdInterceptor(storeContext, storeScopeHolder);
   }
 
   @AfterEach
   void tearDown() {
     SecurityContextHolder.clearContext();
-  }
-
-  private Jwt.Builder jwtBuilder() {
-    return Jwt.withTokenValue("token").header("alg", "HS256").subject("platform-user");
-  }
-
-  /** 認証済みだが storeId claim を持たない Jwt（プラットフォーム / legacy）を模擬する。 */
-  private void authenticateWithoutStoreId() {
-    Jwt jwt = jwtBuilder().issuer("PlatformAuth").build();
-    JwtAuthenticationToken authentication =
-        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("PLATFORM_USER")));
-    SecurityContextHolder.getContext().setAuthentication(authentication);
+    storeScopeHolder.clear();
   }
 
   /** テスト用ハンドラ: {@link StoreOptional} の有無を切り替えて HandlerMethod を組み立てるための土台。 */
@@ -59,291 +51,155 @@ class StoreIdInterceptorTest {
     return new HandlerMethod(new Handlers(), Handlers.class.getMethod(methodName));
   }
 
-  @Test
-  @DisplayName("X-Role が store かつ X-Store-ID が数値なら店舗文脈を設定すること")
-  void preHandle_setsStoreIdForStoreRole() {
+  private static MockHttpServletRequest withStoreHeader(String value) {
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "42");
+    if (value != null) request.addHeader("X-Store-ID", value);
+    return request;
+  }
 
-    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+  /** 認証済み主体を模擬する。authorities と保持器の作用域を別々に与え、権限の有無と集合の有無を独立に動かす。 */
+  private void authenticate(StoreScope scope, String... authorities) {
+    Jwt jwt = Jwt.withTokenValue("token").header("alg", "HS256").subject("user").build();
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new JwtAuthenticationToken(
+                jwt, List.of(authorities).stream().map(SimpleGrantedAuthority::new).toList()));
+    storeScopeHolder.install(() -> scope);
+  }
 
-    assertThat(result).isTrue();
+  private void assertDenied(MockHttpServletRequest request, Object handler) {
+    assertThatThrownBy(() -> interceptor.preHandle(request, new MockHttpServletResponse(), handler))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThat(storeContext.hasStoreId()).isFalse();
+  }
+
+  @Test
+  @DisplayName("未認証（公開サイト）は X-Store-ID だけで店舗文脈を名乗れること")
+  void anonymousHeaderEstablishesContext() {
+    assertThat(
+            interceptor.preHandle(
+                withStoreHeader("42"), new MockHttpServletResponse(), new Object()))
+        .isTrue();
     assertThat(storeContext.getStoreId()).isEqualTo(42L);
   }
 
   @Test
-  @DisplayName("X-Role が store でなければ店舗文脈を設定せず、@StoreOptional の無いハンドラは 403 で拒否すること")
-  void preHandle_ignoresNonStoreRole() {
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "platform");
-    request.addHeader("X-Store-ID", "42");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
-  }
-
-  @Test
-  @DisplayName("X-Store-ID が数値でなければ店舗文脈を設定せず、@StoreOptional の無いハンドラは 403 で拒否すること")
-  void preHandle_ignoresNonNumericStoreId() {
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "abc");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
-  }
-
-  @Test
-  @DisplayName("認証はあるが非 JwtAuthenticationToken（例: 匿名認証）の場合はヘッダのみで店舗文脈を設定すること")
-  void preHandle_fallsBackToHeaderWhenAuthenticationIsNotJwt() {
+  @DisplayName("非 JwtAuthenticationToken（匿名認証）も未認証と同じ扱い")
+  void anonymousAuthenticationEstablishesContextFromHeader() {
     SecurityContextHolder.getContext()
         .setAuthentication(
             new AnonymousAuthenticationToken(
                 "key", "anonymous", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "7");
 
-    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
-
-    assertThat(result).isTrue();
+    assertThat(
+            interceptor.preHandle(
+                withStoreHeader("7"), new MockHttpServletResponse(), new Object()))
+        .isTrue();
     assertThat(storeContext.getStoreId()).isEqualTo(7L);
   }
 
   @Test
-  @DisplayName("店舗文脈を解決できなくても @StoreOptional 付きハンドラは素通りし、文脈を設定しないこと")
-  void preHandle_allowsStoreOptionalHandlerWhenContextUnresolved() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    MockHttpServletResponse response = new MockHttpServletResponse();
+  @DisplayName("X-Role は読まない — 送られても店舗文脈の判定に影響しないこと")
+  void roleHeaderIsIgnored() {
+    MockHttpServletRequest request = withStoreHeader("42");
+    request.addHeader("X-Role", "platform");
 
-    boolean result = interceptor.preHandle(request, response, handlerMethod("optional"));
-
-    assertThat(result).isTrue();
-    assertThat(response.getStatus()).isEqualTo(200);
-    assertThat(storeContext.hasStoreId()).isFalse();
+    assertThat(interceptor.preHandle(request, new MockHttpServletResponse(), new Object()))
+        .isTrue();
+    assertThat(storeContext.getStoreId()).isEqualTo(42L);
   }
 
   @Test
-  @DisplayName("店舗文脈を解決できず @StoreOptional も無いハンドラは 403 で拒否すること")
-  void preHandle_rejectsNonOptionalHandlerWhenContextUnresolved() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, handlerMethod("required")))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
+  @DisplayName("X-Store-ID が数値でなければ店舗文脈は成立せず、@StoreOptional の無いハンドラは 403")
+  void nonNumericHeaderIsNoContext() throws Exception {
+    assertDenied(withStoreHeader("abc"), handlerMethod("required"));
+    assertThat(
+            interceptor.preHandle(
+                withStoreHeader("abc"), new MockHttpServletResponse(), handlerMethod("optional")))
+        .isTrue();
   }
 
   @Test
-  @DisplayName("ハンドラが HandlerMethod でなく文脈も解決できない場合は 403 で拒否すること")
-  void preHandle_rejectsNonHandlerMethodWhenContextUnresolved() {
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
-  }
-
-  @Test
-  @DisplayName("認証済みだが storeId claim が無いトークンが X-Role:store で別店舗を名乗ると 403 で拒否すること")
-  void preHandle_rejectsAuthenticatedTokenWithoutStoreIdClaimSpoofingHeader() {
-    authenticateWithoutStoreId();
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "2");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
-  }
-
-  @Test
-  @DisplayName("未認証で X-Store-ID が long 範囲を超える桁数なら 400 で拒否すること")
-  void preHandle_rejectsOverflowingStoreIdHeaderWith400() {
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "99999999999999999999");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
+  @DisplayName("long 範囲を超える桁数は 400")
+  void overflowingHeaderIs400() {
+    assertThatThrownBy(
+            () ->
+                interceptor.preHandle(
+                    withStoreHeader("99999999999999999999"),
+                    new MockHttpServletResponse(),
+                    new Object()))
         .isInstanceOf(ServiceException.class);
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
-  /**
-   * 平台トークン（storeScopeType/storeIds claim を持ち storeId claim は持たない）を店舗文脈確立可
-   * （storeBridge=true）で模擬する。storeIds には List を渡す（ALL_STORES では無視される）。
-   */
-  private void authenticateWithPlatformScope(String scopeType, Object storeIds) {
-    authenticateWithPlatformScope(true, scopeType, storeIds);
-  }
-
-  /**
-   * 平台トークンを storeBridge 指定で模擬する。storeBridge claim は StoreIdInterceptor の店舗文脈確立判定に使われる（STORE
-   * コンソール能力の保持者のみ true）。
-   */
-  private void authenticateWithPlatformScope(
-      boolean storeBridge, String scopeType, Object storeIds) {
-    Jwt jwt =
-        jwtBuilder()
-            .claim("storeBridge", storeBridge)
-            .claim("storeScopeType", scopeType)
-            .claim("storeIds", storeIds)
-            .build();
-    JwtAuthenticationToken authentication =
-        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
-    SecurityContextHolder.getContext().setAuthentication(authentication);
-  }
-
   @Test
-  @DisplayName("平台 SPECIFIC{1} が X-Store-ID:1 を名乗れば授権内として店舗文脈を設定すること")
-  void preHandle_platformSpecific_allowsAuthorizedStore() {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "1");
-
-    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
-
-    assertThat(result).isTrue();
-    assertThat(storeContext.getStoreId()).isEqualTo(1L);
-  }
-
-  @Test
-  @DisplayName("平台 SPECIFIC{1} が非授権店舗 X-Store-ID:2 を名乗ると 403 で拒否し文脈を設定しないこと")
-  void preHandle_platformSpecific_rejectsUnauthorizedStore() {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "2");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
+  @DisplayName("店舗文脈を解決できず @StoreOptional も無いハンドラは 403、@StoreOptional 付きは素通り")
+  void unresolvedContextFallsToStoreOptional() throws Exception {
+    assertDenied(withStoreHeader(null), handlerMethod("required"));
+    assertDenied(withStoreHeader(null), new Object());
+    assertThat(
+            interceptor.preHandle(
+                withStoreHeader(null), new MockHttpServletResponse(), handlerMethod("optional")))
+        .isTrue();
     assertThat(storeContext.hasStoreId()).isFalse();
   }
 
   @Test
-  @DisplayName("平台 ALL_STORES は任意の X-Store-ID を店舗文脈に設定すること")
-  void preHandle_platformAllStores_allowsAnyStore() {
-    authenticateWithPlatformScope("ALL_STORES", List.of());
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "999");
+  @DisplayName("権限保持者は本人の店舗集合に含まれる店舗を名乗れること（ALL_STORES は任意の店舗）")
+  void permissionHolderWithinScopeEstablishesContext() {
+    authenticate(new StoreScope(false, Set.of(1L)), "PERM_ORDER_MANAGE");
+    assertThat(
+            interceptor.preHandle(
+                withStoreHeader("1"), new MockHttpServletResponse(), new Object()))
+        .isTrue();
+    assertThat(storeContext.getStoreId()).isEqualTo(1L);
 
-    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
-
-    assertThat(result).isTrue();
+    storeContext.clear();
+    authenticate(new StoreScope(true, Set.of()), "PERM_STORE_VIEW");
+    assertThat(
+            interceptor.preHandle(
+                withStoreHeader("999"), new MockHttpServletResponse(), new Object()))
+        .isTrue();
     assertThat(storeContext.getStoreId()).isEqualTo(999L);
   }
 
   @Test
-  @DisplayName("平台トークンでも店舗ヘッダが無ければ @StoreOptional 無しハンドラは 403 で拒否すること")
-  void preHandle_platformScope_noHeader_rejectsRequiredHandler() throws Exception {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, handlerMethod("required")))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
+  @DisplayName("本人の店舗集合に含まれない店舗を名乗ると 403")
+  void storeOutsideScopeIsDenied() {
+    authenticate(new StoreScope(false, Set.of(1L)), "PERM_ORDER_MANAGE");
+    assertDenied(withStoreHeader("2"), new Object());
   }
 
   @Test
-  @DisplayName("平台トークンでも店舗ヘッダが無ければ @StoreOptional 付きハンドラは素通りし文脈を設定しないこと")
-  void preHandle_platformScope_noHeader_allowsStoreOptionalHandler() throws Exception {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    boolean result = interceptor.preHandle(request, response, handlerMethod("optional"));
-
-    assertThat(result).isTrue();
-    assertThat(storeContext.hasStoreId()).isFalse();
+  @DisplayName("権限（PERM_）を持たない CAST / MEMBER は店舗集合に店舗があっても 403（招待で店舗を持つ CAST を塞ぐ）")
+  void subjectWithoutPermissionIsDeniedEvenWithinScope() {
+    authenticate(new StoreScope(false, Set.of(1L)), "ROLE_CAST");
+    assertDenied(withStoreHeader("1"), new Object());
   }
 
   @Test
-  @DisplayName("平台トークンで X-Role が欠落し X-Store-ID のみなら店舗文脈は成立せず 403 で拒否すること")
-  void preHandle_platformScope_missingRoleHeader_rejects() {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of(1L));
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Store-ID", "1");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
+  @DisplayName("権限保持者でも作用域を解決できなければ 403（fail-closed）")
+  void unresolvedScopeIsDenied() {
+    authenticate(null, "PERM_ORDER_MANAGE");
+    assertDenied(withStoreHeader("1"), new Object());
   }
 
   @Test
-  @DisplayName("storeIds claim が不正な平台トークンは StoreScope が解決できず 403 で拒否すること（fail-closed）")
-  void preHandle_platformScope_invalidStoreIds_rejects() {
-    authenticateWithPlatformScope("SPECIFIC_STORES", List.of("not-a-number"));
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "1");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
+  @DisplayName("認証済みが非数値の X-Store-ID で店舗を名乗ると 403")
+  void authenticatedNonNumericHeaderIsDenied() throws Exception {
+    authenticate(new StoreScope(true, Set.of()), "PERM_ORDER_MANAGE");
+    assertDenied(withStoreHeader("abc"), handlerMethod("optional"));
   }
 
   @Test
-  @DisplayName("storeBridge=false の平台トークンは授権スコープでも店舗ヘッダを名乗ると 403 で拒否し文脈を設定しないこと（本人種別線）")
-  void preHandle_withoutStoreBridge_rejectsEvenWithAuthorizedScope() {
-    // CAST/MEMBER/HQ 系（STORE コンソール能力なし）は ALL_STORES でも過橋不可。scope.authorizes が
-    // 真になる前に storeBridge で弾き、isAuthenticated() のみの端点（POST /files 等）への店舗文脈確立を塞ぐ。
-    authenticateWithPlatformScope(false, "ALL_STORES", List.of());
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "1");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
-  }
-
-  @Test
-  @DisplayName("storeBridge=true の平台トークンは授権店舗の店舗ヘッダで店舗文脈を設定できること")
-  void preHandle_withStoreBridge_allowsAuthorizedStore() {
-    authenticateWithPlatformScope(true, "SPECIFIC_STORES", List.of(1L));
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "1");
-
-    boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
-
-    assertThat(result).isTrue();
-    assertThat(storeContext.getStoreId()).isEqualTo(1L);
-  }
-
-  @Test
-  @DisplayName("storeBridge claim を持たない旧形式の平台トークンは店舗ヘッダを名乗ると 403 で拒否すること（fail-closed）")
-  void preHandle_missingStoreBridgeClaim_rejects() {
-    // 部署前に発行された旧トークンは storeBridge claim を持たない。欠落は false と同様に扱い、
-    // 再ログインを促す（授権変更は次回ログイン反映の既定と同じ受け入れ面）。
-    Jwt jwt =
-        jwtBuilder().claim("storeScopeType", "ALL_STORES").claim("storeIds", List.of()).build();
-    JwtAuthenticationToken authentication =
-        new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
-    SecurityContextHolder.getContext().setAuthentication(authentication);
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader("X-Role", "store");
-    request.addHeader("X-Store-ID", "1");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-
-    assertThatThrownBy(() -> interceptor.preHandle(request, response, new Object()))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(storeContext.hasStoreId()).isFalse();
+  @DisplayName("認証済みでも X-Store-ID が無ければ @StoreOptional 判定へ落ちること")
+  void authenticatedWithoutHeaderFallsToStoreOptional() throws Exception {
+    authenticate(new StoreScope(true, Set.of()), "PERM_ORDER_MANAGE");
+    assertDenied(withStoreHeader(null), handlerMethod("required"));
+    assertThat(
+            interceptor.preHandle(
+                withStoreHeader(null), new MockHttpServletResponse(), handlerMethod("optional")))
+        .isTrue();
   }
 
   @Test

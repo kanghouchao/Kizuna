@@ -21,7 +21,8 @@ import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.store.application.StoreActivationService;
+import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -39,7 +40,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(PlatformBenefitRuleController.class)
-@Import({PlatformBenefitRuleControllerTest.MethodSecurityConfig.class, StoreContext.class})
+@Import({
+  PlatformBenefitRuleControllerTest.MethodSecurityConfig.class,
+  StoreContext.class,
+  StoreScopeHolder.class
+})
 class PlatformBenefitRuleControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -54,7 +59,7 @@ class PlatformBenefitRuleControllerTest {
   // HandlerInterceptor（StoreExistenceInterceptor / MaintenanceModeInterceptor）の依存。
   // @WebMvcTest は interceptor を取り込むため、ポートのモックを用意する。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean private StoreActivationService storeActivationService;
+  @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private SystemConfigService systemConfigService;
 
   private static final String VISIT_RULE_BODY =

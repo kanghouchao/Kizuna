@@ -4,8 +4,6 @@ import { randomUUID } from "node:crypto";
 import {
   ADMIN_PASSWORD,
   STORE_HEADERS,
-  activateEmergencyElevation,
-  revokeEmergencyElevation,
   createPermissionRole,
   createPlatformStaffFixture,
   createStoreStaffFixture,
@@ -36,17 +34,14 @@ let manager = "",
   ordinary = "",
   limited = "",
   auditor = "",
-  elevated = "",
   castToken = "",
   secret = "",
   enrollment = "",
   otherStore = "",
   storeId = "";
 let ordinaryId = 0,
-  auditorId = 0,
-  castId = 0,
-  elevationId = 0;
-let cases: { id: string; actorId: number; elevated: boolean }[] = [];
+  castId = 0;
+let cases: { id: string; actorId: number }[] = [];
 const active = new Set<string>();
 const actions = [
   "SERVICE_CREATED",
@@ -78,13 +73,12 @@ const headers = (token: string, store = storeId) => ({
 });
 
 Given(
-  "サービス監査専用の通常担当と本人と昇格セッションを用意する",
+  "サービス監査専用の通常担当と本人と監査者を用意する",
   async ({ request, page, $testInfo }) => {
     $testInfo.setTimeout(120000);
     cases = [];
     active.clear();
     enrollment = "";
-    elevationId = 0;
     const suffix = randomUUID(),
       password = randomUUID();
     secret = `監査へ複写しない内容-${suffix}`;
@@ -143,15 +137,10 @@ Given(
       request,
       owner,
       `サービス監査-${suffix}`,
-      [
-        "AUDIT_VIEW",
-        "EMERGENCY_ELEVATE",
-        "PLATFORM_MENU_VIEW",
-        "CAST_PERSON_VIEW",
-      ],
+      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW", "CAST_PERSON_VIEW"],
     );
-    const auditEmail = `service-elevation-${suffix}@example.test`;
-    auditorId = await createPlatformStaffFixture(
+    const auditEmail = `service-auditor-${suffix}@example.test`;
+    await createPlatformStaffFixture(
       request,
       owner,
       auditEmail,
@@ -159,15 +148,6 @@ Given(
       [auditRole],
     );
     auditor = await loginPlatformUser(request, auditEmail, password);
-    const session = await activateEmergencyElevation(
-      request,
-      auditor,
-      storeId,
-      "サービス監査の検証",
-      password,
-    );
-    elevated = session.token;
-    elevationId = session.id;
     enrollment = await createUnpublishedCast(request, manager, secret, storeId);
     const invitation = await issueCastInvitation(
       request,
@@ -202,10 +182,7 @@ async function auditIds(request: APIRequestContext) {
 }
 
 When("設定と本人選択を変更し同値と拒否条件を確認する", async ({ request }) => {
-  for (const actor of [
-    { token: ordinary, id: ordinaryId, elevated: false },
-    { token: elevated, id: auditorId, elevated: true },
-  ]) {
+  for (const actor of [{ token: ordinary, id: ordinaryId }]) {
     const id = await createSpecialService(
       request,
       actor.token,
@@ -213,7 +190,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
       storeId,
     );
     active.add(id);
-    cases.push({ id, actorId: actor.id, elevated: actor.elevated });
+    cases.push({ id, actorId: actor.id });
     const original: ServiceSettingChange = {
       name: secret,
       charge_type: "PAID",
@@ -470,7 +447,6 @@ Then(
             ...(action === "SERVICE_UPDATED"
               ? ["redacted_fields_changed"]
               : []),
-            ...(item.elevated ? ["emergency_elevation_id"] : []),
           ];
           expect(Object.keys(detail.after_values).sort()).toEqual(keys.sort());
           expect(Object.keys(detail.before_values).sort()).toEqual(
@@ -488,10 +464,6 @@ Then(
           if (action === "SERVICE_UPDATED")
             expect(detail.after_values.redacted_fields_changed).toBe(
               revision === 2 ? "name" : "charge_type,price,remuneration",
-            );
-          if (item.elevated)
-            expect(detail.after_values.emergency_elevation_id).toBe(
-              String(elevationId),
             );
           const history = await listServiceRevisions(
             request,
@@ -570,6 +542,4 @@ After({ tags: "@service-audit" }, async ({ request }) => {
   }
   active.clear();
   if (enrollment) await withdrawCast(request, manager, enrollment, storeId);
-  if (elevationId)
-    await revokeEmergencyElevation(request, auditor, elevationId);
 });

@@ -1,8 +1,6 @@
 import { expect } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import {
-  activateEmergencyElevation,
-  revokeEmergencyElevation,
   listAuditEvents,
   getAuditEvent,
   mergeCustomers,
@@ -26,19 +24,15 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 const headers = (token: string) => ({ ...STORE_HEADERS, ...bearer(token) });
 let staff = "",
   auditor = "",
-  elevated = "",
   privateValue = "",
   privateEvidence = "",
   password = "",
   otherStore = "";
-let auditorId = 0,
-  elevationId = 0;
 type Expected = {
   target: string;
   action: string;
   before: Record<string, string> | null;
   after: Record<string, string>;
-  elevated: boolean;
   group?: string;
 };
 let expected: Expected[] = [];
@@ -53,7 +47,7 @@ const actions = [
 ];
 
 Given(
-  "連絡先監査専用の担当と昇格セッションが用意されている",
+  "連絡先監査専用の担当と監査者が用意されている",
   async ({ request, $testInfo }) => {
     $testInfo.setTimeout(120000);
     expected = [];
@@ -68,26 +62,11 @@ Given(
       request,
       owner,
       `連絡先監査-${suffix}`,
-      ["AUDIT_VIEW", "EMERGENCY_ELEVATE", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
     );
     const email = `contact-auditor-${suffix}@example.test`;
-    auditorId = await createPlatformStaffFixture(
-      request,
-      owner,
-      email,
-      password,
-      [role],
-    );
+    await createPlatformStaffFixture(request, owner, email, password, [role]);
     auditor = await loginPlatformUser(request, email, password);
-    const session = await activateEmergencyElevation(
-      request,
-      auditor,
-      STORE1_ID,
-      "連絡先監査の検証",
-      password,
-    );
-    elevated = session.token;
-    elevationId = session.id;
     const stores = await getAuthorizedStores(request, staff);
     otherStore = String(
       stores.find((store: { id: number }) => String(store.id) !== STORE1_ID)!
@@ -97,12 +76,9 @@ Given(
 );
 
 When(
-  "通常と昇格の担当で連絡先の編集と許諾と優先切替を操作する",
+  "通常担当で連絡先の編集と許諾と優先切替を操作する",
   async ({ request }) => {
-    for (const [token, isElevated] of [
-      [staff, false],
-      [elevated, true],
-    ] as const) {
+    for (const token of [staff]) {
       const mark = (
         target: string,
         action: string,
@@ -115,8 +91,7 @@ When(
           action: `CUSTOMER_CONTACT_${action}`,
           before,
           after,
-          elevated: isElevated,
-          group: group ? `${isElevated}-${group}` : undefined,
+          group,
         });
       const customer = await createCustomer(request, token, privateEvidence, [
         { type: "EMAIL", value: privateValue },
@@ -196,7 +171,7 @@ When(
             headers: { ...headers(token), "X-Store-ID": otherStore },
           })
         ).status(),
-      ).toBe(isElevated ? 403 : 404);
+      ).toBe(404);
       expect(
         (
           await request.put(`${path}/permissions/BUSINESS`, {
@@ -324,7 +299,6 @@ Then(
           event = events[index];
         expect(event.target_id).toBe(item.target);
         expect(event.actor_type).toBe("STAFF");
-        expect(event.actor_id === auditorId).toBe(item.elevated);
         expect(event.store_id).toBe(Number(STORE1_ID));
         expect(event.result).toBe("SUCCEEDED");
         expect(event.source_type).toBe("CUSTOMER_CONTACT_HISTORY");
@@ -338,11 +312,6 @@ Then(
         else expect(detail.before_values).toMatchObject(item.before);
         expect(detail.after_values).toMatchObject(item.after);
         expect(detail.after_values.operation_id).toBeTruthy();
-        if (item.elevated)
-          expect(detail.after_values.emergency_elevation_id).toBe(
-            String(elevationId),
-          );
-        else expect(detail.after_values.emergency_elevation_id).toBeUndefined();
         if (item.group) {
           const group = operations.get(item.group) ?? new Set<string>();
           group.add(detail.after_values.operation_id);
@@ -352,12 +321,7 @@ Then(
           expect(Number(detail.after_values.version)).toBeGreaterThan(
             Number(detail.before_values.version),
           );
-        for (const secret of [
-          privateValue,
-          privateEvidence,
-          password,
-          elevated,
-        ])
+        for (const secret of [privateValue, privateEvidence, password])
           expect(JSON.stringify(detail)).not.toContain(secret);
         const safe = new Set([
           "version",
@@ -372,7 +336,6 @@ Then(
           "purpose",
           "source_contact_id",
           "redacted_fields_changed",
-          "emergency_elevation_id",
         ]);
         expect(
           Object.keys(detail.before_values).every((key) => safe.has(key)),
@@ -382,9 +345,8 @@ Then(
         ).toBe(true);
       }
     }
-    expect(historyIds.size).toBe(24);
-    expect(operations.size).toBe(6);
+    expect(historyIds.size).toBe(12);
+    expect(operations.size).toBe(3);
     for (const group of operations.values()) expect(group.size).toBe(1);
-    await revokeEmergencyElevation(request, auditor, elevationId);
   },
 );

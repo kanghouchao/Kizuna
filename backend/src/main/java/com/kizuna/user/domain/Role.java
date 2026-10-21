@@ -19,7 +19,8 @@ import org.hibernate.annotations.BatchSize;
  * ロール集約（RBAC）。権限（{@link Permission}）の束であり、担当店舗集合は持たない — 見える範囲はユーザー側の StoreScope が決める。ユーザーへの授与は
  * {@link User} 側がロール ID の集合で保持する（跨集約 ID 参照）。
  *
- * <p>平台既定ロール（{@code systemRole=true}）は播種で投入され、名称・権限の変更と削除を拒否する。利用者は自作ロールを API から自由に追加・改廃できる。
+ * <p>平台既定ロール（{@code systemRole=true}）は播種で投入され、改名と削除を拒否する。権限は管理者が編集できる — 既定授与は初期値であって
+ * 運用の正本ではない。利用者は自作ロールを API から自由に追加・改廃できる。
  *
  * <p>本ロールは Spring Security の {@code ROLE_*} authority（CAST / MEMBER の本人種別標識）とは別物である。ロール保持者の
  * authority は所持権限を {@code PERM_} 接頭辞で発行したものであり、ロール名は authority に現れない。
@@ -33,7 +34,7 @@ public class Role extends BaseEntity {
   @Column(nullable = false, unique = true, length = 100)
   private String name;
 
-  /** 平台既定ロール。true は名称・権限の変更と削除を拒否する。 */
+  /** 平台既定ロール。true は改名と削除を拒否する（権限の編集は許す）。 */
   @Column(name = "is_system", nullable = false)
   private Boolean systemRole = false;
 
@@ -54,24 +55,22 @@ public class Role extends BaseEntity {
     this.permissionIds = new HashSet<>(permissionIds);
   }
 
-  /** 名称を変更する。平台既定ロールは拒否する。 */
+  /** 名称を変更する。平台既定ロールは名称が播種の自然キーなので改名を拒否する（同じ名称の指定は変更ではない）。 */
   public void rename(String name) {
-    requireMutable();
     validateName(name);
+    if (name.equals(this.name)) {
+      return;
+    }
+    if (Boolean.TRUE.equals(this.systemRole)) {
+      throw new SystemRoleImmutableException("平台既定ロールは改名できません");
+    }
     this.name = name;
   }
 
-  /** 権限集合を置き換える。平台既定ロールは拒否する。 */
+  /** 権限集合を置き換える。既定ロールも編集できる。 */
   public void replacePermissions(Set<Long> permissionIds) {
-    requireMutable();
     validatePermissions(permissionIds);
     this.permissionIds = new HashSet<>(permissionIds);
-  }
-
-  private void requireMutable() {
-    if (Boolean.TRUE.equals(this.systemRole)) {
-      throw new SystemRoleImmutableException("平台既定ロールは変更できません");
-    }
   }
 
   private static void validateName(String name) {
