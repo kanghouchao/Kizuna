@@ -9,9 +9,9 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -39,7 +39,7 @@ public class MemberRegistrationService {
   /** 会員コード発行の再試行上限。数字 12 桁空間では衝突は実質発生せず、上限到達は乱数源の異常を意味する。 */
   private static final int CODE_ISSUE_ATTEMPTS = 5;
 
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final MemberRepository memberRepository;
   private final PasswordEncoder passwordEncoder;
 
@@ -47,14 +47,12 @@ public class MemberRegistrationService {
 
   @Transactional
   public MemberRegistrationResponse register(MemberRegistrationRequest request) {
-    if (platformUserRepository
-        .findByEmail(request.getEmail().toLowerCase(Locale.ROOT))
-        .isPresent()) {
+    if (userRepository.findByEmail(request.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
     }
-    PlatformUser user =
+    User user =
         saveUser(
-            PlatformUser.builder()
+            User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .displayName(request.getDisplayName())
@@ -65,7 +63,7 @@ public class MemberRegistrationService {
                 .build());
     Member member =
         memberRepository.save(
-            Member.builder().memberCode(issueCode()).platformUserId(user.getId()).build());
+            Member.builder().memberCode(issueCode()).userId(user.getId()).build());
     return new MemberRegistrationResponse(member.getMemberCode());
   }
 
@@ -77,19 +75,19 @@ public class MemberRegistrationService {
    * （400）と区別できなければならない。
    *
    * @param lineUserId LINE が検証した LINE ユーザー ID
-   * @return 作成された会員身分のプラットフォームユーザー
+   * @return 作成された会員身分のユーザー
    */
   @Transactional
-  public PlatformUser registerWithLine(String email, String displayName, String lineUserId) {
-    if (platformUserRepository.findByEmail(email.toLowerCase(Locale.ROOT)).isPresent()) {
+  public User registerWithLine(String email, String displayName, String lineUserId) {
+    if (userRepository.findByEmail(email.toLowerCase(Locale.ROOT)).isPresent()) {
       throw new ConflictException(DUPLICATE_EMAIL_MESSAGE);
     }
-    if (platformUserRepository.existsByLineUserId(lineUserId)) {
+    if (userRepository.existsByLineUserId(lineUserId)) {
       throw new ConflictException(DUPLICATE_LINE_USER_MESSAGE);
     }
-    PlatformUser user =
+    User user =
         saveLineUser(
-            PlatformUser.builder()
+            User.builder()
                 .email(email)
                 .password(passwordEncoder.encode(randomPassword()))
                 .displayName(displayName)
@@ -101,7 +99,7 @@ public class MemberRegistrationService {
                 .build());
     // flush まで行い、会員行の制約違反も呼び出し元が登録チケットを消費する前に顕在化させる
     memberRepository.saveAndFlush(
-        Member.builder().memberCode(issueCode()).platformUserId(user.getId()).build());
+        Member.builder().memberCode(issueCode()).userId(user.getId()).build());
     return user;
   }
 
@@ -124,9 +122,9 @@ public class MemberRegistrationService {
   }
 
   /** 事前チェック後の並行登録で同一 email が先に確定した場合、一意制約違反を重複登録の 400 に写像する（事前チェックだけでは競合を塞げないための最終防衛線）。 */
-  private PlatformUser saveUser(PlatformUser user) {
+  private User saveUser(User user) {
     return IntegrityViolations.translateOnFailure(
-        () -> platformUserRepository.saveAndFlush(user),
+        () -> userRepository.saveAndFlush(user),
         Map.of(DbConstraint.UQ_T_USERS_EMAIL, () -> new ServiceException(DUPLICATE_EMAIL_MESSAGE)));
   }
 
@@ -134,9 +132,9 @@ public class MemberRegistrationService {
    * LINE 登録の保存。事前チェックを擦り抜けた並行登録を、email・LINE ユーザー ID いずれの一意制約違反も 409 へ写像する
    * （どちらも「先に確定した別要求と衝突した」であり、要求自体の形式は正しい）。
    */
-  private PlatformUser saveLineUser(PlatformUser user) {
+  private User saveLineUser(User user) {
     return IntegrityViolations.translateOnFailure(
-        () -> platformUserRepository.saveAndFlush(user),
+        () -> userRepository.saveAndFlush(user),
         Map.of(
             DbConstraint.UQ_T_USERS_EMAIL,
             () -> new ConflictException(DUPLICATE_EMAIL_MESSAGE),

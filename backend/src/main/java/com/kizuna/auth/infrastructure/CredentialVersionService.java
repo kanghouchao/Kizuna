@@ -1,7 +1,7 @@
 package com.kizuna.auth.infrastructure;
 
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -32,7 +32,7 @@ public class CredentialVersionService {
 
   private final RedisTemplate<String, Object> redisTemplate;
   private final AppProperties appProperties;
-  private final PlatformUserRepository userRepository;
+  private final UserRepository userRepository;
 
   /** claim が運ぶ版を確定済みの版と照合する。主体不在は拒否し、キャッシュの遅れだけを単調書込みで埋め戻す。 */
   public boolean isCurrent(String email, long claimedVersion) {

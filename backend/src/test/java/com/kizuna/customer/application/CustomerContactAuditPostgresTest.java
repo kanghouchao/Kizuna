@@ -29,9 +29,9 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -469,10 +469,10 @@ class CustomerContactAuditPostgresTest {
     }
 
     @Bean
-    PlatformUserRepository users() {
-      var users = mock(PlatformUserRepository.class);
+    UserRepository users() {
+      var users = mock(UserRepository.class);
       var actor =
-          PlatformUser.builder()
+          User.builder()
               .email("operator@example.test")
               .password(UUID.randomUUID().toString())
               .displayName("連絡先担当")

@@ -3,8 +3,8 @@ package com.kizuna;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.user.application.CredentialOperations;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserCredentialsChanged;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import java.util.ArrayList;
@@ -17,8 +17,8 @@ class CredentialOperationsBoundaryTests {
   void credentialMutationsAndEventConstructionCannotBypassOperations() {
     var protectedOperations =
         Map.of(
-            PlatformUser.class.getName(), Set.of("stop", "changePassword", "invalidateSessions"),
-            PlatformUserCredentialsChanged.class.getName(), Set.of("<init>"));
+            User.class.getName(), Set.of("stop", "changePassword", "invalidateSessions"),
+            UserCredentialsChanged.class.getName(), Set.of("<init>"));
     var classes =
         new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)

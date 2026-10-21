@@ -3,8 +3,8 @@ package com.kizuna.member.application;
 import com.kizuna.member.api.dto.MemberHomeResponse;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,17 +14,17 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberSelfService {
 
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final MemberRepository memberRepository;
 
   @Transactional(readOnly = true)
   public MemberHomeResponse home(String email) {
-    PlatformUser user =
-        platformUserRepository
+    User user =
+        userRepository
             .findByEmail(email)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     return memberRepository
-        .findByPlatformUserId(user.getId())
+        .findByUserId(user.getId())
         .map(member -> new MemberHomeResponse(member.getMemberCode(), user.getDisplayName()))
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }

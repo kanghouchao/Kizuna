@@ -26,7 +26,7 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +47,7 @@ public class CustomerContactService {
   private final CustomerRepository customers;
   private final CustomerContactRepository contacts;
   private final CustomerContactHistoryRepository histories;
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final BusinessAudit businessAudit;
 
   @StoreScoped

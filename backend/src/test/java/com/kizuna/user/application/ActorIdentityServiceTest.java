@@ -6,8 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,21 +18,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ActorIdentityServiceTest {
 
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
   @InjectMocks private ActorIdentityService service;
 
   @Test
   void resolvesAuthenticatedEmailToUserId() {
-    PlatformUser user = mock(PlatformUser.class);
+    User user = mock(User.class);
     when(user.getId()).thenReturn(42L);
-    when(platformUserRepository.findByEmail("actor@kizuna.test")).thenReturn(Optional.of(user));
+    when(userRepository.findByEmail("actor@kizuna.test")).thenReturn(Optional.of(user));
 
     assertThat(service.requireUserId("actor@kizuna.test")).isEqualTo(42L);
   }
 
   @Test
   void rejectsMissingPrincipal() {
-    when(platformUserRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.requireUserId("missing@kizuna.test"))
         .isInstanceOf(StaleSessionException.class)

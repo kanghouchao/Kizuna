@@ -13,7 +13,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +39,7 @@ class CredentialVersionServiceTest {
 
   @Mock private RedisTemplate<String, Object> redisTemplate;
 
-  @Mock private PlatformUserRepository userRepository;
+  @Mock private UserRepository userRepository;
 
   private CredentialVersionService service;
 

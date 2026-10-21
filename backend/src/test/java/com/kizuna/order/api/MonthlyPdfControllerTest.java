@@ -119,9 +119,9 @@ class MonthlyPdfControllerTest {
     when(query.personName(1L, 34L)).thenReturn("源氏名さくら");
     when(self.storeName(34L, 1L)).thenReturn("日本語店舗");
     when(actors.requireUserId("actor")).thenReturn(12L);
-    var person = Cast.builder().platformUserId(12L).realName("印刷禁止の本名").build();
+    var person = Cast.builder().userId(12L).realName("印刷禁止の本名").build();
     person.setId(34L);
-    when(people.findByPlatformUserId(12L)).thenReturn(Optional.of(person));
+    when(people.findByUserId(12L)).thenReturn(Optional.of(person));
     rows(0);
   }
 

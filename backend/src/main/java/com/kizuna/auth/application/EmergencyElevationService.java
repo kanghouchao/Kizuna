@@ -3,7 +3,7 @@ package com.kizuna.auth.application;
 import com.kizuna.auth.api.dto.EmergencyElevationActivationResponse;
 import com.kizuna.auth.api.dto.EmergencyElevationSummaryResponse;
 import com.kizuna.auth.api.dto.Token;
-import com.kizuna.auth.infrastructure.PlatformUserDetails;
+import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
@@ -16,8 +16,8 @@ import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
 import com.kizuna.user.domain.EmergencyElevationView;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -38,7 +38,7 @@ public class EmergencyElevationService {
 
   private final BusinessAudit businessAudit;
   private final EmergencyElevationRepository elevationRepository;
-  private final PlatformUserRepository userRepository;
+  private final UserRepository userRepository;
   private final PlatformAuthService authService;
   private final AuthenticationManager authenticationManager;
   private final CredentialOperations credentialOperations;
@@ -56,7 +56,7 @@ public class EmergencyElevationService {
   @Transactional
   public EmergencyElevationActivationResponse activate(
       String operatorEmail, Long targetStoreId, String reason, String rawPassword) {
-    PlatformUser operator = reauthenticate(operatorEmail, rawPassword);
+    User operator = reauthenticate(operatorEmail, rawPassword);
     EmergencyElevation elevation =
         persist(
             EmergencyElevation.activate(
@@ -77,7 +77,7 @@ public class EmergencyElevationService {
         elevationRepository
             .findById(elevationId)
             .orElseThrow(() -> new NotFoundException("指定された緊急昇格が見つかりません"));
-    PlatformUser revoker =
+    User revoker =
         userRepository
             .findByEmail(operatorEmail)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
@@ -104,7 +104,7 @@ public class EmergencyElevationService {
             });
 
     // 発動者の行は外部キー（NO ACTION）が存在を保証する。引けないのは実装欠陥なので大きく失敗させる。
-    PlatformUser activator =
+    User activator =
         userRepository
             .findById(elevation.getActivatedBy())
             .orElseThrow(
@@ -209,12 +209,12 @@ public class EmergencyElevationService {
    * 発動直前の再認証。判定は AuthenticationManager に委ね、失敗はログインと同じ経路・同じ 401 で抜ける （パスワードの正誤オラクルを新設しない）。email
    * の小文字正規化もログインと揃える。
    */
-  private PlatformUser reauthenticate(String email, String rawPassword) {
+  private User reauthenticate(String email, String rawPassword) {
     Authentication authentication =
         authenticationManager.authenticate(
             UsernamePasswordAuthenticationToken.unauthenticated(
                 email.toLowerCase(Locale.ROOT), rawPassword));
-    return ((PlatformUserDetails) authentication.getPrincipal()).getPlatformUser();
+    return ((UserPrincipal) authentication.getPrincipal()).getUser();
   }
 
   /** 記録を書いて id を確定させる。claim に載せる id が要るので、commit を待たず flush する。 */

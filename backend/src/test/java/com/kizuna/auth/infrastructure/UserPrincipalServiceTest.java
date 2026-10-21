@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Optional;
 import java.util.Set;
@@ -19,16 +19,16 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
-class PlatformUserDetailsServiceTest {
+class UserPrincipalServiceTest {
 
-  @Mock private PlatformUserRepository userRepository;
+  @Mock private UserRepository userRepository;
 
-  @InjectMocks private PlatformUserDetailsService service;
+  @InjectMocks private UserPrincipalService service;
 
   @Test
-  void loadUserByUsername_existingEmail_returnsUserDetailsWrappingPlatformUser() {
-    PlatformUser user =
-        PlatformUser.builder()
+  void loadUserByUsername_existingEmail_returnsUserDetailsWrappingUser() {
+    User user =
+        User.builder()
             .email("admin@kizuna.test")
             .password("stored-hash")
             .displayName("HQ管理者")
@@ -45,7 +45,7 @@ class PlatformUserDetailsServiceTest {
     assertThat(result.getUsername()).isEqualTo("admin@kizuna.test");
     assertThat(result.getPassword()).isEqualTo("stored-hash");
     assertThat(result.isEnabled()).isTrue();
-    assertThat(((PlatformUserDetails) result).getPlatformUser()).isSameAs(user);
+    assertThat(((UserPrincipal) result).getUser()).isSameAs(user);
   }
 
   @Test

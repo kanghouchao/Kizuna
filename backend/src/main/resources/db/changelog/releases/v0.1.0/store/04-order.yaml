@@ -279,7 +279,7 @@ databaseChangeLog:
             referencedColumnNames: id
             onDelete: CASCADE
         - addForeignKeyConstraint:
-            constraintName: fk_t_orders_receptionist_platform_user
+            constraintName: fk_t_orders_receptionist_user
             baseTableName: t_orders
             baseColumnNames: receptionist_id
             referencedTableName: t_users

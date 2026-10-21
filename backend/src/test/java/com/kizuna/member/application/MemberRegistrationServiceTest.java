@@ -15,9 +15,9 @@ import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.util.Optional;
@@ -36,7 +36,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @ExtendWith(MockitoExtension.class)
 class MemberRegistrationServiceTest {
 
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
   @Mock private MemberRepository memberRepository;
   @Mock private PasswordEncoder passwordEncoder;
 
@@ -50,9 +50,9 @@ class MemberRegistrationServiceTest {
     return request;
   }
 
-  private PlatformUser savedUser(long id) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private User savedUser(long id) {
+    User user =
+        User.builder()
             .email("member@example.com")
             .password("encoded")
             .displayName("会員 花子")
@@ -68,10 +68,10 @@ class MemberRegistrationServiceTest {
   @Test
   @DisplayName("登録は MEMBER 身分（ロールなし・紐づけ店舗なし）と数字 12 桁の会員コード付き会員を作成する")
   void registerCreatesMemberIdentityAndMemberWithCode() {
-    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
     when(passwordEncoder.encode("password123")).thenReturn("encoded");
-    ArgumentCaptor<PlatformUser> userCaptor = ArgumentCaptor.forClass(PlatformUser.class);
-    when(platformUserRepository.saveAndFlush(userCaptor.capture())).thenReturn(savedUser(10L));
+    ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+    when(userRepository.saveAndFlush(userCaptor.capture())).thenReturn(savedUser(10L));
     when(memberRepository.existsByMemberCode(anyString())).thenReturn(false);
     ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
     when(memberRepository.save(memberCaptor.capture()))
@@ -79,14 +79,14 @@ class MemberRegistrationServiceTest {
 
     MemberRegistrationResponse response = service.register(request());
 
-    PlatformUser user = userCaptor.getValue();
+    User user = userCaptor.getValue();
     assertThat(user.getUserType()).isEqualTo(UserType.MEMBER);
     assertThat(user.getRoleIds()).isEmpty();
     assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(user.getStoreIds()).isEmpty();
     assertThat(user.getPassword()).isEqualTo("encoded");
     Member member = memberCaptor.getValue();
-    assertThat(member.getPlatformUserId()).isEqualTo(10L);
+    assertThat(member.getUserId()).isEqualTo(10L);
     assertThat(member.getMemberCode()).matches("\\d{12}");
     assertThat(response.memberCode()).isEqualTo(member.getMemberCode());
   }
@@ -94,21 +94,20 @@ class MemberRegistrationServiceTest {
   @Test
   @DisplayName("既存 email の登録は 400 系例外で拒否し、身分・会員とも作成しない")
   void registerRejectsDuplicateEmail() {
-    when(platformUserRepository.findByEmail("member@example.com"))
-        .thenReturn(Optional.of(savedUser(10L)));
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.of(savedUser(10L)));
 
     assertThatThrownBy(() -> service.register(request())).isInstanceOf(ServiceException.class);
 
-    verify(platformUserRepository, never()).saveAndFlush(any());
+    verify(userRepository, never()).saveAndFlush(any());
     verify(memberRepository, never()).save(any());
   }
 
   @Test
   @DisplayName("並行登録の一意制約違反（事前チェック通過後）は重複登録の 400 系例外に写像する")
   void registerMapsEmailConstraintViolationToServiceException() {
-    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
     when(passwordEncoder.encode("password123")).thenReturn("encoded");
-    when(platformUserRepository.saveAndFlush(any()))
+    when(userRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
@@ -125,11 +124,11 @@ class MemberRegistrationServiceTest {
   @Test
   @DisplayName("LINE 登録は MEMBER 身分に LINE ユーザー ID を持たせ、推測不能な乱数パスワードで作成する")
   void registerWithLineCreatesMemberIdentityWithLineUserId() {
-    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
-    when(platformUserRepository.existsByLineUserId("U-line-1")).thenReturn(false);
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(userRepository.existsByLineUserId("U-line-1")).thenReturn(false);
     when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
-    ArgumentCaptor<PlatformUser> userCaptor = ArgumentCaptor.forClass(PlatformUser.class);
-    when(platformUserRepository.saveAndFlush(userCaptor.capture())).thenReturn(savedUser(10L));
+    ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+    when(userRepository.saveAndFlush(userCaptor.capture())).thenReturn(savedUser(10L));
     when(memberRepository.existsByMemberCode(anyString())).thenReturn(false);
     ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
     when(memberRepository.saveAndFlush(memberCaptor.capture()))
@@ -137,7 +136,7 @@ class MemberRegistrationServiceTest {
 
     service.registerWithLine("member@example.com", "会員 花子", "U-line-1");
 
-    PlatformUser user = userCaptor.getValue();
+    User user = userCaptor.getValue();
     assertThat(user.getUserType()).isEqualTo(UserType.MEMBER);
     assertThat(user.getLineUserId()).isEqualTo("U-line-1");
     assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
@@ -152,35 +151,34 @@ class MemberRegistrationServiceTest {
   @Test
   @DisplayName("LINE 登録の重複 email は 409 系例外で拒否する（入力形式の誤りと区別する）")
   void registerWithLineRejectsDuplicateEmailWithConflict() {
-    when(platformUserRepository.findByEmail("member@example.com"))
-        .thenReturn(Optional.of(savedUser(10L)));
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.of(savedUser(10L)));
 
     assertThatThrownBy(() -> service.registerWithLine("member@example.com", "会員 花子", "U-line-1"))
         .isInstanceOf(ConflictException.class);
 
-    verify(platformUserRepository, never()).saveAndFlush(any());
+    verify(userRepository, never()).saveAndFlush(any());
     verify(memberRepository, never()).save(any());
   }
 
   @Test
   @DisplayName("既に連携済みの LINE ユーザー ID での登録は 409 系例外で拒否する")
   void registerWithLineRejectsAlreadyLinkedLineUser() {
-    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
-    when(platformUserRepository.existsByLineUserId("U-line-1")).thenReturn(true);
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(userRepository.existsByLineUserId("U-line-1")).thenReturn(true);
 
     assertThatThrownBy(() -> service.registerWithLine("member@example.com", "会員 花子", "U-line-1"))
         .isInstanceOf(ConflictException.class);
 
-    verify(platformUserRepository, never()).saveAndFlush(any());
+    verify(userRepository, never()).saveAndFlush(any());
   }
 
   @Test
   @DisplayName("並行 LINE 登録の LINE ユーザー ID 一意制約違反は 409 系例外へ写像する（生の 500 にしない）")
   void registerWithLineMapsLineUserConstraintViolationToConflict() {
-    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
-    when(platformUserRepository.existsByLineUserId("U-line-1")).thenReturn(false);
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(userRepository.existsByLineUserId("U-line-1")).thenReturn(false);
     when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
-    when(platformUserRepository.saveAndFlush(any()))
+    when(userRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
@@ -198,10 +196,10 @@ class MemberRegistrationServiceTest {
   @Test
   @DisplayName("並行 LINE 登録の email 一意制約違反も 409 系例外へ写像する")
   void registerWithLineMapsEmailConstraintViolationToConflict() {
-    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
-    when(platformUserRepository.existsByLineUserId("U-line-1")).thenReturn(false);
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(userRepository.existsByLineUserId("U-line-1")).thenReturn(false);
     when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
-    when(platformUserRepository.saveAndFlush(any()))
+    when(userRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
                 "save failed",
@@ -217,9 +215,9 @@ class MemberRegistrationServiceTest {
   @Test
   @DisplayName("会員コードが衝突した場合は再生成して未使用のコードを採用する")
   void registerRetriesCodeGenerationOnCollision() {
-    when(platformUserRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
     when(passwordEncoder.encode("password123")).thenReturn("encoded");
-    when(platformUserRepository.saveAndFlush(any())).thenReturn(savedUser(10L));
+    when(userRepository.saveAndFlush(any())).thenReturn(savedUser(10L));
     when(memberRepository.existsByMemberCode(anyString())).thenReturn(true, false);
     when(memberRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 

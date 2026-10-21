@@ -10,24 +10,24 @@ import org.junit.jupiter.api.Test;
 class MemberTest {
 
   @Test
-  @DisplayName("会員コードとプラットフォームユーザー ID を持って構築できる")
-  void buildsWithCodeAndPlatformUserId() {
-    Member member = Member.builder().memberCode("123456789012").platformUserId(7L).build();
+  @DisplayName("会員コードとユーザー ID を持って構築できる")
+  void buildsWithCodeAndUserId() {
+    Member member = Member.builder().memberCode("123456789012").userId(7L).build();
 
     assertThat(member.getMemberCode()).isEqualTo("123456789012");
-    assertThat(member.getPlatformUserId()).isEqualTo(7L);
+    assertThat(member.getUserId()).isEqualTo(7L);
   }
 
   @Test
   @DisplayName("会員コードが空だと不変条件違反で例外")
   void blankMemberCodeThrows() {
-    assertThatThrownBy(() -> Member.builder().memberCode(" ").platformUserId(7L).build())
+    assertThatThrownBy(() -> Member.builder().memberCode(" ").userId(7L).build())
         .isInstanceOf(InvalidMemberException.class);
   }
 
   @Test
-  @DisplayName("プラットフォームユーザー ID が無いと不変条件違反で例外")
-  void missingPlatformUserIdThrows() {
+  @DisplayName("ユーザー ID が無いと不変条件違反で例外")
+  void missingUserIdThrows() {
     assertThatThrownBy(() -> Member.builder().memberCode("123456789012").build())
         .isInstanceOf(InvalidMemberException.class);
   }
@@ -35,7 +35,7 @@ class MemberTest {
   @Test
   @DisplayName("新規会員は最低位の BRONZE から始まる（builder が指定できる余地を持たない）")
   void newMemberStartsAtBronze() {
-    Member member = Member.builder().memberCode("123456789012").platformUserId(7L).build();
+    Member member = Member.builder().memberCode("123456789012").userId(7L).build();
 
     assertThat(member.getRank()).isEqualTo(MemberRank.BRONZE);
   }
@@ -43,7 +43,7 @@ class MemberTest {
   @Test
   @DisplayName("昇格は上位へのみ通り、同格・降格・null は不変条件違反で例外")
   void promoteToRejectsAnythingButAnUpgrade() {
-    Member member = Member.builder().memberCode("123456789012").platformUserId(7L).build();
+    Member member = Member.builder().memberCode("123456789012").userId(7L).build();
     member.promoteTo(MemberRank.GOLD);
 
     assertThat(member.getRank()).isEqualTo(MemberRank.GOLD);

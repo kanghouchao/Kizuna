@@ -27,10 +27,10 @@ import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.LineAlreadyLinkedException;
 import com.kizuna.user.domain.PermissionRepository;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.util.Optional;
@@ -58,7 +58,7 @@ class LineAuthServiceTest {
   @Mock private LineChannelResolver channelResolver;
   @Mock private LineApiClient lineApiClient;
   @Mock private LineRegistrationTicketStore ticketStore;
-  @Mock private PlatformUserRepository userRepository;
+  @Mock private UserRepository userRepository;
   @Mock private MemberRegistrationService memberRegistrationService;
   @Mock private PlatformAuthService authService;
   @Mock private PlatformJwtIssuer jwtIssuer;
@@ -81,8 +81,8 @@ class LineAuthServiceTest {
     return request;
   }
 
-  private static PlatformUser member(String email) {
-    return PlatformUser.builder()
+  private static User member(String email) {
+    return User.builder()
         .email(email)
         .password("hash")
         .displayName("会員太郎")
@@ -121,7 +121,7 @@ class LineAuthServiceTest {
   @DisplayName("連携済み LINE ユーザーはパスワードログインと同一の発行経路でトークンを得る")
   void loginWithLinkedLineUserIssuesToken() {
     stubVerifiedIdentity();
-    PlatformUser user = member("member@kizuna.test");
+    User user = member("member@kizuna.test");
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(user));
     when(authService.issueTokenFor(user)).thenReturn(TOKEN);
 
@@ -166,7 +166,7 @@ class LineAuthServiceTest {
   @DisplayName("停止済みアカウントの LINE ログインはパスワードログインと同じく 401 相当で拒否する")
   void loginWithDisabledLinkedUserIsRejected() {
     stubVerifiedIdentity();
-    PlatformUser user = member("member@kizuna.test");
+    User user = member("member@kizuna.test");
     user.stop();
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(user));
 
@@ -188,7 +188,7 @@ class LineAuthServiceTest {
   @DisplayName("登録はチケット裏の LINE ユーザー ID で会員を作り、成功時のみチケットを消費してトークンを発行する")
   void registerConsumesTicketAndIssuesToken() {
     when(ticketStore.peek("ticket-1")).thenReturn(Optional.of("U-line-1"));
-    PlatformUser created = member("member@kizuna.test");
+    User created = member("member@kizuna.test");
     when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
         .thenReturn(created);
     when(authService.issueTokenFor(created)).thenReturn(TOKEN);
@@ -224,7 +224,7 @@ class LineAuthServiceTest {
   @DisplayName("連携は現在の認証主体に結び付ける")
   void linkAttachesLineUserToAuthenticatedUser() {
     stubVerifiedIdentity();
-    PlatformUser user = member("member@kizuna.test");
+    User user = member("member@kizuna.test");
     when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(user));
     when(userRepository.existsByLineUserId("U-line-1")).thenReturn(false);
 
@@ -238,7 +238,7 @@ class LineAuthServiceTest {
   @DisplayName("事前チェックを擦り抜けた並行連携は一意制約違反を 409 に写像する")
   void linkMapsConcurrentUniqueViolationToConflict() {
     stubVerifiedIdentity();
-    PlatformUser user = member("member@kizuna.test");
+    User user = member("member@kizuna.test");
     when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(user));
     when(userRepository.existsByLineUserId("U-line-1")).thenReturn(false);
     when(userRepository.saveAndFlush(user))
@@ -258,7 +258,7 @@ class LineAuthServiceTest {
   @DisplayName("連携済み本人の再連携は同じ LINE アカウントでも本人側の不変条件で拒否する（他人に取られた旨の誤った理由を返さない）")
   void relinkingAlreadyLinkedAccountReportsOwnLinkage() {
     stubVerifiedIdentity();
-    PlatformUser user = member("member@kizuna.test");
+    User user = member("member@kizuna.test");
     user.linkLine("U-line-1");
     when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(user));
 
@@ -285,7 +285,7 @@ class LineAuthServiceTest {
   void lineLoginRejectsServiceIdentity() {
     LineAuthService service = withRealTokenIssuance();
     // ドメイン不変条件が禁じる「LINE 連携済みの SERVICE」を mock で組む（不変条件は緩めない）。
-    PlatformUser serviceIdentity = mock(PlatformUser.class);
+    User serviceIdentity = mock(User.class);
     when(serviceIdentity.getUserType()).thenReturn(UserType.SERVICE);
     stubVerifiedIdentity();
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(serviceIdentity));
@@ -317,7 +317,7 @@ class LineAuthServiceTest {
   @Test
   void registerRejectsDisabledIdentityAtTokenIssuance() {
     when(ticketStore.peek("ticket-1")).thenReturn(Optional.of("U-line-1"));
-    PlatformUser user = member("member@kizuna.test");
+    User user = member("member@kizuna.test");
     user.stop();
     when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
         .thenReturn(user);
@@ -330,12 +330,8 @@ class LineAuthServiceTest {
   @Test
   void registerRejectsServiceIdentityAtTokenIssuance() {
     when(ticketStore.peek("ticket-1")).thenReturn(Optional.of("U-line-1"));
-    PlatformUser user =
-        PlatformUser.builder()
-            .userType(UserType.SERVICE)
-            .enabled(true)
-            .roleIds(Set.of(10L))
-            .build();
+    User user =
+        User.builder().userType(UserType.SERVICE).enabled(true).roleIds(Set.of(10L)).build();
     when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
         .thenReturn(user);
 

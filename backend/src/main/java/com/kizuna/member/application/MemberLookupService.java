@@ -27,12 +27,10 @@ public class MemberLookupService {
     return memberRepository.findIdentityByMemberCode(memberCode).map(MemberLookupService::toLookup);
   }
 
-  /** プラットフォームユーザーに対応する会員。会員でなければ空。 */
+  /** ユーザーに対応する会員。会員でなければ空。 */
   @Transactional(readOnly = true)
-  public Optional<MemberLookup> findByPlatformUserId(Long platformUserId) {
-    return memberRepository
-        .findIdentityByPlatformUserId(platformUserId)
-        .map(MemberLookupService::toLookup);
+  public Optional<MemberLookup> findByUserId(Long userId) {
+    return memberRepository.findIdentityByUserId(userId).map(MemberLookupService::toLookup);
   }
 
   /** 顧客統合の残高確認から確定まで、新規仕訳の挿入と会員削除を直列化する。 */

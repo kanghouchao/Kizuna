@@ -165,7 +165,7 @@ class ReviewPostgresTest {
     jdbc.update(
         "insert into t_role_permissions(role_id,permission_id) select ?,id from t_permissions where code in ('REVIEW_VIEW','REVIEW_MANAGE','REVIEW_MODERATE','ORDER_MANAGE')",
         roleId);
-    jdbc.update("insert into t_user_roles(platform_user_id,role_id) values (?,?)", actorId, roleId);
+    jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", actorId, roleId);
     auth =
         new UsernamePasswordAuthenticationToken(
             email,
@@ -181,7 +181,7 @@ class ReviewPostgresTest {
 
   @Test
   void activeElevationRechecksActorStoreExpiryAndRevocationBeforeReplay() throws Exception {
-    jdbc.update("delete from t_user_roles where platform_user_id=?", actorId);
+    jdbc.update("delete from t_user_roles where user_id=?", actorId);
     jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", actorId);
     read("", 403);
     Long elevation =

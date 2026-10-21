@@ -24,7 +24,7 @@ import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -45,7 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CastShiftRequestService {
 
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final CastEnrollmentRepository castRepository;
   private final ShiftRequestRepository shiftRequestRepository;
   private final ShiftRepository shiftRepository;
@@ -62,7 +62,7 @@ public class CastShiftRequestService {
 
     Long userId = resolveUserId(email);
     String castId =
-        castRepository.findIdsByPlatformUserIdAndStoreId(userId, request.getStoreId()).stream()
+        castRepository.findIdsByUserIdAndStoreId(userId, request.getStoreId()).stream()
             .findFirst()
             .orElseThrow(() -> new ServiceException("指定店舗に所属していません"));
 
@@ -102,7 +102,7 @@ public class CastShiftRequestService {
     validateRequestedSlot(request.getWorkDate(), request.getStartTime(), request.getEndTime());
 
     Long userId = resolveUserId(email);
-    List<String> castIds = castRepository.findIdsByPlatformUserId(userId);
+    List<String> castIds = castRepository.findIdsByUserId(userId);
     Shift shift =
         shiftRepository
             .findById(request.getShiftId())
@@ -161,7 +161,7 @@ public class CastShiftRequestService {
   public CursorPage<CastShiftRequestResponse> history(
       String email, String cursor, int requestedSize) {
     Long userId = resolveUserId(email);
-    List<String> castIds = castRepository.findIdsByPlatformUserId(userId);
+    List<String> castIds = castRepository.findIdsByUserId(userId);
     if (castIds.isEmpty()) {
       return new CursorPage<>(List.of(), null);
     }
@@ -206,7 +206,7 @@ public class CastShiftRequestService {
   }
 
   private Long resolveUserId(String email) {
-    return platformUserRepository
+    return userRepository
         .findByEmail(email)
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
         .getId();

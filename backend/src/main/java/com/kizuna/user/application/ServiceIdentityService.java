@@ -12,11 +12,11 @@ import com.kizuna.user.api.dto.ServiceIdentitySummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleServiceIdentityUpdateException;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -40,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
  * サービスID（本人種別 SERVICE）の管理ユースケース。作成・一覧・授権変更・停止・再開を一つの面で扱う —
  * 作成が授権（ロール×店舗集合）を伴うため、授権を一切動かさないアカウント管理とは面ごと分ける（ADR 0025）。
  *
- * <p>付与できるのは自作ロールに限る。PlatformUser はロール id しか持たず is_system を参照できない（跨集約）ため、 実体不変条件でなくこの授与口で拒む。
+ * <p>付与できるのは自作ロールに限る。User はロール id しか持たず is_system を参照できない（跨集約）ため、 実体不変条件でなくこの授与口で拒む。
  */
 @Service
 @RequiredArgsConstructor
@@ -51,12 +51,12 @@ public class ServiceIdentityService {
 
   private final BusinessAudit businessAudit;
   private final CredentialOperations credentialOperations;
-  private final PlatformUserRepository repository;
+  private final UserRepository repository;
   private final RoleRepository roleRepository;
 
   @Transactional(readOnly = true)
   public Page<ServiceIdentitySummaryResponse> list(String search, Pageable pageable) {
-    Page<PlatformUser> identities = repository.findAll(identitySpec(search), pageable);
+    Page<User> identities = repository.findAll(identitySpec(search), pageable);
     Map<Long, String> roleNames =
         roleNamesOf(
             identities.getContent().stream()
@@ -79,7 +79,7 @@ public class ServiceIdentityService {
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
    */
-  private static Specification<PlatformUser> identitySpec(String search) {
+  private static Specification<User> identitySpec(String search) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.SERVICE));
@@ -95,15 +95,15 @@ public class ServiceIdentityService {
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
   public ServiceIdentityResponse get(Long id) {
-    PlatformUser user = requireServiceIdentity(id);
+    User user = requireServiceIdentity(id);
     return toResponse(user, roleNamesOf(user.getRoleIds()));
   }
 
   @Transactional
   public ServiceIdentityResponse create(ServiceIdentityCreateRequest req) {
     Map<Long, String> roleNames = requireCustomRoles(req.getRoleIds());
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .displayName(req.getDisplayName())
             .enabled(true)
             .userType(UserType.SERVICE)
@@ -126,7 +126,7 @@ public class ServiceIdentityService {
   @Transactional
   public ServiceIdentityResponse update(Long id, ServiceIdentityUpdateRequest req) {
     Map<Long, String> roleNames = requireCustomRoles(req.getRoleIds());
-    PlatformUser user = requireServiceIdentity(id);
+    User user = requireServiceIdentity(id);
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
     // ため、応答で往復させた version を明示比対して 409 で拒否する。
     if (!user.getVersion().equals(req.getVersion())) {
@@ -152,7 +152,7 @@ public class ServiceIdentityService {
    */
   @Transactional
   public void suspend(Long id) {
-    PlatformUser user = requireServiceIdentityForUpdate(id);
+    User user = requireServiceIdentityForUpdate(id);
     var before = BusinessAudit.grants(user);
     boolean wasEnabled = user.getEnabled();
     credentialOperations.stop(user);
@@ -171,7 +171,7 @@ public class ServiceIdentityService {
   /** 再開する。既に有効でも 204 で受理する（冪等）。 */
   @Transactional
   public void resume(Long id) {
-    PlatformUser user = requireServiceIdentityForUpdate(id);
+    User user = requireServiceIdentityForUpdate(id);
     var before = BusinessAudit.grants(user);
     if (!user.getEnabled()) {
       user.resume();
@@ -199,7 +199,7 @@ public class ServiceIdentityService {
   }
 
   /** サービスID管理の対象行を取り出す。本人種別が SERVICE 以外の行は、存在しても対象外として「見つからない」に倒す — 人のアカウントの在否をこの面から列挙させない。 */
-  private PlatformUser requireServiceIdentity(Long id) {
+  private User requireServiceIdentity(Long id) {
     return requireService(repository.findById(id), id);
   }
 
@@ -207,11 +207,11 @@ public class ServiceIdentityService {
    * 停止・再開用に行を押さえて取り出す。冪等 204 の約束を並行再送でも守るための行ロック — 素の読みだと両方が enabled を読んだ後に遅い側が版競合で 409
    * に化ける。事前検査で実体を読まずに最初から押さえる（読み後の昇格は版照合を伴う）。
    */
-  private PlatformUser requireServiceIdentityForUpdate(Long id) {
+  private User requireServiceIdentityForUpdate(Long id) {
     return requireService(repository.findByIdForUpdate(id), id);
   }
 
-  private static PlatformUser requireService(Optional<PlatformUser> row, Long id) {
+  private static User requireService(Optional<User> row, Long id) {
     return row.filter(user -> user.getUserType() == UserType.SERVICE)
         .orElseThrow(() -> new NotFoundException("サービスIDが見つかりません: " + id));
   }
@@ -232,7 +232,7 @@ public class ServiceIdentityService {
    * 保存時の整合性違反を制約名で分類する。店舗 FK 違反（存在しない店舗 id）は店舗エラー、ロール FK 違反（requireCustomRoles 通過後の並行ロール削除）は
    * ロール不存在エラーへ変換する（いずれも 400）。それ以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。
    */
-  private PlatformUser save(PlatformUser user) {
+  private User save(User user) {
     return IntegrityViolations.translateOnFailure(
         () -> repository.saveAndFlush(user),
         Map.of(
@@ -242,8 +242,7 @@ public class ServiceIdentityService {
             () -> new ServiceException("指定されたロールが存在しません")));
   }
 
-  private static ServiceIdentityResponse toResponse(
-      PlatformUser user, Map<Long, String> roleNames) {
+  private static ServiceIdentityResponse toResponse(User user, Map<Long, String> roleNames) {
     return new ServiceIdentityResponse(
         user.getId(),
         user.getDisplayName(),
@@ -254,8 +253,7 @@ public class ServiceIdentityService {
         user.getVersion());
   }
 
-  private static List<ServiceIdentityRoleRef> rolesOf(
-      PlatformUser user, Map<Long, String> roleNames) {
+  private static List<ServiceIdentityRoleRef> rolesOf(User user, Map<Long, String> roleNames) {
     return user.getRoleIds().stream()
         .map(id -> new ServiceIdentityRoleRef(id, roleNames.get(id)))
         .sorted(

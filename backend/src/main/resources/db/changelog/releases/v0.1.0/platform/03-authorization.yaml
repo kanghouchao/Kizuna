@@ -132,7 +132,7 @@ databaseChangeLog:
             remarks: ユーザーへのロール授与（STAFF は 1 ロール以上。兼務=複数ロール）
             columns:
               - column:
-                  name: platform_user_id
+                  name: user_id
                   type: BIGINT
                   constraints:
                     nullable: false
@@ -143,12 +143,12 @@ databaseChangeLog:
                     nullable: false
         - addPrimaryKey:
             tableName: t_user_roles
-            columnNames: platform_user_id,role_id
+            columnNames: user_id,role_id
             constraintName: pk_t_user_roles
         - addForeignKeyConstraint:
             constraintName: fk_t_user_roles_user
             baseTableName: t_user_roles
-            baseColumnNames: platform_user_id
+            baseColumnNames: user_id
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: CASCADE

@@ -144,7 +144,7 @@ class SurveyPostgresTest {
     jdbc.update(
         "insert into t_role_permissions(role_id,permission_id) select ?,id from t_permissions where code in ('SURVEY_VIEW','SURVEY_MANAGE','SURVEY_RECORD')",
         roleId);
-    jdbc.update("insert into t_user_roles(platform_user_id,role_id) values (?,?)", actorId, roleId);
+    jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", actorId, roleId);
     auth =
         new UsernamePasswordAuthenticationToken(
             email,
@@ -396,7 +396,7 @@ class SurveyPostgresTest {
   @Test
   void emergencyElevationMustStillMatchCurrentActorStoreTimeAndStatusBeforeReplay()
       throws Exception {
-    jdbc.update("delete from t_user_roles where platform_user_id=?", actorId);
+    jdbc.update("delete from t_user_roles where user_id=?", actorId);
     jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", actorId);
     read("/store/surveys", 403);
     Long elevation =
@@ -435,7 +435,7 @@ class SurveyPostgresTest {
         "update t_emergency_elevations set status='ACTIVE',revoked_by=null,revoked_at=null,activated_at=now()+interval '1 minute' where id=?",
         elevation);
     read(base, 403);
-    jdbc.update("insert into t_user_roles(platform_user_id,role_id) values (?,?)", actorId, roleId);
+    jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", actorId, roleId);
     jdbc.update("update t_users set store_scope_type='ALL_STORES' where id=?", actorId);
     read(base, 403);
   }

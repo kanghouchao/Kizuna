@@ -26,9 +26,9 @@ import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -66,7 +66,7 @@ class AttendanceServiceTest {
   @Mock private AttendanceMapper attendanceMapper;
   @Mock private ShiftRepository shiftRepository;
   @Mock private CastService castService;
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
   @Mock private BusinessDateService businessDateService;
 
   @Mock private BusinessAudit audit;
@@ -81,8 +81,8 @@ class AttendanceServiceTest {
   @InjectMocks private AttendanceService attendanceService;
 
   private void givenActor() {
-    PlatformUser actor =
-        PlatformUser.builder()
+    User actor =
+        User.builder()
             .email(ACTOR_EMAIL)
             .password("encoded")
             .displayName("店長")
@@ -93,7 +93,7 @@ class AttendanceServiceTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(ACTOR_ID);
-    when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
   }
 
   private Shift shift(String castId) {

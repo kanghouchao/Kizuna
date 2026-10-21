@@ -10,12 +10,11 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface PlatformUserRepository
-    extends JpaRepository<PlatformUser, Long>, JpaSpecificationExecutor<PlatformUser> {
-  Optional<PlatformUser> findByEmail(String email);
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
+  Optional<User> findByEmail(String email);
 
   /** 連携済み LINE ユーザー ID で身分を引く。LINE ログインが同一性の根拠にする唯一の経路。 */
-  Optional<PlatformUser> findByLineUserId(String lineUserId);
+  Optional<User> findByLineUserId(String lineUserId);
 
   /** 指定 LINE ユーザー ID が既に別の身分へ連携済みか（連携要求の事前検証）。 */
   boolean existsByLineUserId(String lineUserId);
@@ -24,16 +23,16 @@ public interface PlatformUserRepository
    * 指定した本人種別で、現店舗を授権する（ALL_STORES または個別授権店舗集合に含む）有効なユーザーを表示名昇順で取得する。店舗スコープの絞り込みを DB
    * 層で行うことで、無関係な他店舗ユーザーの ElementCollection（ロール・店舗集合）を読み込まずに済む。
    *
-   * <p>本クエリの WHERE 句は {@link PlatformUser#authorizes} と同じ条件を HQL で再表現しており、呼び出し側は必ず同条件を含む 述語（例:
+   * <p>本クエリの WHERE 句は {@link User#authorizes} と同じ条件を HQL で再表現しており、呼び出し側は必ず同条件を含む 述語（例:
    * 受付適格判定）でさらに絞り込むこと。本クエリ単体は結果を狭める方向にのみ働く事前絞り込みであり、真の条件は呼び出し側の述語が持つ
    * （二重化した表現が乖離しても、狭める方向にしか作用しないため取りこぼしはあっても漏洩はない）。
    */
   @Query(
-      "select u from PlatformUser u where u.userType = :userType and u.enabled = true"
+      "select u from User u where u.userType = :userType and u.enabled = true"
           + " and (u.storeScopeType = com.kizuna.user.domain.StoreScopeType.ALL_STORES"
           + " or :storeId member of u.storeIds)"
           + " order by u.displayName asc")
-  List<PlatformUser> findAuthorizedByUserTypeOrderByDisplayNameAsc(
+  List<User> findAuthorizedByUserTypeOrderByDisplayNameAsc(
       @Param("userType") UserType userType, @Param("storeId") Long storeId);
 
   /**
@@ -44,8 +43,8 @@ public interface PlatformUserRepository
    * とは異なり、呼び出し前に同一エンティティを読み込んでいない前提で新鮮な行を返す。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select u from PlatformUser u where u.email = :email")
-  Optional<PlatformUser> findByEmailForUpdate(@Param("email") String email);
+  @Query("select u from User u where u.email = :email")
+  Optional<User> findByEmailForUpdate(@Param("email") String email);
 
   /**
    * id でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR UPDATE）を掛ける。
@@ -54,8 +53,8 @@ public interface PlatformUserRepository
    * 版の照合で撥ねると利用者に再試行の手立てが無いため、直列化して待たせる。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select u from PlatformUser u where u.id = :id")
-  Optional<PlatformUser> findByIdForUpdate(@Param("id") Long id);
+  @Query("select u from User u where u.id = :id")
+  Optional<User> findByIdForUpdate(@Param("id") Long id);
 
   /**
    * 本人種別 STAFF の行に限り email を返す（アカウント面の対象絞りと自己停止判定の事前検査）。
@@ -64,7 +63,7 @@ public interface PlatformUserRepository
    * 直列化点で待っている間に他者が停止を確定させただけで 409 に落ちる — 冪等であるべき停止がそこで壊れる。
    */
   @Query(
-      "select u.email from PlatformUser u where u.id = :id"
+      "select u.email from User u where u.id = :id"
           + " and u.userType = com.kizuna.user.domain.UserType.STAFF")
   Optional<String> findStaffEmailById(@Param("id") Long id);
 
@@ -83,18 +82,18 @@ public interface PlatformUserRepository
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
-      "select u.id from PlatformUser u where u.enabled = true"
+      "select u.id from User u where u.enabled = true"
           + " and u.userType = com.kizuna.user.domain.UserType.STAFF"
-          + " and exists (select 1 from PlatformUser h join h.roleIds rid"
+          + " and exists (select 1 from User h join h.roleIds rid"
           + " where h.id = u.id and rid in :roleIds)"
           + " order by u.id")
   List<Long> lockEnabledRoleHolderIds(@Param("roleIds") Collection<Long> roleIds);
 
   /** 同じ母集団を押さえずに読む。{@link #lockEnabledRoleHolderIds} の後に呼ぶと、新しいスナップショットで実際の顔ぶれが返る。 */
   @Query(
-      "select u.id from PlatformUser u where u.enabled = true"
+      "select u.id from User u where u.enabled = true"
           + " and u.userType = com.kizuna.user.domain.UserType.STAFF"
-          + " and exists (select 1 from PlatformUser h join h.roleIds rid"
+          + " and exists (select 1 from User h join h.roleIds rid"
           + " where h.id = u.id and rid in :roleIds)")
   List<Long> findEnabledRoleHolderIds(@Param("roleIds") Collection<Long> roleIds);
 
@@ -102,12 +101,12 @@ public interface PlatformUserRepository
    * 資格情報の版だけをスカラー投影で返す（JWT 受理前の正本照合用）。実体を読まないのは、認証フィルタの毎要求経路で
    * ElementCollection（ロール・店舗集合）まで読み込む無駄を避けるため。
    */
-  @Query("select u.credentialVersion from PlatformUser u where u.email = :email")
+  @Query("select u.credentialVersion from User u where u.email = :email")
   Optional<Long> findCredentialVersionByEmail(@Param("email") String email);
 
   /** 指定ロールを授与されたユーザーが 1 人でも存在するか（ロール削除の事前検証）。 */
   @Query(
-      "select count(u) > 0 from com.kizuna.user.domain.PlatformUser u"
+      "select count(u) > 0 from com.kizuna.user.domain.User u"
           + " where :roleId member of u.roleIds")
   boolean existsByRoleId(@Param("roleId") Long roleId);
 }

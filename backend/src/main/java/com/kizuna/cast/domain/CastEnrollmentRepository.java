@@ -45,15 +45,15 @@ public interface CastEnrollmentRepository extends JpaRepository<CastEnrollment, 
   Optional<Long> findCastIdById(@Param("id") String id);
 
   @Query(
-      "select e.id from CastEnrollment e join com.kizuna.cast.domain.Cast c on c.id = e.castId where c.platformUserId = :userId")
-  List<String> findIdsByPlatformUserId(@Param("userId") Long userId);
+      "select e.id from CastEnrollment e join com.kizuna.cast.domain.Cast c on c.id = e.castId where c.userId = :userId")
+  List<String> findIdsByUserId(@Param("userId") Long userId);
 
   @Query(
-      "select e.id from CastEnrollment e join com.kizuna.cast.domain.Cast c on c.id = e.castId where c.platformUserId = :userId and e.storeId = :storeId and e.status <> com.kizuna.cast.domain.CastEnrollmentStatus.WITHDRAWN order by e.id")
-  List<String> findIdsByPlatformUserIdAndStoreId(
+      "select e.id from CastEnrollment e join com.kizuna.cast.domain.Cast c on c.id = e.castId where c.userId = :userId and e.storeId = :storeId and e.status <> com.kizuna.cast.domain.CastEnrollmentStatus.WITHDRAWN order by e.id")
+  List<String> findIdsByUserIdAndStoreId(
       @Param("userId") Long userId, @Param("storeId") Long storeId);
 
   @Query(
-      "select distinct e.storeId as storeId, st.name as storeName from CastEnrollment e join com.kizuna.cast.domain.Cast c on c.id = e.castId join com.kizuna.store.domain.Store st on st.id = e.storeId where c.platformUserId = :userId and e.status <> com.kizuna.cast.domain.CastEnrollmentStatus.WITHDRAWN order by st.name")
-  List<CastStoreView> findStoresByPlatformUserId(@Param("userId") Long userId);
+      "select distinct e.storeId as storeId, st.name as storeName from CastEnrollment e join com.kizuna.cast.domain.Cast c on c.id = e.castId join com.kizuna.store.domain.Store st on st.id = e.storeId where c.userId = :userId and e.status <> com.kizuna.cast.domain.CastEnrollmentStatus.WITHDRAWN order by st.name")
+  List<CastStoreView> findStoresByUserId(@Param("userId") Long userId);
 }

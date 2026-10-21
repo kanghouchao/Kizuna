@@ -19,13 +19,13 @@ import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleInUseException;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
 import com.kizuna.user.domain.StaleRoleUpdateException;
 import com.kizuna.user.domain.SystemRoleImmutableException;
+import com.kizuna.user.domain.UserRepository;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
@@ -56,7 +56,7 @@ class RoleServiceTest {
   @Mock private BusinessAudit businessAudit;
   @Mock private RoleRepository roleRepository;
   @Mock private PermissionRepository permissionRepository;
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
 
   @Mock private RoleManageHolderGuard roleManageHolderGuard;
 
@@ -341,7 +341,7 @@ class RoleServiceTest {
   void delete_customUnusedRole_deletes() {
     Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
-    when(platformUserRepository.existsByRoleId(7L)).thenReturn(false);
+    when(userRepository.existsByRoleId(7L)).thenReturn(false);
 
     service.delete(7L);
 
@@ -362,7 +362,7 @@ class RoleServiceTest {
   void delete_roleInUse_throwsConflictWithoutDeleting() {
     Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
-    when(platformUserRepository.existsByRoleId(7L)).thenReturn(true);
+    when(userRepository.existsByRoleId(7L)).thenReturn(true);
 
     assertThatThrownBy(() -> service.delete(7L)).isInstanceOf(RoleInUseException.class);
 
@@ -374,7 +374,7 @@ class RoleServiceTest {
     // 事前検証を通過した後に授与が割り込む競合。DB の RESTRICT 違反も事前検証と同じ 409 へ揃える。
     Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
-    when(platformUserRepository.existsByRoleId(7L)).thenReturn(false);
+    when(userRepository.existsByRoleId(7L)).thenReturn(false);
     doThrow(
             new DataIntegrityViolationException(
                 "delete failed",
@@ -394,7 +394,7 @@ class RoleServiceTest {
     // 無条件に 409 へ変換すると想定外の実装欠陥まで「使用中」に化けてしまう。
     Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
-    when(platformUserRepository.existsByRoleId(7L)).thenReturn(false);
+    when(userRepository.existsByRoleId(7L)).thenReturn(false);
     DataIntegrityViolationException violation =
         new DataIntegrityViolationException(
             "delete failed",

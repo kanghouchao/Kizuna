@@ -16,9 +16,9 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -60,12 +60,9 @@ class OrderAttributionCorrectionServiceTest {
   @Mock private OrderRepository orderRepository;
   @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private PointLedgerService pointLedgerService;
-  private final PlatformUserRepository platformUserRepository =
-      Mockito.mock(PlatformUserRepository.class);
+  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
-  @Spy
-  private ActorIdentityService actorIdentityService =
-      new ActorIdentityService(platformUserRepository);
+  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   @Mock private StoreContext storeContext;
 
@@ -73,8 +70,8 @@ class OrderAttributionCorrectionServiceTest {
 
   @BeforeEach
   void resolveActor() {
-    PlatformUser actor =
-        PlatformUser.builder()
+    User actor =
+        User.builder()
             .email(ACTOR_EMAIL)
             .password("encoded")
             .displayName("店長 花子")
@@ -85,9 +82,7 @@ class OrderAttributionCorrectionServiceTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(ACTOR_ID);
-    Mockito.lenient()
-        .when(platformUserRepository.findByEmail(ACTOR_EMAIL))
-        .thenReturn(Optional.of(actor));
+    Mockito.lenient().when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
     Mockito.lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
   }
 
@@ -396,7 +391,7 @@ class OrderAttributionCorrectionServiceTest {
     givenAttribution(invalidatedAttribution());
     givenGranted(100L);
     givenCorrected(0L, ATTRIBUTION_ID);
-    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
+    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);

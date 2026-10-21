@@ -27,8 +27,8 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +57,7 @@ class CastServiceTest {
   @Mock StoreRepository stores;
   @Mock CastEnrollmentStatusHistoryRepository histories;
   @Mock CastEnrollmentSnapshotRepository snapshots;
-  @Mock PlatformUserRepository users;
+  @Mock UserRepository users;
   @Mock BusinessAudit audit;
   CastService service;
 
@@ -97,8 +97,8 @@ class CastServiceTest {
   }
 
   private void actor() {
-    PlatformUser actor =
-        PlatformUser.builder()
+    User actor =
+        User.builder()
             .userType(UserType.CAST)
             .email("actor@kizuna.test")
             .password("encoded")

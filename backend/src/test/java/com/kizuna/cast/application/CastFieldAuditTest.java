@@ -23,9 +23,9 @@ import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -49,7 +49,7 @@ class CastFieldAuditTest {
   private final CastProfileRepository profiles = mock(CastProfileRepository.class);
   private final CastEnrollmentSnapshotRepository snapshots =
       mock(CastEnrollmentSnapshotRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final AuditEventRepository events = mock(AuditEventRepository.class);
   private final List<AuditEvent> recorded = new ArrayList<>();
   private CastFieldDefinitionService service;
@@ -80,7 +80,7 @@ class CastFieldAuditTest {
             profiles,
             audit);
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("operator@example.test")
             .password(UUID.randomUUID().toString())
             .displayName("監査担当")

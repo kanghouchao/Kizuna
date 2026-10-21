@@ -162,7 +162,7 @@ class StoreIsolationTests {
   private static boolean hasStoreIdColumn(Class<?> type) {
     for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
       for (Field field : c.getDeclaredFields()) {
-        // @ElementCollection の @Column は集合テーブルの列（PlatformUser.storeIds 等の授権店舗集合）であり、
+        // @ElementCollection の @Column は集合テーブルの列（User.storeIds 等の授権店舗集合）であり、
         // 本体テーブルの行識別列ではないため店舗フィルタの対象判定から除外する。
         if (field.isAnnotationPresent(ElementCollection.class)) {
           continue;

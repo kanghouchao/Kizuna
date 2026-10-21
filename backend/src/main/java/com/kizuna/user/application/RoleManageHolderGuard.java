@@ -4,9 +4,9 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -23,11 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class RoleManageHolderGuard {
   private static final String ROLE_MANAGE = PermissionCode.ROLE_MANAGE.name();
 
-  private final PlatformUserRepository repository;
+  private final UserRepository repository;
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
 
-  public void requireAfterGrantChange(PlatformUser target, Set<Long> nextRoleIds) {
+  public void requireAfterGrantChange(User target, Set<Long> nextRoleIds) {
     permissionRepository.lockIdByCode(ROLE_MANAGE);
     Set<Long> supplierIds = roleRepository.findIdsByPermissionCode(ROLE_MANAGE);
     if (target.getEnabled()
@@ -37,10 +37,10 @@ public class RoleManageHolderGuard {
     }
   }
 
-  public PlatformUser loadForSuspension(Long targetId) {
+  public User loadForSuspension(Long targetId) {
     permissionRepository.lockIdByCode(ROLE_MANAGE);
     // 目録行を待つ前に実体を読み込まず、待機中に確定した対象の状態をここで取得する。
-    PlatformUser target =
+    User target =
         repository
             .findByIdForUpdate(targetId)
             .orElseThrow(() -> new NotFoundException("アカウントが見つかりません: " + targetId));
@@ -70,7 +70,7 @@ public class RoleManageHolderGuard {
     }
   }
 
-  private void requireAnotherHolder(PlatformUser target, Set<Long> supplierIds) {
+  private void requireAnotherHolder(User target, Set<Long> supplierIds) {
     // ロック照会は待機中に変わった関連ロールを見ないため、別クエリの新しい顔ぶれで数える。
     repository.lockEnabledRoleHolderIds(supplierIds);
     List<Long> holders = repository.findEnabledRoleHolderIds(supplierIds);

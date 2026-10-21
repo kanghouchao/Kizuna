@@ -4,8 +4,8 @@ import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditChange;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 @NamedInterface("business-audit")
 @Transactional(propagation = Propagation.MANDATORY)
 public class BusinessAudit {
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final AuditWriter writer;
 
   public void recordCurrent(
@@ -67,7 +67,7 @@ public class BusinessAudit {
   }
 
   private void append(
-      PlatformUser actor,
+      User actor,
       Long storeId,
       String action,
       String targetType,
@@ -96,7 +96,7 @@ public class BusinessAudit {
             values));
   }
 
-  public static Map<String, String> grants(PlatformUser user) {
+  public static Map<String, String> grants(User user) {
     return Map.of(
         "user_type",
         user.getUserType().name(),

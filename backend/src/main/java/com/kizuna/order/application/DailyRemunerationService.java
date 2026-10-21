@@ -55,7 +55,7 @@ public class DailyRemunerationService {
     if (storeId <= 0) throw new ServiceException("店舗の指定が不正です");
     var person =
         people
-            .findByPlatformUserId(actors.requireUserId(actor))
+            .findByUserId(actors.requireUserId(actor))
             .orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
     Long personId = person.getId();
     String name = selfQuery.storeName(personId, storeId);

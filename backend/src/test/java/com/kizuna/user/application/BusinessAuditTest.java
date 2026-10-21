@@ -9,9 +9,9 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.recording.AuditChange;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Map;
 import java.util.Optional;
@@ -33,14 +33,14 @@ class BusinessAuditTest {
 
   @Test
   void requiresAuthenticatedActorAndNeverCopiesCredentialClaims() {
-    var users = mock(PlatformUserRepository.class);
+    var users = mock(UserRepository.class);
     var writer = mock(AuditWriter.class);
     var audit = new BusinessAudit(users, writer);
     assertThatThrownBy(
             () -> audit.recordCurrent(null, "ROLE_CHANGED", "ROLE", "1", Map.of(), Map.of()))
         .isInstanceOf(StaleSessionException.class);
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("operator@kizuna.test")
             .password("encoded")
             .displayName("監査担当")
@@ -75,7 +75,7 @@ class BusinessAuditTest {
   void largeExistingGrantSetsAreRetainedWithoutTruncation() {
     var stores = LongStream.rangeClosed(1, 2000).boxed().collect(Collectors.toSet());
     var user =
-        PlatformUser.builder()
+        User.builder()
             .displayName("多数店舗の担当")
             .userType(UserType.SERVICE)
             .enabled(true)

@@ -30,9 +30,9 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -58,7 +58,7 @@ class MemberOrderApplicationServiceTest {
   private static final long STORE_ID = 1L;
   private static final long OTHER_STORE_ID = 2L;
   private static final long MEMBER_ID = 100L;
-  private static final long PLATFORM_USER_ID = 50L;
+  private static final long USER_ID = 50L;
   private static final String EMAIL = "member@kizuna.test";
   private static final String MEMBER_CODE = "123456789012";
   private static final String DECLARED_NAME = "名乗り太郎";
@@ -66,12 +66,9 @@ class MemberOrderApplicationServiceTest {
 
   @Mock OrderApplicationRepository orderApplicationRepository;
   @Mock OrderApplicationIntake orderApplicationIntake;
-  private final PlatformUserRepository platformUserRepository =
-      Mockito.mock(PlatformUserRepository.class);
+  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
-  @Spy
-  private ActorIdentityService actorIdentityService =
-      new ActorIdentityService(platformUserRepository);
+  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   @Mock MemberLookupService memberLookupService;
   @Mock StoreExistenceCheck storeExistenceCheck;
@@ -86,8 +83,8 @@ class MemberOrderApplicationServiceTest {
     lenient()
         .when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of(TIMEZONE)));
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email(EMAIL)
             .password("pw")
             .displayName("会員")
@@ -97,10 +94,10 @@ class MemberOrderApplicationServiceTest {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of())
             .build();
-    user.setId(PLATFORM_USER_ID);
-    lenient().when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    user.setId(USER_ID);
+    lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     lenient()
-        .when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID))
+        .when(memberLookupService.findByUserId(USER_ID))
         .thenReturn(Optional.of(new MemberLookup(MEMBER_ID, MEMBER_CODE)));
   }
 
@@ -270,7 +267,7 @@ class MemberOrderApplicationServiceTest {
     service.withdraw(EMAIL, "a1");
 
     assertThat(own.getStatus()).isEqualTo(OrderApplicationStatus.WITHDRAWN);
-    assertThat(own.getProcessedBy()).isEqualTo(PLATFORM_USER_ID);
+    assertThat(own.getProcessedBy()).isEqualTo(USER_ID);
   }
 
   @Test
@@ -323,7 +320,7 @@ class MemberOrderApplicationServiceTest {
   @Test
   @DisplayName("会員でない主体は本人経路を使えないこと")
   void rejectsNonMemberPrincipal() {
-    when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID)).thenReturn(Optional.empty());
+    when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.list(EMAIL, null, 20))
         .isInstanceOf(StaleSessionException.class);
@@ -333,7 +330,7 @@ class MemberOrderApplicationServiceTest {
   @Test
   @DisplayName("認証主体が実在しない場合は失効セッションとして扱うこと")
   void rejectsUnknownPrincipal() {
-    when(platformUserRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+    when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.list("ghost@kizuna.test", null, 20))
         .isInstanceOf(StaleSessionException.class);

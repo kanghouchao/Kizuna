@@ -17,8 +17,8 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -44,7 +44,7 @@ public class LineAuthService {
   private final LineChannelResolver channelResolver;
   private final LineApiClient lineApiClient;
   private final LineRegistrationTicketStore ticketStore;
-  private final PlatformUserRepository userRepository;
+  private final UserRepository userRepository;
   private final MemberRegistrationService memberRegistrationService;
   private final PlatformAuthService authService;
 
@@ -77,7 +77,7 @@ public class LineAuthService {
         ticketStore
             .peek(request.getRegistrationTicket())
             .orElseThrow(() -> new ServiceException(INVALID_TICKET_MESSAGE));
-    PlatformUser user =
+    User user =
         memberRegistrationService.registerWithLine(
             request.getEmail(), request.getDisplayName(), lineUserId);
     // 消費は登録成功後 — 重複メールなどの失敗でチケットを失うと、入力を直すだけのやり直しに OAuth の再実行を強いるため。
@@ -89,7 +89,7 @@ public class LineAuthService {
   @Transactional
   public void link(String email, LineAuthorizationRequest request) {
     LineIdentity identity = verify(request);
-    PlatformUser user =
+    User user =
         userRepository
             .findByEmail(email)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
@@ -118,7 +118,7 @@ public class LineAuthService {
   }
 
   /** 連携済み身分へのトークン発行。停止済みアカウントはパスワードログインと同じく 401 で拒否する。 */
-  private LineLoginResponse issueTokenForLinkedUser(PlatformUser user) {
+  private LineLoginResponse issueTokenForLinkedUser(User user) {
     return LineLoginResponse.registered(authService.issueTokenFor(user));
   }
 }

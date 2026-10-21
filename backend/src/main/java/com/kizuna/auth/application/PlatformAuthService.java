@@ -3,17 +3,17 @@ package com.kizuna.auth.application;
 import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
-import com.kizuna.auth.infrastructure.PlatformUserDetails;
+import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,7 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PlatformAuthService {
 
-  private final PlatformUserRepository userRepository;
+  private final UserRepository userRepository;
   private final RoleRepository roleRepository;
   private final PermissionRepository permissionRepository;
   private final PasswordEncoder passwordEncoder;
@@ -64,15 +64,15 @@ public class PlatformAuthService {
     Authentication authentication =
         authenticationManager.authenticate(
             UsernamePasswordAuthenticationToken.unauthenticated(normalizedEmail, password));
-    // principal は認証成功時に自作 UserDetails が保持する PlatformUser（二次クエリを避ける）。
-    PlatformUser user = ((PlatformUserDetails) authentication.getPrincipal()).getPlatformUser();
+    // principal は認証成功時に自作 UserDetails が保持する User（二次クエリを避ける）。
+    User user = ((UserPrincipal) authentication.getPrincipal()).getUser();
 
     return issueTokenFor(user);
   }
 
   /** 本人性を確認済みの身分に通常トークンを発行する。呼び出し側はパスワード照合や LINE の id_token 検証を済ませていること。 */
   @Transactional(readOnly = true)
-  public Token issueTokenFor(PlatformUser user) {
+  public Token issueTokenFor(User user) {
     return jwtIssuer.issue(user.getEmail(), baseClaims(user, permissionsOf(user)));
   }
 
@@ -81,7 +81,7 @@ public class PlatformAuthService {
    * をそのまま渡す — 別々に 60 分を数えると監査で復元した区間と実効区間が 食い違う。資格情報の版は現在値のまま据え置き、撤回で版が進めば昇格トークンも同時に失効する（ADR 0022）。
    */
   @Transactional(readOnly = true)
-  public Token issueElevatedTokenFor(PlatformUser user, EmergencyElevation elevation) {
+  public Token issueElevatedTokenFor(User user, EmergencyElevation elevation) {
     Set<PermissionCode> permissions = permissionsOf(user);
     Map<String, Object> claims = baseClaims(user, permissions);
     claims.put("authorities", elevatedAuthorities(user, permissions));
@@ -98,7 +98,7 @@ public class PlatformAuthService {
    * 全ての発行経路が共有する適格性検査と claim の組み立て。停止中の身分と SERVICE をここで拒否し、 認証手段や昇格の有無による検査漏れ・claim の齟齬を防ぐ。SERVICE
    * の資格情報を禁じるドメイン不変条件に加え、 発行時にも種別を検査して対話ログインを拒否する。
    */
-  private Map<String, Object> baseClaims(PlatformUser user, Set<PermissionCode> permissions) {
+  private Map<String, Object> baseClaims(User user, Set<PermissionCode> permissions) {
     if (user.getUserType() == UserType.SERVICE) {
       throw new ServiceIdentityLoginException("サービスIDは対話ログインできません");
     }
@@ -125,8 +125,7 @@ public class PlatformAuthService {
    * <p>{@link PermissionCode#grantsStoreConsole()} では組まない。あれは入場資格の述語で標識権限 {@code STORE_MENU_VIEW}
    * を除くため、それで組むと店舗コンソールのメニューが一行も出ない昇格になる。
    */
-  private static List<String> elevatedAuthorities(
-      PlatformUser user, Set<PermissionCode> permissions) {
+  private static List<String> elevatedAuthorities(User user, Set<PermissionCode> permissions) {
     return Stream.concat(
             buildAuthorities(user, permissions).stream(),
             Arrays.stream(PermissionCode.values())
@@ -146,7 +145,7 @@ public class PlatformAuthService {
   /** 自己プロフィール（表示名）を更新し、更新後の me レスポンスを返す。 */
   @Transactional
   public PlatformMeResponse updateMe(String email, String displayName) {
-    PlatformUser user =
+    User user =
         userRepository
             .findByEmail(email)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
@@ -158,7 +157,7 @@ public class PlatformAuthService {
   /** パスワード変更。版の増分により当該トークンを含む全端末のセッションが失効する（要再ログイン、ADR 0022）。 */
   @Transactional
   public void changePassword(String email, String currentPassword, String newPassword) {
-    PlatformUser user =
+    User user =
         userRepository
             .findByEmail(email)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
@@ -169,7 +168,7 @@ public class PlatformAuthService {
     userRepository.save(user);
   }
 
-  private PlatformMeResponse toMeResponse(PlatformUser user) {
+  private PlatformMeResponse toMeResponse(User user) {
     Set<PermissionCode> permissions = permissionsOf(user);
     return new PlatformMeResponse(
         user.getEmail(),
@@ -189,7 +188,7 @@ public class PlatformAuthService {
    * <p>ロールは権限を id 集合で持つため、id→コード→enum の 2 段で解決する。目録行はコード側 enum の播種済み写像であり、写像できないコードは存在しない前提で {@code
    * valueOf} が fail-loud に落ちる。
    */
-  private Set<PermissionCode> permissionsOf(PlatformUser user) {
+  private Set<PermissionCode> permissionsOf(User user) {
     if (!user.getUserType().holdsRoles()) {
       return Set.of();
     }
@@ -202,7 +201,7 @@ public class PlatformAuthService {
         .collect(Collectors.toCollection(() -> EnumSet.noneOf(PermissionCode.class)));
   }
 
-  private static List<String> buildAuthorities(PlatformUser user, Set<PermissionCode> permissions) {
+  private static List<String> buildAuthorities(User user, Set<PermissionCode> permissions) {
     return switch (user.getUserType()) {
       case STAFF, SERVICE -> permissions.stream().map(PermissionCode::authority).sorted().toList();
       case CAST -> List.of("ROLE_CAST");
@@ -216,7 +215,7 @@ public class PlatformAuthService {
   }
 
   /** ログイン後の着地先。PLATFORM 権限保持者は platform 優先（兼務者のコンソール切替導線は別票）。 */
-  private static String consoleOf(PlatformUser user, Set<PermissionCode> permissions) {
+  private static String consoleOf(User user, Set<PermissionCode> permissions) {
     if (user.getUserType() != UserType.STAFF) {
       return "none";
     }

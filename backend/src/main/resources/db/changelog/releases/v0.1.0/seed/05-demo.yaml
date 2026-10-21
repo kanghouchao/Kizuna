@@ -57,7 +57,7 @@ databaseChangeLog:
             columns:
               - column:
                   {
-                    name: platform_user_id,
+                    name: user_id,
                     valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
                   }
               - column:
@@ -70,7 +70,7 @@ databaseChangeLog:
             columns:
               - column:
                   {
-                    name: platform_user_id,
+                    name: user_id,
                     valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')",
                   }
               - column:
@@ -84,7 +84,7 @@ databaseChangeLog:
             columns:
               - column:
                   {
-                    name: platform_user_id,
+                    name: user_id,
                     valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
                   }
               - column:
@@ -97,7 +97,7 @@ databaseChangeLog:
             columns:
               - column:
                   {
-                    name: platform_user_id,
+                    name: user_id,
                     valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
                   }
               - column:
@@ -110,7 +110,7 @@ databaseChangeLog:
             columns:
               - column:
                   {
-                    name: platform_user_id,
+                    name: user_id,
                     valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')",
                   }
               - column:

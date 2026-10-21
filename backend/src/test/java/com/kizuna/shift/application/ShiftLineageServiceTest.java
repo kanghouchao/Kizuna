@@ -22,9 +22,9 @@ import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftRequestStatus;
 import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -53,7 +53,7 @@ class ShiftLineageServiceTest {
   @Mock private ShiftRepository shiftRepository;
   @Mock private ShiftRequestRepository shiftRequestRepository;
   @Mock private AttendanceRepository attendanceRepository;
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
 
   @InjectMocks private ShiftLineageService shiftLineageService;
 
@@ -106,9 +106,9 @@ class ShiftLineageServiceTest {
     return attendance;
   }
 
-  private static PlatformUser user(Long id, String displayName) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private static User user(Long id, String displayName) {
+    User user =
+        User.builder()
             .email(id + "@kizuna.test")
             .password("encoded")
             .displayName(displayName)
@@ -139,7 +139,7 @@ class ShiftLineageServiceTest {
     givenOrigin(request(ShiftRequestType.NEW, ShiftRequestStatus.APPROVED));
     when(attendanceRepository.findByShiftIdAndCancelledAtIsNull(SHIFT_ID))
         .thenReturn(Optional.of(attendance()));
-    when(platformUserRepository.findAllById(any()))
+    when(userRepository.findAllById(any()))
         .thenReturn(List.of(user(APPROVER_ID, "承認した店長"), user(RECORDER_ID, "記録した店員")));
 
     ShiftDetailResponse detail = shiftLineageService.detail(SHIFT_ID);
@@ -155,7 +155,7 @@ class ShiftLineageServiceTest {
     assertThat(origin.getProcessedAt()).isNotNull();
 
     ArgumentCaptor<Iterable<Long>> requestedIds = ArgumentCaptor.captor();
-    verify(platformUserRepository).findAllById(requestedIds.capture());
+    verify(userRepository).findAllById(requestedIds.capture());
     assertThat(requestedIds.getValue())
         .as("実行主体は系列全体で一度に引くこと")
         .containsExactlyInAnyOrder(APPROVER_ID, RECORDER_ID);
@@ -199,7 +199,7 @@ class ShiftLineageServiceTest {
     ShiftDetailResponse detail = shiftLineageService.detail(SHIFT_ID);
 
     assertThat(detail.getCreatedBy()).isNull();
-    verify(platformUserRepository, never()).findAllById(any());
+    verify(userRepository, never()).findAllById(any());
   }
 
   @Test
@@ -215,8 +215,7 @@ class ShiftLineageServiceTest {
     // 上限より 1 件多く返すことで「続きがある」を伝える契約なので、size=1 に対して 2 件返す。
     when(shiftRequestRepository.findChangeHistoryByShiftId(eq(SHIFT_ID), any()))
         .thenReturn(List.of(newer, older));
-    when(platformUserRepository.findAllById(any()))
-        .thenReturn(List.of(user(APPROVER_ID, "承認した店長")));
+    when(userRepository.findAllById(any())).thenReturn(List.of(user(APPROVER_ID, "承認した店長")));
 
     CursorPage<ShiftRequestLineageResponse> page =
         shiftLineageService.changeRequests(SHIFT_ID, null, 1);

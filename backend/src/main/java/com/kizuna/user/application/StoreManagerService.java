@@ -10,12 +10,12 @@ import com.kizuna.user.api.dto.StoreManagerCandidateResponse;
 import com.kizuna.user.api.dto.StoreManagerResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.SystemRole;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -55,14 +55,13 @@ public class StoreManagerService {
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   /** 一覧・候補の並び。offset ページングの境界を確定させるため、表示名には一意な副キーを添える。 */
-  private static final Sort BY_DISPLAY_NAME =
-      Sort.by(PlatformUser::getDisplayName, PlatformUser::getId);
+  private static final Sort BY_DISPLAY_NAME = Sort.by(User::getDisplayName, User::getId);
 
   /** 解任が撥ねられたときに残る出口。降格はこの面に、停止はアカウント管理にあり、どちらも実在する操作を指す。 */
   private static final String DISMISSAL_ALTERNATIVES = "降格で店舗スタッフにするか、退職の場合はアカウント管理で停止してください";
 
   private final BusinessAudit businessAudit;
-  private final PlatformUserRepository repository;
+  private final UserRepository repository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
   private final StoreExistenceCheck storeExistenceCheck;
@@ -129,7 +128,7 @@ public class StoreManagerService {
 
   private StoreManagerResponse appointExisting(Long storeId, Long userId, Long managerRoleId) {
     // 母集団外と不在は同じ応答に倒す（この面から他人のアカウントの在否を引き当てさせない）。
-    PlatformUser user =
+    User user =
         repository
             .findByIdForUpdate(userId)
             .orElseThrow(() -> new ServiceException("このアカウントは店長に任命できません"));
@@ -164,8 +163,8 @@ public class StoreManagerService {
     if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
     }
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email(req.getEmail())
             .password(passwordEncoder.encode(req.getPassword()))
             .displayName(req.getDisplayName())
@@ -194,7 +193,7 @@ public class StoreManagerService {
   @Transactional
   public void dismiss(Long storeId, Long userId) {
     requireStore(storeId);
-    PlatformUser user = requireManagerOf(storeId, userId, requireStoreManagerRole().getId());
+    User user = requireManagerOf(storeId, userId, requireStoreManagerRole().getId());
     if (user.getStoreScopeType() == StoreScopeType.ALL_STORES) {
       throw new InvalidStoreScopeException("全店舗を担当しているため解任できません。" + DISMISSAL_ALTERNATIVES);
     }
@@ -226,7 +225,7 @@ public class StoreManagerService {
   public void demote(Long storeId, Long userId) {
     requireStore(storeId);
     Long managerRoleId = requireStoreManagerRole().getId();
-    PlatformUser user = requireManagerOf(storeId, userId, managerRoleId);
+    User user = requireManagerOf(storeId, userId, managerRoleId);
     if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
         && user.getStoreIds().size() > 1) {
       throw new InvalidStoreScopeException("複数の店舗を担当しているため降格できません。この店舗の店長から外すには解任してください");
@@ -247,7 +246,7 @@ public class StoreManagerService {
   }
 
   /** 解任・降格が指す対象。両者で同一の述語・同一の例外にするのは、片方だけ緩むと「この店舗の店長か」を隠している 述語から他人のアカウントの在否が漏れるためである。 */
-  private PlatformUser requireManagerOf(Long storeId, Long userId, Long managerRoleId) {
+  private User requireManagerOf(Long storeId, Long userId, Long managerRoleId) {
     return repository
         .findByIdForUpdate(userId)
         .filter(target -> target.getUserType() == UserType.STAFF)
@@ -257,7 +256,7 @@ public class StoreManagerService {
   }
 
   /** 店長の導出条件。任命記録を持たないので、ロールの保持と担当範囲の 2 条件がそのまま述語になる。 */
-  private static Specification<PlatformUser> managerSpec(Long storeId, Long managerRoleId) {
+  private static Specification<User> managerSpec(Long storeId, Long managerRoleId) {
     return (root, query, cb) ->
         cb.and(
             cb.equal(root.get("userType"), UserType.STAFF),
@@ -273,7 +272,7 @@ public class StoreManagerService {
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
    */
-  private static Specification<PlatformUser> candidateSpec(
+  private static Specification<User> candidateSpec(
       Long storeId, Long managerRoleId, Set<Long> hqRoleIds, String search) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
@@ -300,7 +299,7 @@ public class StoreManagerService {
   }
 
   /** 候補の母集団に属するか（「既にこの店舗の店長でない」は呼出側が先に判定する）。 */
-  private static boolean isCandidate(PlatformUser user, Set<Long> hqRoleIds) {
+  private static boolean isCandidate(User user, Set<Long> hqRoleIds) {
     return user.getUserType() == UserType.STAFF
         && Boolean.TRUE.equals(user.getEnabled())
         && user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES
@@ -336,7 +335,7 @@ public class StoreManagerService {
    * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（事前検証と保存の間に
    * 店舗が消えるレース）は店舗エラーへ変換する（いずれも 400）。ロール FK は既定ロールが削除不能なので写像を持たない。
    */
-  private PlatformUser save(PlatformUser user) {
+  private User save(User user) {
     return IntegrityViolations.translateOnFailure(
         () -> repository.saveAndFlush(user),
         Map.of(
@@ -346,7 +345,7 @@ public class StoreManagerService {
             () -> new InvalidStoreScopeException("指定された店舗が存在しません")));
   }
 
-  private static StoreManagerResponse toResponse(PlatformUser user) {
+  private static StoreManagerResponse toResponse(User user) {
     return new StoreManagerResponse(
         user.getId(), user.getEmail(), user.getDisplayName(), user.getEnabled());
   }

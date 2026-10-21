@@ -55,11 +55,11 @@ public class Shift extends StoreScopedEntity {
   @Column(name = "is_published", nullable = false)
   private boolean published = true;
 
-  /** この行を作成した操作の実行者（PlatformUser id）。承認で生まれた行なら承認者。利用者削除後も行は残す（FK が SET NULL）。 */
+  /** この行を作成した操作の実行者（User id）。承認で生まれた行なら承認者。利用者削除後も行は残す（FK が SET NULL）。 */
   @Column(name = "created_by", updatable = false)
   private Long createdBy;
 
-  /** この行を最後に書き換えた操作の実行者（PlatformUser id）。作成のみの行では null。 */
+  /** この行を最後に書き換えた操作の実行者（User id）。作成のみの行では null。 */
   @Column(name = "updated_by")
   private Long updatedBy;
 

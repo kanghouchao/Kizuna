@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.kizuna.auth.infrastructure.CredentialVersionService;
 import com.kizuna.auth.infrastructure.TokenBlacklistService;
-import com.kizuna.user.domain.PlatformUserCredentialsChanged;
+import com.kizuna.user.domain.UserCredentialsChanged;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +39,7 @@ class AuthSessionServiceTest {
     doThrow(failure).when(credentialVersionService).reflect(EMAIL, 3L);
     TransactionSynchronizationManager.initSynchronization();
     try {
-      service.onCredentialsChanged(new PlatformUserCredentialsChanged(EMAIL, 3L));
+      service.onCredentialsChanged(new UserCredentialsChanged(EMAIL, 3L));
       verify(credentialVersionService, never()).reflect(anyString(), anyLong());
       assertThatThrownBy(
               () ->
@@ -102,7 +102,7 @@ class AuthSessionServiceTest {
   @Test
   @DisplayName("資格情報変更イベント: イベントが運ぶ確定値をそのまま版キャッシュへ反映する")
   void onCredentialsChanged_reflectsCarriedVersion() {
-    service.onCredentialsChanged(new PlatformUserCredentialsChanged(EMAIL, 3L));
+    service.onCredentialsChanged(new UserCredentialsChanged(EMAIL, 3L));
 
     verify(credentialVersionService).reflect(EMAIL, 3L);
   }
@@ -112,7 +112,7 @@ class AuthSessionServiceTest {
   void onCredentialsChanged_withinTransaction_defersUntilAfterCommit() {
     TransactionSynchronizationManager.initSynchronization();
     try {
-      service.onCredentialsChanged(new PlatformUserCredentialsChanged(EMAIL, 3L));
+      service.onCredentialsChanged(new UserCredentialsChanged(EMAIL, 3L));
 
       // commit 前に書くと「Redis 成功・commit 失敗」で増えていない版が残り、正当なトークンが誤拒否される
       verify(credentialVersionService, never()).reflect(anyString(), anyLong());
@@ -131,7 +131,7 @@ class AuthSessionServiceTest {
   void onCredentialsChanged_rollbackDoesNotReflect() {
     TransactionSynchronizationManager.initSynchronization();
     try {
-      service.onCredentialsChanged(new PlatformUserCredentialsChanged(EMAIL, 3L));
+      service.onCredentialsChanged(new UserCredentialsChanged(EMAIL, 3L));
       // rollback: afterCommit は発火しないまま同期が破棄される
     } finally {
       TransactionSynchronizationManager.clearSynchronization();

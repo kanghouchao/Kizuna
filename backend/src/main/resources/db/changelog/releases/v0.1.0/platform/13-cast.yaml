@@ -15,7 +15,7 @@ databaseChangeLog:
                     primaryKey: true
                     primaryKeyName: pk_t_casts
               - column:
-                  name: platform_user_id
+                  name: user_id
                   type: BIGINT
                   constraints:
                     nullable: false
@@ -44,11 +44,11 @@ databaseChangeLog:
                   constraints:
                     nullable: false
         - addForeignKeyConstraint:
-            constraintName: fk_t_casts_platform_user
+            constraintName: fk_t_casts_user
             baseTableName: t_casts
-            baseColumnNames: platform_user_id
+            baseColumnNames: user_id
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: NO ACTION
         - sql:
-            sql: ALTER TABLE t_casts ADD CONSTRAINT uq_t_casts_platform_user UNIQUE (platform_user_id)
+            sql: ALTER TABLE t_casts ADD CONSTRAINT uq_t_casts_user UNIQUE (user_id)

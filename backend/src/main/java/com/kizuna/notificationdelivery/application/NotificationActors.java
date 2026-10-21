@@ -3,8 +3,8 @@ package com.kizuna.notificationdelivery.application;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class NotificationActors {
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final RoleRepository roles;
   private final StoreContext store;
 

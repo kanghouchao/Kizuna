@@ -21,9 +21,9 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -50,7 +50,7 @@ class CustomerPointServiceTest {
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private PointLedgerService pointLedgerService;
-  @Mock private PlatformUserRepository platformUserRepository;
+  @Mock private UserRepository userRepository;
   @Mock private StoreContext storeContext;
 
   @InjectMocks private CustomerPointService service;
@@ -132,7 +132,7 @@ class CustomerPointServiceTest {
     givenCustomerLocked();
     givenActiveLink(MEMBER_ID);
     Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
+    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(300L);
     LocalDate expiresOn = LocalDate.of(2099, 12, 31);
 
@@ -152,7 +152,7 @@ class CustomerPointServiceTest {
     // その形で残さない
     givenCustomerLocked();
     givenActiveLink(MEMBER_ID);
-    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
+    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(
             () -> service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
@@ -169,7 +169,7 @@ class CustomerPointServiceTest {
     givenCustomerLocked();
     givenActiveLink(MEMBER_ID);
     Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
+    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
 
     service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
 
@@ -202,7 +202,7 @@ class CustomerPointServiceTest {
     givenCustomerExists();
     givenActiveLink(MEMBER_ID);
     Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
-    Mockito.when(platformUserRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
+    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800L);
 
     CustomerPointBalanceResponse response =
@@ -276,9 +276,9 @@ class CustomerPointServiceTest {
         .thenReturn(Optional.of(link));
   }
 
-  private static PlatformUser actor() {
-    PlatformUser user =
-        PlatformUser.builder()
+  private static User actor() {
+    User user =
+        User.builder()
             .email(ACTOR_EMAIL)
             .password("encoded")
             .displayName("田中花子")

@@ -22,9 +22,9 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -43,7 +43,7 @@ class CustomerAuditTest {
   private final CustomerRepository customers = mock(CustomerRepository.class);
   private final CustomerContactRepository contacts = mock(CustomerContactRepository.class);
   private final CustomerMergeRepository merges = mock(CustomerMergeRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final AuditEventRepository events = mock(AuditEventRepository.class);
   private final List<AuditEvent> audit = new ArrayList<>();
   private CustomerService service;
@@ -52,7 +52,7 @@ class CustomerAuditTest {
   @BeforeEach
   void prepare() {
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("operator@example.test")
             .displayName("顧客担当")
             .userType(UserType.STAFF)

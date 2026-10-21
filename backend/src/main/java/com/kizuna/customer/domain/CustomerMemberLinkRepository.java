@@ -53,7 +53,7 @@ public interface CustomerMemberLinkRepository extends JpaRepository<CustomerMemb
   Optional<CustomerMemberLink> findByStoreIdAndMemberIdAndStatus(
       Long storeId, Long memberId, LinkStatus status);
 
-  // 実行者の表示名は ID 参照のため JPQL join で取得する。PlatformUser は FQCN で参照する
+  // 実行者の表示名は ID 参照のため JPQL join で取得する。User は FQCN で参照する
   // （HQL の予約語衝突を避ける既存規約）。実行者が削除されると linked_by / released_by は
   // NULL になるため join は left。
   String HISTORY_SELECT =
@@ -64,8 +64,8 @@ public interface CustomerMemberLinkRepository extends JpaRepository<CustomerMemb
              l.linkedAt as linkedAt, lu.displayName as linkedByName,
              l.releasedAt as releasedAt, ru.displayName as releasedByName
       from com.kizuna.customer.domain.CustomerMemberLink l
-        left join com.kizuna.user.domain.PlatformUser lu on lu.id = l.linkedBy
-        left join com.kizuna.user.domain.PlatformUser ru on ru.id = l.releasedBy
+        left join com.kizuna.user.domain.User lu on lu.id = l.linkedBy
+        left join com.kizuna.user.domain.User ru on ru.id = l.releasedBy
       """;
 
   String HISTORY_WHERE = " where l.customerId = :customerId ";

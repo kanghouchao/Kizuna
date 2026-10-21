@@ -27,8 +27,8 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +47,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ApplicantServiceTest {
   @Mock ApplicantRepository applicants;
   @Mock ApplicantStatusHistoryRepository histories;
-  @Mock PlatformUserRepository users;
+  @Mock UserRepository users;
   @Mock BusinessAudit audit;
   ApplicantService service;
   Applicant applicant;
@@ -77,7 +77,7 @@ class ApplicantServiceTest {
   }
 
   void actor() {
-    PlatformUser user = new PlatformUser();
+    User user = new User();
     user.setId(9L);
     when(users.findByEmail("actor")).thenReturn(Optional.of(user));
   }

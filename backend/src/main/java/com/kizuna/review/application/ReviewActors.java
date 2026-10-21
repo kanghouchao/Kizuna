@@ -5,9 +5,9 @@ import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.EmergencyElevationRepository;
 import com.kizuna.user.domain.EmergencyElevationStatus;
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class ReviewActors {
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final RoleRepository roles;
   private final StoreContext store;
   private final EmergencyElevationRepository elevations;
@@ -42,7 +42,7 @@ public class ReviewActors {
   }
 
   /** 昇格による店舗権限は通常ロールと独立するため、発動記録の主体・店舗・有効区間を毎回照合する。 */
-  private boolean elevated(PlatformUser user, PermissionCode action) {
+  private boolean elevated(User user, PermissionCode action) {
     var authentication = SecurityContextHolder.getContext().getAuthentication();
     if (!(authentication instanceof JwtAuthenticationToken jwt)
         || !jwt.getToken().getClaims().containsKey("elevationId")) return false;

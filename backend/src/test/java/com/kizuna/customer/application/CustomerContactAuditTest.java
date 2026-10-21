@@ -23,9 +23,9 @@ import com.kizuna.customer.domain.CustomerContactHistoryRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -44,7 +44,7 @@ class CustomerContactAuditTest {
   private final CustomerContactRepository contacts = mock(CustomerContactRepository.class);
   private final CustomerContactHistoryRepository histories =
       mock(CustomerContactHistoryRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final AuditEventRepository events = mock(AuditEventRepository.class);
   private final List<CustomerContact> rows = new ArrayList<>();
   private final List<CustomerContactHistory> history = new ArrayList<>();
@@ -54,7 +54,7 @@ class CustomerContactAuditTest {
   @BeforeEach
   void prepare() {
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("operator@example.test")
             .password(UUID.randomUUID().toString())
             .displayName("連絡先担当")

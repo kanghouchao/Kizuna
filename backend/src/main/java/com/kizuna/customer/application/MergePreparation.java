@@ -17,8 +17,8 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -32,7 +32,7 @@ public class MergePreparation {
   private final CustomerContactRepository contacts;
   private final CustomerMemberLinkRepository links;
   private final CustomerMergeRepository merges;
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final PointLedgerService points;
   private final MemberLookupService members;
   private final StoreContext store;
@@ -162,6 +162,6 @@ public class MergePreparation {
   }
 
   private String userName(Long id) {
-    return id == null ? null : users.findById(id).map(PlatformUser::getDisplayName).orElse(null);
+    return id == null ? null : users.findById(id).map(User::getDisplayName).orElse(null);
   }
 }

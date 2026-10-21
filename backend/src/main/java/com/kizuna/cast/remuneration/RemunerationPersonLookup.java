@@ -15,10 +15,7 @@ public class RemunerationPersonLookup {
   public record Person(Long id, String name, String storeName) {}
 
   public Long self(Long userId) {
-    return people
-        .findByPlatformUserId(userId)
-        .orElseThrow(RemunerationPersonLookup::missing)
-        .getId();
+    return people.findByUserId(userId).orElseThrow(RemunerationPersonLookup::missing).getId();
   }
 
   public Person require(Long storeId, Long personId) {

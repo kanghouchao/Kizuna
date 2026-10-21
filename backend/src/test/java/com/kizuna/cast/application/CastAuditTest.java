@@ -29,9 +29,9 @@ import com.kizuna.shared.persistence.StoreScopedEntity;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -61,7 +61,7 @@ class CastAuditTest {
   private final CastFieldDefinitionRepository definitions =
       mock(CastFieldDefinitionRepository.class);
   private final StoreRepository stores = mock(StoreRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final AuditEventRepository events = mock(AuditEventRepository.class);
   private final BusinessAudit audit =
       new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC()));
@@ -95,7 +95,7 @@ class CastAuditTest {
             ids -> Set.of(),
             audit);
     var actor =
-        PlatformUser.builder()
+        User.builder()
             .email("operator@example.test")
             .password(UUID.randomUUID().toString())
             .displayName("監査担当")

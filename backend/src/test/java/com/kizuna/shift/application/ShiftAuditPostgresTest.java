@@ -35,9 +35,9 @@ import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -610,16 +610,16 @@ class ShiftAuditPostgresTest {
       e.setStoreId(1L);
       when(r.findScopedByIdForUpdate("cast")).thenReturn(Optional.of(e));
       when(r.findByIdForUpdate("cast")).thenReturn(Optional.of(e));
-      when(r.findIdsByPlatformUserIdAndStoreId(10L, 1L)).thenReturn(List.of("cast"));
-      when(r.findIdsByPlatformUserId(10L)).thenReturn(List.of("cast"));
+      when(r.findIdsByUserIdAndStoreId(10L, 1L)).thenReturn(List.of("cast"));
+      when(r.findIdsByUserId(10L)).thenReturn(List.of("cast"));
       return r;
     }
 
     @Bean
-    PlatformUserRepository users() {
-      var r = mock(PlatformUserRepository.class);
+    UserRepository users() {
+      var r = mock(UserRepository.class);
       var staff =
-          PlatformUser.builder()
+          User.builder()
               .email("operator@example.test")
               .displayName("担当")
               .password(UUID.randomUUID().toString())
@@ -630,7 +630,7 @@ class ShiftAuditPostgresTest {
               .build();
       staff.setId(9L);
       var cast =
-          PlatformUser.builder()
+          User.builder()
               .email("cast@example.test")
               .displayName("本人")
               .password(UUID.randomUUID().toString())

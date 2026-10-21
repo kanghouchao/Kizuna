@@ -14,13 +14,13 @@ import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -46,7 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 店舗スタッフの授権管理ユースケース。対象は本人種別 STAFF のうち店舗側ロールしか持たない者に限る — HQ 側ロールを 1 つでも持つ者は管理者管理（ROLE_MANAGE
  * 門）が扱い、この面には在否すら出さない（ADR 0020）。
  *
- * <p>行使者の担当店舗集合は JWT から、対象の現況は DB から取る。PlatformUser は StoreScopedEntity ではないため storeFilter
+ * <p>行使者の担当店舗集合は JWT から、対象の現況は DB から取る。User は StoreScopedEntity ではないため storeFilter
  * / @StoreSetScoped（ADR 0002）の機構は乗らず、店舗境界は本クラスの明示検証が唯一の担保である。
  *
  * <p>防提権守衛（ADR 0020）: G1 付与できるのは店舗側ロールかつ委譲権限（STORE_STAFF_MANAGE）を含まないもの、G2 対象の店舗集合 ⊆ 行使者の担当店舗集合、G3
@@ -67,7 +67,7 @@ public class StoreStaffService {
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
   private final BusinessAudit businessAudit;
-  private final PlatformUserRepository repository;
+  private final UserRepository repository;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
   private final CredentialOperations credentialOperations;
@@ -76,7 +76,7 @@ public class StoreStaffService {
   @Transactional(readOnly = true)
   public Page<StoreStaffResponse> list(String search, Pageable pageable) {
     Set<Long> hqRoleIds = roleRepository.findHqRoleIds();
-    Page<PlatformUser> staff =
+    Page<User> staff =
         repository.findAll(staffSpec(search, storeContext.getStoreId(), hqRoleIds), pageable);
     Map<Long, String> roleNames =
         roleNamesOf(
@@ -95,8 +95,7 @@ public class StoreStaffService {
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
    */
-  private static Specification<PlatformUser> staffSpec(
-      String search, Long storeId, Set<Long> hqRoleIds) {
+  private static Specification<User> staffSpec(String search, Long storeId, Set<Long> hqRoleIds) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
@@ -120,7 +119,7 @@ public class StoreStaffService {
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
   public StoreStaffResponse get(Long id) {
-    PlatformUser user = requireManagedStaff(id, roleRepository.findHqRoleIds());
+    User user = requireManagedStaff(id, roleRepository.findHqRoleIds());
     return toResponse(user, roleNamesOf(user.getRoleIds()), delegationRoleIds(), actorScope());
   }
 
@@ -135,8 +134,8 @@ public class StoreStaffService {
     if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
     }
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email(req.getEmail())
             .password(passwordEncoder.encode(req.getPassword()))
             .displayName(req.getDisplayName())
@@ -160,7 +159,7 @@ public class StoreStaffService {
   @Transactional
   public StoreStaffResponse update(Long id, StoreStaffUpdateRequest req) {
     Set<Long> hqRoleIds = roleRepository.findHqRoleIds();
-    PlatformUser user = requireManagedStaff(id, hqRoleIds);
+    User user = requireManagedStaff(id, hqRoleIds);
     Set<Long> delegationRoleIds = delegationRoleIds();
     StoreScope scope = actorScope();
     if (!editableBy(user, delegationRoleIds, scope)) {
@@ -221,7 +220,7 @@ public class StoreStaffService {
    * <p>店舗文脈で絞るのは可視性の軸であり、付与できる店舗集合の軸（G2）とは別物である。後者は行使者の担当店舗集合 <b>全体</b>で判定し、文脈の単店には縮めない —
    * 対象の集合が行使者の別の担当店に跨るのは正常だからである。
    */
-  private PlatformUser requireManagedStaff(Long id, Set<Long> hqRoleIds) {
+  private User requireManagedStaff(Long id, Set<Long> hqRoleIds) {
     Long contextStoreId = storeContext.getStoreId();
     return repository
         .findById(id)
@@ -274,8 +273,7 @@ public class StoreStaffService {
    * G3: 編集・停止できる対象か。委譲権限の実効保持者（店長等）は同僚として一覧には出すが、停止は事実上の解任なので触らせない。 現在の店舗集合が行使者の集合に収まることも要求する —
    * さもないと、担当外の店を含むアカウントは「その店を落とす」形でしか 保存できず、善意の編集が他店の授権を壊す。
    */
-  private static boolean editableBy(
-      PlatformUser user, Set<Long> delegationRoleIds, StoreScope actorScope) {
+  private static boolean editableBy(User user, Set<Long> delegationRoleIds, StoreScope actorScope) {
     if (holdsAny(user.getRoleIds(), delegationRoleIds)) {
       return false;
     }
@@ -326,7 +324,7 @@ public class StoreStaffService {
    * 保存時の整合性違反を制約名で分類する。email 一意制約違反（同一メール二重送信レース）は重複エラー、店舗 FK 違反（存在しない店舗 id）は店舗エラー、ロール FK
    * 違反（requireRoles 通過後の並行ロール削除）はロール不存在エラーへ変換する（いずれも 400）。
    */
-  private PlatformUser save(PlatformUser user) {
+  private User save(User user) {
     return IntegrityViolations.translateOnFailure(
         () -> repository.saveAndFlush(user),
         Map.of(
@@ -339,10 +337,7 @@ public class StoreStaffService {
   }
 
   private static StoreStaffResponse toResponse(
-      PlatformUser user,
-      Map<Long, String> roleNames,
-      Set<Long> delegationRoleIds,
-      StoreScope actorScope) {
+      User user, Map<Long, String> roleNames, Set<Long> delegationRoleIds, StoreScope actorScope) {
     List<StoreStaffResponse.RoleRef> roles =
         user.getRoleIds().stream()
             .map(id -> new StoreStaffResponse.RoleRef(id, roleNames.get(id)))

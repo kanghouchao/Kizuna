@@ -18,9 +18,9 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -43,7 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class MemberReceiptClaimServiceTest {
 
   private static final String EMAIL = "member@example.com";
-  private static final long PLATFORM_USER_ID = 10L;
+  private static final long USER_ID = 10L;
   private static final long MEMBER_ID = 7L;
   private static final String MEMBER_CODE = "123456789012";
   private static final long STORE_ID = 3L;
@@ -56,12 +56,9 @@ class MemberReceiptClaimServiceTest {
   @Mock private OrderRepository orderRepository;
   @Mock private ReceiptTokenGenerator receiptTokenGenerator;
   @Mock private PointLedgerService pointLedgerService;
-  private final PlatformUserRepository platformUserRepository =
-      Mockito.mock(PlatformUserRepository.class);
+  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
-  @Spy
-  private ActorIdentityService actorIdentityService =
-      new ActorIdentityService(platformUserRepository);
+  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   @Mock private MemberLookupService memberLookupService;
   @Mock private AttributionMaterializer materializer;
@@ -70,8 +67,8 @@ class MemberReceiptClaimServiceTest {
 
   @BeforeEach
   void resolveAuthenticatedMember() {
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email(EMAIL)
             .password("encoded")
             .displayName("会員 花子")
@@ -80,10 +77,10 @@ class MemberReceiptClaimServiceTest {
             .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of())
             .build();
-    user.setId(PLATFORM_USER_ID);
-    Mockito.lenient().when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    user.setId(USER_ID);
+    Mockito.lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     Mockito.lenient()
-        .when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID))
+        .when(memberLookupService.findByUserId(USER_ID))
         .thenReturn(Optional.of(new MemberLookup(MEMBER_ID, MEMBER_CODE)));
     Mockito.lenient().when(receiptTokenGenerator.digest(RAW_TOKEN)).thenReturn(DIGEST);
   }
@@ -108,7 +105,7 @@ class MemberReceiptClaimServiceTest {
             Mockito.eq(STORE_ID),
             Mockito.eq(ORDER_BUSINESS_DATE),
             occurredAt.capture(),
-            Mockito.eq(PLATFORM_USER_ID),
+            Mockito.eq(USER_ID),
             Mockito.eq(new AttributionMaterializer.ReceiptClaim(PLANNED_POINTS)));
     Mockito.verify(token).claim(occurredAt.getValue());
   }
@@ -149,7 +146,7 @@ class MemberReceiptClaimServiceTest {
             Mockito.eq(STORE_ID),
             Mockito.eq(ORDER_BUSINESS_DATE),
             Mockito.any(OffsetDateTime.class),
-            Mockito.eq(PLATFORM_USER_ID),
+            Mockito.eq(USER_ID),
             Mockito.eq(new AttributionMaterializer.ReceiptClaim(0)));
   }
 
@@ -228,8 +225,7 @@ class MemberReceiptClaimServiceTest {
   @Test
   @DisplayName("会員でない主体には申領させないこと")
   void refusesANonMemberPrincipal() {
-    Mockito.when(memberLookupService.findByPlatformUserId(PLATFORM_USER_ID))
-        .thenReturn(Optional.empty());
+    Mockito.when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.claim(EMAIL, RAW_TOKEN))
         .isInstanceOf(StaleSessionException.class);
@@ -239,7 +235,7 @@ class MemberReceiptClaimServiceTest {
   @Test
   @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外")
   void refusesAStalePrincipal() {
-    Mockito.when(platformUserRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+    Mockito.when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.claim(EMAIL, RAW_TOKEN))
         .isInstanceOf(StaleSessionException.class);

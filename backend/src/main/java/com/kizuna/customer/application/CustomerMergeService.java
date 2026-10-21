@@ -27,7 +27,7 @@ import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -58,7 +58,7 @@ public class CustomerMergeService {
   private final CustomerContactService customerContactService;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
-  private final PlatformUserRepository platformUserRepository;
+  private final UserRepository userRepository;
   private final StoreContext storeContext;
 
   /** 墓標は別の顧客へ読み替えず拒否する。確認した二行と原資料の一致が不可逆な統合の前提になる。 */
@@ -111,10 +111,7 @@ public class CustomerMergeService {
             preview.merged().contacts().stream().map(MergeSnapshot.Contact::id).toList(),
             preview.merged().memberLinks().stream().map(MergeSnapshot.Link::id).toList(),
             actorId,
-            platformUserRepository
-                .findById(actorId)
-                .map(user -> user.getDisplayName())
-                .orElse(null));
+            userRepository.findById(actorId).map(user -> user.getDisplayName()).orElse(null));
     var recorded =
         customerMergeRepository.save(
             CustomerMerge.record(
@@ -292,7 +289,7 @@ public class CustomerMergeService {
 
   /** JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。 */
   private Long resolveActorId(String actorEmail) {
-    return platformUserRepository
+    return userRepository
         .findByEmail(actorEmail)
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
         .getId();

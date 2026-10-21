@@ -17,7 +17,7 @@ import org.hibernate.annotations.BatchSize;
 
 /**
  * ロール集約（RBAC）。権限（{@link Permission}）の束であり、担当店舗集合は持たない — 見える範囲はユーザー側の StoreScope が決める。ユーザーへの授与は
- * {@link PlatformUser} 側がロール ID の集合で保持する（跨集約 ID 参照）。
+ * {@link User} 側がロール ID の集合で保持する（跨集約 ID 参照）。
  *
  * <p>平台既定ロール（{@code systemRole=true}）は播種で投入され、名称・権限の変更と削除を拒否する。利用者は自作ロールを API から自由に追加・改廃できる。
  *

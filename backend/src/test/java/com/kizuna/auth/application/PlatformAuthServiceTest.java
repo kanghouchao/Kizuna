@@ -14,7 +14,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.auth.api.dto.PlatformMeResponse;
 import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
-import com.kizuna.auth.infrastructure.PlatformUserDetails;
+import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.CredentialOperations;
@@ -22,11 +22,11 @@ import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -57,7 +57,7 @@ class PlatformAuthServiceTest {
   private static final long HQ_ROLE_ID = 10L;
   private static final long STORE_ROLE_ID = 20L;
 
-  @Mock private PlatformUserRepository userRepository;
+  @Mock private UserRepository userRepository;
   @Mock private RoleRepository roleRepository;
   @Mock private PermissionRepository permissionRepository;
   @Mock private PasswordEncoder passwordEncoder;
@@ -71,11 +71,11 @@ class PlatformAuthServiceTest {
   @InjectMocks private PlatformAuthService authService;
 
   /** authenticationManager.authenticate が指定ユーザーを principal に持つ成功済み Authentication を返すよう配線する。 */
-  private void stubSuccessfulAuthentication(String email, String password, PlatformUser user) {
+  private void stubSuccessfulAuthentication(String email, String password, User user) {
     when(authenticationManager.authenticate(
             UsernamePasswordAuthenticationToken.unauthenticated(email, password)))
         .thenReturn(authentication);
-    when(authentication.getPrincipal()).thenReturn(new PlatformUserDetails(user));
+    when(authentication.getPrincipal()).thenReturn(new UserPrincipal(user));
   }
 
   /** 権限解決の 2 段（ロール id → 権限 id 集合 → 権限コード）を配線する。 */
@@ -93,8 +93,8 @@ class PlatformAuthServiceTest {
     return code.ordinal() + 1L;
   }
 
-  private PlatformUser hqAdmin() {
-    return PlatformUser.builder()
+  private User hqAdmin() {
+    return User.builder()
         .email("admin@kizuna.test")
         .password("stored-hash")
         .displayName("HQ管理者")
@@ -120,8 +120,8 @@ class PlatformAuthServiceTest {
             PermissionCode.ORDER_SET_MANAGE));
   }
 
-  private PlatformUser storeStaff(String email, String displayName, StoreScopeType scopeType) {
-    return PlatformUser.builder()
+  private User storeStaff(String email, String displayName, StoreScopeType scopeType) {
+    return User.builder()
         .email(email)
         .password("stored-hash")
         .displayName(displayName)
@@ -169,7 +169,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void login_staffWithStorePermissions_setsStoreBridgeTrue() {
-    PlatformUser staff = storeStaff("staff@kizuna.test", "店舗スタッフ", StoreScopeType.SPECIFIC_STORES);
+    User staff = storeStaff("staff@kizuna.test", "店舗スタッフ", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("staff@kizuna.test", "pass", staff);
     stubRolePermissions(
         STORE_ROLE_ID, "店舗スタッフ", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
@@ -189,8 +189,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void login_staffWithOnlyStoreMenuMarker_doesNotSetStoreBridge() {
-    PlatformUser staff =
-        storeStaff("menu@kizuna.test", "店舗メニュー標識のみ", StoreScopeType.SPECIFIC_STORES);
+    User staff = storeStaff("menu@kizuna.test", "店舗メニュー標識のみ", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("menu@kizuna.test", "pass", staff);
     stubRolePermissions(STORE_ROLE_ID, "店舗メニュー標識のみ", Set.of(PermissionCode.STORE_MENU_VIEW));
     when(jwtIssuer.issue(eq("menu@kizuna.test"), any())).thenReturn(new Token("t", 1L));
@@ -205,7 +204,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void login_staffWithOperationalStorePermissionAndMenuMarker_setsStoreBridgeTrue() {
-    PlatformUser staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
+    User staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("manager@kizuna.test", "pass", staff);
     stubRolePermissions(
         STORE_ROLE_ID, "店長", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_MENU_VIEW));
@@ -221,8 +220,8 @@ class PlatformAuthServiceTest {
 
   @Test
   void login_cast_issuesRoleCastOnlyWithoutStoreBridge() {
-    PlatformUser cast =
-        PlatformUser.builder()
+    User cast =
+        User.builder()
             .email("cast@kizuna.test")
             .password("stored-hash")
             .displayName("キャスト")
@@ -279,7 +278,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void issueElevatedTokenFor_addsAllStoreAuthoritiesScopedToTargetStoreUntilRecordExpiry() {
-    PlatformUser admin = hqAdmin();
+    User admin = hqAdmin();
     stubHqRole();
     EmergencyElevation elevation = elevationTo(42L);
     when(jwtIssuer.issue(eq("admin@kizuna.test"), any(), any()))
@@ -313,7 +312,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void issueElevatedTokenFor_holderOfStorePermissions_doesNotDuplicateAuthorities() {
-    PlatformUser staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
+    User staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
     stubRolePermissions(
         STORE_ROLE_ID, "店長", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_MENU_VIEW));
     when(jwtIssuer.issue(eq("manager@kizuna.test"), any(), any()))
@@ -330,7 +329,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void issueTokenFor_isUnaffectedByElevationClaims() {
-    PlatformUser admin = hqAdmin();
+    User admin = hqAdmin();
     stubHqRole();
     when(jwtIssuer.issue(eq("admin@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
@@ -362,7 +361,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void me_staffWithStoreConsolePermission_returnsStoreBridgeTrue() {
-    PlatformUser staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
+    User staff = storeStaff("manager@kizuna.test", "店長", StoreScopeType.SPECIFIC_STORES);
     when(userRepository.findByEmail("manager@kizuna.test")).thenReturn(Optional.of(staff));
     stubRolePermissions(
         STORE_ROLE_ID, "店長", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
@@ -377,7 +376,7 @@ class PlatformAuthServiceTest {
   @Test
   void me_hybridStaffWithPlatformAndStorePermissions_returnsPlatformConsoleAndStoreBridgeTrue() {
     // 混成ロール（PLATFORM 権限と実運用 STORE 権限の併持）: 着地は platform 優先のまま store_bridge=true。
-    PlatformUser staff = storeStaff("hybrid@kizuna.test", "兼務者", StoreScopeType.SPECIFIC_STORES);
+    User staff = storeStaff("hybrid@kizuna.test", "兼務者", StoreScopeType.SPECIFIC_STORES);
     when(userRepository.findByEmail("hybrid@kizuna.test")).thenReturn(Optional.of(staff));
     stubRolePermissions(
         STORE_ROLE_ID, "兼務ロール", Set.of(PermissionCode.STORE_MANAGE, PermissionCode.ORDER_MANAGE));
@@ -391,7 +390,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void me_staffWithOnlySharedPermissions_returnsStoreBridgeFalse() {
-    PlatformUser staff = storeStaff("shared@kizuna.test", "跨店参照のみ", StoreScopeType.ALL_STORES);
+    User staff = storeStaff("shared@kizuna.test", "跨店参照のみ", StoreScopeType.ALL_STORES);
     when(userRepository.findByEmail("shared@kizuna.test")).thenReturn(Optional.of(staff));
     stubRolePermissions(
         STORE_ROLE_ID,
@@ -407,8 +406,8 @@ class PlatformAuthServiceTest {
 
   @Test
   void me_cast_returnsNoneConsoleWithoutPermissions() {
-    PlatformUser cast =
-        PlatformUser.builder()
+    User cast =
+        User.builder()
             .email("cast@kizuna.test")
             .password("stored-hash")
             .displayName("キャスト")
@@ -429,8 +428,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void me_staffWithOnlyStoreMenuMarker_returnsNoneConsole() {
-    PlatformUser staff =
-        storeStaff("menu@kizuna.test", "店舗メニュー標識のみ", StoreScopeType.SPECIFIC_STORES);
+    User staff = storeStaff("menu@kizuna.test", "店舗メニュー標識のみ", StoreScopeType.SPECIFIC_STORES);
     when(userRepository.findByEmail("menu@kizuna.test")).thenReturn(Optional.of(staff));
     stubRolePermissions(STORE_ROLE_ID, "店舗メニュー標識のみ", Set.of(PermissionCode.STORE_MENU_VIEW));
 
@@ -454,7 +452,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void updateMe_success_updatesDisplayNameAndReturnsResponse() {
-    PlatformUser user = hqAdmin();
+    User user = hqAdmin();
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
     stubHqRole();
 
@@ -468,7 +466,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void changePassword_wrongCurrentPassword_throwsServiceExceptionAndKeepsSession() {
-    PlatformUser user = hqAdmin();
+    User user = hqAdmin();
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("wrong", "stored-hash")).thenReturn(false);
 
@@ -482,7 +480,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void changePassword_success_encodesSavesAndPublishesBumpedCredentialVersion() {
-    PlatformUser user = hqAdmin();
+    User user = hqAdmin();
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("current-pass", "stored-hash")).thenReturn(true);
     when(passwordEncoder.encode("new-password-123")).thenReturn("new-encoded-hash");
@@ -498,15 +496,15 @@ class PlatformAuthServiceTest {
    * ドメイン不変条件が禁じる「資格情報を持つ SERVICE」を mock で組む。真の経路では email が null で引けず種別の守衛に
    * 到達しないため、二重化した第二の防線を単独で突くには mock しかない（テストを通すために不変条件を緩めない）。
    */
-  private static PlatformUser serviceIdentity() {
-    PlatformUser user = mock(PlatformUser.class);
+  private static User serviceIdentity() {
+    User user = mock(User.class);
     when(user.getUserType()).thenReturn(UserType.SERVICE);
     return user;
   }
 
   @Test
   void issueTokenFor_disabledUser_isRejectedWithoutIssuingToken() {
-    PlatformUser user = hqAdmin();
+    User user = hqAdmin();
     user.stop();
 
     assertThatThrownBy(() -> authService.issueTokenFor(user)).isInstanceOf(DisabledException.class);
@@ -516,7 +514,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void login_disabledPrincipal_isRejectedWithoutIssuingToken() {
-    PlatformUser user = hqAdmin();
+    User user = hqAdmin();
     user.stop();
     stubSuccessfulAuthentication("admin@kizuna.test", "pass", user);
 
@@ -527,7 +525,7 @@ class PlatformAuthServiceTest {
 
   @Test
   void issueElevatedTokenFor_disabledUser_isRejectedWithoutIssuingToken() {
-    PlatformUser user = hqAdmin();
+    User user = hqAdmin();
     user.stop();
 
     assertThatThrownBy(() -> authService.issueElevatedTokenFor(user, elevationTo(42L)))

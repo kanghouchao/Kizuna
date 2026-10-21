@@ -32,8 +32,8 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -48,7 +48,7 @@ class CustomerMergePreviewTest {
   private final CustomerContactRepository contacts = mock(CustomerContactRepository.class);
   private final CustomerMemberLinkRepository links = mock(CustomerMemberLinkRepository.class);
   private final CustomerMergeRepository merges = mock(CustomerMergeRepository.class);
-  private final PlatformUserRepository users = mock(PlatformUserRepository.class);
+  private final UserRepository users = mock(UserRepository.class);
   private final PointLedgerService points = mock(PointLedgerService.class);
   private final MemberLookupService members = mock(MemberLookupService.class);
   private final StoreContext store = mock(StoreContext.class);
@@ -175,7 +175,7 @@ class CustomerMergePreviewTest {
   void rejectsAlteredConfirmationBeforeAnyWrites() {
     var preferences = new MergePreferences(null, "one", null);
     var preview = service.preview("a", new CustomerMergePreviewRequest("b", null, preferences));
-    var actor = mock(PlatformUser.class);
+    var actor = mock(User.class);
     when(actor.getId()).thenReturn(3L);
     when(users.findByEmail("actor")).thenReturn(Optional.of(actor));
     second.change(ContactType.EMAIL, "changed@example.com");

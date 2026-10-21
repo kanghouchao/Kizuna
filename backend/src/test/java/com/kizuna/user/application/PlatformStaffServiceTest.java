@@ -20,12 +20,12 @@ import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.LastRoleManageHolderException;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
 import java.util.List;
@@ -65,7 +65,7 @@ class PlatformStaffServiceTest {
   private static final Pageable PAGEABLE = PageRequest.of(0, 20);
 
   @Mock private BusinessAudit businessAudit;
-  @Mock private PlatformUserRepository repository;
+  @Mock private UserRepository repository;
 
   @Mock private RoleRepository roleRepository;
 
@@ -77,7 +77,7 @@ class PlatformStaffServiceTest {
 
   @InjectMocks private PlatformStaffService service;
 
-  @Captor private ArgumentCaptor<PlatformUser> userCaptor;
+  @Captor private ArgumentCaptor<User> userCaptor;
 
   /** HQ 側ロールの解決を差し込む。既定では HQ_ROLE と ROLE_MANAGE_ROLE だけが HQ 側。 */
   private void givenHqSideRoles() {
@@ -90,10 +90,10 @@ class PlatformStaffServiceTest {
     return role;
   }
 
-  private PlatformUser staff(
+  private User staff(
       long id, String email, Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
-    PlatformUser user =
-        PlatformUser.builder()
+    User user =
+        User.builder()
             .email(email)
             .password("hash")
             .displayName("表示名")
@@ -109,9 +109,9 @@ class PlatformStaffServiceTest {
     return user;
   }
 
-  private PlatformUser castUser(long id, String email) {
-    PlatformUser user =
-        PlatformUser.builder()
+  private User castUser(long id, String email) {
+    User user =
+        User.builder()
             .email(email)
             .password("hash")
             .displayName("キャスト")
@@ -153,7 +153,7 @@ class PlatformStaffServiceTest {
 
   @Test
   void list_returnsStaffWithResolvedRoleNames() {
-    List<PlatformUser> staff =
+    List<User> staff =
         List.of(
             staff(1L, "hq@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of()),
             staff(
@@ -162,7 +162,7 @@ class PlatformStaffServiceTest {
                 Set.of(MANAGER_ROLE),
                 StoreScopeType.SPECIFIC_STORES,
                 Set.of(1L)));
-    when(repository.findAll(ArgumentMatchers.<Specification<PlatformUser>>any(), eq(PAGEABLE)))
+    when(repository.findAll(ArgumentMatchers.<Specification<User>>any(), eq(PAGEABLE)))
         .thenReturn(new PageImpl<>(staff, PAGEABLE, staff.size()));
     givenHqSideRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE, MANAGER_ROLE)))
@@ -194,7 +194,7 @@ class PlatformStaffServiceTest {
     when(repository.saveAndFlush(userCaptor.capture()))
         .thenAnswer(
             invocation -> {
-              PlatformUser saved = invocation.getArgument(0);
+              User saved = invocation.getArgument(0);
               saved.setId(9L);
               ReflectionTestUtils.setField(saved, "version", 0L);
               return saved;
@@ -203,7 +203,7 @@ class PlatformStaffServiceTest {
     PlatformStaffResponse res = service.create(req);
 
     verify(encoder).encode("rawpass");
-    PlatformUser saved = userCaptor.getValue();
+    User saved = userCaptor.getValue();
     assertThat(saved.getEmail()).isEqualTo("new@kizuna.test");
     assertThat(saved.getPassword()).isEqualTo("ENCODED");
     assertThat(saved.getDisplayName()).isEqualTo("表示名");
@@ -362,7 +362,7 @@ class PlatformStaffServiceTest {
 
   @Test
   void update_reassignsRolesAndScopesAndSaves() {
-    PlatformUser existing =
+    User existing =
         staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
     givenHqSideRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE, MANAGER_ROLE)))
@@ -396,7 +396,7 @@ class PlatformStaffServiceTest {
   @Test
   void update_staleVersion_throwsConflictWithoutSaving() {
     // 陳腐化した編集フォームの提出（version 不一致）は reassign 前に 409 系例外で拒否する。
-    PlatformUser existing =
+    User existing =
         staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
     ReflectionTestUtils.setField(existing, "version", 5L);
     givenHqSideRoles();
@@ -463,7 +463,7 @@ class PlatformStaffServiceTest {
 
   @Test
   void update_unknownStoreId_convertsToInvalidStoreScope() {
-    PlatformUser existing =
+    User existing =
         staff(7L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
     givenHqSideRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
@@ -487,7 +487,7 @@ class PlatformStaffServiceTest {
 
   @Test
   void update_duplicateEmailUniqueViolation_convertsToDuplicateEmail() {
-    PlatformUser existing =
+    User existing =
         staff(9L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
     givenHqSideRoles();
     when(roleRepository.findAllById(Set.of(HQ_ROLE))).thenReturn(List.of(role(HQ_ROLE, "HQ管理者")));
@@ -532,7 +532,7 @@ class PlatformStaffServiceTest {
   @Test
   void update_toStoreSideRolesOnly_isRejectedWithoutSaving() {
     // 一覧から消えるだけの静黙な降格にしない。店舗側へ降ろす操作は店舗スタッフ管理の領分で、この面では拒否する。
-    PlatformUser existing =
+    User existing =
         staff(3L, "target@kizuna.test", Set.of(HQ_ROLE), StoreScopeType.ALL_STORES, Set.of());
     givenHqSideRoles();
     when(roleRepository.findAllById(Set.of(MANAGER_ROLE)))
@@ -577,7 +577,7 @@ class PlatformStaffServiceTest {
   @Test
   void update_demotionOfLastRoleManageHolder_isRejected() {
     // 降格そのものは許すが、母集団が 0 になるならこの守衛が先に立つ。
-    PlatformUser existing =
+    User existing =
         staff(
             3L,
             "last-admin@kizuna.test",
@@ -604,7 +604,7 @@ class PlatformStaffServiceTest {
   @Test
   void update_demotingRoleManageHolderWhileAnotherRemains_isAllowed() {
     // 守衛が「降格そのもの」を塞いでいないことの対照。母集団が残るなら通す。
-    PlatformUser existing =
+    User existing =
         staff(
             3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
     givenHqSideRoles();
@@ -621,7 +621,7 @@ class PlatformStaffServiceTest {
   @Test
   void update_thatCannotShrinkTheHolderSet_doesNotSerialize() {
     // 母集団を減らさない更新まで母集団の全行を押さえると、無関係な授権変更同士が待ち合う。
-    PlatformUser existing =
+    User existing =
         staff(
             3L, "admin@kizuna.test", Set.of(ROLE_MANAGE_ROLE), StoreScopeType.ALL_STORES, Set.of());
     givenHqSideRoles();
@@ -638,7 +638,7 @@ class PlatformStaffServiceTest {
 
   @Test
   void update_removingAnyExistingRoleCallsTheGuardEvenWithoutKnownManagementGrants() {
-    PlatformUser existing =
+    User existing =
         staff(
             3L,
             "target@kizuna.test",
@@ -657,7 +657,7 @@ class PlatformStaffServiceTest {
 
   @Test
   void update_disabledTargetCanLoseRolesWithoutCallingTheGuard() {
-    PlatformUser existing =
+    User existing =
         staff(
             3L,
             "target@kizuna.test",

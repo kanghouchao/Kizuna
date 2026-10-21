@@ -13,7 +13,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
   @Query(value = "select id from t_members where id = :id for update", nativeQuery = true)
   Optional<Long> lockIdForBalanceConfirmation(Long id);
 
-  Optional<Member> findByPlatformUserId(Long platformUserId);
+  Optional<Member> findByUserId(Long userId);
 
   Optional<Member> findByMemberCode(String memberCode);
 
@@ -26,7 +26,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
   Optional<MemberIdentityView> findIdentityByMemberCode(String memberCode);
 
   /** {@link #findIdentityByMemberCode} と同じ理由の projection。 */
-  Optional<MemberIdentityView> findIdentityByPlatformUserId(Long platformUserId);
+  Optional<MemberIdentityView> findIdentityByUserId(Long userId);
 
   /**
    * 昇格の判定と書き込みのために会員行を悲観排他ロック付きで引く。

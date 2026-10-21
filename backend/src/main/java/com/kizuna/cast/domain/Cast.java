@@ -17,8 +17,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class Cast extends BaseEntity {
-  @Column(name = "platform_user_id", nullable = false, unique = true, updatable = false)
-  private Long platformUserId;
+  @Column(name = "user_id", nullable = false, unique = true, updatable = false)
+  private Long userId;
 
   @Column(name = "real_name")
   private String realName;

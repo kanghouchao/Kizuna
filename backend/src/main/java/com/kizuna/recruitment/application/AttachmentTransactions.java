@@ -22,7 +22,7 @@ import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PlatformUserRepository;
+import com.kizuna.user.domain.UserRepository;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -42,7 +42,7 @@ public class AttachmentTransactions {
   private final AttachmentUploadRepository uploads;
   private final StoreRepository stores;
   private final StoreContext storeContext;
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final BusinessAudit audit;
   private final AppProperties properties;
   private final PrivateAttachmentStorage storage;

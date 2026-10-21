@@ -3,10 +3,10 @@ package com.kizuna.user.application;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.PermissionCode;
-import com.kizuna.user.domain.PlatformUser;
-import com.kizuna.user.domain.PlatformUserRepository;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @NamedInterface("execution-identity")
 @Transactional(readOnly = true)
 public class ServiceExecutionIdentityService {
-  private final PlatformUserRepository users;
+  private final UserRepository users;
   private final RoleRepository roles;
 
   // 呼出側の分離レベルや一次キャッシュに依存せず、確定済みの授権を読み直す。
@@ -56,7 +56,7 @@ public class ServiceExecutionIdentityService {
     return requireOperator(user, permission);
   }
 
-  private AuditActor requireOperator(PlatformUser user, PermissionCode permission) {
+  private AuditActor requireOperator(User user, PermissionCode permission) {
     if (user.getUserType() != UserType.STAFF
         || !Boolean.TRUE.equals(user.getEnabled())
         || user.getStoreScopeType() != StoreScopeType.ALL_STORES
@@ -74,8 +74,7 @@ public class ServiceExecutionIdentityService {
 
   public Page<Candidate> candidates(int page, int size, PermissionCode permission, Long storeId) {
     if (page < 0 || size < 1 || size > 100) throw new ServiceException("ページ指定が不正です");
-    var pageable =
-        PageRequest.of(page, size, Sort.by(PlatformUser::getDisplayName, PlatformUser::getId));
+    var pageable = PageRequest.of(page, size, Sort.by(User::getDisplayName, User::getId));
     var roleIds = roles.findIdsByPermissionCode(PermissionCode.TASK_EXECUTE.name());
     var taskRoleIds = roles.findIdsByPermissionCode(permission.name());
     if (roleIds.isEmpty() || taskRoleIds.isEmpty()) return Page.empty(pageable);
@@ -98,12 +97,12 @@ public class ServiceExecutionIdentityService {
         .map(user -> new Candidate(user.getId(), user.getDisplayName()));
   }
 
-  private boolean hasPermission(PlatformUser user, PermissionCode permission) {
+  private boolean hasPermission(User user, PermissionCode permission) {
     return !Collections.disjoint(
         user.getRoleIds(), roles.findIdsByPermissionCode(permission.name()));
   }
 
-  private static AuditActor actor(PlatformUser user) {
+  private static AuditActor actor(User user) {
     return new AuditActor(user.getId(), user.getUserType().name(), user.getDisplayName());
   }
 

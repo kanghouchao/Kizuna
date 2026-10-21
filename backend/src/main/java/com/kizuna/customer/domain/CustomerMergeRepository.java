@@ -96,7 +96,7 @@ public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, St
       from com.kizuna.customer.domain.CustomerMerge m
         left join com.kizuna.customer.domain.Customer sc on sc.id = m.survivingCustomerId
         left join com.kizuna.customer.domain.Customer mc on mc.id = m.mergedCustomerId
-        left join com.kizuna.user.domain.PlatformUser mu on mu.id = m.mergedBy
+        left join com.kizuna.user.domain.User mu on mu.id = m.mergedBy
       """;
 
   // 両方向を 1 文で引く。括弧は必須 — 外すと続きの位置の条件が `or` の片方の枝にしか掛からず、
