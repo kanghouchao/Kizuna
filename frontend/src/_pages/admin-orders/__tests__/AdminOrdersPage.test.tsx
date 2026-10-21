@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import PlatformOrdersPage from '../ui/PlatformOrdersPage';
+import AdminOrdersPage from '../ui/AdminOrdersPage';
 import { orderApi } from '@/entities/order';
 import { hasPermission } from '@/shared/lib';
 
@@ -9,14 +9,14 @@ jest.mock('@/shared/lib', () => ({
 }));
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
-  orderApi: { platformList: jest.fn(), correctionHistory: jest.fn() },
+  orderApi: { adminList: jest.fn(), correctionHistory: jest.fn() },
 }));
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(hasPermission).mockReturnValue(true);
 });
 it('参照権限だけで一覧と履歴を開き、訂正操作は表示しない', async () => {
-  jest.mocked(orderApi.platformList).mockResolvedValue({
+  jest.mocked(orderApi.adminList).mockResolvedValue({
     rows: [
       {
         completion_invalidated: false,
@@ -46,7 +46,7 @@ it('参照権限だけで一覧と履歴を開き、訂正操作は表示しな�
     pageCount: 1,
   });
   jest.mocked(orderApi.correctionHistory).mockResolvedValue({ rows: [], nextCursor: null });
-  render(<PlatformOrdersPage />);
+  render(<AdminOrdersPage />);
   expect(await screen.findByRole('table', { name: '受注一覧' })).toBeInTheDocument();
   expect(screen.getByText('¥7,000')).toBeInTheDocument();
   expect(screen.getByText('¥11,900')).toBeInTheDocument();
@@ -57,24 +57,22 @@ it('参照権限だけで一覧と履歴を開き、訂正操作は表示しな�
   expect(detailDialog).toHaveTextContent('原完了日時');
   fireEvent.click(screen.getByRole('button', { name: /訂正履歴.*受注 o1/ }));
   expect(await screen.findByText('訂正履歴はありません')).toBeInTheDocument();
-  expect(orderApi.correctionHistory).toHaveBeenCalledWith('platform', 'o1', undefined);
+  expect(orderApi.correctionHistory).toHaveBeenCalledWith('admin', 'o1', undefined);
   expect(screen.queryByRole('button', { name: '訂正する' })).not.toBeInTheDocument();
 });
 it('権限のない利用者には一覧を取得せず拒否を示す', async () => {
   jest.mocked(hasPermission).mockReturnValue(false);
-  render(<PlatformOrdersPage />);
+  render(<AdminOrdersPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('受注を閲覧する権限がありません');
-  expect(orderApi.platformList).not.toHaveBeenCalled();
+  expect(orderApi.adminList).not.toHaveBeenCalled();
 });
 
 it('帳票閲覧権限のない注文参照者には帳票入口を表示しない', async () => {
   jest
     .mocked(hasPermission)
     .mockImplementation((_claims, permission) => permission === 'ORDER_SET_MANAGE');
-  jest
-    .mocked(orderApi.platformList)
-    .mockResolvedValue({ rows: [], total: 0, page: 0, pageCount: 0 });
-  render(<PlatformOrdersPage />);
+  jest.mocked(orderApi.adminList).mockResolvedValue({ rows: [], total: 0, page: 0, pageCount: 0 });
+  render(<AdminOrdersPage />);
   await screen.findByText('受注はありません。');
   expect(screen.queryByRole('link', { name: '運営金額集計' })).not.toBeInTheDocument();
 });

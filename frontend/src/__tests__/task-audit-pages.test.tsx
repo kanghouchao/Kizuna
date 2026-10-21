@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import TaskExecutionsPage from '@/_pages/platform-task-executions';
-import AuditEventsPage from '@/_pages/platform-audit-events';
+import TaskExecutionsPage from '@/_pages/admin-task-executions';
+import AuditEventsPage from '@/_pages/admin-audit-events';
 import { taskExecutionApi, ExecutionSummary } from '@/entities/task-execution';
 import { auditEventApi } from '@/entities/audit-event';
 import { notify } from '@/shared/notify';

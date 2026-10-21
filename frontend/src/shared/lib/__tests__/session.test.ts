@@ -1,64 +1,64 @@
 import Cookies from 'js-cookie';
 import {
-  clearPlatformSession,
-  getPlatformSessionKind,
-  getPlatformStoreId,
-  isPlatformSession,
-  setPlatformStore,
+  clearSession,
+  getSessionKind,
+  getCurrentStoreId,
+  hasSession,
+  setCurrentStore,
   isSafeMemberReturnPath,
   rememberMemberReturnPath,
-  startPlatformSession,
+  startSession,
   takeMemberReturnPath,
-} from '../platform-session';
+} from '../session';
 
-describe('platform-session', () => {
+describe('session', () => {
   afterEach(() => {
-    clearPlatformSession();
+    clearSession();
   });
 
-  it('startPlatformSession sets the platform-role cookie, readable via getPlatformSessionKind', () => {
-    startPlatformSession('admin');
-    expect(getPlatformSessionKind()).toBe('admin');
+  it('startSession sets the session-kind cookie, readable via getSessionKind', () => {
+    startSession('admin');
+    expect(getSessionKind()).toBe('admin');
   });
 
-  it('setPlatformStore sets the platform-store-id cookie, readable via getPlatformStoreId', () => {
-    setPlatformStore(2);
-    expect(getPlatformStoreId()).toBe('2');
+  it('setCurrentStore sets the current-store-id cookie, readable via getCurrentStoreId', () => {
+    setCurrentStore(2);
+    expect(getCurrentStoreId()).toBe('2');
   });
 
-  it('isPlatformSession is true only when platform-role cookie is present', () => {
-    expect(isPlatformSession()).toBe(false);
-    startPlatformSession('admin');
-    expect(isPlatformSession()).toBe(true);
+  it('hasSession is true only when session-kind cookie is present', () => {
+    expect(hasSession()).toBe(false);
+    startSession('admin');
+    expect(hasSession()).toBe(true);
   });
 
-  it('clearPlatformSession removes both cookies', () => {
-    startPlatformSession('admin');
-    setPlatformStore(1);
-    clearPlatformSession();
-    expect(getPlatformSessionKind()).toBeUndefined();
-    expect(getPlatformStoreId()).toBeUndefined();
+  it('clearSession removes both cookies', () => {
+    startSession('admin');
+    setCurrentStore(1);
+    clearSession();
+    expect(getSessionKind()).toBeUndefined();
+    expect(getCurrentStoreId()).toBeUndefined();
   });
 
-  it('startPlatformSession sets the platform-role cookie with the same expiry as expiresAt', () => {
+  it('startSession sets the session-kind cookie with the same expiry as expiresAt', () => {
     const setSpy = jest.spyOn(Cookies, 'set');
     const expiresAt = Date.now() + 60_000;
 
-    startPlatformSession('admin', expiresAt);
+    startSession('admin', expiresAt);
 
-    expect(setSpy).toHaveBeenCalledWith('platform-role', 'admin', {
+    expect(setSpy).toHaveBeenCalledWith('session-kind', 'admin', {
       expires: new Date(expiresAt),
     });
     setSpy.mockRestore();
   });
 
-  it('setPlatformStore sets the platform-store-id cookie with the same expiry as expiresAt', () => {
+  it('setCurrentStore sets the current-store-id cookie with the same expiry as expiresAt', () => {
     const setSpy = jest.spyOn(Cookies, 'set');
     const expiresAt = Date.now() + 60_000;
 
-    setPlatformStore(2, expiresAt);
+    setCurrentStore(2, expiresAt);
 
-    expect(setSpy).toHaveBeenCalledWith('platform-store-id', '2', { expires: new Date(expiresAt) });
+    expect(setSpy).toHaveBeenCalledWith('current-store-id', '2', { expires: new Date(expiresAt) });
     setSpy.mockRestore();
   });
 });
@@ -88,7 +88,7 @@ describe('会員ポータルの戻り先パス', () => {
     ['スキーム相対', '//evil.test/member/'],
     ['スキーム入り', '/member/x:https://evil.test'],
     ['バックスラッシュ', '/member\\evil.test'],
-    ['会員ポータル外', '/platform/dashboard/'],
+    ['会員ポータル外', '/admin/dashboard/'],
     ['店舗コンソール', '/store/1/orders'],
     ['空文字', ''],
   ])('%s は覚えないこと', (_label, value) => {
@@ -147,7 +147,7 @@ describe('会員ポータルの戻り先パス', () => {
     // 対で 1 つの戻り先なので、片方だけ消すと「戻り先はあるがトークンが無い」画面に着地する
     rememberMemberReturnPath('/member/receipts', '#tok3n');
 
-    rememberMemberReturnPath('/platform/line/callback', '');
+    rememberMemberReturnPath('/auth/line/callback', '');
 
     expect(takeMemberReturnPath()).toBe('/member/receipts#tok3n');
   });

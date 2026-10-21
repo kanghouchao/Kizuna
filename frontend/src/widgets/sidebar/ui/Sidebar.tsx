@@ -91,7 +91,7 @@ export function Sidebar() {
         setNavigation([
           {
             name: 'メイン',
-            items: [{ name: 'ダッシュボード', href: '/platform/dashboard', icon: HouseIcon }],
+            items: [{ name: 'ダッシュボード', href: '/admin/dashboard', icon: HouseIcon }],
           },
         ]);
       }

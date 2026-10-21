@@ -34,7 +34,7 @@ function CreateOrder({ replacement }: { replacement?: string }) {
         ...data,
         replacement_for_order_id: replacement,
         // 未選択は「自分」の意。項目ごと送らないことでサーバが実行者本人を受付担当に据える
-        // （JWT にも /platform/me にも利用者 id が無いため、画面の側で自分を選択値にはできない）
+        // （JWT にも /me にも利用者 id が無いため、画面の側で自分を選択値にはできない）
         receptionist_id: data.receptionist_id === '' ? undefined : Number(data.receptionist_id),
         arrival_scheduled_start_time: data.arrival_scheduled_start_time
           ? `${data.arrival_scheduled_start_time}:00`

@@ -3,12 +3,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import {
-  PermissionResponse,
-  PlatformPermission,
-  RoleResponse,
-  platformRoleApi,
-} from '@/entities/user';
+import { PermissionResponse, PermissionCode, RoleResponse, roleApi } from '@/entities/user';
 import { getApiErrorMessage, isConflict, useManagedList, useResource } from '@/shared/lib';
 import {
   Button,
@@ -29,7 +24,7 @@ import {
 
 interface RoleFormValues {
   name: string;
-  permissions: PlatformPermission[];
+  permissions: PermissionCode[];
 }
 
 interface RoleFormModalProps {
@@ -61,7 +56,7 @@ export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: Rol
     isLoading: detailLoading,
     failure: detailFailure,
     reload: reloadEditingRole,
-  } = useResource(editingId === null ? null : () => platformRoleApi.get(editingId), [editingId]);
+  } = useResource(editingId === null ? null : () => roleApi.get(editingId), [editingId]);
 
   const form = useForm<RoleFormValues>({ defaultValues: { name: '', permissions: [] } });
   const {
@@ -76,7 +71,7 @@ export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: Rol
     isLoading: catalogLoading,
     failed: catalogFailed,
     refetch: refetchCatalog,
-  } = useManagedList<PermissionResponse>(() => platformRoleApi.permissions());
+  } = useManagedList<PermissionResponse>(() => roleApi.permissions());
   // 届いた詳細をフォームへ移し終えたか。移した相手を持つのは、409 後の取り直しで届く別の
   // 詳細も同じ経路で載せ直すため
   const [seededRole, setSeededRole] = useState<RoleResponse | null>(null);
@@ -107,7 +102,7 @@ export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: Rol
     try {
       if (editingId !== null) {
         if (editingRole === null) return;
-        await platformRoleApi.update(editingId, {
+        await roleApi.update(editingId, {
           name: values.name,
           permissions: values.permissions,
           // 楽観ロック用バージョン（詳細応答の version をそのまま往復する）
@@ -115,7 +110,7 @@ export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: Rol
         });
         notify.success('ロールを更新しました');
       } else {
-        await platformRoleApi.create({ name: values.name, permissions: values.permissions });
+        await roleApi.create({ name: values.name, permissions: values.permissions });
         notify.success('ロールを追加しました');
       }
       onSaved();
@@ -212,7 +207,7 @@ export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: Rol
                   const permissions = sortByCode(catalog);
                   // 焦点は組の先頭が受ける
                   const firstCode = permissions.find(entry => entry.code !== undefined)?.code;
-                  const toggle = (code: PlatformPermission) => {
+                  const toggle = (code: PermissionCode) => {
                     field.onChange(
                       field.value.includes(code)
                         ? field.value.filter(item => item !== code)

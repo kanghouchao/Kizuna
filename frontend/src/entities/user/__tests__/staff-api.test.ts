@@ -1,4 +1,4 @@
-import { platformRoleApi, platformStaffApi } from '@/entities/user';
+import { roleApi, staffApi } from '@/entities/user';
 import { apiClient } from '@/shared/api';
 
 jest.mock('@/shared/api/client', () => ({
@@ -11,17 +11,17 @@ jest.mock('@/shared/api/client', () => ({
   },
 }));
 
-describe('platformStaffApi', () => {
+describe('staffApi', () => {
   // 一覧は他一覧と同形の Spring Page 形（0 起点）
-  it('list は /platform/staff を page/size/search 付きで GET し正規化ページを返す', async () => {
+  it('list は /admin/staff を page/size/search 付きで GET し正規化ページを返す', async () => {
     (apiClient.get as jest.Mock).mockResolvedValueOnce({
       data: { content: [{ id: 1 }], total_pages: 3, total_elements: 21, size: 10, number: 1 },
     });
 
-    const res = await platformStaffApi.list({ page: 1, size: 10, search: '山田' });
+    const res = await staffApi.list({ page: 1, size: 10, search: '山田' });
 
     expect(res).toEqual({ rows: [{ id: 1 }], page: 1, pageCount: 3, total: 21 });
-    expect(apiClient.get).toHaveBeenCalledWith('/platform/staff', {
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/staff', {
       params: { page: 1, size: 10, search: '山田', storeId: undefined },
     });
   });
@@ -31,18 +31,18 @@ describe('platformStaffApi', () => {
       data: { content: [], total_pages: 0, total_elements: 0, size: 10, number: 0 },
     });
 
-    await platformStaffApi.list({ page: 0, size: 10, storeId: 9 });
+    await staffApi.list({ page: 0, size: 10, storeId: 9 });
 
-    expect(apiClient.get).toHaveBeenCalledWith('/platform/staff', {
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/staff', {
       params: { page: 0, size: 10, search: undefined, storeId: 9 },
     });
   });
-  it('get は /platform/staff/{id} を GET する', async () => {
-    const res = await platformStaffApi.get(7);
-    expect(res).toEqual({ ok: true, url: '/platform/staff/7' });
+  it('get は /admin/staff/{id} を GET する', async () => {
+    const res = await staffApi.get(7);
+    expect(res).toEqual({ ok: true, url: '/admin/staff/7' });
   });
-  it('create は /platform/staff を POST する', async () => {
-    const res = await platformStaffApi.create({
+  it('create は /admin/staff を POST する', async () => {
+    const res = await staffApi.create({
       email: 'staff@example.com',
       password: 'pass1234',
       display_name: '新規スタッフ',
@@ -50,92 +50,92 @@ describe('platformStaffApi', () => {
       store_scope_type: 'SPECIFIC_STORES',
       store_ids: [1],
     });
-    expect(res).toEqual({ ok: true, url: '/platform/staff' });
+    expect(res).toEqual({ ok: true, url: '/admin/staff' });
     // 授権はロール id の配列で送る（応答側の roles: {id,name}[] とは非対称）
     expect(apiClient.post).toHaveBeenCalledWith(
-      '/platform/staff',
+      '/admin/staff',
       expect.objectContaining({ role_ids: [2] })
     );
   });
-  it('update は /platform/staff/:id を PUT し version を往復する', async () => {
-    const res = await platformStaffApi.update(1, {
+  it('update は /admin/staff/:id を PUT し version を往復する', async () => {
+    const res = await staffApi.update(1, {
       role_ids: [1, 2],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
       version: 7,
     });
-    expect(res).toEqual({ ok: true, url: '/platform/staff/1' });
+    expect(res).toEqual({ ok: true, url: '/admin/staff/1' });
     // 楽観ロックの往復契約: 更新ボディに version が含まれること
     expect(apiClient.put).toHaveBeenCalledWith(
-      '/platform/staff/1',
+      '/admin/staff/1',
       expect.objectContaining({ version: 7 })
     );
   });
-  it('grantableRoles は /platform/staff/grantable-roles を GET する', async () => {
-    const res = await platformStaffApi.grantableRoles();
-    expect(res).toEqual({ ok: true, url: '/platform/staff/grantable-roles' });
+  it('grantableRoles は /admin/staff/grantable-roles を GET する', async () => {
+    const res = await staffApi.grantableRoles();
+    expect(res).toEqual({ ok: true, url: '/admin/staff/grantable-roles' });
   });
   // 停止・再開は本体を持たない専用端点（版の往復も無い）
-  it('suspend は /platform/staff/{id}/suspension を POST する', async () => {
-    await platformStaffApi.suspend(7);
-    expect(apiClient.post).toHaveBeenCalledWith('/platform/staff/7/suspension');
+  it('suspend は /admin/staff/{id}/suspension を POST する', async () => {
+    await staffApi.suspend(7);
+    expect(apiClient.post).toHaveBeenCalledWith('/admin/staff/7/suspension');
   });
-  it('resume は /platform/staff/{id}/resumption を POST する', async () => {
-    await platformStaffApi.resume(7);
-    expect(apiClient.post).toHaveBeenCalledWith('/platform/staff/7/resumption');
+  it('resume は /admin/staff/{id}/resumption を POST する', async () => {
+    await staffApi.resume(7);
+    expect(apiClient.post).toHaveBeenCalledWith('/admin/staff/7/resumption');
   });
   // 仮パスワードの生値はこの応答にしか現れないので、本体をそのまま返す
-  it('resetPassword は /platform/staff/{id}/password-reset を POST し応答本体を返す', async () => {
+  it('resetPassword は /admin/staff/{id}/password-reset を POST し応答本体を返す', async () => {
     (apiClient.post as jest.Mock).mockResolvedValueOnce({
       data: { temporary_password: 'test-temporary-password' },
     });
 
-    const res = await platformStaffApi.resetPassword(7);
+    const res = await staffApi.resetPassword(7);
 
     expect(res).toEqual({ temporary_password: 'test-temporary-password' });
-    expect(apiClient.post).toHaveBeenCalledWith('/platform/staff/7/password-reset');
+    expect(apiClient.post).toHaveBeenCalledWith('/admin/staff/7/password-reset');
   });
 });
 
-describe('platformRoleApi', () => {
-  it('list は /platform/roles を GET する', async () => {
-    const res = await platformRoleApi.list();
-    expect(res).toEqual({ ok: true, url: '/platform/roles' });
+describe('roleApi', () => {
+  it('list は /admin/roles を GET する', async () => {
+    const res = await roleApi.list();
+    expect(res).toEqual({ ok: true, url: '/admin/roles' });
   });
-  it('get は /platform/roles/{id} を GET する', async () => {
-    const res = await platformRoleApi.get(5);
-    expect(res).toEqual({ ok: true, url: '/platform/roles/5' });
+  it('get は /admin/roles/{id} を GET する', async () => {
+    const res = await roleApi.get(5);
+    expect(res).toEqual({ ok: true, url: '/admin/roles/5' });
   });
-  it('create は /platform/roles を POST する', async () => {
-    const res = await platformRoleApi.create({
+  it('create は /admin/roles を POST する', async () => {
+    const res = await roleApi.create({
       name: '受付担当',
       permissions: ['ORDER_MANAGE'],
     });
-    expect(res).toEqual({ ok: true, url: '/platform/roles' });
+    expect(res).toEqual({ ok: true, url: '/admin/roles' });
     // 権限コードは接頭辞なしの素の enum 名で送る（PERM_ は JWT authorities 内部だけの形式）
-    expect(apiClient.post).toHaveBeenCalledWith('/platform/roles', {
+    expect(apiClient.post).toHaveBeenCalledWith('/admin/roles', {
       name: '受付担当',
       permissions: ['ORDER_MANAGE'],
     });
   });
-  it('update は /platform/roles/:id を PUT し version を往復する', async () => {
-    const res = await platformRoleApi.update(5, {
+  it('update は /admin/roles/:id を PUT し version を往復する', async () => {
+    const res = await roleApi.update(5, {
       name: '受付担当',
       permissions: ['ORDER_MANAGE', 'CUSTOMER_MANAGE'],
       version: 3,
     });
-    expect(res).toEqual({ ok: true, url: '/platform/roles/5' });
+    expect(res).toEqual({ ok: true, url: '/admin/roles/5' });
     expect(apiClient.put).toHaveBeenCalledWith(
-      '/platform/roles/5',
+      '/admin/roles/5',
       expect.objectContaining({ version: 3 })
     );
   });
-  it('remove は /platform/roles/:id を DELETE する', async () => {
-    await platformRoleApi.remove(5);
-    expect(apiClient.delete).toHaveBeenCalledWith('/platform/roles/5');
+  it('remove は /admin/roles/:id を DELETE する', async () => {
+    await roleApi.remove(5);
+    expect(apiClient.delete).toHaveBeenCalledWith('/admin/roles/5');
   });
-  it('permissions は /platform/permissions を GET する', async () => {
-    const res = await platformRoleApi.permissions();
-    expect(res).toEqual({ ok: true, url: '/platform/permissions' });
+  it('permissions は /admin/permissions を GET する', async () => {
+    const res = await roleApi.permissions();
+    expect(res).toEqual({ ok: true, url: '/admin/permissions' });
   });
 });

@@ -1,15 +1,15 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MeProvider, useMe } from '../MeContext';
-import { platformAuthApi } from '../../api/platform';
-import type { PlatformMeResponse } from '../types';
+import { authApi } from '../../api/auth';
+import type { MeResponse } from '../types';
 
-jest.mock('../../api/platform', () => ({
-  platformAuthApi: { me: jest.fn() },
+jest.mock('../../api/auth', () => ({
+  authApi: { me: jest.fn() },
 }));
 
-const mockedMe = platformAuthApi.me as jest.MockedFunction<typeof platformAuthApi.me>;
+const mockedMe = authApi.me as jest.MockedFunction<typeof authApi.me>;
 
-const meFixture: PlatformMeResponse = {
+const meFixture: MeResponse = {
   email: 'tanaka.hanako@example.com',
   display_name: '田中花子',
   line_linked: false,
@@ -35,7 +35,7 @@ function UpdateProbe() {
   );
 }
 
-describe('MeProvider（/platform/me の共有 seam）', () => {
+describe('MeProvider（/me の共有 seam）', () => {
   beforeEach(() => {
     // clearAllMocks は mockRejectedValueOnce の残り（Once 設定）を消さないため、
     // 実装ごと確実に畳んでから設定し直す。

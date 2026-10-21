@@ -1,6 +1,6 @@
 'use client';
 
-import { platformAuthApi, useAuth } from '@/entities/user';
+import { authApi, useAuth } from '@/entities/user';
 import { LineLinkSection } from '@/features/line-auth';
 import { useResource } from '@/shared/lib';
 import { Button, Card, CardContent, RegionError } from '@/shared/ui';
@@ -8,7 +8,7 @@ import { Button, Card, CardContent, RegionError } from '@/shared/ui';
 /** アカウントタブ。表示名とログアウトのみの最小画面。 */
 export function CastAccountPage() {
   const { logout } = useAuth();
-  const { data: me, isLoading, failure, reload } = useResource(() => platformAuthApi.me());
+  const { data: me, isLoading, failure, reload } = useResource(() => authApi.me());
 
   return (
     <div className="space-y-4 p-4">

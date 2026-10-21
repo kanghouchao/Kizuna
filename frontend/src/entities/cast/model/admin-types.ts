@@ -1,17 +1,17 @@
 import { CastEnrollmentStatus } from './types';
 
-export interface PlatformCastSummaryResponse {
+export interface AdminCastSummaryResponse {
   id: number;
   display_name: string;
   real_name: string | null;
 }
 
-export interface PlatformCastResponse extends PlatformCastSummaryResponse {
+export interface AdminCastResponse extends AdminCastSummaryResponse {
   platform_user_id: number;
   birth_date: string | null;
 }
 
-export interface PlatformCastEnrollmentResponse {
+export interface AdminCastEnrollmentResponse {
   id: string;
   store_id: number;
   store_name: string;

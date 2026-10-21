@@ -1,1 +1,1 @@
-export { default as PlatformOrdersPage } from './ui/PlatformOrdersPage';
+export { default as AdminOrdersPage } from './ui/AdminOrdersPage';

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Store, UpdateStoreRequest, platformStoreApi } from '@/entities/store';
+import { Store, UpdateStoreRequest, adminStoreApi } from '@/entities/store';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
@@ -17,7 +17,7 @@ export default function EditStorePage() {
     isLoading: loading,
     failure,
     reload: reloadStore,
-  } = useResource(id ? () => platformStoreApi.getById(id) : null, [id]);
+  } = useResource(id ? () => adminStoreApi.getById(id) : null, [id]);
   // 欄の起点は取得した店舗で、編集を始めたらその下書きが優先する。効果で写すと、店舗が
   // 届いたレンダーで欄が空のまま一度描かれる。下書きは書き始めた時点の店舗に結び付ける —
   // 別の店舗が届いたら、その店舗の値で描き直す
@@ -49,9 +49,9 @@ export default function EditStorePage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await platformStoreApi.update(store.id, formData);
+      await adminStoreApi.update(store.id, formData);
       notify.success('店舗情報を更新しました');
-      router.push('/platform/stores');
+      router.push('/admin/stores');
     } catch (err: unknown) {
       if (
         typeof err === 'object' &&
@@ -85,7 +85,7 @@ export default function EditStorePage() {
           // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="この店舗は見つかりませんでした"
-            fallback={{ href: '/platform/stores', label: '店舗一覧へ' }}
+            fallback={{ href: '/admin/stores', label: '店舗一覧へ' }}
           />
         ) : (
           <RegionError message="店舗情報の取得に失敗しました" onRetry={() => void reloadStore()} />
@@ -146,11 +146,7 @@ export default function EditStorePage() {
 
             {/* 操作 */}
             <div className="flex justify-end space-x-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push('/platform/stores')}
-              >
+              <Button type="button" variant="outline" onClick={() => router.push('/admin/stores')}>
                 キャンセル
               </Button>
               <Button type="submit" disabled={saving}>

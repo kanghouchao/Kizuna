@@ -8,15 +8,15 @@ export interface StoreData {
 }
 
 /**
- * 平台ドメイン。サーバ実行時の env が唯一の根拠で、role 判定と、proxy がクライアントへ渡す
+ * アプリドメイン。サーバ実行時の env が唯一の根拠で、role 判定と、proxy がクライアントへ渡す
  * cookie の両方がここを読む（既定値が分かれると cookie だけ別のドメインを運ぶため 1 箇所に置く）。
  */
-export const PLATFORM_DOMAIN = process.env.APP_DOMAIN || 'kizuna.test';
+export const APP_DOMAIN = process.env.APP_DOMAIN || 'kizuna.test';
 
-const ADMIN_DOMAINS = new Set([PLATFORM_DOMAIN]);
+const ADMIN_DOMAINS = new Set([APP_DOMAIN]);
 
 export async function resolveStore(request: NextRequest): Promise<{
-  role: 'platform' | 'store';
+  role: 'app' | 'store';
   storeData?: StoreData;
 }> {
   const rawHost =
@@ -26,7 +26,7 @@ export async function resolveStore(request: NextRequest): Promise<{
   const hostname = rawHost.split(',')[0].trim().split(':')[0].toLowerCase();
 
   if (ADMIN_DOMAINS.has(hostname)) {
-    return { role: 'platform' };
+    return { role: 'app' };
   }
 
   // Cookie の店舗情報を優先使用（重複クエリを回避）
@@ -53,7 +53,7 @@ export async function resolveStore(request: NextRequest): Promise<{
 
   // Cookie に店舗情報がない場合、バックエンド API を呼び出す（バックエンドにキャッシュあり）
   const validationApiUrl =
-    process.env.STORE_LOOKUP_API_URL || 'http://backend:8080/platform/stores/lookup';
+    process.env.STORE_LOOKUP_API_URL || 'http://backend:8080/admin/stores/lookup';
   const url = validationApiUrl + `?domain=${encodeURIComponent(hostname)}`;
 
   try {
@@ -65,7 +65,7 @@ export async function resolveStore(request: NextRequest): Promise<{
       const storeName = String(data.name ?? '');
       const isValid = Boolean(storeId || storeName || data.domain);
 
-      // プラットフォーム応答（StoreVO）は template_key を返さないため、含まれていれば採用し、
+      // lookup 応答（StoreVO）は template_key を返さないため、含まれていれば採用し、
       // 無ければ店舗側の /store/config/public を追撃取得する（キャッシュ無しで鮮度が高い）。
       let templateKey = 'default';
       if (data.template_key) {

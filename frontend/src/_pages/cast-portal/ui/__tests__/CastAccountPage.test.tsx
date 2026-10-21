@@ -1,15 +1,15 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CastAccountPage } from '../CastAccountPage';
-import { platformAuthApi, platformLineApi, useAuth } from '@/entities/user';
+import { authApi, lineApi, useAuth } from '@/entities/user';
 
 jest.mock('@/entities/user', () => ({
-  platformAuthApi: { me: jest.fn() },
-  platformLineApi: { config: jest.fn() },
+  authApi: { me: jest.fn() },
+  lineApi: { config: jest.fn() },
   useAuth: jest.fn(),
 }));
 
-const mockedMe = platformAuthApi.me as jest.Mock;
-const mockedLineConfig = platformLineApi.config as jest.Mock;
+const mockedMe = authApi.me as jest.Mock;
+const mockedLineConfig = lineApi.config as jest.Mock;
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockLogout = jest.fn();
 

@@ -4,11 +4,11 @@ import { useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import type {
-  PlatformStore,
-  PlatformStoreScopeType,
+  AuthorizedStore,
+  StoreScopeType,
   RoleSummaryResponse,
-  PlatformStaffCreateRequest,
-  PlatformStaffUpdateRequest,
+  StaffCreateRequest,
+  StaffUpdateRequest,
   ServiceIdentityCreateRequest,
   ServiceIdentityResponse,
 } from '@/entities/user';
@@ -41,7 +41,7 @@ import { roleSetLabel } from '../lib/roleSetLabel';
 import { storeSetLabel } from '../lib/storeSetLabel';
 
 export interface StaffModalProps {
-  stores: PlatformStore[];
+  stores: AuthorizedStore[];
   storesLoading: boolean;
   storesFailed: boolean;
   onReloadStores: () => void;
@@ -58,13 +58,13 @@ export interface StaffEditModalProps<T> extends StaffModalProps {
 type CreateOptions = {
   mode: 'create';
   title: string;
-  initialScope: PlatformStoreScopeType;
+  initialScope: StoreScopeType;
   displayName: { label: string; required: string; placeholder?: string };
   successMessage: string;
   failureMessage: string;
   onCreated: () => void;
 } & (
-  | { identity: 'human'; create: (values: PlatformStaffCreateRequest) => Promise<unknown> }
+  | { identity: 'human'; create: (values: StaffCreateRequest) => Promise<unknown> }
   | {
       identity: 'service';
       create: (
@@ -77,7 +77,7 @@ type EditOptions<T> = {
   resource: KeyedResource<T>;
   honorific: string;
   onUpdated: () => void;
-  update: (id: number, values: PlatformStaffUpdateRequest) => Promise<unknown>;
+  update: (id: number, values: StaffUpdateRequest) => Promise<unknown>;
 };
 type Props<T> = StaffModalProps & {
   loadRoles: () => Promise<RoleSummaryResponse[]>;
@@ -89,7 +89,7 @@ interface FormValues {
   password: string;
   display_name: string;
   role_ids: number[];
-  storeSet: { storeScopeType: PlatformStoreScopeType; storeIds: number[] };
+  storeSet: { storeScopeType: StoreScopeType; storeIds: number[] };
 }
 
 export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {

@@ -1,11 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MonthlyRemunerationsPage } from '@/_pages/store-monthly-remunerations';
-import PlatformMonthlyRemunerationsPage from '@/_pages/platform-monthly-remunerations';
+import AdminMonthlyRemunerationsPage from '@/_pages/admin-monthly-remunerations';
 import { CastMonthlyRemunerationsPage } from '@/_pages/cast-portal/ui/CastMonthlyRemunerationsPage';
 import {
   fetchMonthlyPdf,
   monthlyRemunerationApi,
-  platformMonthlyRemunerationApi,
+  adminMonthlyRemunerationApi,
   selfMonthlyRemunerationApi,
 } from '@/entities/order';
 
@@ -29,7 +29,7 @@ jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   fetchMonthlyPdf: jest.fn(),
   monthlyRemunerationApi: { casts: jest.fn(), monthly: jest.fn() },
-  platformMonthlyRemunerationApi: { stores: jest.fn(), casts: jest.fn(), monthly: jest.fn() },
+  adminMonthlyRemunerationApi: { stores: jest.fn(), casts: jest.fn(), monthly: jest.fn() },
   selfMonthlyRemunerationApi: { stores: jest.fn(), monthly: jest.fn() },
   selfRemunerationApi: { detail: jest.fn(), changes: jest.fn() },
 }));
@@ -79,9 +79,9 @@ async function choose(label: string, name: string) {
 const scopes = [
   { scope: 'store', Page: MonthlyRemunerationsPage, api: monthlyRemunerationApi },
   {
-    scope: 'platform',
-    Page: PlatformMonthlyRemunerationsPage,
-    api: platformMonthlyRemunerationApi,
+    scope: 'admin',
+    Page: AdminMonthlyRemunerationsPage,
+    api: adminMonthlyRemunerationApi,
   },
   { scope: 'self', Page: CastMonthlyRemunerationsPage, api: selfMonthlyRemunerationApi },
 ] as const;
@@ -93,8 +93,8 @@ beforeEach(() => {
   const storePage = { rows: stores, page: 0, pageCount: 1, total: 2 };
   const personPage = { rows: people, page: 0, pageCount: 1, total: 2 };
   jest.mocked(selfMonthlyRemunerationApi.stores).mockResolvedValue(storePage);
-  jest.mocked(platformMonthlyRemunerationApi.stores).mockResolvedValue(storePage);
-  jest.mocked(platformMonthlyRemunerationApi.casts).mockResolvedValue(personPage);
+  jest.mocked(adminMonthlyRemunerationApi.stores).mockResolvedValue(storePage);
+  jest.mocked(adminMonthlyRemunerationApi.casts).mockResolvedValue(personPage);
   jest.mocked(monthlyRemunerationApi.casts).mockResolvedValue(personPage);
   for (const { api } of scopes) jest.mocked(api.monthly).mockResolvedValue(statement);
 });
@@ -134,7 +134,7 @@ describe.each(scopes)('$scope の月次 PDF ライフサイクル', ({ scope, Pa
       const signal = jest.mocked(fetchMonthlyPdf).mock.calls[0][1];
       const page = deferred<typeof statement>();
       jest.mocked(api.monthly).mockReturnValueOnce(page.promise);
-      if (scope === 'platform')
+      if (scope === 'admin')
         fireEvent.change(screen.getByLabelText('対象月'), { target: { value: '2026-10' } });
       next();
       await waitFor(() => expect(api.monthly).toHaveBeenCalledTimes(2));
@@ -178,7 +178,7 @@ describe.each(scopes)('$scope の月次 PDF ライフサイクル', ({ scope, Pa
       else if (scope === 'store') await choose('キャスト本人', '別本人');
       else {
         await choose('店舗', '別店舗');
-        if (scope === 'platform') {
+        if (scope === 'admin') {
           await choose('キャスト本人', '対象本人');
           fireEvent.change(screen.getByLabelText('対象月'), { target: { value: '2026-09' } });
         }

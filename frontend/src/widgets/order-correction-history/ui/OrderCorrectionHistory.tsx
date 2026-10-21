@@ -15,7 +15,7 @@ import {
 
 interface Props {
   orderId: string;
-  scope: 'store' | 'platform';
+  scope: 'store' | 'admin';
 }
 const dateTime = (value: string) => new Date(value).toLocaleString('ja-JP');
 const yen = (value: number) => `¥${value.toLocaleString()}`;
@@ -102,7 +102,7 @@ export function OrderCorrectionHistory({ orderId, scope }: Props) {
         {...(status === 404
           ? {
               fallback: {
-                href: scope === 'platform' ? '/platform/orders' : storePath('/orders'),
+                href: scope === 'admin' ? '/admin/orders' : storePath('/orders'),
                 label: '一覧へ戻る',
               },
             }

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { remunerationApi } from '../api';
 import type { Bonus, Guarantee } from './types';
-import { getPlatformStoreId, readTokenClaims } from '@/shared/lib';
+import { getCurrentStoreId, readTokenClaims } from '@/shared/lib';
 
 export type EditTarget =
   | { kind: 'guarantee'; item?: Guarantee; version: number; cancel?: boolean }
@@ -48,7 +48,7 @@ function update(scope: string, value: PendingOperation | null) {
 export function currentOperationScope(): string | null {
   if (typeof window === 'undefined') return null;
   const subject = readTokenClaims()?.subject;
-  const store = getPlatformStoreId();
+  const store = getCurrentStoreId();
   return subject && store ? JSON.stringify([subject, store]) : null;
 }
 export function usePendingOperation(scope: string | null) {

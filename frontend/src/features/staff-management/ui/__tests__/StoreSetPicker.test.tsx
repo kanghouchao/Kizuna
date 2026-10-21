@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { PlatformStoreScopeType } from '@/entities/user';
+import type { StoreScopeType } from '@/entities/user';
 import { StoreSetPicker } from '../StoreSetPicker';
 
 it('フォーム文脈なしで特典規則の店舗範囲を選べる', () => {
   const changed = jest.fn();
   function Harness() {
     const [value, setValue] = useState<{
-      storeScopeType: PlatformStoreScopeType;
+      storeScopeType: StoreScopeType;
       storeIds: number[];
     }>({ storeScopeType: 'ALL_STORES', storeIds: [] });
     return (

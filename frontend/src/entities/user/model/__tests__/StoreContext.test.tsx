@@ -1,25 +1,25 @@
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { StoreContextProvider, useStoreContext } from '../StoreContext';
-import { platformAuthApi } from '../../api/platform';
-import { getPlatformStoreId, setPlatformStore } from '@/shared/lib';
-import type { PlatformStore } from '../types';
+import { authApi } from '../../api/auth';
+import { getCurrentStoreId, setCurrentStore } from '@/shared/lib';
+import type { AuthorizedStore } from '../types';
 
-jest.mock('../../api/platform', () => ({
-  platformAuthApi: { stores: jest.fn() },
+jest.mock('../../api/auth', () => ({
+  authApi: { stores: jest.fn() },
 }));
 
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
-  getPlatformStoreId: jest.fn(),
-  setPlatformStore: jest.fn(),
+  getCurrentStoreId: jest.fn(),
+  setCurrentStore: jest.fn(),
 }));
 
-const mockedStores = platformAuthApi.stores as jest.MockedFunction<typeof platformAuthApi.stores>;
-const mockedGetStoreId = getPlatformStoreId as jest.MockedFunction<typeof getPlatformStoreId>;
-const mockedSetPlatformStore = setPlatformStore as jest.MockedFunction<typeof setPlatformStore>;
+const mockedStores = authApi.stores as jest.MockedFunction<typeof authApi.stores>;
+const mockedGetStoreId = getCurrentStoreId as jest.MockedFunction<typeof getCurrentStoreId>;
+const mockedSetCurrentStore = setCurrentStore as jest.MockedFunction<typeof setCurrentStore>;
 
-const storeA: PlatformStore = { id: 1, name: '店舗A', status: 'ACTIVE' };
-const storeB: PlatformStore = { id: 2, name: '店舗B', status: 'PREPARING' };
+const storeA: AuthorizedStore = { id: 1, name: '店舗A', status: 'ACTIVE' };
+const storeB: AuthorizedStore = { id: 2, name: '店舗B', status: 'PREPARING' };
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <StoreContextProvider>{children}</StoreContextProvider>
@@ -40,7 +40,7 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
 
       expect(result.current.stores).toBeNull();
       expect(result.current.currentStoreId).toBeUndefined();
-      expect(mockedSetPlatformStore).not.toHaveBeenCalled();
+      expect(mockedSetCurrentStore).not.toHaveBeenCalled();
     });
 
     it('授権店舗ゼロは空一覧として確定し、現在店舗は未確定のまま', async () => {
@@ -50,7 +50,7 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
 
       await waitFor(() => expect(result.current.stores).toEqual([]));
       expect(result.current.currentStoreId).toBeUndefined();
-      expect(mockedSetPlatformStore).not.toHaveBeenCalled();
+      expect(mockedSetCurrentStore).not.toHaveBeenCalled();
     });
 
     it('stores() が失敗したときは値を確定させず loadFailed を立てる', async () => {
@@ -80,7 +80,7 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       const { result } = renderHook(() => useStoreContext(), { wrapper });
       await waitFor(() => expect(result.current.currentStoreId).toBe('1'));
 
-      let resolveReload: (stores: PlatformStore[]) => void = () => {};
+      let resolveReload: (stores: AuthorizedStore[]) => void = () => {};
       mockedStores.mockReturnValueOnce(new Promise(resolve => (resolveReload = resolve)));
       mockedGetStoreId.mockReturnValue('1');
       act(() => result.current.reload());
@@ -119,7 +119,7 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
 
       await waitFor(() => expect(result.current.currentStoreId).toBe('2'));
       expect(result.current.currentStore).toEqual(storeB);
-      expect(mockedSetPlatformStore).toHaveBeenCalledWith('2');
+      expect(mockedSetCurrentStore).toHaveBeenCalledWith('2');
     });
 
     it.each([undefined, '99'])(
@@ -130,18 +130,18 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
         const { result } = renderHook(() => useStoreContext(), { wrapper });
 
         await waitFor(() => expect(result.current.currentStoreId).toBe('1'));
-        expect(mockedSetPlatformStore).toHaveBeenCalledWith('1');
+        expect(mockedSetCurrentStore).toHaveBeenCalledWith('1');
       }
     );
 
     it('cookie を書いてから現在店舗を出す（apiClient が同期に読むため）', async () => {
       const seen: (string | undefined)[] = [];
-      mockedSetPlatformStore.mockImplementation(id => {
+      mockedSetCurrentStore.mockImplementation(id => {
         mockedGetStoreId.mockReturnValue(String(id));
       });
       function Probe() {
         const { currentStoreId } = useStoreContext();
-        if (currentStoreId !== undefined) seen.push(getPlatformStoreId());
+        if (currentStoreId !== undefined) seen.push(getCurrentStoreId());
         return null;
       }
 
@@ -160,11 +160,11 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
     it('cookie を書き、現在店舗を差し替える', async () => {
       const { result } = renderHook(() => useStoreContext(), { wrapper });
       await waitFor(() => expect(result.current.currentStoreId).toBe('1'));
-      mockedSetPlatformStore.mockClear();
+      mockedSetCurrentStore.mockClear();
 
       act(() => result.current.switchStore(2));
 
-      expect(mockedSetPlatformStore).toHaveBeenCalledWith(2);
+      expect(mockedSetCurrentStore).toHaveBeenCalledWith(2);
       expect(result.current.currentStoreId).toBe('2');
       expect(result.current.currentStore).toEqual(storeB);
     });

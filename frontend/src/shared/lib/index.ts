@@ -15,24 +15,24 @@ export { useCursorList } from './hooks/useCursorList';
 export { useResource } from './hooks/useResource';
 export { useDeleteAction } from './hooks/useDeleteAction';
 export {
-  clearPlatformSession,
+  clearSession,
   isSafeMemberReturnPath,
   rememberMemberReturnPath,
   takeMemberReturnPath,
-  getPlatformSessionKind,
-  getPlatformStoreId,
-  isPlatformSession,
-  setPlatformStore,
-  startPlatformSession,
-} from './platform-session';
+  getSessionKind,
+  getCurrentStoreId,
+  hasSession,
+  setCurrentStore,
+  startSession,
+} from './session';
 export { isLegacyStorePath, storePath } from './store-route';
 export { cn } from './utils';
 export { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, integerRule } from './validation';
-export { isPublicPlatformPath } from './app-area';
+export { isPublicAuthPath } from './app-area';
 export {
   LINE_AUTHORIZE_ENDPOINT,
   consumeLineAuthorization,
-  isLinePlatformHost,
+  isLineAppHost,
   lineCallbackRedirectUri,
   prepareLineAuthorization,
   startLineAuthorization,

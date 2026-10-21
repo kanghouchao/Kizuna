@@ -125,9 +125,9 @@ describe('AdminShell', () => {
     });
   });
 
-  describe('/platform 配下', () => {
+  describe('/admin 配下', () => {
     beforeEach(() => {
-      mockPathname = '/platform/dashboard';
+      mockPathname = '/admin/dashboard';
     });
 
     it('店舗の読み込み中・失敗・ゼロでも本文を描く', () => {

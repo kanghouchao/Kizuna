@@ -1,8 +1,8 @@
 import { receiptClaimUrl } from '../lib/receiptClaimUrl';
 
 describe('receiptClaimUrl', () => {
-  it('平台ドメインの申領画面を指し、トークンをフラグメントに置く', () => {
-    // 会員ポータルは平台ドメイン側。店舗コンソールのドメインで組み立てると、店舗ドメインで
+  it('アプリドメインの申領画面を指し、トークンをフラグメントに置く', () => {
+    // 会員ポータルはアプリドメイン側。店舗コンソールのドメインで組み立てると、店舗ドメインで
     // 配信された瞬間に客の QR が行き先を失う
     expect(receiptClaimUrl('raw-receipt-token')).toBe(
       'http://kizuna.test/member/receipts#raw-receipt-token'

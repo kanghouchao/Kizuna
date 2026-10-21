@@ -1,1 +1,1 @@
-export { SettingsPage as default } from '@/_pages/platform-settings';
+export { SettingsPage as default } from '@/_pages/admin-settings';

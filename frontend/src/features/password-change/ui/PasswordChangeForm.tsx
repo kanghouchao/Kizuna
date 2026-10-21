@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { platformAuthApi, useAuth } from '@/entities/user';
+import { authApi, useAuth } from '@/entities/user';
 import { getApiErrorMessage } from '@/shared/lib';
 import {
   Button,
@@ -49,7 +49,7 @@ export function PasswordChangeForm() {
 
   const submit = async (values: PasswordChangeFormValues) => {
     try {
-      await platformAuthApi.changePassword({
+      await authApi.changePassword({
         current_password: values.current_password,
         new_password: values.new_password,
       });

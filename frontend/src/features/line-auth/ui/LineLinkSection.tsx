@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { notify } from '@/shared/notify';
-import { platformAuthApi, platformLineApi } from '@/entities/user';
-import { isLinePlatformHost, startLineAuthorization } from '@/shared/lib';
+import { authApi, lineApi } from '@/entities/user';
+import { isLineAppHost, startLineAuthorization } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -25,11 +25,11 @@ export function LineLinkSection() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    // 店舗ドメイン上ではコールバック URL がチャネル登録の平台 origin と食い違い認可が成立しないため、入口を出さない
-    if (!isLinePlatformHost()) return;
+    // 店舗ドメイン上ではコールバック URL がチャネル登録のアプリ origin と食い違い認可が成立しないため、入口を出さない
+    if (!isLineAppHost()) return;
     const load = async () => {
       try {
-        const [config, me] = await Promise.all([platformLineApi.config(), platformAuthApi.me()]);
+        const [config, me] = await Promise.all([lineApi.config(), authApi.me()]);
         setLinked(me.line_linked);
         setSubject(me.email ?? '');
         if (config.enabled && config.channel_id) {

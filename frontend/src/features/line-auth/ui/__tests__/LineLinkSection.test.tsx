@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LineLinkSection } from '../LineLinkSection';
-import { platformAuthApi, platformLineApi } from '@/entities/user';
+import { authApi, lineApi } from '@/entities/user';
 import { startLineAuthorization } from '@/shared/lib';
-import type { PlatformMeResponse } from '@/entities/user';
+import type { MeResponse } from '@/entities/user';
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
@@ -12,8 +12,8 @@ jest.mock('@/entities/user', () => {
   const actual = jest.requireActual('@/entities/user');
   return {
     ...actual,
-    platformLineApi: { ...actual.platformLineApi, config: jest.fn() },
-    platformAuthApi: { ...actual.platformAuthApi, me: jest.fn() },
+    lineApi: { ...actual.lineApi, config: jest.fn() },
+    authApi: { ...actual.authApi, me: jest.fn() },
   };
 });
 
@@ -22,11 +22,11 @@ jest.mock('@/shared/lib', () => {
   return { ...actual, startLineAuthorization: jest.fn() };
 });
 
-const mockedConfig = platformLineApi.config as jest.Mock;
-const mockedMe = platformAuthApi.me as jest.Mock;
+const mockedConfig = lineApi.config as jest.Mock;
+const mockedMe = authApi.me as jest.Mock;
 const mockedStart = startLineAuthorization as jest.Mock;
 
-function meResponse(lineLinked: boolean): PlatformMeResponse {
+function meResponse(lineLinked: boolean): MeResponse {
   return {
     email: 'user@kizuna.test',
     display_name: '本人',

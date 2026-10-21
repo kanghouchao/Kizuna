@@ -1,7 +1,7 @@
 export * from './model/types';
-export { platformAuthApi } from './api/platform';
-export { platformLineApi } from './api/line';
-export { platformStaffApi, platformRoleApi } from './api/platform-staff';
+export { authApi } from './api/auth';
+export { lineApi } from './api/line';
+export { staffApi, roleApi } from './api/staff';
 export { serviceIdentityApi } from './api/service-identity';
 export { StoreContextProvider, useStoreContext } from './model/StoreContext';
 export { MeProvider, useMe } from './model/MeContext';

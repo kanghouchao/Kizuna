@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { platformCastApi, PlatformCastSummaryResponse } from '@/entities/cast';
+import { adminCastApi, AdminCastSummaryResponse } from '@/entities/cast';
 import { useListPage } from '@/shared/lib';
 import {
   Button,
@@ -16,10 +16,10 @@ import {
 } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 
-export function PlatformCastsPage() {
+export function AdminCastsPage() {
   const [search, setSearch] = useState('');
-  const list = useListPage<PlatformCastSummaryResponse, string>(
-    (page, term) => platformCastApi.list({ page, size: 20, search: term || undefined }),
+  const list = useListPage<AdminCastSummaryResponse, string>(
+    (page, term) => adminCastApi.list({ page, size: 20, search: term || undefined }),
     ''
   );
   return (
@@ -72,7 +72,7 @@ export function PlatformCastsPage() {
               <TableCell>{person.display_name}</TableCell>
               <TableCell>{person.real_name ?? '未登録'}</TableCell>
               <TableCell>
-                <Button variant="ghost" render={<Link href={`/platform/casts/${person.id}`} />}>
+                <Button variant="ghost" render={<Link href={`/admin/casts/${person.id}`} />}>
                   在籍を確認
                 </Button>
               </TableCell>

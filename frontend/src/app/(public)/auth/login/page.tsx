@@ -1,1 +1,1 @@
-export { PlatformLoginPage as default } from '@/_pages/platform-login';
+export { LoginPage as default } from '@/_pages/auth-login';

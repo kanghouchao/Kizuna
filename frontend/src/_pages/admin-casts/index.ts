@@ -1,2 +1,2 @@
-export { PlatformCastsPage } from './ui/PlatformCastsPage';
-export { PlatformCastDetailPage } from './ui/PlatformCastDetailPage';
+export { AdminCastsPage } from './ui/AdminCastsPage';
+export { AdminCastDetailPage } from './ui/AdminCastDetailPage';

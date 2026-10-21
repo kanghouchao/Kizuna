@@ -1,1 +1,1 @@
-export { default } from '@/_pages/platform-monthly-remunerations';
+export { default } from '@/_pages/admin-monthly-remunerations';

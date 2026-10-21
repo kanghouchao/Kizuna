@@ -2,7 +2,7 @@
 
 import { PlusIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { PlatformStaffResponse, platformStaffApi, useStoreContext } from '@/entities/user';
+import { StaffResponse, staffApi, useStoreContext } from '@/entities/user';
 import { StaffCreateModal, StaffEditModal, roleSetLabel } from '@/features/staff-management';
 import {
   getApiErrorMessage,
@@ -55,9 +55,9 @@ export default function StaffPage() {
   const [storeFilter, setStoreFilter] = useState(ALL_STORES);
   const storeId = storeFilter === ALL_STORES ? undefined : Number(storeFilter);
 
-  const list = useListPage<PlatformStaffResponse, StaffCriteria>(
+  const list = useListPage<StaffResponse, StaffCriteria>(
     (page, criteria) =>
-      platformStaffApi.list({
+      staffApi.list({
         page,
         size: PAGE_SIZE,
         search: criteria.search || undefined,
@@ -87,9 +87,9 @@ export default function StaffPage() {
     { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; id: number }
   >({ kind: 'none' });
   const editingId = modal.kind === 'edit' ? modal.id : null;
-  const editing = useKeyedResource<PlatformStaffResponse>(
-    ['platformStaffApi', editingId],
-    editingId === null ? null : () => platformStaffApi.get(editingId)
+  const editing = useKeyedResource<StaffResponse>(
+    ['staffApi', editingId],
+    editingId === null ? null : () => staffApi.get(editingId)
   );
   const closeModal = () => {
     if (editing.failure === 'notFound') void list.reload();
@@ -98,8 +98,8 @@ export default function StaffPage() {
 
   // 停止は対象のセッションを即時に失効させるため確認を挟む。拒否の理由（自分自身・
   // 最後の管理権限保持者・委譲外）はサーバだけが持つので、文言は応答からそのまま出す。
-  const suspension = useDeleteAction<PlatformStaffResponse>({
-    remove: member => platformStaffApi.suspend(member.id ?? 0),
+  const suspension = useDeleteAction<StaffResponse>({
+    remove: member => staffApi.suspend(member.id ?? 0),
     successMessage: 'アカウントを停止しました',
     errorMessage: 'アカウントの停止に失敗しました',
     onDeleted: list.reload,
@@ -108,7 +108,7 @@ export default function StaffPage() {
   // 再設定の確認対象と発行された仮パスワードはページに置く — 行に持たせると
   // 成功後の一覧取り直しで行ごと unmount され、表示が消える。
   const [resetTargetOpen, setResetTargetOpen] = useState(false);
-  const [resetTarget, setResetTarget] = useState<PlatformStaffResponse | null>(null);
+  const [resetTarget, setResetTarget] = useState<StaffResponse | null>(null);
   const [issuedOpen, setIssuedOpen] = useState(false);
   const [issued, setIssued] = useState<{
     displayName: string;
@@ -121,12 +121,12 @@ export default function StaffPage() {
   const [resetting, setResetting] = useState(false);
   const resetRequestIdRef = useRef(0);
 
-  const resetPassword = async (member: PlatformStaffResponse) => {
+  const resetPassword = async (member: StaffResponse) => {
     setResetTargetOpen(false);
     setResetting(true);
     const requestId = ++resetRequestIdRef.current;
     try {
-      const result = await platformStaffApi.resetPassword(member.id ?? 0);
+      const result = await staffApi.resetPassword(member.id ?? 0);
       if (requestId !== resetRequestIdRef.current) return;
       setIssued({
         displayName: member.display_name ?? '',
@@ -143,9 +143,9 @@ export default function StaffPage() {
   };
 
   // 再開は元に戻す操作なので確認を挟まない
-  const resume = async (member: PlatformStaffResponse) => {
+  const resume = async (member: StaffResponse) => {
     try {
-      await platformStaffApi.resume(member.id ?? 0);
+      await staffApi.resume(member.id ?? 0);
       notify.success('アカウントを再開しました');
       void list.reload();
     } catch (error) {

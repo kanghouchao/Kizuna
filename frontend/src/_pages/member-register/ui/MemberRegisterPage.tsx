@@ -13,7 +13,7 @@ export function MemberRegisterPage() {
       <p className="mt-6 text-center text-xs text-[#9a958e]">
         すでにアカウントをお持ちの方は{' '}
         <Link
-          href="/platform/login"
+          href="/auth/login"
           className="text-[#7c3aed] hover:underline focus:underline focus:outline-none"
         >
           ログイン

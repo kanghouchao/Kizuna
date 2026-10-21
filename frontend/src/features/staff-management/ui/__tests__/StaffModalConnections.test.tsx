@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { platformStaffApi, serviceIdentityApi } from '@/entities/user';
-import type { PlatformStaffResponse, ServiceIdentityResponse } from '@/entities/user';
+import { staffApi, serviceIdentityApi } from '@/entities/user';
+import type { StaffResponse, ServiceIdentityResponse } from '@/entities/user';
 import { useKeyedResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { StaffCreateModal } from '../StaffCreateModal';
@@ -9,7 +9,7 @@ import { ServiceIdentityCreateModal } from '../ServiceIdentityCreateModal';
 import { ServiceIdentityEditModal } from '../ServiceIdentityEditModal';
 
 jest.mock('@/entities/user', () => ({
-  platformStaffApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
+  staffApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
   serviceIdentityApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
 }));
 jest.mock('@/shared/notify', () => ({
@@ -20,8 +20,8 @@ const cases = [
   {
     name: '従業員作成',
     Create: StaffCreateModal,
-    api: platformStaffApi,
-    roles: platformStaffApi.grantableRoles,
+    api: staffApi,
+    roles: staffApi.grantableRoles,
     service: false,
     scope: 'SPECIFIC_STORES',
   },
@@ -36,8 +36,8 @@ const cases = [
   {
     name: '従業員編集',
     Edit: StaffEditModal,
-    api: platformStaffApi,
-    roles: platformStaffApi.grantableRoles,
+    api: staffApi,
+    roles: staffApi.grantableRoles,
     service: false,
   },
   {
@@ -72,7 +72,7 @@ function EditHarness({ entry }: { entry: (typeof cases)[number] }) {
     store_ids: [],
     version: 7,
   };
-  const staff = useKeyedResource<PlatformStaffResponse>(['staff', 42], async () => ({
+  const staff = useKeyedResource<StaffResponse>(['staff', 42], async () => ({
     ...subject,
     email: 'staff@example.com',
     editable: true,

@@ -1,25 +1,25 @@
 import redirectToLogin, { __setNavigatorForTests, __resetNavigator } from '../navigation';
-import { clearPlatformSession } from '../platform-session';
+import { clearSession } from '../session';
 
 describe('navigation helper', () => {
   afterEach(() => {
     __resetNavigator();
     jest.restoreAllMocks();
-    clearPlatformSession();
+    clearSession();
   });
 
-  it('calls provided navigator with /platform/login when available', () => {
+  it('calls provided navigator with /auth/login when available', () => {
     const navMock = jest.fn();
     __setNavigatorForTests(navMock);
     redirectToLogin();
-    expect(navMock).toHaveBeenCalledWith('/platform/login');
+    expect(navMock).toHaveBeenCalledWith('/auth/login');
   });
 
   it('理由を渡すと理由コードを載せたログイン画面へ送る', () => {
     const navMock = jest.fn();
     __setNavigatorForTests(navMock);
     redirectToLogin('expired');
-    expect(navMock).toHaveBeenCalledWith('/platform/login?reason=expired');
+    expect(navMock).toHaveBeenCalledWith('/auth/login?reason=expired');
   });
 
   it('does not throw when provided navigator throws (caught)', () => {

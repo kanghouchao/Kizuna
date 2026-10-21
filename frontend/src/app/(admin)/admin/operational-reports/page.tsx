@@ -1,1 +1,1 @@
-export { PlatformOperationalReportsPage as default } from '@/_pages/platform-operational-reports';
+export { AdminOperationalReportsPage as default } from '@/_pages/admin-operational-reports';

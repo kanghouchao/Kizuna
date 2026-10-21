@@ -30,13 +30,13 @@ test('repeated clicks generate one export with both applied amount sources', asy
         complete = resolve;
       })
   );
-  render(<ReportExport scope="platform" criteria={criteria} />);
+  render(<ReportExport scope="admin" criteria={criteria} />);
   const csv = screen.getByRole('button', { name: 'CSV 全件出力' });
   fireEvent.click(csv);
   fireEvent.click(csv);
   fireEvent.click(screen.getByRole('button', { name: 'Excel 全件出力' }));
   expect(download).toHaveBeenCalledTimes(1);
-  expect(download).toHaveBeenCalledWith('platform', criteria, 'csv', expect.any(AbortSignal));
+  expect(download).toHaveBeenCalledWith('admin', criteria, 'csv', expect.any(AbortSignal));
   expect(csv).toBeDisabled();
   await act(async () => complete(new Blob(['report'], { type: 'text/csv' })));
   expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
@@ -57,10 +57,10 @@ test.each<Partial<ReportCriteria>>([
         complete = resolve;
       })
   );
-  const view = render(<ReportExport scope="platform" criteria={criteria} />);
+  const view = render(<ReportExport scope="admin" criteria={criteria} />);
   fireEvent.click(screen.getByRole('button', { name: 'CSV 全件出力' }));
   const signal = download.mock.calls[0][3];
-  view.rerender(<ReportExport scope="platform" criteria={{ ...criteria, ...change }} />);
+  view.rerender(<ReportExport scope="admin" criteria={{ ...criteria, ...change }} />);
   expect(signal.aborted).toBe(true);
   await act(async () => complete(new Blob(['old'], { type: 'text/csv' })));
   expect(URL.createObjectURL).not.toHaveBeenCalled();

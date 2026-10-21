@@ -6,7 +6,7 @@ import {
   BenefitRuleUpdateRequest,
 } from '../model/types';
 
-const BASE_URL = '/platform/benefit-rules';
+const BASE_URL = '/admin/benefit-rules';
 
 /** 特典規則の管理 API（BENEFIT_MANAGE 限定）。削除の口は無く、退場は停用で表す。 */
 export const benefitRuleApi = {

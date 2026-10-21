@@ -50,19 +50,19 @@ describe('shiftApi', () => {
   it('delete は /store/shifts/:id を DELETE する', async () => {
     await expect(shiftApi.delete('s1')).resolves.toBeUndefined();
   });
-  it('confirmedCasts は /platform/shifts/casts を GET する', async () => {
+  it('confirmedCasts は /admin/shifts/casts を GET する', async () => {
     expect(await shiftApi.confirmedCasts({ store_id: 1, date: '2026-08-10' })).toEqual({
       ok: true,
-      url: '/platform/shifts/casts',
+      url: '/admin/shifts/casts',
     });
   });
-  it('mySchedule は /platform/me/schedule を GET する', async () => {
+  it('mySchedule は /me/schedule を GET する', async () => {
     expect(await shiftApi.mySchedule({ from: '2026-07-19', to: '2026-07-25' })).toEqual({
       ok: true,
-      url: '/platform/me/schedule',
+      url: '/me/schedule',
     });
   });
-  it('submitShiftRequest は /platform/me/shift-requests を POST する', async () => {
+  it('submitShiftRequest は /me/shift-requests を POST する', async () => {
     expect(
       await shiftApi.submitShiftRequest({
         store_id: 1,
@@ -70,9 +70,9 @@ describe('shiftApi', () => {
         start_time: '18:00:00',
         end_time: '23:00:00',
       })
-    ).toEqual({ ok: true, url: '/platform/me/shift-requests' });
+    ).toEqual({ ok: true, url: '/me/shift-requests' });
   });
-  it('submitShiftChangeRequest は /platform/me/shift-requests/changes を POST する', async () => {
+  it('submitShiftChangeRequest は /me/shift-requests/changes を POST する', async () => {
     expect(
       await shiftApi.submitShiftChangeRequest({
         shift_id: 'sh1',
@@ -80,9 +80,9 @@ describe('shiftApi', () => {
         start_time: '19:00:00',
         end_time: '22:00:00',
       })
-    ).toEqual({ ok: true, url: '/platform/me/shift-requests/changes' });
+    ).toEqual({ ok: true, url: '/me/shift-requests/changes' });
   });
-  it('myShiftRequests は /platform/me/shift-requests を GET し、カーソルページを正規化する', async () => {
+  it('myShiftRequests は /me/shift-requests を GET し、カーソルページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
       data: { content: [{ id: 'r1' }], next_cursor: 'abc' },
     });
@@ -91,12 +91,12 @@ describe('shiftApi', () => {
       rows: [{ id: 'r1' }],
       nextCursor: 'abc',
     });
-    expect(mockedGet).toHaveBeenLastCalledWith('/platform/me/shift-requests', {
+    expect(mockedGet).toHaveBeenLastCalledWith('/me/shift-requests', {
       params: { cursor: 'x' },
     });
   });
-  it('myStores は /platform/me/stores を GET する', async () => {
-    expect(await shiftApi.myStores()).toEqual({ ok: true, url: '/platform/me/stores' });
+  it('myStores は /me/stores を GET する', async () => {
+    expect(await shiftApi.myStores()).toEqual({ ok: true, url: '/me/stores' });
   });
   it('listShiftRequests は /store/shift-requests を GET する', async () => {
     expect(await shiftApi.listShiftRequests({ status: 'PENDING' })).toEqual({

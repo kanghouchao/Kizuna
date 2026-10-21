@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { PasswordChangeForm } from '../PasswordChangeForm';
-import { platformAuthApi } from '@/entities/user';
+import { authApi } from '@/entities/user';
 
 const mockLogout = jest.fn();
 
@@ -10,11 +10,11 @@ jest.mock('@/shared/notify', () => ({
 }));
 
 jest.mock('@/entities/user', () => ({
-  platformAuthApi: { changePassword: jest.fn() },
+  authApi: { changePassword: jest.fn() },
   useAuth: () => ({ logout: mockLogout }),
 }));
 
-const mockedChangePassword = platformAuthApi.changePassword as jest.Mock;
+const mockedChangePassword = authApi.changePassword as jest.Mock;
 const mockedNotifyError = notify.error as jest.Mock;
 const mockedNotifySuccess = notify.success as jest.Mock;
 

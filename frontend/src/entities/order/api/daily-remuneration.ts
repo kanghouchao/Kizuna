@@ -11,7 +11,7 @@ export const dailyRemunerationApi = {
   },
   async self(storeId: number, businessDate: string, page: number): Promise<SelfDailyRemuneration> {
     return (
-      await apiClient.get<SelfDailyRemuneration>('/platform/me/daily-remunerations', {
+      await apiClient.get<SelfDailyRemuneration>('/me/daily-remunerations', {
         params: { store_id: storeId, business_date: businessDate, page, size: 20 },
       })
     ).data;

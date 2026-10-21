@@ -1,1 +1,1 @@
-export { DashboardPage as default } from '@/_pages/platform-dashboard';
+export { DashboardPage as default } from '@/_pages/admin-dashboard';

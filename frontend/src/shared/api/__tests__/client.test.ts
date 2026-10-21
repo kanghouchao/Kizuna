@@ -20,7 +20,7 @@ describe('apiClient request interceptor', () => {
       config,
     })) as AxiosAdapter;
 
-    const res = await apiClient.get('/platform/me');
+    const res = await apiClient.get('/me');
     expect(res.config.headers?.Authorization).toBe('Bearer abc123');
     expect(res.config.headers.get('X-XSRF-TOKEN')).toBe('abc123');
 

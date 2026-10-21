@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LineLoginButton } from '../LineLoginButton';
-import { platformLineApi } from '@/entities/user';
+import { lineApi } from '@/entities/user';
 import { startLineAuthorization } from '@/shared/lib';
 
 jest.mock('@/shared/notify', () => ({
@@ -11,7 +11,7 @@ jest.mock('@/entities/user', () => {
   const actual = jest.requireActual('@/entities/user');
   return {
     ...actual,
-    platformLineApi: { ...actual.platformLineApi, config: jest.fn() },
+    lineApi: { ...actual.lineApi, config: jest.fn() },
   };
 });
 
@@ -20,7 +20,7 @@ jest.mock('@/shared/lib', () => {
   return { ...actual, startLineAuthorization: jest.fn() };
 });
 
-const mockedConfig = platformLineApi.config as jest.Mock;
+const mockedConfig = lineApi.config as jest.Mock;
 const mockedStart = startLineAuthorization as jest.Mock;
 
 describe('LineLoginButton', () => {

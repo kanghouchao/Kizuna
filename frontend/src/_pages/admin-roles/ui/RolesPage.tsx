@@ -2,7 +2,7 @@
 
 import { PlusIcon } from 'lucide-react';
 import { useState } from 'react';
-import { RoleSummaryResponse, platformRoleApi } from '@/entities/user';
+import { RoleSummaryResponse, roleApi } from '@/entities/user';
 import { useDeleteAction, useManagedList } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -26,9 +26,9 @@ export default function RolesPage() {
     isLoading,
     failed,
     refetch,
-  } = useManagedList<RoleSummaryResponse>(() => platformRoleApi.list());
+  } = useManagedList<RoleSummaryResponse>(() => roleApi.list());
   const [searchTerm, setSearchTerm] = useState('');
-  // ロールは定義数が限られ、GET /platform/roles も全量を返す（付与 UI のロール目録が同じ端点を
+  // ロールは定義数が限られ、GET /admin/roles も全量を返す（付与 UI のロール目録が同じ端点を
   // 使うため分頁できない）。絞り込みは取得済みの配列に対して行い、送信で確定させる。
   const [appliedSearch, setAppliedSearch] = useState('');
   const roles = appliedSearch
@@ -37,9 +37,9 @@ export default function RolesPage() {
   // フォームは 1 つだけ開く（閉じている / 新規 / 既存 id の編集）。一覧は権限個数までの要約しか
   // 持たないため、編集フォームの中身（権限コードと version）はモーダル側が id で個別取得する。
   const [formTarget, setFormTarget] = useState<'closed' | 'create' | number>('closed');
-  // 授与中のロール削除は 409、平台既定ロールは 400。文言はサーバ側が持つ。
+  // 授与中のロール削除は 409、既定ロールは 400。文言はサーバ側が持つ。
   const deletion = useDeleteAction<RoleSummaryResponse>({
-    remove: role => platformRoleApi.remove(role.id ?? 0),
+    remove: role => roleApi.remove(role.id ?? 0),
     successMessage: 'ロールを削除しました',
     errorMessage: 'ロールの削除に失敗しました',
     onDeleted: refetch,

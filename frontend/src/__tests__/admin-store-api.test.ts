@@ -13,39 +13,39 @@ jest.mock('@/shared/api/client', () => ({
   },
 }));
 
-import { platformStoreApi } from '@/entities/store';
+import { adminStoreApi } from '@/entities/store';
 import { ClientDataError } from '@/shared/lib';
 
-describe('platform store api wrappers', () => {
+describe('admin store api wrappers', () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  it('platformStoreApi basic CRUD and stats', async () => {
+  it('adminStoreApi basic CRUD and stats', async () => {
     // 一覧は他一覧と同形の Spring Page 形（0 起点）
     mockGet.mockResolvedValueOnce({
       data: { content: [{ id: '1' }], total_pages: 4, total_elements: 35, size: 10, number: 1 },
     });
-    const list = await platformStoreApi.getList({ page: 1, size: 10 });
+    const list = await adminStoreApi.getList({ page: 1, size: 10 });
     expect(list).toEqual({ rows: [{ id: '1' }], page: 1, pageCount: 4, total: 35 });
-    expect(mockGet).toHaveBeenCalledWith('/platform/stores', {
+    expect(mockGet).toHaveBeenCalledWith('/admin/stores', {
       params: { page: 1, size: 10, search: undefined },
     });
 
     mockGet.mockResolvedValueOnce({ data: { id: '2' } });
-    const byId = await platformStoreApi.getById('2');
+    const byId = await adminStoreApi.getById('2');
     expect(byId).toEqual({ id: '2' });
-    expect(mockGet).toHaveBeenCalledWith('/platform/stores/2');
+    expect(mockGet).toHaveBeenCalledWith('/admin/stores/2');
 
     // 作成の端点は 201 Created。body には作成された店舗の id だけが載る。
     mockPost.mockResolvedValueOnce({ data: { id: 1 } });
-    const created = await platformStoreApi.create({
+    const created = await adminStoreApi.create({
       name: 't',
       domain: 't.example.com',
       email: 't@example.com',
     });
     expect(created).toEqual({ id: 1 });
-    expect(mockPost).toHaveBeenCalledWith('/platform/stores', {
+    expect(mockPost).toHaveBeenCalledWith('/admin/stores', {
       name: 't',
       domain: 't.example.com',
       email: 't@example.com',
@@ -53,21 +53,21 @@ describe('platform store api wrappers', () => {
 
     // 更新の端点は 204 No Content。body は返らない。
     mockPut.mockResolvedValueOnce();
-    const updated = await platformStoreApi.update('3', { name: 'u', email: 'u@example.com' });
+    const updated = await adminStoreApi.update('3', { name: 'u', email: 'u@example.com' });
     expect(updated).toBeUndefined();
-    expect(mockPut).toHaveBeenCalledWith('/platform/stores/3', {
+    expect(mockPut).toHaveBeenCalledWith('/admin/stores/3', {
       name: 'u',
       email: 'u@example.com',
     });
 
     mockDelete.mockResolvedValueOnce();
-    await platformStoreApi.delete('3');
-    expect(mockDelete).toHaveBeenCalledWith('/platform/stores/3');
+    await adminStoreApi.delete('3');
+    expect(mockDelete).toHaveBeenCalledWith('/admin/stores/3');
 
     mockGet.mockResolvedValueOnce({ data: { total: 1 } });
-    const stats = await platformStoreApi.getStats();
+    const stats = await adminStoreApi.getStats();
     expect(stats).toEqual({ total: 1 });
-    expect(mockGet).toHaveBeenCalledWith('/platform/stores/stats');
+    expect(mockGet).toHaveBeenCalledWith('/admin/stores/stats');
   });
 });
 
@@ -76,11 +76,11 @@ describe('platform store api wrappers', () => {
  * `?? ''` で素通しすると単数の操作が一覧の URI へ飛び、届いた先の 404/405 が操作の失敗と
  * 見分けられなくなる。守りはアダプタの内側にあり、画面ごとに書かない。
  */
-describe('識別子を欠いた platformStoreApi', () => {
+describe('識別子を欠いた adminStoreApi', () => {
   const calls: [string, () => Promise<unknown>][] = [
-    ['getById', () => platformStoreApi.getById(undefined)],
-    ['update', () => platformStoreApi.update(undefined, { name: 'n', email: 'e@example.com' })],
-    ['delete', () => platformStoreApi.delete(undefined)],
+    ['getById', () => adminStoreApi.getById(undefined)],
+    ['update', () => adminStoreApi.update(undefined, { name: 'n', email: 'e@example.com' })],
+    ['delete', () => adminStoreApi.delete(undefined)],
   ];
 
   it.each(calls)('%s は要求を出さず、名乗る失敗を投げる', async (_name, call) => {

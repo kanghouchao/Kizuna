@@ -5,7 +5,7 @@ export const ownServiceApi = {
   async list(storeId: string, page: number): Promise<PageResult<OwnServiceConditionSummary>> {
     return fromSpringPage(
       (
-        await apiClient.get('/platform/me/service-conditions', {
+        await apiClient.get('/me/service-conditions', {
           params: { store_id: storeId, page, size: 20 },
         })
       ).data
@@ -17,13 +17,9 @@ export const ownServiceApi = {
     body: OwnConsentRequest
   ): Promise<OwnServiceConditionSummary> {
     return (
-      await apiClient.put(
-        `/platform/me/service-conditions/${encodeURIComponent(id)}/consent`,
-        body,
-        {
-          params: { store_id: storeId },
-        }
-      )
+      await apiClient.put(`/me/service-conditions/${encodeURIComponent(id)}/consent`, body, {
+        params: { store_id: storeId },
+      })
     ).data;
   },
 };

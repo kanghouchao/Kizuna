@@ -20,7 +20,7 @@ export default function NotFound() {
           <Button render={<Link href="/" />} className="w-full">
             ホームへ戻る
           </Button>
-          <Button render={<Link href="/platform/login" />} variant="outline" className="w-full">
+          <Button render={<Link href="/auth/login" />} variant="outline" className="w-full">
             ログイン画面を開く
           </Button>
         </div>

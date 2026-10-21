@@ -3,18 +3,18 @@
 import { createContext, useContext } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useResource } from '@/shared/lib';
-import { platformAuthApi } from '../api/platform';
-import { PlatformMeResponse } from './types';
+import { authApi } from '../api/auth';
+import { MeResponse } from './types';
 
 /**
- * 自分のプロフィール（/platform/me）の共有 seam。両コンソール layout に1つだけ搭載し、
+ * 自分のプロフィール（/me）の共有 seam。両コンソール layout に1つだけ搭載し、
  * Header とアカウント設定ページが同じ取得結果を消費する（消費者ごとの重複取得を無くす）。
  * 更新の応答は setMe で差し替える — 差し替えは搭載中の全消費者へ届くため、プロフィール
  * 更新後のヘッダー表示が再取得なしで追随する。
  */
 interface MeContextValue {
   /** null = 未取得（読み込み中・失敗）。 */
-  me: PlatformMeResponse | null;
+  me: MeResponse | null;
   isLoading: boolean;
   failure: 'notFound' | 'error' | null;
   /** 取り直す。失敗の再試行もこれ。 */
@@ -23,7 +23,7 @@ interface MeContextValue {
    * 更新の応答をそのまま反映する差し替え口。取り直しに倒すと、直したばかりの内容が
    * 読み込み表示で一瞬消える。
    */
-  setMe: Dispatch<SetStateAction<PlatformMeResponse | null>>;
+  setMe: Dispatch<SetStateAction<MeResponse | null>>;
 }
 
 const MeContext = createContext<MeContextValue | undefined>(undefined);
@@ -37,7 +37,7 @@ export function useMe(): MeContextValue {
 }
 
 export function MeProvider({ children }: { children: React.ReactNode }) {
-  const { data, setData, isLoading, failure, reload } = useResource(() => platformAuthApi.me());
+  const { data, setData, isLoading, failure, reload } = useResource(() => authApi.me());
 
   return (
     <MeContext.Provider value={{ me: data, isLoading, failure, reload, setMe: setData }}>

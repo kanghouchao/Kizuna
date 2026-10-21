@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ExternalLinkIcon, PlusIcon, SquarePenIcon, StoreIcon, Trash2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Store, isStoreDomain, platformStoreApi } from '@/entities/store';
+import { Store, isStoreDomain, adminStoreApi } from '@/entities/store';
 import { useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -27,7 +27,7 @@ export default function StoresPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const list = useListPage<Store, string>(
     (page, search) =>
-      platformStoreApi.getList({
+      adminStoreApi.getList({
         page,
         size: PAGE_SIZE,
         search: search || undefined,
@@ -37,7 +37,7 @@ export default function StoresPage() {
   const stores = list.rows;
 
   const deletion = useDeleteAction<Store>({
-    remove: store => platformStoreApi.delete(store.id),
+    remove: store => adminStoreApi.delete(store.id),
     successMessage: '店舗を削除しました',
     errorMessage: '店舗の削除に失敗しました',
     onDeleted: list.reload,
@@ -49,7 +49,7 @@ export default function StoresPage() {
         title="店舗一覧"
         description="システム内の全ての店舗を管理します"
         actions={
-          <Button onClick={() => router.push('/platform/stores/create')}>
+          <Button onClick={() => router.push('/admin/stores/create')}>
             <PlusIcon />
             店舗を追加
           </Button>
@@ -96,7 +96,7 @@ export default function StoresPage() {
               {searchTerm ? '該当する店舗が見つかりません' : '最初の店舗を作成しましょう'}
             </p>
             <div className="mt-6">
-              <Button onClick={() => router.push('/platform/stores/create')}>
+              <Button onClick={() => router.push('/admin/stores/create')}>
                 <PlusIcon />
                 店舗を追加
               </Button>
@@ -160,7 +160,7 @@ export default function StoresPage() {
                       variant="ghost"
                       size="icon-sm"
                       aria-label="編集"
-                      onClick={() => router.push(`/platform/stores/${store.id}/edit`)}
+                      onClick={() => router.push(`/admin/stores/${store.id}/edit`)}
                     >
                       <SquarePenIcon />
                     </Button>

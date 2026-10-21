@@ -8,7 +8,7 @@ import { notify } from '@/shared/notify';
 import { useRouter } from 'next/navigation';
 import { memberOrderApplicationApi } from '@/entities/order';
 import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
-import { platformStoreApi } from '@/entities/store';
+import { adminStoreApi } from '@/entities/store';
 import { integerRule, useResource } from '@/shared/lib';
 import {
   Button,
@@ -56,7 +56,7 @@ export function MemberReservationNewPage() {
     isLoading: storeLoading,
     failure: storeFailure,
     reload: reloadStore,
-  } = useResource(domain ? () => platformStoreApi.lookupByDomain(domain) : null, [domain]);
+  } = useResource(domain ? () => adminStoreApi.lookupByDomain(domain) : null, [domain]);
   // フックが持つのは「最後に取れた店舗」であって「今の ?store= の店舗」ではない。取りに行く
   // 理由が無くなっても値は残る（フックの既定 — 開き直した区画に生の id を出さないため）ので、
   // この頁では捨てる。残すと ?store= の外れた URL で前の店舗宛のフォームが送信できてしまう。

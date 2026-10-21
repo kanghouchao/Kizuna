@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Cookies from 'js-cookie';
 import LineCallbackPage from '../ui/LineCallbackPage';
-import { platformAuthApi, platformLineApi } from '@/entities/user';
-import { completePlatformLogin } from '@/features/platform-login';
+import { authApi, lineApi } from '@/entities/user';
+import { completeLogin } from '@/features/login';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -18,8 +18,8 @@ jest.mock('@/entities/user', () => {
   const actual = jest.requireActual('@/entities/user');
   return {
     ...actual,
-    platformAuthApi: { ...actual.platformAuthApi, me: jest.fn() },
-    platformLineApi: {
+    authApi: { ...actual.authApi, me: jest.fn() },
+    lineApi: {
       config: jest.fn(),
       login: jest.fn(),
       register: jest.fn(),
@@ -28,16 +28,16 @@ jest.mock('@/entities/user', () => {
   };
 });
 
-jest.mock('@/features/platform-login', () => ({
-  completePlatformLogin: jest.fn(),
+jest.mock('@/features/login', () => ({
+  completeLogin: jest.fn(),
 }));
 
-const mockedLineApi = platformLineApi as jest.Mocked<typeof platformLineApi>;
-const mockedMe = platformAuthApi.me as jest.Mock;
-const mockedComplete = completePlatformLogin as jest.MockedFunction<typeof completePlatformLogin>;
+const mockedLineApi = lineApi as jest.Mocked<typeof lineApi>;
+const mockedMe = authApi.me as jest.Mock;
+const mockedComplete = completeLogin as jest.MockedFunction<typeof completeLogin>;
 
 const STORAGE_KEY = 'kizuna-line-oauth';
-const REDIRECT_URI = 'http://localhost/platform/line/callback';
+const REDIRECT_URI = 'http://localhost/auth/line/callback';
 
 function arriveAt(
   query: string,
@@ -46,7 +46,7 @@ function arriveAt(
   if (stored) {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   }
-  window.history.replaceState({}, '', `/platform/line/callback${query}`);
+  window.history.replaceState({}, '', `/auth/line/callback${query}`);
 }
 
 describe('LineCallbackPage', () => {
@@ -57,7 +57,7 @@ describe('LineCallbackPage', () => {
 
   afterEach(() => {
     Cookies.remove('token');
-    Cookies.remove('platform-role');
+    Cookies.remove('session-kind');
     Cookies.remove('member-return-path');
   });
 
@@ -130,7 +130,7 @@ describe('LineCallbackPage', () => {
       );
       await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/'));
       expect(Cookies.get('token')).toBe('jwt-token');
-      expect(Cookies.get('platform-role')).toBe('member');
+      expect(Cookies.get('session-kind')).toBe('member');
     });
 
     it('伝票の QR から未登録で来ていた場合、登録後は申領画面へ戻ること', async () => {
@@ -217,7 +217,7 @@ describe('LineCallbackPage', () => {
           code_verifier: 'v2',
         })
       );
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/platform/settings/account'));
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/admin/settings/account'));
       expect(mockedLineApi.login).not.toHaveBeenCalled();
     });
 
@@ -260,7 +260,7 @@ describe('LineCallbackPage', () => {
       ).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'アカウント設定へ戻る' })).toHaveAttribute(
         'href',
-        '/platform/settings/account'
+        '/admin/settings/account'
       );
       expect(mockReplace).not.toHaveBeenCalled();
     });
@@ -283,7 +283,7 @@ describe('LineCallbackPage', () => {
       ).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'ログイン画面へ戻る' })).toHaveAttribute(
         'href',
-        '/platform/login'
+        '/auth/login'
       );
       expect(mockedLineApi.login).not.toHaveBeenCalled();
     });

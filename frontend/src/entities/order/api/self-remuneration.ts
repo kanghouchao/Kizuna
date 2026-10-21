@@ -11,12 +11,11 @@ import {
   SelfRemunerationEnrollment,
   SelfRemunerationChange,
 } from '../model/selfRemuneration';
-const base = '/platform/me/remunerations';
+const base = '/me/remunerations';
 export const selfRemunerationApi = {
   async enrollments(page: number): Promise<PageResult<SelfRemunerationEnrollment>> {
     return fromSpringPage(
-      (await apiClient.get('/platform/me/remuneration-enrollments', { params: { page, size: 20 } }))
-        .data
+      (await apiClient.get('/me/remuneration-enrollments', { params: { page, size: 20 } })).data
     );
   },
   async list(page: number, enrollmentId?: string): Promise<PageResult<SelfRemunerationSummary>> {

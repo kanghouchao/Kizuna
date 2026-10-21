@@ -19,7 +19,7 @@ describe('memberPointApi', () => {
     // 店舗側の照会（/store/customers/{id}/member-point-balance）は顧客管理権限が要る別の口。
     expect(await memberPointApi.balance()).toEqual({
       ok: true,
-      url: '/platform/me/points/balance',
+      url: '/me/points/balance',
     });
   });
 
@@ -32,7 +32,7 @@ describe('memberPointApi', () => {
       rows: [{ amount: 100 }],
       nextCursor: 'c1',
     });
-    expect(mockedGet).toHaveBeenCalledWith('/platform/me/points/entries', {
+    expect(mockedGet).toHaveBeenCalledWith('/me/points/entries', {
       params: { cursor: 'c0', size: 20 },
     });
   });

@@ -1,24 +1,24 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
-import type { PlatformStaffResponse } from '@/entities/user';
-import { platformRoleApi, platformStaffApi } from '@/entities/user';
+import type { StaffResponse } from '@/entities/user';
+import { roleApi, staffApi } from '@/entities/user';
 import { useKeyedResource } from '@/shared/lib';
 import { StaffModal, type StaffEditModalProps } from '../StaffModal';
 
 jest.mock('@/entities/user', () => ({
-  platformRoleApi: { list: jest.fn() },
-  platformStaffApi: { get: jest.fn(), update: jest.fn() },
+  roleApi: { list: jest.fn() },
+  staffApi: { get: jest.fn(), update: jest.fn() },
 }));
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;
-const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
+const mockedStaffApi = staffApi as jest.Mocked<typeof staffApi>;
+const mockedRoleApi = roleApi as jest.Mocked<typeof roleApi>;
 const mockedNotify = notify as jest.Mocked<typeof notify>;
 
-const staff = (override: Partial<PlatformStaffResponse> = {}): PlatformStaffResponse => ({
+const staff = (override: Partial<StaffResponse> = {}): StaffResponse => ({
   id: 42,
   email: 'staff@example.com',
   display_name: '山田太郎',
@@ -31,17 +31,17 @@ const staff = (override: Partial<PlatformStaffResponse> = {}): PlatformStaffResp
   ...override,
 });
 
-const renderModal = (props: Partial<StaffEditModalProps<PlatformStaffResponse>> = {}) => {
+const renderModal = (props: Partial<StaffEditModalProps<StaffResponse>> = {}) => {
   const onClose = jest.fn();
   const onUpdated = jest.fn();
   function Harness() {
-    const resource = useKeyedResource(['staff', 42], () => platformStaffApi.get(42));
+    const resource = useKeyedResource(['staff', 42], () => staffApi.get(42));
     return (
       <StaffModal
         mode="edit"
         honorific="さん"
-        loadRoles={platformRoleApi.list}
-        update={platformStaffApi.update}
+        loadRoles={roleApi.list}
+        update={staffApi.update}
         resource={resource}
         stores={[]}
         storesLoading={false}
@@ -193,7 +193,7 @@ describe('共通授権編集モーダル', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
   it('詳細取得が終わるまで編集フォームを表示しない', async () => {
-    let resolve!: (value: PlatformStaffResponse) => void;
+    let resolve!: (value: StaffResponse) => void;
     mockedStaffApi.get.mockReturnValue(
       new Promise(done => {
         resolve = done;

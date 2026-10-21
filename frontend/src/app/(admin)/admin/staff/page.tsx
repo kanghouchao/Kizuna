@@ -1,1 +1,1 @@
-export { StaffPage as default } from '@/_pages/platform-staff';
+export { StaffPage as default } from '@/_pages/admin-staff';

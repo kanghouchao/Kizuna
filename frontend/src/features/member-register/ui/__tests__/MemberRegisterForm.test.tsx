@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import { MemberRegisterForm } from '../MemberRegisterForm';
 import { memberApi } from '@/entities/member';
-import { platformAuthApi } from '@/entities/user';
+import { authApi } from '@/entities/user';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -20,15 +20,15 @@ jest.mock('@/entities/user', () => {
   const actual = jest.requireActual('@/entities/user');
   return {
     ...actual,
-    platformAuthApi: {
-      ...actual.platformAuthApi,
+    authApi: {
+      ...actual.authApi,
       login: jest.fn(),
     },
   };
 });
 
 const mockedRegister = memberApi.register as jest.Mock;
-const mockedLogin = platformAuthApi.login as jest.Mock;
+const mockedLogin = authApi.login as jest.Mock;
 const mockedNotifyError = notify.error as jest.Mock;
 const mockedNotifySuccess = notify.success as jest.Mock;
 
@@ -49,7 +49,7 @@ describe('MemberRegisterForm', () => {
 
   afterEach(() => {
     Cookies.remove('token');
-    Cookies.remove('platform-role');
+    Cookies.remove('session-kind');
     Cookies.remove('member-return-path');
     sessionStorage.clear();
   });
@@ -71,7 +71,7 @@ describe('MemberRegisterForm', () => {
       { skipAuthRedirect: true }
     );
     expect(Cookies.get('token')).toBe('jwt-token');
-    expect(Cookies.get('platform-role')).toBe('member');
+    expect(Cookies.get('session-kind')).toBe('member');
     expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 
@@ -107,7 +107,7 @@ describe('MemberRegisterForm', () => {
 
     await submitForm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/login'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/auth/login'));
     // 登録自体は完了しているので成功の段。行き先は同じ root layout なので通知は生き残る。
     expect(mockedNotifySuccess).toHaveBeenCalledWith('登録が完了しました。ログインしてください');
     expect(mockedNotifyError).not.toHaveBeenCalled();

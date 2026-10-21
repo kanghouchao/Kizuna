@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { platformStoreApi } from '@/entities/store';
+import { adminStoreApi } from '@/entities/store';
 import { useStoreContext } from '@/entities/user';
 import { hasPermission, readTokenClaims, useResource } from '@/shared/lib';
 import { Badge, Card, CardContent, RegionError, Skeleton } from '@/shared/ui';
@@ -71,7 +71,7 @@ function StoreStatsCard() {
     isLoading: loadingStats,
     failure,
     reload: loadStats,
-  } = useResource(() => platformStoreApi.getStats());
+  } = useResource(() => adminStoreApi.getStats());
 
   return (
     <Card>

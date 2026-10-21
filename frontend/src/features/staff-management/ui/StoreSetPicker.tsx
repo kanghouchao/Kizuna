@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, type Ref, type ComponentProps } from 'react';
-import { PlatformStore, PlatformStoreScopeType } from '@/entities/user';
+import { AuthorizedStore, StoreScopeType } from '@/entities/user';
 import { Button, Label, RegionError } from '@/shared/ui';
 
 interface StoreSetPickerProps extends Pick<
@@ -12,15 +12,15 @@ interface StoreSetPickerProps extends Pick<
   /** 見出し。既定は授権の語彙で、店舗集合を別の意味で使う面（特典規則の発火範囲など）が言い換える。 */
   label?: string;
   /** 店舗目録。取得は呼び出し元（一覧ページ）が 1 回だけ行い、ここでは取得しない。 */
-  stores: PlatformStore[];
+  stores: AuthorizedStore[];
   isLoading: boolean;
   /** 目録の取得に失敗した状態。選択肢が無いのが事実なのか読めなかったのかを区別する。 */
   failed: boolean;
   /** 目録の取り直し。取得失敗が続いた場合の手動回復導線（空の SPECIFIC_STORES はサーバが 400 で拒む）。 */
   onReload: () => void;
-  storeScopeType: PlatformStoreScopeType;
+  storeScopeType: StoreScopeType;
   storeIds: number[];
-  onChange: (next: { storeScopeType: PlatformStoreScopeType; storeIds: number[] }) => void;
+  onChange: (next: { storeScopeType: StoreScopeType; storeIds: number[] }) => void;
 }
 
 /** 「全店舗」ラジオ+個別店舗チェックボックスの2択で店舗集合を編集する共通部品。 */

@@ -1,39 +1,38 @@
 import Cookies from 'js-cookie';
 
-// cookie 名は互換のため platform-role のまま。値はセッション種別（admin / cast / member —
-// ログイン時に /me の user_type から決める）を保存する。
-const PLATFORM_ROLE_COOKIE = 'platform-role';
-const PLATFORM_STORE_ID_COOKIE = 'platform-store-id';
+// 値はセッション種別（admin / cast / member — ログイン時に /me の user_type から決める）。
+const SESSION_KIND_COOKIE = 'session-kind';
+const CURRENT_STORE_ID_COOKIE = 'current-store-id';
 // proxy 側（routeGuard）はサーバ応答の Set-Cookie で書き、クライアント側は js-cookie で読み書きする。
 export const MEMBER_RETURN_PATH_COOKIE = 'member-return-path';
 
-/** 平台セッションの cookie 読み書きの唯一の入口。 */
-export function getPlatformSessionKind(): string | undefined {
-  return Cookies.get(PLATFORM_ROLE_COOKIE);
+/** セッションの cookie 読み書きの唯一の入口。 */
+export function getSessionKind(): string | undefined {
+  return Cookies.get(SESSION_KIND_COOKIE);
 }
 
-export function getPlatformStoreId(): string | undefined {
-  return Cookies.get(PLATFORM_STORE_ID_COOKIE);
+export function getCurrentStoreId(): string | undefined {
+  return Cookies.get(CURRENT_STORE_ID_COOKIE);
 }
 
 /** expiresAt（epoch millis）を渡すと token cookie と同じ有効期限を設定し、cookie 間の失効ズレを防ぐ。 */
-export function startPlatformSession(sessionKind: string, expiresAt?: number): void {
+export function startSession(sessionKind: string, expiresAt?: number): void {
   Cookies.set(
-    PLATFORM_ROLE_COOKIE,
+    SESSION_KIND_COOKIE,
     sessionKind,
     expiresAt ? { expires: new Date(expiresAt) } : undefined
   );
 }
 
-export function setPlatformStore(id: number | string, expiresAt?: number): void {
+export function setCurrentStore(id: number | string, expiresAt?: number): void {
   Cookies.set(
-    PLATFORM_STORE_ID_COOKIE,
+    CURRENT_STORE_ID_COOKIE,
     String(id),
     expiresAt ? { expires: new Date(expiresAt) } : undefined
   );
 }
 
-export function clearPlatformSession(): void {
+export function clearSession(): void {
   try {
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const key = sessionStorage.key(i);
@@ -42,13 +41,13 @@ export function clearPlatformSession(): void {
   } catch {
     // 保存領域が利用不能でもログアウトは完了させる。
   }
-  Cookies.remove(PLATFORM_ROLE_COOKIE);
-  Cookies.remove(PLATFORM_STORE_ID_COOKIE);
+  Cookies.remove(SESSION_KIND_COOKIE);
+  Cookies.remove(CURRENT_STORE_ID_COOKIE);
 }
 
-/** platform-role cookie の存在で平台セッションかどうかを判定する（fail-closed ではなく単なる存在確認）。 */
-export function isPlatformSession(): boolean {
-  return !!getPlatformSessionKind();
+/** session-kind cookie の存在でセッションかどうかを判定する（fail-closed ではなく単なる存在確認）。 */
+export function hasSession(): boolean {
+  return !!getSessionKind();
 }
 
 /**

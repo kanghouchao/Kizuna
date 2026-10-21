@@ -1,7 +1,7 @@
 import {
   LINE_AUTHORIZE_ENDPOINT,
   consumeLineAuthorization,
-  isLinePlatformHost,
+  isLineAppHost,
   lineCallbackRedirectUri,
   prepareLineAuthorization,
   startLineAuthorization,
@@ -84,16 +84,16 @@ describe('line-oauth', () => {
     });
   });
 
-  describe('isLinePlatformHost', () => {
+  describe('isLineAppHost', () => {
     it('店舗ドメイン（proxy が立てる role=store cookie）でのみ false', () => {
-      expect(isLinePlatformHost()).toBe(true);
+      expect(isLineAppHost()).toBe(true);
       document.cookie = 'x-mw-role=store';
       try {
-        expect(isLinePlatformHost()).toBe(false);
+        expect(isLineAppHost()).toBe(false);
       } finally {
         document.cookie = 'x-mw-role=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       }
-      expect(isLinePlatformHost()).toBe(true);
+      expect(isLineAppHost()).toBe(true);
     });
   });
 

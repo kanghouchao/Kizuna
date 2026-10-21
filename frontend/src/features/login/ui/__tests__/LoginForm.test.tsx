@@ -1,9 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
-import PlatformLoginForm from '../PlatformLoginForm';
-import { platformAuthApi } from '@/entities/user';
-import type { PlatformMeResponse } from '@/entities/user';
+import LoginForm from '../LoginForm';
+import { authApi } from '@/entities/user';
+import type { MeResponse } from '@/entities/user';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -16,18 +16,18 @@ jest.mock('@/entities/user', () => {
   const actual = jest.requireActual('@/entities/user');
   return {
     ...actual,
-    platformAuthApi: {
-      ...actual.platformAuthApi,
+    authApi: {
+      ...actual.authApi,
       login: jest.fn(),
       me: jest.fn(),
     },
   };
 });
 
-const mockedAuthApi = platformAuthApi as jest.Mocked<typeof platformAuthApi>;
+const mockedAuthApi = authApi as jest.Mocked<typeof authApi>;
 const mockedNotifyError = notify.error as jest.Mock;
 
-function meResponse(overrides: Partial<PlatformMeResponse>): PlatformMeResponse {
+function meResponse(overrides: Partial<MeResponse>): MeResponse {
   return {
     email: 'user@kizuna.test',
     display_name: '本人',
@@ -39,7 +39,7 @@ function meResponse(overrides: Partial<PlatformMeResponse>): PlatformMeResponse 
 }
 
 async function submitLoginForm() {
-  render(<PlatformLoginForm />);
+  render(<LoginForm />);
   fireEvent.change(screen.getByLabelText('メールアドレス'), {
     target: { value: 'user@kizuna.test' },
   });
@@ -47,7 +47,7 @@ async function submitLoginForm() {
   fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
 }
 
-describe('PlatformLoginForm の利用者種別による分岐', () => {
+describe('LoginForm の利用者種別による分岐', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedAuthApi.login.mockResolvedValue({
@@ -58,17 +58,17 @@ describe('PlatformLoginForm の利用者種別による分岐', () => {
 
   afterEach(() => {
     Cookies.remove('token');
-    Cookies.remove('platform-role');
-    Cookies.remove('platform-store-id');
+    Cookies.remove('session-kind');
+    Cookies.remove('current-store-id');
   });
 
-  it('user_type=STAFF は admin セッションを開始し /platform/dashboard/ へ遷移する', async () => {
+  it('user_type=STAFF は admin セッションを開始し /admin/dashboard/ へ遷移する', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'STAFF' }));
 
     await submitLoginForm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/platform/dashboard/'));
-    expect(Cookies.get('platform-role')).toBe('admin');
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/dashboard/'));
+    expect(Cookies.get('session-kind')).toBe('admin');
     expect(Cookies.get('token')).toBe('jwt-token');
   });
 
@@ -79,7 +79,7 @@ describe('PlatformLoginForm の利用者種別による分岐', () => {
 
     await waitFor(() => expect(mockedNotifyError).toHaveBeenCalled());
     expect(mockPush).not.toHaveBeenCalled();
-    expect(Cookies.get('platform-role')).toBeUndefined();
+    expect(Cookies.get('session-kind')).toBeUndefined();
     expect(Cookies.get('token')).toBeUndefined();
   });
 
@@ -89,7 +89,7 @@ describe('PlatformLoginForm の利用者種別による分岐', () => {
     await submitLoginForm();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/schedule/'));
-    expect(Cookies.get('platform-role')).toBe('cast');
+    expect(Cookies.get('session-kind')).toBe('cast');
     expect(Cookies.get('token')).toBe('jwt-token');
     expect(mockedNotifyError).not.toHaveBeenCalled();
   });
@@ -163,19 +163,19 @@ describe('PlatformLoginForm の利用者種別による分岐', () => {
     await submitLoginForm();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
-    expect(Cookies.get('platform-role')).toBe('member');
+    expect(Cookies.get('session-kind')).toBe('member');
     expect(Cookies.get('token')).toBe('jwt-token');
     expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 });
 
-describe('PlatformLoginForm のクライアント検証（#598）', () => {
+describe('LoginForm のクライアント検証（#598）', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('未入力のまま押すと欄ごとの文言が出て、送信は行われないこと', async () => {
-    render(<PlatformLoginForm />);
+    render(<LoginForm />);
 
     fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
 
@@ -187,7 +187,7 @@ describe('PlatformLoginForm のクライアント検証（#598）', () => {
   });
 
   it('文言が欄と結び付いていること（読み上げ環境で「どの欄が」まで届く）', async () => {
-    render(<PlatformLoginForm />);
+    render(<LoginForm />);
 
     fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
 
@@ -199,7 +199,7 @@ describe('PlatformLoginForm のクライアント検証（#598）', () => {
   });
 
   it('形式違反のメールアドレスは送信せず形式の文言を出すこと（noValidate で原生 type=email は執行されない）', async () => {
-    render(<PlatformLoginForm />);
+    render(<LoginForm />);
 
     fireEvent.change(screen.getByLabelText('メールアドレス'), {
       target: { value: 'not-an-email' },

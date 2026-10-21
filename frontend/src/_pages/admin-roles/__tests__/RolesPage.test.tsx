@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { RoleSummaryResponse, platformRoleApi } from '@/entities/user';
+import { RoleSummaryResponse, roleApi } from '@/entities/user';
 import RolesPage from '../ui/RolesPage';
 
 jest.mock('@/entities/user', () => ({
-  platformRoleApi: { list: jest.fn(), remove: jest.fn() },
+  roleApi: { list: jest.fn(), remove: jest.fn() },
 }));
 
 jest.mock('../ui/RoleFormModal', () => {
@@ -18,7 +18,7 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockedRoleApi = platformRoleApi as jest.Mocked<typeof platformRoleApi>;
+const mockedRoleApi = roleApi as jest.Mocked<typeof roleApi>;
 
 const role = (override: Partial<RoleSummaryResponse>): RoleSummaryResponse => ({
   id: 1,

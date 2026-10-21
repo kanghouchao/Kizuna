@@ -21,9 +21,9 @@ export const remunerationApi = {
     const path =
       scope.scope === 'store'
         ? '/store/remuneration-statements'
-        : scope.scope === 'platform'
-          ? '/platform/remuneration-statements'
-          : '/platform/me/remuneration-statements';
+        : scope.scope === 'admin'
+          ? '/admin/remuneration-statements'
+          : '/me/remuneration-statements';
     return (
       await apiClient.get<Statement>(path, {
         params: {

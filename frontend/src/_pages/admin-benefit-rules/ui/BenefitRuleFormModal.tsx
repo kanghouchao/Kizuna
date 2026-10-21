@@ -12,7 +12,7 @@ import {
   BenefitRuleType,
   benefitRuleApi,
 } from '@/entities/benefit-rule';
-import { PlatformStore } from '@/entities/user';
+import { AuthorizedStore } from '@/entities/user';
 import { StoreSetPicker } from '@/features/staff-management';
 import { getApiErrorMessage, integerRule, isConflict, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -71,7 +71,7 @@ interface BenefitRuleFormModalProps {
   editingId: number | null;
   /** 保存成功後に呼ばれる（一覧の再取得用）。 */
   onSaved: () => void;
-  stores: PlatformStore[];
+  stores: AuthorizedStore[];
   storesLoading: boolean;
   storesFailed: boolean;
   onReloadStores: () => void;

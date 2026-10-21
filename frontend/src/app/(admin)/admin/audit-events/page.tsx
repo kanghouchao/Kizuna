@@ -1,1 +1,1 @@
-export { default } from '@/_pages/platform-audit-events';
+export { default } from '@/_pages/admin-audit-events';

@@ -1,1 +1,1 @@
-export { StoresPage as default } from '@/_pages/platform-stores';
+export { StoresPage as default } from '@/_pages/admin-stores';

@@ -18,5 +18,5 @@ export default async function CastInviteLegacyRoute({
 }): Promise<never> {
   const { token } = await params;
   // ルート引数は Next が復号済みなので、フラグメントへ載せる際に符号化し直す。
-  redirect(`/platform/invite#${encodeURIComponent(token)}`);
+  redirect(`/auth/invite#${encodeURIComponent(token)}`);
 }

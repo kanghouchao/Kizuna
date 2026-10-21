@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { orderApi, ORDER_STATUS_LABELS, type PlatformOrder } from '@/entities/order';
+import { orderApi, ORDER_STATUS_LABELS, type AdminOrder } from '@/entities/order';
 import { hasPermission, readTokenClaims, useListPage } from '@/shared/lib';
 import {
   Badge,
@@ -22,7 +22,7 @@ import {
 import { ListPage } from '@/widgets/list-page';
 import { OrderCorrectionHistoryModal } from '@/widgets/order-correction-history';
 
-export default function PlatformOrdersPage() {
+export default function AdminOrdersPage() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   useEffect(() => setAllowed(hasPermission(readTokenClaims(), 'ORDER_SET_MANAGE')), []);
   if (allowed === null) return <p role="status">権限を確認中...</p>;
@@ -31,10 +31,10 @@ export default function PlatformOrdersPage() {
 }
 
 function OrderList() {
-  const list = useListPage(orderApi.platformList);
+  const list = useListPage(orderApi.adminList);
   const [canReport, setCanReport] = useState(false);
   useEffect(() => setCanReport(hasPermission(readTokenClaims(), 'OPERATIONAL_REPORT_VIEW')), []);
-  const [details, setDetails] = useState<PlatformOrder | null>(null);
+  const [details, setDetails] = useState<AdminOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -45,14 +45,11 @@ function OrderList() {
         actions={
           <>
             {canReport && (
-              <Button variant="outline" render={<Link href="/platform/operational-reports" />}>
+              <Button variant="outline" render={<Link href="/admin/operational-reports" />}>
                 運営金額集計
               </Button>
             )}
-            <Button
-              variant="outline"
-              render={<Link href="/platform/orders/monthly-remunerations" />}
-            >
+            <Button variant="outline" render={<Link href="/admin/orders/monthly-remunerations" />}>
               月次給与明細
             </Button>
           </>
@@ -219,7 +216,7 @@ function OrderList() {
       {selected && (
         <OrderCorrectionHistoryModal
           orderId={selected}
-          scope="platform"
+          scope="admin"
           open={historyOpen}
           onOpenChange={setHistoryOpen}
         />

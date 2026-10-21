@@ -1,12 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
-import { PlatformStaffResponse, platformStaffApi, useStoreContext } from '@/entities/user';
+import { StaffResponse, staffApi, useStoreContext } from '@/entities/user';
 import { TokenClaims, readTokenClaims } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import StaffPage from '../ui/StaffPage';
 
 jest.mock('@/entities/user', () => ({
-  platformStaffApi: {
+  staffApi: {
     list: jest.fn(),
     get: jest.fn(),
     suspend: jest.fn(),
@@ -31,7 +31,7 @@ jest.mock('@/features/staff-management', () => {
       resource,
       onUpdated,
     }: {
-      resource: import('@/shared/lib').KeyedResource<PlatformStaffResponse>;
+      resource: import('@/shared/lib').KeyedResource<StaffResponse>;
       onUpdated: () => void;
     }) =>
       React.createElement(
@@ -58,7 +58,7 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockedStaffApi = platformStaffApi as jest.Mocked<typeof platformStaffApi>;
+const mockedStaffApi = staffApi as jest.Mocked<typeof staffApi>;
 const mockedStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
 const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
@@ -84,7 +84,7 @@ const givenStores = (
   return reload;
 };
 
-const staff = (override: Partial<PlatformStaffResponse>): PlatformStaffResponse => ({
+const staff = (override: Partial<StaffResponse>): StaffResponse => ({
   id: 1,
   email: 'staff@example.com',
   display_name: '山田太郎',
@@ -98,9 +98,9 @@ const staff = (override: Partial<PlatformStaffResponse>): PlatformStaffResponse 
 });
 
 const paginated = (
-  rows: PlatformStaffResponse[],
-  override: Partial<PageResult<PlatformStaffResponse>> = {}
-): PageResult<PlatformStaffResponse> => ({
+  rows: StaffResponse[],
+  override: Partial<PageResult<StaffResponse>> = {}
+): PageResult<StaffResponse> => ({
   rows,
   page: 0,
   pageCount: 1,
@@ -637,7 +637,7 @@ describe('パスワード再設定', () => {
 });
 
 test('同じ ID の連続競合再取得では最後に開始した応答だけを採用する', async () => {
-  let resolveOld!: (value: PlatformStaffResponse) => void;
+  let resolveOld!: (value: StaffResponse) => void;
   mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '一覧' })]));
   mockedStaffApi.get
     .mockResolvedValueOnce(staff({ id: 1, display_name: '初期' }))

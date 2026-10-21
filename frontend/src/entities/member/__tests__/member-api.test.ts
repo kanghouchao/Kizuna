@@ -9,17 +9,17 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('member api', () => {
-  it('register POSTs /platform/members', async () => {
+  it('register POSTs /admin/members', async () => {
     const res = await memberApi.register({
       email: 'member@example.com',
       password: 'password1234',
       display_name: '会員花子',
     });
-    expect(res).toEqual({ ok: true, url: '/platform/members' });
+    expect(res).toEqual({ ok: true, url: '/admin/members' });
   });
 
-  it('home GETs /platform/me/member', async () => {
+  it('home GETs /me/member', async () => {
     const res = await memberApi.home();
-    expect(res).toEqual({ ok: true, url: '/platform/me/member' });
+    expect(res).toEqual({ ok: true, url: '/me/member' });
   });
 });

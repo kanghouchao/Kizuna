@@ -1,22 +1,22 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { getPlatformStoreId, setPlatformStore } from '@/shared/lib';
-import { platformAuthApi } from '../api/platform';
-import { PlatformStore } from './types';
+import { getCurrentStoreId, setCurrentStore } from '@/shared/lib';
+import { authApi } from '../api/auth';
+import { AuthorizedStore } from './types';
 
 /**
  * 店舗コンテキスト（授権店舗・現在店舗・切替）を一手に担う deep module。管理画面シェルに1つだけ搭載し、
  * stores() を provider で1回だけ呼ぶ（消費者ごとの重複取得を無くす）。
- * 現在店舗は platform-store-id cookie に置く — apiClient がそこから X-Store-ID を同期に読むため、
+ * 現在店舗は current-store-id cookie に置く — apiClient がそこから X-Store-ID を同期に読むため、
  * cookie を書いてから state へ出す（逆順だと店舗級ページの初回取得がヘッダ無しで飛ぶ）。
  */
 interface StoreContextValue {
   /** null = 読み込み中（または取得失敗）、[] = 授権店舗なし、非空 = 授権店舗一覧。 */
-  stores: PlatformStore[] | null;
+  stores: AuthorizedStore[] | null;
   /** 現在店舗 id。前回選択 cookie が授権店舗を指していればそれ、無ければ授権店舗の先頭。 */
   currentStoreId: string | undefined;
-  currentStore: PlatformStore | undefined;
+  currentStore: AuthorizedStore | undefined;
   /**
    * 取得そのものが失敗した（通信断・5xx）。「店舗が無い」という授権の答えとは区別される。
    * 初回の失敗では stores は null のまま、取り直しの失敗では直前の一覧を保つ。
@@ -39,24 +39,24 @@ export function useStoreContext(): StoreContextValue {
 }
 
 export function StoreContextProvider({ children }: { children: React.ReactNode }) {
-  const [stores, setStores] = useState<PlatformStore[] | null>(null);
+  const [stores, setStores] = useState<AuthorizedStore[] | null>(null);
   const [currentStoreId, setCurrentStoreId] = useState<string | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
-    platformAuthApi.stores().then(
+    authApi.stores().then(
       list => {
         if (!active) return;
         // cookie は利用者が任意値を書けるうえ旧 URL の誘導も書くため、授権店舗に含まれるときだけ採る。
-        const lastUsed = getPlatformStoreId();
+        const lastUsed = getCurrentStoreId();
         const resolved = list.some(store => String(store.id) === lastUsed)
           ? lastUsed
           : list[0]?.id !== undefined
             ? String(list[0].id)
             : undefined;
-        if (resolved !== undefined) setPlatformStore(resolved);
+        if (resolved !== undefined) setCurrentStore(resolved);
         setStores(list);
         setCurrentStoreId(resolved);
       },
@@ -78,7 +78,7 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
   };
 
   const switchStore = (id: number) => {
-    setPlatformStore(id);
+    setCurrentStore(id);
     setCurrentStoreId(String(id));
   };
 

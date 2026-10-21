@@ -35,7 +35,7 @@ export interface ShiftUpdateRequest {
   status?: string;
 }
 
-// 本人（キャスト）ポータル週間スケジュールの1件（GET /platform/me/schedule）。店舗名を内联する。
+// 本人（キャスト）ポータル週間スケジュールの1件（GET /me/schedule）。店舗名を内联する。
 export interface CastScheduleItem {
   id?: string;
   work_date?: string;
@@ -85,7 +85,7 @@ export interface ShiftRequestResponse {
   created_at?: string;
 }
 
-// 本人（キャスト）の出勤希望履歴の1件（GET /platform/me/shift-requests）。店舗名を埋め込む。
+// 本人（キャスト）の出勤希望履歴の1件（GET /me/shift-requests）。店舗名を埋め込む。
 export interface CastShiftRequestItem {
   id?: string;
   work_date?: string;
@@ -99,7 +99,7 @@ export interface CastShiftRequestItem {
   created_at?: string;
 }
 
-// 本人（キャスト）所属店舗セレクタの1件（GET /platform/me/stores）。
+// 本人（キャスト）所属店舗セレクタの1件（GET /me/stores）。
 export interface CastStoreItem {
   store_id?: number;
   store_name?: string;
@@ -124,7 +124,7 @@ export interface StoreShiftRequestItem {
   approvable?: boolean;
 }
 
-// 会員の指名候補となる確定シフトのキャスト1件（GET /platform/shifts/casts）。
+// 会員の指名候補となる確定シフトのキャスト1件（GET /admin/shifts/casts）。
 export interface ConfirmedShiftCast {
   cast_id?: string;
   cast_name?: string;

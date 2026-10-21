@@ -69,9 +69,9 @@ it('前後の費用・報酬と理由を表示し、追加取得の失敗では�
   expect(await screen.findByText('提供コースの訂正')).toBeInTheDocument();
   await waitFor(() => expect(fetchHistory).toHaveBeenLastCalledWith('store', 'o1', undefined));
 });
-it('平台の権限不足は空履歴と区別する', async () => {
+it('グループ級の権限不足は空履歴と区別する', async () => {
   fetchHistory.mockRejectedValue({ response: { status: 403 } });
-  render(<OrderCorrectionHistory orderId="o1" scope="platform" />);
+  render(<OrderCorrectionHistory orderId="o1" scope="admin" />);
   expect(await screen.findByRole('alert')).toHaveTextContent('履歴を閲覧する権限がありません');
   expect(screen.queryByText('訂正履歴はありません')).not.toBeInTheDocument();
 });
@@ -102,7 +102,7 @@ it('閉じる要求を即時に反映しても退出中の本文を保ち、再�
         <button onClick={() => setOpen(true)}>再表示</button>
         <OrderCorrectionHistoryModal
           orderId="o1"
-          scope="platform"
+          scope="admin"
           open={open}
           onOpenChange={next => {
             changed(next);

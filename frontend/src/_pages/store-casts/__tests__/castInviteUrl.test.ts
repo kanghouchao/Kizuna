@@ -3,7 +3,7 @@ import { castInviteUrl } from '../lib/castInviteUrl';
 describe('castInviteUrl', () => {
   it('現在のオリジンの受諾画面を指し、トークンをフラグメントに置く', () => {
     expect(castInviteUrl('raw-invitation-token')).toBe(
-      'http://localhost/platform/invite#raw-invitation-token'
+      'http://localhost/auth/invite#raw-invitation-token'
     );
   });
 
@@ -12,7 +12,7 @@ describe('castInviteUrl', () => {
     // 生値が残る。招待が開かれるたびにログへクレデンシャルを書くことになる
     const [requestTarget] = castInviteUrl('raw-invitation-token').split('#');
 
-    expect(requestTarget).toBe('http://localhost/platform/invite');
+    expect(requestTarget).toBe('http://localhost/auth/invite');
     expect(requestTarget).not.toContain('raw-invitation-token');
   });
 
@@ -22,6 +22,6 @@ describe('castInviteUrl', () => {
   });
 
   it('URL で意味を持つ文字を含むトークンも安全に載せる', () => {
-    expect(castInviteUrl('a/b?c#d')).toBe('http://localhost/platform/invite#a%2Fb%3Fc%23d');
+    expect(castInviteUrl('a/b?c#d')).toBe('http://localhost/auth/invite#a%2Fb%3Fc%23d');
   });
 });

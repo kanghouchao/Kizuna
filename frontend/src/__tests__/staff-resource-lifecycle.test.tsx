@@ -1,16 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import StaffPage from '@/_pages/platform-staff/ui/StaffPage';
-import ServiceIdentitiesPage from '@/_pages/platform-service-identities/ui/ServiceIdentitiesPage';
-import {
-  platformStaffApi,
-  serviceIdentityApi,
-  platformAuthApi,
-  useStoreContext,
-} from '@/entities/user';
+import StaffPage from '@/_pages/admin-staff/ui/StaffPage';
+import ServiceIdentitiesPage from '@/_pages/admin-service-identities/ui/ServiceIdentitiesPage';
+import { staffApi, serviceIdentityApi, authApi, useStoreContext } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
 jest.mock('@/entities/user', () => ({
-  platformStaffApi: {
+  staffApi: {
     list: jest.fn(),
     get: jest.fn(),
     update: jest.fn(),
@@ -22,7 +17,7 @@ jest.mock('@/entities/user', () => ({
     update: jest.fn(),
     grantableRoles: jest.fn(),
   },
-  platformAuthApi: { stores: jest.fn() },
+  authApi: { stores: jest.fn() },
   useStoreContext: jest.fn(),
 }));
 jest.mock('@/shared/notify', () => ({
@@ -50,7 +45,7 @@ const detail = {
   version: 2,
 };
 const cases = [
-  { name: '従業員', Page: StaffPage, api: platformStaffApi },
+  { name: '従業員', Page: StaffPage, api: staffApi },
   { name: 'サービスID', Page: ServiceIdentitiesPage, api: serviceIdentityApi },
 ];
 
@@ -58,14 +53,14 @@ describe.each(cases)('$name の詳細ライフサイクル', ({ Page, api }) => 
   const mocked = api as jest.Mocked<typeof api>;
   beforeEach(() => {
     jest.resetAllMocks();
-    (platformAuthApi.stores as jest.Mock).mockResolvedValue([{ id: 1, name: '本店' }]);
+    (authApi.stores as jest.Mock).mockResolvedValue([{ id: 1, name: '本店' }]);
     (useStoreContext as jest.Mock).mockReturnValue({
       stores: [{ id: 1, name: '本店' }],
       currentStoreId: '1',
       loadFailed: false,
       reload: jest.fn(),
     });
-    for (const fetcher of [platformStaffApi.grantableRoles, serviceIdentityApi.grantableRoles]) {
+    for (const fetcher of [staffApi.grantableRoles, serviceIdentityApi.grantableRoles]) {
       (fetcher as jest.Mock).mockResolvedValue([
         { id: 3, name: '経理', system: false, permission_count: 1 },
       ]);

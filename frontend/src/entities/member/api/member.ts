@@ -4,12 +4,12 @@ import { MemberHomeResponse, MemberRegisterRequest, MemberRegisterResponse } fro
 export const memberApi = {
   /** 会員を自助登録する（公開・匿名）。 */
   register: async (data: MemberRegisterRequest): Promise<MemberRegisterResponse> => {
-    const response = await apiClient.post('/platform/members', data);
+    const response = await apiClient.post('/admin/members', data);
     return response.data;
   },
   /** 本人の会員ポータルホーム（会員コード・表示名）を取得する。 */
   home: async (): Promise<MemberHomeResponse> => {
-    const response = await apiClient.get('/platform/me/member');
+    const response = await apiClient.get('/me/member');
     return response.data;
   },
 };

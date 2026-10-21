@@ -25,12 +25,12 @@ export const shiftApi = {
     store_id: number;
     date: string;
   }): Promise<ConfirmedShiftCast[]> => {
-    const response = await apiClient.get('/platform/shifts/casts', { params });
+    const response = await apiClient.get('/admin/shifts/casts', { params });
     return response.data;
   },
   /** 本人（キャスト）の週間確定シフトを跨店で取得する（cast_id 単層自限）。 */
   mySchedule: async (params: { from: string; to: string }): Promise<CastScheduleItem[]> => {
-    const response = await apiClient.get('/platform/me/schedule', { params });
+    const response = await apiClient.get('/me/schedule', { params });
     return response.data;
   },
   /** シフトを新規作成する */
@@ -56,14 +56,14 @@ export const shiftApi = {
   },
   /** 出勤希望を提出する（本人・cast）。 */
   submitShiftRequest: async (data: ShiftRequestCreateRequest): Promise<ShiftRequestResponse> => {
-    const response = await apiClient.post('/platform/me/shift-requests', data);
+    const response = await apiClient.post('/me/shift-requests', data);
     return response.data;
   },
   /** 確定シフトへの変更申請を提出する（本人・cast）。 */
   submitShiftChangeRequest: async (
     data: ShiftChangeRequestCreateRequest
   ): Promise<ShiftRequestResponse> => {
-    const response = await apiClient.post('/platform/me/shift-requests/changes', data);
+    const response = await apiClient.post('/me/shift-requests/changes', data);
     return response.data;
   },
   /**
@@ -75,12 +75,12 @@ export const shiftApi = {
   myShiftRequests: async (
     params?: CursorParams
   ): Promise<CursorPageResult<CastShiftRequestItem>> => {
-    const response = await apiClient.get('/platform/me/shift-requests', { params });
+    const response = await apiClient.get('/me/shift-requests', { params });
     return fromCursorPage(response.data);
   },
   /** 本人（キャスト）の所属店舗一覧を取得する（提出フォームの店舗セレクタ用）。 */
   myStores: async (): Promise<CastStoreItem[]> => {
-    const response = await apiClient.get('/platform/me/stores');
+    const response = await apiClient.get('/me/stores');
     return response.data;
   },
   /** 店舗側 inbox の出勤希望一覧を取得する（status 省略で全件）。 */

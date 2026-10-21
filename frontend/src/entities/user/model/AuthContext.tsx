@@ -1,10 +1,10 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
-import { platformAuthApi } from '../api/platform';
+import { authApi } from '../api/auth';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
-import { clearPlatformSession, loginPath } from '@/shared/lib';
+import { clearSession, loginPath } from '@/shared/lib';
 
 interface AuthContextType {
   /**
@@ -34,12 +34,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (reason?: string) => {
     try {
-      await platformAuthApi.logout();
+      await authApi.logout();
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
       Cookies.remove('token');
-      clearPlatformSession();
+      clearSession();
       router.push(loginPath(reason));
     }
   };

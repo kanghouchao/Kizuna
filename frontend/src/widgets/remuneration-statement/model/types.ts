@@ -1,7 +1,7 @@
 import type { Page, CursorPage } from '@/shared/api';
 export type StatementScope =
   | { scope: 'store'; personId: number }
-  | { scope: 'platform'; personId: number; storeId: number }
+  | { scope: 'admin'; personId: number; storeId: number }
   | { scope: 'self'; storeId: number };
 export interface Guarantee {
   id: string;
