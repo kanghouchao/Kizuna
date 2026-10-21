@@ -130,13 +130,13 @@ export default function RolesPage() {
                   )}
                 </TableCell>
                 <TableCell className="space-x-2 text-right">
-                  {/* 平台既定ロールは改名・権限変更・削除がサーバ側で拒否されるため導線自体を無効化する */}
+                  {/* 既定ロールは権限を編集できる（改名は編集モーダルが塞ぎ、削除はサーバ側で拒否されるため導線を無効化する） */}
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
                     // id が無ければ編集対象を特定できず、押しても何も起きない状態になるため無効化する
-                    disabled={role.system || role.id === undefined}
+                    disabled={role.id === undefined}
                     onClick={() => role.id !== undefined && setFormTarget(role.id)}
                   >
                     編集
