@@ -31,6 +31,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreFilterEnable;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.store.domain.Store;
@@ -474,7 +475,8 @@ class RemunerationPostgresTest {
     BusinessDateService.class,
     ActorIdentityService.class,
     StoreScopeStampListener.class,
-    StoreFilterEnable.class
+    StoreFilterEnable.class,
+    StoreScopeHolder.class
   })
   static class Config {
     @Bean
