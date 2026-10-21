@@ -192,7 +192,7 @@ Then(
 
 When("店舗管理者が受付箱で予約を確定する", async ({ page, request }) => {
   const storeId = await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/orders`);
+  await page.goto(`${PLATFORM_URL}/store/orders`);
   const adminToken = await loginAsStoreAdmin(request);
   const courseName = `申請確定コース-${Date.now()}`;
   await createCourse(request, adminToken, courseName, storeId);
@@ -225,7 +225,7 @@ When("店舗管理者が受付箱で予約を確定する", async ({ page, reque
 });
 
 When("予約一覧を開き直す", async ({ page }) => {
-  // 店舗コンソールへ入った後は会員セッションが失われるため、会員として入り直す。
+  // 管理画面へ入った後は会員セッションが失われるため、会員として入り直す。
   await page.goto(`${PLATFORM_URL}/platform/login`);
   await page.getByLabel("メールアドレス", { exact: true }).fill(memberEmail);
   await page.getByLabel("パスワード", { exact: true }).fill(MEMBER_PASSWORD);

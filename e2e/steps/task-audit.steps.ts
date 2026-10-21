@@ -25,7 +25,7 @@ Given('専用の処理実行者とサービスIDが用意されている', async
   const suffix = Date.now().toString();
   password = 'Audit-' + suffix + '-fixture';
   email = 'audit-' + suffix + '@kizuna.test';
-  roleId = await createPermissionRole(request, admin, '実行監査-' + suffix, ['TASK_MANAGE', 'AUDIT_VIEW', 'PLATFORM_MENU_VIEW']);
+  roleId = await createPermissionRole(request, admin, '実行監査-' + suffix, ['TASK_MANAGE', 'AUDIT_VIEW']);
   await createPlatformStaffFixture(request, admin, email, password, [roleId]);
   operator = await loginPlatformUser(request, email, password);
   limitedEmail = 'audit-limited-' + suffix + '@kizuna.test';
@@ -85,8 +85,8 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   expect((await request.post('/api/platform/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
   expect((await request.post(`/api/platform/service-identities/${serviceId}/resumption`, { headers: headers(admin) })).status()).toBe(204);
   for (const [id, replacement, callerRevoked] of [
-    [serviceRoleId, ['PLATFORM_MENU_VIEW'], false],
-    [roleId, ['AUDIT_VIEW', 'PLATFORM_MENU_VIEW'], true],
+    [serviceRoleId, ['STORE_VIEW'], false],
+    [roleId, ['AUDIT_VIEW'], true],
   ] as const) {
     const current = await request.get(`/api/platform/roles/${id}`, { headers: headers(admin) });
     expect(current.status()).toBe(200);

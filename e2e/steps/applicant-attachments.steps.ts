@@ -5,7 +5,6 @@ import { Client } from "pg";
 import { PLATFORM_URL } from "../base-url";
 import { ADMIN_PASSWORD, STORE1_ID, STORE_HEADERS, createPermissionRole, loginAsStoreAdmin, loginPlatformUser } from "./store-api";
 const { Given, When, Then } = createBdd();
-let storeId = "";
 let token = "";
 let managerToken = "";
 let staffToken = "";
@@ -32,10 +31,10 @@ Given("添付検証専用の担当者と応募者が存在する", async ({ page
   const ownerLogin = await request.post("/api/platform/login", { data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD } });
   expect(ownerLogin.status()).toBe(200);
   const owner = (await ownerLogin.json()).token;
-  const role = await createPermissionRole(request, owner, `添付検証-${suffix}`, ["RECRUITMENT_VIEW", "RECRUITMENT_MANAGE", "RECRUITMENT_ATTACHMENT_VIEW", "RECRUITMENT_ATTACHMENT_MANAGE", "STORE_VIEW", "STORE_MENU_VIEW"]);
+  const role = await createPermissionRole(request, owner, `添付検証-${suffix}`, ["RECRUITMENT_VIEW", "RECRUITMENT_MANAGE", "RECRUITMENT_ATTACHMENT_VIEW", "RECRUITMENT_ATTACHMENT_MANAGE", "STORE_VIEW",]);
   email = `attachment-${suffix}@example.invalid`;
   const password = randomUUID();
-  const staff = await request.post("/api/store/staff-members", { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, data: { email, password, display_name: "添付検証担当", role_ids: [role], store_scope_type: "SPECIFIC_STORES", store_ids: [Number(STORE1_ID)] } });
+  const staff = await request.post("/api/platform/staff", { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, data: { email, password, display_name: "添付検証担当", role_ids: [role], store_scope_type: "SPECIFIC_STORES", store_ids: [Number(STORE1_ID)] } });
   expect(staff.status(), await staff.text()).toBe(201);
   const login = await request.post("/api/platform/login", { data: { email, password } });
   expect(login.status()).toBe(200);
@@ -47,8 +46,7 @@ Given("添付検証専用の担当者と応募者が存在する", async ({ page
   await page.getByLabel("メールアドレス", { exact: true }).fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/\d+\//, { timeout: 20000 });
-  storeId = new URL(page.url()).pathname.match(/\/store\/(\d+)/)![1];
+  await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 20000 });
   image = Buffer.from(await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 8; canvas.height = 8; return canvas.toDataURL('image/png').split(',')[1]; }), 'base64');
   const policy = await request.get('/api/store/applicants/attachment-policy', { headers: headers() });
   expect(policy.status()).toBe(200);
@@ -68,7 +66,7 @@ When("非公開添付の初回登録と同一操作の再送を行う", async ({
   const client = await database();
   try { expect(Number((await client.query('select count(*) from t_audit_events where target_id=$1', [attachmentId])).rows[0].count)).toBe(1); }
   finally { await client.end(); }
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`);
+  await page.goto(`${PLATFORM_URL}/store/applicants/${applicantId}`);
   await page.getByLabel('追加する画像').setInputFiles({ name: 'synthetic-ui.png', mimeType: 'image/png', buffer: image });
   let submissions = 0;
   let storedStatus = 0;
@@ -208,7 +206,7 @@ Then("監査障害で未完了になった添付を画面から同じ画像で�
     for (const field of ['original_sha256', 'canonical_sha256', 'object_id', 'bucket', 'url']) expect(rows[0]).not.toHaveProperty(field);
     expect((await request.get(`${path()}/attachments/${recoveryId}/content`, { headers: headers() })).status()).toBe(404);
     await client.query("update t_applicant_attachment_uploads set failure='CONTENT_MISMATCH' where id=$1", [recoveryId]);
-    await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`);
+    await page.goto(`${PLATFORM_URL}/store/applicants/${applicantId}`);
     const resend = page.getByRole('button', { name: '修復後の同じ画像を再送' });
     await expect(resend).toBeDisabled();
     await expect(page.getByText(/同じ画像の再送だけでは回復できません/)).toBeVisible();

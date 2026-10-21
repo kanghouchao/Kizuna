@@ -6,19 +6,18 @@ const { Given, When, Then } = createBdd();
 let email = '';
 let password = '';
 let token = '';
-let storeId = '';
 let reviewId = '';
 let receipt: Record<string, unknown>;
 const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${token}` });
 
 Given('既定権限を持たない口コミ担当者が用意されている', async ({ page, request }) => {
-  storeId = await loginViaUiAndEnterStore(page);
+  await loginViaUiAndEnterStore(page);
   const admin = await loginPlatformUser(request, 'admin@kizuna.test', ADMIN_PASSWORD);
   expect((await request.get('/api/store/reviews', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${admin}` } })).status()).toBe(403);
   const suffix = Date.now().toString();
   email = `review-${suffix}@kizuna.test`;
   password = `Review-${suffix}-fixture`;
-  const role = await createPermissionRole(request, admin, `口コミ担当-${suffix}`, ['REVIEW_VIEW', 'REVIEW_MANAGE', 'REVIEW_MODERATE', 'ORDER_MANAGE', 'PLATFORM_MENU_VIEW', 'STORE_MENU_VIEW']);
+  const role = await createPermissionRole(request, admin, `口コミ担当-${suffix}`, ['REVIEW_VIEW', 'REVIEW_MANAGE', 'REVIEW_MODERATE', 'ORDER_MANAGE',]);
   await createPlatformStaffFixture(request, admin, email, password, [role]);
   token = await loginPlatformUser(request, email, password);
   expect((await request.get('/api/store/reviews', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(403);
@@ -39,7 +38,7 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).toHaveURL(/\/platform\/dashboard/, { timeout: 15000 });
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/reviews`);
+  await page.goto(`${PLATFORM_URL}/store/reviews`);
   await page.getByRole('button', { name: '口コミを受付', exact: true }).click();
   const intake = page.getByRole('dialog', { name: '口コミを受付', exact: true });
   await intake.getByLabel('口コミ本文').fill('  受付時の原文をそのまま保存します。\n二行目の長い本文です。  ');

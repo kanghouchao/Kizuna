@@ -74,8 +74,8 @@ Given(
         "ORDER_MANAGE",
         "ORDER_SET_MANAGE",
         "STORE_VIEW",
-        "STORE_MENU_VIEW",
-        "PLATFORM_MENU_VIEW",
+
+
         "REMUNERATION_VIEW",
         "GUARANTEE_MANAGE",
         "BONUS_AWARD",
@@ -160,7 +160,7 @@ When(
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
     await page.waitForURL((url) => url.pathname !== "/platform/login");
     await page.goto(
-      `${PLATFORM_URL}/store/${STORE1_ID}/orders/monthly-remunerations`,
+      `${PLATFORM_URL}/store/orders/monthly-remunerations`,
     );
     await page.getByRole("combobox", { name: "キャスト本人" }).click();
     await page.getByPlaceholder("源氏名で検索").fill(name);
@@ -501,7 +501,7 @@ When("ボーナスが保存された直後に応答を失う", async ({ page, re
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await page.waitForURL((url) => url.pathname !== "/platform/login");
   await page.goto(
-    `${PLATFORM_URL}/store/${STORE1_ID}/orders/monthly-remunerations`,
+    `${PLATFORM_URL}/store/orders/monthly-remunerations`,
   );
   await selectPerson(page, name);
   await page.getByLabel("対象月").fill(month);

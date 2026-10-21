@@ -6,10 +6,10 @@ import { createCast, issueCastInvitation, loginAsStoreAdmin, loginViaUiAndEnterS
 const { Given, When, Then } = createBdd();
 
 Given('在籍操作用のキャスト編集画面を開く', async ({ page, request }) => {
-  const storeId = await loginViaUiAndEnterStore(page);
+  await loginViaUiAndEnterStore(page);
   const token = await loginAsStoreAdmin(request);
   const id = await createCast(request, token, `在籍操作-${Date.now()}`);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/${id}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/casts/${id}/edit`);
   await expect(page.getByText('在籍状態: 在籍中', { exact: true })).toBeVisible();
 });
 
@@ -41,23 +41,22 @@ Then('退店状態と入店からの在籍履歴が表示される', async ({ pa
   await expect(page.getByText('在籍状態: 退店', { exact: true })).toBeVisible();
 });
 
-let invitedStoreId: string;
 let invitedCastName: string;
 let withdrawnInvitation: string;
 
 Given('招待発行済みのキャスト編集画面を開く', async ({ page, request }) => {
-  invitedStoreId = await loginViaUiAndEnterStore(page);
+  await loginViaUiAndEnterStore(page);
   const token = await loginAsStoreAdmin(request);
   invitedCastName = `招待不可-${Date.now()}`;
   const id = await createCast(request, token, invitedCastName);
   withdrawnInvitation = await issueCastInvitation(request, token, id);
-  await page.goto(`${PLATFORM_URL}/store/${invitedStoreId}/casts/${id}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/casts/${id}/edit`);
   await expect(page.getByText('在籍状態: 在籍中', { exact: true })).toBeVisible();
 });
 
 Then('管理一覧は招待不可を表示し招待ページは受諾を案内しない', async ({ page }) => {
   await expect(page.getByText('在籍状態: 退店', { exact: true })).toBeVisible();
-  await page.goto(`${PLATFORM_URL}/store/${invitedStoreId}/casts`);
+  await page.goto(`${PLATFORM_URL}/store/casts`);
   await page.getByPlaceholder('名前で検索...').fill(invitedCastName);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   const row = page.getByRole('row').filter({ hasText: invitedCastName });

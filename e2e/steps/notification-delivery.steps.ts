@@ -20,7 +20,7 @@ Given('業務通知の担当者とサービス主体と同意済みゲスト申�
   const suffix = Date.now().toString();
   email = 'notification-' + suffix + '@kizuna.test';
   password = 'Notification-' + suffix + '-fixture';
-  const role = await createPermissionRole(request, admin, '通知運用-' + suffix, ['TASK_MANAGE', 'NOTIFICATION_DELIVER', 'NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND', 'PLATFORM_MENU_VIEW', 'STORE_MENU_VIEW']);
+  const role = await createPermissionRole(request, admin, '通知運用-' + suffix, ['TASK_MANAGE', 'NOTIFICATION_DELIVER', 'NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND',]);
   await createPlatformStaffFixture(request, admin, email, password, [role]);
   operator = await loginPlatformUser(request, email, password);
   const executionRole = await createPermissionRole(request, admin, '通知実行-' + suffix, ['TASK_EXECUTE', 'NOTIFICATION_DELIVER']);
@@ -43,7 +43,7 @@ When('担当者が通知を作成して内容を確認し送信待ちにする',
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).toHaveURL(/\/platform\/dashboard/, { timeout: 15000 });
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/notification-deliveries`);
+  await page.goto(`${PLATFORM_URL}/store/notification-deliveries`);
   await page.getByRole('button', { name: '通知を作成', exact: true }).click();
   const create = page.getByRole('dialog', { name: '業務通知を作成' });
   await create.getByRole('combobox', { name: '起点', exact: true }).click();
@@ -111,7 +111,7 @@ Then('未設定の通知を成功扱いせず履歴から明示的に再試行�
     expect(response.status()).toBe(200);
     return (await response.json()).status;
   }).toBe('FAILED');
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/notification-deliveries`);
+  await page.goto(`${PLATFORM_URL}/store/notification-deliveries`);
   await page.getByRole('button', { name: '内容・履歴' }).first().click();
   const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
   await expect(detail.getByText('送信設定が利用できません', { exact: true })).toBeVisible();
@@ -137,7 +137,7 @@ Then('未設定の通知を成功扱いせず履歴から明示的に再試行�
   expect(retryHistory[0].attempt_number).toBe(2);
   expect(retryHistory[0].failure_code).toBe('UNAVAILABLE');
   expect(retryHistory[0].reason).toBe('未送信の結果を確認して再試行');
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/notification-deliveries`);
+  await page.goto(`${PLATFORM_URL}/store/notification-deliveries`);
   await page.getByRole('button', { name: '内容・履歴' }).first().click();
   await expect(detail.getByText('第2回', { exact: false })).toBeVisible();
   await detail.getByText('第1回', { exact: false }).scrollIntoViewIfNeeded();

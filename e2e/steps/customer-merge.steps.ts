@@ -6,7 +6,6 @@ import { PLATFORM_URL } from '../base-url';
 const { Given, When, Then } = createBdd();
 let survivingId = '';
 let mergedId = '';
-let storeId = '';
 let token = '';
 let marker = '';
 const reason = '本人の資料を照合し重複を確認';
@@ -21,10 +20,10 @@ Given('統合の比較用に長い注意事項と同値連絡先を持つ二顧�
     await preferCustomerContact(request, token, id, 'EMAIL', contactId);
     await updateCustomer(request, token, id, { ng_content: '連絡前に在宅状況を確認してください。'.repeat(20) });
   }
-  storeId = await loginViaUiAndEnterStore(page);
+  await loginViaUiAndEnterStore(page);
 });
 When('顧客一覧の二行から統合資料を選ぶ', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers`);
+  await page.goto(`${PLATFORM_URL}/store/customers`);
   await page.getByPlaceholder('名前・電話・メール・LINE ID で検索...').fill(marker);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   for (const suffix of ['甲', '乙']) await page.getByRole('checkbox', { name: `${marker}${suffix} を見比べる` }).click();
@@ -83,7 +82,7 @@ When('最新資料を再確認して統合を確定する', async ({ page }) => 
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 Then('統合前後の資料と連絡先の移動を監査で確認できる', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers/${survivingId}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/customers/${survivingId}/edit`);
   await page.getByRole('button', { name: '監査記録を確認' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(reason, { exact: true })).toBeVisible();

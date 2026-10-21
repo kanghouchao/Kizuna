@@ -11,8 +11,8 @@ const longEmail = `${'long.contact.'.repeat(4)}person+tag@EXAMPLE.COM`;
 Given('連絡先検証用の顧客編集画面を開く', async ({ page, request }) => {
   token = await loginAsStoreAdmin(request);
   customerId = await createCustomer(request, token, `連絡先検証-${Date.now()}`);
-  const storeId = await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers/${customerId}/edit`);
+  await loginViaUiAndEnterStore(page);
+  await page.goto(`${PLATFORM_URL}/store/customers/${customerId}/edit`);
   await expect(page.getByText('連絡先はありません', { exact: true })).toBeVisible();
 });
 
@@ -106,8 +106,8 @@ Then('古い連絡先が画面から消える', async ({ page }) => {
 });
 
 Given('新規顧客登録画面を開く', async ({ page }) => {
-  const storeId = await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers/create`);
+  await loginViaUiAndEnterStore(page);
+  await page.goto(`${PLATFORM_URL}/store/customers/create`);
 });
 
 When('海外の電話番号を連絡先に指定して顧客を保存する', async ({ page }) => {

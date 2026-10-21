@@ -5,7 +5,7 @@ import { PLATFORM_URL } from '../base-url';
 const { When, Then } = createBdd();
 
 const ROLES_URL = `${PLATFORM_URL}/platform/roles`;
-const ADMIN_URL = `${PLATFORM_URL}/platform/staff`;
+const STAFF_URL = `${PLATFORM_URL}/platform/staff`;
 
 // 作成するロール名はシナリオごとに一意化する（失敗した過去 run の残骸との重複＝strict モード違反を
 // 避ける。staff-management.steps.ts の採番手法に倣う）。
@@ -42,11 +42,11 @@ Then(
   }
 );
 
-Then('管理者追加のロール選択に {string} が出る', async ({ page }, _label: string) => {
-  // ロール管理で作ったロールが、授与側（管理者追加）の選択肢として実際に届くことまで見る。
-  await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: '管理者を追加', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '管理者を追加' });
+Then('従業員追加のロール選択に {string} が出る', async ({ page }, _label: string) => {
+  // ロール管理で作ったロールが、授与側（従業員追加）の選択肢として実際に届くことまで見る。
+  await page.goto(STAFF_URL, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: '従業員を追加', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '従業員を追加' });
   await expect(dialog.getByRole('checkbox', { name: createdRoleName, exact: true })).toBeVisible({
     timeout: 15000,
   });

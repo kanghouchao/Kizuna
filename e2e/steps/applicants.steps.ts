@@ -17,7 +17,7 @@ let token = "";
 let managerToken = "";
 let applicantId = "";
 let applicantName = "";
-let storeId = STORE1_ID;
+const storeId = STORE1_ID;
 const intake = () => ({
   name: applicantName,
   channel: "PHONE",
@@ -64,12 +64,11 @@ Given(
         "RECRUITMENT_MANAGE",
         "RECRUITMENT_DECIDE",
         "STORE_VIEW",
-        "STORE_MENU_VIEW",
       ],
     );
     const email = `recruitment-${suffix}@example.invalid`;
     const password = randomUUID();
-    const created = await request.post("/api/store/staff-members", {
+    const created = await request.post("/api/platform/staff", {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` },
       data: {
         email,
@@ -90,13 +89,12 @@ Given(
     await page.getByLabel("メールアドレス", { exact: true }).fill(email);
     await page.getByLabel("パスワード", { exact: true }).fill(password);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
-    await expect(page).toHaveURL(/\/store\/\d+\//, { timeout: 20000 });
-    storeId = new URL(page.url()).pathname.match(/\/store\/(\d+)/)![1];
+    await expect(page).toHaveURL(/\/platform\/dashboard\/?$/, { timeout: 20000 });
   },
 );
 
 When("応募者の受付と面接を画面で登録する", async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants`);
+  await page.goto(`${PLATFORM_URL}/store/applicants`);
   await page.getByRole("link", { name: "応募者を登録" }).click();
   await page.getByLabel("氏名", { exact: true }).fill(applicantName);
   await page.getByLabel("電話番号", { exact: true }).fill("09000000000");
@@ -158,7 +156,7 @@ Then(
         document.documentElement.classList.toggle("dark", value === "dark");
       }, theme);
       await page.goto(
-        `${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`,
+        `${PLATFORM_URL}/store/applicants/${applicantId}`,
       );
       await page.setViewportSize({ width: 1280, height: 960 });
       await expect(
@@ -174,7 +172,7 @@ Then(
         path: $testInfo.outputPath(`applicant-detail-${theme}.png`),
         fullPage: true,
       });
-      await page.goto(`${PLATFORM_URL}/store/${storeId}/applicants`);
+      await page.goto(`${PLATFORM_URL}/store/applicants`);
       await expect(
         page.getByRole("heading", { name: "応募者管理", exact: true }),
       ).toBeVisible();
@@ -187,7 +185,7 @@ Then(
         fullPage: true,
       });
       await page.goto(
-        `${PLATFORM_URL}/store/${storeId}/applicants/${applicantId}`,
+        `${PLATFORM_URL}/store/applicants/${applicantId}`,
       );
     }
     await page.setViewportSize({ width: 390, height: 844 });

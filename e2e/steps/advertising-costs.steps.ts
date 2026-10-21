@@ -20,6 +20,7 @@ import {
   invalidateOrder,
   cancelOrder,
   submitConfirmedStoreRequest,
+  switchStoreInHeader,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const base = "/api/store/advertising-costs",
@@ -29,6 +30,8 @@ let storeId = "",
   reader = "",
   exporter = "",
   foreign = "",
+  storeName = "",
+  foreignName = "",
   email = "",
   readerEmail = "",
   orderReader = "",
@@ -78,8 +81,8 @@ async function login(page: Page, address = email) {
   await page.getByLabel("メールアドレス", { exact: true }).fill(address);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/\d+\//);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/advertising-costs`);
+  await expect(page).toHaveURL(/\/platform\/dashboard\/?$/);
+  await page.goto(`${PLATFORM_URL}/store/advertising-costs`);
   await expect(page.getByRole("heading", { name: "広告費管理" })).toBeVisible();
   await selectMonth(page, month);
 }
@@ -94,11 +97,11 @@ Given(
       ADMIN_PASSWORD,
     );
     const manager = await loginAsStoreAdmin(request);
-    foreign = String(
-      (await getAuthorizedStores(request, manager)).find(
-        (s) => String(s.id) !== storeId,
-      )!.id,
-    );
+    const stores = await getAuthorizedStores(request, manager);
+    const other = stores.find((s) => String(s.id) !== storeId)!;
+    foreign = String(other.id);
+    foreignName = other.name;
+    storeName = stores.find((s) => String(s.id) === storeId)!.name;
     const suffix = randomUUID();
     password = randomUUID();
     month = `${($testInfo.title.includes("受注あたり") ? 1980 : $testInfo.title.includes("媒体別") ? 1970 : $testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
@@ -120,7 +123,7 @@ Given(
         request,
         owner,
         `広告費-${index}-${suffix}`,
-        ["STORE_VIEW", "STORE_MENU_VIEW", ...perms],
+        ["STORE_VIEW", ...perms],
       );
       const address = `advertising-${index}-${suffix}@example.test`;
       if (index === 0) email = address;
@@ -484,10 +487,10 @@ Then(
     ).toBeVisible();
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
     await page.unroute("**/api/store/advertising-costs?**");
-    await page.goto(`${PLATFORM_URL}/store/${foreign}/advertising-costs`);
+    await switchStoreInHeader(page, foreignName);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
-    await page.goto(`${PLATFORM_URL}/store/${storeId}/advertising-costs`);
+    await switchStoreInHeader(page, storeName);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeVisible();
     for (const theme of ["light", "dark"]) {
@@ -1236,7 +1239,7 @@ Then(
       .click();
     await storeArrived;
     await page.unroute("**/api/store/advertising-order-costs?**");
-    await page.goto(`${PLATFORM_URL}/store/${foreign}/advertising-costs`);
+    await switchStoreInHeader(page, foreignName);
     await selectMonth(page, month);
     await page
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })

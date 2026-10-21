@@ -18,17 +18,12 @@ const { Given, When, Then, After } = createBdd();
 // の _label 引数と同じ扱い）。
 let createdFieldKey = '';
 let createdFieldLabel = '';
-// キャストの編集画面遷移時、一覧行の編集リンク（/store/{storeId}/casts/{id}/edit）から id を取り出して
+// キャストの編集画面遷移時、一覧行の編集リンク（/store/casts/{id}/edit）から id を取り出して
 // 後続の公開詳細ページ遷移・After での削除に使う（作成ステップは cast-detail-404.steps.ts の
 // 既存 Given を再利用する。名前は seededCastName() で解決済み一意名を受け取れるが、id は
 // 公開しておらず編集リンクから読み取る）。
 let currentCastId = '';
 let currentCastName = '';
-// ルート移設（#413）で店舗管理画面 URL に storeId が必須になった。ログイン着地先の
-// ログイン後の着地 URL /store/{id}/... から読み取り、以降の管理画面遷移で使う（seed id をハードコードしない）。
-// 公開詳細ページ（/casts/{id}）遷移後は URL に店舗文脈が残らないため、現在 URL からの都度解決ではなく
-// ログイン時に確定した値を保持する。
-let storeId = '';
 
 async function addFieldDefinition(page: Page, rawKey: string, rawLabel: string, isPublic: boolean) {
   const ts = Date.now();
@@ -50,10 +45,9 @@ async function addFieldDefinition(page: Page, rawKey: string, rawLabel: string, 
 }
 
 Given('キャストカスタムフィールド管理画面を開く', async ({ page }) => {
-  // 統一ログイン（/platform/login）は platform ドメインで提供され、店長ロールのセッションも
-  // platform ドメイン上のまま /store/* を操作する（store-settings.steps.ts と同じ）。
-  storeId = await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/fields`);
+  // 統一ログイン（/platform/login）は platform ドメインで提供され、店舗業務画面も同じドメイン上で操作する。
+  await loginViaUiAndEnterStore(page);
+  await page.goto(`${PLATFORM_URL}/store/casts/fields`);
   await expect(page.getByRole('button', { name: 'フィールドを追加', exact: true })).toBeVisible();
 });
 
@@ -83,12 +77,12 @@ When(
     // {string} のキャスト名は可読性のための基底名の表記。実際の照合は Given が播種した
     // 解決済み一意名で行う（残骸の同基底名の行と衝突させない）。
     currentCastName = seededCastName();
-    await page.goto(`${PLATFORM_URL}/store/${storeId}/casts`);
+    await page.goto(`${PLATFORM_URL}/store/casts`);
     const row = page.getByRole('row', { name: new RegExp(currentCastName) });
     await expect(row).toBeVisible({ timeout: 15000 });
     const editLink = row.locator('a[href$="/edit"]');
     const href = await editLink.getAttribute('href');
-    currentCastId = href?.match(/\/store\/\d+\/casts\/([^/]+)\/edit/)?.[1] ?? '';
+    currentCastId = href?.match(/\/store\/casts\/([^/]+)\/edit/)?.[1] ?? '';
     await editLink.click();
 
     await expect(page.getByRole('heading', { name: 'キャスト編集', exact: true })).toBeVisible();
@@ -130,7 +124,7 @@ Then(
 );
 
 When('キャストカスタムフィールド管理画面で {string} を削除する', async ({ page }, _label: string) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/fields`);
+  await page.goto(`${PLATFORM_URL}/store/casts/fields`);
   const row = page.getByRole('row', { name: new RegExp(createdFieldLabel) });
   await expect(row).toBeVisible({ timeout: 15000 });
   await row.getByRole('button', { name: '削除', exact: true }).click();
@@ -182,7 +176,7 @@ When('同じキーを公開フィールドとして再作成する', async ({ pa
 });
 
 Then('再作成したフィールドの値は空で公開プロフィールに表示される', async ({ page }) => {
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/casts/${currentCastId}/edit`);
+  await page.goto(`${PLATFORM_URL}/store/casts/${currentCastId}/edit`);
   const publicProfile = page.getByRole('region', { name: '公開プロフィール', exact: true });
   await expect(publicProfile.getByLabel(createdFieldLabel, { exact: true })).toHaveValue('');
   await expect(page.getByRole('region', { name: '内部情報', exact: true }).getByLabel(createdFieldLabel, { exact: true })).toHaveCount(0);

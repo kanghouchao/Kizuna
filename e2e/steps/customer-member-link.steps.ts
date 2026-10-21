@@ -16,8 +16,8 @@ Given('会員関連の検証用顧客と二人の会員を用意する', async (
   const password = `E2e-${Date.now()}-member`;
   firstCode = await registerMember(request, `link-first-${Date.now()}@kizuna.test`, password, '関連検証一');
   secondCode = await registerMember(request, `link-second-${Date.now()}@kizuna.test`, password, '関連検証二');
-  const storeId = await loginViaUiAndEnterStore(page);
-  await page.goto(`${PLATFORM_URL}/store/${storeId}/customers/${customerId}/edit`);
+  await loginViaUiAndEnterStore(page);
+  await page.goto(`${PLATFORM_URL}/store/customers/${customerId}/edit`);
   await expect(page.getByText('未紐づけ', { exact: true })).toBeVisible();
 });
 

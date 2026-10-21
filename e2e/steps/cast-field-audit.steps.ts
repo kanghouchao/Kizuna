@@ -87,7 +87,7 @@ Given(
         "CAST_FIELD_DEF_MANAGE",
         "CAST_FIELD_DEF_VIEW",
         "STORE_VIEW",
-        "STORE_MENU_VIEW",
+
       ],
     );
     const ordinaryEmail = `field-audit-${suffix}@example.test`;
@@ -104,7 +104,7 @@ Given(
       request,
       owner,
       `勤務担当-${suffix}`,
-      ["CAST_FIELD_DEF_VIEW", "STORE_VIEW", "STORE_MENU_VIEW"],
+      ["CAST_FIELD_DEF_VIEW", "STORE_VIEW",],
     );
     const limitedEmail = `field-limited-${suffix}@example.test`;
     await createStoreStaffFixture(
@@ -126,7 +126,7 @@ Given(
       request,
       owner,
       `項目監査-${suffix}`,
-      ["AUDIT_VIEW", "PLATFORM_MENU_VIEW"],
+      ["AUDIT_VIEW",],
     );
     const auditEmail = `field-auditor-${suffix}@example.test`;
     await createPlatformStaffFixture(
