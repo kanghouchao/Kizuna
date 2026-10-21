@@ -63,11 +63,6 @@ public enum DbConstraint {
   /** t_benefit_rule_stores → t_stores の FK。実在しない店舗を指した特典規則の保存を止める。 */
   FK_T_BENEFIT_RULE_STORES_STORE("fk_t_benefit_rule_stores_store"),
 
-  /**
-   * t_emergency_elevations → t_stores の FK。挿入方向は実在しない店舗を宛先にした発動を、 削除方向は発動記録（監査の正本）を道連れにする店舗削除を止める。
-   */
-  FK_T_EMERGENCY_ELEVATIONS_STORE("fk_t_emergency_elevations_store"),
-
   FK_T_SERVICES_STORE("fk_t_services_store"),
 
   FK_T_SERVICE_REVISIONS_STORE("fk_t_service_revisions_store"),

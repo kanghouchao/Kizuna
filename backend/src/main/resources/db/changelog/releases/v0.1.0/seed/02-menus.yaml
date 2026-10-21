@@ -96,16 +96,6 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
-              - column: { name: id, value: platform-emergency-elevations }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: 緊急昇格 }
-              - column: { name: path, value: /platform/emergency-elevations }
-              - column: { name: icon, value: ShieldAlertIcon }
-              - column: { name: permission, value: EMERGENCY_ELEVATE }
-              - column: { name: sort_order, valueNumeric: 7 }
-        - insert:
-            tableName: t_menus
-            columns:
               - column: { name: id, value: platform-service-identities }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: サービスID管理 }

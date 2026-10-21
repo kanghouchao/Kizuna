@@ -7,16 +7,13 @@ import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.CredentialOperations;
-import com.kizuna.user.domain.EmergencyElevation;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -25,7 +22,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
@@ -77,25 +73,7 @@ public class PlatformAuthService {
   }
 
   /**
-   * 緊急昇格中の身分に対してトークンを発行する。基底の claim は通常発行と同一の組み立てを通し、昇格が変える点だけを 上書きする。期限は記録の {@code expiresAt}
-   * をそのまま渡す — 別々に 60 分を数えると監査で復元した区間と実効区間が 食い違う。資格情報の版は現在値のまま据え置き、撤回で版が進めば昇格トークンも同時に失効する（ADR 0022）。
-   */
-  @Transactional(readOnly = true)
-  public Token issueElevatedTokenFor(User user, EmergencyElevation elevation) {
-    Set<PermissionCode> permissions = permissionsOf(user);
-    Map<String, Object> claims = baseClaims(user, permissions);
-    claims.put("authorities", elevatedAuthorities(user, permissions));
-    claims.put("storeBridge", true);
-    claims.put("storeScopeType", StoreScopeType.SPECIFIC_STORES.name());
-    claims.put("storeIds", List.of(elevation.getTargetStoreId()));
-    // 昇格中の操作を発動記録へ結び付けるための錨。今は誰も検証しないが、この claim が無いと
-    // 昇格中に何をしたかを後から記録へ辿れない。
-    claims.put("elevationId", elevation.getId());
-    return jwtIssuer.issue(user.getEmail(), claims, elevation.getExpiresAt().toInstant());
-  }
-
-  /**
-   * 全ての発行経路が共有する適格性検査と claim の組み立て。停止中の身分と SERVICE をここで拒否し、 認証手段や昇格の有無による検査漏れ・claim の齟齬を防ぐ。SERVICE
+   * 全ての発行経路が共有する適格性検査と claim の組み立て。停止中の身分と SERVICE をここで拒否し、 認証手段による検査漏れ・claim の齟齬を防ぐ。SERVICE
    * の資格情報を禁じるドメイン不変条件に加え、 発行時にも種別を検査して対話ログインを拒否する。
    */
   private Map<String, Object> baseClaims(User user, Set<PermissionCode> permissions) {
@@ -117,23 +95,6 @@ public class PlatformAuthService {
     // 即時に不一致となる（ADR 0022）。
     claims.put("credentialVersion", user.getCredentialVersion());
     return claims;
-  }
-
-  /**
-   * 昇格中の authorities。本人の通常の授権に、店舗コンソールの全権限を重ねる。
-   *
-   * <p>{@link PermissionCode#grantsStoreConsole()} では組まない。あれは入場資格の述語で標識権限 {@code STORE_MENU_VIEW}
-   * を除くため、それで組むと店舗コンソールのメニューが一行も出ない昇格になる。
-   */
-  private static List<String> elevatedAuthorities(User user, Set<PermissionCode> permissions) {
-    return Stream.concat(
-            buildAuthorities(user, permissions).stream(),
-            Arrays.stream(PermissionCode.values())
-                .filter(code -> code.getConsole() == PermissionCode.Console.STORE)
-                .map(PermissionCode::authority))
-        .distinct()
-        .sorted()
-        .toList();
   }
 
   /** me 応答を返す（GET /platform/me）。ユーザー不在は空を返し、HTTP 表現は呼び出し側が決める。 */

@@ -436,12 +436,11 @@ class ServiceAuditPostgresTest {
   }
 
   @Test
-  void elevationUsesActualActorWithoutChangingOwnChoiceAuthority() {
+  void staffWritesUseActualActorWithoutChangingOwnChoiceAuthority() {
     var jwt =
         Jwt.withTokenValue(UUID.randomUUID().toString())
             .header("alg", "HS256")
             .subject(STAFF)
-            .claim("elevationId", 77L)
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of(), STAFF));
@@ -450,16 +449,11 @@ class ServiceAuditPostgresTest {
     settings.delete(id, 2, STAFF);
     assertThat(audits())
         .hasSize(3)
-        .allSatisfy(
-            event -> {
-              assertThat(event.getActorId()).isEqualTo(staffId);
-              assertThat(event.getAfterValues()).containsEntry("emergency_elevation_id", "77");
-            });
+        .allSatisfy(event -> assertThat(event.getActorId()).isEqualTo(staffId));
     authenticate(storeId, CAST);
     String ownId = special();
     decide(ownId, 1, 0, ConsentDecision.ACCEPTED);
     assertThat(audits().getLast().getActorId()).isEqualTo(castId);
-    assertThat(audits().getLast().getAfterValues()).doesNotContainKey("emergency_elevation_id");
   }
 
   @Test

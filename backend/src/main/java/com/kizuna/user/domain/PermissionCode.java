@@ -118,12 +118,6 @@ public enum PermissionCode {
   BENEFIT_MANAGE(Console.PLATFORM, SystemRole.HQ_ADMIN),
 
   /**
-   * 緊急昇格の発動と撤回。1 回の発動につき 1 店舗で、理由必須・有効期間 60 分の短命な昇格を起こす。
-   * 担当店舗集合の迂回口なので他のどの権限とも束ねず、「誰が迂回できるか」を権限一覧から読めるままにする。
-   */
-  EMERGENCY_ELEVATE(Console.PLATFORM, SystemRole.HQ_ADMIN),
-
-  /**
    * サービスID（本人種別 SERVICE）の閲覧・作成・授権変更・停止・再開（ServiceIdentityController）。
    *
    * <p>作成が授権（ロール×店舗集合）を伴うため、授権を一切動かさない {@link #STAFF_ACCOUNT_MANAGE} とは別の権限で仕切る。

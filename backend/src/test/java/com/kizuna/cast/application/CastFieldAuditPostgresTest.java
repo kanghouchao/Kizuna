@@ -86,9 +86,9 @@ class CastFieldAuditPostgresTest {
   private TransactionTemplate transactions;
   private Long storeId;
   private Long ordinaryId;
-  private Long elevatedId;
+  private Long secondId;
   private static final String ORDINARY = "ordinary@example.test";
-  private static final String ELEVATED = "elevated@example.test";
+  private static final String SECOND = "second@example.test";
 
   @BeforeAll
   void connect() {
@@ -99,7 +99,7 @@ class CastFieldAuditPostgresTest {
     lifecycle = context.getBean(CastEnrollmentService.class);
     transactions = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
     ordinaryId = actor(ORDINARY);
-    elevatedId = actor(ELEVATED);
+    secondId = actor(SECOND);
     for (String table :
         List.of(
             "t_cast_profiles",
@@ -306,7 +306,7 @@ class CastFieldAuditPostgresTest {
                     "select before_values,after_values from t_audit_events where store_id=?",
                     storeId)
                 .toString())
-        .doesNotContain("秘密", "private-key", "public-key", ORDINARY, ELEVATED);
+        .doesNotContain("秘密", "private-key", "public-key", ORDINARY, SECOND);
   }
 
   @ParameterizedTest
@@ -386,29 +386,28 @@ class CastFieldAuditPostgresTest {
   }
 
   @Test
-  void elevatedActorAndSnapshotAreConsistentAcrossCreationUpdateAndDeletion() {
+  void secondActorAndSnapshotAreConsistentAcrossCreationUpdateAndDeletion() {
     var jwt =
         Jwt.withTokenValue(UUID.randomUUID().toString())
             .header("alg", "HS256")
-            .subject(ELEVATED)
-            .claim("elevationId", 77L)
+            .subject(SECOND)
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     String definition = definition("private-key", false);
     var request = new CastCreateRequest();
     request.setName("秘密の名前");
-    String id = casts.create(request, ELEVATED).getId();
+    String id = casts.create(request, SECOND).getId();
     var write = new CastUpdateRequest();
     write.setCustomFields(Map.of("private-key", "秘密の値"));
-    casts.update(id, write, ELEVATED);
+    casts.update(id, write, SECOND);
     var edit = new CastFieldDefinitionUpdateRequest();
     edit.setDisplayOrder(4);
     fields.update(definition, edit);
-    fields.delete(definition, ELEVATED);
+    fields.delete(definition, SECOND);
     var rows =
         jdbc.queryForList(
-            "select actor_id,actor_type,store_id,after_values ->> 'emergency_elevation_id' as elevation from t_audit_events where target_id=? or source_id=? order by id",
+            "select actor_id,actor_type,store_id from t_audit_events where target_id=? or source_id=? order by id",
             definition,
             definition);
     assertThat(rows)
@@ -416,13 +415,12 @@ class CastFieldAuditPostgresTest {
         .allSatisfy(
             row ->
                 assertThat(row)
-                    .containsEntry("actor_id", elevatedId)
+                    .containsEntry("actor_id", secondId)
                     .containsEntry("actor_type", "STAFF")
-                    .containsEntry("store_id", storeId)
-                    .containsEntry("elevation", "77"));
+                    .containsEntry("store_id", storeId));
     assertThat(lifecycle.snapshots(id, null, 20).content())
         .hasSize(2)
-        .allSatisfy(snapshot -> assertThat(snapshot.actorId()).isEqualTo(elevatedId));
+        .allSatisfy(snapshot -> assertThat(snapshot.actorId()).isEqualTo(secondId));
     assertNoSecrets();
   }
 

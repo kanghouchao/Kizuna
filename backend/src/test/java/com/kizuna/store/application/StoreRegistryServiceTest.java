@@ -253,26 +253,6 @@ class StoreRegistryServiceTest {
     verify(storeRepository, never()).deleteById(any());
   }
 
-  // 発動記録は応用層で数えず、外部キー（NO ACTION）の違反を flush でこの場に顕在化させて写像する。
-  @Test
-  void delete_storeWithEmergencyElevation_isRejectedViaConstraintTranslation() {
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
-    when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
-    when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(false);
-    when(attendanceRecordCheck.existsForStore(1L)).thenReturn(false);
-    doThrow(
-            new DataIntegrityViolationException(
-                "could not execute statement",
-                new ConstraintViolationException(
-                    "違反", new SQLException("外部キー違反"), "fk_t_emergency_elevations_store")))
-        .when(storeRepository)
-        .flush();
-
-    assertThatThrownBy(() -> storeRegistryService.delete("1"))
-        .isInstanceOf(ServiceException.class)
-        .hasMessage("緊急昇格の記録が存在する店舗は削除できません");
-  }
-
   @ParameterizedTest
   @CsvSource({
     "fk_t_services_store, サービス設定が存在する店舗は削除できません",

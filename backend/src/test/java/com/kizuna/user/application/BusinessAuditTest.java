@@ -56,7 +56,6 @@ class BusinessAuditTest {
         Jwt.withTokenValue("opaque")
             .header("alg", "RS256")
             .subject("operator@kizuna.test")
-            .claim("elevationId", 22L)
             .claim("password", "must-not-copy")
             .build();
     SecurityContextHolder.getContext()
@@ -67,8 +66,7 @@ class BusinessAuditTest {
     verify(writer).append(event.capture());
     assertThat(event.getValue().actor().id()).isEqualTo(10L);
     assertThat(event.getValue().afterValues())
-        .containsExactlyInAnyOrderEntriesOf(
-            Map.of("role_ids", "2", "emergency_elevation_id", "22"));
+        .containsExactlyInAnyOrderEntriesOf(Map.of("role_ids", "2"));
   }
 
   @Test

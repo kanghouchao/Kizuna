@@ -6,14 +6,12 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,13 +74,6 @@ public class BusinessAudit {
       String sourceId,
       Map<String, String> before,
       Map<String, String> after) {
-    var values = new HashMap<>(after);
-    var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth instanceof JwtAuthenticationToken jwt
-        && jwt.isAuthenticated()
-        && jwt.getToken().getClaim("elevationId") instanceof Number elevation) {
-      values.put("emergency_elevation_id", elevation.toString());
-    }
     writer.append(
         new AuditChange(
             new AuditActor(actor.getId(), actor.getUserType().name(), actor.getDisplayName()),
@@ -93,7 +84,7 @@ public class BusinessAudit {
             sourceType,
             sourceId,
             before,
-            values));
+            after));
   }
 
   public static Map<String, String> grants(User user) {
