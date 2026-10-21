@@ -275,7 +275,11 @@ describe('顧客一覧ページ固有の要素', () => {
 
   it('統合権限が無ければ重複候補への導線を出さないこと', async () => {
     // 強制はサーバ側。ここは押しても 403 になる導線を描かないための出し分け
-    mockedReadClaims.mockReturnValue({ authorities: [], userType: 'PLATFORM_USER', storeBridge: true });
+    mockedReadClaims.mockReturnValue({
+      authorities: [],
+      userType: 'PLATFORM_USER',
+      storeBridge: true,
+    });
 
     render(<CustomersPage />);
     await screen.findByText('顧客が登録されていません');
@@ -379,7 +383,11 @@ describe('顧客一覧からの統合', () => {
 
   it('統合権限が無ければ選択列を出さないこと', async () => {
     // 強制はサーバ側（読み口も実行も CUSTOMER_MERGE）。ここは押しても 403 になる導線を描かない
-    mockedReadClaims.mockReturnValue({ authorities: [], userType: 'PLATFORM_USER', storeBridge: true });
+    mockedReadClaims.mockReturnValue({
+      authorities: [],
+      userType: 'PLATFORM_USER',
+      storeBridge: true,
+    });
 
     render(<CustomersPage />);
     await screen.findByText('山田太郎');

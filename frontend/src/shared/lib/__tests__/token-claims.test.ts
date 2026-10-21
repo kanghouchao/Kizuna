@@ -86,7 +86,11 @@ describe('readTokenClaims', () => {
 
 describe('hasPermission', () => {
   it('権限コードを PERM_ 接頭辞付きの claim 表現で照合する', () => {
-    const claims = { authorities: ['PERM_CAST_INVITE'], userType: 'PLATFORM_USER', storeBridge: true };
+    const claims = {
+      authorities: ['PERM_CAST_INVITE'],
+      userType: 'PLATFORM_USER',
+      storeBridge: true,
+    };
 
     expect(hasPermission(claims, 'CAST_INVITE')).toBe(true);
     expect(hasPermission(claims, 'CAST_FIELD_DEF_MANAGE')).toBe(false);
