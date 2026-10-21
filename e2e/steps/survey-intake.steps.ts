@@ -40,6 +40,13 @@ Given(
       "admin@kizuna.test",
       ADMIN_PASSWORD,
     );
+    expect(
+      (
+        await request.get("/api/store/surveys", {
+          headers: { ...STORE_HEADERS, Authorization: `Bearer ${owner}` },
+        })
+      ).status(),
+    ).toBe(403);
     const suffix = Date.now().toString();
     email = `survey-${suffix}@kizuna.test`;
     secret = `Survey-${suffix}-fixture`;

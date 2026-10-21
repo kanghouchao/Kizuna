@@ -16,6 +16,7 @@ const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${operator}` }
 Given('業務通知の担当者とサービス主体と同意済みゲスト申請がある', async ({ request, page }) => {
   storeId = await loginViaUiAndEnterStore(page);
   const admin = await loginPlatformUser(request, 'admin@kizuna.test', 'pass');
+  expect((await request.get('/api/store/notification-deliveries', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${admin}` } })).status()).toBe(403);
   const suffix = Date.now().toString();
   email = 'notification-' + suffix + '@kizuna.test';
   password = 'Notification-' + suffix + '-fixture';
