@@ -69,7 +69,9 @@ Given('店舗1だけを担当する検証スタッフがログイン済みであ
   admin = await loginPlatformUser(request, 'admin@kizuna.test', 'pass');
   otherStoreId = await resolveOtherStore(request);
   const suffix = Date.now().toString();
-  const role = await createPermissionRole(request, admin, '作用域検証-' + suffix, ['ORDER_MANAGE', 'STORE_MENU_VIEW']);
+  // 管理者管理の対象は HQ 側ロール保持者なので、平台権限と店舗コンソール権限を併せ持つ混成ロールにする
+  // （hybrid-console-access と同じ形。ORDER_MANAGE が storeBridge を立て、店舗の受注一覧を読める）。
+  const role = await createPermissionRole(request, admin, '作用域検証-' + suffix, ['PLATFORM_MENU_VIEW', 'ORDER_MANAGE', 'STORE_MENU_VIEW']);
   const email = 'scope-' + suffix + '@kizuna.test';
   const password = 'Scope-' + suffix + '-fixture';
   staffId = await createPlatformStaffFixture(request, admin, email, password, [role], [Number(STORE1_ID)]);

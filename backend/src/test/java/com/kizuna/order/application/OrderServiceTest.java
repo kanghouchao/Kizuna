@@ -240,8 +240,9 @@ class OrderServiceTest {
   /** 受付担当ヘルパーが持つ既定ロール id。@BeforeEach で ORDER_MANAGE を含むものとして緩く stub する。 */
   private static final long STAFF_ROLE_ID = 30L;
 
-  /** 受付担当ヘルパーが作った利用者 → 店舗作用域の行。id は後から差し替えられるので実体で引く。 */
-  private final Map<User, PlatformUser> receptionistScopes = new IdentityHashMap<>();
+  /** 受付担当ヘルパーが作った利用者 → 店舗作用域の行。id は後から差し替えられるので実体で引き、行は引いた時に組む。 */
+  private final Map<User, java.util.function.Supplier<PlatformUser>> receptionistScopes =
+      new IdentityHashMap<>();
 
   @BeforeEach
   void stubReceptionistScopes() {
@@ -251,8 +252,20 @@ class OrderServiceTest {
             invocation ->
                 receptionistScopes.entrySet().stream()
                     .filter(e -> Objects.equals(e.getKey().getId(), invocation.getArgument(0)))
-                    .map(Map.Entry::getValue)
+                    .map(e -> e.getValue().get())
                     .findFirst());
+    lenient()
+        .when(platformUserRepository.findByUserIdIn(any()))
+        .thenAnswer(
+            invocation ->
+                receptionistScopes.entrySet().stream()
+                    .filter(
+                        e ->
+                            invocation
+                                .<java.util.Collection<Long>>getArgument(0)
+                                .contains(e.getKey().getId()))
+                    .map(e -> e.getValue().get())
+                    .toList());
   }
 
   @BeforeEach
@@ -285,7 +298,12 @@ class OrderServiceTest {
       user.setId(1_000L + receptionistScopes.size());
       receptionistScopes.put(
           user,
-          PlatformUser.builder().user(user).storeScopeType(scopeType).storeIds(storeIds).build());
+          () ->
+              PlatformUser.builder()
+                  .user(user)
+                  .storeScopeType(scopeType)
+                  .storeIds(storeIds)
+                  .build());
     }
     return user;
   }
