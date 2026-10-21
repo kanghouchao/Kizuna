@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 会員コードから会員を引き当てる、店舗側モジュール向けの読み取り口。
  *
- * <p>返すのは会員 ID とコードだけで、表示名などのプラットフォーム側プロフィールは意図的に含めない — 店舗は来店者が提示したコードの実在を確かめられれば足り、
+ * <p>返すのは会員 ID とコードだけで、表示名などのグループ共通プロフィールは意図的に含めない — 店舗は来店者が提示したコードの実在を確かめられれば足り、
  * 会員本人の登録情報へ到達できてはならない。読むのも実体ではなく projection で、理由は {@link
  * MemberRepository#findIdentityByMemberCode} に記す。
  */

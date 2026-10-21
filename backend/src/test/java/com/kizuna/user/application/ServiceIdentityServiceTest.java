@@ -122,7 +122,7 @@ class ServiceIdentityServiceTest {
   }
 
   @Test
-  @DisplayName("平台既定ロール（is_system）を載せた作成は 400 で拒絶される")
+  @DisplayName("既定ロール（is_system）を載せた作成は 400 で拒絶される")
   void create_rejectsSystemRoleGrant() {
     // 名称でなく is_system フラグの実体で判定していることを固定する — 既定ロールと同名でない行でも拒む。
     when(roleRepository.findAllById(Set.of(CUSTOM_ROLE, SYSTEM_ROLE)))
@@ -159,7 +159,7 @@ class ServiceIdentityServiceTest {
   }
 
   @Test
-  @DisplayName("平台既定ロール（is_system）を載せた授権変更は 400 で拒絶される")
+  @DisplayName("既定ロール（is_system）を載せた授権変更は 400 で拒絶される")
   void update_rejectsSystemRoleGrant() {
     when(roleRepository.findAllById(Set.of(SYSTEM_ROLE)))
         .thenReturn(List.of(role(SYSTEM_ROLE, "任意の名称", true)));
@@ -235,7 +235,7 @@ class ServiceIdentityServiceTest {
   }
 
   @Test
-  @DisplayName("付与可能ロールの読み口は平台既定ロールを含まない")
+  @DisplayName("付与可能ロールの読み口は既定ロールを含まない")
   void grantableRoles_excludeSystemRoles() {
     when(roleRepository.findAllSummaries())
         .thenReturn(List.of(summary(1L, "HQ管理者", true), summary(2L, "バッチ実行", false)));

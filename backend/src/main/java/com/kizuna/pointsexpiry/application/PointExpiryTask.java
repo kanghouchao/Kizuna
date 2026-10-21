@@ -41,7 +41,7 @@ public class PointExpiryTask implements TaskHandler {
     return Optional.of(PermissionCode.POINT_EXPIRE);
   }
 
-  public boolean platformWide() {
+  public boolean groupWide() {
     return true;
   }
 

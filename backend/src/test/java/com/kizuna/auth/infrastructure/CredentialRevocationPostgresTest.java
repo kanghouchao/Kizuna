@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
-import com.kizuna.auth.api.platform.PlatformAuthController;
+import com.kizuna.auth.api.auth.AuthController;
+import com.kizuna.auth.application.AuthService;
 import com.kizuna.auth.application.AuthSessionService;
-import com.kizuna.auth.application.PlatformAuthService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.config.RedisConfig;
 import com.kizuna.shared.storescope.StoreContext;
@@ -94,18 +94,17 @@ class CredentialRevocationPostgresTest {
     decoder = context.getBean(JwtDecoder.class);
     jdbc = new JdbcTemplate(context.getBean(DataSource.class));
     var provider = new JwtAuthenticationProvider(decoder);
-    provider.setJwtAuthenticationConverter(new PlatformJwtAuthenticationConverter());
+    provider.setJwtAuthenticationConverter(new JwtAuthoritiesConverter());
     var converter = new BearerTokenAuthenticationConverter();
-    converter.setBearerTokenResolver(new PlatformBearerTokenResolver());
+    converter.setBearerTokenResolver(new ExemptingBearerTokenResolver());
     var bearer = new BearerTokenAuthenticationFilter(new ProviderManager(provider), converter);
-    bearer.setAuthenticationEntryPoint(new PlatformAuthenticationEntryPoint());
+    bearer.setAuthenticationEntryPoint(new JwtAuthenticationEntryPoint());
     var principal = new SecurityContextHolderAwareRequestFilter();
     principal.afterPropertiesSet();
     http =
         MockMvcBuilders.standaloneSetup(
-                new PlatformAuthController(
-                    context.getBean(PlatformAuthService.class),
-                    context.getBean(AuthSessionService.class)))
+                new AuthController(
+                    context.getBean(AuthService.class), context.getBean(AuthSessionService.class)))
             .addFilters(bearer, principal)
             .build();
   }
@@ -199,7 +198,7 @@ class CredentialRevocationPostgresTest {
 
   private String token(User user, long version) {
     return context
-        .getBean(PlatformJwtIssuer.class)
+        .getBean(JwtIssuer.class)
         .issue(
             user.getEmail(),
             Map.of(CredentialVersionService.CLAIM, version, "authorities", List.of("PERM_TEST")))
@@ -221,7 +220,7 @@ class CredentialRevocationPostgresTest {
 
   private int meStatus(String token) throws Exception {
     try {
-      return http.perform(get("/platform/me").header("Authorization", "Bearer " + token))
+      return http.perform(get("/me").header("Authorization", "Bearer " + token))
           .andReturn()
           .getResponse()
           .getStatus();
@@ -256,7 +255,7 @@ class CredentialRevocationPostgresTest {
   @EnableTransactionManagement
   @EnableJpaRepositories(basePackageClasses = UserRepository.class)
   @Import({
-    PlatformAuthService.class,
+    AuthService.class,
     CredentialOperations.class,
     AuthSessionService.class,
     CredentialVersionService.class,
@@ -265,7 +264,7 @@ class CredentialRevocationPostgresTest {
     TokenBlacklistValidator.class,
     JwtDecoderConfig.class,
     JwtEncoderConfig.class,
-    PlatformJwtIssuer.class,
+    JwtIssuer.class,
     RedisConfig.class
   })
   static class Config {

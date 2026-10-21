@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.domain.AdminOrderView;
 import com.kizuna.order.domain.InvalidOrderFeeLineException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderFeeLine;
@@ -7,7 +8,6 @@ import com.kizuna.order.domain.OrderFeeLineDraft;
 import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderView;
-import com.kizuna.order.domain.PlatformOrderView;
 import java.util.List;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -89,8 +89,8 @@ public interface OrderMapper {
   /** 読み側 projection を顧客詳細の注文履歴の行に変換します。 */
   OrderSummaryResponse toSummaryResponse(OrderView view);
 
-  /** 平台横断一覧の projection をレスポンスDTOに変換します（集合作用域）。 */
-  PlatformOrderResponse toPlatformResponse(PlatformOrderView view);
+  /** 全群横断一覧の projection をレスポンスDTOに変換します（集合作用域）。 */
+  AdminOrderResponse toAdminResponse(AdminOrderView view);
 
   /** 注文作成リクエストDTOを注文エンティティに変換します。 */
   @Mapping(target = "locationAddress", source = "address")

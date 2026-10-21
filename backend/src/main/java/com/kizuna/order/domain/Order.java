@@ -263,7 +263,7 @@ public class Order extends StoreScopedEntity {
   /**
    * 申請時に本人が店舗へ名乗った名前の写し（正本は申請行と、確定時の自動整備が起こした台帳行）。
    *
-   * <p>店舗はプラットフォーム側プロフィール（表示名・メール）へ到達しないため、店舗が知る名前は本人がその店舗へ名乗ると決めたこの名前だけになる。
+   * <p>店舗はグループ共通プロフィール（表示名・メール）へ到達しないため、店舗が知る名前は本人がその店舗へ名乗ると決めたこの名前だけになる。
    */
   @Column(name = "requester_declared_name")
   private String requesterDeclaredName;

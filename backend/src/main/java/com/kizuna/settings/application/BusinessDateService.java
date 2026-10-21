@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 営業日（暦日から独立した帰属単位）の判定。プラットフォーム統一の日付変更時刻で区切り、帰属は分割しない。
+ * 営業日（暦日から独立した帰属単位）の判定。グループ統一の日付変更時刻で区切り、帰属は分割しない。
  *
  * <p>日付変更時刻の変更は将来の判定にのみ作用する（不遡及 — ADR 0014）。物化済みの営業日は書き換えない。
  */

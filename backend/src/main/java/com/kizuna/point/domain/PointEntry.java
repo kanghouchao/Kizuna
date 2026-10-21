@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 /**
  * ポイント台帳の 1 仕訳。追加型の台帳で、訂正も取消も新しい行として積み、既存行は書き換えない。
  *
- * <p>残高は行の合計であってどこにも保持しない。会員はプラットフォーム級の身分なので、台帳も店舗で分割しない — {@code originatingStoreId}
+ * <p>残高は行の合計であってどこにも保持しない。会員はグループ級の身分なので、台帳も店舗で分割しない — {@code originatingStoreId}
  * は「どの店舗で起きたか」の帰属情報にすぎず、残高の作用域ではない（列名を {@code store_id} にしないのはこのため）。
  *
  * <p>不変条件（構築時に検証、違反は 400 系ドメイン例外 {@link InvalidPointEntryException}）:

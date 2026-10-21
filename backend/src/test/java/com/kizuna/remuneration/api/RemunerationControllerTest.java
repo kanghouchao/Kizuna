@@ -12,8 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.cast.remuneration.RemunerationPersonLookup;
 import com.kizuna.order.remuneration.OrderRemunerationFacts;
-import com.kizuna.remuneration.api.platform.PlatformRemunerationStatementController;
-import com.kizuna.remuneration.api.platform.SelfRemunerationStatementController;
+import com.kizuna.remuneration.api.admin.AdminRemunerationStatementController;
+import com.kizuna.remuneration.api.me.SelfRemunerationStatementController;
 import com.kizuna.remuneration.api.store.BonusController;
 import com.kizuna.remuneration.api.store.GuaranteeController;
 import com.kizuna.remuneration.api.store.RemunerationStatementController;
@@ -58,7 +58,7 @@ import org.springframework.transaction.PlatformTransactionManager;
   BonusController.class,
   RemunerationStatementController.class,
   SelfRemunerationStatementController.class,
-  PlatformRemunerationStatementController.class
+  AdminRemunerationStatementController.class
 })
 @Import({
   RemunerationControllerTest.Security.class,
@@ -121,7 +121,7 @@ class RemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"/store/remuneration-statements", "/platform/me/remuneration-statements"})
+  @ValueSource(strings = {"/store/remuneration-statements", "/me/remuneration-statements"})
   void safeStatementUsesDailyTopUpAndAuthenticatedPerson(String path) throws Exception {
     mvc.perform(
             get(path)
@@ -142,7 +142,7 @@ class RemunerationControllerTest {
   @Test
   void selfCannotSelectAnotherPerson() throws Exception {
     mvc.perform(
-            get("/platform/me/remuneration-statements")
+            get("/me/remuneration-statements")
                 .principal(() -> "person@example.test")
                 .param("store_id", "1")
                 .param("person_id", "999")

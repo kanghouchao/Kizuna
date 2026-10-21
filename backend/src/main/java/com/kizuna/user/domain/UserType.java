@@ -1,6 +1,6 @@
 package com.kizuna.user.domain;
 
-/** プラットフォームユーザーの本人種別。ロールで授権されるのは STAFF と SERVICE で、CAST / MEMBER は権限モデルに入らない独立した本人種別として扱う。 */
+/** ユーザーの本人種別。ロールで授権されるのは STAFF と SERVICE で、CAST / MEMBER は権限モデルに入らない独立した本人種別として扱う。 */
 public enum UserType {
   /** 社内利用者。ロール × 担当店舗集合で授権される。 */
   STAFF,

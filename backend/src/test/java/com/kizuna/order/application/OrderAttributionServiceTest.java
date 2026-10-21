@@ -138,7 +138,7 @@ class OrderAttributionServiceTest {
 
     assertThatThrownBy(() -> service.currentAttribution(ORDER_ID))
         .isInstanceOf(NotFoundException.class);
-    // 帰属記録は platform 帰属で店舗行分離機構に載らない。受注を引けない時点で終えないと他店舗の会員コードが漏れる
+    // 帰属記録は グループ帰属で店舗行分離機構に載らない。受注を引けない時点で終えないと他店舗の会員コードが漏れる
     Mockito.verifyNoInteractions(orderAttributionRepository);
   }
 

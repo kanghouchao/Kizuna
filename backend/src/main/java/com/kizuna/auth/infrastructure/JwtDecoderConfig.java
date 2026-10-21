@@ -13,7 +13,7 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 /**
- * Bearer トークン検証用の {@link JwtDecoder} を組み立てる。secret は {@link PlatformJwtIssuer}
+ * Bearer トークン検証用の {@link JwtDecoder} を組み立てる。secret は {@link JwtIssuer}
  * の発行側と同一のバイト表現から導出する。署名アルゴリズムは発行側と両側で HS256 に固定する。
  */
 @Configuration
@@ -32,8 +32,9 @@ public class JwtDecoderConfig {
             // 既定の 60 秒スキューを明示的に 0 へ。ブラックリスト TTL は exp までのため、
             // スキューがあるとその秒数ぶん「失効済みだが exp 未到来」の token が fail-open する窓ができる。
             new JwtTimestampValidator(Duration.ZERO),
-            // 発行は PlatformAuth の 1 箇所のみ。/files 等ドメイン外パスも含め全リクエスト単一 issuer で揃える。
-            new JwtIssuerValidator(PlatformJwtIssuer.ISSUER_PLATFORM),
+            // 発行は JwtIssuer の 1 箇所のみ（iss は "PlatformAuth" 固定）。/files 等ドメイン外パスも含め全リクエスト単一 issuer
+            // で揃える。
+            new JwtIssuerValidator(JwtIssuer.ISSUER),
             tokenBlacklistValidator,
             // 受理候補の版を DB で照合する検証は、連鎖の最後に置く。
             credentialVersionValidator);

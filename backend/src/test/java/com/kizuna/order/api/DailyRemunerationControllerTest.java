@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
-import com.kizuna.order.api.platform.PlatformSelfDailyRemunerationController;
+import com.kizuna.order.api.me.SelfDailyRemunerationController;
 import com.kizuna.order.api.store.DailyRemunerationController;
 import com.kizuna.order.application.DailyRemunerationService;
 import com.kizuna.order.infrastructure.RemunerationQuery;
@@ -42,7 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@WebMvcTest({DailyRemunerationController.class, PlatformSelfDailyRemunerationController.class})
+@WebMvcTest({DailyRemunerationController.class, SelfDailyRemunerationController.class})
 @Import({
   DailyRemunerationControllerTest.Security.class,
   DailyRemunerationService.class,
@@ -89,9 +89,7 @@ class DailyRemunerationControllerTest {
   }
 
   private MockHttpServletRequestBuilder request(String scope, String date) {
-    return get(scope.equals("store")
-            ? "/store/daily-remunerations"
-            : "/platform/me/daily-remunerations")
+    return get(scope.equals("store") ? "/store/daily-remunerations" : "/me/daily-remunerations")
         .principal(() -> "cast@example.test")
         .header("X-Role", scope.equals("store") ? "store" : "platform")
         .header("X-Store-ID", "1")
@@ -143,7 +141,7 @@ class DailyRemunerationControllerTest {
                 .param("business_date", "2026-09-30"))
         .andExpect(status().isBadRequest());
     mvc.perform(
-            get("/platform/me/daily-remunerations")
+            get("/me/daily-remunerations")
                 .principal(() -> "cast@example.test")
                 .param("store_id", id)
                 .param("business_date", "2026-09-30"))

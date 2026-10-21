@@ -1,0 +1,43 @@
+package com.kizuna.store.application;
+
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.store.api.dto.AdminStoreResponse;
+import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StoreRepository;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.StreamSupport;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * グループ級 principal（授権店舗集合）の店舗一覧ユースケース（統一ログイン）。保持器から授権店舗集合を解決できない場合は fail-closed に {@link
+ * AccessDeniedException} を投げる。
+ */
+@Service
+@RequiredArgsConstructor
+public class AdminStoreService {
+
+  private final StoreRepository storeRepository;
+  private final StoreScopeHolder storeScopeHolder;
+
+  /** 授権店舗を id 昇順で返す。ALL_STORES は全店、SPECIFIC_STORES は授権集合のみ。 */
+  @Transactional(readOnly = true)
+  public List<AdminStoreResponse> listAuthorizedStores() {
+    StoreScope scope = storeScopeHolder.current();
+    if (scope == null) {
+      throw new AccessDeniedException("授権店舗集合を解決できません");
+    }
+    Iterable<Store> stores =
+        scope.allStores()
+            ? storeRepository.findAll()
+            : storeRepository.findAllById(scope.storeIds());
+    return StreamSupport.stream(stores.spliterator(), false)
+        .sorted(Comparator.comparing(Store::getId))
+        .map(store -> new AdminStoreResponse(store.getId(), store.getName(), store.getStatus()))
+        .toList();
+  }
+}

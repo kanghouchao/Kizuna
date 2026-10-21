@@ -174,7 +174,7 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
   boolean existsByOriginatingStoreId(@Param("storeId") Long storeId);
 
   // 会員本人の明細一覧。発生店舗名は列に持たず、表示が要るときだけ store から導出する（ADR 0003 と同じ
-  // 扱い。台帳は platform 帰属なので同 ADR が名指す店舗作用域エンティティそのものではない）。left join
+  // 扱い。台帳は グループ帰属なので同 ADR が名指す店舗作用域エンティティそのものではない）。left join
   // なのは、失効のように発生店舗を持たない仕訳と、店舗が消えた後の仕訳（FK は SET NULL）でも行そのものを
   // 落とさないため。
   String MEMBER_ENTRY_SELECT =

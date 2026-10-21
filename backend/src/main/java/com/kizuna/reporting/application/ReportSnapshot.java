@@ -51,12 +51,12 @@ public class ReportSnapshot {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
-  public OperationalReport platform(
+  public OperationalReport groupWide(
       Long store,
       ReportCriteria criteria,
       boolean includeRemuneration,
       boolean includeAdvertising) {
-    var facts = orders.platform(store, criteria.from(), criteria.to());
+    var facts = orders.groupWide(store, criteria.from(), criteria.to());
     return OperationalReport.aggregate(
         criteria,
         facts,
@@ -71,12 +71,12 @@ public class ReportSnapshot {
   }
 
   private AdvertisingReportFacts advertising(
-      boolean platform, OperationalFacts facts, ReportCriteria criteria, boolean include) {
+      boolean groupWide, OperationalFacts facts, ReportCriteria criteria, boolean include) {
     if (!include) return null;
     if (AdvertisingAmounts.inapplicableStatus(criteria) != null)
       return new AdvertisingReportFacts(List.of());
     return advertising.read(
-        platform,
+        groupWide,
         facts.stores().stream().map(OperationalFacts.Store::storeId).toList(),
         criteria.from().toString().substring(0, 7),
         criteria.to().toString().substring(0, 7),

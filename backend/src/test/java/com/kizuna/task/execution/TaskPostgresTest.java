@@ -258,7 +258,7 @@ class TaskPostgresTest {
       return PermissionCode.TASK_EXECUTE;
     }
 
-    public boolean platformWide() {
+    public boolean groupWide() {
       return true;
     }
 

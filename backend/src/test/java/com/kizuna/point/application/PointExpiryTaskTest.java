@@ -153,7 +153,7 @@ class PointExpiryTaskTest {
   void registryMetadataAndEmptyRunAreAccurate() {
     assertThat(task.name()).isEqualTo("POINT_EXPIRY");
     assertThat(task.permission()).isEqualTo(PermissionCode.POINT_EXPIRE);
-    assertThat(task.platformWide()).isTrue();
+    assertThat(task.groupWide()).isTrue();
     assertThat(task.execute(context)).isZero();
     properties.getPointsExpiry().setMaxLots(0);
     assertThatThrownBy(() -> task.execute(context)).isInstanceOf(ServiceException.class);

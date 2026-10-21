@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>受注取消（CONFIRMED / IN_SERVICE → CANCELLED）へは配線しない。付与も利用も完了と事後申領の契機でしか記帳されないため、
  * 取消できる受注に打ち消す仕訳は構造上存在しない。 完了後訂正の門とも繋がない — 門は台帳を読みも書きもしないまま（ADR 0019）で、画面の導線だけがここを指す。
  *
- * <p>店舗の境界を決めるのは受注だけである。台帳も操作記録も platform 帰属で店舗行分離機構に載らないため、 先に受注を引き、引けなければそこで終える。
+ * <p>店舗の境界を決めるのは受注だけである。台帳も操作記録も グループ帰属で店舗行分離機構に載らないため、 先に受注を引き、引けなければそこで終える。
  */
 @Service
 @RequiredArgsConstructor

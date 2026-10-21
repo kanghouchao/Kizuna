@@ -16,7 +16,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 /**
  * {@link StoreScopeExecutor} の授権検査・文脈 set→action→clear ライフサイクル（例外時の clear 含む）を実 {@link
- * StoreContext} で固定する。旧 PlatformOrderServiceTest が実 StoreContext で担っていた検証を本 seam のテストへ移した。
+ * StoreContext} で固定する。旧 AdminOrderServiceTest が実 StoreContext で担っていた検証を本 seam のテストへ移した。
  */
 @ExtendWith(MockitoExtension.class)
 class StoreScopeExecutorTest {

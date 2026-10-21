@@ -122,7 +122,7 @@ class OrderAttributionCorrectionServiceTest {
   @DisplayName("別の受注の帰属記録を名指した訂正は届かないこと")
   void refusesAnAttributionBelongingToAnotherOrder() {
     givenOrder();
-    // この受注が持つのは別の記録だけ。帰属記録は platform 帰属で storeFilter が働かないため、
+    // この受注が持つのは別の記録だけ。帰属記録は グループ帰属で storeFilter が働かないため、
     // id を直に引く形なら同一店舗の別受注の記録にも当たってしまう。
     OrderAttribution own =
         OrderAttribution.onCompletion(ORDER_ID, ATTRIBUTED_MEMBER_ID, MEMBER_CODE, NOW);

@@ -5,7 +5,7 @@ import static org.assertj.core.api.InstanceOfAssertFactories.MAP;
 
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
 import com.kizuna.storeprofile.domain.SnsLink;
-import com.kizuna.user.api.dto.PlatformStaffCreateRequest;
+import com.kizuna.user.api.dto.AdminStaffCreateRequest;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import java.sql.SQLException;
@@ -206,7 +206,7 @@ class CommonExceptionHandlerTest {
   @Test
   @DisplayName("検証エラーの details のキーは、要求で送るのと同じ snake_case になる")
   void validationDetailKeysUseWireNames() {
-    PlatformStaffCreateRequest request = new PlatformStaffCreateRequest();
+    AdminStaffCreateRequest request = new AdminStaffCreateRequest();
     request.setEmail("staff@kizuna.test");
     request.setPassword("password");
     request.setDisplayName("");
@@ -264,7 +264,7 @@ class CommonExceptionHandlerTest {
     JsonMapper mapper =
         JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build();
     try {
-      mapper.readValue(json, PlatformStaffCreateRequest.class);
+      mapper.readValue(json, AdminStaffCreateRequest.class);
       throw new IllegalStateException("前提: この JSON は解釈に失敗するはず");
     } catch (RuntimeException cause) {
       return new HttpMessageNotReadableException(

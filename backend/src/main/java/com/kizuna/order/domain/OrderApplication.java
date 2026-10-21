@@ -67,7 +67,7 @@ public class OrderApplication extends StoreScopedEntity {
   /**
    * 申請時に本人が店舗へ名乗った名前。確定時の自動整備で起こす台帳行の氏名になる。
    *
-   * <p>店舗はプラットフォーム側プロフィール（表示名・メール）へ到達しないため、店舗が知る名前は本人がその店舗へ名乗ると決めたこの名前だけになる。
+   * <p>店舗はグループ共通プロフィール（表示名・メール）へ到達しないため、店舗が知る名前は本人がその店舗へ名乗ると決めたこの名前だけになる。
    */
   @Column(name = "requester_declared_name")
   private String requesterDeclaredName;

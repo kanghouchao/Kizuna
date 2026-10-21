@@ -45,7 +45,7 @@ class TokenBlacklistServiceTest {
   /** service と同一 secret で実トークンを発行する（blacklist() の decoder が実際に解読できる必要があるため）。 */
   private String issueToken() {
     JwtEncoder encoder = new JwtEncoderConfig().jwtEncoder(appProperties);
-    PlatformJwtIssuer issuer = new PlatformJwtIssuer(encoder, appProperties);
+    JwtIssuer issuer = new JwtIssuer(encoder, appProperties);
     return issuer.issue("user@kizuna.test", Map.of("authorities", List.of("PERM_TEST"))).token();
   }
 

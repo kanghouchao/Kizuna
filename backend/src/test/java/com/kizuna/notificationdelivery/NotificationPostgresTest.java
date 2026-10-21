@@ -534,7 +534,7 @@ class NotificationPostgresTest {
   }
 
   @Test
-  void platformManualExecutionRequiresAdditionalBusinessPermission() {
+  void groupWideManualExecutionRequiresAdditionalBusinessPermission() {
     var command =
         new TaskCommand(
             "NOTIFICATION_DELIVER",

@@ -33,7 +33,7 @@ public class OrderCorrectionHistory {
 
   @StoreSetScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<OrderCorrectionResult> platform(String orderId, String cursor, int size) {
+  public CursorPage<OrderCorrectionResult> groupWide(String orderId, String cursor, int size) {
     return read(orderId, cursor, size, "platform");
   }
 

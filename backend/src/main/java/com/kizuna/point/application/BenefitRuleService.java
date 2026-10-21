@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 特典規則の管理。プラットフォーム console 限定の操作で、店舗自助の入口は持たない。
+ * 特典規則の管理。管理画面 限定の操作で、店舗自助の入口は持たない。
  *
  * <p>削除の口を持たないのは、後続の付与仕訳が規則を FK RESTRICT で指し返すためである。退場は停用で表し、停用は一方通行にする。
  */

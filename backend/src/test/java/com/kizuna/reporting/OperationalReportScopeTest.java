@@ -49,7 +49,7 @@ class OperationalReportScopeTest {
     for (int maximum : List.of(0, 100_001)) {
       properties.getOperationalReport().setMaxOrders(maximum);
       assertThatThrownBy(
-              () -> reader.platform(null, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
+              () -> reader.groupWide(null, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
           .isInstanceOf(ServiceUnavailableException.class);
     }
     verifyNoInteractions(manager);
@@ -57,7 +57,7 @@ class OperationalReportScopeTest {
 
   void assertDenied(Long storeId) {
     assertThatThrownBy(
-            () -> reader.platform(storeId, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
+            () -> reader.groupWide(storeId, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
         .isInstanceOf(AccessDeniedException.class);
   }
 }

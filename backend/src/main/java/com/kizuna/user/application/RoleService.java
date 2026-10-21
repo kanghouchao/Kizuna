@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  * ロール管理ユースケース（RBAC）。権限は目録（{@link Permission}）に実在するコードのみを受け付け、応答も id ではなくコードで返す — 権限目録は播種で固定される正本であり
  * API 面に id を露出しない。
  *
- * <p>平台既定ロールは改名・削除を拒否し（400）、授与中のロールの削除は 409 で拒否する。
+ * <p>既定ロールは改名・削除を拒否し（400）、授与中のロールの削除は 409 で拒否する。
  */
 @Service
 @RequiredArgsConstructor

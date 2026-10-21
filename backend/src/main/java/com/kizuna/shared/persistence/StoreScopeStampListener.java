@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>store_id が既に設定済み → 尊重して素通り（CastInvitation の cast 由来 copy、IT の他店舗カナリア直挿を壊さない）。
  *   <li>未設定かつ StoreContext 確立済み → 現店舗 id を採番。
- *   <li>未設定かつ StoreContext 未確立 → {@link IllegalStateException}（@StoreScoped の付け忘れ、または平台側 seam
+ *   <li>未設定かつ StoreContext 未確立 → {@link IllegalStateException}（@StoreScoped の付け忘れ、またはグループ級 seam
  *       の未使用）。
  * </ul>
  *
@@ -34,7 +34,7 @@ public class StoreScopeStampListener {
     if (!storeContext.hasStoreId()) {
       throw new IllegalStateException(
           "店舗文脈が確立されていない状態で store-scoped エンティティを永続化しようとしました（@StoreScoped の付け忘れ、"
-              + "または平台側 seam の未使用）: "
+              + "またはグループ級 seam の未使用）: "
               + entity.getClass().getName());
     }
     entity.setStoreId(storeContext.getStoreId());

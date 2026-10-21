@@ -78,7 +78,7 @@ class RoleTest {
   }
 
   @Test
-  @DisplayName("平台既定ロールは改名できない")
+  @DisplayName("既定ロールは改名できない")
   void systemRoleCannotBeRenamed() {
     Role role = Role.builder().name("グループ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
 
@@ -87,7 +87,7 @@ class RoleTest {
   }
 
   @Test
-  @DisplayName("平台既定ロールでも権限集合は置き換えられる（初期授与は出発点で、運用の正本は DB 側）")
+  @DisplayName("既定ロールでも権限集合は置き換えられる（初期授与は出発点で、運用の正本は DB 側）")
   void systemRoleCanReplacePermissions() {
     Role role = Role.builder().name("グループ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
 
@@ -97,7 +97,7 @@ class RoleTest {
   }
 
   @Test
-  @DisplayName("同じ名称の指定は改名ではなく、平台既定ロールでも通る")
+  @DisplayName("同じ名称の指定は改名ではなく、既定ロールでも通る")
   void renamingToTheSameNameIsNotARename() {
     Role role = Role.builder().name("グループ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
 

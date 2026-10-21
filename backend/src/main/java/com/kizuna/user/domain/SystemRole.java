@@ -3,7 +3,7 @@ package com.kizuna.user.domain;
 import lombok.Getter;
 
 /**
- * 平台既定ロールの目録。{@code t_roles.is_system = true} の行に対応し、名称（自然キー）はここが正本である。
+ * 既定ロールの目録。{@code t_roles.is_system = true} の行に対応し、名称（自然キー）はここが正本である。
  *
  * <p>既定ロールは改名・削除できない（{@link Role#rename} が拒否する）が権限は編集できる。各 {@link PermissionCode} の {@code
  * defaultRoles} はロール行を初めて作る時の初期授与で、以後の正本は DB 側にある。

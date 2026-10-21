@@ -77,7 +77,7 @@ public enum PermissionCode {
   /** 応募者の非公開添付の登録・回復。 */
   RECRUITMENT_ATTACHMENT_MANAGE(SystemRole.STORE_MANAGER),
 
-  /** 店舗（組織）の閲覧・登録・更新・削除（PlatformStoreController）。 */
+  /** 店舗（組織）の閲覧・登録・更新・削除（AdminStoreController）。 */
   STORE_MANAGE(SystemRole.HQ_ADMIN),
 
   /** キャスト本人の検索と全店舗の在籍照会。担当店舗集合に依存しない全群の読み取り。 */
@@ -91,20 +91,20 @@ public enum PermissionCode {
   ROLE_MANAGE(SystemRole.HQ_ADMIN),
 
   /**
-   * 従業員アカウントの停止・再開・パスワード代理再設定（PlatformStaffController）。対象は行使者の店舗集合に収まる者に限る。
+   * 従業員アカウントの停止・再開・パスワード代理再設定（AdminStaffController）。対象は行使者の店舗集合に収まる者に限る。
    *
    * <p>授権（ロール・店舗集合）は書かないので、授権を動かす {@link #STORE_STAFF_MANAGE} とは別の権限で仕切る。
    */
   STAFF_ACCOUNT_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
-  /** 共通設定の閲覧・更新（PlatformConfigController）。 */
+  /** 共通設定の閲覧・更新（AdminConfigController）。 */
   SYSTEM_CONFIG_MANAGE(SystemRole.HQ_ADMIN),
 
   /** 全店共有領域への資産アップロード（登録・出力 — FileUploadController の店舗文脈を持たない保存経路）。 */
   PLATFORM_ASSET_MANAGE(SystemRole.HQ_ADMIN),
 
   /**
-   * 特典規則の閲覧・登録・更新・停用（PlatformBenefitRuleController）。
+   * 特典規則の閲覧・登録・更新・停用（AdminBenefitRuleController）。
    *
    * <p>{@link #SYSTEM_CONFIG_MANAGE} へ同居させない。ポイントを発行する規則と SMTP ホストは監査上同類ではなく、
    * 共通設定を触れる者が黙って会員へポイントを配れる規則を建てられる形になるためである。
@@ -125,14 +125,14 @@ public enum PermissionCode {
    */
   SERVICE_ID_MANAGE(SystemRole.HQ_ADMIN),
 
-  /** 授権店舗一覧の閲覧（PlatformStoreController）。 */
+  /** 授権店舗一覧の閲覧（AdminStoreController）。 */
   STORE_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
-  /** 授権店舗集合を跨ぐ受注の閲覧と、明示単一店舗指定での登録（PlatformOrderController）。 */
+  /** 授権店舗集合を跨ぐ受注の閲覧と、明示単一店舗指定での登録（AdminOrderController）。 */
   ORDER_SET_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /**
-   * 従業員の閲覧・作成・授権変更（PlatformStaffController）。
+   * 従業員の閲覧・作成・授権変更（AdminStaffController）。
    *
    * <p>委譲の守衛は「付与するロールの権限並集 ⊆ 行使者の有効権限並集」かつ「対象の店舗集合 ⊆ 行使者の店舗集合」のみ。 行使者自身が持たないものは配れず、持つものは配れる。
    */

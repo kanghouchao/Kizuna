@@ -32,7 +32,7 @@ public class TaskOptions {
             handler ->
                 new TaskType(
                     handler.name(),
-                    handler.platformWide() ? "PLATFORM" : "STORE",
+                    handler.groupWide() ? "PLATFORM" : "STORE",
                     allowed(email, handler)))
         .toList();
   }
@@ -59,7 +59,7 @@ public class TaskOptions {
   public Page<ServiceExecutionIdentityService.Candidate> candidates(
       String taskName, Long storeId, int page, int size) {
     var handler = registry.requireName(taskName);
-    if (handler.platformWide() != (storeId == null) || storeId != null && storeId <= 0)
+    if (handler.groupWide() != (storeId == null) || storeId != null && storeId <= 0)
       throw new ServiceException("処理の対象範囲と店舗を確認してください");
     if (storeId != null && !stores.existsById(storeId)) throw new NotFoundException("対象店舗が見つかりません");
     return identities.candidates(page, size, handler.permission(), storeId);

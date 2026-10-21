@@ -48,7 +48,7 @@ public class RemunerationStatementService {
 
   @StoreSetScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public RemunerationStatementResponse platform(
+  public RemunerationStatementResponse groupWide(
       Long store, Long person, String month, int orderPage, int bonusPage, int size) {
     var scope = storeScopeHolder.current();
     if (scope == null || !scope.authorizes(store)) throw new AccessDeniedException("授権店舗集合に含まれません");

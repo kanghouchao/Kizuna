@@ -68,7 +68,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 平台既定ロールへ与える授権の承認台帳と、コード側宣言（{@link PermissionCode#getDefaultRoles()}）が一致していることを機械検証する。
+ * 既定ロールへ与える授権の承認台帳と、コード側宣言（{@link PermissionCode#getDefaultRoles()}）が一致していることを機械検証する。
  *
  * <p>既定ロールの初期授与は宣言から播種され、基線 seed もこれと一致する（{@code
  * PermissionSeedLiteralTests}）。増減はいずれも製品判断なので、「うっかり」では通らないよう 本台帳との照合を 1
@@ -80,7 +80,7 @@ import org.junit.jupiter.api.Test;
  */
 class DefaultGrantApprovalTests {
 
-  /** 既定授権の承認台帳。権限ごとに、その権限を持たせると承認済みの平台既定ロールを並べる（既定授与が無い権限は載せない）。 */
+  /** 既定授権の承認台帳。権限ごとに、その権限を持たせると承認済みの既定ロールを並べる（既定授与が無い権限は載せない）。 */
   private static final Map<PermissionCode, Set<SystemRole>> APPROVED_DEFAULT_GRANTS =
       Map.ofEntries(
           Map.entry(STORE_MANAGE, Set.of(HQ_ADMIN)),
@@ -136,7 +136,7 @@ class DefaultGrantApprovalTests {
           Map.entry(BONUS_AWARD, Set.of(STORE_MANAGER)),
           Map.entry(REMUNERATION_CORRECT, Set.of(STORE_MANAGER)));
 
-  /** どの平台既定ロールにも与えないと承認済みの権限。サービス ID 専用で人のロールに載せないもの。 */
+  /** どの既定ロールにも与えないと承認済みの権限。サービス ID 専用で人のロールに載せないもの。 */
   private static final Set<PermissionCode> APPROVED_WITHOUT_DEFAULT_GRANT = Set.of(TASK_EXECUTE);
 
   @Test
@@ -162,7 +162,7 @@ class DefaultGrantApprovalTests {
   }
 
   @Test
-  @DisplayName("全ての平台既定ロールが少なくとも 1 つの権限から宣言されていること")
+  @DisplayName("全ての既定ロールが少なくとも 1 つの権限から宣言されていること")
   void everySystemRoleHasAtLeastOnePermission() {
     // 播種は宣言どおりロール行を作るため、権限を 1 つも宣言されていない既定ロールは「authority が
     // 空のロール」として利用者に見え、それだけを付与された staff は権限ゼロのトークンになる。

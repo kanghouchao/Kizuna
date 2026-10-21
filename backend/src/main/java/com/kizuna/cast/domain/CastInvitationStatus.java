@@ -8,7 +8,7 @@ public enum CastInvitationStatus {
   INVITED,
   /** PENDING 招待が存在するが期限切れ。 */
   EXPIRED,
-  /** 档案に平台身分が紐づいている。 */
+  /** 档案にグループ共通アカウントが紐づいている。 */
   LINKED,
   /** 未紐づけのまま退店し、招待を利用できない。 */
   UNAVAILABLE

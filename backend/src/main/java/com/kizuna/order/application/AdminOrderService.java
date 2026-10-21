@@ -1,0 +1,33 @@
+package com.kizuna.order.application;
+
+import com.kizuna.order.api.dto.AdminOrderResponse;
+import com.kizuna.order.api.dto.OrderMapper;
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.shared.storescope.StoreSetScoped;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/** グループ級 principal（授権店舗集合）での受注横断ユースケース（集合作用域）。 */
+@Service
+@RequiredArgsConstructor
+public class AdminOrderService {
+
+  private final OrderRepository orderRepository;
+  private final OrderMapper orderMapper;
+
+  /** 授権店舗集合での受注横断一覧。濾過は storeSetFilter（@StoreSetScoped）が機構的に行う。 */
+  @StoreSetScoped
+  @Transactional(readOnly = true)
+  public Page<AdminOrderResponse> list(Pageable pageable) {
+    var sort = pageable.getSort().and(Sort.by(Order::getId).descending());
+    return orderRepository
+        .findGroupWideViews(PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort))
+        .map(orderMapper::toAdminResponse);
+  }
+}
