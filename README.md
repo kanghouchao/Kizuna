@@ -8,7 +8,7 @@
 - キャスト／会員ポータル: 本人の出勤希望・サービス条件の受諾・報酬明細、会員の予約申請・来店・ポイント情報。
 - 公開店舗サイト: 店舗ドメインの `/`、`/casts`、`/schedule`、`/menu`、`/about`、`/reservation`。
 
-ログインは `/platform/login` に統一し、本人種別（従業員・キャスト・会員）から遷移先を決める。ホスト名による公開サイトの選択と、API の権限・店舗分離は別の仕組みである。Traefik は `/api` を除去してバックエンドへ転送する。JWT の失効はセッション単位とアカウント単位で管理する。LINE ログインも同じ入口から利用でき、チャネル資格情報の設定時に有効になる。
+ログインは `/auth/login` に統一し、本人種別（従業員・キャスト・会員）から遷移先を決める。ホスト名による公開サイトの選択と、API の権限・店舗分離は別の仕組みである。Traefik は `/api` を除去してバックエンドへ転送する。JWT の失効はセッション単位とアカウント単位で管理する。LINE ログインも同じ入口から利用でき、チャネル資格情報の設定時に有効になる。
 
 ## 開発環境の起動
 
@@ -20,7 +20,7 @@ cd Kizuna
 cp infrastructure/.env.example infrastructure/development/.env
 ```
 
-コピー先の環境設定を調整する。ローカルのプラットフォームホストは `APP_DOMAIN=kizuna.test` とし、`APP_JWT_SECRET` は自分で生成したランダム値へ置き換える。実装は文字列の UTF-8 バイト列をそのまま HS256 の鍵として使い、32 バイト未満なら起動を拒否する。DB・Redis・SeaweedFS の資格情報も設定し、実際の `.env` はコミットしない。
+コピー先の環境設定を調整する。ローカルのアプリホスト（管理画面・ポータルのドメイン）は `APP_DOMAIN=kizuna.test` とし、`APP_JWT_SECRET` は自分で生成したランダム値へ置き換える。実装は文字列の UTF-8 バイト列をそのまま HS256 の鍵として使い、32 バイト未満なら起動を拒否する。DB・Redis・SeaweedFS の資格情報も設定し、実際の `.env` はコミットしない。
 
 オブジェクトストレージは SeaweedFS 4.48 の単一ノード構成を使用する。`S3_ENDPOINT=http://storage:8333`、`S3_BUCKET=uploads`、`S3_ACCESS_KEY`、`S3_SECRET_KEY` を設定する。画像は gateway の `/static/uploads/` から公開する。
 
@@ -48,7 +48,7 @@ task build
 task up
 ```
 
-[プラットフォーム](http://kizuna.test/platform/login)と[公開店舗サイト](http://store1.kizuna.test)から利用できる。`task up` は再ビルドしないため、変更後は対象サービスを先にビルドする。
+[管理画面](http://kizuna.test/auth/login)と[公開店舗サイト](http://store1.kizuna.test)から利用できる。`task up` は再ビルドしないため、変更後は対象サービスを先にビルドする。
 
 開発環境は `LIQUIBASE_CONTEXTS=demo` でサンプル店舗とスタッフを投入する。HQ の `admin@kizuna.test` は baseline、店長 `tanaka.hanako@kizuna.test` とスタッフ `yamada.jiro@kizuna.test` は demo データである。初期パスワードのハッシュは `INITIAL_ADMIN_PASSWORD_HASH` / `DEMO_USER_PASSWORD_HASH` の設定を参照する。初回適用後の変更は Liquibase のチェックサムに影響するため、パスワード更新はアプリから行う。
 

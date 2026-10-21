@@ -43,13 +43,13 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
 
 ## Structure
 
-- `releases/v0.1.0/` is split into `platform/` (platform-wide tables), `store/` (store-scoped
+- `releases/v0.1.0/` is split into `platform/` (group-wide tables; the directory name is fixed because applied changeset paths are recorded in DATABASECHANGELOG), `store/` (store-scoped
   tables), and `seed/` (initial data). A table's schema, FKs, and indexes live together in its
   aggregate area's file — one file may hold several tables of one area (`02-cast.yaml` holds
   casts, field definitions, and invitations; `03-customer.yaml` holds customers and merge
   history). Changeset ids carry the file's number prefix (`store-v0100-003-…` lives in
   `store/03-…`).
-- `releases/v0.1.0/master.yaml` includes files in **FK dependency order**. Platform tables that
+- `releases/v0.1.0/master.yaml` includes files in **FK dependency order**. Group-wide tables that
   reference `t_orders` (order attribution, receipt tokens, point ledger) are included **after**
   the store layer — placement in `platform/` states ownership, include order states dependency.
 - `reconcile/` is not a release: `runAlways` changesets that re-derive rows from code
