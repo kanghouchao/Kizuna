@@ -195,8 +195,9 @@ export function RoleFormModal({ onClose: handleClosed, editingId, onSaved }: Rol
                         type="text"
                         maxLength={100}
                         {...field}
-                        // 詳細が届く前に入力させると、到着時の reset が入力を黙って上書きする
-                        disabled={editingLoading}
+                        // 詳細が届く前に入力させると、到着時の reset が入力を黙って上書きする。
+                        // 既定ロールの名称は播種の自然キーなので改名させない（権限だけ編集できる）。
+                        disabled={editingLoading || seededRole?.system === true}
                       />
                     </FormControl>
                     <FormMessage />

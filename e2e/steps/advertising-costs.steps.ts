@@ -514,7 +514,9 @@ Then(
       .getByRole("button", { name: "広告費を登録", exact: true })
       .focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("dialog")).toBeVisible();
+    // 保留中操作の再確認トーストも role=dialog なので、登録ダイアログを名前で指す。
+    const registration = page.getByRole("dialog", { name: "広告費の登録" });
+    await expect(registration).toBeVisible();
     await page
       .getByLabel("媒体", { exact: true })
       .fill("非常に長い媒体名".repeat(20));
@@ -525,7 +527,7 @@ Then(
       animations: "disabled",
     });
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(registration).toBeHidden();
     await login(page, readerEmail);
     await expect(
       page.getByRole("button", { name: "広告費を登録", exact: true }),
