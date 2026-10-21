@@ -33,7 +33,7 @@ public class TaskRegistry {
 
   public TaskHandler require(TaskCommand command) {
     var handler = requireName(command.taskName());
-    if (handler.platformWide() != (command.storeId() == null)) {
+    if (handler.groupWide() != (command.storeId() == null)) {
       throw new ServiceException("登録済み処理とその対象範囲を指定してください");
     }
     return handler;

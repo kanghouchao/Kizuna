@@ -36,7 +36,7 @@ class AdvertisingReportReaderTest {
   }
 
   @Test
-  void foreignAndUnresolvedScopesFailBeforeReadingEvenWithPlatformStoreContext() {
+  void foreignAndUnresolvedScopesFailBeforeReadingEvenWithAdminStoreContext() {
     assertThatThrownBy(() -> reader.read(true, List.of(1L), "2026-01", "2026-12", 20))
         .isInstanceOf(AccessDeniedException.class);
     authorize();

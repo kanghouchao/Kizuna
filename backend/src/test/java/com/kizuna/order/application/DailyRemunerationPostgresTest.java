@@ -9,7 +9,7 @@ import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.platform.PlatformSelfDailyRemunerationController;
+import com.kizuna.order.api.me.SelfDailyRemunerationController;
 import com.kizuna.order.api.store.DailyRemunerationController;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
@@ -194,7 +194,7 @@ class DailyRemunerationPostgresTest {
     var http =
         standaloneSetup(
                 new DailyRemunerationController(service),
-                new PlatformSelfDailyRemunerationController(service))
+                new SelfDailyRemunerationController(service))
             .setMessageConverters(
                 new JacksonJsonHttpMessageConverter(
                     JsonMapper.builder()
@@ -208,9 +208,7 @@ class DailyRemunerationPostgresTest {
                 context.getBean(StoreContext.class).setStoreId(storeId);
                 try {
                   return http.perform(
-                          get(self
-                                  ? "/platform/me/daily-remunerations"
-                                  : "/store/daily-remunerations")
+                          get(self ? "/me/daily-remunerations" : "/store/daily-remunerations")
                               .principal(() -> email)
                               .param("person_id", personId.toString())
                               .param("store_id", storeId.toString())

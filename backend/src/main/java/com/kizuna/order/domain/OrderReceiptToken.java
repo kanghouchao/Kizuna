@@ -21,7 +21,7 @@ import lombok.NoArgsConstructor;
  * <p>{@code plannedPoints} は完了時点の付与規則で確定した固定値。申領時点の設定は読まない — 同じ会計が申領の早い遅いで 別のポイントになることを許さないためで、0
  * 円完了にも 0 として発行する（申領の効果は来店の可視化に閉じる）。
  *
- * <p>帰属記録（{@link OrderAttribution}）と同じく platform 帰属で、店舗行分離機構には載せない — 申領するのは店舗文脈を
+ * <p>帰属記録（{@link OrderAttribution}）と同じく グループ帰属で、店舗行分離機構には載せない — 申領するのは店舗文脈を
  * 持たない会員本人であり、店舗で絞ると照合そのものが成立しない。
  *
  * <p>不変条件（構築時に検証、違反は 400 系ドメイン例外 {@link InvalidOrderReceiptTokenException}）: 受注 ID・ダイジェスト・発行時刻が必須で、

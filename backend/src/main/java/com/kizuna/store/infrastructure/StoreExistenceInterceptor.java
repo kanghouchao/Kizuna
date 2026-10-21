@@ -14,7 +14,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * 店舗文脈（X-Store-ID）が確立済みのとき、その store_id が実在することを毎リクエスト 1 回検証するインターセプタ。
  *
  * <p>{@link com.kizuna.shared.storescope.StoreIdInterceptor} の後段に同一 mount（{@code /store/**}・{@code
- * /files/**}）で登録する。 実在性判定は跨モジュールポート {@link StoreExistenceCheck} に収束させ、平台側の {@link
+ * /files/**}）で登録する。 実在性判定は跨モジュールポート {@link StoreExistenceCheck} に収束させ、グループ級の {@link
  * com.kizuna.shared.storescope.StoreScopeExecutor} と同一の判定経路にする。
  *
  * <p>JWT の授権店舗集合は次回ログインまで陳旧化しうるため、存在しない storeId が文脈に載ることがある。純 FK 兜底だと制約違反が 500 に逃げてしまうため、 本インターセプタが

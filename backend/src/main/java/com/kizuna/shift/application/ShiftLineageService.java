@@ -161,8 +161,8 @@ public class ShiftLineageService {
   }
 
   /**
-   * 系列に現れる実行主体の表示名を一度に引く。行に残るのは id だけで、店舗側の呼び手には利用者を引く読み口が 無い（{@code /platform/staff}
-   * は平台面）ため、ここで解決しないと「実行主体が辿れる」が数値で止まる。
+   * 系列に現れる実行主体の表示名を一度に引く。行に残るのは id だけで、店舗側の呼び手には利用者を引く読み口が 無い（{@code /admin/staff}
+   * はグループ級）ため、ここで解決しないと「実行主体が辿れる」が数値で止まる。
    */
   private Map<Long, String> resolveActorNames(
       Shift shift, List<ShiftRequest> requests, Attendance attendance) {

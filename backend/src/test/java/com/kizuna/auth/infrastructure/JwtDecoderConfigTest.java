@@ -28,7 +28,7 @@ import org.springframework.security.oauth2.jwt.JwtException;
 /**
  * {@link JwtDecoderConfig} の単体テスト。decoder への配線（HS256 固定・skew=0・issuer・ブラックリスト）を実発行
  * トークンの実解読で固定する。issuer/exp を可変にしたテスト専用トークンは {@link JwtEncoderConfig} の encoder で直接組み立てる （{@link
- * PlatformJwtIssuer} は issuer を {@code ISSUER_PLATFORM} の 1 値へ固定しているため、issuer 不一致ケースを 表現できない）。
+ * JwtIssuer} は issuer を {@code ISSUER} の 1 値へ固定しているため、issuer 不一致ケースを 表現できない）。
  */
 class JwtDecoderConfigTest {
 
@@ -88,7 +88,7 @@ class JwtDecoderConfigTest {
   @Test
   @DisplayName("正しい issuer・未失効・未ブラックリストの token は解読できること")
   void decodesValidToken() {
-    String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L);
+    String token = issueToken(JwtIssuer.ISSUER, 3_600_000L);
 
     Jwt jwt = decoder.decode(token);
 
@@ -101,7 +101,7 @@ class JwtDecoderConfigTest {
   void credentialValidationFailurePropagates() {
     when(credentialVersionService.isCurrent("user@kizuna.test", 0L))
         .thenThrow(new IllegalStateException("正本を照合できません"));
-    String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L);
+    String token = issueToken(JwtIssuer.ISSUER, 3_600_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(IllegalStateException.class);
   }
@@ -118,7 +118,7 @@ class JwtDecoderConfigTest {
   @Test
   @DisplayName("期限切れの token は skew=0 で即座に拒否されること")
   void rejectsExpiredTokenWithZeroSkew() {
-    String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, -1_000L);
+    String token = issueToken(JwtIssuer.ISSUER, -1_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
     verifyNoInteractions(tokenBlacklistService, credentialVersionService);
@@ -128,7 +128,7 @@ class JwtDecoderConfigTest {
   @DisplayName("トークン単位ブラックリスト登録済みの token は拒否されること")
   void rejectsBlacklistedToken() {
     when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(true);
-    String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L);
+    String token = issueToken(JwtIssuer.ISSUER, 3_600_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
     verifyNoInteractions(credentialVersionService);
@@ -138,7 +138,7 @@ class JwtDecoderConfigTest {
   @DisplayName("資格情報の版が現在と不一致の token は拒否されること")
   void rejectsStaleCredentialVersionToken() {
     when(credentialVersionService.isCurrent("user@kizuna.test", 0L)).thenReturn(false);
-    String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L);
+    String token = issueToken(JwtIssuer.ISSUER, 3_600_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
   }
@@ -147,7 +147,7 @@ class JwtDecoderConfigTest {
   @DisplayName("資格情報の版 claim を欠く token は、他の検証を全て通っても拒否されること（移行期なし）")
   void rejectsTokenWithoutCredentialVersionClaim() {
     // isCurrent は無条件 true に stub 済み — それでも拒否されるなら claim 欠落そのものが拒否理由である。
-    String token = issueToken(PlatformJwtIssuer.ISSUER_PLATFORM, 3_600_000L, false);
+    String token = issueToken(JwtIssuer.ISSUER, 3_600_000L, false);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
   }

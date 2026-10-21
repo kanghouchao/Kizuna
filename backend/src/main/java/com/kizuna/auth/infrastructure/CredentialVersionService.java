@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CredentialVersionService {
 
-  /** トークン claim 名。発行（PlatformAuthService）と検証（CredentialVersionValidator）の単一の合意点。 */
+  /** トークン claim 名。発行（AuthService）と検証（CredentialVersionValidator）の単一の合意点。 */
   public static final String CLAIM = "credentialVersion";
 
   private static final String KEY_PREFIX = "credential-version:";

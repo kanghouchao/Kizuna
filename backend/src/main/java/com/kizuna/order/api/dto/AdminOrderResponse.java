@@ -1,0 +1,34 @@
+package com.kizuna.order.api.dto;
+
+import com.kizuna.order.domain.OrderCourse;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/** 全群横断受注一覧のレスポンスDTO。JSON キーはグローバルの snake_case 設定に従う。 */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AdminOrderResponse {
+  private boolean completionInvalidated;
+  private String replacementForOrderId;
+  private boolean requiresAttention;
+  private int unresolvedSpecialServiceCount;
+  private OffsetDateTime startedAt;
+  private OffsetDateTime completedAt;
+  private int accruedRemuneration;
+  private int totalRemuneration;
+  private int totalFee;
+  private OrderCourse course;
+  private String id;
+  private Long storeId;
+  private LocalDate businessDate;
+  private LocalTime arrivalScheduledStartTime;
+  private LocalTime arrivalScheduledEndTime;
+  private String status;
+}

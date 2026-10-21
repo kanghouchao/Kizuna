@@ -22,7 +22,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-dashboard }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: ダッシュボード }
-              - column: { name: path, value: /platform/dashboard }
+              - column: { name: path, value: /admin/dashboard }
               - column: { name: icon, value: HouseIcon }
               - column: { name: sort_order, valueNumeric: 1 }
         - insert:
@@ -31,7 +31,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-stores }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: 店舗一覧 }
-              - column: { name: path, value: /platform/stores }
+              - column: { name: path, value: /admin/stores }
               - column: { name: icon, value: BuildingIcon }
               - column: { name: permission, value: STORE_MANAGE }
               - column: { name: sort_order, valueNumeric: 2 }
@@ -41,7 +41,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-staff }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: 従業員管理 }
-              - column: { name: path, value: /platform/staff }
+              - column: { name: path, value: /admin/staff }
               - column: { name: icon, value: UsersIcon }
               - column: { name: permission, value: STORE_STAFF_MANAGE }
               - column: { name: sort_order, valueNumeric: 3 }
@@ -51,7 +51,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-roles }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: ロール管理 }
-              - column: { name: path, value: /platform/roles }
+              - column: { name: path, value: /admin/roles }
               - column: { name: icon, value: KeyRoundIcon }
               - column: { name: permission, value: ROLE_MANAGE }
               - column: { name: sort_order, valueNumeric: 4 }
@@ -68,7 +68,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-casts }
               - column: { name: parent_id, value: platform-cast-group }
               - column: { name: label, value: キャスト在籍照会 }
-              - column: { name: path, value: /platform/casts }
+              - column: { name: path, value: /admin/casts }
               - column: { name: icon, value: UsersIcon }
               - column: { name: permission, value: CAST_PERSON_VIEW }
               - column: { name: sort_order, valueNumeric: 9 }
@@ -78,7 +78,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-benefit-rules }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: 特典規則 }
-              - column: { name: path, value: /platform/benefit-rules }
+              - column: { name: path, value: /admin/benefit-rules }
               - column: { name: icon, value: MegaphoneIcon }
               - column: { name: permission, value: BENEFIT_MANAGE }
               - column: { name: sort_order, valueNumeric: 6 }
@@ -88,7 +88,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-service-identities }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: サービスID管理 }
-              - column: { name: path, value: /platform/service-identities }
+              - column: { name: path, value: /admin/service-identities }
               - column: { name: icon, value: BotIcon }
               - column: { name: permission, value: SERVICE_ID_MANAGE }
               - column: { name: sort_order, valueNumeric: 8 }
@@ -98,7 +98,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-orders }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: 受注照会 }
-              - column: { name: path, value: /platform/orders }
+              - column: { name: path, value: /admin/orders }
               - column: { name: icon, value: ClipboardListIcon }
               - column: { name: permission, value: ORDER_SET_MANAGE }
               - column: { name: sort_order, valueNumeric: 9 }
@@ -183,7 +183,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-config }
               - column: { name: parent_id, value: store-settings }
               - column: { name: label, value: システム設定 }
-              - column: { name: path, value: /platform/settings }
+              - column: { name: path, value: /admin/settings }
               - column: { name: icon, value: SettingsIcon }
               - column: { name: permission, value: SYSTEM_CONFIG_MANAGE }
               - column: { name: sort_order, valueNumeric: 2 }
@@ -210,7 +210,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-task-executions }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: 処理の実行履歴 }
-              - column: { name: path, value: /platform/task-executions }
+              - column: { name: path, value: /admin/task-executions }
               - column: { name: icon, value: ClockIcon }
               - column: { name: permission, value: TASK_MANAGE }
               - column: { name: sort_order, valueNumeric: 11 }
@@ -220,7 +220,7 @@ databaseChangeLog:
               - column: { name: id, value: platform-audit-events }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: 監査履歴 }
-              - column: { name: path, value: /platform/audit-events }
+              - column: { name: path, value: /admin/audit-events }
               - column: { name: icon, value: ShieldAlertIcon }
               - column: { name: permission, value: AUDIT_VIEW }
               - column: { name: sort_order, valueNumeric: 12 }

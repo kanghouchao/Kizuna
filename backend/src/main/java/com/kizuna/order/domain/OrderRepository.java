@@ -149,7 +149,7 @@ public interface OrderRepository
    * <p>{@code storeFilter} は applyToLoadByKey により派生の {@code findById} にも掛かる（StoreScopedLoadByKeyIT
    * が実測で固定）。JPQL で書くのは境界の明示で、フィルタの代替ではない。
    *
-   * <p>受注に紐づく帰属記録・伝票トークンは platform 帰属で店舗行分離機構に載らない。それらを受注 ID で引く操作は、 先にこの読み口で店舗の所有を確かめてから行う。
+   * <p>受注に紐づく帰属記録・伝票トークンは グループ帰属で店舗行分離機構に載らない。それらを受注 ID で引く操作は、 先にこの読み口で店舗の所有を確かめてから行う。
    */
   @Query("select o from com.kizuna.order.domain.Order o where o.id = :id")
   Optional<Order> findScopedById(@Param("id") String id);
@@ -168,9 +168,9 @@ public interface OrderRepository
   @Query("select o from com.kizuna.order.domain.Order o where o.id = :id")
   Optional<Order> findScopedByIdForUpdate(@Param("id") String id);
 
-  // 平台横断一覧（集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う。
+  // 全群横断一覧（集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う。
   // 店舗（store）表示名の join は張らない。
-  String PLATFORM_VIEW_SELECT =
+  String GROUP_WIDE_VIEW_SELECT =
       """
       select o.completionInvalidated as completionInvalidated, o.replacementForOrderId as replacementForOrderId,
              o.startedAt as startedAt,
@@ -189,7 +189,7 @@ public interface OrderRepository
       """;
 
   @Query(
-      value = PLATFORM_VIEW_SELECT,
+      value = GROUP_WIDE_VIEW_SELECT,
       countQuery = "select count(o) from com.kizuna.order.domain.Order o")
-  Page<PlatformOrderView> findPlatformViews(Pageable pageable);
+  Page<AdminOrderView> findGroupWideViews(Pageable pageable);
 }

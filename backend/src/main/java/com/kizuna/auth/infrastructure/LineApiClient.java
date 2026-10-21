@@ -29,7 +29,7 @@ public class LineApiClient {
   private static final String TOKEN_PATH = "/oauth2/v2.1/token";
   private static final String VERIFY_PATH = "/oauth2/v2.1/verify";
 
-  // 公開端点（/platform/line/login）から呼ばれるため、LINE 側の停滞がサーブレットスレッドを
+  // 公開端点（/auth/line/login）から呼ばれるため、LINE 側の停滞がサーブレットスレッドを
   // 無期限に占有しないよう接続・読み取りとも有限にする。超過は RestClientException として
   // 既存の写像（LineAuthenticationException → 401）に落ちる。
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);

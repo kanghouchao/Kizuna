@@ -29,13 +29,13 @@ public class AdvertisingReportReader {
       Integer amount) {}
 
   @PreAuthorize(
-      "#platform ? hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') : hasAuthority('PERM_ADVERTISING_COST_VIEW')")
+      "#groupWide ? hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') : hasAuthority('PERM_ADVERTISING_COST_VIEW')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
   public AdvertisingReportFacts read(
-      boolean platform, List<Long> stores, String from, String to, int limit) {
+      boolean groupWide, List<Long> stores, String from, String to, int limit) {
     var scope = storeScopeHolder.current();
     for (var store : stores)
-      if (platform
+      if (groupWide
           ? scope == null || !scope.authorizes(store)
           : !context.hasStoreId() || !store.equals(context.getStoreId()))
         throw new AccessDeniedException("授権店舗集合に含まれません");

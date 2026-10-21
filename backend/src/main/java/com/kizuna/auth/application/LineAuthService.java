@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>なりすまし防止の不変条件: ログイン経路は LINE ユーザー ID でしか身分を引かない。LINE 側の検証済みメールアドレスが 既存アカウントと一致しても自動連携はせず、未知の
  * LINE ユーザー ID は必ず登録チケット経路へ落とす（メール一致は本人性の 証明にならず、自動連携を許すと LINE 側でメールを詐称できる限りアカウント乗っ取りになる）。
  *
- * <p>発行するトークンはパスワードログインと同一の {@link PlatformAuthService#issueTokenFor} を通す（認証手段による claim の齟齬を作らない）。
+ * <p>発行するトークンはパスワードログインと同一の {@link AuthService#issueTokenFor} を通す（認証手段による claim の齟齬を作らない）。
  */
 @Service
 @RequiredArgsConstructor
@@ -46,7 +46,7 @@ public class LineAuthService {
   private final LineRegistrationTicketStore ticketStore;
   private final UserRepository userRepository;
   private final MemberRegistrationService memberRegistrationService;
-  private final PlatformAuthService authService;
+  private final AuthService authService;
 
   /** 前端が認可要求を組み立てるための公開設定。無効なら channelId は返さない。 */
   @Transactional(readOnly = true)

@@ -46,7 +46,7 @@ public class OperationalReportReader {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
-  public OperationalFacts platform(Long storeId, LocalDate from, LocalDate to) {
+  public OperationalFacts groupWide(Long storeId, LocalDate from, LocalDate to) {
     var scope = storeScopeHolder.current();
     if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
     if (storeId != null) {

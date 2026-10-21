@@ -37,7 +37,7 @@ public class CustomerProvisioningService {
     if (established.isPresent()) {
       return customerReferenceResolver.resolveForWrite(established.get().getCustomerId());
     }
-    // 店舗が知るのは申請時の名乗りだけで、プラットフォームのプロフィールは参照しない。
+    // 店舗が知るのは申請時の名乗りだけで、グループ共通プロフィールは参照しない。
     Customer customer =
         customerRepository.save(Customer.builder().name(input.declaredName()).build());
     try {

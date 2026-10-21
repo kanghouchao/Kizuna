@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.BatchSize;
 
 /**
- * プラットフォーム共通ユーザー集約。email でログインし、授権は「ロール × 担当店舗集合」で表す。
+ * グループ共通ユーザー集約。email でログインし、授権は「ロール × 担当店舗集合」で表す。
  *
  * <p>本人種別（{@link UserType}）が {@link UserType#holdsRoles()} のユーザーだけがロールを持ち、CAST / MEMBER
  * は権限モデルに入らない。ロールは跨集約 ID 参照（{@link Role}）。停止は {@link

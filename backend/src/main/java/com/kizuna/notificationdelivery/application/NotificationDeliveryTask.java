@@ -50,7 +50,7 @@ public class NotificationDeliveryTask implements TaskHandler {
 
   @Override
   @StoreScopeExempt(reason = "登録処理の対象範囲だけを返す")
-  public boolean platformWide() {
+  public boolean groupWide() {
     return false;
   }
 

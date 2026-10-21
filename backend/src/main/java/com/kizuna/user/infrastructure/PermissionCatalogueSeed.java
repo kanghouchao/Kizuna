@@ -20,8 +20,8 @@ import liquibase.exception.ValidationErrors;
 import liquibase.resource.ResourceAccessor;
 
 /**
- * 権限目録（{@code t_permissions}）と平台既定ロールの行（{@code t_roles}）を {@link PermissionCode} と {@link
- * SystemRole} の宣言から播種する Liquibase 変更。changeset は {@code runAlways} で毎回走る。
+ * 権限目録（{@code t_permissions}）と既定ロールの行（{@code t_roles}）を {@link PermissionCode} と {@link SystemRole}
+ * の宣言から播種する Liquibase 変更。changeset は {@code runAlways} で毎回走る。
  *
  * <p>既定ロールへの授与（{@code t_role_permissions}）は<b>ロール行を初めて作った回だけ</b>宣言の {@code defaultRoles} を播種する。
  * 既定ロールの権限は管理者が編集できるため、既存行の授与を起動のたびに取り直すと運用の編集を黙って巻き戻してしまう。 基線 seed
@@ -78,7 +78,7 @@ public class PermissionCatalogueSeed implements CustomTaskChange {
   }
 
   /**
-   * 宣言された平台既定ロールの行を揃え、この回に新しく作った行を返す。ロール名の正本も {@link SystemRole} 側にあるため、欠けている行はここで作る — 別の changeset
+   * 宣言された既定ロールの行を揃え、この回に新しく作った行を返す。ロール名の正本も {@link SystemRole} 側にあるため、欠けている行はここで作る — 別の changeset
    * に任せると、毎回走る本播種のほうが先に動いて「まだ存在しないロール」で止まってしまう。
    *
    * <p>落とす場合が 2 つある。同名の行が利用者自作ロール（{@code is_system = FALSE}）として既にある場合は、既定ロールとして扱えば利用者のロールを奪い、

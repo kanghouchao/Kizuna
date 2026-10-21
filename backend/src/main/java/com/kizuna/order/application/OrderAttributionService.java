@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * PointLedgerService} を持たないことがその宣言であり、{@link OrderAttributionCorrectionService} を別のサービスに
  * 分けている理由でもある。
  *
- * <p>帰属記録も伝票トークンも platform 帰属で店舗行分離機構に載らないため、店舗の境界を決めるのは受注だけである。 どの操作も先に {@link
+ * <p>帰属記録も伝票トークンも グループ帰属で店舗行分離機構に載らないため、店舗の境界を決めるのは受注だけである。 どの操作も先に {@link
  * OrderRepository#findScopedById} で受注を引き、引けなければそこで終える。
  *
  * <p>完了（{@link OrderService#complete}）が受け持つのは帰属の<b>成立</b>で、こちらは成立済みの記録の訂正にあたる。
@@ -166,7 +166,7 @@ public class OrderAttributionService {
   }
 
   /**
-   * 会員側の情報は会員コードだけを写す。表示名・メールはプラットフォーム側プロフィールで、店舗へは渡らない。
+   * 会員側の情報は会員コードだけを写す。表示名・メールはグループ共通プロフィールで、店舗へは渡らない。
    *
    * <p>残っている訂正の項目はここでは埋めない。台帳を読まなければ決まらず、このサービスが台帳へ依存しないことが 「無効化はポイント台帳へ自動波及しない」（ADR
    * 0009）の構造的な証跡である。呼出側が訂正のサービスから受け取って {@link OrderAttributionResponse#withPendingCorrection} で添える。

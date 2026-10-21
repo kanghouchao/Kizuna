@@ -19,7 +19,7 @@ import com.kizuna.order.reporting.OperationalFacts;
 import com.kizuna.order.reporting.OperationalReportReader;
 import com.kizuna.remuneration.reporting.RemunerationReportFacts;
 import com.kizuna.remuneration.reporting.RemunerationReportReader;
-import com.kizuna.reporting.api.platform.PlatformOperationalReportController;
+import com.kizuna.reporting.api.admin.AdminOperationalReportController;
 import com.kizuna.reporting.api.store.StoreOperationalReportController;
 import com.kizuna.reporting.application.OperationalReportService;
 import com.kizuna.reporting.application.ReportSnapshot;
@@ -54,7 +54,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@WebMvcTest({StoreOperationalReportController.class, PlatformOperationalReportController.class})
+@WebMvcTest({StoreOperationalReportController.class, AdminOperationalReportController.class})
 @Import({
   OperationalReportControllerTest.Config.class,
   OperationalReportService.class,
@@ -104,7 +104,7 @@ class OperationalReportControllerTest {
     when(advertising.read(anyBoolean(), any(), any(), any(), anyInt()))
         .thenReturn(new AdvertisingReportFacts(List.of()));
     when(reader.store(any(), any())).thenReturn(facts);
-    when(reader.platform(any(), any(), any())).thenReturn(facts);
+    when(reader.groupWide(any(), any(), any())).thenReturn(facts);
   }
 
   MockHttpServletRequestBuilder request(String scope, String path, String... permissions) {
@@ -125,7 +125,7 @@ class OperationalReportControllerTest {
 
   @Test
   void readAndExportRequireIndependentPermissionsAndScopeAuthority() throws Exception {
-    for (String scope : List.of("store", "platform")) {
+    for (String scope : List.of("store", "admin")) {
       String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
       mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
           .andExpect(status().isOk())
@@ -165,7 +165,7 @@ class OperationalReportControllerTest {
 
   @Test
   void additionalAmountsRequireRemunerationPermissionAndLegacyOmitsFields() throws Exception {
-    for (String scope : List.of("store", "platform")) {
+    for (String scope : List.of("store", "admin")) {
       String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
       mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
           .andExpect(status().isOk())
@@ -242,7 +242,7 @@ class OperationalReportControllerTest {
 
   @Test
   void advertisingPermissionsAreIndependentForEachConsoleAndExport() throws Exception {
-    for (String scope : List.of("store", "platform")) {
+    for (String scope : List.of("store", "admin")) {
       String order = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
       String view = scope.equals("store") ? "ADVERTISING_COST_VIEW" : "ADVERTISING_COST_SET_VIEW";
       String export =
@@ -374,13 +374,13 @@ class OperationalReportControllerTest {
   @Test
   void invalidCriteriaAndSizeAre400AndOversizeNeverSetsAttachment() throws Exception {
     mvc.perform(
-            request("platform", "", "ORDER_SET_MANAGE", "OPERATIONAL_REPORT_VIEW")
+            request("admin", "", "ORDER_SET_MANAGE", "OPERATIONAL_REPORT_VIEW")
                 .param("size", "101"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").isString());
     mvc.perform(
             request(
-                    "platform",
+                    "admin",
                     "/exports",
                     "ORDER_SET_MANAGE",
                     "OPERATIONAL_REPORT_VIEW",
@@ -390,7 +390,7 @@ class OperationalReportControllerTest {
     properties.getOperationalReport().setMaxBytes(1);
     mvc.perform(
             request(
-                    "platform",
+                    "admin",
                     "/exports",
                     "ORDER_SET_MANAGE",
                     "OPERATIONAL_REPORT_VIEW",

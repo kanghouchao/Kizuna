@@ -20,7 +20,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-/** プラットフォーム統合メニュー木の 1 ノード（Central/Store の別なく単一集約として扱う）。 */
+/** 統合メニュー木の 1 ノード（Central/Store の別なく単一集約として扱う）。 */
 @Getter
 @Setter
 @Entity

@@ -67,7 +67,7 @@ class StoreIsolationTests {
 
   /**
    * {@code @Filter(storeSetFilter)} の宣言は、対象エンティティを実際に読む {@code @StoreSetScoped}
-   * メソッドが存在しなければ休眠（dormant）のままになる。 宣言済みであることは、そのエンティティが集合作用域の平台横断一覧に既に対応済みであることを意味しない。
+   * メソッドが存在しなければ休眠（dormant）のままになる。 宣言済みであることは、そのエンティティが集合作用域の全群横断一覧に既に対応済みであることを意味しない。
    */
   @Test
   @DisplayName("store_id 列を持つ全 @Entity が storeSetFilter の @Filter を宣言していること")

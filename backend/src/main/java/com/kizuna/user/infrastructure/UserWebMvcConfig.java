@@ -15,7 +15,7 @@ public class UserWebMvcConfig implements WebMvcConfigurer {
 
   @Override
   public void addInterceptors(@NonNull InterceptorRegistry registry) {
-    // 店舗文脈を確立する StoreIdInterceptor（/store/**）や平台側の作用域判定より先に解決器を差し込む。
+    // 店舗文脈を確立する StoreIdInterceptor（/store/**）やグループ級の作用域判定より先に解決器を差し込む。
     registry.addInterceptor(storeScopeInstallingInterceptor).order(Ordered.HIGHEST_PRECEDENCE);
   }
 }

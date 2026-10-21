@@ -1,8 +1,8 @@
 package com.kizuna.auth.api.dto;
 
 /**
- * POST /platform/line/login の応答。JSON キーは Jackson 設定により snake_case（expires_at / registration_ticket
- * / display_name）で、null 項目は応答から省かれる。
+ * POST /auth/line/login の応答。JSON キーは Jackson 設定により snake_case（expires_at / registration_ticket /
+ * display_name）で、null 項目は応答から省かれる。
  *
  * <p>連携済み（{@code registered=true}）なら token と expires_at を、未登録なら登録チケットと LINE 表示名を返す 2 形態を取る。 未登録側で
  * token を返さないことが、なりすまし（LINE 側のメール一致による既存アカウントへの自動ログイン）を構造的に排除している。

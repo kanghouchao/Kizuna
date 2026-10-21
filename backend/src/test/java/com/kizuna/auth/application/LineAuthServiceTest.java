@@ -14,12 +14,12 @@ import com.kizuna.auth.api.dto.LineAuthorizationRequest;
 import com.kizuna.auth.api.dto.LineLoginResponse;
 import com.kizuna.auth.api.dto.LineRegistrationRequest;
 import com.kizuna.auth.api.dto.Token;
+import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.LineApiClient;
 import com.kizuna.auth.infrastructure.LineChannel;
 import com.kizuna.auth.infrastructure.LineChannelResolver;
 import com.kizuna.auth.infrastructure.LineIdentity;
 import com.kizuna.auth.infrastructure.LineRegistrationTicketStore;
-import com.kizuna.auth.infrastructure.PlatformJwtIssuer;
 import com.kizuna.member.application.MemberRegistrationService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
@@ -60,8 +60,8 @@ class LineAuthServiceTest {
   @Mock private LineRegistrationTicketStore ticketStore;
   @Mock private UserRepository userRepository;
   @Mock private MemberRegistrationService memberRegistrationService;
-  @Mock private PlatformAuthService authService;
-  @Mock private PlatformJwtIssuer jwtIssuer;
+  @Mock private AuthService authService;
+  @Mock private JwtIssuer jwtIssuer;
 
   @InjectMocks private LineAuthService lineAuthService;
 
@@ -296,8 +296,8 @@ class LineAuthServiceTest {
   }
 
   private LineAuthService withRealTokenIssuance() {
-    PlatformAuthService realAuthService =
-        new PlatformAuthService(
+    AuthService realAuthService =
+        new AuthService(
             userRepository,
             mock(RoleRepository.class),
             mock(PermissionRepository.class),

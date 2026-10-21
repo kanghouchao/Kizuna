@@ -28,22 +28,22 @@ import org.springframework.util.StringUtils;
 public class SecurityConfig {
 
   private final JwtDecoder jwtDecoder;
-  private final PlatformJwtAuthenticationConverter jwtAuthenticationConverter;
-  private final PlatformAuthenticationEntryPoint authenticationEntryPoint;
-  private final PlatformBearerTokenResolver bearerTokenResolver;
+  private final JwtAuthoritiesConverter jwtAuthenticationConverter;
+  private final JwtAuthenticationEntryPoint authenticationEntryPoint;
+  private final ExemptingBearerTokenResolver bearerTokenResolver;
 
   private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
-    PathPatternRequestMatcher.withDefaults().matcher("/platform/login"),
+    PathPatternRequestMatcher.withDefaults().matcher("/auth/login"),
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/files"),
     // 匿名 POST の招待照会と新規登録受諾（Bearer なしのため Bearer 免除に該当しない）。既存受諾(/existing)は Bearer 付きで既存免除に該当する。
     // 照会はトークンをパスに載せないため POST であり、読み取りでも CSRF 免除が要る。
-    PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/view"),
-    PathPatternRequestMatcher.withDefaults().matcher("/platform/cast-invitations/acceptance"),
+    PathPatternRequestMatcher.withDefaults().matcher("/admin/cast-invitations/view"),
+    PathPatternRequestMatcher.withDefaults().matcher("/admin/cast-invitations/acceptance"),
     // 匿名 POST の会員自助登録（同上: Bearer なしのため Bearer 免除に該当しない）。
-    PathPatternRequestMatcher.withDefaults().matcher("/platform/members"),
-    // 匿名 POST の LINE ログインと LINE 登録確定（同上）。連携(/platform/me/line)は Bearer 付きで既存免除に該当する。
-    PathPatternRequestMatcher.withDefaults().matcher("/platform/line/login"),
-    PathPatternRequestMatcher.withDefaults().matcher("/platform/line/register"),
+    PathPatternRequestMatcher.withDefaults().matcher("/admin/members"),
+    // 匿名 POST の LINE ログインと LINE 登録確定（同上）。連携(/me/line)は Bearer 付きで既存免除に該当する。
+    PathPatternRequestMatcher.withDefaults().matcher("/auth/line/login"),
+    PathPatternRequestMatcher.withDefaults().matcher("/auth/line/register"),
     // 公開店面からの匿名 POST（ゲスト予約申請）。/store 配下で唯一の匿名の書き込みで、店舗文脈は
     // StoreIdInterceptor がヘッダから確立する。同一パス上に他のメソッドの handler を作らないよう
     // メソッドまで指定する。
@@ -72,7 +72,7 @@ public class SecurityConfig {
                             jwt.decoder(jwtDecoder)
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter))
                     .authenticationEntryPoint(authenticationEntryPoint)
-                    // PlatformBearerTokenResolver: 公開端点では壊れた Bearer を無視して匿名継続させる
+                    // ExemptingBearerTokenResolver: 公開端点では壊れた Bearer を無視して匿名継続させる
                     // （decoder より前段の全リクエスト共通処理のため、@PreAuthorize/@PermitAll の区別を待てない）。
                     .bearerTokenResolver(bearerTokenResolver))
         .formLogin(AbstractHttpConfigurer::disable);

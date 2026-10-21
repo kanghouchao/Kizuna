@@ -111,7 +111,7 @@ class TaskExecutorTest {
                     .max(Comparator.comparingInt(ExecutionAttempt::getAttemptNumber)));
     when(identities.requireService(anyLong(), any(), nullable(Long.class))).thenReturn(service);
     when(handler.name()).thenReturn("CHECK");
-    when(handler.platformWide()).thenReturn(true);
+    when(handler.groupWide()).thenReturn(true);
     when(handler.permission()).thenReturn(PermissionCode.TASK_EXECUTE);
     var transactions = mock(PlatformTransactionManager.class);
     when(transactions.getTransaction(any())).thenAnswer(call -> new SimpleTransactionStatus());
@@ -270,7 +270,7 @@ class TaskExecutorTest {
 
   @Test
   void storeExecutionEstablishesAndClearsScopeAndSnapshotsName() {
-    when(handler.platformWide()).thenReturn(false);
+    when(handler.groupWide()).thenReturn(false);
     var store = new Store();
     store.setId(3L);
     store.setName("対象店舗");

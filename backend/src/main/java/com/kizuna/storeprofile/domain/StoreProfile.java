@@ -83,7 +83,7 @@ public class StoreProfile extends StoreScopedEntity {
   /**
    * 店舗用のデフォルト設定を生成する。
    *
-   * <p>店舗登録（平台側・StoreContext なし）から呼ばれるため store_id を明示設定する。 StoreScopeStampListener はこの設定済み値を尊重する。
+   * <p>店舗登録（グループ級・StoreContext なし）から呼ばれるため store_id を明示設定する。 StoreScopeStampListener はこの設定済み値を尊重する。
    *
    * @param storeId 対象店舗の ID
    * @return デフォルト値が設定された StoreProfile インスタンス

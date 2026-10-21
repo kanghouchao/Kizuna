@@ -18,7 +18,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 class ServiceExecutionIdentityServiceTest {
   @Test
-  void platformWorkRequiresExplicitAllStoresAndCurrentPermission() {
+  void groupWideWorkRequiresExplicitAllStoresAndCurrentPermission() {
     var users = mock(UserRepository.class);
     var roles = mock(RoleRepository.class);
     var user =
