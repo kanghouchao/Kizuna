@@ -35,6 +35,12 @@ async function report(request: APIRequestContext, overrides: Record<string, stri
   expect(response.status(), await response.text()).toBe(200);
   return response.json();
 }
+/** 単店（STORE1）の集計は店舗級の端点が現在店舗で返す。 */
+async function storeReport(request: APIRequestContext) {
+  const response = await request.get(store, { headers: headers(full, store), params: parameters() });
+  expect(response.status(), await response.text()).toBe(200);
+  return response.json();
+}
 async function database() {
   if (process.env.PGHOST !== 'database') throw new Error('専用 E2E DB でのみ実行できます');
   const db = new Client({ application_name: 'report-advertising388-bdd' });
@@ -143,9 +149,11 @@ Then('広告費帳票は整月と閏年と登録なしを日割りせず区別�
 
 Then('広告費帳票は店と本部の閲覧出力権限を独立して検証する', async ({ request }) => {
   for (const endpoint of [store, admin]) {
-    const allowed = endpoint === store ? storeOnly : adminOnly;
-    const opposite = endpoint === store ? adminOnly : storeOnly;
-    for (const token of [legacy, opposite, exportOnly]) {
+    // 店舗の集計は受注の担当者族（ADVERTISING_COST_*）と横断照会族（ADVERTISING_COST_SET_*）の両方が読む。
+    // 集合全体の集計は横断照会族だけ。
+    const allowed = endpoint === store ? [storeOnly, adminOnly] : [adminOnly];
+    const denied = endpoint === store ? [legacy, exportOnly] : [legacy, storeOnly, exportOnly];
+    for (const token of denied) {
       for (const condition of [{}, { group_by: 'day' }, { from: `${year}-02-02` }] as Record<string, string>[]) {
         for (const format of [undefined, 'csv', 'xlsx']) {
           const response = await request.get(endpoint + (format ? '/exports' : ''), {
@@ -164,7 +172,7 @@ Then('広告費帳票は店と本部の閲覧出力権限を独立して検証�
         expect(response.status(), await response.text()).toBe(include_remuneration ? 403 : 200);
       }
     }
-    for (const token of [allowed, viewOnly]) {
+    for (const token of [...allowed, viewOnly]) {
       const response = await request.get(endpoint, { headers: headers(token, endpoint), params: parameters() });
       expect(response.status(), await response.text()).toBe(200);
     }
@@ -172,10 +180,12 @@ Then('広告費帳票は店と本部の閲覧出力権限を独立して検証�
       expect((await request.get(endpoint + '/exports', {
         headers: headers(viewOnly, endpoint), params: parameters({ format }),
       })).status()).toBe(403);
-      const allowedExport = await request.get(endpoint + '/exports', {
-        headers: headers(allowed, endpoint), params: parameters({ format }),
-      });
-      expect(allowedExport.status(), await allowedExport.text()).toBe(200);
+      for (const token of allowed) {
+        const allowedExport = await request.get(endpoint + '/exports', {
+          headers: headers(token, endpoint), params: parameters({ format }),
+        });
+        expect(allowedExport.status(), await allowedExport.text()).toBe(200);
+      }
       const old = await request.get(endpoint + '/exports', {
         headers: headers(legacy, endpoint), params: parameters({ include_advertising: false, format }),
       });
@@ -265,7 +275,6 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
   const submit = page.getByRole('button', { name: '照会', exact: true });
   const total = page.getByLabel('広告登録額合計（円）', { exact: true });
   const grouping = page.getByLabel('集計単位');
-  const storeId = page.getByLabel('店舗ID（空欄は授権全店）');
   await expect(advertising).not.toBeChecked();
   await expect(remuneration).not.toBeChecked();
   await from.fill(`${year}-02-01`);
@@ -280,12 +289,8 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
   await submit.click();
   await expect(total).toHaveText('1,800');
   await expect(page.getByLabel('報酬合計（円）', { exact: true })).toHaveText('10,500');
-  await storeId.fill(foreign);
-  await submit.click();
-  await expect(total).toHaveText('800');
-  await storeId.fill(STORE1_ID);
-  await submit.click();
-  await expect(total).toHaveText('1,000');
+  // 単店の集計は店舗級の画面が持つ。集合全体の画面に店舗の指定欄は無い。
+  await expect(page.getByLabel(/店舗ID/)).toHaveCount(0);
   await from.fill(`${year}-02-02`);
   await submit.click();
   await expect(total).toHaveText('');
@@ -294,7 +299,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
   await grouping.click();
   await page.getByRole('option', { name: '店舗別', exact: true }).click();
   await submit.click();
-  await expect(total).toHaveText('1,000');
+  await expect(total).toHaveText('1,800');
   for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width: theme === 'dark' ? 390 : 1280, height: 844 });
     await page.evaluate(t => document.documentElement.classList.toggle('dark', t === 'dark'), theme);
@@ -387,7 +392,7 @@ Then('広告費帳票は受注と保証と賞与と費用を同じ時点で読�
   try {
     await lock.query('BEGIN');
     await lock.query('LOCK TABLE t_orders IN ACCESS EXCLUSIVE MODE');
-    pending = request.get(admin, { headers: headers(), params: parameters({ store_id: STORE1_ID }) });
+    pending = request.get(store, { headers: headers(full, store), params: parameters() });
     await expect.poll(async () => {
       const result = await observer.query(`SELECT count(*)::int n FROM pg_stat_activity
         WHERE wait_event_type='Lock' AND application_name <> 'report-advertising388-bdd' AND query LIKE '%t_orders%'`);
@@ -403,7 +408,7 @@ Then('広告費帳票は受注と保証と賞与と費用を同じ時点で読�
     expect(response.status(), await response.text()).toBe(200);
     expect(await response.json()).toMatchObject({ total_remuneration: 7000,
       remuneration: { guarantee_total: 3000, bonus_total: 500, total: 10500 }, advertising: recorded(2, 400, 600) });
-    expect(await report(request, { store_id: STORE1_ID })).toMatchObject({ total_remuneration: 7100,
+    expect(await storeReport(request)).toMatchObject({ total_remuneration: 7100,
       remuneration: { guarantee_total: 0, bonus_total: 600, total: 7700 }, advertising: recorded(2, 500, 600) });
   } finally {
     await lock.query('ROLLBACK');
@@ -420,12 +425,12 @@ Then('広告費帳票は受注と保証と賞与と費用を同じ時点で読�
 
 When('月次費用を原月で訂正して留痕削除する', async ({ request }) => {
   sales = await updateAdvertisingCost(request, full, sales, values(700, 'RECRUITMENT'), secret);
-  expect((await report(request, { store_id: STORE1_ID })).advertising).toEqual(recorded(2, 0, 1300));
+  expect((await storeReport(request)).advertising).toEqual(recorded(2, 0, 1300));
   await deleteAdvertisingCost(request, full, recruitment, secret);
 });
 
 Then('広告費帳票の再照会と再出力だけが原月の変更を反映する', async ({ request }) => {
-  expect((await report(request, { store_id: STORE1_ID })).advertising).toEqual(recorded(1, 0, 700));
+  expect((await storeReport(request)).advertising).toEqual(recorded(1, 0, 700));
   expect((await report(request, { from: `${year}-03-01`, to: `${year}-03-31` })).advertising).toEqual(recorded(1, 200));
   const csv = await request.get(admin + '/exports', { headers: headers(), params: parameters({ format: 'csv' }) });
   expect(csv.status(), await csv.text()).toBe(200);
@@ -435,7 +440,7 @@ Then('広告費帳票の再照会と再出力だけが原月の変更を反映�
   expect(archivedCsv).toContain(recruitment.id);
   expect(archivedCsv).not.toEqual(current);
   await deleteAdvertisingCost(request, full, sales, secret);
-  const empty = await report(request, { store_id: STORE1_ID });
+  const empty = await storeReport(request);
   expect(empty.advertising).toEqual(recorded(0, 0));
   expect(empty.rows.content[0].advertising).toEqual(recorded(0, 0));
   expect(empty.remuneration.total).toBe(10500);
