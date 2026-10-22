@@ -63,7 +63,7 @@ For each anonymous endpoint, check all four concerns:
 3. If stale Bearer credentials must be ignored, add the **method plus path** to `ExemptingBearerTokenResolver.BEARER_EXEMPT_MATCHERS`. Do not exempt optional-authentication handlers that inspect `Principal`: doing so discards valid credentials too. Test anonymous access with a broken Bearer, not just without credentials.
 4. `/store/**` and `/files/**` still need `X-Store-ID` through `StoreIdInterceptor`. Only handlers intentionally independent of store context declare `@StoreOptional`.
 
-Store reads use `@StoreScoped` row isolation. A handwritten `where store_id = ?` is not a substitute. If a path must bypass the mechanism, document and test its explicit ownership control. The layer rules above describe transaction/proxy requirements.
+One capability has one endpoint. A read of one store's data lives only under `/store/**` and takes the store from `X-Store-ID`; do not add an `/admin/**` twin that takes `store_id` as a query. When a cross-store reader (e.g. `ORDER_SET_VIEW`) also needs that read, widen the `/store/**` condition to the union of the permission families instead. Only reads without a current store (cross-store lists and aggregates) live under `/admin/**`, filtered by `@StoreSetScoped`. Store reads use `@StoreScoped` row isolation. A handwritten `where store_id = ?` is not a substitute. If a path must bypass the mechanism, document and test its explicit ownership control. The layer rules above describe transaction/proxy requirements.
 
 ### Existing deviations
 
