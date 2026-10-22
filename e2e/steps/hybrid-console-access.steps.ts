@@ -1,7 +1,11 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 
-const { Then } = createBdd();
+const { Then, When } = createBdd();
+
+// シェルが自分で取るもの。/admin と /store を跨いでも再取得されないことを要求回数で見る。
+const SHELL_REQUESTS = ['/api/admin/stores/me', '/api/me', '/api/admin/menus/me'];
+let shellRequests: string[] = [];
 
 // このシナリオが使う他ステップ（ログイン・従業員追加・サイドバー遷移）は playwright-bdd が
 // steps/**/*.ts を横断解決するため再定義しない。
@@ -18,4 +22,19 @@ Then('受注一覧が権限エラーなく表示される', async ({ page }) => 
   ]);
   expect(response.status()).toBe(200);
   await expect(page.getByRole('heading', { name: 'オーダー一覧', exact: true })).toBeVisible();
+});
+
+When('管理画面のシェルの取得要求を数え始める', async ({ page }) => {
+  shellRequests = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'GET' && SHELL_REQUESTS.includes(path)) shellRequests.push(path);
+  });
+  // 数え始めた時点のシェルを確実に一度描かせる。以降の遷移はすべてクライアント遷移になる。
+  await page.reload({ waitUntil: 'networkidle' });
+});
+
+Then('授権店舗一覧と本人情報とメニューはシェルの初回描画で一度ずつだけ取得されている', async ({ page }) => {
+  await page.waitForLoadState('networkidle');
+  expect([...shellRequests].sort()).toEqual([...SHELL_REQUESTS].sort());
 });
