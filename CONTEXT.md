@@ -43,7 +43,7 @@ Permission は機能権限の目録で、PermissionCode から播種する。Rol
 避ける表現・設計: Capability、ロールへの店舗紐付け、権限の「側」分類（Console）、標識権限、is_owner
 
 **店舗コンテキスト（Store Context）**:
-現在店舗・授権店舗・切替の共通境界。管理画面は一つのシェルで `/admin/**` と `/store/**` を描き、StoreContextProvider が授権店舗一覧（GET /admin/stores/me）を 1 回取得して現在店舗（前回選択 cookie、無ければ先頭）を確定してから店舗級ページを描く。店舗級ページは URL に店舗 id を持たず、API 呼び出しの X-Store-ID は現在店舗から注入する。本人資料は別の MeProvider が共有する。ログイン後の着地は全員ダッシュボード。実装上の使い分けは [frontend/AGENTS.md](frontend/AGENTS.md)。
+現在店舗・授権店舗・切替の共通境界。管理画面は一つのシェルで `/admin/**` と `/store/**` を描き、StoreContextProvider が授権店舗一覧（GET /admin/stores/me）を 1 回取得して現在店舗（前回選択 cookie、無ければ先頭）を確定してから店舗級ページを描く。店舗級ページは URL に店舗 id を持たず、API 呼び出しの X-Store-ID は現在店舗から注入する。店舗級の照会（月次報酬・報酬明細・訂正履歴・運営集計など）は /store の一端点だけで、受注の担当者（ORDER_MANAGE）と店舗集合を跨ぐ照会者（ORDER_SET_VIEW）が同じ端点を読む。現在店舗を持たない読み（店舗集合を跨ぐ一覧・集計）だけが /admin に残る。本人資料は別の MeProvider が共有する。ログイン後の着地は全員ダッシュボード。実装上の使い分けは [frontend/AGENTS.md](frontend/AGENTS.md)。
 避ける表現・設計: 消費者ごとの me()/stores() 再取得、店舗パスの手組み、URL の店舗 id
 
 ### 店舗運営
