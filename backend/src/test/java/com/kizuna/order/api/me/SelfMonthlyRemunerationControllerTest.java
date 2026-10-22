@@ -84,7 +84,7 @@ class SelfMonthlyRemunerationControllerTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"", "/stores"})
-  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_SET_MANAGE"})
+  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_SET_VIEW"})
   @DisplayName("店舗・集合の受注権限は本人照会を許可しない")
   void staffCannotReadSelf(String suffix) throws Exception {
     mvc.perform(request(BASE + suffix).param("store_id", "1").param("month", "2026-09"))

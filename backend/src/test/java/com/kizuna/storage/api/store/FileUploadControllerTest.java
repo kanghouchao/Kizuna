@@ -62,9 +62,9 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("PLATFORM_ASSET_MANAGE 能力のトークンは店舗文脈が無くても platform 配下に保存すること")
-  void upload_storesUnderPlatformForPlatformAssetManage() {
-    authenticateWithAuthorities(PermissionCode.PLATFORM_ASSET_MANAGE.authority());
+  @DisplayName("ASSET_MANAGE 能力のトークンは店舗文脈が無くても platform 配下に保存すること")
+  void upload_storesUnderPlatformForAssetManage() {
+    authenticateWithAuthorities(PermissionCode.ASSET_MANAGE.authority());
     when(fileStorageService.store("platform", "public", file)).thenReturn("public/platform/x.jpg");
     when(file.getOriginalFilename()).thenReturn("x.jpg");
     when(file.getSize()).thenReturn(3L);
@@ -77,8 +77,8 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("PLATFORM_ASSET_MANAGE の無いトークンは店舗文脈が無い場合、platform に保存せず拒否すること")
-  void upload_rejectsWithoutPlatformAssetManageAndStoreContext() {
+  @DisplayName("ASSET_MANAGE の無いトークンは店舗文脈が無い場合、platform に保存せず拒否すること")
+  void upload_rejectsWithoutAssetManageAndStoreContext() {
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
 
     assertThatThrownBy(() -> controller.upload(file, "public"))

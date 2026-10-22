@@ -110,9 +110,9 @@ class AuthServiceTest {
             PermissionCode.STORE_MANAGE,
             PermissionCode.ROLE_MANAGE,
             PermissionCode.SYSTEM_CONFIG_MANAGE,
-            PermissionCode.PLATFORM_ASSET_MANAGE,
+            PermissionCode.ASSET_MANAGE,
             PermissionCode.STORE_VIEW,
-            PermissionCode.ORDER_SET_MANAGE));
+            PermissionCode.ORDER_SET_VIEW));
   }
 
   private User storeStaff(String email, String displayName, StoreScopeType scopeType) {
@@ -145,8 +145,8 @@ class AuthServiceTest {
     assertThat(authorities)
         .isEqualTo(
             List.of(
-                "PERM_ORDER_SET_MANAGE",
-                "PERM_PLATFORM_ASSET_MANAGE",
+                "PERM_ASSET_MANAGE",
+                "PERM_ORDER_SET_VIEW",
                 "PERM_ROLE_MANAGE",
                 "PERM_STORE_MANAGE",
                 "PERM_STORE_VIEW",

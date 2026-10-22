@@ -107,7 +107,7 @@ class MonthlyRemunerationControllerTest {
 
   @Test
   @DisplayName("横断照会権限だけでも現在店舗の月次報酬へ到達する（不可視の本人は404）")
-  @WithMockUser(authorities = "PERM_ORDER_SET_MANAGE")
+  @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
   @SuppressWarnings("unchecked")
   void crossStoreViewerReachesStoreStatement() throws Exception {
     TypedQuery<String> name = mock(TypedQuery.class, RETURNS_SELF);
@@ -119,7 +119,7 @@ class MonthlyRemunerationControllerTest {
 
   @Test
   @DisplayName("横断照会権限だけでも現在店舗の本人候補へ到達する（不正なページは400）")
-  @WithMockUser(authorities = "PERM_ORDER_SET_MANAGE")
+  @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
   void crossStoreViewerReachesCandidates() throws Exception {
     mvc.perform(request("/casts").param("page", "-1")).andExpect(status().isBadRequest());
   }

@@ -70,7 +70,7 @@ it('権限のない利用者には一覧を取得せず拒否を示す', async (
 it('帳票閲覧権限のない注文参照者には帳票入口を表示しない', async () => {
   jest
     .mocked(hasPermission)
-    .mockImplementation((_claims, permission) => permission === 'ORDER_SET_MANAGE');
+    .mockImplementation((_claims, permission) => permission === 'ORDER_SET_VIEW');
   jest.mocked(orderApi.adminList).mockResolvedValue({ rows: [], total: 0, page: 0, pageCount: 0 });
   render(<AdminOrdersPage />);
   await screen.findByText('受注はありません。');

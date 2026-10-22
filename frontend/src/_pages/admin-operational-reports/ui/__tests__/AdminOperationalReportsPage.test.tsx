@@ -43,7 +43,7 @@ function report(total: number): OperationalReport {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(readTokenClaims).mockReturnValue({
-    authorities: ['PERM_ORDER_SET_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
+    authorities: ['PERM_ORDER_SET_VIEW', 'PERM_OPERATIONAL_REPORT_VIEW'],
     userType: 'STAFF',
   });
 });
@@ -102,7 +102,7 @@ test.each([
   async (permission, exportAllowed, visible) => {
     jest.mocked(readTokenClaims).mockReturnValue({
       authorities: [
-        'PERM_ORDER_SET_MANAGE',
+        'PERM_ORDER_SET_VIEW',
         'PERM_OPERATIONAL_REPORT_VIEW',
         'PERM_OPERATIONAL_REPORT_EXPORT',
         `PERM_${permission}`,

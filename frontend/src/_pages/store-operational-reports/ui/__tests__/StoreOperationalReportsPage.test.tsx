@@ -379,7 +379,7 @@ test('store advertising does not pair order management with the cross-store adve
 test('cross-store viewer reads the current store with its own advertising permission', async () => {
   jest.mocked(readTokenClaims).mockReturnValue({
     authorities: [
-      'PERM_ORDER_SET_MANAGE',
+      'PERM_ORDER_SET_VIEW',
       'PERM_OPERATIONAL_REPORT_VIEW',
       'PERM_ADVERTISING_COST_SET_VIEW',
     ],

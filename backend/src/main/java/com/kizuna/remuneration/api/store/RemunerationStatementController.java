@@ -17,7 +17,7 @@ public class RemunerationStatementController {
 
   @GetMapping
   @PreAuthorize(
-      "hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_MANAGE') and hasAuthority('PERM_REMUNERATION_VIEW')")
+      "hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW') and hasAuthority('PERM_REMUNERATION_VIEW')")
   public RemunerationStatementResponse statement(
       @RequestParam(name = "person_id") Long personId,
       @RequestParam String month,

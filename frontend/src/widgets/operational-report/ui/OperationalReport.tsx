@@ -55,10 +55,10 @@ export function useOperationalReportPage(scope: 'store' | 'admin') {
     const families = (
       [
         ['ORDER_MANAGE', 'ADVERTISING_COST_VIEW', 'ADVERTISING_COST_EXPORT'],
-        ['ORDER_SET_MANAGE', 'ADVERTISING_COST_SET_VIEW', 'ADVERTISING_COST_SET_EXPORT'],
+        ['ORDER_SET_VIEW', 'ADVERTISING_COST_SET_VIEW', 'ADVERTISING_COST_SET_EXPORT'],
       ] as const
     )
-      .filter(([order]) => scope === 'store' || order === 'ORDER_SET_MANAGE')
+      .filter(([order]) => scope === 'store' || order === 'ORDER_SET_VIEW')
       .filter(([order]) => hasPermission(claims, order));
     setAccess({
       ready: true,

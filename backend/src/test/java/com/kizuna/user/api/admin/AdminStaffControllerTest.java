@@ -58,7 +58,7 @@ class AdminStaffControllerTest {
 
   @Test
   @DisplayName("GET /admin/staff?sort=displayName でも id が副キーとして補われること")
-  @WithMockUser(authorities = "PERM_STORE_STAFF_MANAGE")
+  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<AdminStaffResponse> empty = new PageImpl<>(List.of());
@@ -73,7 +73,7 @@ class AdminStaffControllerTest {
 
   @Test
   @DisplayName("GET /admin/staff?storeId= が店舗絞り込みとしてサービスへ渡ること")
-  @WithMockUser(authorities = "PERM_STORE_STAFF_MANAGE")
+  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listPassesStoreIdFilterToService() throws Exception {
     ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
     Page<AdminStaffResponse> empty = new PageImpl<>(List.of());
@@ -86,7 +86,7 @@ class AdminStaffControllerTest {
 
   @Test
   @DisplayName("storeId 未指定なら絞り込みなし（null）でサービスへ渡ること")
-  @WithMockUser(authorities = "PERM_STORE_STAFF_MANAGE")
+  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listPassesNullStoreIdWhenParamAbsent() throws Exception {
     ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
     Page<AdminStaffResponse> empty = new PageImpl<>(List.of());
@@ -98,8 +98,8 @@ class AdminStaffControllerTest {
   }
 
   @Test
-  @DisplayName("STAFF_ACCOUNT_MANAGE のみ保持では GET /admin/staff が 403（授権の閲覧・編集は STORE_STAFF_MANAGE 門）")
-  @WithMockUser(authorities = "PERM_STAFF_ACCOUNT_MANAGE")
+  @DisplayName("STAFF_CREDENTIAL_MANAGE のみ保持では GET /admin/staff が 403（授権の閲覧・編集は STAFF_MANAGE 門）")
+  @WithMockUser(authorities = "PERM_STAFF_CREDENTIAL_MANAGE")
   void accountManageAloneCannotReadGrants() throws Exception {
     mockMvc.perform(get("/admin/staff").principal(ACTOR)).andExpect(status().isForbidden());
   }

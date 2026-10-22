@@ -72,7 +72,7 @@ Given(
       `保証検証-${suffix}`,
       [
         "ORDER_MANAGE",
-        "ORDER_SET_MANAGE",
+        "ORDER_SET_VIEW",
         "STORE_VIEW",
 
 

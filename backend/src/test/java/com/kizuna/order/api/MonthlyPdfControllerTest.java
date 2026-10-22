@@ -152,7 +152,7 @@ class MonthlyPdfControllerTest {
     String authority =
         switch (scope) {
           case "store" -> "PERM_ORDER_MANAGE";
-          case "crossStore" -> "PERM_ORDER_SET_MANAGE";
+          case "crossStore" -> "PERM_ORDER_SET_VIEW";
           default -> "ROLE_CAST";
         };
     var request =

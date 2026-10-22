@@ -410,7 +410,7 @@ public class OrderController {
 
   /** 訂正履歴。横断一覧（/admin/orders）からも行の店舗を X-Store-ID に名指して読むので、横断照会者も通す。 */
   @GetMapping("/{id}/corrections")
-  @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_MANAGE')")
+  @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
   public CursorPage<OrderCorrectionResult> corrections(
       @PathVariable String id,
       @RequestParam(required = false) String cursor,

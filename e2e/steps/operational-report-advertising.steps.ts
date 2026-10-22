@@ -58,7 +58,7 @@ Given('広告費帳票用の二店舗に受注と保証と賞与と月次費用�
   foreign = String((await getAuthorizedStores(request, manager)).find(s => String(s.id) !== STORE1_ID)!.id);
   const suffix = randomUUID();
   password = randomUUID();
-  const common = ['ORDER_MANAGE', 'ORDER_SET_MANAGE',
+  const common = ['ORDER_MANAGE', 'ORDER_SET_VIEW',
     'OPERATIONAL_REPORT_VIEW', 'OPERATIONAL_REPORT_EXPORT', 'REMUNERATION_VIEW'];
   const read = ['ADVERTISING_COST_VIEW', 'ADVERTISING_COST_SET_VIEW'];
   const write = ['ADVERTISING_COST_EXPORT', 'ADVERTISING_COST_SET_EXPORT'];

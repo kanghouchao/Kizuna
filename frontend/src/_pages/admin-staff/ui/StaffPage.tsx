@@ -80,7 +80,7 @@ export default function StaffPage() {
   // 停止・再開・パスワード再設定は一覧とは別の権限。強制はサーバ側で、ここは導線を出すかだけを決める。
   const [canManageAccounts, setCanManageAccounts] = useState(false);
   useEffect(() => {
-    setCanManageAccounts(hasPermission(readTokenClaims(), 'STAFF_ACCOUNT_MANAGE'));
+    setCanManageAccounts(hasPermission(readTokenClaims(), 'STAFF_CREDENTIAL_MANAGE'));
   }, []);
 
   const [modal, setModal] = useState<

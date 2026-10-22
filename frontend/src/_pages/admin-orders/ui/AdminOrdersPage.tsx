@@ -24,7 +24,7 @@ import { OrderCorrectionHistoryModal } from '@/widgets/order-correction-history'
 
 export default function AdminOrdersPage() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  useEffect(() => setAllowed(hasPermission(readTokenClaims(), 'ORDER_SET_MANAGE')), []);
+  useEffect(() => setAllowed(hasPermission(readTokenClaims(), 'ORDER_SET_VIEW')), []);
   if (allowed === null) return <p role="status">権限を確認中...</p>;
   if (!allowed) return <p role="alert">受注を閲覧する権限がありません。</p>;
   return <OrderList />;

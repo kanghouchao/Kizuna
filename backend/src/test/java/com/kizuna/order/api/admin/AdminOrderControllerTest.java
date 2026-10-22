@@ -54,7 +54,7 @@ class AdminOrderControllerTest {
 
   @Test
   @DisplayName("GET /admin/orders?sort=status でも id が副キーとして補われること")
-  @WithMockUser(authorities = "PERM_ORDER_SET_MANAGE")
+  @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<AdminOrderResponse> empty = new PageImpl<>(List.of());
