@@ -34,7 +34,7 @@ spring:
     # コンテキスト無指定の changeSet（スキーマ本体と必須シード）は、どの値でも常に適用される。
     contexts: ${LIQUIBASE_CONTEXTS:production}
     parameters:
-      # 初期 HQ 管理者のパスワードハッシュ（seed/04-platform-admin.yaml が参照）。
+      # 初期グループ管理者のパスワードハッシュ（seed/04-initial-admin.yaml が参照）。
       # 既定値は開発・E2E 用の平文 pass の bcrypt ハッシュ。本番は必ず自前の値を設定すること。
       initialAdminPasswordHash: ${INITIAL_ADMIN_PASSWORD_HASH:$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue}
       # デモユーザー（田中花子・山田次郎）のパスワードハッシュ（seed/05-demo.yaml が参照）。

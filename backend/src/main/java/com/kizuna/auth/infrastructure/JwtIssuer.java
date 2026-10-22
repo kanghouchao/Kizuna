@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 public class JwtIssuer {
 
   /** トークン発行者 */
-  public static final String ISSUER = "PlatformAuth";
+  public static final String ISSUER = "Kizuna";
 
   private final JwtEncoder jwtEncoder;
   private final AppProperties appProperties;
