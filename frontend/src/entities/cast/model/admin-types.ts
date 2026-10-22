@@ -7,7 +7,7 @@ export interface AdminCastSummaryResponse {
 }
 
 export interface AdminCastResponse extends AdminCastSummaryResponse {
-  platform_user_id: number;
+  user_id: number;
   birth_date: string | null;
 }
 

@@ -5,4 +5,4 @@ import java.time.LocalDate;
 
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record AdminCastResponse(
-    Long id, Long platformUserId, String displayName, String realName, LocalDate birthDate) {}
+    Long id, Long userId, String displayName, String realName, LocalDate birthDate) {}

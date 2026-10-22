@@ -1,8 +1,8 @@
 databaseChangeLog:
   - changeSet:
-      id: seed-v0100-004-platform-admin
+      id: seed-v0100-004-initial-admin
       author: kanghouchao
-      # 初期ログイン用の HQ 管理者。これが無いと誰もログインできず店舗もユーザーも作れないため、
+      # 初期ログイン用のグループ管理者。これが無いと誰もログインできず店舗もユーザーも作れないため、
       # demo コンテキストではなくベースラインに置く。ALL_STORES 授権のため t_user_stores 行は持たない。
       # パスワードハッシュは changelog パラメータ initialAdminPasswordHash から与える
       # （spring.liquibase.parameters 経由。既定は開発・E2E 用の平文 pass のハッシュ）。

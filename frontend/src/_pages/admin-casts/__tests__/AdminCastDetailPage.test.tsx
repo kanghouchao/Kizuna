@@ -12,7 +12,7 @@ beforeEach(() => jest.clearAllMocks());
 it('本人属性と店舗ごとの在籍を読み取り専用で表示する', async () => {
   api.get.mockResolvedValue({
     id: 3,
-    platform_user_id: 7,
+    user_id: 7,
     display_name: '花子',
     real_name: null,
     birth_date: null,
@@ -60,7 +60,7 @@ it('本人が存在しないとき一覧へ戻れる', async () => {
 it('本人取得を再試行して空の在籍を表示する', async () => {
   api.get.mockRejectedValueOnce({ response: { status: 403 } }).mockResolvedValueOnce({
     id: 3,
-    platform_user_id: 7,
+    user_id: 7,
     display_name: '花子',
     real_name: '山田花子',
     birth_date: '1995-04-03',
@@ -76,7 +76,7 @@ it('本人取得を再試行して空の在籍を表示する', async () => {
 it('在籍領域だけを再試行しページ送りできる', async () => {
   api.get.mockResolvedValue({
     id: 3,
-    platform_user_id: 7,
+    user_id: 7,
     display_name: '花子',
     real_name: null,
     birth_date: null,

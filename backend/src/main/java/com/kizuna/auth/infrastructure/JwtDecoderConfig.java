@@ -32,7 +32,7 @@ public class JwtDecoderConfig {
             // 既定の 60 秒スキューを明示的に 0 へ。ブラックリスト TTL は exp までのため、
             // スキューがあるとその秒数ぶん「失効済みだが exp 未到来」の token が fail-open する窓ができる。
             new JwtTimestampValidator(Duration.ZERO),
-            // 発行は JwtIssuer の 1 箇所のみ（iss は "PlatformAuth" 固定）。/files 等ドメイン外パスも含め全リクエスト単一 issuer
+            // 発行は JwtIssuer の 1 箇所のみ（iss は JwtIssuer.ISSUER 固定）。/files 等ドメイン外パスも含め全リクエスト単一 issuer
             // で揃える。
             new JwtIssuerValidator(JwtIssuer.ISSUER),
             tokenBlacklistValidator,

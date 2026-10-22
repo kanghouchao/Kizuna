@@ -19,7 +19,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 /**
  * {@link JwtIssuer}（HS256 発行）と {@link NimbusJwtDecoder}（HS256 復号）の相互運用を固定する。 issuer が {@code
- * "PlatformAuth"}（非 URL）でも {@link JwtIssuerValidator} を通ることを含め、発行→復号の往復を検証する。
+ * "Kizuna"}（非 URL）でも {@link JwtIssuerValidator} を通ることを含め、発行→復号の往復を検証する。
  */
 class JwtIssuerTest {
 
@@ -47,7 +47,7 @@ class JwtIssuerTest {
 
     Jwt decoded = decoder.decode(token.token());
 
-    // iss = "PlatformAuth" は非 URL のため getIssuer()（内部で URL 変換する）ではなく
+    // iss = "Kizuna" は非 URL のため getIssuer()（内部で URL 変換する）ではなく
     // getClaimAsString で読む（JwtIssuerValidator 自身も内部で同様に生クレーム文字列を比較する）。
     assertThat(decoded.getSubject()).isEqualTo("user@kizuna.test");
     assertThat(decoded.getClaimAsString("iss")).isEqualTo(JwtIssuer.ISSUER);
