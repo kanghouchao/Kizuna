@@ -64,9 +64,7 @@ class MonthlyRemunerationControllerTest {
   }
 
   private MockHttpServletRequestBuilder request(String suffix) {
-    return get("/store/monthly-remunerations" + suffix)
-        .header("X-Role", "store")
-        .header("X-Store-ID", "1");
+    return get("/store/monthly-remunerations" + suffix).header("X-Store-ID", "1");
   }
 
   @ParameterizedTest

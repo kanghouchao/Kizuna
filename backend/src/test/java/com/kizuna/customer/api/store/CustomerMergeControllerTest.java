@@ -172,16 +172,12 @@ class CustomerMergeControllerTest {
     return post("/store/customers/c1/merges")
         .principal(() -> "tanaka.hanako@kizuna.test")
         .with(csrf())
-        .header("X-Role", "store")
         .header("X-Store-ID", "1")
         .contentType(MediaType.APPLICATION_JSON)
         .content(body.toString());
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path)
-        .header("X-Role", "store")
-        .header("X-Store-ID", "1")
-        .principal(() -> "tanaka.hanako@kizuna.test");
+    return get(path).header("X-Store-ID", "1").principal(() -> "tanaka.hanako@kizuna.test");
   }
 }

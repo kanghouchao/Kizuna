@@ -193,15 +193,11 @@ class CustomerPointControllerTest {
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path)
-        .header("X-Role", "store")
-        .header("X-Store-ID", "1")
-        .principal(() -> "tanaka.hanako@kizuna.test");
+    return get(path).header("X-Store-ID", "1").principal(() -> "tanaka.hanako@kizuna.test");
   }
 
   private MockHttpServletRequestBuilder storePost(String path, String body) {
     return post(path)
-        .header("X-Role", "store")
         .header("X-Store-ID", "1")
         .principal(() -> "tanaka.hanako@kizuna.test")
         .with(csrf())

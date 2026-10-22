@@ -63,7 +63,6 @@ class AttachmentControllerTest {
                   "u", key, state, "image/png", 3, OffsetDateTime.now(), null));
       mvc.perform(
               get("/store/applicants/a/attachment-operations/" + key)
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .with(
                       actor(
@@ -91,7 +90,6 @@ class AttachmentControllerTest {
     mvc.perform(
             post("/store/applicants/a/attachments")
                 .with(csrf())
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .header("Idempotency-Key", key)
                 .contentType("image/svg+xml")
@@ -110,7 +108,6 @@ class AttachmentControllerTest {
     when(service.policy()).thenThrow(new ResourceBusyException("画像処理が混み合っています"));
     mvc.perform(
             get("/store/applicants/attachment-policy")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(
                     actor(
@@ -161,7 +158,6 @@ class AttachmentControllerTest {
         for (String method : List.of("GET", "HEAD")) {
           mvc.perform(
                   request(HttpMethod.valueOf(method), "/store/applicants/" + suffix)
-                      .header("X-Role", "store")
                       .header("X-Store-ID", "1")
                       .with(actor(new SimpleGrantedAuthority("PERM_" + permission))))
               .andExpect(status().isForbidden());
@@ -192,7 +188,6 @@ class AttachmentControllerTest {
         mvc.perform(
                 request
                     .with(csrf())
-                    .header("X-Role", "store")
                     .header("X-Store-ID", "1")
                     .contentType("image/png")
                     .content(new byte[] {1})
@@ -204,7 +199,6 @@ class AttachmentControllerTest {
               "attachment-uploads", "attachment-operations/6d5ff5a4-4817-4ac5-9e76-2756f086e02b")) {
         mvc.perform(
                 get("/store/applicants/a/" + suffix)
-                    .header("X-Role", "store")
                     .header("X-Store-ID", "1")
                     .with(actor(authorities)))
             .andExpect(status().isForbidden())
@@ -224,11 +218,7 @@ class AttachmentControllerTest {
         actor(
             new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
             new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"));
-    mvc.perform(
-            get("/store/applicants/attachment-policy")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1")
-                .with(read))
+    mvc.perform(get("/store/applicants/attachment-policy").header("X-Store-ID", "1").with(read))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.configured").value(false))
         .andExpect(jsonPath("$.bucket").doesNotExist())
@@ -236,10 +226,7 @@ class AttachmentControllerTest {
     when(service.download("a", "x", true))
         .thenReturn(new AttachmentService.Download("image/png", 123, null));
     mvc.perform(
-            head("/store/applicants/a/attachments/x/content")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1")
-                .with(read))
+            head("/store/applicants/a/attachments/x/content").header("X-Store-ID", "1").with(read))
         .andExpect(status().isOk())
         .andExpect(header().string("Accept-Ranges", "none"))
         .andExpect(

@@ -44,13 +44,12 @@ describe('apiClient session branch', () => {
     });
 
   it.each(['/store/me', '/files'])(
-    'injects X-Store-ID from the current-store cookie for %s requests from a store page (no X-Role)',
+    'injects X-Store-ID from the current-store cookie for %s requests from a store page',
     async url => {
       window.history.pushState({}, '', '/store/orders');
       session('2');
       const headers = await requestTo(url);
       expect(headers['X-Store-ID']).toBe('2');
-      expect(headers['X-Role']).toBeUndefined();
     }
   );
 
@@ -111,6 +110,5 @@ describe('apiClient session branch', () => {
     });
     const headers = await requestTo('/store/me');
     expect(headers['X-Store-ID']).toBe('7');
-    expect(headers['X-Role']).toBeUndefined();
   });
 });

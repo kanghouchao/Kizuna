@@ -76,9 +76,7 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     mockMvc
         .perform(
-            get("/store/orders/o1/business-contact-permission-history")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+            get("/store/orders/o1/business-contact-permission-history").header("X-Store-ID", "1"))
         .andExpect(status().isForbidden());
   }
 
@@ -124,10 +122,7 @@ class OrderControllerTest {
     when(orderService.list(any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
-        .perform(
-            get("/store/orders?sort=businessDate")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+        .perform(get("/store/orders?sort=businessDate").header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
@@ -150,7 +145,6 @@ class OrderControllerTest {
         .perform(
             get("/store/orders/work-queue?statuses=CONFIRMED,COMPLETED&customer_name=山田"
                     + "&business_date=2026-08-15&sort_key=PAX&desc=true&cursor=abc&size=5")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
@@ -279,7 +273,6 @@ class OrderControllerTest {
     mockMvc
         .perform(
             get("/store/orders/work-queue?statuses=CONFIRMED&customer_name=")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
@@ -303,7 +296,6 @@ class OrderControllerTest {
     mockMvc
         .perform(
             get("/store/orders/archive?statuses=CANCELLED&sort_key=BUSINESS_DATE&page=2&size=5")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
@@ -319,16 +311,10 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(
-            get("/store/orders/work-queue?statuses=CONFIRMED")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+        .perform(get("/store/orders/work-queue?statuses=CONFIRMED").header("X-Store-ID", "1"))
         .andExpect(status().isForbidden());
     mockMvc
-        .perform(
-            get("/store/orders/archive?statuses=COMPLETED")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+        .perform(get("/store/orders/archive?statuses=COMPLETED").header("X-Store-ID", "1"))
         .andExpect(status().isForbidden());
     verifyNoInteractions(orderService);
   }
@@ -809,11 +795,7 @@ class OrderControllerTest {
 
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder storePost(String path) {
-    return post(path)
-        .header("X-Role", "store")
-        .header("X-Store-ID", "1")
-        .principal(() -> "staff@kizuna.test")
-        .with(csrf());
+    return post(path).header("X-Store-ID", "1").principal(() -> "staff@kizuna.test").with(csrf());
   }
 
   private MockHttpServletRequestBuilder storePost(String path, String body) {
@@ -821,15 +803,11 @@ class OrderControllerTest {
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path)
-        .header("X-Role", "store")
-        .header("X-Store-ID", "1")
-        .principal(() -> "staff@kizuna.test");
+    return get(path).header("X-Store-ID", "1").principal(() -> "staff@kizuna.test");
   }
 
   private MockHttpServletRequestBuilder storePut(String path, String body) {
     return put(path)
-        .header("X-Role", "store")
         .header("X-Store-ID", "1")
         .principal(() -> "staff@kizuna.test")
         .contentType(MediaType.APPLICATION_JSON)
