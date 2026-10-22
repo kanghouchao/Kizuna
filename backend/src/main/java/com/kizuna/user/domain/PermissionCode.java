@@ -14,10 +14,8 @@ import lombok.Getter;
  * <p>各権限の javadoc に操作単位（閲覧・登録・更新・確定・公開・出力 等）を明示する。SecurityContext への発行は {@link
  * Authorities#permission(String)}（{@code PERM_} 接頭辞）を経由する。
  *
- * <p>{@code defaultRoles} は既定ロールの行を<b>初めて作る時</b>に播種する授与で、省略は「どの既定ロールにも与えない」を意味する。グループ管理者は サービス ID
- * 専用の TASK_EXECUTE を除く全権限を初期授与として持つ — 委譲の守衛が「行使者の権限の部分集合」なので、根となる管理者が
- * 全権限を持たないと店長や店舗スタッフを誰も作れない。既定ロールの権限は 管理者が編集できるため、既存行の授与は起動時に取り直さない — ここを編集しても稼働中の DB の授権は変わらず、基線
- * seed と本宣言の一致は テストが機械検証する。
+ * <p>{@code defaultRoles} は既定ロールの行を<b>初めて作る時</b>に播種する授与で、省略は「どの既定ロールにも与えない」を意味する。既定ロールの権限は
+ * 管理者が編集できるため、既存行の授与は起動時に取り直さない — ここを編集しても稼働中の DB の授権は変わらず、基線 seed と本宣言の一致は テストが機械検証する。
  */
 @Getter
 public enum PermissionCode {
@@ -86,22 +84,22 @@ public enum PermissionCode {
   /**
    * ロール定義の閲覧・登録・更新・削除と権限目録の参照（RoleController / PermissionController）。
    *
-   * <p>ロールを定義できる者は権限の組合せを自由に作れるため、従業員の授権を委譲する {@link #STORE_STAFF_MANAGE} とは別の権限で仕切る。
+   * <p>ロールを定義できる者は権限の組合せを自由に作れるため、従業員の授権を委譲する {@link #STAFF_MANAGE} とは別の権限で仕切る。
    */
   ROLE_MANAGE(SystemRole.HQ_ADMIN),
 
   /**
    * 従業員アカウントの停止・再開・パスワード代理再設定（AdminStaffController）。対象は行使者の店舗集合に収まる者に限る。
    *
-   * <p>授権（ロール・店舗集合）は書かないので、授権を動かす {@link #STORE_STAFF_MANAGE} とは別の権限で仕切る。
+   * <p>授権（ロール・店舗集合）は書かないので、授権を動かす {@link #STAFF_MANAGE} とは別の権限で仕切る。
    */
-  STAFF_ACCOUNT_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
+  STAFF_CREDENTIAL_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 共通設定の閲覧・更新（AdminConfigController）。 */
   SYSTEM_CONFIG_MANAGE(SystemRole.HQ_ADMIN),
 
   /** 全店共有領域への資産アップロード（登録・出力 — FileUploadController の店舗文脈を持たない保存経路）。 */
-  PLATFORM_ASSET_MANAGE(SystemRole.HQ_ADMIN),
+  ASSET_MANAGE(SystemRole.HQ_ADMIN),
 
   /**
    * 特典規則の閲覧・登録・更新・停用（AdminBenefitRuleController）。
@@ -117,7 +115,7 @@ public enum PermissionCode {
   /**
    * サービスID（本人種別 SERVICE）の閲覧・作成・授権変更・停止・再開（ServiceIdentityController）。
    *
-   * <p>作成が授権（ロール×店舗集合）を伴うため、授権を一切動かさない {@link #STAFF_ACCOUNT_MANAGE} とは別の権限で仕切る。
+   * <p>作成が授権（ロール×店舗集合）を伴うため、授権を一切動かさない {@link #STAFF_CREDENTIAL_MANAGE} とは別の権限で仕切る。
    * 対話ログインできず全店バッチにもなりうる主体を、人のアカウントと別の鍵で管理する（ADR 0025）。
    *
    * <p>全店舗の作用域を<b>前提とする</b> — 店舗集合の選択肢は行使者自身の授権店舗一覧から引くため、担当を絞った
@@ -128,15 +126,15 @@ public enum PermissionCode {
   /** 授権店舗一覧の閲覧（AdminStoreController）。 */
   STORE_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
-  /** 授権店舗集合を跨ぐ受注の閲覧と、明示単一店舗指定での登録（AdminOrderController）。 */
-  ORDER_SET_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
+  /** 受注と報酬の照会（読み取りのみ）。店舗集合を跨ぐ一覧・集計と、現在店舗の月次報酬・明細・PDF・訂正履歴・運営集計。 */
+  ORDER_SET_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 
   /**
    * 従業員の閲覧・作成・授権変更（AdminStaffController）。
    *
    * <p>委譲の守衛は「付与するロールの権限並集 ⊆ 行使者の有効権限並集」かつ「対象の店舗集合 ⊆ 行使者の店舗集合」のみ。 行使者自身が持たないものは配れず、持つものは配れる。
    */
-  STORE_STAFF_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
+  STAFF_MANAGE(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER),
 
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),

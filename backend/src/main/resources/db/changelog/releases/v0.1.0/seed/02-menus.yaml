@@ -43,7 +43,7 @@ databaseChangeLog:
               - column: { name: label, value: 従業員管理 }
               - column: { name: path, value: /admin/staff }
               - column: { name: icon, value: UsersIcon }
-              - column: { name: permission, value: STORE_STAFF_MANAGE }
+              - column: { name: permission, value: STAFF_MANAGE }
               - column: { name: sort_order, valueNumeric: 3 }
         - insert:
             tableName: t_menus
@@ -100,7 +100,7 @@ databaseChangeLog:
               - column: { name: label, value: 受注照会 }
               - column: { name: path, value: /admin/orders }
               - column: { name: icon, value: ClipboardListIcon }
-              - column: { name: permission, value: ORDER_SET_MANAGE }
+              - column: { name: permission, value: ORDER_SET_VIEW }
               - column: { name: sort_order, valueNumeric: 9 }
         # --- 店舗級の節（現在店舗のデータに対する操作） ---
         - insert:

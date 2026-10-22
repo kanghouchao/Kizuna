@@ -130,7 +130,7 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
-              - column: { name: code, value: STAFF_ACCOUNT_MANAGE }
+              - column: { name: code, value: STAFF_CREDENTIAL_MANAGE }
         - insert:
             tableName: t_permissions
             columns:
@@ -138,7 +138,7 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
-              - column: { name: code, value: PLATFORM_ASSET_MANAGE }
+              - column: { name: code, value: ASSET_MANAGE }
         - insert:
             tableName: t_permissions
             columns:
@@ -154,11 +154,11 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
-              - column: { name: code, value: ORDER_SET_MANAGE }
+              - column: { name: code, value: ORDER_SET_VIEW }
         - insert:
             tableName: t_permissions
             columns:
-              - column: { name: code, value: STORE_STAFF_MANAGE }
+              - column: { name: code, value: STAFF_MANAGE }
         - insert:
             tableName: t_permissions
             columns:
@@ -300,7 +300,7 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_ACCOUNT_MANAGE')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_CREDENTIAL_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
@@ -310,7 +310,7 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'PLATFORM_ASSET_MANAGE')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ASSET_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
@@ -330,12 +330,12 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_MANAGE')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_STAFF_MANAGE')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
@@ -442,7 +442,7 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_ACCOUNT_MANAGE')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_CREDENTIAL_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
@@ -452,12 +452,12 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_MANAGE')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_STAFF_MANAGE')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
@@ -574,7 +574,7 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_MANAGE')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:

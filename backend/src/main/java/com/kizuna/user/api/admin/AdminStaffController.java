@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 従業員管理 API。一覧・作成・授権変更は STORE_STAFF_MANAGE、停止・再開・パスワード代理再設定は STAFF_ACCOUNT_MANAGE 限定。
+ * 従業員管理 API。一覧・作成・授権変更は STAFF_MANAGE、停止・再開・パスワード代理再設定は STAFF_CREDENTIAL_MANAGE 限定。
  * どの行使者も自分の店舗集合に収まる従業員だけを見て、自分の権限と店舗集合の部分集合だけを配れる。
  */
 @RestController
@@ -38,7 +38,7 @@ public class AdminStaffController {
 
   /** 一覧は行使者の店舗集合と交わる者に絞る。並びは全順序（表示名 + id）— 副キーが無いと更新のたびに行が頁を跨いで滑る。 */
   @GetMapping
-  @PreAuthorize("hasAuthority('PERM_STORE_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<Page<AdminStaffResponse>> list(
       @RequestParam(required = false) String search,
       @RequestParam(required = false) Long storeId,
@@ -50,19 +50,19 @@ public class AdminStaffController {
 
   /** 行使者が付与できるロールの目録。有界（ロール目録）なので裸の List で返す。 */
   @GetMapping("/grantable-roles")
-  @PreAuthorize("hasAuthority('PERM_STORE_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<List<RoleSummaryResponse>> grantableRoles(Principal principal) {
     return ResponseEntity.ok(adminStaffService.grantableRoles(principal.getName()));
   }
 
   @GetMapping("/{id}")
-  @PreAuthorize("hasAuthority('PERM_STORE_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<AdminStaffResponse> get(@PathVariable Long id, Principal principal) {
     return ResponseEntity.ok(adminStaffService.get(id, principal.getName()));
   }
 
   @PostMapping
-  @PreAuthorize("hasAuthority('PERM_STORE_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<AdminStaffResponse> create(
       @Valid @RequestBody AdminStaffCreateRequest req, Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
@@ -70,21 +70,21 @@ public class AdminStaffController {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAuthority('PERM_STORE_STAFF_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<AdminStaffResponse> update(
       @PathVariable Long id, @Valid @RequestBody AdminStaffUpdateRequest req, Principal principal) {
     return ResponseEntity.ok(adminStaffService.update(id, req, principal.getName()));
   }
 
   @PostMapping("/{id}/suspension")
-  @PreAuthorize("hasAuthority('PERM_STAFF_ACCOUNT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_CREDENTIAL_MANAGE')")
   public ResponseEntity<Void> suspend(@PathVariable Long id, Principal principal) {
     adminStaffService.suspend(id, principal.getName());
     return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/{id}/resumption")
-  @PreAuthorize("hasAuthority('PERM_STAFF_ACCOUNT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_CREDENTIAL_MANAGE')")
   public ResponseEntity<Void> resume(@PathVariable Long id, Principal principal) {
     adminStaffService.resume(id, principal.getName());
     return ResponseEntity.noContent().build();
@@ -92,7 +92,7 @@ public class AdminStaffController {
 
   /** 仮パスワードを発行して再設定する。生値を返すのはこの応答だけで、資源を作らないので 200 を返す。 */
   @PostMapping("/{id}/password-reset")
-  @PreAuthorize("hasAuthority('PERM_STAFF_ACCOUNT_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_STAFF_CREDENTIAL_MANAGE')")
   public ResponseEntity<StaffAccountPasswordResetResponse> resetPassword(
       @PathVariable Long id, Principal principal) {
     return ResponseEntity.ok(

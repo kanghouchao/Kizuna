@@ -127,7 +127,7 @@ describe('従業員管理ページ', () => {
       staff({ id, display_name: id === 2 ? '鈴木花子' : '山田太郎' })
     );
     givenStores([]);
-    mockedReadClaims.mockReturnValue(claimsWith('STORE_STAFF_MANAGE'));
+    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE'));
     mockedStaffApi.list.mockResolvedValue(
       paginated([
         staff({ id: 1, display_name: '山田太郎', email: 'yamada@example.com', enabled: true }),
@@ -385,7 +385,7 @@ describe('行の操作可否', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     givenStores([]);
-    mockedReadClaims.mockReturnValue(claimsWith('STORE_STAFF_MANAGE', 'STAFF_ACCOUNT_MANAGE'));
+    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE'));
   });
 
   // editable=false の行は見えるが編集・停止・再設定のいずれもできない（委譲守衛の判定）
@@ -403,8 +403,8 @@ describe('行の操作可否', () => {
   });
 
   // アカウント操作は一覧とは別の権限。持たない行使者には導線ごと出さない（fail-closed）
-  it('STAFF_ACCOUNT_MANAGE を持たなければ編集だけを出すこと', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith('STORE_STAFF_MANAGE'));
+  it('STAFF_CREDENTIAL_MANAGE を持たなければ編集だけを出すこと', async () => {
+    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE'));
     mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
 
     render(<StaffPage />);
@@ -420,7 +420,7 @@ describe('停止・再開', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     givenStores([]);
-    mockedReadClaims.mockReturnValue(claimsWith('STORE_STAFF_MANAGE', 'STAFF_ACCOUNT_MANAGE'));
+    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE'));
     mockedStaffApi.suspend.mockResolvedValue(undefined);
     mockedStaffApi.resume.mockResolvedValue(undefined);
     mockedStaffApi.list.mockResolvedValue(
@@ -511,7 +511,7 @@ describe('パスワード再設定', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     givenStores([]);
-    mockedReadClaims.mockReturnValue(claimsWith('STORE_STAFF_MANAGE', 'STAFF_ACCOUNT_MANAGE'));
+    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE'));
     mockedStaffApi.resetPassword.mockResolvedValue({
       temporary_password: 'test-temporary-password',
     });

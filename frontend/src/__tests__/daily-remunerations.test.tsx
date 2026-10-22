@@ -192,8 +192,8 @@ for (const self of [false, true]) {
   });
 }
 
-it('横断照会者（ORDER_SET_MANAGE のみ）には日別の切替と受注編集への導線を出さない', async () => {
-  granted = new Set(['ORDER_SET_MANAGE']);
+it('横断照会者（ORDER_SET_VIEW のみ）には日別の切替と受注編集への導線を出さない', async () => {
+  granted = new Set(['ORDER_SET_VIEW']);
   render(<MonthlyRemunerationsPage />);
   expect(screen.queryByRole('button', { name: '日別' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: '受注照会' })).toHaveAttribute('href', '/admin/orders');

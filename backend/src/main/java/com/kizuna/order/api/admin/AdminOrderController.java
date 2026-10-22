@@ -22,7 +22,7 @@ public class AdminOrderController {
   private final AdminOrderService adminOrderService;
 
   @GetMapping
-  @PreAuthorize("hasAuthority('PERM_ORDER_SET_MANAGE')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_SET_VIEW')")
   public ResponseEntity<Page<AdminOrderResponse>> list(
       @PageableDefault(sort = "businessDate", direction = Sort.Direction.DESC) Pageable pageable) {
     return ResponseEntity.ok(adminOrderService.list(pageable));

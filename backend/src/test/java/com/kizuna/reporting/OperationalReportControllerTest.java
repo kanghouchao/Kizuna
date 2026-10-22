@@ -109,7 +109,7 @@ class OperationalReportControllerTest {
 
   /**
    * scope は store（店舗の担当者）・crossStore（横断照会者が /store を現在店舗で読む）・admin（集合全体）。 crossStore と admin
-   * は横断照会の権限族（ORDER_SET_MANAGE / ADVERTISING_COST_SET_*）を使う。
+   * は横断照会の権限族（ORDER_SET_VIEW / ADVERTISING_COST_SET_*）を使う。
    */
   MockHttpServletRequestBuilder request(String scope, String path, String... permissions) {
     var request =
@@ -130,7 +130,7 @@ class OperationalReportControllerTest {
   @Test
   void readAndExportRequireIndependentPermissionsAndScopeAuthority() throws Exception {
     for (String scope : List.of("store", "crossStore", "admin")) {
-      String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
+      String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_VIEW";
       mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
           .andExpect(status().isOk())
           .andExpect(header().string("Cache-Control", "no-store"))
@@ -170,7 +170,7 @@ class OperationalReportControllerTest {
   @Test
   void additionalAmountsRequireRemunerationPermissionAndLegacyOmitsFields() throws Exception {
     for (String scope : List.of("store", "crossStore", "admin")) {
-      String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
+      String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_VIEW";
       mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.remuneration").doesNotExist())
@@ -247,7 +247,7 @@ class OperationalReportControllerTest {
   @Test
   void advertisingPermissionsAreIndependentForEachConsoleAndExport() throws Exception {
     for (String scope : List.of("store", "crossStore", "admin")) {
-      String order = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
+      String order = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_VIEW";
       String view = scope.equals("store") ? "ADVERTISING_COST_VIEW" : "ADVERTISING_COST_SET_VIEW";
       String export =
           scope.equals("store") ? "ADVERTISING_COST_EXPORT" : "ADVERTISING_COST_SET_EXPORT";
@@ -378,15 +378,14 @@ class OperationalReportControllerTest {
   @Test
   void invalidCriteriaAndSizeAre400AndOversizeNeverSetsAttachment() throws Exception {
     mvc.perform(
-            request("admin", "", "ORDER_SET_MANAGE", "OPERATIONAL_REPORT_VIEW")
-                .param("size", "101"))
+            request("admin", "", "ORDER_SET_VIEW", "OPERATIONAL_REPORT_VIEW").param("size", "101"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").isString());
     mvc.perform(
             request(
                     "admin",
                     "/exports",
-                    "ORDER_SET_MANAGE",
+                    "ORDER_SET_VIEW",
                     "OPERATIONAL_REPORT_VIEW",
                     "OPERATIONAL_REPORT_EXPORT")
                 .param("format", "xls"))
@@ -396,7 +395,7 @@ class OperationalReportControllerTest {
             request(
                     "admin",
                     "/exports",
-                    "ORDER_SET_MANAGE",
+                    "ORDER_SET_VIEW",
                     "OPERATIONAL_REPORT_VIEW",
                     "OPERATIONAL_REPORT_EXPORT")
                 .param("format", "xlsx"))

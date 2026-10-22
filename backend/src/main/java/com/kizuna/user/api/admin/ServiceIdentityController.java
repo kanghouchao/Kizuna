@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * サービスID管理 API（本人種別 SERVICE の作成・一覧・授権変更・停止・再開）。全操作 SERVICE_ID_MANAGE 権限限定。
  *
- * <p>作成が授権（ロール×店舗集合）を伴うため、授権を一切動かさないアカウント管理（STAFF_ACCOUNT_MANAGE 門）には
+ * <p>作成が授権（ロール×店舗集合）を伴うため、授権を一切動かさないアカウント管理（STAFF_CREDENTIAL_MANAGE 門）には
  * 混ぜない。対話ログインできず全店バッチにもなりうる主体を、人のアカウントと別の鍵で仕切る（ADR 0025）。
  */
 @RestController

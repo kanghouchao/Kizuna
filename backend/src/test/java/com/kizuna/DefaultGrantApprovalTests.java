@@ -5,6 +5,7 @@ import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_SET_EXPORT;
 import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_SET_VIEW;
 import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_VIEW;
+import static com.kizuna.user.domain.PermissionCode.ASSET_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.AUDIT_VIEW;
 import static com.kizuna.user.domain.PermissionCode.BENEFIT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.BONUS_AWARD;
@@ -24,8 +25,7 @@ import static com.kizuna.user.domain.PermissionCode.OPERATIONAL_REPORT_EXPORT;
 import static com.kizuna.user.domain.PermissionCode.OPERATIONAL_REPORT_VIEW;
 import static com.kizuna.user.domain.PermissionCode.ORDER_CORRECT;
 import static com.kizuna.user.domain.PermissionCode.ORDER_MANAGE;
-import static com.kizuna.user.domain.PermissionCode.ORDER_SET_MANAGE;
-import static com.kizuna.user.domain.PermissionCode.PLATFORM_ASSET_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.ORDER_SET_VIEW;
 import static com.kizuna.user.domain.PermissionCode.POINT_ADJUST;
 import static com.kizuna.user.domain.PermissionCode.POINT_EXPIRE;
 import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_ATTACHMENT_MANAGE;
@@ -42,10 +42,10 @@ import static com.kizuna.user.domain.PermissionCode.ROLE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SERVICE_ID_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SERVICE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SHIFT_MANAGE;
-import static com.kizuna.user.domain.PermissionCode.STAFF_ACCOUNT_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.STAFF_CREDENTIAL_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.STAFF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_PROFILE_MANAGE;
-import static com.kizuna.user.domain.PermissionCode.STORE_STAFF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_VIEW;
 import static com.kizuna.user.domain.PermissionCode.SURVEY_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SURVEY_RECORD;
@@ -85,15 +85,15 @@ class DefaultGrantApprovalTests {
       Map.ofEntries(
           Map.entry(STORE_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(ROLE_MANAGE, Set.of(HQ_ADMIN)),
-          Map.entry(STAFF_ACCOUNT_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER)),
-          Map.entry(STORE_STAFF_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER)),
+          Map.entry(STAFF_CREDENTIAL_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER)),
+          Map.entry(STAFF_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER)),
           Map.entry(SYSTEM_CONFIG_MANAGE, Set.of(HQ_ADMIN)),
-          Map.entry(PLATFORM_ASSET_MANAGE, Set.of(HQ_ADMIN)),
+          Map.entry(ASSET_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(BENEFIT_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(SERVICE_ID_MANAGE, Set.of(HQ_ADMIN)),
           Map.entry(SERVICE_MANAGE, Set.of(STORE_MANAGER)),
           Map.entry(STORE_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)),
-          Map.entry(ORDER_SET_MANAGE, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)),
+          Map.entry(ORDER_SET_VIEW, Set.of(HQ_ADMIN, STORE_MANAGER, STORE_STAFF)),
           Map.entry(ORDER_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CUSTOMER_MANAGE, Set.of(STORE_MANAGER, STORE_STAFF)),
           Map.entry(CUSTOMER_MERGE, Set.of(STORE_MANAGER)),

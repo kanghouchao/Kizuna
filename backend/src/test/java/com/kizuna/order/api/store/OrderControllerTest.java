@@ -702,7 +702,7 @@ class OrderControllerTest {
 
   @Test
   @DisplayName("横断照会権限は訂正履歴を読めるが、受注の詳細と訂正操作には届かないこと")
-  @WithMockUser(authorities = "PERM_ORDER_SET_MANAGE")
+  @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
   void crossStoreViewerReadsOnlyCorrectionHistory() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(correctionHistory.store("o1", null, 20)).thenReturn(new CursorPage<>(List.of(), null));

@@ -86,7 +86,7 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, onlyForeign, secondStore),
     'admin-monthly-foreign-' + suffix + '@kizuna.test', password, '他店限定本人');
   const role = await request.post('/api/admin/roles', { headers: { Authorization: 'Bearer ' + admin },
-    data: { name: '月次グループ級参照-' + suffix, permissions: ['ORDER_SET_MANAGE',] } });
+    data: { name: '月次グループ級参照-' + suffix, permissions: ['ORDER_SET_VIEW',] } });
   expect(role.status(), await role.text()).toBe(201);
   const roleId = (await role.json()).id;
   const storeOnlyRole = await request.post('/api/admin/roles', { headers: { Authorization: 'Bearer ' + admin },

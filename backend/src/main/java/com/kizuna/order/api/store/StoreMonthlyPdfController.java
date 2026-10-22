@@ -18,7 +18,7 @@ public class StoreMonthlyPdfController {
   private final MonthlyPdfSnapshotService snapshots;
 
   @GetMapping("/store/monthly-remunerations/pdf")
-  @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_MANAGE')")
+  @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
   public ResponseEntity<byte[]> pdf(
       @RequestParam(name = "person_id") Long personId, @RequestParam String month)
       throws IOException {

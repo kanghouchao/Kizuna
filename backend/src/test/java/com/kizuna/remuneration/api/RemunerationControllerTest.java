@@ -226,7 +226,7 @@ class RemunerationControllerTest {
   }
 
   @Test
-  @WithMockUser(authorities = {"PERM_ORDER_SET_MANAGE", "PERM_REMUNERATION_VIEW"})
+  @WithMockUser(authorities = {"PERM_ORDER_SET_VIEW", "PERM_REMUNERATION_VIEW"})
   void crossStoreViewerReadsCurrentStoreStatement() throws Exception {
     mvc.perform(
             get("/store/remuneration-statements")
@@ -239,7 +239,7 @@ class RemunerationControllerTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"/store/remuneration-guarantees", "/store/bonus-awards"})
-  @WithMockUser(authorities = {"PERM_ORDER_SET_MANAGE", "PERM_REMUNERATION_VIEW"})
+  @WithMockUser(authorities = {"PERM_ORDER_SET_VIEW", "PERM_REMUNERATION_VIEW"})
   void crossStoreViewerDoesNotReachStoreOnlyReads(String path) throws Exception {
     mvc.perform(
             get(path).header("X-Store-ID", "1").param("person_id", "34").param("month", "2026-09"))

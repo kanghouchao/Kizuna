@@ -65,7 +65,7 @@ function MonthlyStatement() {
   const [history, setHistory] = useState<{ orderId: string; open: boolean } | null>(null);
   const [query, setQuery] = useState<Query | null>(null);
   const [mode, setMode] = useState<'month' | 'day'>('month');
-  // 横断照会者（ORDER_SET_MANAGE のみ）は月次の照会だけを持つ。日別・受注の画面は受注の担当者の権限で開く。
+  // 横断照会者（ORDER_SET_VIEW のみ）は月次の照会だけを持つ。日別・受注の画面は受注の担当者の権限で開く。
   const [manages, setManages] = useState(false);
   useEffect(() => setManages(hasPermission(readTokenClaims(), 'ORDER_MANAGE')), []);
   const ordersLink = manages
