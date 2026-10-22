@@ -38,8 +38,8 @@ apiClient.interceptors.request.use(
     }
     // 店舗文脈は X-Store-ID だけで名乗る。管理画面の店舗級ページ（/store 配下）からの店舗級端点にだけ、
     // StoreContext が確定させた現在店舗（current-store-id cookie）を付ける。/admin 配下の画面は現在店舗を
-    // 持たない（/files は全店共有領域への保存）。横断一覧が行の店舗を名指す呼び出しは自ら X-Store-ID を
-    // 渡し、ここでは上書きしない。キャスト・会員の portal は cookie が残っていても
+    // 持たない（/files は全店共有領域への保存）。/admin の横断一覧が行の店舗を名指す呼び出しは自ら
+    // X-Store-ID を渡し、/admin 画面ではここで何も付けないのでそのまま届く。キャスト・会員の portal は cookie が残っていても
     // 付けない。公開店舗サイトでは proxy が焼いた x-mw-store-id を付ける。受否はバックエンドが授権店舗集合で判定する。
     try {
       const sessionKind = getSessionKind();

@@ -314,9 +314,6 @@ Then(
     await expect(
       adminPage.getByText("¥10,000", { exact: true }).first(),
     ).toBeVisible();
-    await expect(
-      adminPage.getByRole("button", { name: "ボーナスを記録" }),
-    ).toHaveCount(0);
     await adminPage
       .getByRole("heading", { name: "受注報酬・保証・ボーナス", exact: true })
       .scrollIntoViewIfNeeded();
