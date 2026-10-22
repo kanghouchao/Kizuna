@@ -128,10 +128,10 @@ test.each([
       expect(checkbox).not.toBeChecked();
       fireEvent.click(checkbox!);
     } else expect(checkbox).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('店舗ID（空欄は授権全店）'), { target: { value: '8' } });
+    expect(screen.queryByLabelText(/店舗ID/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '照会' }));
     await screen.findByLabelText('請求額（円）');
-    expect(fetch.mock.calls[0][1]).toMatchObject({ store_id: 8 });
+    expect(fetch.mock.calls[0][1]).not.toHaveProperty('store_id');
     expect(Boolean(fetch.mock.calls[0][1].include_advertising)).toBe(visible);
     if (!visible || exportAllowed)
       expect(screen.getByRole('button', { name: 'CSV 全件出力' })).toBeInTheDocument();

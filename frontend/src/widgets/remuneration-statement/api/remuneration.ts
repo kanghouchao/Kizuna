@@ -19,11 +19,7 @@ export const remunerationApi = {
     bonusPage: number
   ): Promise<Statement> {
     const path =
-      scope.scope === 'store'
-        ? '/store/remuneration-statements'
-        : scope.scope === 'admin'
-          ? '/admin/remuneration-statements'
-          : '/me/remuneration-statements';
+      scope.scope === 'store' ? '/store/remuneration-statements' : '/me/remuneration-statements';
     return (
       await apiClient.get<Statement>(path, {
         params: {

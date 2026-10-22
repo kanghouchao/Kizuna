@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.cast.remuneration.RemunerationPersonLookup;
 import com.kizuna.order.remuneration.OrderRemunerationFacts;
-import com.kizuna.remuneration.api.admin.AdminRemunerationStatementController;
 import com.kizuna.remuneration.api.me.SelfRemunerationStatementController;
 import com.kizuna.remuneration.api.store.BonusController;
 import com.kizuna.remuneration.api.store.GuaranteeController;
@@ -57,8 +56,7 @@ import org.springframework.transaction.PlatformTransactionManager;
   GuaranteeController.class,
   BonusController.class,
   RemunerationStatementController.class,
-  SelfRemunerationStatementController.class,
-  AdminRemunerationStatementController.class
+  SelfRemunerationStatementController.class
 })
 @Import({
   RemunerationControllerTest.Security.class,
@@ -224,6 +222,27 @@ class RemunerationControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     "{\"person_id\":34,\"award_date\":\"2026-09-30\",\"amount\":1000,\"reason\":\"付与\",\"request_id\":\"37caf776-d07e-418d-ad80-75c88de60480\"}"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @WithMockUser(authorities = {"PERM_ORDER_SET_MANAGE", "PERM_REMUNERATION_VIEW"})
+  void crossStoreViewerReadsCurrentStoreStatement() throws Exception {
+    mvc.perform(
+            get("/store/remuneration-statements")
+                .header("X-Store-ID", "1")
+                .param("person_id", "34")
+                .param("month", "2026-09"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value(12000));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"/store/remuneration-guarantees", "/store/bonus-awards"})
+  @WithMockUser(authorities = {"PERM_ORDER_SET_MANAGE", "PERM_REMUNERATION_VIEW"})
+  void crossStoreViewerDoesNotReachStoreOnlyReads(String path) throws Exception {
+    mvc.perform(
+            get(path).header("X-Store-ID", "1").param("person_id", "34").param("month", "2026-09"))
         .andExpect(status().isForbidden());
   }
 

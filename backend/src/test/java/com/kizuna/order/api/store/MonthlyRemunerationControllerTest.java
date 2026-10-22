@@ -106,6 +106,25 @@ class MonthlyRemunerationControllerTest {
   }
 
   @Test
+  @DisplayName("横断照会権限だけでも現在店舗の月次報酬へ到達する（不可視の本人は404）")
+  @WithMockUser(authorities = "PERM_ORDER_SET_MANAGE")
+  @SuppressWarnings("unchecked")
+  void crossStoreViewerReachesStoreStatement() throws Exception {
+    TypedQuery<String> name = mock(TypedQuery.class, RETURNS_SELF);
+    when(entityManager.createQuery(anyString(), eq(String.class))).thenReturn(name);
+    when(name.getResultStream()).thenReturn(Stream.empty());
+    mvc.perform(request("").param("person_id", "1").param("month", "2026-09"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  @DisplayName("横断照会権限だけでも現在店舗の本人候補へ到達する（不正なページは400）")
+  @WithMockUser(authorities = "PERM_ORDER_SET_MANAGE")
+  void crossStoreViewerReachesCandidates() throws Exception {
+    mvc.perform(request("/casts").param("page", "-1")).andExpect(status().isBadRequest());
+  }
+
+  @Test
   @DisplayName("本人候補の不正なページ指定も400にする")
   void invalidCandidatePage() throws Exception {
     mvc.perform(request("/casts").param("page", "-1")).andExpect(status().isBadRequest());

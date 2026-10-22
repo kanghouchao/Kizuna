@@ -18,6 +18,12 @@ jest.mock('@/entities/user', () => ({
     switchStore: jest.fn(),
   }),
 }));
+let granted = new Set(['ORDER_MANAGE']);
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  hasPermission: (_claims: unknown, permission: string) => granted.has(permission),
+  readTokenClaims: () => ({}),
+}));
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   dailyRemunerationApi: { store: jest.fn(), self: jest.fn() },
@@ -95,6 +101,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  granted = new Set(['ORDER_MANAGE']);
   jest.mocked(dailyRemunerationApi.store).mockResolvedValue(daily);
   jest.mocked(dailyRemunerationApi.self).mockResolvedValue(daily);
   jest.mocked(monthlyRemunerationApi.monthly).mockResolvedValue(monthly);
@@ -184,3 +191,15 @@ for (const self of [false, true]) {
     expect(api()).not.toHaveBeenCalled();
   });
 }
+
+it('横断照会者（ORDER_SET_MANAGE のみ）には日別の切替と受注編集への導線を出さない', async () => {
+  granted = new Set(['ORDER_SET_MANAGE']);
+  render(<MonthlyRemunerationsPage />);
+  expect(screen.queryByRole('button', { name: '日別' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '受注照会' })).toHaveAttribute('href', '/admin/orders');
+  fireEvent.change(screen.getByLabelText('対象人物'), { target: { value: '1' } });
+  fireEvent.change(screen.getByLabelText('対象月'), { target: { value: '2026-09' } });
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  expect(await screen.findByText('old-order')).not.toHaveAttribute('href');
+  expect(dailyRemunerationApi.store).not.toHaveBeenCalled();
+});

@@ -47,7 +47,6 @@ test.each<Partial<ReportCriteria>>([
   { include_remuneration: false },
   { include_advertising: false },
   { group_by: 'month' },
-  { store_id: 2 },
   { from: '2026-08-01' },
 ])('applied criteria change aborts pending export and discards its file: %j', async change => {
   let complete!: (blob: Blob) => void;

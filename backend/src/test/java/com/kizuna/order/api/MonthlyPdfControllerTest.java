@@ -13,19 +13,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.admin.AdminMonthlyPdfController;
 import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
 import com.kizuna.order.api.me.SelfMonthlyPdfController;
 import com.kizuna.order.api.store.StoreMonthlyPdfController;
-import com.kizuna.order.application.AdminMonthlyRemunerationService;
 import com.kizuna.order.application.MonthlyPdfService;
 import com.kizuna.order.application.MonthlyPdfSnapshotService;
 import com.kizuna.order.application.MonthlyRemunerationService;
 import com.kizuna.order.application.SelfMonthlyRemunerationService;
-import com.kizuna.order.infrastructure.AdminMonthlyRemunerationStores;
 import com.kizuna.order.infrastructure.MonthlyPdfRenderer;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
+import com.kizuna.order.infrastructure.StoreNames;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
@@ -65,18 +63,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@WebMvcTest({
-  StoreMonthlyPdfController.class,
-  AdminMonthlyPdfController.class,
-  SelfMonthlyPdfController.class
-})
+@WebMvcTest({StoreMonthlyPdfController.class, SelfMonthlyPdfController.class})
 @Import({
   MonthlyPdfControllerTest.Config.class,
   MonthlyPdfService.class,
   MonthlyPdfSnapshotService.class,
   MonthlyPdfRenderer.class,
   MonthlyRemunerationService.class,
-  AdminMonthlyRemunerationService.class,
   SelfMonthlyRemunerationService.class,
   StoreContext.class,
   StoreScopeHolder.class
@@ -105,7 +98,7 @@ class MonthlyPdfControllerTest {
   @Autowired MockMvc mvc;
   @Autowired AppProperties properties;
   @MockitoBean RemunerationQuery query;
-  @MockitoBean AdminMonthlyRemunerationStores stores;
+  @MockitoBean StoreNames stores;
   @MockitoBean SelfMonthlyRemunerationQuery self;
   @MockitoBean ActorIdentityService actors;
   @MockitoBean CastRepository people;
@@ -155,11 +148,11 @@ class MonthlyPdfControllerTest {
   }
 
   private MockHttpServletRequestBuilder request(String scope) {
-    String path = scope.equals("self") ? "/me" : "/" + scope;
+    String path = scope.equals("self") ? "/me" : "/store";
     String authority =
         switch (scope) {
           case "store" -> "PERM_ORDER_MANAGE";
-          case "admin" -> "PERM_ORDER_SET_MANAGE";
+          case "crossStore" -> "PERM_ORDER_SET_MANAGE";
           default -> "ROLE_CAST";
         };
     var request =
@@ -171,12 +164,12 @@ class MonthlyPdfControllerTest {
             .param("store_id", "1")
             .param("person_id", "34")
             .param("month", "2026-09");
-    if (scope.equals("store")) request.header("X-Store-ID", "1");
+    if (!scope.equals("self")) request.header("X-Store-ID", "1");
     return request;
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"store", "admin", "self"})
+  @ValueSource(strings = {"store", "crossStore", "self"})
   void emptyMonthHasNamesAndNoPrivateIdentity(String scope) throws Exception {
     var result =
         mvc.perform(request(scope))
@@ -223,12 +216,13 @@ class MonthlyPdfControllerTest {
   }
 
   @Test
-  void adminCannotReadOutsideGrantedStores() throws Exception {
+  void crossStoreViewerCannotNameStoreOutsideGrantedSet() throws Exception {
     mvc.perform(
-            request("admin")
+            request("crossStore")
                 .with(
                     r -> {
-                      r.setParameter("store_id", "2");
+                      r.removeHeader("X-Store-ID");
+                      r.addHeader("X-Store-ID", "2");
                       return r;
                     }))
         .andExpect(status().isForbidden());
@@ -262,7 +256,7 @@ class MonthlyPdfControllerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"store", "admin", "self"})
+  @ValueSource(strings = {"store", "crossStore", "self"})
   void wrongPermissionDoesNotGrantPdf(String scope) throws Exception {
     mvc.perform(
             request(scope).with(jwt().authorities(new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))

@@ -10,7 +10,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.shared.storescope.StoreSetScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import lombok.RequiredArgsConstructor;
@@ -28,19 +27,8 @@ public class OrderCorrectionHistory {
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<OrderCorrectionResult> store(String orderId, String cursor, int size) {
-    return read(orderId, cursor, size, "store");
-  }
-
-  @StoreSetScoped
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<OrderCorrectionResult> groupWide(String orderId, String cursor, int size) {
-    return read(orderId, cursor, size, "platform");
-  }
-
-  private CursorPage<OrderCorrectionResult> read(
-      String orderId, String cursor, int size, String surface) {
     var order = orders.findById(orderId).orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    return readChanges(order, cursor, size, surface).map(OrderCorrectionHistory::result);
+    return readChanges(order, cursor, size, "store").map(OrderCorrectionHistory::result);
   }
 
   @StoreScopeExempt(reason = "認証主体と担当在籍の本人一致で受注を検証し、その受注の変更記録のみを返す")

@@ -52,11 +52,8 @@ public class ReportSnapshot {
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
   public OperationalReport groupWide(
-      Long store,
-      ReportCriteria criteria,
-      boolean includeRemuneration,
-      boolean includeAdvertising) {
-    var facts = orders.groupWide(store, criteria.from(), criteria.to());
+      ReportCriteria criteria, boolean includeRemuneration, boolean includeAdvertising) {
+    var facts = orders.groupWide(criteria.from(), criteria.to());
     return OperationalReport.aggregate(
         criteria,
         facts,

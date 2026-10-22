@@ -297,12 +297,8 @@ Then(
   "本人も原月の最新内訳を安全に参照できる",
   async ({ request, browser, page: adminPage, $testInfo }) => {
     await adminPage.goto(
-      APP_URL + "/admin/orders/monthly-remunerations",
+      APP_URL + "/store/orders/monthly-remunerations",
     );
-    await adminPage
-      .getByRole("combobox", { name: "店舗", exact: true })
-      .click();
-    await adminPage.getByRole("option").first().click();
     await adminPage
       .getByRole("combobox", { name: "キャスト本人", exact: true })
       .click();
@@ -465,16 +461,6 @@ Then("授権外店舗と無権限の内訳操作は拒否される", async ({ re
     params: { person_id: personId, month },
   });
   expect(unprivileged.status()).toBe(403);
-  const admin = await request.get("/api/admin/remuneration-statements", {
-    headers: { Authorization: `Bearer ${token}` },
-    params: { person_id: personId, store_id: STORE1_ID, month },
-  });
-  expect(admin.status(), await admin.text()).toBe(200);
-  const foreign = await request.get("/api/admin/remuneration-statements", {
-    headers: { Authorization: `Bearer ${token}` },
-    params: { person_id: personId, store_id: otherStore, month },
-  });
-  expect(foreign.status()).toBe(403);
   const noPerson = await request.post("/api/store/bonus-awards", {
     headers: headers(),
     data: {

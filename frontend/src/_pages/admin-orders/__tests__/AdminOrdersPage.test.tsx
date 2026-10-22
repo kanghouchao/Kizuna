@@ -57,7 +57,7 @@ it('参照権限だけで一覧と履歴を開き、訂正操作は表示しな�
   expect(detailDialog).toHaveTextContent('原完了日時');
   fireEvent.click(screen.getByRole('button', { name: /訂正履歴.*受注 o1/ }));
   expect(await screen.findByText('訂正履歴はありません')).toBeInTheDocument();
-  expect(orderApi.correctionHistory).toHaveBeenCalledWith('admin', 'o1', undefined);
+  expect(orderApi.correctionHistory).toHaveBeenCalledWith('o1', undefined, 2);
   expect(screen.queryByRole('button', { name: '訂正する' })).not.toBeInTheDocument();
 });
 it('権限のない利用者には一覧を取得せず拒否を示す', async () => {

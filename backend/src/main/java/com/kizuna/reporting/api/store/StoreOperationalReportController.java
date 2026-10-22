@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 現在店舗の運営集計。受注の担当者（ORDER_MANAGE）と横断照会者（ORDER_SET_MANAGE）の両方が読み、広告費の可否は各々の対となる権限で決める。 */
 @RestController
 @RequestMapping("/store/operational-reports")
 @RequiredArgsConstructor
@@ -21,7 +22,7 @@ public class StoreOperationalReportController {
 
   @GetMapping
   @PreAuthorize(
-      "(!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_VIEW')) and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW')")
+      "hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and ((hasAuthority('PERM_ORDER_MANAGE') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_VIEW'))) or (hasAuthority('PERM_ORDER_SET_MANAGE') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_VIEW'))))")
   public ResponseEntity<OperationalReportResponse> view(
       @RequestParam String from,
       @RequestParam String to,
@@ -36,20 +37,12 @@ public class StoreOperationalReportController {
         .cacheControl(CacheControl.noStore())
         .body(
             service.view(
-                false,
-                null,
-                from,
-                to,
-                groupBy,
-                page,
-                size,
-                includeRemuneration,
-                includeAdvertising));
+                false, from, to, groupBy, page, size, includeRemuneration, includeAdvertising));
   }
 
   @GetMapping("/exports")
   @PreAuthorize(
-      "(!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_VIEW')) and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_EXPORT'))")
+      "hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and ((hasAuthority('PERM_ORDER_MANAGE') and (!#includeAdvertising or (hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_EXPORT')))) or (hasAuthority('PERM_ORDER_SET_MANAGE') and (!#includeAdvertising or (hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') and hasAuthority('PERM_ADVERTISING_COST_SET_EXPORT')))))")
   public ResponseEntity<byte[]> export(
       @RequestParam String from,
       @RequestParam String to,
@@ -62,7 +55,6 @@ public class StoreOperationalReportController {
       throws IOException {
     return ReportDownload.response(
         format,
-        service.export(
-            false, null, from, to, groupBy, format, includeRemuneration, includeAdvertising));
+        service.export(false, from, to, groupBy, format, includeRemuneration, includeAdvertising));
   }
 }

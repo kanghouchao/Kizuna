@@ -84,8 +84,7 @@ class AdvertisingReportResourceTest {
         assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
         assertThatThrownBy(
                 () ->
-                    service.export(
-                        false, null, "2026-09-01", "2026-09-30", "month", "csv", false, true))
+                    service.export(false, "2026-09-01", "2026-09-30", "month", "csv", false, true))
             .isInstanceOf(ServiceUnavailableException.class);
       } finally {
         release.countDown();
@@ -142,11 +141,11 @@ class AdvertisingReportResourceTest {
   }
 
   private OperationalReportResponse view() {
-    return service.view(false, null, "2026-09-01", "2026-09-30", "month", 0, 1, false, true);
+    return service.view(false, "2026-09-01", "2026-09-30", "month", 0, 1, false, true);
   }
 
   private byte[] export() throws IOException {
-    return service.export(false, null, "2026-09-01", "2026-09-30", "month", "xlsx", false, true);
+    return service.export(false, "2026-09-01", "2026-09-30", "month", "xlsx", false, true);
   }
 
   private OperationalReport report(int count) {

@@ -104,12 +104,16 @@ class OperationalReportControllerTest {
     when(advertising.read(anyBoolean(), any(), any(), any(), anyInt()))
         .thenReturn(new AdvertisingReportFacts(List.of()));
     when(reader.store(any(), any())).thenReturn(facts);
-    when(reader.groupWide(any(), any(), any())).thenReturn(facts);
+    when(reader.groupWide(any(), any())).thenReturn(facts);
   }
 
+  /**
+   * scope は store（店舗の担当者）・crossStore（横断照会者が /store を現在店舗で読む）・admin（集合全体）。 crossStore と admin
+   * は横断照会の権限族（ORDER_SET_MANAGE / ADVERTISING_COST_SET_*）を使う。
+   */
   MockHttpServletRequestBuilder request(String scope, String path, String... permissions) {
     var request =
-        get("/" + scope + "/operational-reports" + path)
+        get((scope.equals("admin") ? "/admin" : "/store") + "/operational-reports" + path)
             .param("from", "2026-09-01")
             .param("to", "2026-09-30")
             .with(
@@ -119,13 +123,13 @@ class OperationalReportControllerTest {
                         Arrays.stream(permissions)
                             .map(p -> new SimpleGrantedAuthority("PERM_" + p))
                             .toArray(SimpleGrantedAuthority[]::new)));
-    if (scope.equals("store")) request.header("X-Store-ID", "1");
+    if (!scope.equals("admin")) request.header("X-Store-ID", "1");
     return request;
   }
 
   @Test
   void readAndExportRequireIndependentPermissionsAndScopeAuthority() throws Exception {
-    for (String scope : List.of("store", "admin")) {
+    for (String scope : List.of("store", "crossStore", "admin")) {
       String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
       mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
           .andExpect(status().isOk())
@@ -165,7 +169,7 @@ class OperationalReportControllerTest {
 
   @Test
   void additionalAmountsRequireRemunerationPermissionAndLegacyOmitsFields() throws Exception {
-    for (String scope : List.of("store", "admin")) {
+    for (String scope : List.of("store", "crossStore", "admin")) {
       String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
       mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
           .andExpect(status().isOk())
@@ -242,7 +246,7 @@ class OperationalReportControllerTest {
 
   @Test
   void advertisingPermissionsAreIndependentForEachConsoleAndExport() throws Exception {
-    for (String scope : List.of("store", "admin")) {
+    for (String scope : List.of("store", "crossStore", "admin")) {
       String order = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_MANAGE";
       String view = scope.equals("store") ? "ADVERTISING_COST_VIEW" : "ADVERTISING_COST_SET_VIEW";
       String export =

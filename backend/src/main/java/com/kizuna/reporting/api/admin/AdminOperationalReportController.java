@@ -23,7 +23,6 @@ public class AdminOperationalReportController {
   @PreAuthorize(
       "(!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_VIEW')) and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_SET_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW')")
   public ResponseEntity<OperationalReportResponse> view(
-      @RequestParam(name = "store_id", required = false) Long storeId,
       @RequestParam String from,
       @RequestParam String to,
       @RequestParam(name = "group_by", defaultValue = "day") String groupBy,
@@ -37,22 +36,13 @@ public class AdminOperationalReportController {
         .cacheControl(CacheControl.noStore())
         .body(
             service.view(
-                true,
-                storeId,
-                from,
-                to,
-                groupBy,
-                page,
-                size,
-                includeRemuneration,
-                includeAdvertising));
+                true, from, to, groupBy, page, size, includeRemuneration, includeAdvertising));
   }
 
   @GetMapping("/exports")
   @PreAuthorize(
       "(!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_VIEW')) and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_SET_MANAGE') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_EXPORT'))")
   public ResponseEntity<byte[]> export(
-      @RequestParam(name = "store_id", required = false) Long storeId,
       @RequestParam String from,
       @RequestParam String to,
       @RequestParam(name = "group_by", defaultValue = "day") String groupBy,
@@ -64,7 +54,6 @@ public class AdminOperationalReportController {
       throws IOException {
     return ReportDownload.response(
         format,
-        service.export(
-            true, storeId, from, to, groupBy, format, includeRemuneration, includeAdvertising));
+        service.export(true, from, to, groupBy, format, includeRemuneration, includeAdvertising));
   }
 }

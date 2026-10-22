@@ -148,7 +148,7 @@ test('再訪では無効化履歴の前後額を表示する', async () => {
   render(<OrderCompletionInvalidationPage />);
   expect(await screen.findByText('有効な請求 9,000 円 → 0 円')).toBeInTheDocument();
   expect(screen.getByText('発生済み報酬 5,000 円 → 0 円')).toBeInTheDocument();
-  expect(orderApi.correctionHistory).toHaveBeenCalledWith('store', 'o1');
+  expect(orderApi.correctionHistory).toHaveBeenCalledWith('o1');
 });
 
 test('再訪時の履歴取得失敗を零の前値で隠さず再試行できる', async () => {

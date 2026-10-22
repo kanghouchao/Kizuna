@@ -2,8 +2,7 @@ import { apiClient } from '@/shared/api';
 
 export type MonthlyPdfCriteria =
   | { scope: 'store'; personId: number; month: string }
-  | { scope: 'self'; storeId: number; month: string }
-  | { scope: 'admin'; storeId: number; personId: number; month: string };
+  | { scope: 'self'; storeId: number; month: string };
 
 export async function fetchMonthlyPdf(
   criteria: MonthlyPdfCriteria,
@@ -12,7 +11,6 @@ export async function fetchMonthlyPdf(
   const path = {
     store: '/store/monthly-remunerations/pdf',
     self: '/me/monthly-remunerations/pdf',
-    admin: '/admin/monthly-remunerations/pdf',
   }[criteria.scope];
   try {
     const response = await apiClient.get<Blob>(path, {

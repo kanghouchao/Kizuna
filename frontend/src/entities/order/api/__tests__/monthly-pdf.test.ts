@@ -34,7 +34,7 @@ it.each([undefined, new Blob(['Bad gateway'], { type: 'text/html' })])(
   async data => {
     get.mockRejectedValue({ response: { data } });
     await expect(
-      fetchMonthlyPdf({ scope: 'admin', storeId: 1, personId: 2, month: '2026-09' }, signal)
+      fetchMonthlyPdf({ scope: 'store', personId: 2, month: '2026-09' }, signal)
     ).rejects.toThrow('通信状態を確認');
   }
 );

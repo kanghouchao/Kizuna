@@ -4,7 +4,7 @@ import { apiClient } from '@/shared/api';
 
 jest.mock('js-cookie');
 
-async function requestTo(url: string) {
+async function requestTo(url: string, headers?: Record<string, string>) {
   const original = apiClient.defaults.adapter;
   apiClient.defaults.adapter = (async (config: InternalAxiosRequestConfig) => ({
     data: {},
@@ -13,7 +13,7 @@ async function requestTo(url: string) {
     headers: {},
     config,
   })) as AxiosAdapter;
-  const res = await apiClient.get(url);
+  const res = await apiClient.get(url, headers ? { headers } : undefined);
   apiClient.defaults.adapter = original;
   return res.config.headers;
 }
@@ -72,6 +72,13 @@ describe('apiClient session branch', () => {
       expect(headers['X-Store-ID']).toBeUndefined();
     }
   );
+
+  it('keeps the store a cross-store list names explicitly from a /admin page', async () => {
+    window.history.pushState({}, '', '/admin/orders');
+    session('2');
+    const headers = await requestTo('/store/orders/o1/corrections', { 'X-Store-ID': '5' });
+    expect(headers['X-Store-ID']).toBe('5');
+  });
 
   it('does not inject X-Store-ID for /admin requests', async () => {
     session('2');

@@ -118,9 +118,10 @@ Then('運営帳票は全件同一時点で授権内だけを出力する', async
   expect((await request.get(base, { headers: headers(parts.join('.')), params })).status()).toBe(401);
 
   expect((await request.get(base + '/exports', { headers: headers(viewer), params: { ...params, format: 'csv' } })).status()).toBe(403);
-  expect((await request.get(base, { headers: headers(writer), params: { ...params, store_id: foreign } })).status()).toBe(403);
+  expect((await request.get('/api/store/operational-reports', { headers: { ...headers(writer), 'X-Store-ID': foreign }, params })).status()).toBe(403);
   expect((await request.get(base, { headers: headers(manager), params })).status()).toBe(200);
-  expect((await request.get('/api/store/operational-reports', { headers: { ...STORE_HEADERS, ...headers(writer) }, params })).status()).toBe(403);
+  // 横断照会者は現在店舗の集計も読む（店舗は X-Store-ID が本人の店舗集合から名乗る）。
+  expect((await request.get('/api/store/operational-reports', { headers: { ...STORE_HEADERS, ...headers(writer) }, params })).status()).toBe(200);
   const other = await request.get(base, { headers: headers(secondReader), params });
   expect(await other.json()).toMatchObject({ total_order_count: 1, total_fee: 12000, stores: [{ store_id: Number(foreign) }] });
   const empty = await request.get(base, { headers: headers(writer), params: { from: '1998-01-01', to: '1998-01-31' } });
