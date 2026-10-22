@@ -81,6 +81,28 @@ it('参照権限のない店舗利用者に追加金額の導線を出さない'
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(statement).not.toHaveBeenCalled();
 });
+it.each([
+  [['PERM_ORDER_MANAGE', 'PERM_REMUNERATION_VIEW', 'PERM_BONUS_AWARD'], true],
+  [['PERM_ORDER_SET_VIEW', 'PERM_REMUNERATION_VIEW', 'PERM_BONUS_AWARD'], false],
+])(
+  '店舗の明細は受注の担当者 %j にだけ保証・ボーナスの管理を出す（%s）',
+  async (authorities, manages) => {
+    jest
+      .mocked(readTokenClaims)
+      .mockReturnValue({ subject: 'actor', authorities, userType: 'STAFF' });
+    jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
+    jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
+    render(<RemunerationStatementPanel scope={{ scope: 'store', personId: 2 }} month="2026-09" />);
+    fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
+    await screen.findByText('退勤記録待ち');
+    if (manages) await waitFor(() => expect(remunerationApi.guarantees).toHaveBeenCalled());
+    else {
+      expect(remunerationApi.guarantees).not.toHaveBeenCalled();
+      expect(remunerationApi.bonuses).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'ボーナスを記録' })).not.toBeInTheDocument();
+    }
+  }
+);
 it('取得失敗時は旧合計を残さず領域内で再試行する', async () => {
   render(<RemunerationStatementPanel scope={{ scope: 'self', storeId: 1 }} month="2026-09" />);
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));

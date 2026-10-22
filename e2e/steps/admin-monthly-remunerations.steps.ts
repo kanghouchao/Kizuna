@@ -86,7 +86,7 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, onlyForeign, secondStore),
     'admin-monthly-foreign-' + suffix + '@kizuna.test', password, '他店限定本人');
   const role = await request.post('/api/admin/roles', { headers: { Authorization: 'Bearer ' + admin },
-    data: { name: '月次グループ級参照-' + suffix, permissions: ['ORDER_SET_VIEW',] } });
+    data: { name: '月次グループ級参照-' + suffix, permissions: ['ORDER_SET_VIEW', 'REMUNERATION_VIEW'] } });
   expect(role.status(), await role.text()).toBe(201);
   const roleId = (await role.json()).id;
   const storeOnlyRole = await request.post('/api/admin/roles', { headers: { Authorization: 'Bearer ' + admin },
@@ -155,6 +155,13 @@ Then('横断照会の月次合計は同店の再入店を含み他店と未完�
   await expect(page.getByRole('button', { name: '訂正履歴', exact: true })).toHaveCount(2);
   // 受注の編集画面は受注の担当者の権限で開くので、横断照会者には導線を出さない。
   await expect(page.locator('a[href*="/edit"]')).toHaveCount(0);
+  // 保証・ボーナスの内訳は読めるが、管理（受注の担当者の端点）は出さず、その取得失敗も出さない。
+  const breakdown = page.getByRole('button', { name: '保証・ボーナスを含む月次明細', exact: true });
+  await breakdown.click();
+  await expect(page.getByRole('heading', { name: '受注報酬・保証・ボーナス', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ボーナスを記録' })).toHaveCount(0);
+  await expect(page.getByText('取得できませんでした')).toHaveCount(0);
+  await breakdown.click();
   expect((await monthly(request, secondReader, secondStore)).total_remuneration).toBe(7000);
 });
 

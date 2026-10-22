@@ -52,6 +52,9 @@ function Statement({ scope, month }: { scope: StatementScope; month: string }) {
   const [orderPage, setOrderPage] = useState(0),
     [bonusPage, setBonusPage] = useState(0),
     [revision, setRevision] = useState(0);
+  // 保証・ボーナスの管理は受注の担当者（ORDER_MANAGE）の端点を読む。横断照会者には明細だけを見せる。
+  const [manages, setManages] = useState(false);
+  useEffect(() => setManages(hasPermission(readTokenClaims(), 'ORDER_MANAGE')), []);
   const result = useResource(
     () => remunerationApi.statement(scope, month, orderPage, bonusPage),
     [
@@ -218,7 +221,7 @@ function Statement({ scope, month }: { scope: StatementScope; month: string }) {
           />
         </>
       )}
-      {scope.scope === 'store' && (
+      {scope.scope === 'store' && manages && (
         <RemunerationManagement
           personId={scope.personId}
           personName={data?.name ?? `本人 ID ${scope.personId}`}
