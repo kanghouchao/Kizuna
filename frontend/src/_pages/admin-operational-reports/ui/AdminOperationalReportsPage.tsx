@@ -1,5 +1,7 @@
 'use client';
-import { Form } from '@/shared/ui';
+import Link from 'next/link';
+import { storePath } from '@/shared/lib';
+import { Button, Form } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 import { useOperationalReportPage, ReportSearch, ReportTable } from '@/widgets/operational-report';
 export default function AdminOperationalReportsPage() {
@@ -10,11 +12,18 @@ function ReportPage() {
   const { form, access, query, report, result, paging, submit, setQuery } = model;
   if (!access.ready) return <p>読み込み中...</p>;
   if (!access.view) return <p role="alert">運営金額集計を閲覧する権限がありません。</p>;
+  // 集合全体を読める者は店舗級の集計も必ず読める（店舗級の端点が ORDER_SET_VIEW の族を受け入れる）ので、
+  // 入口の可視条件はこの画面の閲覧条件と同じでよい。
   return (
     <Form {...form}>
       <ListPage
         title="運営金額集計"
         description="原営業日の完了受注から、現在の有効請求額と発生済み固定報酬を集計します。"
+        actions={
+          <Button variant="outline" render={<Link href={storePath('/operational-reports')} />}>
+            現在店舗の集計
+          </Button>
+        }
         search={{ onSearch: () => void submit(), content: <ReportSearch model={model} /> }}
         state={{
           ...paging,
