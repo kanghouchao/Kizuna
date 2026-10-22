@@ -161,3 +161,16 @@ Then('運営帳票の再取得は原期の訂正と無効化を反映する', as
   await expect(page.getByLabel('有効完了件数', { exact: true })).toHaveText('2,000');
   await expect(page.getByLabel('無効化件数', { exact: true })).toHaveText('1');
 });
+Then('横断照会だけの担当者は運営帳票画面から現在店舗の集計へ到達する', async ({ page }) => {
+  // この担当者は ORDER_SET_VIEW だけを持ち、受注一覧（ORDER_MANAGE）からは店舗級の集計へ入れない。
+  await page.getByRole('link', { name: '現在店舗の集計', exact: true }).click();
+  await expect(page).toHaveURL(/\/store\/operational-reports$/);
+  await page.getByLabel('開始営業日').fill(params.from); await page.getByLabel('終了営業日').fill(params.to);
+  const [response] = await Promise.all([
+    page.waitForResponse(r => new URL(r.url()).pathname === '/api/store/operational-reports'),
+    page.getByRole('button', { name: '照会', exact: true }).click(),
+  ]);
+  expect(response.status()).toBe(200);
+  await expect(page.getByLabel('有効完了件数', { exact: true })).toHaveText('2,000');
+  await expect(page.getByLabel('無効化件数', { exact: true })).toHaveText('1');
+});

@@ -138,3 +138,21 @@ test.each([
     else expect(screen.queryByRole('button', { name: 'CSV 全件出力' })).not.toBeInTheDocument();
   }
 );
+
+test('集合全体を読める者には現在店舗の集計への入口を出す', async () => {
+  render(<AdminOperationalReportsPage />);
+  expect(await screen.findByRole('link', { name: '現在店舗の集計' })).toHaveAttribute(
+    'href',
+    '/store/operational-reports'
+  );
+});
+
+test('閲覧権限の無い者には現在店舗の集計への入口を出さない', async () => {
+  jest.mocked(readTokenClaims).mockReturnValue({
+    authorities: ['PERM_ORDER_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
+    userType: 'STAFF',
+  });
+  render(<AdminOperationalReportsPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('閲覧する権限がありません');
+  expect(screen.queryByRole('link', { name: '現在店舗の集計' })).not.toBeInTheDocument();
+});
