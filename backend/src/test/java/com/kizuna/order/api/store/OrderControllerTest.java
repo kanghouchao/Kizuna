@@ -701,6 +701,20 @@ class OrderControllerTest {
   }
 
   @Test
+  @DisplayName("横断照会権限は訂正履歴を読めるが、受注の詳細と訂正操作には届かないこと")
+  @WithMockUser(authorities = "PERM_ORDER_SET_MANAGE")
+  void crossStoreViewerReadsOnlyCorrectionHistory() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(correctionHistory.store("o1", null, 20)).thenReturn(new CursorPage<>(List.of(), null));
+
+    mockMvc.perform(storeGet("/store/orders/o1/corrections")).andExpect(status().isOk());
+    mockMvc.perform(storeGet("/store/orders/o1")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(storePost("/store/orders/o1/corrections", CORRECTION_BODY))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
   @DisplayName("受注管理だけの店員は完了後訂正に届かないこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void correctionIsRejectedWithOrderManageAlone() throws Exception {

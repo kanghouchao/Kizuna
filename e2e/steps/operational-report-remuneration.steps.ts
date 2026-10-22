@@ -161,7 +161,6 @@ Then('旧帳票の権限と形式を保ち報酬額の追加参照を守る', as
     expect(text).not.toContain('remuneration_day');
     expect(text).not.toContain(bonus.id);
   }
-  expect((await request.get(base, { headers: headers(), params: { ...parameters(), store_id: foreign } })).status()).toBe(403);
   expect((await request.get('/api/store/operational-reports', {
     headers: { ...storeHeaders(), 'X-Store-ID': foreign }, params: parameters(),
   })).status()).toBe(403);
@@ -270,15 +269,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
   await expect(total).toHaveText('500');
   await submit.click();
   await expect(total).toHaveText('500');
-  const store = page.getByLabel('店舗ID（空欄は授権全店）');
-  await store.fill(foreign);
-  const denied = page.waitForResponse(response => response.url().includes('/operational-reports?') && response.status() === 403);
-  await submit.click();
-  await denied;
-  await expect(total).toHaveCount(0);
-  await store.fill(STORE1_ID);
-  await submit.click();
-  await expect(total).toHaveText('500');
+  await expect(page.getByLabel(/店舗ID/)).toHaveCount(0);
 
   let exportCount = 0, downloads = 0, releaseExport!: () => void, exportFetched!: () => void, exportFinished!: () => void;
   const exportGate = new Promise<void>(resolve => { releaseExport = resolve; });

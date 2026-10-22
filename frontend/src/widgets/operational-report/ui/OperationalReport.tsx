@@ -37,7 +37,6 @@ interface Fields {
   from: string;
   to: string;
   group_by: ReportCriteria['group_by'];
-  store: string;
   include_remuneration: boolean;
   include_advertising: boolean;
 }
@@ -52,20 +51,23 @@ export function useOperationalReportPage(scope: 'store' | 'admin') {
   });
   useEffect(() => {
     const claims = readTokenClaims();
+    // 店舗の集計は担当者と横断照会者の両方が読み、広告費はそれぞれ対になる権限で開く（端点と同じ組合せ）。
+    const families = (
+      [
+        ['ORDER_MANAGE', 'ADVERTISING_COST_VIEW', 'ADVERTISING_COST_EXPORT'],
+        ['ORDER_SET_MANAGE', 'ADVERTISING_COST_SET_VIEW', 'ADVERTISING_COST_SET_EXPORT'],
+      ] as const
+    )
+      .filter(([order]) => scope === 'store' || order === 'ORDER_SET_MANAGE')
+      .filter(([order]) => hasPermission(claims, order));
     setAccess({
       ready: true,
-      view:
-        hasPermission(claims, 'OPERATIONAL_REPORT_VIEW') &&
-        hasPermission(claims, scope === 'store' ? 'ORDER_MANAGE' : 'ORDER_SET_MANAGE'),
+      view: hasPermission(claims, 'OPERATIONAL_REPORT_VIEW') && families.length > 0,
       output: hasPermission(claims, 'OPERATIONAL_REPORT_EXPORT'),
       remuneration: hasPermission(claims, 'REMUNERATION_VIEW'),
-      advertising: hasPermission(
-        claims,
-        scope === 'store' ? 'ADVERTISING_COST_VIEW' : 'ADVERTISING_COST_SET_VIEW'
-      ),
-      advertisingOutput: hasPermission(
-        claims,
-        scope === 'store' ? 'ADVERTISING_COST_EXPORT' : 'ADVERTISING_COST_SET_EXPORT'
+      advertising: families.some(([, view]) => hasPermission(claims, view)),
+      advertisingOutput: families.some(
+        ([, view, output]) => hasPermission(claims, view) && hasPermission(claims, output)
       ),
     });
   }, [scope]);
@@ -75,7 +77,6 @@ export function useOperationalReportPage(scope: 'store' | 'admin') {
       from: `${today.slice(0, 7)}-01`,
       to: today,
       group_by: 'day',
-      store: '',
       include_remuneration: false,
       include_advertising: false,
     },
@@ -99,7 +100,6 @@ export function useOperationalReportPage(scope: 'store' | 'admin') {
         from: values.from,
         to: values.to,
         group_by: values.group_by,
-        ...(scope === 'admin' && values.store ? { store_id: Number(values.store) } : {}),
         ...(access.remuneration && values.include_remuneration
           ? { include_remuneration: true }
           : {}),
@@ -167,27 +167,6 @@ export function ReportSearch({ model }: { model: ReportModel }) {
             </FormItem>
           )}
         />
-        {scope === 'admin' && (
-          <FormField
-            control={form.control}
-            name="store"
-            rules={{
-              validate: value =>
-                !value ||
-                (/^[1-9][0-9]*$/.test(value) && Number.isSafeInteger(Number(value))) ||
-                '正の店舗IDを入力してください',
-            }}
-            render={({ field }) => (
-              <FormItem className="w-44">
-                <FormLabel>店舗ID（空欄は授権全店）</FormLabel>
-                <FormControl>
-                  <Input {...field} inputMode="numeric" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
         {access.remuneration && (
           <FormField
             control={form.control}

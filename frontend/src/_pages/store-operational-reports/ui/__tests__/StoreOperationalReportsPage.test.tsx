@@ -360,7 +360,7 @@ test('advertising view requires its export permission even when not applicable',
   fireEvent.click(screen.getByRole('button', { name: '照会' }));
   expect(await screen.findByRole('button', { name: 'CSV 全件出力' })).toBeInTheDocument();
 });
-test('store does not accept group-wide advertising permission', async () => {
+test('store advertising does not pair order management with the cross-store advertising permission', async () => {
   jest.mocked(readTokenClaims).mockReturnValue({
     authorities: [
       'PERM_ORDER_MANAGE',
@@ -375,6 +375,26 @@ test('store does not accept group-wide advertising permission', async () => {
   fireEvent.click(await screen.findByRole('button', { name: '照会' }));
   await screen.findByLabelText('請求額（円）');
   expect(fetch.mock.calls[0][1]).not.toHaveProperty('include_advertising');
+});
+test('cross-store viewer reads the current store with its own advertising permission', async () => {
+  jest.mocked(readTokenClaims).mockReturnValue({
+    authorities: [
+      'PERM_ORDER_SET_MANAGE',
+      'PERM_OPERATIONAL_REPORT_VIEW',
+      'PERM_ADVERTISING_COST_SET_VIEW',
+    ],
+    userType: 'STAFF',
+  });
+  fetch.mockResolvedValue(report(0));
+  render(<StoreOperationalReportsPage />);
+  fireEvent.click(await screen.findByRole('checkbox', { name: '広告費を含める' }));
+  fireEvent.click(screen.getByRole('button', { name: '照会' }));
+  await screen.findByLabelText('請求額（円）');
+  expect(fetch.mock.calls[0]).toEqual([
+    'store',
+    expect.objectContaining({ include_advertising: true }),
+    0,
+  ]);
 });
 test('new dates, group and option discard a late advertising response', async () => {
   grantAdvertising();

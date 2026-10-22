@@ -7,7 +7,6 @@ const criteria: ReportCriteria = {
   from: '2026-09-30',
   to: '2026-10-01',
   group_by: 'day',
-  store_id: 7,
   include_remuneration: true,
   include_advertising: true,
 };

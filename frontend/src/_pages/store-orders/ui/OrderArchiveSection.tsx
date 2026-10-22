@@ -74,7 +74,7 @@ function ArchiveRow({
   return (
     <div className="flex items-start justify-between gap-4 border-b px-4 py-3 last:border-b-0">
       <div className="min-w-0 space-y-1">
-        <OrderCorrectionHistoryDialog key={order.id} orderId={order.id!} scope="store" />
+        <OrderCorrectionHistoryDialog key={order.id} orderId={order.id!} />
         <div className="flex flex-wrap items-center gap-2">
           {label === null ? (
             <span className="text-muted-foreground">お客様名なし</span>

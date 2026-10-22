@@ -16,8 +16,6 @@ export { selfMonthlyRemunerationApi } from './api/self-monthly-remuneration';
 export * from './model/monthlyRemuneration';
 export { monthlyRemunerationApi } from './api/monthly-remuneration';
 
-export * from './model/adminMonthlyRemuneration';
-export { adminMonthlyRemunerationApi } from './api/admin-monthly-remuneration';
 export { fetchMonthlyPdf, type MonthlyPdfCriteria } from './api/monthly-pdf';
 
 export * from './model/dailyRemuneration';

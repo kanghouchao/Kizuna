@@ -62,7 +62,7 @@ function Invalidation({ id }: { id: string }) {
             let change: OrderCorrectionHistoryEntry | undefined;
             if (order.completion_invalidated) {
               // 無効化後は訂正できないため、無効化は版降順の履歴の先頭ページにある。
-              const history = await orderApi.correctionHistory('store', id);
+              const history = await orderApi.correctionHistory(id);
               change = history.rows.find(entry => entry.change_type === 'COMPLETION_INVALIDATION');
               if (!change) throw new Error('無効化履歴が見つかりません');
             }

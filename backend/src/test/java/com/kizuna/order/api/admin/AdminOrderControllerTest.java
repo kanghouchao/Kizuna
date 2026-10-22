@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.order.api.dto.AdminOrderResponse;
 import com.kizuna.order.application.AdminOrderService;
-import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -45,7 +44,6 @@ class AdminOrderControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockitoBean private OrderCorrectionHistory correctionHistory;
   @MockitoBean private AdminOrderService adminOrderService;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として

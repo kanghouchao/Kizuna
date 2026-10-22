@@ -33,13 +33,10 @@ class OperationalReportScopeTest {
   }
 
   @Test
-  void unresolvedEmptyAndForeignStoreAreRejectedBeforeQuery() {
-    assertDenied(null);
+  void unresolvedScopeIsRejectedBeforeQuery() {
+    assertDenied();
     holder.install(() -> null);
-    assertDenied(null);
-    holder.install(() -> new StoreScope(false, Set.of(1L)));
-    assertDenied(2L);
-    assertDenied(Long.MAX_VALUE);
+    assertDenied();
     verifyNoInteractions(manager);
   }
 
@@ -49,15 +46,14 @@ class OperationalReportScopeTest {
     for (int maximum : List.of(0, 100_001)) {
       properties.getOperationalReport().setMaxOrders(maximum);
       assertThatThrownBy(
-              () -> reader.groupWide(null, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
+              () -> reader.groupWide(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
           .isInstanceOf(ServiceUnavailableException.class);
     }
     verifyNoInteractions(manager);
   }
 
-  void assertDenied(Long storeId) {
-    assertThatThrownBy(
-            () -> reader.groupWide(storeId, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
+  void assertDenied() {
+    assertThatThrownBy(() -> reader.groupWide(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
         .isInstanceOf(AccessDeniedException.class);
   }
 }

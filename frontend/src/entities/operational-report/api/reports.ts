@@ -4,7 +4,6 @@ export interface ReportCriteria {
   from: string;
   to: string;
   group_by: 'day' | 'month' | 'store';
-  store_id?: number;
   include_remuneration?: boolean;
   include_advertising?: boolean;
 }

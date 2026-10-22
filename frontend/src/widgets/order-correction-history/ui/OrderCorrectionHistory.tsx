@@ -15,7 +15,8 @@ import {
 
 interface Props {
   orderId: string;
-  scope: 'store' | 'admin';
+  /** 横断一覧（/admin/orders）から開くときの行の店舗。省略時は現在店舗で読む。 */
+  storeId?: number;
 }
 const dateTime = (value: string) => new Date(value).toLocaleString('ja-JP');
 const yen = (value: number) => `¥${value.toLocaleString()}`;
@@ -81,10 +82,10 @@ function Snapshot({ value, label }: { value: OrderCorrectionSnapshot; label: str
   );
 }
 
-export function OrderCorrectionHistory({ orderId, scope }: Props) {
+export function OrderCorrectionHistory({ orderId, storeId }: Props) {
   const [status, setStatus] = useState<number>();
   const history = useCursorList(cursor =>
-    orderApi.correctionHistory(scope, orderId, cursor).catch(error => {
+    orderApi.correctionHistory(orderId, cursor, storeId).catch(error => {
       setStatus(error?.response?.status);
       throw error;
     })
@@ -102,7 +103,7 @@ export function OrderCorrectionHistory({ orderId, scope }: Props) {
         {...(status === 404
           ? {
               fallback: {
-                href: scope === 'admin' ? '/admin/orders' : storePath('/orders'),
+                href: storeId === undefined ? storePath('/orders') : '/admin/orders',
                 label: '一覧へ戻る',
               },
             }
@@ -175,7 +176,7 @@ export function OrderCorrectionHistoryModal({
           <DialogTitle>訂正履歴</DialogTitle>
           <DialogDescription>受注 {props.orderId} の費用・報酬の変更記録</DialogDescription>
         </DialogHeader>
-        <OrderCorrectionHistory key={`${props.scope}:${props.orderId}`} {...props} />
+        <OrderCorrectionHistory key={`${props.storeId ?? 'current'}:${props.orderId}`} {...props} />
       </DialogContent>
     </Dialog>
   );

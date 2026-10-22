@@ -184,13 +184,11 @@ Then('広告費帳票は店と本部の閲覧出力権限を独立して検証�
   }
   const scoped = await request.get(admin, { headers: headers(restricted), params: parameters() });
   expect((await scoped.json()).advertising).toEqual(recorded(2, 400, 600));
-  for (const endpoint of [admin, store]) {
-    for (const format of [undefined, 'csv']) {
-      expect((await request.get(endpoint + (format ? '/exports' : ''), {
-        headers: headers(restricted, endpoint, foreign),
-        params: parameters({ store_id: foreign, ...(format ? { format } : {}) }),
-      })).status()).toBe(403);
-    }
+  for (const format of [undefined, 'csv']) {
+    expect((await request.get(store + (format ? '/exports' : ''), {
+      headers: headers(restricted, store, foreign),
+      params: parameters(format ? { format } : {}),
+    })).status()).toBe(403);
   }
 });
 

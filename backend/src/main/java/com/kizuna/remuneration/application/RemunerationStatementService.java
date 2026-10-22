@@ -12,9 +12,7 @@ import com.kizuna.remuneration.domain.RemunerationAmounts;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
-import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.shared.storescope.StoreSetScoped;
 import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
@@ -23,7 +21,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +33,6 @@ public class RemunerationStatementService {
   private final OrderRemunerationFacts orders;
   private final AttendanceFacts attendances;
   private final StoreContext stores;
-  private final StoreScopeHolder storeScopeHolder;
   private final ActorIdentityService actors;
 
   @StoreScoped
@@ -44,15 +40,6 @@ public class RemunerationStatementService {
   public RemunerationStatementResponse store(
       Long person, String month, int orderPage, int bonusPage, int size) {
     return read(stores.getStoreId(), person, month, orderPage, bonusPage, size);
-  }
-
-  @StoreSetScoped
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public RemunerationStatementResponse groupWide(
-      Long store, Long person, String month, int orderPage, int bonusPage, int size) {
-    var scope = storeScopeHolder.current();
-    if (scope == null || !scope.authorizes(store)) throw new AccessDeniedException("授権店舗集合に含まれません");
-    return read(store, person, month, orderPage, bonusPage, size);
   }
 
   @StoreScopeExempt(reason = "認証主体の本人と店舗の歴史在籍を照合し、全照会を明示した本人・店舗に限定する")

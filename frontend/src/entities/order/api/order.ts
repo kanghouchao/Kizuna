@@ -104,9 +104,11 @@ export const orderApi = {
     });
     return fromSpringPage<AdminOrder>(response.data);
   },
-  correctionHistory: async (scope: 'store' | 'admin', id: string, cursor?: string) => {
-    const response = await apiClient.get(`/${scope}/orders/${requireId(id, '受注')}/corrections`, {
+  /** storeId は横断一覧の行の店舗を名指すときだけ渡す。省略時は現在店舗（cookie）が注入される。 */
+  correctionHistory: async (id: string, cursor?: string, storeId?: number) => {
+    const response = await apiClient.get(`/store/orders/${requireId(id, '受注')}/corrections`, {
       params: { cursor, size: 20 },
+      ...(storeId === undefined ? {} : { headers: { 'X-Store-ID': String(storeId) } }),
     });
     return fromCursorPage<OrderCorrectionHistoryEntry>(response.data);
   },

@@ -28,8 +28,9 @@ public class AdvertisingReportReader {
       AdvertisingCategory category,
       Integer amount) {}
 
+  // 店舗経路での担当者／横断照会者と広告費権限の対は呼び出す端点が判定する。ここは店舗経路の下限だけを持つ。
   @PreAuthorize(
-      "#groupWide ? hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') : hasAuthority('PERM_ADVERTISING_COST_VIEW')")
+      "#groupWide ? hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') : hasAnyAuthority('PERM_ADVERTISING_COST_VIEW', 'PERM_ADVERTISING_COST_SET_VIEW')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
   public AdvertisingReportFacts read(
       boolean groupWide, List<Long> stores, String from, String to, int limit) {

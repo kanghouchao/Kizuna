@@ -260,11 +260,7 @@ export default function OrderEditPage() {
           <div className="flex items-center justify-between gap-6">
             <h1 className="text-foreground text-2xl font-bold">受注の編集</h1>
             {current && !failure && !isLoading && (
-              <OrderCorrectionHistoryDialog
-                key={`${storeId}:${orderId}`}
-                orderId={orderId}
-                scope="store"
-              />
+              <OrderCorrectionHistoryDialog key={`${storeId}:${orderId}`} orderId={orderId} />
             )}
           </div>
           {/* 取れていない間は名乗らせない。「お客様名なし」は顧客の着いていない受注を指す文言で、

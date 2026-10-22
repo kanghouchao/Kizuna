@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { orderApi, ORDER_STATUS_LABELS, type AdminOrder } from '@/entities/order';
-import { hasPermission, readTokenClaims, useListPage } from '@/shared/lib';
+import { hasPermission, readTokenClaims, storePath, useListPage } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -37,7 +37,7 @@ function OrderList() {
   const [details, setDetails] = useState<AdminOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<AdminOrder | null>(null);
   return (
     <>
       <ListPage
@@ -49,7 +49,10 @@ function OrderList() {
                 運営金額集計
               </Button>
             )}
-            <Button variant="outline" render={<Link href="/admin/orders/monthly-remunerations" />}>
+            <Button
+              variant="outline"
+              render={<Link href={storePath('/orders/monthly-remunerations')} />}
+            >
               月次給与明細
             </Button>
           </>
@@ -150,7 +153,7 @@ function OrderList() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        setSelected(order.id);
+                        setSelected(order);
                         setHistoryOpen(true);
                       }}
                     >
@@ -215,8 +218,8 @@ function OrderList() {
       </Dialog>
       {selected && (
         <OrderCorrectionHistoryModal
-          orderId={selected}
-          scope="admin"
+          orderId={selected.id}
+          storeId={selected.store_id}
           open={historyOpen}
           onOpenChange={setHistoryOpen}
         />

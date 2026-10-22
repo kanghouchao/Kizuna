@@ -25,7 +25,6 @@ public class OperationalReportService {
 
   public OperationalReportResponse view(
       boolean groupWide,
-      Long storeId,
       String from,
       String to,
       String groupBy,
@@ -38,7 +37,6 @@ public class OperationalReportService {
     try {
       return execute(
           groupWide,
-          storeId,
           from,
           to,
           groupBy,
@@ -52,7 +50,6 @@ public class OperationalReportService {
 
   public byte[] export(
       boolean groupWide,
-      Long storeId,
       String from,
       String to,
       String groupBy,
@@ -64,7 +61,6 @@ public class OperationalReportService {
       throw new ServiceException("出力形式は csv / xlsx で指定してください");
     return execute(
         groupWide,
-        storeId,
         from,
         to,
         groupBy,
@@ -75,7 +71,6 @@ public class OperationalReportService {
 
   private <T> T execute(
       boolean groupWide,
-      Long storeId,
       String from,
       String to,
       String groupBy,
@@ -89,7 +84,7 @@ public class OperationalReportService {
       var budget = new ReportBudget(properties.getOperationalReport());
       var report =
           groupWide
-              ? snapshot.groupWide(storeId, criteria, includeRemuneration, includeAdvertising)
+              ? snapshot.groupWide(criteria, includeRemuneration, includeAdvertising)
               : snapshot.store(criteria, includeRemuneration, includeAdvertising);
       var facts = report.facts();
       if (facts.orders().size() > properties.getOperationalReport().getMaxOrders()

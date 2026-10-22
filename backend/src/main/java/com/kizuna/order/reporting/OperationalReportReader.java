@@ -2,7 +2,6 @@ package com.kizuna.order.reporting;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScope;
@@ -46,14 +45,10 @@ public class OperationalReportReader {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
-  public OperationalFacts groupWide(Long storeId, LocalDate from, LocalDate to) {
+  public OperationalFacts groupWide(LocalDate from, LocalDate to) {
     var scope = storeScopeHolder.current();
     if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
-    if (storeId != null) {
-      if (storeId <= 0) throw new ServiceException("店舗の指定が不正です");
-      if (!scope.authorizes(storeId)) throw new AccessDeniedException("授権店舗集合に含まれません");
-    }
-    return read(scope, storeId, from, to);
+    return read(scope, null, from, to);
   }
 
   private OperationalFacts read(StoreScope scope, Long storeId, LocalDate from, LocalDate to) {
