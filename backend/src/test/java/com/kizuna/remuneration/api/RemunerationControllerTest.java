@@ -126,7 +126,6 @@ class RemunerationControllerTest {
     mvc.perform(
             get(path)
                 .principal(() -> "person@example.test")
-                .header("X-Role", path.startsWith("/store") ? "store" : "platform")
                 .header("X-Store-ID", "1")
                 .param("store_id", "1")
                 .param("person_id", "34")
@@ -162,7 +161,6 @@ class RemunerationControllerTest {
     mvc.perform(
             get(path)
                 .principal(() -> "person@example.test")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .param("person_id", "999")
                 .param("month", "2026-09"))
@@ -176,7 +174,7 @@ class RemunerationControllerTest {
     when(records.bonus(1L, "b")).thenReturn(bonus);
     when(records.term(1L, "g")).thenReturn(term);
     for (String base : List.of("/store/bonus-awards/b", "/store/remuneration-guarantees/g")) {
-      mvc.perform(get(base + "/changes").header("X-Role", "store").header("X-Store-ID", "1"))
+      mvc.perform(get(base + "/changes").header("X-Store-ID", "1"))
           .andExpect(status().isNotFound());
       String correction =
           base.contains("bonus-awards")
@@ -186,7 +184,6 @@ class RemunerationControllerTest {
               post(base + "/corrections")
                   .principal(() -> "person@example.test")
                   .with(csrf())
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(
@@ -198,7 +195,6 @@ class RemunerationControllerTest {
               post(base + "/cancellation")
                   .principal(() -> "person@example.test")
                   .with(csrf())
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(
@@ -212,7 +208,6 @@ class RemunerationControllerTest {
   void orderPermissionDoesNotGrantNewMoneyReads() throws Exception {
     mvc.perform(
             get("/store/remuneration-statements")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09"))
@@ -225,7 +220,6 @@ class RemunerationControllerTest {
     mvc.perform(
             post("/store/bonus-awards")
                 .with(csrf())
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
@@ -238,7 +232,6 @@ class RemunerationControllerTest {
   void pageLimitsAreValidated(String size) throws Exception {
     mvc.perform(
             get("/store/remuneration-statements")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09")

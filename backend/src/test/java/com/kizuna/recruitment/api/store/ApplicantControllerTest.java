@@ -96,7 +96,6 @@ class ApplicantControllerTest {
     when(service.list(any(), any(), any())).thenReturn(new PageImpl<>(List.of(summary)));
     mvc.perform(
             get("/store/applicants")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
         .andExpect(status().isOk())
@@ -124,7 +123,6 @@ class ApplicantControllerTest {
     for (String path : List.of("", "/a", "/a/history", "/policy")) {
       mvc.perform(
               get("/store/applicants" + path)
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .with(actor().authorities(new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
           .andExpect(status().isForbidden());
@@ -140,7 +138,6 @@ class ApplicantControllerTest {
       mvc.perform(
               post("/store/applicants")
                   .with(csrf())
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body)
@@ -150,7 +147,6 @@ class ApplicantControllerTest {
     mvc.perform(
             post("/store/applicants")
                 .with(csrf())
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content(body)
@@ -171,7 +167,6 @@ class ApplicantControllerTest {
       mvc.perform(
               post("/store/applicants/a/decision")
                   .with(csrf())
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content("{\"version\":0,\"status\":\"HIRED\",\"reason\":\"確認\"}")
@@ -189,7 +184,6 @@ class ApplicantControllerTest {
     mvc.perform(
             put("/store/applicants/a")
                 .with(csrf())
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content(
@@ -202,7 +196,6 @@ class ApplicantControllerTest {
         .andExpect(status().isBadRequest());
     mvc.perform(
             get("/store/applicants/policy")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
         .andExpect(status().isOk())

@@ -81,7 +81,6 @@ class ReviewInputPrivacyTest {
             mvc.perform(
                     post("/store/reviews")
                         .with(csrf())
-                        .header("X-Role", "store")
                         .header("X-Store-ID", "1")
                         .with(
                             request -> {
@@ -99,7 +98,6 @@ class ReviewInputPrivacyTest {
           mvc.perform(
                   post("/store/reviews/1/permissions")
                       .with(csrf())
-                      .header("X-Role", "store")
                       .header("X-Store-ID", "1")
                       .with(
                           request -> {

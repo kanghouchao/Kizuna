@@ -133,7 +133,6 @@ class CustomerMemberLinkControllerTest {
                 .contentType("application/json")
                 .content("{\"expected_link_id\":\"l1\",\"operation_reason\":\"本人依頼\"}")
                 .with(csrf())
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .principal(() -> "tanaka.hanako@kizuna.test"))
         .andExpect(status().isNoContent());
@@ -142,9 +141,6 @@ class CustomerMemberLinkControllerTest {
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path)
-        .header("X-Role", "store")
-        .header("X-Store-ID", "1")
-        .principal(() -> "tanaka.hanako@kizuna.test");
+    return get(path).header("X-Store-ID", "1").principal(() -> "tanaka.hanako@kizuna.test");
   }
 }

@@ -44,7 +44,6 @@ describe('apiClient request interceptor', () => {
     })) as AxiosAdapter;
 
     const res = await apiClient.get('/store/me');
-    expect(res.config.headers.get('X-Role')).toBeUndefined();
     expect(res.config.headers.get('X-Store-ID')).toBe('42');
     expect(res.config.headers.get('X-XSRF-TOKEN')).toBeUndefined();
 

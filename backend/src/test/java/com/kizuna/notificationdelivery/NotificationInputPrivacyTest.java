@@ -85,7 +85,6 @@ class NotificationInputPrivacyTest {
             mvc.perform(
                     post("/store/notification-deliveries")
                         .with(csrf())
-                        .header("X-Role", "store")
                         .header("X-Store-ID", "1")
                         .with(
                             request -> {
@@ -103,7 +102,6 @@ class NotificationInputPrivacyTest {
           mvc.perform(
                   post("/store/notification-deliveries/1/queue")
                       .with(csrf())
-                      .header("X-Role", "store")
                       .header("X-Store-ID", "1")
                       .with(
                           request -> {

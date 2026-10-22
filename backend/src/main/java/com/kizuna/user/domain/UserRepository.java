@@ -60,9 +60,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
    * 指定ロールのいずれかを保持する有効な利用者の行を、id 昇順で押さえる（{@code SELECT ... FOR UPDATE}）。
    *
    * <p><b>返る集合を数えてはいけない</b>。READ COMMITTED では待たされている間に確定した変更のうち、取り直されるのは押さえた行自身の 列だけで、保持判定が読む
-   * t_user_roles は元のスナップショットのまま — 降格済みの相手が保持者に見え続ける（実測: {@code
-   * PlatformStaffManagementIT#lockedLookupIsStaleSoTheCountMustBeTakenAgain}）。数えるのは {@link
-   * #findEnabledRoleHolderIds} で押さえた後に取り直す。
+   * t_user_roles は元のスナップショットのまま — 降格済みの相手が保持者に見え続ける（実測済み）。数えるのは {@link #findEnabledRoleHolderIds}
+   * で押さえた後に取り直す。
    *
    * <p>母集団の全行を押さえるのは、計数だけでは最後の 2 人が同時に相互降級したとき双方が検査を通り 0 になるため（ADR 0020）。id
    * 昇順は獲得順序を揃えて待ちを環にしない。実体でなく id を返すのは、実体で受けるとロックの獲得が版の照合を伴い、 書きもしない他人の行の版が進んだだけで授権の更新が 409 に落ちるため。

@@ -369,7 +369,6 @@ class OrderApplicationControllerTest {
   /** 匿名の来訪者を模す。店舗文脈だけをヘッダで名乗り、認証主体は載せない。 */
   private MockHttpServletRequestBuilder guestPost(String body) {
     return post("/store/order-applications/public")
-        .header("X-Role", "store")
         .header("X-Store-ID", "1")
         .with(csrf())
         .contentType(MediaType.APPLICATION_JSON)
@@ -379,7 +378,6 @@ class OrderApplicationControllerTest {
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder storePost(String path, String body) {
     return post(path)
-        .header("X-Role", "store")
         .header("X-Store-ID", "1")
         .principal(() -> "staff@kizuna.test")
         .with(csrf())
@@ -388,9 +386,6 @@ class OrderApplicationControllerTest {
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path)
-        .header("X-Role", "store")
-        .header("X-Store-ID", "1")
-        .principal(() -> "staff@kizuna.test");
+    return get(path).header("X-Store-ID", "1").principal(() -> "staff@kizuna.test");
   }
 }

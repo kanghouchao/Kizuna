@@ -119,7 +119,7 @@ class OperationalReportControllerTest {
                         Arrays.stream(permissions)
                             .map(p -> new SimpleGrantedAuthority("PERM_" + p))
                             .toArray(SimpleGrantedAuthority[]::new)));
-    if (scope.equals("store")) request.header("X-Role", "store").header("X-Store-ID", "1");
+    if (scope.equals("store")) request.header("X-Store-ID", "1");
     return request;
   }
 

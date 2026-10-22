@@ -54,7 +54,7 @@ class AdminCastControllerTest {
   @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void storePermissionCannotReadAnyPersonEndpoint() throws Exception {
     for (String path : new String[] {"", "/1", "/1/enrollments"}) {
-      mvc.perform(get("/admin/casts" + path).header("X-Role", "platform").header("X-Store-ID", "2"))
+      mvc.perform(get("/admin/casts" + path).header("X-Store-ID", "2"))
           .andExpect(status().isForbidden());
     }
   }

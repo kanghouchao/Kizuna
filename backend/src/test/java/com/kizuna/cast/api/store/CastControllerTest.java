@@ -67,7 +67,7 @@ class CastControllerTest {
     when(castService.list(any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
-        .perform(get("/store/casts?sort=name").header("X-Role", "store").header("X-Store-ID", "1"))
+        .perform(get("/store/casts?sort=name").header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
@@ -83,11 +83,7 @@ class CastControllerTest {
     when(castService.list(searchCaptor.capture(), any())).thenReturn(empty);
 
     mockMvc
-        .perform(
-            get("/store/casts")
-                .param("search", "  ")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+        .perform(get("/store/casts").param("search", "  ").header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(searchCaptor.getValue()).isNull();
@@ -100,11 +96,7 @@ class CastControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(
-            delete("/store/casts/cast-1")
-                .with(csrf())
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+        .perform(delete("/store/casts/cast-1").with(csrf()).header("X-Store-ID", "1"))
         .andExpect(status().isNoContent());
   }
 
@@ -117,7 +109,6 @@ class CastControllerTest {
         .perform(
             MockMvcRequestBuilders.patch("/store/casts/cast-1/publication")
                 .with(csrf())
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"publication_status\":\"PUBLISHED\"}"))
@@ -133,7 +124,6 @@ class CastControllerTest {
           .perform(
               MockMvcRequestBuilders.patch("/store/casts/cast-1/publication")
                   .with(csrf())
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body))
@@ -149,7 +139,6 @@ class CastControllerTest {
         .perform(
             MockMvcRequestBuilders.patch("/store/casts/cast-1/publication")
                 .with(csrf())
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"publication_status\":\"PUBLISHED\"}"))

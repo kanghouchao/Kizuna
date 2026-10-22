@@ -91,7 +91,6 @@ class DailyRemunerationControllerTest {
   private MockHttpServletRequestBuilder request(String scope, String date) {
     return get(scope.equals("store") ? "/store/daily-remunerations" : "/me/daily-remunerations")
         .principal(() -> "cast@example.test")
-        .header("X-Role", scope.equals("store") ? "store" : "platform")
         .header("X-Store-ID", "1")
         .param("person_id", "34")
         .param("store_id", "1")
@@ -135,7 +134,6 @@ class DailyRemunerationControllerTest {
   void invalidIdsAre400(String id) throws Exception {
     mvc.perform(
             get("/store/daily-remunerations")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .param("person_id", id)
                 .param("business_date", "2026-09-30"))
