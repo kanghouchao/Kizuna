@@ -84,7 +84,6 @@ class SurveyInputPrivacyTest {
             mvc.perform(
                     post("/store/surveys")
                         .with(csrf())
-                        .header("X-Role", "store")
                         .header("X-Store-ID", "1")
                         .with(
                             request -> {
@@ -102,7 +101,6 @@ class SurveyInputPrivacyTest {
           mvc.perform(
                   post("/store/surveys/1/revisions/2/openings")
                       .with(csrf())
-                      .header("X-Role", "store")
                       .header("X-Store-ID", "1")
                       .with(
                           request -> {
@@ -135,7 +133,6 @@ class SurveyInputPrivacyTest {
           mvc.perform(
                   post(endpoint)
                       .with(csrf())
-                      .header("X-Role", "store")
                       .header("X-Store-ID", "1")
                       .with(
                           request -> {

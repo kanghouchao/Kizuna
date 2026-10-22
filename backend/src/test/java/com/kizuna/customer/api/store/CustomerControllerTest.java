@@ -69,8 +69,7 @@ class CustomerControllerTest {
     when(customerService.list(any(), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
-        .perform(
-            get("/store/customers?sort=name").header("X-Role", "store").header("X-Store-ID", "1"))
+        .perform(get("/store/customers?sort=name").header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
@@ -86,11 +85,7 @@ class CustomerControllerTest {
     when(customerService.list(searchCaptor.capture(), any(), any())).thenReturn(empty);
 
     mockMvc
-        .perform(
-            get("/store/customers")
-                .param("search", " yamada ")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+        .perform(get("/store/customers").param("search", " yamada ").header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(searchCaptor.getValue()).isEqualTo("yamada");
@@ -106,11 +101,7 @@ class CustomerControllerTest {
     when(customerService.list(searchCaptor.capture(), any(), any())).thenReturn(empty);
 
     mockMvc
-        .perform(
-            get("/store/customers")
-                .param("search", "　　")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+        .perform(get("/store/customers").param("search", "　　").header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(searchCaptor.getValue()).isNull();
@@ -129,7 +120,6 @@ class CustomerControllerTest {
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"山田太郎\"}")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isCreated());
   }
@@ -147,7 +137,6 @@ class CustomerControllerTest {
             get("/store/customers/merge-comparison")
                 .param("ids", "c2")
                 .param("ids", "c1")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
@@ -166,7 +155,6 @@ class CustomerControllerTest {
             get("/store/customers/merge-comparison")
                 .param("ids", "c1")
                 .param("ids", "c2")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isForbidden());
   }
@@ -178,11 +166,7 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(
-            delete("/store/customers/c1")
-                .with(csrf())
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+        .perform(delete("/store/customers/c1").with(csrf()).header("X-Store-ID", "1"))
         .andExpect(status().isNoContent());
   }
 }

@@ -127,7 +127,6 @@ class AdvertisingControllerTest {
     var result =
         mvc.perform(
                 post("/store/advertising-costs")
-                    .header("X-Role", "store")
                     .header("X-Store-ID", "1")
                     .with(permissions("VIEW", "MANAGE"))
                     .with(csrf())
@@ -144,7 +143,6 @@ class AdvertisingControllerTest {
   void independentPermissionChecksRejectDirectMutationsAndExport() throws Exception {
     mvc.perform(
             post("/store/advertising-costs")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW"))
                 .with(csrf())
@@ -153,7 +151,6 @@ class AdvertisingControllerTest {
         .andExpect(status().isForbidden());
     mvc.perform(
             post("/store/advertising-costs")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(permissions("MANAGE"))
                 .with(csrf())
@@ -164,7 +161,6 @@ class AdvertisingControllerTest {
             get("/store/advertising-costs/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW")))
         .andExpect(status().isForbidden());
@@ -176,7 +172,6 @@ class AdvertisingControllerTest {
     for (String amount : List.of("1.5", "\"1\"", "2147483648", "-1"))
       mvc.perform(
               post("/store/advertising-costs")
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .with(permissions("VIEW", "MANAGE"))
                   .with(csrf())
@@ -185,7 +180,6 @@ class AdvertisingControllerTest {
           .andExpect(status().isBadRequest());
     mvc.perform(
             put("/store/advertising-costs/c")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW", "MANAGE"))
                 .with(csrf())
@@ -211,7 +205,6 @@ class AdvertisingControllerTest {
     var query =
         get("/store/advertising-media-summaries")
             .param("month", "2026-09")
-            .header("X-Role", "store")
             .header("X-Store-ID", "1")
             .with(permissions("VIEW"));
     var result =
@@ -234,14 +227,12 @@ class AdvertisingControllerTest {
               get("/store/advertising-media-summaries")
                   .param("month", "2026-09")
                   .param(pair[0], pair[1])
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .with(permissions("VIEW")))
           .andExpect(status().isBadRequest());
     }
     mvc.perform(
             get("/store/advertising-media-summaries")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW")))
         .andExpect(status().isBadRequest());
@@ -258,7 +249,6 @@ class AdvertisingControllerTest {
               get("/store/advertising-media-summaries/exports")
                   .param("month", "2026-09")
                   .param("format", "csv")
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .with(permissions(permissions)))
           .andExpect(status().isForbidden());
@@ -268,7 +258,6 @@ class AdvertisingControllerTest {
                 .param("month", "2026-09")
                 .param("format", "csv")
                 .param("page", "0")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW", "EXPORT")))
         .andExpect(status().isBadRequest());
@@ -284,7 +273,6 @@ class AdvertisingControllerTest {
   void deleteHasNoResponseBody() throws Exception {
     mvc.perform(
             delete("/store/advertising-costs/c")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW", "MANAGE"))
                 .with(csrf())
@@ -313,7 +301,6 @@ class AdvertisingControllerTest {
         mvc.perform(
                 get("/store/advertising-order-costs")
                     .param("month", "2026-09")
-                    .header("X-Role", "store")
                     .header("X-Store-ID", "1")
                     .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
             .andExpect(status().isOk())
@@ -328,7 +315,6 @@ class AdvertisingControllerTest {
                 .param("month", "2026-09")
                 .param("page", "2147483647")
                 .param("size", "1000")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
         .andExpect(status().isOk())
@@ -342,7 +328,6 @@ class AdvertisingControllerTest {
               get("/store/advertising-order-costs")
                   .param("month", "2026-09")
                   .param(pair[0], pair[1])
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1")
                   .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
           .andExpect(status().isBadRequest());
@@ -362,7 +347,6 @@ class AdvertisingControllerTest {
                 get(path)
                     .param("month", "2026-09")
                     .param("format", "csv")
-                    .header("X-Role", "store")
                     .header("X-Store-ID", "1")
                     .with(orderPermissions(codes)))
             .andExpect(status().isForbidden());
@@ -372,7 +356,6 @@ class AdvertisingControllerTest {
             get("/store/advertising-order-costs/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
         .andExpect(status().isForbidden());
@@ -381,7 +364,6 @@ class AdvertisingControllerTest {
             get("/store/advertising-order-costs/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(
                     orderPermissions(
@@ -392,7 +374,6 @@ class AdvertisingControllerTest {
                 .param("month", "2026-09")
                 .param("format", "csv")
                 .param("page", "0")
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1")
                 .with(
                     orderPermissions(

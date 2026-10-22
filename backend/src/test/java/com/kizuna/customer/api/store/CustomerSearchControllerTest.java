@@ -105,11 +105,7 @@ class CustomerSearchControllerTest {
     when(contacts.findByCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(any()))
         .thenReturn(List.of(preferred));
     var body =
-        mvc.perform(
-                get("/store/customers/duplicates")
-                    .param("size", "1")
-                    .header("X-Role", "store")
-                    .header("X-Store-ID", "1"))
+        mvc.perform(get("/store/customers/duplicates").param("size", "1").header("X-Store-ID", "1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].matched_type").value("EMAIL"))
@@ -128,10 +124,7 @@ class CustomerSearchControllerTest {
     when(candidates.groups(any(), any(), any(), any(), anyInt())).thenReturn(List.of());
     when(candidates.members(any())).thenReturn(List.of());
     mvc.perform(
-            get("/store/customers/duplicates")
-                .param("cursor", cursor)
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+            get("/store/customers/duplicates").param("cursor", cursor).header("X-Store-ID", "1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isEmpty())
         .andExpect(jsonPath("$.next_cursor").doesNotExist());
@@ -149,7 +142,6 @@ class CustomerSearchControllerTest {
                     .param("type", "PHONE")
                     .param("value", "090-1234-5678")
                     .param("size", "1")
-                    .header("X-Role", "store")
                     .header("X-Store-ID", "1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
@@ -165,7 +157,6 @@ class CustomerSearchControllerTest {
                 .param("type", "PHONE")
                 .param("value", "09012345678")
                 .param("cursor", cursor)
-                .header("X-Role", "store")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value("2"))
@@ -183,10 +174,7 @@ class CustomerSearchControllerTest {
     when(contacts.findAll(ArgumentMatchers.<Specification<CustomerContact>>any(), any(Sort.class)))
         .thenReturn(List.of(contact));
     mvc.perform(
-            get("/store/customers")
-                .param("search", "Case@EXAMPLE.COM")
-                .header("X-Role", "store")
-                .header("X-Store-ID", "1"))
+            get("/store/customers").param("search", "Case@EXAMPLE.COM").header("X-Store-ID", "1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].preferred_contacts").isEmpty())
         .andExpect(jsonPath("$.content[0].matched_contacts[0].value").value("Case@example.com"));
@@ -202,7 +190,6 @@ class CustomerSearchControllerTest {
                     .param("type", "LINE")
                     .param("value", "Case")
                     .param("size", size)
-                    .header("X-Role", "store")
                     .header("X-Store-ID", "1"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error").isString());
@@ -212,7 +199,6 @@ class CustomerSearchControllerTest {
                   .param("type", "LINE")
                   .param("value", "Case")
                   .param("cursor", "bad")
-                  .header("X-Role", "store")
                   .header("X-Store-ID", "1"))
           .andExpect(status().isBadRequest());
     }

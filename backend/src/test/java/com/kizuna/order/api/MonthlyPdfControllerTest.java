@@ -171,7 +171,7 @@ class MonthlyPdfControllerTest {
             .param("store_id", "1")
             .param("person_id", "34")
             .param("month", "2026-09");
-    if (scope.equals("store")) request.header("X-Role", "store").header("X-Store-ID", "1");
+    if (scope.equals("store")) request.header("X-Store-ID", "1");
     return request;
   }
 
