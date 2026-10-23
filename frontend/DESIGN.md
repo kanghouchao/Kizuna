@@ -36,51 +36,51 @@ AuthLayout の利用で認証画面を判定する。アカウント設定内の
 
 ### 対比の基準と記録
 
-通常文字は 4.5:1、意味を持つ図形は 3:1 を両モードで満たす。以下は既存文書の計算記録であり、今回の整理で再計測した値ではない。token や背景を変えた場合は再計測する。`/10` はカード／ページへ直接合成した条件である。
+通常文字は 4.5:1、意味を持つ図形は 3:1 を両モードで満たす。以下は配色 A（藍 × 生成り）への変更時に、本文の手順（oklch → sRGB、gamma-encoded 合成）で再計測した値である。token や背景を変えた場合は再計測する。`/10` はカード／ページへ直接合成した条件である。
 
 | 組合せ                                                          | ライト     | ダーク     | 必要比 |
 | --------------------------------------------------------------- | ---------- | ---------- | ------ |
-| `text-foreground` / `bg-background` / `bg-card`                 | 19.89      | 16.98      | 4.5    |
-| `text-muted-foreground` / `bg-background` / `bg-card`           | 4.83       | 6.74       | 4.5    |
-| `text-foreground` / `bg-muted` （hover 行）                     | 18.07      | 14.26      | 4.5    |
-| `bg-primary` + `text-primary-foreground` (CTA)                  | 5.03       | 5.03       | 4.5    |
-| `text-primary-strong` / `bg-card`                               | 5.26       | 6.72       | 4.5    |
-| `text-primary-strong` / `bg-background`                         | 5.26       | 7.54       | 4.5    |
-| `bg-primary/10` + `text-primary-strong`                         | 4.55       | 6.23       | 4.5    |
-| `bg-primary-strong` 図形 / `bg-card`                            | 5.26       | 6.72       | 3      |
-| `bg-primary-strong` 塗り / `bg-muted` トラック                  | 4.78       | 5.65       | 3      |
-| `text-success-strong` / `bg-card`                               | 9.07       | 9.99       | 4.5    |
-| `bg-success/10` + `text-success-strong`                         | 8.10       | 8.35       | 4.5    |
-| `bg-success` + `text-success-foreground`                        | 6.18       | 11.20      | 4.5    |
-| `bg-success/90` hover + `text-success-foreground`               | 5.10       | 9.04       | 4.5    |
-| `bg-success` 図形 / `bg-card`                                   | 3.22       | 9.99       | 3      |
-| `border-success-strong` 境界 / `bg-muted` トラック              | 8.24       | 8.39       | 3      |
-| `bg-success/10` hover / `bg-muted` + `text-foreground`          | 16.23      | 11.75      | 4.5    |
-| `text-warning-strong` / `bg-card`                               | 9.09       | 10.33      | 4.5    |
-| `bg-warning/10` + `text-warning-strong`                         | 8.15       | 8.50       | 4.5    |
-| `bg-warning` + `text-warning-foreground`                        | 6.23       | 11.58      | 4.5    |
-| `bg-warning/90` hover + `text-warning-foreground`               | 5.14       | 9.35       | 4.5    |
-| `bg-warning` 図形 / `bg-card`                                   | 3.19       | 10.33      | 3      |
-| `text-destructive-strong` / `bg-card`                           | 10.06      | 6.13       | 4.5    |
-| `text-destructive-strong` / `bg-background`                     | 10.06      | 6.88       | 4.5    |
-| `bg-destructive/10` + `text-destructive-strong`                 | 8.42       | 5.39       | 4.5    |
-| `bg-destructive` + `text-destructive-foreground`                | 4.56       | 6.88       | 4.5    |
-| `bg-destructive` 図形 / `bg-card`                               | 4.76       | 6.13       | 3      |
-| `bg-destructive` マーカー / `bg-muted` トラック                 | 4.33       | 5.15       | 3      |
-| `text-destructive` / `bg-card` (FormMessage)                    | 4.76       | 6.13       | 4.5    |
-| `bg-chart-1/10` … `bg-chart-5/10` + `text-foreground`           | 16.87 以上 | 14.40 以上 | 4.5    |
-| `text-foreground` / `bg-primary/10`                             | 17.22      | 15.75      | 4.5    |
-| `text-primary-strong` / `bg-accent` （ghost hover）             | 4.78       | 5.65       | 4.5    |
-| `border-primary` / `ring-primary` / `bg-card` / `bg-background` | 5.26       | 3.37       | 3      |
-| `bg-destructive/90` hover 塗り + アイコン                       | 4.32       | 5.64       | 3      |
-| `border-muted-foreground` ドロップ領域 境界 / `bg-card`         | 4.83       | 6.74       | 3      |
+| `text-foreground` / `bg-background` / `bg-card`                 | 15.86      | 15.25      | 4.5    |
+| `text-muted-foreground` / `bg-background` / `bg-card`           | 5.58       | 7.42       | 4.5    |
+| `text-foreground` / `bg-muted` （hover 行）                     | 14.65      | 13.01      | 4.5    |
+| `bg-primary` + `text-primary-foreground` (CTA)                  | 8.01       | 5.44       | 4.5    |
+| `text-primary-strong` / `bg-card`                               | 8.37       | 7.94       | 4.5    |
+| `text-primary-strong` / `bg-background`                         | 7.95       | 8.73       | 4.5    |
+| `bg-primary/10` + `text-primary-strong`                         | 7.13       | 7.30       | 4.5    |
+| `bg-primary-strong` 図形 / `bg-card`                            | 8.37       | 7.94       | 3      |
+| `bg-primary-strong` 塗り / `bg-muted` トラック                  | 7.34       | 6.78       | 3      |
+| `text-success-strong` / `bg-card`                               | 8.13       | 8.99       | 4.5    |
+| `bg-success/10` + `text-success-strong`                         | 7.31       | 7.54       | 4.5    |
+| `bg-success` + `text-success-foreground`                        | 4.83       | 8.62       | 4.5    |
+| `bg-success/90` hover + `text-success-foreground`               | 5.56       | 7.24       | 4.5    |
+| `bg-success` 図形 / `bg-card`                                   | 3.46       | 7.85       | 3      |
+| `border-success-strong` 境界 / `bg-muted` トラック              | 7.13       | 7.67       | 3      |
+| `bg-success/10` hover / `bg-muted` + `text-foreground`          | 13.28      | 10.81      | 4.5    |
+| `text-warning-strong` / `bg-card`                               | 7.63       | 9.67       | 4.5    |
+| `bg-warning/10` + `text-warning-strong`                         | 6.86       | 8.00       | 4.5    |
+| `bg-warning` + `text-warning-foreground`                        | 4.83       | 9.91       | 4.5    |
+| `bg-warning/90` hover + `text-warning-foreground`               | 5.54       | 8.26       | 4.5    |
+| `bg-warning` 図形 / `bg-card`                                   | 3.46       | 9.01       | 3      |
+| `text-destructive-strong` / `bg-card`                           | 8.71       | 7.00       | 4.5    |
+| `text-destructive-strong` / `bg-background`                     | 8.27       | 7.69       | 4.5    |
+| `bg-destructive/10` + `text-destructive-strong`                 | 7.46       | 6.19       | 4.5    |
+| `bg-destructive` + `text-destructive-foreground`                | 5.75       | 6.05       | 4.5    |
+| `bg-destructive` 図形 / `bg-card`                               | 6.00       | 5.50       | 3      |
+| `bg-destructive` マーカー / `bg-muted` トラック                 | 5.27       | 4.70       | 3      |
+| `text-destructive` / `bg-card` (FormMessage)                    | 6.00       | 5.50       | 4.5    |
+| `bg-chart-1/10` … `bg-chart-5/10` + `text-foreground`           | 14.24 以上 | 12.25 以上 | 4.5    |
+| `text-foreground` / `bg-primary/10`                             | 14.24      | 14.01      | 4.5    |
+| `text-primary-strong` / `bg-accent` （ghost hover）             | 7.27       | 6.34       | 4.5    |
+| `border-primary` / `ring-primary` / `bg-card` / `bg-background` | 7.95       | 3.02       | 3      |
+| `bg-destructive/90` hover 塗り + アイコン                       | 4.84       | 5.14       | 3      |
+| `border-muted-foreground` ドロップ領域 境界 / `bg-card`         | 5.88       | 7.42       | 3      |
 
 新しい組合せは oklch → sRGB（gamma と gamut clamp を含む）→相対輝度で計算し、半透明は gamma-encoded sRGB で合成する。黒／白 = 21.00、`#767676`／白 = 4.54 で輝度計算を確認し、既存の plain・tint・track の行で変換と合成も確認する。不一致は計算器と token の両方を調べ、既存表を副作用で書き換えない。
 
-- 二重 tint は別の組合せ。`bg-primary/10` の親と子に primary-strong を重ねるとライトで 3.97。親の hover 中は `group-hover:text-foreground` 等で切り替え、入れ子を計測する。
+- 二重 tint は別の組合せ。`bg-primary/10` の親と子に primary-strong を重ねるとライトで 6.12（配色 A）。親の hover 中は `group-hover:text-foreground` 等で切り替え、入れ子を計測する。
 - 背景が不定の画像上の半透明 veil は最悪条件で測る。必要なら `bg-card` の不透明面にする。
 - 1px 境界と、同じ意味の文字に隣接する凡例の点は装飾例外。位置・長さが情報の図形には自動適用しない。
-- **シフト timeline の既存例外**: `bg-muted` 上の success / warning バーはライトで 2.92 / 2.90。所有者が、時刻の併記・shadow・既存表示との関係を理由にこの画面だけ認めた。非公開の確定シフトの hollow 境界は `border-success-strong` を使い、この例外に含めない。
+- **シフト timeline**: `bg-muted` 上の success / warning バーは配色 A でライト 3.03 / 3.04 となり 3:1 を満たす。以前（2.92 / 2.90）の画面限定例外は不要になった。非公開の確定シフトの hollow 境界は `border-success-strong` を使い、この例外に含めない。
 - timeline 内の操作ボタンはブラウザ既定 outline を保持する。背景と overflow によって検証済み ring の配置が成立しないための限定例外であり、他画面へ広げない。
 
 ### 公開サイト
