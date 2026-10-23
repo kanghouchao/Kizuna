@@ -1,5 +1,6 @@
-# 1. Download and cache dependencies
-FROM gradle:9.6.1-jdk25-ubi10 AS dependencies
+FROM dhi.io/gradle:9-jdk25-alpine-dev AS dependencies
+# DHI の gradle イメージは root（HOME=/root）で動くため、キャッシュマウント先へ明示的に向ける
+ENV GRADLE_USER_HOME=/home/gradle/.gradle
 WORKDIR /app
 COPY build.gradle settings.gradle ./
 COPY gradlew gradlew
@@ -8,38 +9,37 @@ RUN chmod +x gradlew
 RUN --mount=type=cache,id=gradle-cache,target=/home/gradle/.gradle,uid=1000,gid=1000,sharing=locked \
     ./gradlew dependencies --configuration runtimeClasspath --no-daemon
 
-# Lint stage: run Spotless check
 FROM dependencies AS lint
 WORKDIR /app
 COPY src src
 RUN --mount=type=cache,id=gradle-cache,target=/home/gradle/.gradle,uid=1000,gid=1000,sharing=locked \
     ./gradlew --no-daemon --info spotlessCheck
 
-# 2. Run tests
 FROM dependencies AS test
 WORKDIR /app
 COPY src src
 RUN --mount=type=cache,id=gradle-cache,target=/home/gradle/.gradle,uid=1000,gid=1000,sharing=locked \
     ./gradlew clean test jacocoTestReport jacocoTestCoverageVerification --no-daemon --info
 
-# 3. Build artifacts
 FROM dependencies AS build
 WORKDIR /app
 COPY src src
 RUN --mount=type=cache,id=gradle-cache,target=/home/gradle/.gradle,uid=1000,gid=1000,sharing=locked \
     ./gradlew build --no-daemon --info -x test
+COPY docker/HealthCheck.java docker/
+RUN javac -d healthcheck docker/HealthCheck.java && mkdir logs
 
-# 4. Create runtime image
-FROM eclipse-temurin:25-jre-alpine-3.23
+FROM dhi.io/eclipse-temurin:25-alpine3.23
 WORKDIR /app
 
+# シェルが無いので $JAVA_OPTS を展開できない。JVM 自身が読む JAVA_TOOL_OPTIONS で渡す
 ARG APP_JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseContainerSupport"
-ENV JAVA_OPTS=${APP_JAVA_OPTS}
-
-# Install curl used by the healthcheck
-RUN apk add --no-cache curl
+ENV JAVA_TOOL_OPTIONS=${APP_JAVA_OPTS}
 
 COPY --from=build /app/build/libs/kizuna-*.jar app.jar
+COPY --from=build /app/healthcheck healthcheck
+# log4j2 の既定出力先 ./logs を非 root（65532）で書けるようにする
+COPY --from=build --chown=65532:65532 /app/logs logs
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]

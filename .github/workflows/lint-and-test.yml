@@ -25,6 +25,14 @@ jobs:
       - name: Repo lint
         run: task lint service=.github
 
+      # ベースイメージは dhi.io（Docker Hardened Images）から取るため、Docker Hub の資格情報でログインする
+      - name: Log in to dhi.io
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
+
       - name: Check E2E types
         run: task lint service=e2e
 
@@ -66,6 +74,14 @@ jobs:
           driver-opts: |
             image=moby/buildkit:latest
             network=host
+
+      - name: Log in to dhi.io
+        if: steps.diff.outputs.docs_only != 'true'
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
 
       - name: Set up Task
         uses: arduino/setup-task@v3
@@ -132,6 +148,14 @@ jobs:
           driver-opts: |
             image=moby/buildkit:latest
             network=host
+
+      - name: Log in to dhi.io
+        if: steps.diff.outputs.docs_only != 'true'
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
 
       - name: Set up Task
         uses: arduino/setup-task@v3

@@ -1,4 +1,4 @@
-ARG NODE_IMAGE=node:24.7.0-alpine3.22
+ARG NODE_IMAGE=dhi.io/node:24-alpine3.23-dev
 FROM ${NODE_IMAGE} AS lint
 WORKDIR /e2e
 COPY package.json ./
