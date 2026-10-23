@@ -4,12 +4,14 @@ name: kizuna
 services:
   # Database: PostgreSQL
   database:
-    image: postgres:18-alpine
+    image: dhi.io/postgres:18-alpine3.23
     container_name: database
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-kizuna}
       POSTGRES_USER: ${POSTGRES_USER:-kizuna}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      # 既存ボリュームの格納先（公式イメージの既定）に合わせる。DHI の既定 18/data のままだと空クラスタを作り直す
+      PGDATA: /var/lib/postgresql/18/docker
     volumes:
       - db-data:/var/lib/postgresql
     networks:
@@ -22,7 +24,7 @@ services:
 
   # Cache: Redis
   cache:
-    image: redis:8.8.0-alpine3.23
+    image: dhi.io/redis:8-alpine3.23
     container_name: redis
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}
     environment:
@@ -32,7 +34,8 @@ services:
     networks:
       - network
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      # -e: NOAUTH などのエラー応答でも終了コード 1 にする（grep が無いので PONG 照合の代わり）
+      test: ["CMD", "redis-cli", "-e", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -115,7 +118,8 @@ services:
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.backend-strip.stripPrefix.prefixes=/api"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
+      test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
       start_period: 15s
       interval: 5s
       timeout: 3s
@@ -124,7 +128,8 @@ services:
 
   # S3 互換オブジェクトストレージ
   storage:
-    image: chrislusf/seaweedfs:4.48
+    # dev 版（root + bash）を使う：実行版は /data が root 所有で書けず、ヘルスチェックに使える道具も無い
+    image: dhi.io/seaweedfs:4-dev
     container_name: storage
     command: mini -dir=/data -admin.ui=true -webdav=false
     environment:
@@ -145,7 +150,7 @@ services:
       - "traefik.http.services.storage.loadbalancer.server.port=8333"
       - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8333 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -171,7 +176,7 @@ services:
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       start_period: 20s
       interval: 5s
       timeout: 5s
@@ -180,8 +185,12 @@ services:
 
   # Traefik: The reverse proxy
   gateway:
-    image: traefik:v3.7.6
+    image: dhi.io/traefik:3-alpine3.23
     container_name: traefik
+    # 実行ユーザーが非 root（65532）なので docker.sock の所有グループを足す。
+    # Docker Desktop / OrbStack は 0、Linux ホストは `getent group docker` の GID を DOCKER_GID に設定する
+    group_add:
+      - "${DOCKER_GID:-0}"
     ports:
       - "80:80"
       - "8080:8080"

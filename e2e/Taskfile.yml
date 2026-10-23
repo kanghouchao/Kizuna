@@ -4,7 +4,7 @@ silent: true
 
 vars:
   NODE_IMAGE:
-    sh: awk '$1 == "FROM" && $2 ~ /^node:/ { print $2; exit }' ../frontend/Dockerfile
+    sh: awk '$1 == "FROM" && $2 ~ /(^|\/)node:/ { print $2; exit }' ../frontend/Dockerfile
 
 tasks:
   lint:

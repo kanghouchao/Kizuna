@@ -1,4 +1,4 @@
-FROM node:24.22.0-alpine3.24 AS deps
+FROM dhi.io/node:24-alpine3.23-dev AS deps
 WORKDIR /app
 COPY package.json ./
 RUN --mount=type=cache,id=npm-cache,target=/root/.npm,uid=1000,gid=1000,sharing=locked \
@@ -29,23 +29,17 @@ COPY . .
 RUN --mount=type=cache,id=npm-cache,target=/root/.npm,uid=1000,gid=1000,sharing=locked \
     npm run build
 
-FROM node:24.22.0-alpine3.24 AS runner
+FROM dhi.io/node:24-alpine3.23 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# Ensure Next server binds correctly in containers
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-# Alpine: add glibc compatibility for Next/SWC native binaries and tools for healthcheck
-RUN apk add --no-cache libc6-compat wget curl
-
-# Copy standalone server output to root (as Next docs recommend)
-COPY --from=builder /app/.next/standalone ./
-# Static assets
-COPY --from=builder /app/.next/static ./.next/static
-# Public assets (e.g., /health)
-COPY --from=builder /app/public ./public
+# 実行ユーザーは node（1000）。.next/cache を書けるよう所有者を合わせる
+COPY --from=builder --chown=1000:1000 /app/.next/standalone ./
+COPY --from=builder --chown=1000:1000 /app/.next/static ./.next/static
+COPY --from=builder --chown=1000:1000 /app/public ./public
 
 EXPOSE 3000
 

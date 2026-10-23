@@ -15,11 +15,12 @@ name: kizuna-e2e
 
 services:
   database:
-    image: postgres:18-alpine
+    image: dhi.io/postgres:18-alpine3.23
     # 永続化しない。実行ごとにシードからやり直すことで、手動 QA の残骸や前回実行の書き込みが
     # 次の実行を汚染する経路そのものを断つ。
     tmpfs:
-      - /var/lib/postgresql
+      # DHI の postgres は最初から uid 70 で動き、root 所有の tmpfs では initdb できない
+      - /var/lib/postgresql:uid=70,gid=70
     environment:
       POSTGRES_DB: kizuna
       POSTGRES_USER: kizuna
@@ -33,7 +34,7 @@ services:
       retries: 10
 
   cache:
-    image: redis:8.8.0-alpine3.23
+    image: dhi.io/redis:8-alpine3.23
     # 資格情報は開発用 compose と同じ変数参照形式（既定値は E2E 専用のダミー値）
     command: redis-server --requirepass ${REDIS_PASSWORD:-password}
     environment:
@@ -41,13 +42,15 @@ services:
     networks:
       - network
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      # -e: NOAUTH などのエラー応答でも終了コード 1 にする（grep が無いので PONG 照合の代わり）
+      test: ["CMD", "redis-cli", "-e", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   storage:
-    image: chrislusf/seaweedfs:4.48
+    # dev 版（root + bash）を使う：実行版は /data が root 所有で書けず、ヘルスチェックに使える道具も無い
+    image: dhi.io/seaweedfs:4-dev
     command: mini -dir=/data -admin.ui=false -webdav=false
     tmpfs:
       - /data
@@ -65,13 +68,13 @@ services:
       - "traefik.http.services.storage.loadbalancer.server.port=8333"
       - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8333 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   private-storage:
-    image: chrislusf/seaweedfs:4.48
+    image: dhi.io/seaweedfs:4-dev
     command: mini -dir=/data -admin.ui=false -webdav=false -bucket=applicant-images -volume.max=4 -master.volumeSizeLimitMB=16
     tmpfs:
       - /data:size=134217728
@@ -81,14 +84,15 @@ services:
     networks:
       - network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8333 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   backend:
     tmpfs:
-      - /tmp/kizuna-private-attachments:size=134217728,mode=0700
+      # backend は非 root（65532）で動くため、所有者を合わせないと mode=0700 で書けない
+      - /tmp/kizuna-private-attachments:size=134217728,mode=0700,uid=65532,gid=65532
     # タグは worktree ごとに分ける（root Taskfile が E2E_IMAGE_TAG を export する）。
     # latest 固定だと、別 worktree の task build が同じタグを上書きし、相手のコードを検証してしまう。
     image: kizuna-backend:${E2E_IMAGE_TAG:-latest}
@@ -137,7 +141,8 @@ services:
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.backend-strip.stripPrefix.prefixes=/api"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
+      test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
       start_period: 15s
       interval: 5s
       timeout: 3s
@@ -160,14 +165,18 @@ services:
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       start_period: 20s
       interval: 5s
       timeout: 5s
       retries: 5
 
   gateway:
-    image: traefik:v3.7.6
+    image: dhi.io/traefik:3-alpine3.23
+    # 実行ユーザーが非 root（65532）なので docker.sock の所有グループを足す。
+    # Docker Desktop / OrbStack は 0、Linux ホストは `getent group docker` の GID を DOCKER_GID に設定する
+    group_add:
+      - "${DOCKER_GID:-0}"
     # 設定ファイルはマウントせず CLI 引数で完結させる（開発環境の traefik.yml への相乗りを避ける）。
     command:
       - "--global.checkNewVersion=false"
