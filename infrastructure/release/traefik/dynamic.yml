@@ -1,0 +1,59 @@
+# traefik のルーティング定義（file provider）。転送先は compose のサービス名で、同じネットワーク内だけで解決する。
+# TLS 証明書の対象ドメインは gateway に渡した APP_DOMAIN から取る（file provider は compose の変数展開を受けないため）。
+http:
+  routers:
+    backend:
+      rule: "PathPrefix(`/api`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - backend-strip
+      service: backend
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: '{{ env "APP_DOMAIN" }}'
+    storage:
+      rule: "PathPrefix(`/static`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - storage-strip
+      service: storage
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: '{{ env "APP_DOMAIN" }}'
+    frontend:
+      rule: "PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`)"
+      entryPoints:
+        - websecure
+      service: frontend
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: '{{ env "APP_DOMAIN" }}'
+
+  middlewares:
+    backend-strip:
+      stripPrefix:
+        prefixes:
+          - /api
+    storage-strip:
+      stripPrefix:
+        prefixes:
+          - /static
+
+  services:
+    backend:
+      loadBalancer:
+        servers:
+          - url: "http://backend:8080"
+    storage:
+      loadBalancer:
+        servers:
+          - url: "http://storage:8333"
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:3000"

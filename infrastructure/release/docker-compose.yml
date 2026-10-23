@@ -108,15 +108,6 @@ services:
         condition: service_healthy
       storage:
         condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
-      - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.backend.tls.domains[0].main=${APP_DOMAIN:-kizuna.jp}"
-      - "traefik.http.routers.backend.middlewares=backend-strip@docker"
-      - "traefik.http.services.backend.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.backend-strip.stripPrefix.prefixes=/api"
     healthcheck:
       # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
       test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
@@ -138,16 +129,6 @@ services:
       - seaweedfs-data:/data
     networks:
       - network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.storage.rule=PathPrefix(`/static`)"
-      - "traefik.http.routers.storage.entrypoints=websecure"
-      - "traefik.http.routers.storage.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.storage.tls.domains[0].main=${APP_DOMAIN:-kizuna.jp}"
-      - "traefik.http.routers.storage.middlewares=storage-strip@docker"
-      - "traefik.http.routers.storage.service=storage"
-      - "traefik.http.services.storage.loadbalancer.server.port=8333"
-      - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
       interval: 10s
@@ -169,13 +150,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`)"
-      - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.frontend.tls.domains[0].main=${APP_DOMAIN:-kizuna.jp}"
-      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       start_period: 20s
@@ -188,16 +162,14 @@ services:
   gateway:
     image: dhi.io/traefik:3-alpine3.23
     container_name: traefik
-    # 実行ユーザーが非 root（65532）なので docker.sock の所有グループを足す。
-    # Docker Desktop / OrbStack は 0、Linux ホストは `getent group docker` の GID を DOCKER_GID に設定する
-    group_add:
-      - "${DOCKER_GID:-0}"
+    # traefik/dynamic.yml が証明書の対象ドメインとして読む
+    environment:
+      - APP_DOMAIN=${APP_DOMAIN:-kizuna.jp}
     ports:
       - "80:80"
       - "443:443"
       - "8080:8080"
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./traefik/:/etc/traefik/:ro"
       - "acme-data:/letsencrypt"
     networks:
