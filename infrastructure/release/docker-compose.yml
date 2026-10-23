@@ -128,8 +128,7 @@ services:
 
   # S3 互換オブジェクトストレージ
   storage:
-    # dev 版（root + bash）を使う：実行版は /data が root 所有で書けず、ヘルスチェックに使える道具も無い
-    image: dhi.io/seaweedfs:4-dev
+    image: chrislusf/seaweedfs:4.48
     container_name: storage
     command: mini -dir=/data -admin.ui=false -webdav=false
     environment:
@@ -150,7 +149,7 @@ services:
       - "traefik.http.services.storage.loadbalancer.server.port=8333"
       - "traefik.http.middlewares.storage-strip.stripPrefix.prefixes=/static"
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8333 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$$code\" = 200 ]"]
+      test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
