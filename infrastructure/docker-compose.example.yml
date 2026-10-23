@@ -10,8 +10,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-kizuna}
       POSTGRES_USER: ${POSTGRES_USER:-kizuna}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      # 既存ボリュームの格納先（公式イメージの既定）に合わせる。DHI の既定 18/data のままだと空クラスタを作り直す
-      PGDATA: /var/lib/postgresql/18/docker
     volumes:
       - db-data:/var/lib/postgresql
     networks:

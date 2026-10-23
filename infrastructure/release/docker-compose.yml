@@ -10,7 +10,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-kizuna}
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER を .env に設定してください（旧 DB_USERNAME から改名。既存ボリュームがある場合は初回起動時と同じ値にすること）}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD を .env に設定してください（旧 DB_PASSWORD から改名。既存ボリュームがある場合は初回起動時と同じ値にすること）}
-      # 既存ボリュームの格納先（公式イメージの既定）に合わせる。DHI の既定 18/data のままだと空クラスタを作り直す
+      # 公式イメージ時代のボリュームは 18/docker にある。DHI の既定 18/data だと黙って空クラスタを作るため固定する。
+      # 新規ボリュームでは 18/ が root 所有で 18/docker を作れず起動に失敗する（その場合はこの 2 行を消す）
       PGDATA: /var/lib/postgresql/18/docker
     volumes:
       - db-data:/var/lib/postgresql
