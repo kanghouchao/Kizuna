@@ -9,7 +9,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
@@ -46,7 +45,6 @@ public class ShiftService {
   private final ShiftMapper shiftMapper;
   private final CastEnrollmentRepository enrollments;
   private final StoreRepository storeRepository;
-  private final StoreContext storeContext;
   private final CastProfileRepository castRepository;
   private final UserRepository userRepository;
   private final BusinessDateService businessDateService;
@@ -55,8 +53,10 @@ public class ShiftService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<ShiftResponse> list(LocalDate from, LocalDate to) {
-    return shiftRepository.findByWorkDateBetween(from, to).stream().map(this::toResponse).toList();
+  public List<ShiftResponse> list(Long storeId, LocalDate from, LocalDate to) {
+    return shiftRepository.findByStoreIdAndWorkDateBetween(storeId, from, to).stream()
+        .map(this::toResponse)
+        .toList();
   }
 
   /**
@@ -67,15 +67,15 @@ public class ShiftService {
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<PublicShiftResponse> listPublicToday() {
+  public List<PublicShiftResponse> listPublicToday(Long storeId) {
     List<Shift> shifts =
-        shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
-            businessDateService.currentBusinessDate(), ShiftStatus.CONFIRMED);
+        shiftRepository.findByStoreIdAndWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+            storeId, businessDateService.currentBusinessDate(), ShiftStatus.CONFIRMED);
     if (shifts.isEmpty()) {
       return List.of();
     }
     Map<String, CastProfile> activeCasts =
-        castRepository.findPublished(storeContext.getStoreId()).stream()
+        castRepository.findPublished(storeId).stream()
             .collect(Collectors.toMap(CastProfile::getEnrollmentId, Function.identity()));
     return shifts.stream()
         .filter(shift -> activeCasts.containsKey(shift.getCastId()))
@@ -95,14 +95,14 @@ public class ShiftService {
 
   @StoreScoped
   @Transactional
-  public ShiftResponse create(ShiftCreateRequest request, String actorEmail) {
+  public ShiftResponse create(Long storeId, ShiftCreateRequest request, String actorEmail) {
     if (request.getStartTime().equals(request.getEndTime())) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
-    requireActiveMembership(lockEnrollment(request.getCastId()));
+    requireActiveMembership(lockEnrollment(storeId, request.getCastId()));
 
-    // store_id は StoreScopeStampListener が @PrePersist で採番する
     Shift shift = shiftMapper.toEntity(request, resolveActorId(actorEmail));
+    shift.setStoreId(storeId);
     shiftRepository.save(shift);
     shiftRepository.flush();
     audit.recordById(
@@ -120,13 +120,14 @@ public class ShiftService {
 
   @StoreScoped
   @Transactional
-  public ShiftResponse update(String id, ShiftUpdateRequest request, String actorEmail) {
+  public ShiftResponse update(
+      Long storeId, String id, ShiftUpdateRequest request, String actorEmail) {
     CastEnrollment target =
-        request.getCastId() == null ? null : lockEnrollment(request.getCastId());
+        request.getCastId() == null ? null : lockEnrollment(storeId, request.getCastId());
 
     // 実績の有無を読んで可否を決める以上、実績の記録・訂正と直列でなければ守衛は素通りされる。
-    // ロックはこの取引でのシフトの最初の読み込みでなければならない（{@link ShiftRepository#findScopedByIdForUpdate}）。
-    Shift shift = findShiftForUpdate(id);
+    // ロックはこの取引でのシフトの最初の読み込みでなければならない（{@link ShiftRepository#findByIdAndStoreIdForUpdate}）。
+    Shift shift = findShiftForUpdate(storeId, id);
     if (target != null && !target.getId().equals(shift.getCastId())) {
       requireActiveMembership(target);
     }
@@ -143,7 +144,7 @@ public class ShiftService {
     // 未取消の実績が付いたシフトは勤務日とキャストを変えられない。実績は記録時に営業日とキャストを物化して
     // おり、事後の付け替えはその事実と食い違う（ADR 0014）。逃げ道は実績の取消 → 変更 → 再記録。
     // 時刻・status は実績の有無と無関係に通す。
-    if (movesAttribution(shift, request) && attendanceRepository.hasActiveAttendance(id)) {
+    if (movesAttribution(shift, request) && attendanceRepository.hasActiveAttendance(storeId, id)) {
       throw new ServiceException("実績が記録されているシフトの勤務日とキャストは変更できません。実績を取り消してから変更してください");
     }
 
@@ -169,10 +170,10 @@ public class ShiftService {
   }
 
   /** 店舗・在籍・シフトの順序を守り、作成と付け替えを退店から直列化する。 */
-  private CastEnrollment lockEnrollment(String id) {
-    storeRepository.lockAgainstDeletion(storeContext.getStoreId());
+  private CastEnrollment lockEnrollment(Long storeId, String id) {
+    storeRepository.lockAgainstDeletion(storeId);
     return enrollments
-        .findByIdAndStoreIdForUpdate(id, storeContext.getStoreId())
+        .findByIdAndStoreIdForUpdate(id, storeId)
         .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + id));
   }
 
@@ -191,8 +192,9 @@ public class ShiftService {
   /** 店外への露出可否は承認と独立した軸なので、状態や時間帯の更新とは別の口で受ける。 */
   @StoreScoped
   @Transactional
-  public ShiftResponse changePublication(String id, boolean published, String actorEmail) {
-    Shift shift = findShift(id);
+  public ShiftResponse changePublication(
+      Long storeId, String id, boolean published, String actorEmail) {
+    Shift shift = findShift(storeId, id);
     var before = ShiftAuditSnapshot.of(shift);
     shift.changePublication(published);
     shift.stampUpdatedBy(resolveActorId(actorEmail));
@@ -215,16 +217,16 @@ public class ShiftService {
 
   @StoreScoped
   @Transactional
-  public void delete(String id) {
-    Shift shift = findShiftForUpdate(id);
+  public void delete(Long storeId, String id) {
+    Shift shift = findShiftForUpdate(storeId, id);
     var before = ShiftAuditSnapshot.of(shift);
     // 実績が参照する限り削除しない。取消済みも数えるのは、参照を外して消すと「予定通りの出勤」が
     // 「飛び込み」へ不可逆に化けるため（ADR 0014）。誤建の組は実績の取消と TENTATIVE 化で中性化する。
-    if (attendanceRepository.existsByShiftId(id)) {
+    if (attendanceRepository.existsByStoreIdAndShiftId(storeId, id)) {
       throw new ConflictException("実績が記録されているシフトは削除できません。実績を取り消したうえで下書きに戻してください");
     }
-    recordUnlinkedRequests(id);
-    shiftRepository.deleteById(id);
+    recordUnlinkedRequests(storeId, id);
+    shiftRepository.delete(shift);
     shiftRepository.flush();
     audit.recordCurrent(
         shift.getStoreId(),
@@ -235,10 +237,10 @@ public class ShiftService {
         Map.of("exists", "false"));
   }
 
-  private void recordUnlinkedRequests(String shiftId) {
+  private void recordUnlinkedRequests(Long storeId, String shiftId) {
     String afterId = "";
     while (true) {
-      var page = requests.findLinkedForUpdate(shiftId, afterId, Limit.of(100));
+      var page = requests.findLinkedForUpdate(storeId, shiftId, afterId, Limit.of(100));
       if (page.isEmpty()) return;
       for (var request : page) {
         var before = ShiftAuditSnapshot.of(request).values();
@@ -269,16 +271,16 @@ public class ShiftService {
         shift, businessDateService.effectiveDateChangeTimeOn(shift.getWorkDate()));
   }
 
-  private Shift findShift(String id) {
+  private Shift findShift(Long storeId, String id) {
     return shiftRepository
-        .findById(id)
+        .findByIdAndStoreId(id, storeId)
         .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
   }
 
-  /** 予実の交差を触る操作のためにシフトを押さえて引く。契約は {@link ShiftRepository#findScopedByIdForUpdate} にある。 */
-  private Shift findShiftForUpdate(String id) {
+  /** 予実の交差を触る操作のためにシフトを押さえて引く。契約は {@link ShiftRepository#findByIdAndStoreIdForUpdate} にある。 */
+  private Shift findShiftForUpdate(Long storeId, String id) {
     return shiftRepository
-        .findScopedByIdForUpdate(id)
+        .findByIdAndStoreIdForUpdate(id, storeId)
         .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
   }
 

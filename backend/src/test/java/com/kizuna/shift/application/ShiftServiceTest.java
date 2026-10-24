@@ -18,7 +18,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
@@ -42,7 +41,6 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -58,7 +56,6 @@ class ShiftServiceTest {
   @Mock private ShiftMapper shiftMapper;
   @Mock private CastEnrollmentRepository enrollments;
   @Mock private StoreRepository storeRepository;
-  @Mock private StoreContext storeContext;
   @Mock private CastProfileRepository castRepository;
   @Mock private UserRepository userRepository;
   @Mock private BusinessDateService businessDateService;
@@ -72,11 +69,6 @@ class ShiftServiceTest {
   private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final Long ACTOR_ID = 42L;
   private static final Long STORE_ID = 1L;
-
-  @BeforeEach
-  void currentStore() {
-    lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
-  }
 
   private CastEnrollment enrollment(String id) {
     CastEnrollment enrollment = CastEnrollment.builder().build();
@@ -115,12 +107,13 @@ class ShiftServiceTest {
     LocalDate to = LocalDate.of(2026, 7, 31);
     Shift s = Shift.builder().castId("c1").build();
 
-    when(shiftRepository.findByWorkDateBetween(from, to)).thenReturn(List.of(s));
+    when(shiftRepository.findByStoreIdAndWorkDateBetween(STORE_ID, from, to))
+        .thenReturn(List.of(s));
     ShiftResponse resp = new ShiftResponse();
     resp.setId("s1");
     when(shiftMapper.toResponse(eq(s), any())).thenReturn(resp);
 
-    List<ShiftResponse> result = shiftService.list(from, to);
+    List<ShiftResponse> result = shiftService.list(STORE_ID, from, to);
     assertThat(result).hasSize(1);
     assertThat(result.get(0).getId()).isEqualTo("s1");
   }
@@ -147,13 +140,14 @@ class ShiftServiceTest {
     resp.setId("s_new");
     when(shiftMapper.toResponse(any(), any())).thenReturn(resp);
 
-    ShiftResponse res = shiftService.create(req, ACTOR_EMAIL);
+    ShiftResponse res = shiftService.create(STORE_ID, req, ACTOR_EMAIL);
     var locks = inOrder(storeRepository, enrollments);
-    locks.verify(storeRepository).lockAgainstDeletion(any());
+    locks.verify(storeRepository).lockAgainstDeletion(STORE_ID);
     locks.verify(enrollments).findByIdAndStoreIdForUpdate("c1", STORE_ID);
     assertThat(res.getId()).isEqualTo("s_new");
     // 作成の実行者は認証主体から解決して写像へ渡す（実際に列へ載ることは ShiftCrossStoreIT が見る）
     verify(shiftMapper).toEntity(req, ACTOR_ID);
+    assertThat(entity.getStoreId()).as("店舗 id を生成時に明示設定すること").isEqualTo(STORE_ID);
   }
 
   @Test
@@ -162,7 +156,7 @@ class ShiftServiceTest {
     req.setStartTime(LocalTime.of(20, 0));
     req.setEndTime(LocalTime.of(20, 0));
 
-    assertThatThrownBy(() -> shiftService.create(req, ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftService.create(STORE_ID, req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("開始時刻と終了時刻");
   }
@@ -173,7 +167,7 @@ class ShiftServiceTest {
 
     when(enrollments.findByIdAndStoreIdForUpdate("c1", STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftService.create(req, ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftService.create(STORE_ID, req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
@@ -184,7 +178,7 @@ class ShiftServiceTest {
     s.setId("s1");
 
     givenActor();
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID)).thenReturn(Optional.of(s));
     when(shiftRepository.save(any())).thenReturn(s);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -196,7 +190,7 @@ class ShiftServiceTest {
     resp.setStatus("CONFIRMED");
     when(shiftMapper.toResponse(eq(s), any())).thenReturn(resp);
 
-    ShiftResponse result = shiftService.update("s1", req, ACTOR_EMAIL);
+    ShiftResponse result = shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL);
     assertThat(result.getStatus()).isEqualTo("CONFIRMED");
     assertThat(s.getStatus()).isEqualTo(ShiftStatus.CONFIRMED);
     assertThat(s.getUpdatedBy()).as("直接編集は updated_by に実行者を印字すること").isEqualTo(ACTOR_ID);
@@ -204,9 +198,11 @@ class ShiftServiceTest {
 
   @Test
   void update_throwsWhenNotFound() {
-    when(shiftRepository.findScopedByIdForUpdate("missing")).thenReturn(Optional.empty());
+    when(shiftRepository.findByIdAndStoreIdForUpdate("missing", STORE_ID))
+        .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftService.update("missing", new ShiftUpdateRequest(), ACTOR_EMAIL))
+    assertThatThrownBy(
+            () -> shiftService.update(STORE_ID, "missing", new ShiftUpdateRequest(), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("シフトが見つかりません");
   }
@@ -219,7 +215,7 @@ class ShiftServiceTest {
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setCastId("foreign");
 
-    assertThatThrownBy(() -> shiftService.update("s1", req, ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
@@ -228,13 +224,13 @@ class ShiftServiceTest {
   void update_rejectsWhenEndEqualsStart() {
     Shift s = Shift.builder().build();
     s.setId("s1");
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID)).thenReturn(Optional.of(s));
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setStartTime(LocalTime.of(20, 0));
     req.setEndTime(LocalTime.of(20, 0));
 
-    assertThatThrownBy(() -> shiftService.update("s1", req, ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("開始時刻と終了時刻");
   }
@@ -244,12 +240,12 @@ class ShiftServiceTest {
     // 既存 18:00-22:00 に start だけ 22:00 → 既存 end 22:00 とマージで一致 → 拒否
     Shift s = Shift.builder().startTime(LocalTime.of(18, 0)).endTime(LocalTime.of(22, 0)).build();
     s.setId("s1");
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID)).thenReturn(Optional.of(s));
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setStartTime(LocalTime.of(22, 0));
 
-    assertThatThrownBy(() -> shiftService.update("s1", req, ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("開始時刻と終了時刻");
   }
@@ -257,13 +253,13 @@ class ShiftServiceTest {
   @Test
   void update_rejectsWorkDateChangeWhenActiveAttendanceExists() {
     Shift s = shiftWithAttribution();
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
-    when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID)).thenReturn(Optional.of(s));
+    when(attendanceRepository.hasActiveAttendance(STORE_ID, "s1")).thenReturn(true);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setWorkDate(LocalDate.of(2026, 7, 9));
 
-    assertThatThrownBy(() -> shiftService.update("s1", req, ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("勤務日とキャストは変更できません");
     verify(shiftRepository, never()).save(any());
@@ -272,15 +268,15 @@ class ShiftServiceTest {
   @Test
   void update_rejectsCastChangeWhenActiveAttendanceExists() {
     Shift s = shiftWithAttribution();
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID)).thenReturn(Optional.of(s));
     when(enrollments.findByIdAndStoreIdForUpdate("c2", STORE_ID))
         .thenReturn(Optional.of(enrollment("c2")));
-    when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
+    when(attendanceRepository.hasActiveAttendance(STORE_ID, "s1")).thenReturn(true);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
     req.setCastId("c2");
 
-    assertThatThrownBy(() -> shiftService.update("s1", req, ACTOR_EMAIL))
+    assertThatThrownBy(() -> shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("勤務日とキャストは変更できません");
     verify(shiftRepository, never()).save(any());
@@ -292,8 +288,8 @@ class ShiftServiceTest {
     // 実績「あり」を敷いたうえで通ることが主張なので、短絡で呼ばれない stub は lenient で置く。
     Shift s = shiftWithAttribution();
     givenActor();
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
-    lenient().when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID)).thenReturn(Optional.of(s));
+    lenient().when(attendanceRepository.hasActiveAttendance(STORE_ID, "s1")).thenReturn(true);
     when(shiftRepository.save(any())).thenReturn(s);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -303,7 +299,7 @@ class ShiftServiceTest {
         .thenReturn(new ShiftPatch(null, null, LocalTime.of(19, 0), null, ShiftStatus.TENTATIVE));
     when(shiftMapper.toResponse(eq(s), any())).thenReturn(new ShiftResponse());
 
-    shiftService.update("s1", req, ACTOR_EMAIL);
+    shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL);
 
     assertThat(s.getStartTime()).isEqualTo(LocalTime.of(19, 0));
     assertThat(s.getStatus()).isEqualTo(ShiftStatus.TENTATIVE);
@@ -314,10 +310,10 @@ class ShiftServiceTest {
     // 同値の再送は変更ではない。全項目を送り返す客体を禁改が誤って撥ねないこと。
     Shift s = shiftWithAttribution();
     givenActor();
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID)).thenReturn(Optional.of(s));
     when(enrollments.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(enrollment("c1")));
-    lenient().when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(true);
+    lenient().when(attendanceRepository.hasActiveAttendance(STORE_ID, "s1")).thenReturn(true);
     when(shiftRepository.save(any())).thenReturn(s);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -327,7 +323,7 @@ class ShiftServiceTest {
         .thenReturn(new ShiftPatch("c1", LocalDate.of(2026, 7, 8), null, null, null));
     when(shiftMapper.toResponse(eq(s), any())).thenReturn(new ShiftResponse());
 
-    shiftService.update("s1", req, ACTOR_EMAIL);
+    shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL);
 
     verify(shiftRepository).save(s);
   }
@@ -337,8 +333,8 @@ class ShiftServiceTest {
     // 取消後は変更できる。逃げ道（取消 → 変更 → 再記録）が塞がっていないこと。
     Shift s = shiftWithAttribution();
     givenActor();
-    when(shiftRepository.findScopedByIdForUpdate("s1")).thenReturn(Optional.of(s));
-    when(attendanceRepository.hasActiveAttendance("s1")).thenReturn(false);
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID)).thenReturn(Optional.of(s));
+    when(attendanceRepository.hasActiveAttendance(STORE_ID, "s1")).thenReturn(false);
     when(shiftRepository.save(any())).thenReturn(s);
 
     ShiftUpdateRequest req = new ShiftUpdateRequest();
@@ -347,36 +343,38 @@ class ShiftServiceTest {
         .thenReturn(new ShiftPatch(null, LocalDate.of(2026, 7, 9), null, null, null));
     when(shiftMapper.toResponse(eq(s), any())).thenReturn(new ShiftResponse());
 
-    shiftService.update("s1", req, ACTOR_EMAIL);
+    shiftService.update(STORE_ID, "s1", req, ACTOR_EMAIL);
 
     assertThat(s.getWorkDate()).isEqualTo(LocalDate.of(2026, 7, 9));
   }
 
   @Test
   void delete_removes() {
-    when(shiftRepository.findScopedByIdForUpdate("s1"))
-        .thenReturn(Optional.of(Shift.builder().build()));
-    shiftService.delete("s1");
-    verify(shiftRepository).deleteById("s1");
+    Shift shift = Shift.builder().build();
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID))
+        .thenReturn(Optional.of(shift));
+    shiftService.delete(STORE_ID, "s1");
+    verify(shiftRepository).delete(shift);
   }
 
   @Test
   void delete_rejectsWhenAnyAttendanceReferencesTheShift() {
-    when(shiftRepository.findScopedByIdForUpdate("s1"))
+    when(shiftRepository.findByIdAndStoreIdForUpdate("s1", STORE_ID))
         .thenReturn(Optional.of(Shift.builder().build()));
-    when(attendanceRepository.existsByShiftId("s1")).thenReturn(true);
+    when(attendanceRepository.existsByStoreIdAndShiftId(STORE_ID, "s1")).thenReturn(true);
 
-    assertThatThrownBy(() -> shiftService.delete("s1"))
+    assertThatThrownBy(() -> shiftService.delete(STORE_ID, "s1"))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("実績が記録されているシフトは削除できません");
-    verify(shiftRepository, never()).deleteById("s1");
+    verify(shiftRepository, never()).delete(any());
   }
 
   @Test
   void delete_throwsWhenNotFound() {
-    when(shiftRepository.findScopedByIdForUpdate("missing")).thenReturn(Optional.empty());
+    when(shiftRepository.findByIdAndStoreIdForUpdate("missing", STORE_ID))
+        .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftService.delete("missing"))
+    assertThatThrownBy(() -> shiftService.delete(STORE_ID, "missing"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("シフトが見つかりません");
   }
@@ -405,11 +403,11 @@ class ShiftServiceTest {
   void changePublication_flipsFlagAndStampsActor() {
     Shift shift = Shift.builder().castId("c1").status(ShiftStatus.CONFIRMED).build();
     givenActor();
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+    when(shiftRepository.findByIdAndStoreId("s1", STORE_ID)).thenReturn(Optional.of(shift));
     when(shiftRepository.save(shift)).thenReturn(shift);
     when(shiftMapper.toResponse(eq(shift), any())).thenReturn(new ShiftResponse());
 
-    shiftService.changePublication("s1", false, ACTOR_EMAIL);
+    shiftService.changePublication(STORE_ID, "s1", false, ACTOR_EMAIL);
 
     assertThat(shift.isPublished()).isFalse();
     assertThat(shift.getUpdatedBy()).isEqualTo(ACTOR_ID);
@@ -426,11 +424,11 @@ class ShiftServiceTest {
             .status(ShiftStatus.CONFIRMED)
             .build();
     givenActor();
-    when(shiftRepository.findById("s1")).thenReturn(Optional.of(shift));
+    when(shiftRepository.findByIdAndStoreId("s1", STORE_ID)).thenReturn(Optional.of(shift));
     when(shiftRepository.save(shift)).thenReturn(shift);
     when(shiftMapper.toResponse(eq(shift), any())).thenReturn(new ShiftResponse());
 
-    shiftService.changePublication("s1", false, ACTOR_EMAIL);
+    shiftService.changePublication(STORE_ID, "s1", false, ACTOR_EMAIL);
 
     assertThat(shift.getStatus()).as("公開可否は状態機械の一部ではない").isEqualTo(ShiftStatus.CONFIRMED);
     assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(18, 0));
@@ -439,9 +437,10 @@ class ShiftServiceTest {
 
   @Test
   void changePublication_rejectsUnknownShift() {
-    when(shiftRepository.findById("missing")).thenReturn(Optional.empty());
+    when(shiftRepository.findByIdAndStoreId("missing", STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftService.changePublication("missing", false, ACTOR_EMAIL))
+    assertThatThrownBy(
+            () -> shiftService.changePublication(STORE_ID, "missing", false, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -461,12 +460,13 @@ class ShiftServiceTest {
             .startTime(LocalTime.of(21, 0))
             .endTime(LocalTime.of(23, 0))
             .build();
-    when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByStoreIdAndWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+            eq(STORE_ID), any(), any()))
         .thenReturn(List.of(first, second));
     when(castRepository.findPublished(STORE_ID))
         .thenReturn(List.of(activeCast("cA", "キャストA", "urlA"), activeCast("cB", "キャストB", "urlB")));
 
-    List<PublicShiftResponse> result = shiftService.listPublicToday();
+    List<PublicShiftResponse> result = shiftService.listPublicToday(STORE_ID);
 
     assertThat(result).hasSize(2);
     assertThat(result.get(0).getCastId()).isEqualTo("cA");
@@ -484,16 +484,17 @@ class ShiftServiceTest {
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
     LocalDate expectedToday = LocalDate.now(ZoneId.of("Asia/Tokyo"));
-    when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByStoreIdAndWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+            eq(STORE_ID), any(), any()))
         .thenReturn(List.of());
 
-    shiftService.listPublicToday();
+    shiftService.listPublicToday(STORE_ID);
 
     ArgumentCaptor<LocalDate> dateCaptor = ArgumentCaptor.forClass(LocalDate.class);
     ArgumentCaptor<ShiftStatus> statusCaptor = ArgumentCaptor.forClass(ShiftStatus.class);
     verify(shiftRepository)
-        .findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
-            dateCaptor.capture(), statusCaptor.capture());
+        .findByStoreIdAndWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+            eq(STORE_ID), dateCaptor.capture(), statusCaptor.capture());
     assertThat(dateCaptor.getValue()).isEqualTo(expectedToday);
     assertThat(statusCaptor.getValue()).isEqualTo(ShiftStatus.CONFIRMED);
   }
@@ -514,12 +515,13 @@ class ShiftServiceTest {
             .startTime(LocalTime.of(19, 0))
             .endTime(LocalTime.of(21, 0))
             .build();
-    when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByStoreIdAndWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+            eq(STORE_ID), any(), any()))
         .thenReturn(List.of(active, orphan));
     when(castRepository.findPublished(STORE_ID))
         .thenReturn(List.of(activeCast("cA", "キャストA", "urlA")));
 
-    List<PublicShiftResponse> result = shiftService.listPublicToday();
+    List<PublicShiftResponse> result = shiftService.listPublicToday(STORE_ID);
 
     assertThat(result).hasSize(1);
     assertThat(result.get(0).getCastId()).isEqualTo("cA");
@@ -529,9 +531,10 @@ class ShiftServiceTest {
   void listPublicToday_returnsEmptyWhenNoConfirmedShifts() {
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    when(shiftRepository.findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(any(), any()))
+    when(shiftRepository.findByStoreIdAndWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+            eq(STORE_ID), any(), any()))
         .thenReturn(List.of());
 
-    assertThat(shiftService.listPublicToday()).isEmpty();
+    assertThat(shiftService.listPublicToday(STORE_ID)).isEmpty();
   }
 }

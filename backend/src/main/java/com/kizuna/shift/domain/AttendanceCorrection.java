@@ -54,6 +54,7 @@ public class AttendanceCorrection extends StoreScopedEntity {
   private OffsetDateTime correctedAt;
 
   private AttendanceCorrection(Attendance before, Long correctedBy, OffsetDateTime correctedAt) {
+    setStoreId(before.getStoreId());
     this.attendanceId = before.getId();
     this.castId = before.getCastId();
     this.businessDate = before.getBusinessDate();

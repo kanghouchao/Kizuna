@@ -1,27 +1,31 @@
 package com.kizuna.shift.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, String> {
+public interface ShiftRequestRepository extends StoreScopedRepository<ShiftRequest> {
 
   /** 親シフトを先にロックし、DBの関連解除前の値を有限ページで確保する。 */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
-      "select r from ShiftRequest r where r.shiftId = :shiftId and r.id > :afterId order by r.id")
+      "select r from ShiftRequest r where r.storeId = :storeId and r.shiftId = :shiftId and r.id > :afterId order by r.id")
   List<ShiftRequest> findLinkedForUpdate(
-      @Param("shiftId") String shiftId, @Param("afterId") String afterId, Limit limit);
+      @Param("storeId") Long storeId,
+      @Param("shiftId") String shiftId,
+      @Param("afterId") String afterId,
+      Limit limit);
 
-  List<ShiftRequest> findByStatusOrderByCreatedAtAsc(ShiftRequestStatus status);
+  List<ShiftRequest> findByStoreIdAndStatusOrderByCreatedAtAsc(
+      Long storeId, ShiftRequestStatus status);
 
-  List<ShiftRequest> findAllByOrderByCreatedAtAsc();
+  List<ShiftRequest> findByStoreIdOrderByCreatedAtAsc(Long storeId);
 
   /**
    * このシフトを生んだ出勤希望（NEW）。承認の shift_id 回写で結ばれ、1 シフトにつき高々 1 本 — 承認は毎回 新しいシフトを作るので、同じシフトを 2 本の NEW
@@ -29,8 +33,8 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Stri
    *
    * <p>{@code findFirst} で受けるのは、万一の重複でも 500 ではなく決定的な 1 本を返すためである。
    */
-  Optional<ShiftRequest> findFirstByShiftIdAndTypeOrderByCreatedAtAscIdAsc(
-      String shiftId, ShiftRequestType type);
+  Optional<ShiftRequest> findFirstByStoreIdAndShiftIdAndTypeOrderByCreatedAtAscIdAsc(
+      Long storeId, String shiftId, ShiftRequestType type);
 
   // シフトの変更申請履歴。提出のたびに増え続け、1 本のシフトに対する件数の上限も一意性の守衛も無いので、
   // 裸の一覧では返さない（backend/AGENTS.md の Pagination）。新しい申請が先頭で、createdAt が同値になりうる分は
@@ -38,7 +42,7 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Stri
   String CHANGE_HISTORY_SELECT =
       """
       select r from com.kizuna.shift.domain.ShiftRequest r
-      where r.shiftId = :shiftId
+      where r.storeId = :storeId and r.shiftId = :shiftId
         and r.type = com.kizuna.shift.domain.ShiftRequestType.CHANGE
       """;
 
@@ -46,7 +50,8 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Stri
 
   /** シフトの変更申請履歴の先頭。 */
   @Query(CHANGE_HISTORY_SELECT + CHANGE_HISTORY_ORDER)
-  List<ShiftRequest> findChangeHistoryByShiftId(@Param("shiftId") String shiftId, Limit limit);
+  List<ShiftRequest> findChangeHistoryByShiftId(
+      @Param("storeId") Long storeId, @Param("shiftId") String shiftId, Limit limit);
 
   /** シフトの変更申請履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。 */
   @Query(
@@ -57,6 +62,7 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Stri
             """
           + CHANGE_HISTORY_ORDER)
   List<ShiftRequest> findChangeHistoryByShiftIdAfter(
+      @Param("storeId") Long storeId,
       @Param("shiftId") String shiftId,
       @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
       @Param("cursorId") String cursorId,

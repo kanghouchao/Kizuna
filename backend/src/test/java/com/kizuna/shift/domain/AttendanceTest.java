@@ -14,24 +14,34 @@ class AttendanceTest {
   private static final LocalDate BUSINESS_DATE = LocalDate.of(2026, 8, 18);
   private static final LocalDateTime START = LocalDateTime.of(2026, 8, 18, 19, 0);
   private static final Long ACTOR_ID = 7L;
+  private static final Long STORE_ID = 3L;
 
   private Attendance recorded() {
     return Attendance.record(
-        "cast-1", "shift-1", BUSINESS_DATE, START, START.plusHours(5), "1番待機室", ACTOR_ID);
+        STORE_ID, "cast-1", "shift-1", BUSINESS_DATE, START, START.plusHours(5), "1番待機室", ACTOR_ID);
   }
 
   @Test
   @DisplayName("実終了が実開始以前の記録を拒否すること")
   void rejectsEndNotAfterStart() {
     assertThatThrownBy(
-            () -> Attendance.record("cast-1", null, BUSINESS_DATE, START, START, null, ACTOR_ID))
+            () ->
+                Attendance.record(
+                    STORE_ID, "cast-1", null, BUSINESS_DATE, START, START, null, ACTOR_ID))
         .isInstanceOf(AttendanceStateException.class)
         .hasMessageContaining("実終了");
 
     assertThatThrownBy(
             () ->
                 Attendance.record(
-                    "cast-1", null, BUSINESS_DATE, START, START.minusMinutes(1), null, ACTOR_ID))
+                    STORE_ID,
+                    "cast-1",
+                    null,
+                    BUSINESS_DATE,
+                    START,
+                    START.minusMinutes(1),
+                    null,
+                    ACTOR_ID))
         .isInstanceOf(AttendanceStateException.class);
   }
 
@@ -39,13 +49,14 @@ class AttendanceTest {
   @DisplayName("実終了の未記入は許され、日跨ぎの終了も記録できること")
   void allowsNullEndAndOvernightEnd() {
     assertThat(
-            Attendance.record("cast-1", null, BUSINESS_DATE, START, null, null, ACTOR_ID)
+            Attendance.record(STORE_ID, "cast-1", null, BUSINESS_DATE, START, null, null, ACTOR_ID)
                 .getActualEndAt())
         .isNull();
 
     LocalDateTime nextMorning = START.plusHours(8);
     assertThat(
-            Attendance.record("cast-1", null, BUSINESS_DATE, START, nextMorning, null, ACTOR_ID)
+            Attendance.record(
+                    STORE_ID, "cast-1", null, BUSINESS_DATE, START, nextMorning, null, ACTOR_ID)
                 .getActualEndAt())
         .isEqualTo(nextMorning);
   }
@@ -118,6 +129,7 @@ class AttendanceTest {
     AttendanceCorrection snapshot = AttendanceCorrection.snapshotOf(attendance, 99L, correctedAt);
     attendance.correct(BUSINESS_DATE.minusDays(1), START.minusHours(2), null, "別室", 99L);
 
+    assertThat(snapshot.getStoreId()).isEqualTo(STORE_ID);
     assertThat(snapshot.getCastId()).isEqualTo("cast-1");
     assertThat(snapshot.getShiftId()).isEqualTo("shift-1");
     assertThat(snapshot.getBusinessDate()).isEqualTo(BUSINESS_DATE);

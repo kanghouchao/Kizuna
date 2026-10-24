@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.store;
 
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
@@ -37,36 +38,41 @@ public class AttendanceController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<List<AttendanceResponse>> list(
+      @CurrentStore Long storeId,
       @RequestParam(name = "business_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate businessDate,
       @RequestParam(name = "cast_id", required = false) String castId) {
-    return ResponseEntity.ok(attendanceService.list(businessDate, castId));
+    return ResponseEntity.ok(attendanceService.list(storeId, businessDate, castId));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<AttendanceResponse> record(
-      @Valid @RequestBody AttendanceCreateRequest request, Principal principal) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody AttendanceCreateRequest request,
+      Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(attendanceService.record(request, principal.getName()));
+        .body(attendanceService.record(storeId, request, principal.getName()));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<AttendanceResponse> correct(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody AttendanceCorrectionRequest request,
       Principal principal) {
-    return ResponseEntity.ok(attendanceService.correct(id, request, principal.getName()));
+    return ResponseEntity.ok(attendanceService.correct(storeId, id, request, principal.getName()));
   }
 
   @PostMapping("/{id}/cancellation")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<Void> cancel(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody AttendanceCancellationRequest request,
       Principal principal) {
-    attendanceService.cancel(id, request, principal.getName());
+    attendanceService.cancel(storeId, id, request, principal.getName());
     return ResponseEntity.noContent().build();
   }
 }
