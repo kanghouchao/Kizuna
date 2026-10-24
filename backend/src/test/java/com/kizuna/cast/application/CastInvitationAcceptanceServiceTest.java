@@ -65,7 +65,7 @@ class CastInvitationAcceptanceServiceTest {
   @BeforeEach
   void profilesAndPeople() {
     Mockito.lenient()
-        .when(profileRepository.findByEnrollmentId(any()))
+        .when(profileRepository.findByEnrollmentIdAndStoreId(any(), any()))
         .thenAnswer(
             inv ->
                 Optional.of(
@@ -111,13 +111,13 @@ class CastInvitationAcceptanceServiceTest {
             Optional.of(
                 invitation(
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1))));
-    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(enrollment));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", 1L)).thenReturn(Optional.of(enrollment));
 
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", new CastInvitationAcceptRequest()))
         .isInstanceOf(CastInvitationStateException.class);
     assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
         .isInstanceOf(CastInvitationStateException.class);
-    verify(castInvitationRepository, never()).claimPending(any(), any(), any(), any());
+    verify(castInvitationRepository, never()).claimPending(any(), any(), any(), any(), any());
     verify(userRepository, never()).save(any());
     verify(userRepository, never()).findByEmailForUpdate(any());
   }
@@ -173,7 +173,7 @@ class CastInvitationAcceptanceServiceTest {
             Optional.of(
                 invitation(
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1))));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdAndStoreId("c1", 1L)).thenReturn(Optional.of(cast("c1", "花子档案")));
     stubStore(1L, "店舗A");
 
     CastInvitationDetailResponse response = service.view("tok");
@@ -195,7 +195,7 @@ class CastInvitationAcceptanceServiceTest {
             CastInvitation.Status.PENDING,
             OffsetDateTime.now().plusHours(expired ? -1 : 1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(pending));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(enrollment));
+    when(castRepository.findByIdAndStoreId("c1", 1L)).thenReturn(Optional.of(enrollment));
     stubStore(1L, "店舗A");
 
     assertThat(service.view("tok").status()).isEqualTo("UNAVAILABLE");
@@ -209,7 +209,7 @@ class CastInvitationAcceptanceServiceTest {
             Optional.of(
                 invitation(
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1))));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdAndStoreId("c1", 1L)).thenReturn(Optional.of(cast("c1", "花子档案")));
     stubStore(1L, "店舗A");
 
     assertThat(service.view("tok").status()).isEqualTo("EXPIRED");
@@ -222,7 +222,7 @@ class CastInvitationAcceptanceServiceTest {
             Optional.of(
                 invitation(
                     "c1", 1L, CastInvitation.Status.ACCEPTED, OffsetDateTime.now().plusHours(1))));
-    when(castRepository.findById("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdAndStoreId("c1", 1L)).thenReturn(Optional.of(cast("c1", "花子档案")));
     stubStore(1L, "店舗A");
 
     assertThat(service.view("tok").status()).isEqualTo("USED");
@@ -234,10 +234,14 @@ class CastInvitationAcceptanceServiceTest {
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     CastEnrollment cast = cast("c1", "花子档案");
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", 1L)).thenReturn(Optional.of(cast));
     when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
-            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+            any(),
+            eq(1L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     when(passwordEncoder.encode("password1")).thenReturn("encoded");
     when(userRepository.save(any()))
@@ -256,7 +260,11 @@ class CastInvitationAcceptanceServiceTest {
     // 招待の状態遷移は条件付き UPDATE（claimPending）が担う。エンティティは受諾後に変更しない。
     verify(castInvitationRepository)
         .claimPending(
-            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED));
+            any(),
+            eq(1L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED));
     assertThat(cast.getCastId()).isEqualTo(42L);
 
     ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
@@ -273,7 +281,8 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", 1L))
+        .thenReturn(Optional.of(cast("c1", "花子档案")));
     when(userRepository.findByEmail("dup@example.com"))
         .thenReturn(Optional.of(user(9L, UserType.CAST, Set.of(1L))));
 
@@ -289,10 +298,15 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", 1L))
+        .thenReturn(Optional.of(cast("c1", "花子档案")));
     when(userRepository.findByEmail("race@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
-            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+            any(),
+            eq(1L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     when(passwordEncoder.encode("password1")).thenReturn("encoded");
     // 事前チェックを擦り抜けた並行登録の敗者側。email 一意制約違反が事前チェックと同じ重複エラーへ写像される。
@@ -317,7 +331,8 @@ class CastInvitationAcceptanceServiceTest {
             Optional.of(
                 invitation(
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1))));
-    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", 1L))
+        .thenReturn(Optional.of(cast("c1", "花子档案")));
     when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("New@Example.com")))
@@ -331,10 +346,15 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", 1L))
+        .thenReturn(Optional.of(cast("c1", "花子档案")));
     when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
     when(castInvitationRepository.claimPending(
-            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+            any(),
+            eq(1L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(0);
 
     // クレームが 0 行なら受諾権を確定できず、身分作成の前に弾かれること（二重登録の防止）。
@@ -350,8 +370,8 @@ class CastInvitationAcceptanceServiceTest {
     CastEnrollment enrollment = cast("c2", "招待先");
     User existing = user(7L, UserType.CAST, Set.of(1L));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(enrollment));
-    when(castInvitationRepository.claimPending(any(), any(), any(), any())).thenReturn(1);
+    when(castRepository.findByIdAndStoreIdForUpdate("c2", 2L)).thenReturn(Optional.of(enrollment));
+    when(castInvitationRepository.claimPending(any(), any(), any(), any(), any())).thenReturn(1);
     when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(existing));
     when(castRepository.findIdsByUserIdAndStoreId(7L, 2L)).thenReturn(List.of("current"));
 
@@ -371,10 +391,14 @@ class CastInvitationAcceptanceServiceTest {
     CastEnrollment cast = cast("c2", "花子档案（店舗B）");
     User existing = user(7L, UserType.CAST, Set.of(1L));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast));
+    when(castRepository.findByIdAndStoreIdForUpdate("c2", 2L)).thenReturn(Optional.of(cast));
     when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(existing));
     when(castInvitationRepository.claimPending(
-            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+            any(),
+            eq(2L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     stubStore(2L, "店舗B");
 
@@ -387,7 +411,11 @@ class CastInvitationAcceptanceServiceTest {
     // 招待の状態遷移は条件付き UPDATE（claimPending）が担う。エンティティは受諾後に変更しない。
     verify(castInvitationRepository)
         .claimPending(
-            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED));
+            any(),
+            eq(2L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED));
     verify(userRepository).save(existing);
   }
 
@@ -398,10 +426,14 @@ class CastInvitationAcceptanceServiceTest {
     CastEnrollment cast = cast("c2", "花子档案（全店）");
     User existing = allStoresUser(7L);
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast));
+    when(castRepository.findByIdAndStoreIdForUpdate("c2", 2L)).thenReturn(Optional.of(cast));
     when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(existing));
     when(castInvitationRepository.claimPending(
-            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+            any(),
+            eq(2L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     stubStore(2L, "店舗B");
 
@@ -421,10 +453,15 @@ class CastInvitationAcceptanceServiceTest {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
-    when(castRepository.findByIdForUpdate("c2")).thenReturn(Optional.of(cast("c2", "花子档案")));
+    when(castRepository.findByIdAndStoreIdForUpdate("c2", 2L))
+        .thenReturn(Optional.of(cast("c2", "花子档案")));
     // 悲観ロック取得は招待クレーム後（招待→User のロック順）。ロック行の本人種別が非CASTなら弾く。
     when(castInvitationRepository.claimPending(
-            any(), any(), eq(CastInvitation.Status.PENDING), eq(CastInvitation.Status.ACCEPTED)))
+            any(),
+            eq(2L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED)))
         .thenReturn(1);
     when(userRepository.findByEmailForUpdate("staff@example.com"))
         .thenReturn(Optional.of(user(8L, UserType.STAFF, Set.of(1L))));

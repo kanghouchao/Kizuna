@@ -3,6 +3,7 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -14,6 +15,7 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
 import com.kizuna.shift.domain.AttendanceRepository;
@@ -51,13 +53,17 @@ class ShiftRequestServiceTest {
   @Mock private StoreRepository storeRepository;
 
   @Mock private CastEnrollmentRepository enrollments;
+  @Mock private StoreContext storeContext;
 
   @BeforeEach
   void membership() {
     CastEnrollment enrollment = CastEnrollment.builder().build();
     enrollment.setId("c1");
-    lenient().when(enrollments.findScopedByIdForUpdate(any())).thenReturn(Optional.of(enrollment));
-    lenient().when(enrollments.findAllById(any())).thenReturn(List.of(enrollment));
+    lenient().when(storeContext.getStoreId()).thenReturn(1L);
+    lenient()
+        .when(enrollments.findByIdAndStoreIdForUpdate(any(), any()))
+        .thenReturn(Optional.of(enrollment));
+    lenient().when(enrollments.findByIdInAndStoreId(any(), eq(1L))).thenReturn(List.of(enrollment));
   }
 
   @Mock private ShiftRequestRepository shiftRequestRepository;

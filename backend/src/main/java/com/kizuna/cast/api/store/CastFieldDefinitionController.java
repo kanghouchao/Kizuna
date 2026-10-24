@@ -4,6 +4,7 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionCreateRequest;
 import com.kizuna.cast.api.dto.CastFieldDefinitionResponse;
 import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.application.CastFieldDefinitionService;
+import com.kizuna.shared.storescope.CurrentStore;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
@@ -32,28 +33,31 @@ public class CastFieldDefinitionController {
   // 管理能力（CAST_FIELD_DEF_MANAGE — 既定束では店長のみ）限定を維持する。
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_VIEW')")
-  public ResponseEntity<List<CastFieldDefinitionResponse>> list() {
-    return ResponseEntity.ok(service.list());
+  public ResponseEntity<List<CastFieldDefinitionResponse>> list(@CurrentStore Long storeId) {
+    return ResponseEntity.ok(service.list(storeId));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<CastFieldDefinitionResponse> create(
-      @Valid @RequestBody CastFieldDefinitionCreateRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
+      @CurrentStore Long storeId, @Valid @RequestBody CastFieldDefinitionCreateRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(service.create(storeId, request));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<CastFieldDefinitionResponse> update(
-      @PathVariable String id, @Valid @RequestBody CastFieldDefinitionUpdateRequest request) {
-    return ResponseEntity.ok(service.update(id, request));
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody CastFieldDefinitionUpdateRequest request) {
+    return ResponseEntity.ok(service.update(storeId, id, request));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
-  public ResponseEntity<Void> delete(@PathVariable String id, Principal principal) {
-    service.delete(id, principal.getName());
+  public ResponseEntity<Void> delete(
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    service.delete(storeId, id, principal.getName());
     return ResponseEntity.noContent().build();
   }
 }

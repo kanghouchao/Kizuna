@@ -3,6 +3,8 @@ package com.kizuna.cast.api.store;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -13,6 +15,7 @@ import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -64,7 +67,7 @@ class CastControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<CastSummaryResponse> empty = new PageImpl<>(List.of());
-    when(castService.list(any(), pageableCaptor.capture())).thenReturn(empty);
+    when(castService.list(eq(1L), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
         .perform(get("/store/casts?sort=name").header("X-Store-ID", "1"))
@@ -80,7 +83,7 @@ class CastControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
     Page<CastSummaryResponse> empty = new PageImpl<>(List.of());
-    when(castService.list(searchCaptor.capture(), any())).thenReturn(empty);
+    when(castService.list(eq(1L), searchCaptor.capture(), any())).thenReturn(empty);
 
     mockMvc
         .perform(get("/store/casts").param("search", "  ").header("X-Store-ID", "1"))
@@ -98,6 +101,8 @@ class CastControllerTest {
     mockMvc
         .perform(delete("/store/casts/cast-1").with(csrf()).header("X-Store-ID", "1"))
         .andExpect(status().isNoContent());
+
+    verify(castService).delete(1L, "cast-1");
   }
 
   @Test
@@ -113,6 +118,8 @@ class CastControllerTest {
                 .contentType("application/json")
                 .content("{\"publication_status\":\"PUBLISHED\"}"))
         .andExpect(status().isOk());
+
+    verify(castService).changePublication(1L, "cast-1", CastPublicationStatus.PUBLISHED);
   }
 
   @Test

@@ -103,7 +103,7 @@ class ShiftAuditTest {
     audit = new BusinessAudit(users, new AuditWriter(repository, Clock.systemUTC()));
     var enrollment = CastEnrollment.builder().build();
     enrollment.setId("cast");
-    when(enrollments.findScopedByIdForUpdate("cast")).thenReturn(Optional.of(enrollment));
+    when(enrollments.findByIdAndStoreIdForUpdate("cast", 1L)).thenReturn(Optional.of(enrollment));
     when(shifts.save(any(Shift.class)))
         .thenAnswer(
             call -> {
@@ -117,7 +117,6 @@ class ShiftAuditTest {
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken(actor.getEmail(), null, List.of()));
-    when(enrollments.findByIdForUpdate("cast")).thenReturn(Optional.of(enrollment));
     when(enrollments.findIdsByUserIdAndStoreId(9L, 1L)).thenReturn(List.of("cast"));
     when(enrollments.findIdsByUserId(9L)).thenReturn(List.of("cast"));
     when(requests.save(any(ShiftRequest.class)))
@@ -142,6 +141,8 @@ class ShiftAuditTest {
             dates,
             stores,
             audit);
+    var store = new StoreContext();
+    store.setStoreId(1L);
     decisions =
         new ShiftRequestService(
             requests,
@@ -152,6 +153,7 @@ class ShiftAuditTest {
             users,
             dates,
             stores,
+            store,
             audit);
     when(requests.findLinkedForUpdate(anyString(), anyString(), any()))
         .thenAnswer(
@@ -182,7 +184,7 @@ class ShiftAuditTest {
             });
     when(attendances.findById("attendance")).thenAnswer(call -> Optional.ofNullable(attendance));
     var castService = mock(CastService.class);
-    when(castService.existsForCurrentStoreForUpdate("cast")).thenReturn(true);
+    when(castService.existsForCurrentStoreForUpdate(1L, "cast")).thenReturn(true);
     actuals =
         new AttendanceService(
             attendances,
@@ -190,11 +192,10 @@ class ShiftAuditTest {
             new AttendanceMapperImpl(),
             shifts,
             castService,
+            store,
             users,
             dates,
             audit);
-    var store = new StoreContext();
-    store.setStoreId(1L);
     service =
         new ShiftService(
             shifts,

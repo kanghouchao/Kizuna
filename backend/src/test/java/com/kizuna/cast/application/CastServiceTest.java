@@ -3,6 +3,7 @@ package com.kizuna.cast.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +14,7 @@ import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
@@ -24,7 +26,6 @@ import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -48,6 +50,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class CastServiceTest {
+  private static final Long STORE_ID = 1L;
+
   @Mock CastEnrollmentRepository enrollments;
   @Mock CastProfileRepository profiles;
   @Mock CastInvitationService invitations;
@@ -63,19 +67,15 @@ class CastServiceTest {
 
   @BeforeEach
   void setup() {
-    StoreContext context = new StoreContext();
-    context.setStoreId(1L);
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken("actor", null, List.of()));
     service =
         new CastService(
             enrollments,
-            new CastEnrollmentService(
-                enrollments, histories, snapshots, users, stores, context, audit),
+            new CastEnrollmentService(enrollments, histories, snapshots, users, stores, audit),
             Mappers.getMapper(CastMapper.class),
             profiles,
             stores,
-            context,
             invitations,
             definitions,
             attendance,
@@ -91,8 +91,10 @@ class CastServiceTest {
   private void existing() {
     CastEnrollment enrollment = CastEnrollment.builder().build();
     enrollment.setId("e1");
-    when(enrollments.findScopedByIdForUpdate("e1")).thenReturn(Optional.of(enrollment));
-    when(profiles.findByEnrollmentId("e1"))
+    enrollment.setStoreId(STORE_ID);
+    when(enrollments.findByIdAndStoreIdForUpdate("e1", STORE_ID))
+        .thenReturn(Optional.of(enrollment));
+    when(profiles.findByEnrollmentIdAndStoreId("e1", STORE_ID))
         .thenReturn(Optional.of(CastProfile.builder().name("花").enrollmentId("e1").build()));
   }
 
@@ -120,32 +122,46 @@ class CastServiceTest {
     when(profiles.save(any())).thenAnswer(inv -> inv.getArgument(0));
     CastCreateRequest request = new CastCreateRequest();
     request.setName("花");
-    var response = service.create(request, "actor");
+    var response = service.create(STORE_ID, request, "actor");
     assertThat(response.getId()).isEqualTo("e1");
     assertThat(response.isDeletable()).isTrue();
     assertThat(response.getName()).isEqualTo("花");
     assertThat(response.getPublicationStatus()).isEqualTo(CastPublicationStatus.UNPUBLISHED);
+    var savedEnrollment = ArgumentCaptor.forClass(CastEnrollment.class);
+    verify(enrollments).save(savedEnrollment.capture());
+    var savedProfile = ArgumentCaptor.forClass(CastProfile.class);
+    verify(profiles).save(savedProfile.capture());
+    var savedHistory = ArgumentCaptor.forClass(CastEnrollmentStatusHistory.class);
+    verify(histories).save(savedHistory.capture());
+    assertThat(
+            List.of(
+                savedEnrollment.getValue().getStoreId(),
+                savedProfile.getValue().getStoreId(),
+                savedHistory.getValue().getStoreId()))
+        .containsOnly(STORE_ID);
   }
 
   @Test
   void updateSplitsValuesAndReturnsCombinedManagementView() {
     actor();
     existing();
-    when(definitions.findAllByOrderByDisplayOrderAsc())
+    when(definitions.findAllByStoreIdOrderByDisplayOrderAsc(STORE_ID))
         .thenReturn(
             List.of(
                 CastFieldDefinition.builder().key("memo").isPublic(false).build(),
                 CastFieldDefinition.builder().key("hobby").isPublic(true).build()));
     CastUpdateRequest request = new CastUpdateRequest();
     request.setCustomFields(Map.of("memo", "内部", "hobby", "読書"));
-    assertThat(service.update("e1", request, "actor").getCustomFields())
+    assertThat(service.update(STORE_ID, "e1", request, "actor").getCustomFields())
         .containsExactlyInAnyOrderEntriesOf(request.getCustomFields());
-    assertThat(enrollments.findScopedByIdForUpdate("e1").orElseThrow().getCustomFields())
+    assertThat(
+            enrollments.findByIdAndStoreIdForUpdate("e1", STORE_ID).orElseThrow().getCustomFields())
         .containsOnlyKeys("memo");
-    assertThat(profiles.findByEnrollmentId("e1").orElseThrow().getCustomFields())
+    assertThat(
+            profiles.findByEnrollmentIdAndStoreId("e1", STORE_ID).orElseThrow().getCustomFields())
         .containsOnlyKeys("hobby");
     request.setCustomFields(Map.of());
-    assertThat(service.update("e1", request, "actor").getCustomFields()).isEmpty();
+    assertThat(service.update(STORE_ID, "e1", request, "actor").getCustomFields()).isEmpty();
   }
 
   @Test
@@ -153,34 +169,38 @@ class CastServiceTest {
     existing();
     CastUpdateRequest request = new CastUpdateRequest();
     request.setCustomFields(Map.of("unknown", "値"));
-    assertThatThrownBy(() -> service.update("e1", request, "actor"))
+    assertThatThrownBy(() -> service.update(STORE_ID, "e1", request, "actor"))
         .isInstanceOf(ServiceException.class);
   }
 
   @Test
   void longValueIsRejected() {
     existing();
-    when(definitions.findAllByOrderByDisplayOrderAsc())
+    when(definitions.findAllByStoreIdOrderByDisplayOrderAsc(STORE_ID))
         .thenReturn(List.of(CastFieldDefinition.builder().key("memo").isPublic(false).build()));
     CastUpdateRequest request = new CastUpdateRequest();
     request.setCustomFields(Map.of("memo", "x".repeat(501)));
-    assertThatThrownBy(() -> service.update("e1", request, "actor"))
+    assertThatThrownBy(() -> service.update(STORE_ID, "e1", request, "actor"))
         .isInstanceOf(ServiceException.class);
   }
 
   @Test
   void publicationChanges() {
     CastEnrollment enrollment = CastEnrollment.builder().build();
-    when(enrollments.findById("e1")).thenReturn(Optional.of(enrollment));
-    when(profiles.findByEnrollmentId("e1"))
+    when(enrollments.findByIdAndStoreId("e1", STORE_ID)).thenReturn(Optional.of(enrollment));
+    when(profiles.findByEnrollmentIdAndStoreId("e1", STORE_ID))
         .thenReturn(Optional.of(CastProfile.builder().name("花").enrollmentId("e1").build()));
-    assertThat(service.changePublication("e1", CastPublicationStatus.PUBLISHED).publicationStatus())
+    assertThat(
+            service
+                .changePublication(STORE_ID, "e1", CastPublicationStatus.PUBLISHED)
+                .publicationStatus())
         .isEqualTo(CastPublicationStatus.PUBLISHED);
   }
 
   @Test
   void missingIs404() {
-    assertThatThrownBy(() -> service.get("missing")).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.get(STORE_ID, "missing"))
+        .isInstanceOf(NotFoundException.class);
   }
 
   @Test
@@ -194,10 +214,10 @@ class CastServiceTest {
                   return new CastManagementView(enrollment, CastProfile.builder().name(id).build());
                 })
             .toList();
-    when(profiles.search(any(), any())).thenReturn(new PageImpl<>(views));
+    when(profiles.search(eq(STORE_ID), any(), any())).thenReturn(new PageImpl<>(views));
     when(orders.findReferencedCastIds(any())).thenReturn(Set.of("order"));
     when(attendance.findReferencedCastIds(any())).thenReturn(Set.of("attendance"));
-    var response = service.list(null, PageRequest.of(0, 20));
+    var response = service.list(STORE_ID, null, PageRequest.of(0, 20));
     assertThat(response.getContent())
         .extracting(r -> r.isDeletable())
         .containsExactly(true, false, false);
@@ -209,14 +229,15 @@ class CastServiceTest {
   void updateReturnsReferenceAwareDeletability() {
     existing();
     when(orders.findReferencedCastIds(Set.of("e1"))).thenReturn(Set.of("e1"));
-    assertThat(service.update("e1", new CastUpdateRequest(), "actor").isDeletable()).isFalse();
+    assertThat(service.update(STORE_ID, "e1", new CastUpdateRequest(), "actor").isDeletable())
+        .isFalse();
   }
 
   @Test
   void attendancePreventsDeletion() {
-    when(enrollments.findScopedByIdForUpdate("e1"))
+    when(enrollments.findByIdAndStoreIdForUpdate("e1", STORE_ID))
         .thenReturn(Optional.of(CastEnrollment.builder().build()));
     when(attendance.findReferencedCastIds(List.of("e1"))).thenReturn(Set.of("e1"));
-    assertThatThrownBy(() -> service.delete("e1")).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.delete(STORE_ID, "e1")).isInstanceOf(ConflictException.class);
   }
 }

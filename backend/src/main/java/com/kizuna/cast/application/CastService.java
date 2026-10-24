@@ -24,7 +24,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -71,7 +70,6 @@ public class CastService {
   private final CastMapper castMapper;
   private final CastProfileRepository profileRepository;
   private final StoreRepository storeRepository;
-  private final StoreContext storeContext;
   private final CastInvitationService castInvitationService;
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
   private final AttendanceReferenceCheck attendanceReferenceCheck;
@@ -80,7 +78,7 @@ public class CastService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Page<CastSummaryResponse> list(String search, Pageable pageable) {
+  public Page<CastSummaryResponse> list(Long storeId, String search, Pageable pageable) {
     Sort requestedSort = pageable.getSort();
     if (requestedSort.getOrderFor("id") == null)
       requestedSort = requestedSort.and(Sort.by(CastEnrollment::getId));
@@ -96,11 +94,12 @@ public class CastService {
                 .toList());
     Page<CastManagementView> page =
         profileRepository.search(
+            storeId,
             pattern(search),
             PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort));
     Map<String, CastInvitationStatus> statuses =
         castInvitationService.deriveStatuses(
-            page.getContent().stream().map(CastManagementView::enrollment).toList());
+            storeId, page.getContent().stream().map(CastManagementView::enrollment).toList());
     Set<String> deletable =
         deletableIds(page.getContent().stream().map(CastManagementView::enrollment).toList());
     return page.map(
@@ -114,12 +113,12 @@ public class CastService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public CastResponse get(String id) {
-    CastEnrollment enrollment = requireEnrollment(id);
+  public CastResponse get(Long storeId, String id) {
+    CastEnrollment enrollment = requireEnrollment(storeId, id);
     return castMapper.toResponse(
         enrollment,
-        requireProfile(id),
-        castInvitationService.deriveStatuses(List.of(enrollment)).get(id),
+        requireProfile(storeId, id),
+        castInvitationService.deriveStatuses(storeId, List.of(enrollment)).get(id),
         deletableIds(List.of(enrollment)).contains(id));
   }
 
@@ -137,13 +136,15 @@ public class CastService {
     return candidates;
   }
 
-  private CastEnrollment requireEnrollment(String id) {
-    return castRepository.findById(id).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
+  private CastEnrollment requireEnrollment(Long storeId, String id) {
+    return castRepository
+        .findByIdAndStoreId(id, storeId)
+        .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
   }
 
-  private CastProfile requireProfile(String id) {
+  private CastProfile requireProfile(Long storeId, String id) {
     return profileRepository
-        .findByEnrollmentId(id)
+        .findByEnrollmentIdAndStoreId(id, storeId)
         .orElseThrow(() -> new NotFoundException("プロフィールが見つかりません"));
   }
 
@@ -156,27 +157,30 @@ public class CastService {
         + "%";
   }
 
-  /** 実績の参照先が現在店舗に属することを、削除と直列化して確認する。在籍の後にシフトをロックする。 */
+  /** 実績の参照先が指定店舗に属することを、削除と直列化して確認する。在籍の後にシフトをロックする。 */
   @StoreScoped
   @Transactional
-  public boolean existsForCurrentStoreForUpdate(String id) {
-    return castRepository.findScopedByIdForUpdate(id).isPresent();
+  public boolean existsForCurrentStoreForUpdate(Long storeId, String id) {
+    return castRepository.findByIdAndStoreIdForUpdate(id, storeId).isPresent();
   }
 
   @StoreScoped
   @Transactional
-  public CastResponse create(CastCreateRequest request, String actorEmail) {
-    storeRepository.lockCastFields(storeContext.getStoreId());
-    CastEnrollment enrollment =
-        castRepository.save(
-            CastEnrollment.builder()
-                .status(
-                    request.getStatus() == null
-                        ? CastEnrollmentStatus.ENROLLED
-                        : CastEnrollmentStatus.valueOf(request.getStatus()))
-                .build());
+  public CastResponse create(Long storeId, CastCreateRequest request, String actorEmail) {
+    storeRepository.lockCastFields(storeId);
+    CastEnrollment newEnrollment =
+        CastEnrollment.builder()
+            .status(
+                request.getStatus() == null
+                    ? CastEnrollmentStatus.ENROLLED
+                    : CastEnrollmentStatus.valueOf(request.getStatus()))
+            .build();
+    newEnrollment.setStoreId(storeId);
+    CastEnrollment enrollment = castRepository.save(newEnrollment);
     enrollmentService.recordCreation(enrollment, actorEmail);
-    CastProfile profile = profileRepository.save(castMapper.toProfile(request, enrollment.getId()));
+    CastProfile newProfile = castMapper.toProfile(request, enrollment.getId());
+    newProfile.setStoreId(storeId);
+    CastProfile profile = profileRepository.save(newProfile);
     profileRepository.flush();
     audit.record(
         actorEmail,
@@ -206,23 +210,24 @@ public class CastService {
 
   @StoreScoped
   @Transactional
-  public CastResponse update(String id, CastUpdateRequest request, String actorEmail) {
-    storeRepository.lockCastFields(storeContext.getStoreId());
+  public CastResponse update(
+      Long storeId, String id, CastUpdateRequest request, String actorEmail) {
+    storeRepository.lockCastFields(storeId);
     CastEnrollment enrollment =
         castRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
-    CastProfile profile = requireProfile(id);
+    CastProfile profile = requireProfile(storeId, id);
     var before = snapshot(enrollment, profile);
     var privateBefore = privateValues(enrollment, profile);
     if (request.getName() != null && request.getName().isBlank())
       throw new ServiceException("源氏名は必須です");
     if (request.getCustomFields() != null) {
-      validateCustomFields(request.getCustomFields());
+      validateCustomFields(storeId, request.getCustomFields());
       Map<String, String> internal = new HashMap<>();
       Map<String, String> external = new HashMap<>();
       for (CastFieldDefinition definition :
-          castFieldDefinitionRepository.findAllByOrderByDisplayOrderAsc()) {
+          castFieldDefinitionRepository.findAllByStoreIdOrderByDisplayOrderAsc(storeId)) {
         if (request.getCustomFields().containsKey(definition.getKey())) {
           (Boolean.TRUE.equals(definition.getIsPublic()) ? external : internal)
               .put(definition.getKey(), request.getCustomFields().get(definition.getKey()));
@@ -277,9 +282,10 @@ public class CastService {
 
   @StoreScoped
   @Transactional
-  public CastPublicationResponse changePublication(String id, CastPublicationStatus status) {
-    requireEnrollment(id);
-    CastProfile profile = requireProfile(id);
+  public CastPublicationResponse changePublication(
+      Long storeId, String id, CastPublicationStatus status) {
+    requireEnrollment(storeId, id);
+    CastProfile profile = requireProfile(storeId, id);
     var before = profileSnapshot(profile);
     profile.changePublication(status);
     boolean changed = !before.equals(profileSnapshot(profile));
@@ -307,9 +313,9 @@ public class CastService {
   }
 
   /** カスタムフィールド値を検証する。未知 key・値の文字数超過はいずれも {@link ServiceException}（400）。 */
-  private void validateCustomFields(Map<String, String> customFields) {
+  private void validateCustomFields(Long storeId, Map<String, String> customFields) {
     Set<String> liveKeys =
-        castFieldDefinitionRepository.findAllByOrderByDisplayOrderAsc().stream()
+        castFieldDefinitionRepository.findAllByStoreIdOrderByDisplayOrderAsc(storeId).stream()
             .map(CastFieldDefinition::getKey)
             .collect(Collectors.toSet());
     for (Map.Entry<String, String> entry : customFields.entrySet()) {
@@ -327,10 +333,10 @@ public class CastService {
   /** 本人未紐づけの草稿のみ削除できる。受注・実績の参照は履歴の根拠なので維持する。 */
   @StoreScoped
   @Transactional
-  public void delete(String id) {
+  public void delete(Long storeId, String id) {
     CastEnrollment enrollment =
         castRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
     if (!enrollment.isDeletable()) {
       throw new ConflictException("本人紐づけ済み・退店済みの在籍は削除できません");
@@ -339,7 +345,7 @@ public class CastService {
       throw attendanceReferenced();
     }
     try {
-      castRepository.deleteById(id);
+      castRepository.delete(enrollment);
       // flush が要る理由は CustomerService#delete と同じ（commit まで遅れると catch を素通りする）。
       castRepository.flush();
     } catch (DataIntegrityViolationException ex) {
@@ -371,10 +377,10 @@ public class CastService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<CastPublicResponse> listPublished() {
+  public List<CastPublicResponse> listPublished(Long storeId) {
     List<CastFieldDefinition> publicDefinitions =
-        castFieldDefinitionRepository.findByIsPublicTrueOrderByDisplayOrderAsc();
-    return profileRepository.findPublished().stream()
+        castFieldDefinitionRepository.findByStoreIdAndIsPublicTrueOrderByDisplayOrderAsc(storeId);
+    return profileRepository.findPublished(storeId).stream()
         .map(cast -> castMapper.toPublicResponse(cast, publicDefinitions))
         .toList();
   }

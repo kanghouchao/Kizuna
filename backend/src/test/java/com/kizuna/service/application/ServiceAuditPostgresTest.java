@@ -492,7 +492,7 @@ class ServiceAuditPostgresTest {
         status ->
             context
                 .getBean(CastEnrollmentRepository.class)
-                .findById(enrollment)
+                .findByIdAndStoreId(enrollment, storeId)
                 .orElseThrow()
                 .withdraw(OffsetDateTime.now()));
     assertThatThrownBy(() -> decide(id, 1, 1, ConsentDecision.ACCEPTED))
