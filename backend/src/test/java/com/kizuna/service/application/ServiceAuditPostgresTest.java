@@ -196,6 +196,10 @@ class ServiceAuditPostgresTest {
         .setAuthentication(new UsernamePasswordAuthenticationToken(email, null, List.of()));
   }
 
+  private Long currentStore() {
+    return context.getBean(StoreContext.class).getStoreId();
+  }
+
   @AfterEach
   void clear() {
     SecurityContextHolder.clearContext();
@@ -209,6 +213,7 @@ class ServiceAuditPostgresTest {
 
   private String special() {
     return settings.create(
+        currentStore(),
         new ServiceCreateRequest(
             ServiceKind.SPECIAL_SERVICE, "複写しない秘密", null, ChargeType.PAID, 2000, 1000),
         STAFF);
@@ -219,7 +224,7 @@ class ServiceAuditPostgresTest {
   }
 
   private void decide(String id, long terms, long revision, ConsentDecision decision) {
-    own.decide(CAST, id, new OwnConsentRequest(terms, revision, decision));
+    own.decide(currentStore(), CAST, id, new OwnConsentRequest(terms, revision, decision));
   }
 
   private List<AuditEvent> audits() {
@@ -244,7 +249,9 @@ class ServiceAuditPostgresTest {
     return transactions.execute(
         status -> {
           var terms =
-              context.getBean(OrderSpecialServiceCatalog.class).current(enrollment, serviceId);
+              context
+                  .getBean(OrderSpecialServiceCatalog.class)
+                  .current(currentStore(), enrollment, serviceId);
           var order =
               Order.builder()
                   .businessDate(LocalDate.now())
@@ -291,10 +298,16 @@ class ServiceAuditPostgresTest {
         .containsEntry("version", "0")
         .containsEntry("revision_number", "1");
     settings.update(
-        id, new ServiceUpdateRequest("複写しない秘密", null, ChargeType.PAID, 2000, 1000, 1L), STAFF);
+        currentStore(),
+        id,
+        new ServiceUpdateRequest("複写しない秘密", null, ChargeType.PAID, 2000, 1000, 1L),
+        STAFF);
     assertThat(audits()).hasSize(1);
     settings.update(
-        id, new ServiceUpdateRequest("名称だけの秘密", null, ChargeType.PAID, 2000, 1000, 1L), STAFF);
+        currentStore(),
+        id,
+        new ServiceUpdateRequest("名称だけの秘密", null, ChargeType.PAID, 2000, 1000, 1L),
+        STAFF);
     assertThat(audits().getLast().getAfterValues())
         .containsEntry("version", "1")
         .containsEntry("terms_version", "1")
@@ -318,7 +331,7 @@ class ServiceAuditPostgresTest {
         .containsEntry("version", "0");
     decide(id, 1, 1, ConsentDecision.ACCEPTED);
     assertThat(audits()).hasSize(3);
-    settings.update(id, changed(2), STAFF);
+    settings.update(currentStore(), id, changed(2), STAFF);
     decide(id, 2, 1, ConsentDecision.ACCEPTED);
     assertThat(audits().getLast().getAfterValues())
         .containsEntry("version", "1")
@@ -341,7 +354,7 @@ class ServiceAuditPostgresTest {
             jdbc.queryForObject(
                 "select total_fee from t_orders where id=?", Integer.class, orderId))
         .isEqualTo(15000);
-    settings.delete(id, 3, STAFF);
+    settings.delete(currentStore(), id, 3, STAFF);
     assertThat(audits()).hasSize(7);
     var deleted = audits().getLast();
     assertThat(deleted.getAfterValues())
@@ -386,8 +399,8 @@ class ServiceAuditPostgresTest {
               () -> {
                 switch (action) {
                   case "SERVICE_CREATED" -> special();
-                  case "SERVICE_UPDATED" -> settings.update(id, changed(1), STAFF);
-                  case "SERVICE_DELETED" -> settings.delete(id, 1, STAFF);
+                  case "SERVICE_UPDATED" -> settings.update(currentStore(), id, changed(1), STAFF);
+                  case "SERVICE_DELETED" -> settings.delete(currentStore(), id, 1, STAFF);
                   case "SERVICE_CONSENT_CHANGED" -> decide(id, 1, 1, ConsentDecision.REJECTED);
                   default -> throw new AssertionError(action);
                 }
@@ -408,9 +421,9 @@ class ServiceAuditPostgresTest {
     transactions.executeWithoutResult(
         status -> {
           special();
-          settings.update(id, changed(1), STAFF);
+          settings.update(currentStore(), id, changed(1), STAFF);
           decide(id, 2, 1, ConsentDecision.REJECTED);
-          settings.delete(id, 2, STAFF);
+          settings.delete(currentStore(), id, 2, STAFF);
           assertThat(audits()).hasSize(6);
           status.setRollbackOnly();
         });
@@ -445,8 +458,8 @@ class ServiceAuditPostgresTest {
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of(), STAFF));
     String id = special();
-    settings.update(id, changed(1), STAFF);
-    settings.delete(id, 2, STAFF);
+    settings.update(currentStore(), id, changed(1), STAFF);
+    settings.delete(currentStore(), id, 2, STAFF);
     assertThat(audits())
         .hasSize(3)
         .allSatisfy(event -> assertThat(event.getActorId()).isEqualTo(staffId));
@@ -460,26 +473,36 @@ class ServiceAuditPostgresTest {
   void foreignRowsMissingEnrollmentInvalidTermsAndStaleVersionsLeaveNoSuccess() {
     String id = special();
     var before = stored();
-    assertThatThrownBy(() -> settings.update(id, changed(2), STAFF))
+    assertThatThrownBy(() -> settings.update(currentStore(), id, changed(2), STAFF))
         .isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> settings.delete(id, 2, STAFF)).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> settings.delete(currentStore(), id, 2, STAFF))
+        .isInstanceOf(ConflictException.class);
     assertThatThrownBy(() -> decide(id, 2, 0, ConsentDecision.ACCEPTED))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(() -> decide(id, 1, 2, ConsentDecision.ACCEPTED))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(
-            () -> own.decide(STAFF, id, new OwnConsentRequest(1L, 0L, ConsentDecision.ACCEPTED)))
+            () ->
+                own.decide(
+                    currentStore(),
+                    STAFF,
+                    id,
+                    new OwnConsentRequest(1L, 0L, ConsentDecision.ACCEPTED)))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
                 settings.update(
-                    id, new ServiceUpdateRequest("秘密", null, ChargeType.FREE, 1, 0, 1L), STAFF))
+                    currentStore(),
+                    id,
+                    new ServiceUpdateRequest("秘密", null, ChargeType.FREE, 1, 0, 1L),
+                    STAFF))
         .isInstanceOf(ServiceException.class);
     Long foreign = store();
     authenticate(foreign, STAFF);
-    assertThatThrownBy(() -> settings.update(id, changed(1), STAFF))
+    assertThatThrownBy(() -> settings.update(currentStore(), id, changed(1), STAFF))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> settings.delete(id, 1, STAFF)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> settings.delete(currentStore(), id, 1, STAFF))
+        .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> decide(id, 1, 0, ConsentDecision.ACCEPTED))
         .isInstanceOf(NotFoundException.class);
     authenticate(storeId, STAFF);
@@ -497,9 +520,10 @@ class ServiceAuditPostgresTest {
                 .withdraw(OffsetDateTime.now()));
     assertThatThrownBy(() -> decide(id, 1, 1, ConsentDecision.ACCEPTED))
         .isInstanceOf(NotFoundException.class);
-    settings.delete(id, 1, STAFF);
+    settings.delete(currentStore(), id, 1, STAFF);
     var deleted = stored();
-    assertThatThrownBy(() -> settings.delete(id, 2, STAFF)).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> settings.delete(currentStore(), id, 2, STAFF))
+        .isInstanceOf(ServiceException.class);
     assertThat(stored()).isEqualTo(deleted);
   }
 
@@ -558,8 +582,8 @@ class ServiceAuditPostgresTest {
 
   private void concurrentOperation(String operation, String id) {
     switch (operation) {
-      case "update" -> settings.update(id, changed(1), STAFF);
-      case "delete" -> settings.delete(id, 1, STAFF);
+      case "update" -> settings.update(currentStore(), id, changed(1), STAFF);
+      case "delete" -> settings.delete(currentStore(), id, 1, STAFF);
       case "decision" -> decide(id, 1, 0, ConsentDecision.ACCEPTED);
       default -> throw new AssertionError(operation);
     }

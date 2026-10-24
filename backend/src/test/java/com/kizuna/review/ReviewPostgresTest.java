@@ -729,6 +729,7 @@ class ReviewPostgresTest {
                       .getBean(ServiceItemRepository.class)
                       .saveAndFlush(
                           ServiceItem.create(
+                              store.getStoreId(),
                               new ServiceTerms(ServiceKind.COURSE, "検証コース", 60, null, 1000, 500)));
               var revision =
                   context

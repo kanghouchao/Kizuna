@@ -166,7 +166,7 @@ class OrderServiceTest {
 
     var catalog = Mockito.mock(OrderServiceCatalog.class);
     Mockito.lenient()
-        .when(catalog.current(nullable(String.class), any()))
+        .when(catalog.current(eq(STORE_ID), nullable(String.class), any()))
         .thenReturn(
             new OrderServiceTerms(
                 "course", "revision", 1, "基本", 60, 0, 0, OffsetDateTime.now(), false));
@@ -178,8 +178,9 @@ class OrderServiceTest {
             catalog,
             orderMapper,
             confirmation,
-            new OrderFeeLineSelection(catalog, orderMapper),
-            specialServices));
+            new OrderFeeLineSelection(catalog, orderMapper, storeContext),
+            specialServices,
+            storeContext));
     Mockito.lenient()
         .when(orderRepository.findScopedByIdForUpdate(nullable(String.class)))
         .thenAnswer(inv -> orderRepository.findById(inv.getArgument(0)));

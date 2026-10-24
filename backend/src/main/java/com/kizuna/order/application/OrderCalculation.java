@@ -13,6 +13,7 @@ import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -27,11 +28,14 @@ public class OrderCalculation {
   private final OrderConfirmation confirmation;
   private final OrderFeeLineSelection selection;
   private final OrderSpecialServices specialServices;
+  private final StoreContext storeContext;
 
   public OrderCourse current(String courseId, boolean saving) {
     try {
       return snapshot(
-          catalog.current(courseId, OrderServiceCatalog.SelectionKind.COURSE), "CURRENT_SETTING");
+          catalog.current(
+              storeContext.getStoreId(), courseId, OrderServiceCatalog.SelectionKind.COURSE),
+          "CURRENT_SETTING");
     } catch (NotFoundException ex) {
       if (saving) throw new OrderConfirmationConflict("confirmation_token");
       throw ex;
@@ -40,7 +44,8 @@ public class OrderCalculation {
 
   public OrderCourse historical(String revisionId) {
     return snapshot(
-        catalog.historical(revisionId, OrderServiceCatalog.SelectionKind.COURSE),
+        catalog.historical(
+            storeContext.getStoreId(), revisionId, OrderServiceCatalog.SelectionKind.COURSE),
         "HISTORICAL_CORRECTION");
   }
 

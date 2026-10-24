@@ -28,35 +28,42 @@ public class OrderServiceCatalog {
 
   @StoreScoped
   @Transactional
-  public OrderServiceTerms current(String id, SelectionKind kind) {
-    var item = items.findForUpdate(id).orElseThrow(() -> new NotFoundException("サービスが見つかりません"));
+  public OrderServiceTerms current(Long storeId, String id, SelectionKind kind) {
+    var item =
+        items
+            .findByIdAndStoreIdForUpdate(id, storeId)
+            .orElseThrow(() -> new NotFoundException("サービスが見つかりません"));
     if (item.isDeleted() || item.getTerms().getKind() != ServiceKind.valueOf(kind.name()))
       throw new NotFoundException("選択できるサービスが見つかりません");
     return revisions
-        .findSelection(ServiceKind.valueOf(kind.name()), id, item.getRevisionNumber())
+        .findSelection(storeId, ServiceKind.valueOf(kind.name()), id, item.getRevisionNumber())
         .orElseThrow(() -> new NotFoundException("サービスの版本が見つかりません"));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public OrderServiceTerms historical(String revisionId, SelectionKind kind) {
+  public OrderServiceTerms historical(Long storeId, String revisionId, SelectionKind kind) {
     return revisions
-        .findHistoricalSelection(ServiceKind.valueOf(kind.name()), revisionId)
+        .findHistoricalSelection(storeId, ServiceKind.valueOf(kind.name()), revisionId)
         .orElseThrow(() -> new NotFoundException("サービスの歴史版本が見つかりません"));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Page<OrderServiceTerms> candidates(SelectionKind kind, String search, int page, int size) {
+  public Page<OrderServiceTerms> candidates(
+      Long storeId, SelectionKind kind, String search, int page, int size) {
     requirePage(page, size);
     return revisions.findCurrentSelections(
-        ServiceKind.valueOf(kind.name()), search == null ? "" : search, PageRequest.of(page, size));
+        storeId,
+        ServiceKind.valueOf(kind.name()),
+        search == null ? "" : search,
+        PageRequest.of(page, size));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<OrderServiceTerms> history(
-      SelectionKind kind, String search, String cursor, int size) {
+      Long storeId, SelectionKind kind, String search, String cursor, int size) {
     requirePage(0, size);
     var key = cursor == null ? null : PageCursor.decode(cursor);
     OffsetDateTime at;
@@ -70,6 +77,7 @@ public class OrderServiceCatalog {
     }
     var rows =
         revisions.findHistoricalSelections(
+            storeId,
             ServiceKind.valueOf(kind.name()),
             search == null ? "" : search,
             at,

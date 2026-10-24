@@ -43,6 +43,7 @@ public class ServiceConsentEvent extends StoreScopedEntity {
 
   public static ServiceConsentEvent record(ServiceConsent consent, Long actorId) {
     var event = new ServiceConsentEvent();
+    event.setStoreId(consent.getStoreId());
     event.consentId = consent.getId();
     event.revisionNumber = consent.getRevisionNumber();
     event.decision = consent.getDecision();

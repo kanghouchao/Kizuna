@@ -10,6 +10,7 @@ import com.kizuna.order.domain.OrderServiceAdoption;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreContext;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 public class OrderFeeLineSelection {
   private final OrderServiceCatalog catalog;
   private final OrderMapper mapper;
+  private final StoreContext storeContext;
 
   public List<OrderFeeLineDraft> resolve(
       Order original, List<OrderFeeLineRequest> requests, boolean historical, boolean saving) {
@@ -71,7 +73,10 @@ public class OrderFeeLineSelection {
                 throw new InvalidOrderFeeLineException("加算は設定から選択してください。名称・単価・報酬は上書きできません");
               var terms =
                   historical
-                      ? catalog.historical(id, OrderServiceCatalog.SelectionKind.SURCHARGE)
+                      ? catalog.historical(
+                          storeContext.getStoreId(),
+                          id,
+                          OrderServiceCatalog.SelectionKind.SURCHARGE)
                       : current(id, saving);
               return new OrderFeeLineDraft(
                   null,
@@ -92,7 +97,8 @@ public class OrderFeeLineSelection {
 
   private OrderServiceTerms current(String id, boolean saving) {
     try {
-      return catalog.current(id, OrderServiceCatalog.SelectionKind.SURCHARGE);
+      return catalog.current(
+          storeContext.getStoreId(), id, OrderServiceCatalog.SelectionKind.SURCHARGE);
     } catch (NotFoundException ex) {
       if (saving) throw new OrderConfirmationConflict("confirmation_token");
       throw ex;

@@ -2,32 +2,35 @@ package com.kizuna.service.domain;
 
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.service.application.SpecialServiceTerms;
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-public interface ServiceRevisionRepository extends JpaRepository<ServiceRevision, String> {
-  Optional<ServiceRevision> findByServiceIdAndRevisionNumber(String serviceId, long revisionNumber);
+public interface ServiceRevisionRepository extends StoreScopedRepository<ServiceRevision> {
+  Optional<ServiceRevision> findByStoreIdAndServiceIdAndRevisionNumber(
+      Long storeId, String serviceId, long revisionNumber);
 
-  List<ServiceRevision> findByServiceIdOrderByRevisionNumberDesc(String serviceId, Limit limit);
+  List<ServiceRevision> findByStoreIdAndServiceIdOrderByRevisionNumberDesc(
+      Long storeId, String serviceId, Limit limit);
 
-  List<ServiceRevision> findByServiceIdAndRevisionNumberLessThanOrderByRevisionNumberDesc(
-      String serviceId, long revisionNumber, Limit limit);
+  List<ServiceRevision> findByStoreIdAndServiceIdAndRevisionNumberLessThanOrderByRevisionNumberDesc(
+      Long storeId, String serviceId, long revisionNumber, Limit limit);
 
   String SPECIAL_SELECT =
       """
       select r from ServiceRevision r join ServiceItem s on s.id = r.serviceId
-      where r.afterTerms.kind = com.kizuna.service.domain.ServiceKind.SPECIAL_SERVICE
+      where r.storeId = :storeId and s.storeId = r.storeId
+        and r.afterTerms.kind = com.kizuna.service.domain.ServiceKind.SPECIAL_SERVICE
         and r.operation <> com.kizuna.service.domain.ServiceRevision.Operation.DELETED
       """;
 
   @Query(SPECIAL_SELECT + " and r.id = :id")
-  Optional<ServiceRevision> findHistoricalSpecial(String id);
+  Optional<ServiceRevision> findHistoricalSpecial(Long storeId, String id);
 
   @Query(
       """
@@ -39,7 +42,9 @@ public interface ServiceRevisionRepository extends JpaRepository<ServiceRevision
         join ServiceConsent c on c.serviceId = s.id and c.enrollmentId = :enrollment
         join ServiceConsentEvent e on e.consentId = c.id and e.revisionNumber = c.revisionNumber
         join com.kizuna.cast.domain.CastEnrollment enrollment on enrollment.id = c.enrollmentId
-      where r.afterTerms.kind = com.kizuna.service.domain.ServiceKind.SPECIAL_SERVICE
+      where r.storeId = :storeId and s.storeId = r.storeId and c.storeId = r.storeId
+        and e.storeId = r.storeId and enrollment.storeId = r.storeId
+        and r.afterTerms.kind = com.kizuna.service.domain.ServiceKind.SPECIAL_SERVICE
         and r.operation <> com.kizuna.service.domain.ServiceRevision.Operation.DELETED
         and s.deleted = false and r.revisionNumber = s.revisionNumber
         and c.decision = com.kizuna.service.domain.ConsentDecision.ACCEPTED
@@ -49,7 +54,7 @@ public interface ServiceRevisionRepository extends JpaRepository<ServiceRevision
       order by r.afterTerms.name, r.serviceId
       """)
   Page<SpecialServiceTerms> findAcceptedSpecials(
-      String enrollment, String search, Pageable pageable);
+      Long storeId, String enrollment, String search, Pageable pageable);
 
   @Query(
       SPECIAL_SELECT
@@ -57,7 +62,7 @@ public interface ServiceRevisionRepository extends JpaRepository<ServiceRevision
           + " and (r.occurredAt < :at or (r.occurredAt = :at and r.id < :id))"
           + " order by r.occurredAt desc, r.id desc")
   List<ServiceRevision> findHistoricalSpecials(
-      String search, OffsetDateTime at, String id, Pageable pageable);
+      Long storeId, String search, OffsetDateTime at, String id, Pageable pageable);
 
   String SELECTION_SELECT =
       """
@@ -66,22 +71,25 @@ public interface ServiceRevisionRepository extends JpaRepository<ServiceRevision
         r.afterTerms.durationMinutes, r.afterTerms.price, r.afterTerms.remuneration,
         r.occurredAt, s.deleted)
       from ServiceRevision r join ServiceItem s on s.id = r.serviceId
-      where r.afterTerms.kind = :kind
+      where r.storeId = :storeId and s.storeId = r.storeId
+        and r.afterTerms.kind = :kind
         and r.operation <> com.kizuna.service.domain.ServiceRevision.Operation.DELETED
       """;
 
   @Query(SELECTION_SELECT + " and r.serviceId = :serviceId and r.revisionNumber = :number")
-  Optional<OrderServiceTerms> findSelection(ServiceKind kind, String serviceId, long number);
+  Optional<OrderServiceTerms> findSelection(
+      Long storeId, ServiceKind kind, String serviceId, long number);
 
   @Query(SELECTION_SELECT + " and r.id = :id")
-  Optional<OrderServiceTerms> findHistoricalSelection(ServiceKind kind, String id);
+  Optional<OrderServiceTerms> findHistoricalSelection(Long storeId, ServiceKind kind, String id);
 
   @Query(
       SELECTION_SELECT
           + " and s.deleted = false and r.revisionNumber = s.revisionNumber"
           + " and locate(lower(:search), lower(r.afterTerms.name)) > 0"
           + " order by r.afterTerms.name, r.serviceId")
-  Page<OrderServiceTerms> findCurrentSelections(ServiceKind kind, String search, Pageable pageable);
+  Page<OrderServiceTerms> findCurrentSelections(
+      Long storeId, ServiceKind kind, String search, Pageable pageable);
 
   @Query(
       SELECTION_SELECT
@@ -89,5 +97,10 @@ public interface ServiceRevisionRepository extends JpaRepository<ServiceRevision
           + " and (r.occurredAt < :at or (r.occurredAt = :at and r.id < :id))"
           + " order by r.occurredAt desc, r.id desc")
   List<OrderServiceTerms> findHistoricalSelections(
-      ServiceKind kind, String search, OffsetDateTime at, String id, Pageable pageable);
+      Long storeId,
+      ServiceKind kind,
+      String search,
+      OffsetDateTime at,
+      String id,
+      Pageable pageable);
 }
