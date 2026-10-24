@@ -182,7 +182,7 @@ class ShiftAuditTest {
     when(attendances.findByIdAndStoreId("attendance", 1L))
         .thenAnswer(call -> Optional.ofNullable(attendance));
     var castService = mock(CastService.class);
-    when(castService.existsForCurrentStoreForUpdate(1L, "cast")).thenReturn(true);
+    when(castService.existsInStoreForUpdate(1L, "cast")).thenReturn(true);
     actuals =
         new AttendanceService(
             attendances,

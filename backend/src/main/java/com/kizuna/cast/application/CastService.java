@@ -160,7 +160,7 @@ public class CastService {
   /** 実績の参照先が指定店舗に属することを、削除と直列化して確認する。在籍の後にシフトをロックする。 */
   @StoreScoped
   @Transactional
-  public boolean existsForCurrentStoreForUpdate(Long storeId, String id) {
+  public boolean existsInStoreForUpdate(Long storeId, String id) {
     return castRepository.findByIdAndStoreIdForUpdate(id, storeId).isPresent();
   }
 

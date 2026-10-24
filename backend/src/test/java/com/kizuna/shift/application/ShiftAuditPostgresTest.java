@@ -599,7 +599,7 @@ class ShiftAuditPostgresTest {
     @Bean
     CastService casts() {
       var c = mock(CastService.class);
-      when(c.existsForCurrentStoreForUpdate(1L, "cast")).thenReturn(true);
+      when(c.existsInStoreForUpdate(1L, "cast")).thenReturn(true);
       return c;
     }
 
