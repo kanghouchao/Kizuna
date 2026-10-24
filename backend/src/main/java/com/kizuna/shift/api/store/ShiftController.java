@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.store;
 
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
@@ -41,16 +42,18 @@ public class ShiftController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<List<ShiftResponse>> list(
+      @CurrentStore Long storeId,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-    return ResponseEntity.ok(shiftService.list(from, to));
+    return ResponseEntity.ok(shiftService.list(storeId, from, to));
   }
 
   /** 1 本のシフトを系列ごと返す。字面の {@code /public} とは値空間が交わらない（シフト id は数字だけの Snowflake）。 */
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
-  public ResponseEntity<ShiftDetailResponse> detail(@PathVariable String id) {
-    return ResponseEntity.ok(shiftLineageService.detail(id));
+  public ResponseEntity<ShiftDetailResponse> detail(
+      @CurrentStore Long storeId, @PathVariable String id) {
+    return ResponseEntity.ok(shiftLineageService.detail(storeId, id));
   }
 
   /**
@@ -60,49 +63,54 @@ public class ShiftController {
   @GetMapping("/{id}/change-requests")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<CursorPage<ShiftRequestLineageResponse>> changeRequests(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "50") int size) {
-    return ResponseEntity.ok(shiftLineageService.changeRequests(id, cursor, size));
+    return ResponseEntity.ok(shiftLineageService.changeRequests(storeId, id, cursor, size));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftResponse> create(
-      @Valid @RequestBody ShiftCreateRequest request, Principal principal) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody ShiftCreateRequest request,
+      Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(shiftService.create(request, principal.getName()));
+        .body(shiftService.create(storeId, request, principal.getName()));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftResponse> update(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody ShiftUpdateRequest request,
       Principal principal) {
-    return ResponseEntity.ok(shiftService.update(id, request, principal.getName()));
+    return ResponseEntity.ok(shiftService.update(storeId, id, request, principal.getName()));
   }
 
   @PutMapping("/{id}/publication")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftResponse> changePublication(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody ShiftPublicationRequest request,
       Principal principal) {
     return ResponseEntity.ok(
-        shiftService.changePublication(id, request.getPublished(), principal.getName()));
+        shiftService.changePublication(storeId, id, request.getPublished(), principal.getName()));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
-  public ResponseEntity<Void> delete(@PathVariable String id) {
-    shiftService.delete(id);
+  public ResponseEntity<Void> delete(@CurrentStore Long storeId, @PathVariable String id) {
+    shiftService.delete(storeId, id);
     return ResponseEntity.noContent().build();
   }
 
   @GetMapping("/public")
   @PermitAll
-  public ResponseEntity<List<PublicShiftResponse>> listPublic() {
-    return ResponseEntity.ok(shiftService.listPublicToday());
+  public ResponseEntity<List<PublicShiftResponse>> listPublic(@CurrentStore Long storeId) {
+    return ResponseEntity.ok(shiftService.listPublicToday(storeId));
   }
 }

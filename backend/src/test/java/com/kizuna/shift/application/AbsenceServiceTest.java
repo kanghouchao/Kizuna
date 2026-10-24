@@ -38,6 +38,7 @@ class AbsenceServiceTest {
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
   private static final LocalDate BUSINESS_DATE = LocalDate.of(2026, 8, 18);
   private static final String CAST_ID = "cast-1";
+  private static final Long STORE_ID = 1L;
 
   @Mock private ShiftRepository shiftRepository;
   @Mock private AttendanceRepository attendanceRepository;
@@ -55,13 +56,15 @@ class AbsenceServiceTest {
 
   private void givenConfirmedShifts(Shift... shifts) {
     lenient()
-        .when(shiftRepository.findByWorkDateAndStatus(BUSINESS_DATE, ShiftStatus.CONFIRMED))
+        .when(
+            shiftRepository.findByStoreIdAndWorkDateAndStatus(
+                STORE_ID, BUSINESS_DATE, ShiftStatus.CONFIRMED))
         .thenReturn(List.of(shifts));
   }
 
   private void givenActiveAttendanceCastIds(String... castIds) {
     lenient()
-        .when(attendanceRepository.findCastIdsWithActiveAttendanceOn(BUSINESS_DATE))
+        .when(attendanceRepository.findCastIdsWithActiveAttendanceOn(STORE_ID, BUSINESS_DATE))
         .thenReturn(Set.of(castIds));
   }
 
@@ -85,7 +88,8 @@ class AbsenceServiceTest {
     givenConfirmedShifts(shiftOf(CAST_ID, LocalTime.of(18, 0), LocalTime.of(21, 0)));
 
     // 営業日 08-18 は 08-19 05:00 まで続く。予定終了（08-18 21:00）は過ぎているが飛び込みの記録がまだ来うる。
-    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 2, 30)).list(BUSINESS_DATE)).isEmpty();
+    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 2, 30)).list(STORE_ID, BUSINESS_DATE))
+        .isEmpty();
   }
 
   @Test
@@ -94,10 +98,12 @@ class AbsenceServiceTest {
     givenConfirmedShifts(shiftOf(CAST_ID, LocalTime.of(23, 0), LocalTime.of(7, 0)));
 
     // 営業日は 08-19 05:00 に終わったが、予定終了は 08-19 07:00 — まだ勤務中である。
-    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(BUSINESS_DATE)).isEmpty();
+    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(STORE_ID, BUSINESS_DATE))
+        .isEmpty();
 
     // 正向対照: 予定終了を過ぎれば同じシフトが欠勤として出る。
-    assertThat(castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 7, 0)).list(BUSINESS_DATE)))
+    assertThat(
+            castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 7, 0)).list(STORE_ID, BUSINESS_DATE)))
         .containsExactly(CAST_ID);
   }
 
@@ -108,10 +114,12 @@ class AbsenceServiceTest {
     givenConfirmedShifts(shiftOf(CAST_ID, LocalTime.of(2, 0), LocalTime.of(7, 0)));
 
     // 営業日は 08-19 05:00 に終わったが、この枠は 08-19 07:00 まで勤務中である。
-    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(BUSINESS_DATE)).isEmpty();
+    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(STORE_ID, BUSINESS_DATE))
+        .isEmpty();
 
     // 正向対照: 予定終了を過ぎれば欠勤として出る。
-    assertThat(castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 7, 0)).list(BUSINESS_DATE)))
+    assertThat(
+            castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 7, 0)).list(STORE_ID, BUSINESS_DATE)))
         .containsExactly(CAST_ID);
   }
 
@@ -123,9 +131,11 @@ class AbsenceServiceTest {
         shiftOf(CAST_ID, LocalTime.of(23, 0), LocalTime.of(7, 0)));
 
     // 第一枠（08-18 15:00 終了）は過ぎているが、第二枠が進行中。
-    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(BUSINESS_DATE)).isEmpty();
+    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(STORE_ID, BUSINESS_DATE))
+        .isEmpty();
 
-    assertThat(castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(BUSINESS_DATE)))
+    assertThat(
+            castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(STORE_ID, BUSINESS_DATE)))
         .containsExactly(CAST_ID);
   }
 
@@ -137,7 +147,8 @@ class AbsenceServiceTest {
         shiftOf("cast-2", LocalTime.of(23, 0), LocalTime.of(7, 0)));
 
     // 08-19 06:00 — cast-2 は勤務中だが、cast-1 の枠はとうに終わっている。
-    assertThat(castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(BUSINESS_DATE)))
+    assertThat(
+            castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 6, 0)).list(STORE_ID, BUSINESS_DATE)))
         .containsExactly(CAST_ID);
   }
 
@@ -151,7 +162,7 @@ class AbsenceServiceTest {
     givenActiveAttendanceCastIds("cast-2");
 
     List<AbsenceResponse> absences =
-        serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(BUSINESS_DATE);
+        serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(STORE_ID, BUSINESS_DATE);
 
     assertThat(castIdsOf(absences)).containsExactly(CAST_ID, "cast-3");
     assertThat(absences.getFirst().getBusinessDate()).isEqualTo(BUSINESS_DATE);
@@ -162,16 +173,19 @@ class AbsenceServiceTest {
   void derivesNothingWithoutConfirmedShifts() {
     givenConfirmedShifts();
 
-    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(BUSINESS_DATE)).isEmpty();
+    assertThat(serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(STORE_ID, BUSINESS_DATE))
+        .isEmpty();
   }
 
   @Test
   @DisplayName("欠勤の母集合は確定シフトに限られる")
   void onlyConfirmedShiftsAreQueried() {
-    when(shiftRepository.findByWorkDateAndStatus(BUSINESS_DATE, ShiftStatus.CONFIRMED))
+    when(shiftRepository.findByStoreIdAndWorkDateAndStatus(
+            STORE_ID, BUSINESS_DATE, ShiftStatus.CONFIRMED))
         .thenReturn(List.of(shiftOf(CAST_ID, LocalTime.of(18, 0), LocalTime.of(21, 0))));
 
-    assertThat(castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(BUSINESS_DATE)))
+    assertThat(
+            castIdsOf(serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(STORE_ID, BUSINESS_DATE)))
         .containsExactly(CAST_ID);
   }
 }

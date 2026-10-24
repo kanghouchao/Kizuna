@@ -1,26 +1,33 @@
 package com.kizuna.shift.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface ShiftRepository
-    extends JpaRepository<Shift, String>, JpaSpecificationExecutor<Shift> {
+public interface ShiftRepository extends StoreScopedRepository<Shift> {
 
-  List<Shift> findByWorkDateBetween(LocalDate from, LocalDate to);
+  List<Shift> findByStoreIdAndWorkDateBetween(Long storeId, LocalDate from, LocalDate to);
 
   /** 指定勤務日の確定シフト。欠勤導出の母集合で、公開可否は見ない — 公開可否は店外露出のフィルタであって 状態機械の一部ではない（ADR 0015 の負向不変量）。 */
-  List<Shift> findByWorkDateAndStatus(LocalDate workDate, ShiftStatus status);
+  List<Shift> findByStoreIdAndWorkDateAndStatus(
+      Long storeId, LocalDate workDate, ShiftStatus status);
 
   /** 公式サイト出勤表の絞り。店外への露出関門は CONFIRMED ∧ 公開可（ADR 0015）なので、状態と公開可否の両方で絞る。 */
-  List<Shift> findByWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
-      LocalDate workDate, ShiftStatus status);
+  List<Shift> findByStoreIdAndWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
+      Long storeId, LocalDate workDate, ShiftStatus status);
+
+  List<Shift> findByIdInAndStoreId(Collection<String> ids, Long storeId);
+
+  boolean existsByIdAndStoreId(String id, Long storeId);
+
+  /** 店舗を跨ぐ本人照会。境界は本人の在籍 id（cast_id）集合で、店舗はシフト自身から導く。 */
+  Optional<Shift> findByIdAndCastIdIn(String id, Collection<String> castIds);
 
   /**
    * 本人（cast_id 集合、跨店）の週間確定シフトを店名内联で返す。where 句に店舗の絞りは書かない — cast_id は当人が所属する店にしか 存在しないため、cast_id
@@ -86,7 +93,7 @@ public interface ShiftRepository
       @Param("workDate") LocalDate workDate);
 
   /**
-   * 現店舗のシフト 1 件を、予実の交差を触る間だけ押さえて引く。
+   * 指定店舗のシフト 1 件を、予実の交差を触る間だけ押さえて引く。
    *
    * <p>実績の記録・訂正はシフトの勤務日を読んで自分の営業日を物化し、シフトの更新・削除・変更申請の適用は 実績の有無を読んで可否を決める。互いに相手の行を書かないので、押さえずに読むと
    * 「実績はまだ無い」と 「勤務日はまだ旧値」が同時に真になり、双方が commit して物化済みの帰属がシフトと食い違う（ADR 0014 が
@@ -96,10 +103,9 @@ public interface ShiftRepository
    *
    * <p>この読み口はその取引でのシフトの**最初の**読み込みでなければならない。既に永続化文脈に載った実体へ後から
    * ロックを掛けると獲得が版の照合を伴い、シフトを書きもしない要求が版の進みだけで 409 に落ちる。
-   *
-   * <p>JPQL で書くのは {@code storeFilter} を効かせるためで、native にすると店舗境界が黙って消える。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select s from com.kizuna.shift.domain.Shift s where s.id = :id")
-  Optional<Shift> findScopedByIdForUpdate(@Param("id") String id);
+  @Query("select s from com.kizuna.shift.domain.Shift s where s.id = :id and s.storeId = :storeId")
+  Optional<Shift> findByIdAndStoreIdForUpdate(
+      @Param("id") String id, @Param("storeId") Long storeId);
 }

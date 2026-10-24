@@ -163,6 +163,7 @@ class RemunerationPostgresTest {
           orderId = order(first, DAY, OrderStatus.COMPLETED, 7000, false);
           var a =
               Attendance.record(
+                  storeId,
                   first,
                   null,
                   DAY,
@@ -174,6 +175,7 @@ class RemunerationPostgresTest {
           attendanceId = a.getId();
           em.persist(
               Attendance.record(
+                  storeId,
                   second,
                   null,
                   DAY,

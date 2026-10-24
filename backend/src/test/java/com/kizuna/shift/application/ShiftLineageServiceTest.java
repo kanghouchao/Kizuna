@@ -44,6 +44,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ShiftLineageServiceTest {
 
+  private static final Long STORE_ID = 1L;
   private static final String SHIFT_ID = "shift-1";
   private static final String CAST_ID = "cast-1";
   private static final LocalDate WORK_DATE = LocalDate.of(2026, 8, 18);
@@ -95,6 +96,7 @@ class ShiftLineageServiceTest {
   private static Attendance attendance() {
     Attendance attendance =
         Attendance.record(
+            STORE_ID,
             CAST_ID,
             SHIFT_ID,
             WORK_DATE,
@@ -123,12 +125,13 @@ class ShiftLineageServiceTest {
   }
 
   private void givenShiftExists() {
-    when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(confirmedShift()));
+    when(shiftRepository.findByIdAndStoreId(SHIFT_ID, STORE_ID))
+        .thenReturn(Optional.of(confirmedShift()));
   }
 
   private void givenOrigin(ShiftRequest origin) {
-    when(shiftRequestRepository.findFirstByShiftIdAndTypeOrderByCreatedAtAscIdAsc(
-            SHIFT_ID, ShiftRequestType.NEW))
+    when(shiftRequestRepository.findFirstByStoreIdAndShiftIdAndTypeOrderByCreatedAtAscIdAsc(
+            STORE_ID, SHIFT_ID, ShiftRequestType.NEW))
         .thenReturn(Optional.ofNullable(origin));
   }
 
@@ -137,12 +140,12 @@ class ShiftLineageServiceTest {
   void assemblesTheWholeLineageWithActors() {
     givenShiftExists();
     givenOrigin(request(ShiftRequestType.NEW, ShiftRequestStatus.APPROVED));
-    when(attendanceRepository.findByShiftIdAndCancelledAtIsNull(SHIFT_ID))
+    when(attendanceRepository.findByStoreIdAndShiftIdAndCancelledAtIsNull(STORE_ID, SHIFT_ID))
         .thenReturn(Optional.of(attendance()));
     when(userRepository.findAllById(any()))
         .thenReturn(List.of(user(APPROVER_ID, "承認した店長"), user(RECORDER_ID, "記録した店員")));
 
-    ShiftDetailResponse detail = shiftLineageService.detail(SHIFT_ID);
+    ShiftDetailResponse detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
 
     assertThat(detail.getCreatedBy().getId()).isEqualTo(APPROVER_ID);
     assertThat(detail.getCreatedBy().getName()).as("実行主体は id だけでなく名前まで解決すること").isEqualTo("承認した店長");
@@ -170,10 +173,10 @@ class ShiftLineageServiceTest {
   void cancelledAttendanceIsNotPartOfTheLineage() {
     givenShiftExists();
     givenOrigin(null);
-    when(attendanceRepository.findByShiftIdAndCancelledAtIsNull(SHIFT_ID))
+    when(attendanceRepository.findByStoreIdAndShiftIdAndCancelledAtIsNull(STORE_ID, SHIFT_ID))
         .thenReturn(Optional.empty());
 
-    ShiftDetailResponse detail = shiftLineageService.detail(SHIFT_ID);
+    ShiftDetailResponse detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
 
     assertThat(detail.getAttendance()).isNull();
     assertThat(detail.getOrigin()).as("店舗が直接作成したシフトでは出生の希望が無いこと").isNull();
@@ -191,12 +194,12 @@ class ShiftLineageServiceTest {
             .status(ShiftStatus.CONFIRMED)
             .build();
     actorless.setId(SHIFT_ID);
-    when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.of(actorless));
+    when(shiftRepository.findByIdAndStoreId(SHIFT_ID, STORE_ID)).thenReturn(Optional.of(actorless));
     givenOrigin(null);
-    when(attendanceRepository.findByShiftIdAndCancelledAtIsNull(SHIFT_ID))
+    when(attendanceRepository.findByStoreIdAndShiftIdAndCancelledAtIsNull(STORE_ID, SHIFT_ID))
         .thenReturn(Optional.empty());
 
-    ShiftDetailResponse detail = shiftLineageService.detail(SHIFT_ID);
+    ShiftDetailResponse detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
 
     assertThat(detail.getCreatedBy()).isNull();
     verify(userRepository, never()).findAllById(any());
@@ -205,7 +208,7 @@ class ShiftLineageServiceTest {
   @Test
   @DisplayName("変更申請履歴が新しい順に返り、続きのカーソルが出ること")
   void changeRequestsArePagedNewestFirst() {
-    when(shiftRepository.existsById(SHIFT_ID)).thenReturn(true);
+    when(shiftRepository.existsByIdAndStoreId(SHIFT_ID, STORE_ID)).thenReturn(true);
     ShiftRequest newer = request(ShiftRequestType.CHANGE, ShiftRequestStatus.APPROVED);
     newer.setId("request-newer");
     newer.setCreatedAt(OffsetDateTime.parse("2026-08-17T12:00:00+09:00"));
@@ -213,12 +216,12 @@ class ShiftLineageServiceTest {
     older.setId("request-older");
     older.setCreatedAt(OffsetDateTime.parse("2026-08-16T12:00:00+09:00"));
     // 上限より 1 件多く返すことで「続きがある」を伝える契約なので、size=1 に対して 2 件返す。
-    when(shiftRequestRepository.findChangeHistoryByShiftId(eq(SHIFT_ID), any()))
+    when(shiftRequestRepository.findChangeHistoryByShiftId(eq(STORE_ID), eq(SHIFT_ID), any()))
         .thenReturn(List.of(newer, older));
     when(userRepository.findAllById(any())).thenReturn(List.of(user(APPROVER_ID, "承認した店長")));
 
     CursorPage<ShiftRequestLineageResponse> page =
-        shiftLineageService.changeRequests(SHIFT_ID, null, 1);
+        shiftLineageService.changeRequests(STORE_ID, SHIFT_ID, null, 1);
 
     assertThat(page.content())
         .extracting(ShiftRequestLineageResponse::getId)
@@ -231,9 +234,9 @@ class ShiftLineageServiceTest {
   @Test
   @DisplayName("作用域の外のシフトの変更申請履歴は、空ではなく見つからないになる")
   void changeRequestsOfUnknownShiftIsNotFound() {
-    when(shiftRepository.existsById(SHIFT_ID)).thenReturn(false);
+    when(shiftRepository.existsByIdAndStoreId(SHIFT_ID, STORE_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> shiftLineageService.changeRequests(SHIFT_ID, null, 50))
+    assertThatThrownBy(() -> shiftLineageService.changeRequests(STORE_ID, SHIFT_ID, null, 50))
         .as("空の履歴を返すと、他店舗のシフト id と存在しない id が区別できなくなる")
         .isInstanceOf(NotFoundException.class);
   }
@@ -241,9 +244,11 @@ class ShiftLineageServiceTest {
   @Test
   @DisplayName("作用域の外のシフトは見つからない")
   void unknownShiftIsNotFound() {
-    lenient().when(shiftRepository.findById(SHIFT_ID)).thenReturn(Optional.empty());
+    lenient()
+        .when(shiftRepository.findByIdAndStoreId(SHIFT_ID, STORE_ID))
+        .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> shiftLineageService.detail(SHIFT_ID))
+    assertThatThrownBy(() -> shiftLineageService.detail(STORE_ID, SHIFT_ID))
         .isInstanceOf(NotFoundException.class);
   }
 }

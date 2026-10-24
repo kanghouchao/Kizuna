@@ -52,14 +52,18 @@ public class ShiftLineageService {
    */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public ShiftDetailResponse detail(String id) {
+  public ShiftDetailResponse detail(Long storeId, String id) {
     Shift shift =
-        shiftRepository.findById(id).orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
+        shiftRepository
+            .findByIdAndStoreId(id, storeId)
+            .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
     ShiftRequest origin =
         shiftRequestRepository
-            .findFirstByShiftIdAndTypeOrderByCreatedAtAscIdAsc(id, ShiftRequestType.NEW)
+            .findFirstByStoreIdAndShiftIdAndTypeOrderByCreatedAtAscIdAsc(
+                storeId, id, ShiftRequestType.NEW)
             .orElse(null);
-    Attendance attendance = attendanceRepository.findByShiftIdAndCancelledAtIsNull(id).orElse(null);
+    Attendance attendance =
+        attendanceRepository.findByStoreIdAndShiftIdAndCancelledAtIsNull(storeId, id).orElse(null);
 
     Map<Long, String> actorNames =
         resolveActorNames(shift, origin == null ? List.of() : List.of(origin), attendance);
@@ -123,10 +127,10 @@ public class ShiftLineageService {
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<ShiftRequestLineageResponse> changeRequests(
-      String shiftId, String cursor, int requestedSize) {
+      Long storeId, String shiftId, String cursor, int requestedSize) {
     // シフトの存在と作用域はここで確かめる。履歴だけを問い合わせると、他店舗のシフト id に対して
     // 「空の履歴」を返してしまい、存在しないことと区別が付かなくなる。
-    if (!shiftRepository.existsById(shiftId)) {
+    if (!shiftRepository.existsByIdAndStoreId(shiftId, storeId)) {
       throw new NotFoundException("シフトが見つかりません: " + shiftId);
     }
     int size = CursorPage.clampSize(requestedSize);
@@ -134,17 +138,17 @@ public class ShiftLineageService {
     Limit limit = Limit.of(size + 1);
     List<ShiftRequest> fetched =
         cursor == null
-            ? shiftRequestRepository.findChangeHistoryByShiftId(shiftId, limit)
-            : fetchChangeHistoryAfter(shiftId, PageCursor.decode(cursor), limit);
+            ? shiftRequestRepository.findChangeHistoryByShiftId(storeId, shiftId, limit)
+            : fetchChangeHistoryAfter(storeId, shiftId, PageCursor.decode(cursor), limit);
     CursorPage<ShiftRequest> page = CursorPage.of(fetched, size, ShiftLineageService::cursorOf);
     Map<Long, String> actorNames = resolveProcessorNames(page.content());
     return page.map(request -> toLineage(request, actorNames));
   }
 
   private List<ShiftRequest> fetchChangeHistoryAfter(
-      String shiftId, PageCursor cursor, Limit limit) {
+      Long storeId, String shiftId, PageCursor cursor, Limit limit) {
     return shiftRequestRepository.findChangeHistoryByShiftIdAfter(
-        shiftId, cursor.timestampKey(), cursor.id(), limit);
+        storeId, shiftId, cursor.timestampKey(), cursor.id(), limit);
   }
 
   /** 続きの位置は履歴の並び（提出時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */

@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.store;
 
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shift.api.dto.ShiftApprovalRequest;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
 import com.kizuna.shift.application.ShiftRequestService;
@@ -27,25 +28,27 @@ public class ShiftRequestController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<List<StoreShiftRequestResponse>> list(
-      @RequestParam(required = false) String status) {
-    return ResponseEntity.ok(shiftRequestService.list(status));
+      @CurrentStore Long storeId, @RequestParam(required = false) String status) {
+    return ResponseEntity.ok(shiftRequestService.list(storeId, status));
   }
 
   /** 承認。本体は任意で、新規希望を非公開のまま出生させたいときだけ公開可否を明示する。 */
   @PostMapping("/{id}/approval")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<StoreShiftRequestResponse> approve(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestBody(required = false) ShiftApprovalRequest request,
       Principal principal) {
     Boolean published = request == null ? null : request.getPublished();
-    return ResponseEntity.ok(shiftRequestService.approve(id, published, principal.getName()));
+    return ResponseEntity.ok(
+        shiftRequestService.approve(storeId, id, published, principal.getName()));
   }
 
   @PostMapping("/{id}/rejection")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<StoreShiftRequestResponse> decline(
-      @PathVariable String id, Principal principal) {
-    return ResponseEntity.ok(shiftRequestService.decline(id, principal.getName()));
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    return ResponseEntity.ok(shiftRequestService.decline(storeId, id, principal.getName()));
   }
 }

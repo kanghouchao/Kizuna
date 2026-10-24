@@ -105,8 +105,7 @@ public class CastShiftRequestService {
     List<String> castIds = castRepository.findIdsByUserId(userId);
     Shift shift =
         shiftRepository
-            .findById(request.getShiftId())
-            .filter(s -> castIds.contains(s.getCastId()))
+            .findByIdAndCastIdIn(request.getShiftId(), castIds)
             .orElseThrow(() -> new NotFoundException("対象のシフトが見つかりません: " + request.getShiftId()));
     requireActiveMembership(shift.getCastId(), shift.getStoreId());
     if (shift.getStatus() != ShiftStatus.CONFIRMED) {
@@ -114,7 +113,7 @@ public class CastShiftRequestService {
     }
     // 実績が物化した事実と食い違う付け替えを申請の側からも塞ぐ。提出・承認・承認可否導出の三面が同じ条件で、
     // 提出だけ通しても承認できない申請が inbox に溜まるだけになる（ADR 0014）。
-    if (attendanceRepository.hasActiveAttendance(shift.getId())) {
+    if (attendanceRepository.hasActiveAttendance(shift.getStoreId(), shift.getId())) {
       throw new ServiceException("実績が記録されているシフトには変更申請できません");
     }
 

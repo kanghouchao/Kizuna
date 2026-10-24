@@ -62,6 +62,7 @@ public class Attendance extends StoreScopedEntity {
   private Long updatedBy;
 
   private Attendance(
+      Long storeId,
       String castId,
       String shiftId,
       LocalDate businessDate,
@@ -69,6 +70,7 @@ public class Attendance extends StoreScopedEntity {
       LocalDateTime actualEndAt,
       String waitingPlace,
       Long createdBy) {
+    setStoreId(storeId);
     this.castId = castId;
     this.businessDate = businessDate;
     this.actualStartAt = actualStartAt;
@@ -80,6 +82,7 @@ public class Attendance extends StoreScopedEntity {
 
   /** 出勤の事実を記録する。帰属営業日は呼出側が決める — シフト紐づきは work_date の継承、飛び込みは実開始時刻からの判定で、 どちらもこの集約の外にある情報を要する。 */
   public static Attendance record(
+      Long storeId,
       String castId,
       String shiftId,
       LocalDate businessDate,
@@ -89,7 +92,14 @@ public class Attendance extends StoreScopedEntity {
       Long createdBy) {
     requireEndAfterStart(actualStartAt, actualEndAt);
     return new Attendance(
-        castId, shiftId, businessDate, actualStartAt, actualEndAt, waitingPlace, createdBy);
+        storeId,
+        castId,
+        shiftId,
+        businessDate,
+        actualStartAt,
+        actualEndAt,
+        waitingPlace,
+        createdBy);
   }
 
   /**

@@ -2,6 +2,7 @@ package com.kizuna.shift.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -108,6 +109,6 @@ class CastScheduleServiceTest {
 
     assertThat(result).containsExactly(response);
     verify(shiftRepository).findConfirmedSchedule(eq(castIds), eq(FROM), eq(TO));
-    verify(shiftRepository, never()).findByWorkDateBetween(FROM, TO);
+    verify(shiftRepository, never()).findByStoreIdAndWorkDateBetween(any(), any(), any());
   }
 }
