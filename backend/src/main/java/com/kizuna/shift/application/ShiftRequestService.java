@@ -6,6 +6,7 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
@@ -46,6 +47,7 @@ public class ShiftRequestService {
   private final UserRepository userRepository;
   private final BusinessDateService businessDateService;
   private final StoreRepository storeRepository;
+  private final StoreContext storeContext;
   private final BusinessAudit audit;
 
   @StoreScoped
@@ -82,7 +84,9 @@ public class ShiftRequestService {
 
     Set<String> activeEnrollments =
         enrollments
-            .findAllById(requests.stream().map(ShiftRequest::getCastId).distinct().toList())
+            .findByIdInAndStoreId(
+                requests.stream().map(ShiftRequest::getCastId).distinct().toList(),
+                storeContext.getStoreId())
             .stream()
             .filter(CastEnrollment::isMembershipActive)
             .map(CastEnrollment::getId)
@@ -166,7 +170,7 @@ public class ShiftRequestService {
     var before = ShiftAuditSnapshot.of(request);
     storeRepository.lockAgainstDeletion(request.getStoreId());
     enrollments
-        .findScopedByIdForUpdate(request.getCastId())
+        .findByIdAndStoreIdForUpdate(request.getCastId(), request.getStoreId())
         .filter(CastEnrollment::isMembershipActive)
         .orElseThrow(() -> new ServiceException("退店済みの在籍の出勤希望は承認できません"));
     Long actorId = resolveActorId(actorEmail);

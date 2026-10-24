@@ -200,7 +200,7 @@ public class CastShiftRequestService {
   private void requireActiveMembership(String id, Long storeId) {
     storeRepository.lockAgainstDeletion(storeId);
     castRepository
-        .findByIdForUpdate(id)
+        .findByIdAndStoreIdForUpdate(id, storeId)
         .filter(CastEnrollment::isMembershipActive)
         .orElseThrow(() -> new ServiceException("指定店舗に所属していません"));
   }

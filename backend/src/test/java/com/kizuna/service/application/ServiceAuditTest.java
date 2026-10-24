@@ -193,7 +193,8 @@ class ServiceAuditTest {
     var actors = new ActorIdentityService(users);
     var rejection =
         new OrderSpecialServices(
-            new OrderSpecialServiceCatalog(items, revisions, consents, consentEvents, enrollments),
+            new OrderSpecialServiceCatalog(
+                items, revisions, consents, consentEvents, enrollments, store),
             mock(OrderSpecialServiceEventRepository.class),
             mock(OrderRepository.class),
             stores,

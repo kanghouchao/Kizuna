@@ -185,18 +185,18 @@ class CastAuditPostgresTest {
     assertVersions(id, 0, 0);
     var request = new CastUpdateRequest();
     request.setCustomFields(Map.of("private-key", "秘密の内部値"));
-    casts.update(id, request, ORDINARY);
+    casts.update(storeId, id, request, ORDINARY);
     assertVersions(id, 1, 0);
-    casts.update(id, request, ORDINARY);
-    casts.update(id, new CastUpdateRequest(), ORDINARY);
+    casts.update(storeId, id, request, ORDINARY);
+    casts.update(storeId, id, new CastUpdateRequest(), ORDINARY);
     assertVersions(id, 1, 0);
     assertThat(auditCount(id, profile)).isEqualTo(2);
     request.setName("秘密の変更名");
     request.setCustomFields(Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値"));
-    casts.update(id, request, ORDINARY);
+    casts.update(storeId, id, request, ORDINARY);
     assertVersions(id, 1, 1);
-    casts.changePublication(id, CastPublicationStatus.PUBLISHED);
-    casts.changePublication(id, CastPublicationStatus.PUBLISHED);
+    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
+    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
     assertVersions(id, 1, 2);
     var events =
         jdbc.queryForList(
@@ -223,7 +223,7 @@ class CastAuditPostgresTest {
         .containsEntry("old", "1")
         .containsEntry("new", "2")
         .containsEntry("source_id", id);
-    assertThat(lifecycle.snapshots(id, null, 20).content()).hasSize(1);
+    assertThat(lifecycle.snapshots(storeId, id, null, 20).content()).hasSize(1);
     assertThat(
             jdbc.queryForList(
                     "select before_values,after_values from t_audit_events where target_id in (?,?)",
@@ -236,7 +236,7 @@ class CastAuditPostgresTest {
   private String create() {
     var request = new CastCreateRequest();
     request.setName("秘密の名前-" + UUID.randomUUID());
-    return casts.create(request, ORDINARY).getId();
+    return casts.create(storeId, request, ORDINARY).getId();
   }
 
   @Test
@@ -261,11 +261,11 @@ class CastAuditPostgresTest {
     request.setCustomFields(Map.of("private-key", "内部更新値", "public-key", "公開更新値"));
     rejectAudit("CAST_ENROLLMENT_UPDATED");
     try {
-      assertThatThrownBy(() -> casts.update(id, request, ORDINARY))
+      assertThatThrownBy(() -> casts.update(storeId, id, request, ORDINARY))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThat(storedState(id)).isEqualTo(before);
       assertThat(tableCounts()).isEqualTo(counts);
-      assertThat(lifecycle.snapshots(id, null, 20).content()).isEmpty();
+      assertThat(lifecycle.snapshots(storeId, id, null, 20).content()).isEmpty();
     } finally {
       allowAudit();
     }
@@ -278,7 +278,8 @@ class CastAuditPostgresTest {
     var counts = tableCounts();
     rejectAudit("CAST_PROFILE_PUBLICATION_CHANGED");
     try {
-      assertThatThrownBy(() -> casts.changePublication(id, CastPublicationStatus.PUBLISHED))
+      assertThatThrownBy(
+              () -> casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThat(storedState(id)).isEqualTo(before);
       assertThat(tableCounts()).isEqualTo(counts);
@@ -291,7 +292,7 @@ class CastAuditPostgresTest {
   @ValueSource(strings = {"SUSPENDED", "RESUMED", "WITHDRAWN"})
   void lifecycleAuditFailureRestoresEnrollmentAndHistory(String action) {
     String id = create();
-    if (action.equals("RESUMED")) lifecycle.suspend(id, ORDINARY);
+    if (action.equals("RESUMED")) lifecycle.suspend(storeId, id, ORDINARY);
     var before = storedState(id);
     var counts = tableCounts();
     rejectAudit("CAST_ENROLLMENT_" + action);
@@ -315,9 +316,9 @@ class CastAuditPostgresTest {
           var request = new CastUpdateRequest();
           request.setName("外側rollbackの秘密");
           request.setCustomFields(Map.of("private-key", "戻す内部値", "public-key", "戻す公開値"));
-          casts.update(id, request, ORDINARY);
-          casts.changePublication(id, CastPublicationStatus.PUBLISHED);
-          lifecycle.suspend(id, ORDINARY);
+          casts.update(storeId, id, request, ORDINARY);
+          casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
+          lifecycle.suspend(storeId, id, ORDINARY);
           status.setRollbackOnly();
         });
     assertThat(storedState(id)).isEqualTo(before);
@@ -326,9 +327,9 @@ class CastAuditPostgresTest {
 
   private void transition(String id, String action, String actor) {
     switch (action) {
-      case "SUSPENDED" -> lifecycle.suspend(id, actor);
-      case "RESUMED" -> lifecycle.resume(id, actor);
-      case "WITHDRAWN" -> lifecycle.withdraw(id, actor);
+      case "SUSPENDED" -> lifecycle.suspend(storeId, id, actor);
+      case "RESUMED" -> lifecycle.resume(storeId, id, actor);
+      case "WITHDRAWN" -> lifecycle.withdraw(storeId, id, actor);
       default -> throw new IllegalArgumentException(action);
     }
   }
@@ -346,11 +347,11 @@ class CastAuditPostgresTest {
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     var request = new CastUpdateRequest();
     request.setName("別担当で変更する秘密名");
-    casts.update(id, request, SECOND);
-    casts.changePublication(id, CastPublicationStatus.PUBLISHED);
-    lifecycle.suspend(id, SECOND);
-    lifecycle.resume(id, SECOND);
-    lifecycle.withdraw(id, SECOND);
+    casts.update(storeId, id, request, SECOND);
+    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
+    lifecycle.suspend(storeId, id, SECOND);
+    lifecycle.resume(storeId, id, SECOND);
+    lifecycle.withdraw(storeId, id, SECOND);
     assertVersions(id, 3, 2);
     var actors =
         jdbc.queryForList(
@@ -382,10 +383,13 @@ class CastAuditPostgresTest {
         .extracting(row -> row.get("new_status"))
         .containsExactly("SUSPENDED", "ENROLLED", "WITHDRAWN");
     assertThat(history.getLast().get("ended")).isNotNull().isNotEqualTo("");
-    assertThat(lifecycle.history(id, null, 20).content()).hasSize(4);
-    assertThatThrownBy(() -> lifecycle.suspend(id, SECOND)).isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> lifecycle.resume(id, SECOND)).isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> lifecycle.withdraw(id, SECOND)).isInstanceOf(ServiceException.class);
+    assertThat(lifecycle.history(storeId, id, null, 20).content()).hasSize(4);
+    assertThatThrownBy(() -> lifecycle.suspend(storeId, id, SECOND))
+        .isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> lifecycle.resume(storeId, id, SECOND))
+        .isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> lifecycle.withdraw(storeId, id, SECOND))
+        .isInstanceOf(ServiceException.class);
     assertThat(auditCount(id, profile)).isEqualTo(6);
   }
 
@@ -407,7 +411,7 @@ class CastAuditPostgresTest {
           .containsExactlyInAnyOrder(true, false);
     }
     assertVersions(id, 1, 0);
-    assertThat(lifecycle.history(id, null, 20).content()).hasSize(2);
+    assertThat(lifecycle.history(storeId, id, null, 20).content()).hasSize(2);
     assertThat(auditCount(id, profile)).isEqualTo(2);
     assertThat(storedState(id)).containsEntry("status", "SUSPENDED");
   }
@@ -421,7 +425,7 @@ class CastAuditPostgresTest {
       ready.countDown();
       if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("同時操作が開始されませんでした");
       try {
-        lifecycle.suspend(id, ORDINARY);
+        lifecycle.suspend(storeId, id, ORDINARY);
         return true;
       } catch (ServiceException conflict) {
         assertThat(conflict).hasMessage("在籍中のキャストのみ停止できます");

@@ -598,7 +598,7 @@ class ShiftAuditPostgresTest {
     @Bean
     CastService casts() {
       var c = mock(CastService.class);
-      when(c.existsForCurrentStoreForUpdate("cast")).thenReturn(true);
+      when(c.existsForCurrentStoreForUpdate(1L, "cast")).thenReturn(true);
       return c;
     }
 
@@ -608,8 +608,7 @@ class ShiftAuditPostgresTest {
       var e = CastEnrollment.builder().build();
       e.setId("cast");
       e.setStoreId(1L);
-      when(r.findScopedByIdForUpdate("cast")).thenReturn(Optional.of(e));
-      when(r.findByIdForUpdate("cast")).thenReturn(Optional.of(e));
+      when(r.findByIdAndStoreIdForUpdate("cast", 1L)).thenReturn(Optional.of(e));
       when(r.findIdsByUserIdAndStoreId(10L, 1L)).thenReturn(List.of("cast"));
       when(r.findIdsByUserId(10L)).thenReturn(List.of("cast"));
       return r;

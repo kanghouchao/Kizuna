@@ -55,10 +55,8 @@ public class SelfRemunerationService {
     if (enrollmentId == null)
       return orders.findSelfRemunerations(userId, pageable).map(this::summary);
     var person = people.findByUserId(userId).orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
-    enrollments
-        .findById(enrollmentId)
-        .filter(e -> person.getId().equals(e.getCastId()))
-        .orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
+    if (!enrollments.existsByIdAndCastId(enrollmentId, person.getId()))
+      throw new NotFoundException("在籍が見つかりません");
     return orders
         .findSelfRemunerationsByEnrollment(userId, enrollmentId, pageable)
         .map(this::summary);

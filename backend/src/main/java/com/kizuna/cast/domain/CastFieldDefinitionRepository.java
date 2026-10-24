@@ -1,18 +1,20 @@
 package com.kizuna.cast.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.util.List;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-/** カスタムフィールド定義のリポジトリ。storeFilter 前提のため店舗条件は書かない（CastRepository と同流儀）。 */
-public interface CastFieldDefinitionRepository extends JpaRepository<CastFieldDefinition, String> {
+public interface CastFieldDefinitionRepository extends StoreScopedRepository<CastFieldDefinition> {
 
-  boolean existsByKey(String key);
+  boolean existsByStoreIdAndKey(Long storeId, String key);
 
-  List<CastFieldDefinition> findAllByOrderByDisplayOrderAsc();
+  long countByStoreId(Long storeId);
 
-  List<CastFieldDefinition> findByIsPublicTrueOrderByDisplayOrderAsc();
+  List<CastFieldDefinition> findAllByStoreIdOrderByDisplayOrderAsc(Long storeId);
 
-  @Query("select max(d.displayOrder) from CastFieldDefinition d")
-  Integer findMaxDisplayOrder();
+  List<CastFieldDefinition> findByStoreIdAndIsPublicTrueOrderByDisplayOrderAsc(Long storeId);
+
+  @Query("select max(d.displayOrder) from CastFieldDefinition d where d.storeId = :storeId")
+  Integer findMaxDisplayOrder(@Param("storeId") Long storeId);
 }

@@ -12,7 +12,6 @@ import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -36,28 +35,30 @@ public class CastFieldDefinitionService {
   private final CastEnrollmentService enrollmentService;
   private final CastFieldDefinitionMapper mapper;
   private final StoreRepository storeRepository;
-  private final StoreContext storeContext;
   private final CastEnrollmentRepository enrollmentRepository;
   private final CastProfileRepository profileRepository;
   private final BusinessAudit audit;
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<CastFieldDefinitionResponse> list() {
-    return repository.findAllByOrderByDisplayOrderAsc().stream().map(mapper::toResponse).toList();
+  public List<CastFieldDefinitionResponse> list(Long storeId) {
+    return repository.findAllByStoreIdOrderByDisplayOrderAsc(storeId).stream()
+        .map(mapper::toResponse)
+        .toList();
   }
 
   @StoreScoped
   @Transactional
-  public CastFieldDefinitionResponse create(CastFieldDefinitionCreateRequest request) {
-    storeRepository.lockCastFields(storeContext.getStoreId());
-    if (repository.existsByKey(request.getKey())) {
+  public CastFieldDefinitionResponse create(
+      Long storeId, CastFieldDefinitionCreateRequest request) {
+    storeRepository.lockCastFields(storeId);
+    if (repository.existsByStoreIdAndKey(storeId, request.getKey())) {
       throw new ServiceException("このキーは既に登録されています: " + request.getKey());
     }
-    if (repository.count() >= MAX_DEFINITIONS) {
+    if (repository.countByStoreId(storeId) >= MAX_DEFINITIONS) {
       throw new ServiceException("カスタムフィールド定義は最大" + MAX_DEFINITIONS + "件までです");
     }
-    Integer max = repository.findMaxDisplayOrder();
+    Integer max = repository.findMaxDisplayOrder(storeId);
     int nextOrder = max == null ? 0 : max + 1;
     CastFieldDefinition definition =
         CastFieldDefinition.builder()
@@ -66,6 +67,7 @@ public class CastFieldDefinitionService {
             .displayOrder(nextOrder)
             .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
             .build();
+    definition.setStoreId(storeId);
     repository.saveAndFlush(definition);
     audit.recordCurrent(
         definition.getStoreId(),
@@ -91,10 +93,13 @@ public class CastFieldDefinitionService {
 
   @StoreScoped
   @Transactional
-  public CastFieldDefinitionResponse update(String id, CastFieldDefinitionUpdateRequest request) {
-    storeRepository.lockCastFields(storeContext.getStoreId());
+  public CastFieldDefinitionResponse update(
+      Long storeId, String id, CastFieldDefinitionUpdateRequest request) {
+    storeRepository.lockCastFields(storeId);
     CastFieldDefinition definition =
-        repository.findById(id).orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません"));
+        repository
+            .findByIdAndStoreId(id, storeId)
+            .orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません"));
     var before = snapshot(definition);
     String previousLabel = definition.getLabel();
     definition.apply(mapper.toPatch(request));
@@ -117,14 +122,16 @@ public class CastFieldDefinitionService {
 
   @StoreScoped
   @Transactional
-  public void delete(String id, String actorEmail) {
-    storeRepository.lockCastFields(storeContext.getStoreId());
+  public void delete(Long storeId, String id, String actorEmail) {
+    storeRepository.lockCastFields(storeId);
     CastFieldDefinition definition =
-        repository.findById(id).orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません"));
+        repository
+            .findByIdAndStoreId(id, storeId)
+            .orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません"));
     var before = snapshot(definition);
     String key = definition.getKey();
     var affectedEnrollments =
-        enrollmentRepository.findAllForUpdate().stream()
+        enrollmentRepository.findAllByStoreIdForUpdate(storeId).stream()
             .filter(enrollment -> enrollment.getCustomFields().containsKey(key))
             .toList();
     var enrollmentBefore = new HashMap<String, Map<String, String>>();
@@ -133,7 +140,7 @@ public class CastFieldDefinitionService {
     var savedSnapshots =
         enrollmentService.removeInternalField(affectedEnrollments, key, actorEmail);
     var affectedProfiles =
-        profileRepository.findAll().stream()
+        profileRepository.findByStoreId(storeId).stream()
             .filter(profile -> profile.getCustomFields().containsKey(key))
             .toList();
     var profileBefore = new HashMap<String, Map<String, String>>();
@@ -142,7 +149,7 @@ public class CastFieldDefinitionService {
           profileBefore.put(profile.getId(), snapshot(profile));
           profile.removeCustomField(key);
         });
-    repository.deleteById(id);
+    repository.delete(definition);
     repository.flush();
     audit.record(
         actorEmail,

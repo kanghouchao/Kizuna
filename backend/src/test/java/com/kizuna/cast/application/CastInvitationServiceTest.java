@@ -3,6 +3,7 @@ package com.kizuna.cast.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,7 +17,6 @@ import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -27,6 +27,7 @@ import java.util.Optional;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -36,17 +37,18 @@ import org.springframework.dao.DataIntegrityViolationException;
 @ExtendWith(MockitoExtension.class)
 class CastInvitationServiceTest {
 
+  private static final Long STORE_ID = 1L;
+
   @Mock private CastEnrollmentRepository castRepository;
   @Mock private CastInvitationRepository castInvitationRepository;
   @Mock private StoreRepository storeRepository;
-  @Mock private StoreContext storeContext;
 
   @InjectMocks private CastInvitationService castInvitationService;
 
   private CastEnrollment cast(String id, Long userId) {
     CastEnrollment cast = CastEnrollment.builder().castId(userId).build();
     cast.setId(id);
-    cast.setStoreId(1L);
+    cast.setStoreId(STORE_ID);
     return cast;
   }
 
@@ -62,24 +64,29 @@ class CastInvitationServiceTest {
 
   @Test
   void issue_createsPendingInvitationWith72hExpiry() {
-    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     OffsetDateTime before = OffsetDateTime.now();
-    CastInvitationResponse response = castInvitationService.issue("c1");
+    CastInvitationResponse response = castInvitationService.issue(STORE_ID, "c1");
 
     assertThat(response.token()).isNotBlank();
     assertThat(response.expiresAt())
         .isBetween(
             before.plus(Duration.ofHours(72)).minusMinutes(1),
             OffsetDateTime.now().plus(Duration.ofHours(72)).plusMinutes(1));
+    ArgumentCaptor<CastInvitation> saved = ArgumentCaptor.forClass(CastInvitation.class);
+    verify(castInvitationRepository).saveAndFlush(saved.capture());
+    assertThat(saved.getValue().getStoreId()).isEqualTo(STORE_ID);
   }
 
   @Test
   void issue_rejectsWhenCastNotFound() {
-    when(castRepository.findScopedByIdForUpdate("missing")).thenReturn(Optional.empty());
+    when(castRepository.findByIdAndStoreIdForUpdate("missing", STORE_ID))
+        .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> castInvitationService.issue("missing"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "missing"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
     verify(castInvitationRepository, never()).saveAndFlush(any());
@@ -87,9 +94,10 @@ class CastInvitationServiceTest {
 
   @Test
   void issue_rejectsWhenAlreadyLinked() {
-    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", 99L)));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(cast("c1", 99L)));
 
-    assertThatThrownBy(() -> castInvitationService.issue("c1"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1"))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }
@@ -98,9 +106,10 @@ class CastInvitationServiceTest {
   void issue_rejectsWithdrawnEnrollment() {
     CastEnrollment enrollment = cast("c1", null);
     enrollment.withdraw(OffsetDateTime.now());
-    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(enrollment));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(enrollment));
 
-    assertThatThrownBy(() -> castInvitationService.issue("c1"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1"))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }
@@ -109,15 +118,17 @@ class CastInvitationServiceTest {
   void issue_invalidatesPendingViaConditionalUpdateBeforeReissuing() {
     // 旧 PENDING の失効は管理エンティティの invalidate() ではなく条件付き一括 UPDATE で行い、
     // それが新規 PENDING の INSERT より前に実行されることを確認する（受諾との直列化）。
-    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-    castInvitationService.issue("c1");
+    castInvitationService.issue(STORE_ID, "c1");
 
     InOrder inOrder = inOrder(castInvitationRepository);
     inOrder
         .verify(castInvitationRepository)
-        .invalidatePending("c1", CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
+        .invalidatePending(
+            "c1", STORE_ID, CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
     inOrder.verify(castInvitationRepository).saveAndFlush(any());
   }
 
@@ -126,7 +137,8 @@ class CastInvitationServiceTest {
     // 事前チェックをすり抜けた整合性違反はサービスで握りつぶさず、そのまま伝播すること。
     // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
     // サービス層で 400 に変換すると FK 等の実装欠陥まで「競合」に化けてしまう。
-    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(cast("c1", null)));
     DataIntegrityViolationException violation =
         new DataIntegrityViolationException(
             "save failed",
@@ -136,7 +148,7 @@ class CastInvitationServiceTest {
                 "uq_t_cast_invitations_pending_cast"));
     when(castInvitationRepository.saveAndFlush(any())).thenThrow(violation);
 
-    assertThatThrownBy(() -> castInvitationService.issue("c1")).isSameAs(violation);
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1")).isSameAs(violation);
   }
 
   @Test
@@ -144,7 +156,8 @@ class CastInvitationServiceTest {
     // 招待行の INSERT が t_cast_invitations の cast FK に当たったときの分類を固定する。
     // 冒頭で档案行を押さえる（ADR 0016）ので並行削除の割り込みでは当たらなくなったが、
     // 当たった場合の出口は冒頭の档案不在と同じ分類（NotFoundException → 404）である。
-    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any()))
         .thenThrow(
             new DataIntegrityViolationException(
@@ -154,7 +167,7 @@ class CastInvitationServiceTest {
                     new SQLException("insert or update violates foreign key constraint"),
                     "fk_t_cast_invitations_cast")));
 
-    assertThatThrownBy(() -> castInvitationService.issue("c1"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
@@ -163,10 +176,11 @@ class CastInvitationServiceTest {
   void issue_abortsWhenCastGetsLinkedConcurrentlyBeforeReissuing() {
     // 初回の連携チェック通過後、旧 PENDING 失効までの間に並行受諾が档案を紐づけた状況を模す。
     // 失効後に档案の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する。
-    when(castRepository.findScopedByIdForUpdate("c1")).thenReturn(Optional.of(cast("c1", null)));
-    when(castRepository.findCastIdById("c1")).thenReturn(Optional.of(77L));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(cast("c1", null)));
+    when(castRepository.findCastIdByIdAndStoreId("c1", STORE_ID)).thenReturn(Optional.of(77L));
 
-    assertThatThrownBy(() -> castInvitationService.issue("c1"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1"))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }
@@ -178,7 +192,7 @@ class CastInvitationServiceTest {
     CastEnrollment expired = cast("expired", null);
     CastEnrollment notInvited = cast("not-invited", null);
 
-    when(castInvitationRepository.findByCastIdIn(any()))
+    when(castInvitationRepository.findByStoreIdAndCastIdIn(eq(STORE_ID), any()))
         .thenReturn(
             List.of(
                 invitation(
@@ -187,7 +201,8 @@ class CastInvitationServiceTest {
                     "expired", CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1))));
 
     Map<String, CastInvitationStatus> statuses =
-        castInvitationService.deriveStatuses(List.of(linked, invited, expired, notInvited));
+        castInvitationService.deriveStatuses(
+            STORE_ID, List.of(linked, invited, expired, notInvited));
 
     assertThat(statuses.get("linked")).isEqualTo(CastInvitationStatus.LINKED);
     assertThat(statuses.get("invited")).isEqualTo(CastInvitationStatus.INVITED);
@@ -203,7 +218,7 @@ class CastInvitationServiceTest {
     CastEnrollment linked = cast("linked", 5L);
     List<CastEnrollment> enrollments = List.of(pending, expired, notInvited, linked);
     enrollments.forEach(enrollment -> enrollment.withdraw(OffsetDateTime.now()));
-    when(castInvitationRepository.findByCastIdIn(any()))
+    when(castInvitationRepository.findByStoreIdAndCastIdIn(eq(STORE_ID), any()))
         .thenReturn(
             List.of(
                 invitation(
@@ -211,7 +226,8 @@ class CastInvitationServiceTest {
                 invitation(
                     "expired", CastInvitation.Status.PENDING, OffsetDateTime.now().minusHours(1))));
 
-    Map<String, CastInvitationStatus> statuses = castInvitationService.deriveStatuses(enrollments);
+    Map<String, CastInvitationStatus> statuses =
+        castInvitationService.deriveStatuses(STORE_ID, enrollments);
 
     assertThat(statuses.get("pending").name()).isEqualTo("UNAVAILABLE");
     assertThat(statuses.get("expired").name()).isEqualTo("UNAVAILABLE");
@@ -221,9 +237,10 @@ class CastInvitationServiceTest {
 
   @Test
   void deriveStatuses_emptyInputSkipsQuery() {
-    Map<String, CastInvitationStatus> statuses = castInvitationService.deriveStatuses(List.of());
+    Map<String, CastInvitationStatus> statuses =
+        castInvitationService.deriveStatuses(STORE_ID, List.of());
 
     assertThat(statuses).isEmpty();
-    verify(castInvitationRepository, never()).findByCastIdIn(any());
+    verify(castInvitationRepository, never()).findByStoreIdAndCastIdIn(any(), any());
   }
 }

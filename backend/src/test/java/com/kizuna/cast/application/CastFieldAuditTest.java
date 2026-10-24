@@ -20,7 +20,6 @@ import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -43,6 +42,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class CastFieldAuditTest {
+  private static final Long STORE_ID = 1L;
   private final CastFieldDefinitionRepository definitions =
       mock(CastFieldDefinitionRepository.class);
   private final CastEnrollmentRepository enrollments = mock(CastEnrollmentRepository.class);
@@ -56,8 +56,6 @@ class CastFieldAuditTest {
 
   @BeforeEach
   void setup() {
-    var store = new StoreContext();
-    store.setStoreId(1L);
     var stores = mock(StoreRepository.class);
     var audit = new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC()));
     var lifecycle =
@@ -67,7 +65,6 @@ class CastFieldAuditTest {
             snapshots,
             users,
             stores,
-            store,
             audit);
     service =
         new CastFieldDefinitionService(
@@ -75,7 +72,6 @@ class CastFieldAuditTest {
             lifecycle,
             Mappers.getMapper(CastFieldDefinitionMapper.class),
             stores,
-            store,
             enrollments,
             profiles,
             audit);
@@ -90,7 +86,7 @@ class CastFieldAuditTest {
             .build();
     actor.setId(9L);
     when(users.findByEmail("operator@example.test")).thenReturn(Optional.of(actor));
-    when(definitions.findMaxDisplayOrder()).thenReturn(null);
+    when(definitions.findMaxDisplayOrder(STORE_ID)).thenReturn(null);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
@@ -106,7 +102,6 @@ class CastFieldAuditTest {
             call -> {
               CastFieldDefinition definition = call.getArgument(0);
               definition.setId("definition");
-              definition.setStoreId(1L);
               ReflectionTestUtils.setField(definition, "version", 0L);
               return definition;
             });
@@ -123,13 +118,14 @@ class CastFieldAuditTest {
     request.setKey("private-key");
     request.setLabel("秘密の項目");
     request.setIsPublic(true);
-    assertThat(service.create(request).getId()).isEqualTo("definition");
+    assertThat(service.create(STORE_ID, request).getId()).isEqualTo("definition");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_FIELD_DEFINITION_CREATED");
     assertThat(event.getTargetType()).isEqualTo("CAST_FIELD_DEFINITION");
     assertThat(event.getTargetId()).isEqualTo("definition");
     assertThat(event.getActorId()).isEqualTo(9L);
+    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).isEmpty();
     assertThat(event.getAfterValues())
         .containsOnlyKeys("exists", "is_public", "display_order", "version")
@@ -149,19 +145,20 @@ class CastFieldAuditTest {
             .displayOrder(3)
             .build();
     definition.setId("definition");
-    definition.setStoreId(1L);
+    definition.setStoreId(STORE_ID);
     ReflectionTestUtils.setField(definition, "version", 4L);
-    when(definitions.findById("definition")).thenReturn(Optional.of(definition));
+    when(definitions.findByIdAndStoreId("definition", STORE_ID))
+        .thenReturn(Optional.of(definition));
     when(definitions.save(any())).thenAnswer(call -> call.getArgument(0));
     var same = new CastFieldDefinitionUpdateRequest();
     same.setLabel("旧い秘密");
     same.setDisplayOrder(3);
     same.setIsPublic(false);
-    service.update("definition", same);
+    service.update(STORE_ID, "definition", same);
     assertThat(recorded).isEmpty();
     var changed = new CastFieldDefinitionUpdateRequest();
     changed.setLabel("新しい秘密");
-    service.update("definition", changed);
+    service.update(STORE_ID, "definition", changed);
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_FIELD_DEFINITION_UPDATED");
@@ -173,7 +170,7 @@ class CastFieldAuditTest {
             "exists", "is_public", "display_order", "version", "redacted_fields_changed")
         .containsEntry("redacted_fields_changed", "label");
     assertThat(event.getAfterValues().toString()).doesNotContain("秘密", "private-key");
-    service.update("definition", changed);
+    service.update(STORE_ID, "definition", changed);
     assertThat(recorded).hasSize(1);
   }
 
@@ -187,24 +184,25 @@ class CastFieldAuditTest {
             .displayOrder(2)
             .build();
     definition.setId("definition");
-    definition.setStoreId(1L);
+    definition.setStoreId(STORE_ID);
     ReflectionTestUtils.setField(definition, "version", 4L);
-    when(definitions.existsById("definition")).thenReturn(true);
-    when(definitions.findById("definition")).thenReturn(Optional.of(definition));
+    when(definitions.findByIdAndStoreId("definition", STORE_ID))
+        .thenReturn(Optional.of(definition));
     var affected = CastEnrollment.builder().build();
     affected.setId("affected");
-    affected.setStoreId(1L);
+    affected.setStoreId(STORE_ID);
     ReflectionTestUtils.setField(affected, "version", 5L);
     affected.replaceCustomFields(Map.of("private-key", "秘密の内部値", "remaining", "残す値"));
     var untouched = CastEnrollment.builder().build();
     untouched.setId("untouched");
     var profile = CastProfile.builder().enrollmentId("affected").build();
     profile.setId("profile");
-    profile.setStoreId(1L);
+    profile.setStoreId(STORE_ID);
     ReflectionTestUtils.setField(profile, "version", 8L);
     profile.replaceCustomFields(Map.of("private-key", "秘密の公開値", "remaining", "残す値"));
-    when(enrollments.findAllForUpdate()).thenReturn(List.of(affected, untouched));
-    when(profiles.findAll()).thenReturn(List.of(profile, CastProfile.builder().build()));
+    when(enrollments.findAllByStoreIdForUpdate(STORE_ID)).thenReturn(List.of(affected, untouched));
+    when(profiles.findByStoreId(STORE_ID))
+        .thenReturn(List.of(profile, CastProfile.builder().build()));
     var saved = new ArrayList<CastEnrollmentSnapshot>();
     when(snapshots.save(any()))
         .thenAnswer(
@@ -214,7 +212,7 @@ class CastFieldAuditTest {
               saved.add(snapshot);
               return snapshot;
             });
-    service.delete("definition", "operator@example.test");
+    service.delete(STORE_ID, "definition", "operator@example.test");
     assertThat(affected.getCustomFields()).containsExactlyEntriesOf(Map.of("remaining", "残す値"));
     assertThat(profile.getCustomFields()).containsExactlyEntriesOf(Map.of("remaining", "残す値"));
     assertThat(saved)

@@ -67,7 +67,7 @@ class CastShiftRequestServiceTest {
   @BeforeEach
   void membership() {
     lenient()
-        .when(castRepository.findByIdForUpdate(any()))
+        .when(castRepository.findByIdAndStoreIdForUpdate(any(), any()))
         .thenReturn(Optional.of(CastEnrollment.builder().build()));
   }
 

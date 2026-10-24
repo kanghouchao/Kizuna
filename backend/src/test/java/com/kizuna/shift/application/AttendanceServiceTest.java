@@ -13,6 +13,7 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
@@ -53,6 +54,7 @@ class AttendanceServiceTest {
   private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final Long ACTOR_ID = 42L;
   private static final String CAST_ID = "cast-1";
+  private static final Long STORE_ID = 1L;
   private static final String SHIFT_ID = "shift-1";
 
   /** シフトの勤務日。飛び込みの判定が返す営業日とは別の値にして、どちらを継承したのかを断言で区別できるようにする。 */
@@ -66,6 +68,7 @@ class AttendanceServiceTest {
   @Mock private AttendanceMapper attendanceMapper;
   @Mock private ShiftRepository shiftRepository;
   @Mock private CastService castService;
+  @Mock private StoreContext storeContext;
   @Mock private UserRepository userRepository;
   @Mock private BusinessDateService businessDateService;
 
@@ -73,6 +76,7 @@ class AttendanceServiceTest {
 
   @BeforeEach
   void saveCorrectionIdentity() {
+    lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
     lenient()
         .when(correctionRepository.save(any(AttendanceCorrection.class)))
         .thenAnswer(call -> call.getArgument(0));
@@ -144,7 +148,7 @@ class AttendanceServiceTest {
   @DisplayName("シフト紐づきの実績が営業日をシフトの勤務日から継承すること")
   void shiftLinkedAttendanceInheritsWorkDate() {
     givenActor();
-    when(castService.existsForCurrentStoreForUpdate(CAST_ID)).thenReturn(true);
+    when(castService.existsForCurrentStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(shiftRepository.findScopedByIdForUpdate(SHIFT_ID)).thenReturn(Optional.of(shift(CAST_ID)));
     when(attendanceRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
 
@@ -159,7 +163,7 @@ class AttendanceServiceTest {
   @DisplayName("飛び込み（シフトなし）の営業日が実開始時刻から自動判定されること")
   void walkInAttendanceDerivesBusinessDateFromActualStart() {
     givenActor();
-    when(castService.existsForCurrentStoreForUpdate(CAST_ID)).thenReturn(true);
+    when(castService.existsForCurrentStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(businessDateService.businessDateOf(START)).thenReturn(DERIVED_BUSINESS_DATE);
     when(attendanceRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
 
@@ -175,7 +179,7 @@ class AttendanceServiceTest {
   @DisplayName("他人のシフトへ紐づけた記録を拒否すること")
   void rejectsAttendanceLinkedToAnotherCastsShift() {
     givenActor();
-    when(castService.existsForCurrentStoreForUpdate(CAST_ID)).thenReturn(true);
+    when(castService.existsForCurrentStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(shiftRepository.findScopedByIdForUpdate(SHIFT_ID))
         .thenReturn(Optional.of(shift("cast-2")));
 
@@ -188,7 +192,7 @@ class AttendanceServiceTest {
   @DisplayName("下書き（TENTATIVE）のシフトへ紐づけた記録を拒否すること")
   void rejectsAttendanceLinkedToATentativeShift() {
     givenActor();
-    when(castService.existsForCurrentStoreForUpdate(CAST_ID)).thenReturn(true);
+    when(castService.existsForCurrentStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(shiftRepository.findScopedByIdForUpdate(SHIFT_ID))
         .thenReturn(Optional.of(shift(CAST_ID, ShiftStatus.TENTATIVE)));
 
@@ -201,7 +205,7 @@ class AttendanceServiceTest {
   @DisplayName("現店舗に居ないキャストの記録が 404 になること")
   void rejectsAttendanceForUnknownCast() {
     givenActor();
-    when(castService.existsForCurrentStoreForUpdate(CAST_ID)).thenReturn(false);
+    when(castService.existsForCurrentStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(false);
 
     assertThatThrownBy(() -> attendanceService.record(createRequest(null), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
@@ -211,7 +215,7 @@ class AttendanceServiceTest {
   @DisplayName("未取消の一意性違反が 409 へ写り、当たった索引で文言が分かれること")
   void translatesActiveUniquenessViolations() {
     givenActor();
-    when(castService.existsForCurrentStoreForUpdate(CAST_ID)).thenReturn(true);
+    when(castService.existsForCurrentStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(businessDateService.businessDateOf(START)).thenReturn(DERIVED_BUSINESS_DATE);
     when(attendanceRepository.saveAndFlush(any()))
         .thenThrow(uniqueViolation("uq_t_attendances_active_cast_business_date"))

@@ -1,21 +1,20 @@
 package com.kizuna.cast.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface CastInvitationRepository extends JpaRepository<CastInvitation, String> {
+public interface CastInvitationRepository extends StoreScopedRepository<CastInvitation> {
 
+  /** 店舗を跨ぐ照会。境界は店舗横断で一意かつ推測不能な招待 token。 */
   Optional<CastInvitation> findByToken(String token);
 
-  List<CastInvitation> findByCastIdAndStatus(String castId, CastInvitation.Status status);
-
-  List<CastInvitation> findByCastIdIn(Collection<String> castIds);
+  List<CastInvitation> findByStoreIdAndCastIdIn(Long storeId, Collection<String> castIds);
 
   /**
    * PENDING の招待のみを条件付きで ACCEPTED へ遷移させ（受諾のクレーム）、更新行数を返す。
@@ -26,9 +25,10 @@ public interface CastInvitationRepository extends JpaRepository<CastInvitation, 
   @Modifying
   @Query(
       "update CastInvitation i set i.status = :accepted, i.acceptedAt = :now "
-          + "where i.id = :id and i.status = :pending")
+          + "where i.id = :id and i.storeId = :storeId and i.status = :pending")
   int claimPending(
       @Param("id") String id,
+      @Param("storeId") Long storeId,
       @Param("now") OffsetDateTime now,
       @Param("pending") CastInvitation.Status pending,
       @Param("accepted") CastInvitation.Status accepted);
@@ -43,9 +43,10 @@ public interface CastInvitationRepository extends JpaRepository<CastInvitation, 
   @Modifying
   @Query(
       "update CastInvitation i set i.status = :invalidated "
-          + "where i.castId = :castId and i.status = :pending")
+          + "where i.castId = :castId and i.storeId = :storeId and i.status = :pending")
   int invalidatePending(
       @Param("castId") String castId,
+      @Param("storeId") Long storeId,
       @Param("pending") CastInvitation.Status pending,
       @Param("invalidated") CastInvitation.Status invalidated);
 }

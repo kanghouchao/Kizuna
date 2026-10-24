@@ -1,5 +1,6 @@
 package com.kizuna.shared.web;
 
+import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -17,6 +18,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebBindingConfig implements WebMvcConfigurer {
 
   @NonNull private final PageableHandlerMethodArgumentResolver pageableResolver;
+  @NonNull private final CurrentStoreArgumentResolver currentStoreResolver;
 
   /**
    * Spring Data 自身の解決器より前に登録する。引数解決器は最初に支持した実装が値を作るため、先頭に置くことでしか 副キー補完を必ず通す保証は得られない（この順序は各一覧の
@@ -25,5 +27,6 @@ public class WebBindingConfig implements WebMvcConfigurer {
   @Override
   public void addArgumentResolvers(@NonNull List<HandlerMethodArgumentResolver> resolvers) {
     resolvers.add(new TiebreakerPageableArgumentResolver(pageableResolver));
+    resolvers.add(currentStoreResolver);
   }
 }

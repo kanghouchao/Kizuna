@@ -12,7 +12,6 @@ import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -40,13 +39,12 @@ public class CastEnrollmentService {
   private final CastEnrollmentSnapshotRepository snapshots;
   private final UserRepository users;
   private final StoreRepository stores;
-  private final StoreContext storeContext;
   private final BusinessAudit audit;
 
   @StoreScoped
   @Transactional
-  public CastEnrollmentStatusResponse suspend(String id, String actorEmail) {
-    CastEnrollment enrollment = requireLocked(id);
+  public CastEnrollmentStatusResponse suspend(Long storeId, String id, String actorEmail) {
+    CastEnrollment enrollment = requireLocked(storeId, id);
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
     enrollment.suspend();
@@ -58,8 +56,8 @@ public class CastEnrollmentService {
 
   @StoreScoped
   @Transactional
-  public CastEnrollmentStatusResponse resume(String id, String actorEmail) {
-    CastEnrollment enrollment = requireLocked(id);
+  public CastEnrollmentStatusResponse resume(Long storeId, String id, String actorEmail) {
+    CastEnrollment enrollment = requireLocked(storeId, id);
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
     enrollment.resume();
@@ -71,8 +69,8 @@ public class CastEnrollmentService {
 
   @StoreScoped
   @Transactional
-  public CastEnrollmentStatusResponse withdraw(String id, String actorEmail) {
-    CastEnrollment enrollment = requireLocked(id);
+  public CastEnrollmentStatusResponse withdraw(Long storeId, String id, String actorEmail) {
+    CastEnrollment enrollment = requireLocked(storeId, id);
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
     OffsetDateTime at = now();
@@ -117,27 +115,29 @@ public class CastEnrollmentService {
   }
 
   private CastEnrollmentSnapshot saveSnapshot(CastEnrollment enrollment, Long actorId) {
-    return snapshots.save(
+    CastEnrollmentSnapshot snapshot =
         CastEnrollmentSnapshot.builder()
             .enrollmentId(enrollment.getId())
             .actorId(actorId)
             .recordedAt(now())
             .customFields(new HashMap<>(enrollment.getCustomFields()))
-            .build());
+            .build();
+    snapshot.setStoreId(enrollment.getStoreId());
+    return snapshots.save(snapshot);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<CastEnrollmentStatusHistoryResponse> history(
-      String id, String cursor, int requestedSize) {
-    require(id);
+      Long storeId, String id, String cursor, int requestedSize) {
+    require(storeId, id);
     int size = CursorPage.clampSize(requestedSize);
     Limit limit = Limit.of(size + 1);
     PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
     var rows =
         after == null
-            ? histories.findByEnrollmentIdOrderByRecordedAtDescIdDesc(id, limit)
-            : histories.findAfter(id, after.timestampKey(), after.id(), limit);
+            ? histories.findByStoreIdAndEnrollmentIdOrderByRecordedAtDescIdDesc(storeId, id, limit)
+            : histories.findAfter(storeId, id, after.timestampKey(), after.id(), limit);
     return CursorPage.of(
             rows, size, row -> new PageCursor(row.getRecordedAt().toString(), row.getId()).encode())
         .map(
@@ -153,15 +153,15 @@ public class CastEnrollmentService {
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<CastEnrollmentSnapshotResponse> snapshots(
-      String id, String cursor, int requestedSize) {
-    require(id);
+      Long storeId, String id, String cursor, int requestedSize) {
+    require(storeId, id);
     int size = CursorPage.clampSize(requestedSize);
     Limit limit = Limit.of(size + 1);
     PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
     var rows =
         after == null
-            ? snapshots.findByEnrollmentIdOrderByRecordedAtDescIdDesc(id, limit)
-            : snapshots.findAfter(id, after.timestampKey(), after.id(), limit);
+            ? snapshots.findByStoreIdAndEnrollmentIdOrderByRecordedAtDescIdDesc(storeId, id, limit)
+            : snapshots.findAfter(storeId, id, after.timestampKey(), after.id(), limit);
     return CursorPage.of(
             rows, size, row -> new PageCursor(row.getRecordedAt().toString(), row.getId()).encode())
         .map(
@@ -173,14 +173,16 @@ public class CastEnrollmentService {
                     new HashMap<>(row.getCustomFields())));
   }
 
-  private CastEnrollment require(String id) {
-    return enrollments.findById(id).orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
+  private CastEnrollment require(Long storeId, String id) {
+    return enrollments
+        .findByIdAndStoreId(id, storeId)
+        .orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
   }
 
-  private CastEnrollment requireLocked(String id) {
-    stores.lockCastFields(storeContext.getStoreId());
+  private CastEnrollment requireLocked(Long storeId, String id) {
+    stores.lockCastFields(storeId);
     return enrollments
-        .findScopedByIdForUpdate(id)
+        .findByIdAndStoreIdForUpdate(id, storeId)
         .orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
   }
 
@@ -196,14 +198,16 @@ public class CastEnrollmentService {
       CastEnrollmentStatus previous,
       String actorEmail,
       OffsetDateTime at) {
-    return histories.save(
+    CastEnrollmentStatusHistory history =
         CastEnrollmentStatusHistory.builder()
             .enrollmentId(enrollment.getId())
             .previousStatus(previous)
             .newStatus(enrollment.getStatus())
             .actorId(actorId(actorEmail))
             .recordedAt(at)
-            .build());
+            .build();
+    history.setStoreId(enrollment.getStoreId());
+    return histories.save(history);
   }
 
   private void recordAudit(

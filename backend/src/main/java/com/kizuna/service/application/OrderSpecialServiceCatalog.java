@@ -11,6 +11,7 @@ import com.kizuna.service.domain.ServiceRevision;
 import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -30,6 +31,7 @@ public class OrderSpecialServiceCatalog {
   private final ServiceConsentRepository consents;
   private final ServiceConsentEventRepository events;
   private final CastEnrollmentRepository enrollments;
+  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional(readOnly = true)
@@ -108,7 +110,7 @@ public class OrderSpecialServiceCatalog {
   public String status(String enrollment, String serviceId) {
     if (enrollment == null
         || enrollments
-            .findById(enrollment)
+            .findByIdAndStoreId(enrollment, storeContext.getStoreId())
             .filter(e -> e.getStatus() == CastEnrollmentStatus.ENROLLED)
             .isEmpty()) return ConsentStatus.NOT_ACCEPTED.name();
     var item = items.findById(serviceId).orElseThrow(() -> new NotFoundException("特殊サービスが見つかりません"));
@@ -121,7 +123,9 @@ public class OrderSpecialServiceCatalog {
   private void requireEnrollment(String id) {
     if (id == null) throw new ServiceException("特殊サービスの担当を選択してください");
     var enrollment =
-        enrollments.findById(id).orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
+        enrollments
+            .findByIdAndStoreId(id, storeContext.getStoreId())
+            .orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
     if (enrollment.getStatus() != CastEnrollmentStatus.ENROLLED)
       throw new ServiceException("担当在籍が提供できる状態ではありません");
   }

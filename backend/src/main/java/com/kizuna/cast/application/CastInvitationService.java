@@ -10,7 +10,6 @@ import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
@@ -37,10 +36,9 @@ public class CastInvitationService {
   private final CastEnrollmentRepository castRepository;
   private final CastInvitationRepository castInvitationRepository;
   private final StoreRepository storeRepository;
-  private final StoreContext storeContext;
 
   /**
-   * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 storeFilter により他店舗の档案は見えず
+   * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 档案は店舗条件付きで引くため他店舗の档案は
    * NotFoundException となる（越権はインターセプタが先に 403）。
    *
    * <p>档案あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE
@@ -55,13 +53,13 @@ public class CastInvitationService {
    */
   @StoreScoped
   @Transactional
-  public CastInvitationResponse issue(String castId) {
+  public CastInvitationResponse issue(Long storeId, String castId) {
     // 招待行を書く前に店舗行・档案行を押さえる（ADR 0016）。招待を先に押さえると、同じ档案を
     // 「店舗 → 档案 → 招待」の順で辿る受諾と逆順になって環になる。
-    storeRepository.lockAgainstDeletion(storeContext.getStoreId());
+    storeRepository.lockAgainstDeletion(storeId);
     CastEnrollment cast =
         castRepository
-            .findScopedByIdForUpdate(castId)
+            .findByIdAndStoreIdForUpdate(castId, storeId)
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません: " + castId));
     if (!cast.isMembershipActive()) {
       throw new CastInvitationStateException("退店済みの在籍には招待を発行できません");
@@ -74,12 +72,12 @@ public class CastInvitationService {
     // 遷移させた行は条件に一致せず対象外となるため、受諾確定済みの招待を INVALIDATED へ巻き戻さない。
     // 一括 UPDATE は即時 SQL のため管理エンティティを介さず、旧 PENDING が新 PENDING の INSERT より前に確定する。
     castInvitationRepository.invalidatePending(
-        castId, CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
+        castId, storeId, CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
 
     // 失効 UPDATE は受諾側の行ロック解放（＝受諾トランザクションのコミット）を待って完了するため、この時点で
     // 並行受諾は確定済み。档案が紐づいていないかを DB から再読込（スカラ投影で一次キャッシュを回避）して再確認し、
     // 紐づき済みなら新規発行を中止する。これで連携済み档案に有効トークンが残る矛盾を塞ぐ。
-    if (castRepository.findCastIdById(castId).isPresent()) {
+    if (castRepository.findCastIdByIdAndStoreId(castId, storeId).isPresent()) {
       throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
     }
 
@@ -100,9 +98,10 @@ public class CastInvitationService {
     return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
   }
 
-  /** ページ内の档案について招待状態を一括導出する。呼び出し元の storeFilter 有効なトランザクション内で使う。 */
-  @StoreScopeExempt(reason = "storeFilter を有効化した呼出元のトランザクション内でのみ使う内部一括導出で、境界は呼出元が引く")
-  public Map<String, CastInvitationStatus> deriveStatuses(List<CastEnrollment> casts) {
+  /** ページ内の档案について招待状態を一括導出する。 */
+  @StoreScopeExempt(reason = "呼出元のトランザクション内でのみ使う内部一括導出で、境界は呼出元が渡す店舗 id")
+  public Map<String, CastInvitationStatus> deriveStatuses(
+      Long storeId, List<CastEnrollment> casts) {
     if (casts.isEmpty()) {
       return Map.of();
     }
@@ -110,7 +109,8 @@ public class CastInvitationService {
     List<String> castIds = casts.stream().map(CastEnrollment::getId).toList();
 
     Map<String, List<CastInvitation>> invitationsByCast = new HashMap<>();
-    for (CastInvitation invitation : castInvitationRepository.findByCastIdIn(castIds)) {
+    for (CastInvitation invitation :
+        castInvitationRepository.findByStoreIdAndCastIdIn(storeId, castIds)) {
       invitationsByCast
           .computeIfAbsent(invitation.getCastId(), key -> new ArrayList<>())
           .add(invitation);
