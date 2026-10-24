@@ -48,6 +48,7 @@ import org.mapstruct.factory.Mappers;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ServiceAuditTest {
+  private static final Long STORE_ID = 7L;
   private final ServiceItemRepository items = mock(ServiceItemRepository.class);
   private final ServiceRevisionRepository revisions = mock(ServiceRevisionRepository.class);
   private final UserRepository users = mock(UserRepository.class);
@@ -59,8 +60,6 @@ class ServiceAuditTest {
 
   @BeforeEach
   void setup() {
-    var store = new StoreContext();
-    store.setStoreId(1L);
     settings =
         new ServiceSettingsService(
             items,
@@ -68,7 +67,6 @@ class ServiceAuditTest {
             Mappers.getMapper(ServiceMapper.class),
             new ActorIdentityService(users),
             mock(StoreRepository.class),
-            store,
             audit);
     var actor =
         User.builder()
@@ -94,7 +92,6 @@ class ServiceAuditTest {
             call -> {
               ServiceItem item = call.getArgument(0);
               item.setId("service");
-              item.setStoreId(1L);
               ReflectionTestUtils.setField(item, "version", 0L);
               return item;
             });
@@ -111,6 +108,7 @@ class ServiceAuditTest {
   void creationReferencesExistingRevisionWithoutCopyingServiceContent() {
     assertThat(
             settings.create(
+                STORE_ID,
                 new ServiceCreateRequest(ServiceKind.COURSE, "秘密の名称", 60, null, 12000, 6000),
                 "operator@example.test"))
         .isEqualTo("service");
@@ -119,6 +117,7 @@ class ServiceAuditTest {
         .satisfies(
             event -> {
               assertThat(event.getAction()).isEqualTo("SERVICE_CREATED");
+              assertThat(event.getStoreId()).isEqualTo(STORE_ID);
               assertThat(event.getTargetType()).isEqualTo("SERVICE");
               assertThat(event.getTargetId()).isEqualTo("service");
               assertThat(event.getSourceType()).isEqualTo("SERVICE_REVISION");
@@ -139,17 +138,19 @@ class ServiceAuditTest {
   @Test
   void editAndLogicalDeletionReferenceHistoryWhileSameValuesStaySilent() {
     var item =
-        ServiceItem.create(new ServiceTerms(ServiceKind.COURSE, "旧い秘密", 60, null, 12000, 6000));
+        ServiceItem.create(
+            STORE_ID, new ServiceTerms(ServiceKind.COURSE, "旧い秘密", 60, null, 12000, 6000));
     item.setId("service");
-    item.setStoreId(1L);
     ReflectionTestUtils.setField(item, "version", 4L);
-    when(items.findForUpdate("service")).thenReturn(Optional.of(item));
+    when(items.findByIdAndStoreIdForUpdate("service", STORE_ID)).thenReturn(Optional.of(item));
     settings.update(
+        STORE_ID,
         "service",
         new ServiceUpdateRequest("旧い秘密", 60, null, 12000, 6000, 1L),
         "operator@example.test");
     assertThat(recorded).isEmpty();
     settings.update(
+        STORE_ID,
         "service",
         new ServiceUpdateRequest("新しい秘密", 60, null, 12000, 6000, 1L),
         "operator@example.test");
@@ -172,7 +173,7 @@ class ServiceAuditTest {
                   .containsEntry("terms_version", "1");
               assertThat(event.getSourceId()).isEqualTo("revision");
             });
-    settings.delete("service", 2L, "operator@example.test");
+    settings.delete(STORE_ID, "service", 2L, "operator@example.test");
     assertThat(recorded).hasSize(2);
     assertThat(recorded.getLast().getAction()).isEqualTo("SERVICE_DELETED");
     assertThat(recorded.getLast().getAfterValues())
@@ -185,7 +186,7 @@ class ServiceAuditTest {
   @Test
   void ownDecisionReferencesRealConsentEventAndSuppressesDuplicateChoice() {
     var store = new StoreContext();
-    store.setStoreId(1L);
+    store.setStoreId(STORE_ID);
     var stores = mock(StoreRepository.class);
     var enrollments = mock(CastEnrollmentRepository.class);
     var consents = mock(ServiceConsentRepository.class);
@@ -208,30 +209,28 @@ class ServiceAuditTest {
             enrollments,
             actors,
             stores,
-            store,
             rejection,
             audit);
     var item =
         ServiceItem.create(
+            STORE_ID,
             new ServiceTerms(
                 ServiceKind.SPECIAL_SERVICE, "秘密の内容", null, ChargeType.PAID, 2000, 1000));
     item.setId("service");
-    item.setStoreId(1L);
     var revision = ServiceRevision.record(item, null, 9L);
     revision.setId("revision");
-    when(items.findForUpdate("service")).thenReturn(Optional.of(item));
-    when(revisions.findByServiceIdAndRevisionNumber("service", 1L))
+    when(items.findByIdAndStoreIdForUpdate("service", STORE_ID)).thenReturn(Optional.of(item));
+    when(revisions.findByStoreIdAndServiceIdAndRevisionNumber(STORE_ID, "service", 1L))
         .thenReturn(Optional.of(revision));
-    when(enrollments.findIdsByUserIdAndStoreId(9L, 1L)).thenReturn(List.of("enrollment"));
-    var consent = ServiceConsent.create("enrollment", "service");
-    when(consents.findByEnrollmentIdAndServiceId("enrollment", "service"))
+    when(enrollments.findIdsByUserIdAndStoreId(9L, STORE_ID)).thenReturn(List.of("enrollment"));
+    var consent = ServiceConsent.create(STORE_ID, "enrollment", "service");
+    when(consents.findByStoreIdAndEnrollmentIdAndServiceId(STORE_ID, "enrollment", "service"))
         .thenReturn(Optional.of(consent));
     when(consents.saveAndFlush(any()))
         .thenAnswer(
             call -> {
               ServiceConsent saved = call.getArgument(0);
               saved.setId("consent");
-              saved.setStoreId(1L);
               ReflectionTestUtils.setField(saved, "version", 0L);
               return saved;
             });
@@ -243,6 +242,7 @@ class ServiceAuditTest {
               return event;
             });
     own.decide(
+        STORE_ID,
         "operator@example.test",
         "service",
         new OwnConsentRequest(1L, 0L, ConsentDecision.ACCEPTED));
@@ -251,6 +251,7 @@ class ServiceAuditTest {
         .satisfies(
             event -> {
               assertThat(event.getAction()).isEqualTo("SERVICE_CONSENT_CHANGED");
+              assertThat(event.getStoreId()).isEqualTo(STORE_ID);
               assertThat(event.getTargetType()).isEqualTo("SERVICE_CONSENT");
               assertThat(event.getTargetId()).isEqualTo("consent");
               assertThat(event.getSourceType()).isEqualTo("SERVICE_CONSENT_EVENT");
@@ -270,11 +271,13 @@ class ServiceAuditTest {
                   .containsEntry("service_revision_id", "revision");
             });
     own.decide(
+        STORE_ID,
         "operator@example.test",
         "service",
         new OwnConsentRequest(1L, 1L, ConsentDecision.ACCEPTED));
     assertThat(recorded).hasSize(1);
     own.decide(
+        STORE_ID,
         "operator@example.test",
         "service",
         new OwnConsentRequest(1L, 1L, ConsentDecision.REJECTED));

@@ -33,25 +33,27 @@ public class OrderSpecialServiceCatalog {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public SpecialServiceTerms current(String enrollment, String serviceId) {
-    requireEnrollment(enrollment);
+  public SpecialServiceTerms current(Long storeId, String enrollment, String serviceId) {
+    requireEnrollment(storeId, enrollment);
     var item =
         items
-            .findById(serviceId)
+            .findByIdAndStoreId(serviceId, storeId)
             .filter(i -> !i.isDeleted())
             .orElseThrow(() -> new NotFoundException("特殊サービスが見つかりません"));
     var consent =
         consents
-            .findByEnrollmentIdAndServiceId(enrollment, serviceId)
+            .findByStoreIdAndEnrollmentIdAndServiceId(storeId, enrollment, serviceId)
             .filter(c -> c.status(item.getTermsVersion()) == ConsentStatus.ACCEPTED)
             .orElseThrow(() -> new ServiceException("担当在籍が現在の条件を受諾していません"));
     var revision =
         revisions
-            .findByServiceIdAndRevisionNumber(serviceId, item.getRevisionNumber())
+            .findByStoreIdAndServiceIdAndRevisionNumber(
+                storeId, serviceId, item.getRevisionNumber())
             .orElseThrow(() -> new NotFoundException("特殊サービスの版本が見つかりません"));
     return terms(
+        storeId,
         revisions
-            .findHistoricalSpecial(revision.getId())
+            .findHistoricalSpecial(storeId, revision.getId())
             .orElseThrow(() -> new NotFoundException("特殊サービスが見つかりません")),
         consent);
   }
@@ -60,19 +62,20 @@ public class OrderSpecialServiceCatalog {
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<SpecialServiceTerms> candidates(
-      String enrollment, String search, int page, int size) {
+      Long storeId, String enrollment, String search, int page, int size) {
     requirePage(page, size);
-    requireEnrollment(enrollment);
+    requireEnrollment(storeId, enrollment);
     return revisions.findAcceptedSpecials(
-        enrollment, search == null ? "" : search, PageRequest.of(page, size));
+        storeId, enrollment, search == null ? "" : search, PageRequest.of(page, size));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public SpecialServiceTerms historical(String id) {
+  public SpecialServiceTerms historical(Long storeId, String id) {
     return terms(
+        storeId,
         revisions
-            .findHistoricalSpecial(id)
+            .findHistoricalSpecial(storeId, id)
             .orElseThrow(() -> new NotFoundException("特殊サービスの歴史版本が見つかりません")),
         null);
   }
@@ -80,7 +83,8 @@ public class OrderSpecialServiceCatalog {
   /** 歴史版本と各項目の現在の削除状態を同じ断面から返す。 */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<SpecialServiceTerms> history(String search, String cursor, int size) {
+  public CursorPage<SpecialServiceTerms> history(
+      Long storeId, String search, String cursor, int size) {
     requirePage(0, size);
     var key = cursor == null ? null : PageCursor.decode(cursor);
     OffsetDateTime at;
@@ -94,45 +98,52 @@ public class OrderSpecialServiceCatalog {
     }
     var rows =
         revisions.findHistoricalSpecials(
+            storeId,
             search == null ? "" : search,
             at,
             key == null ? "" : key.id(),
             PageRequest.of(0, size + 1));
     return CursorPage.of(
             rows, size, r -> new PageCursor(r.getOccurredAt().toString(), r.getId()).encode())
-        .map(r -> terms(r, null));
+        .map(r -> terms(storeId, r, null));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public String status(String enrollment, String serviceId) {
+  public String status(Long storeId, String enrollment, String serviceId) {
     if (enrollment == null
         || enrollments
-            .findById(enrollment)
+            .findByIdAndStoreId(enrollment, storeId)
             .filter(e -> e.getStatus() == CastEnrollmentStatus.ENROLLED)
             .isEmpty()) return ConsentStatus.NOT_ACCEPTED.name();
-    var item = items.findById(serviceId).orElseThrow(() -> new NotFoundException("特殊サービスが見つかりません"));
+    var item =
+        items
+            .findByIdAndStoreId(serviceId, storeId)
+            .orElseThrow(() -> new NotFoundException("特殊サービスが見つかりません"));
     return consents
-        .findByEnrollmentIdAndServiceId(enrollment, serviceId)
+        .findByStoreIdAndEnrollmentIdAndServiceId(storeId, enrollment, serviceId)
         .map(c -> c.status(item.getTermsVersion()).name())
         .orElse("NOT_ACCEPTED");
   }
 
-  private void requireEnrollment(String id) {
+  private void requireEnrollment(Long storeId, String id) {
     if (id == null) throw new ServiceException("特殊サービスの担当を選択してください");
     var enrollment =
-        enrollments.findById(id).orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
+        enrollments
+            .findByIdAndStoreId(id, storeId)
+            .orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
     if (enrollment.getStatus() != CastEnrollmentStatus.ENROLLED)
       throw new ServiceException("担当在籍が提供できる状態ではありません");
   }
 
-  private SpecialServiceTerms terms(ServiceRevision r, ServiceConsent consent) {
+  private SpecialServiceTerms terms(Long storeId, ServiceRevision r, ServiceConsent consent) {
     var t = r.getAfterTerms();
     var event =
         consent == null
             ? null
             : events
-                .findByConsentIdAndRevisionNumber(consent.getId(), consent.getRevisionNumber())
+                .findByStoreIdAndConsentIdAndRevisionNumber(
+                    storeId, consent.getId(), consent.getRevisionNumber())
                 .orElseThrow();
     return new SpecialServiceTerms(
         r.getServiceId(),
@@ -146,7 +157,7 @@ public class OrderSpecialServiceCatalog {
         event == null ? null : event.getId(),
         consent == null ? null : consent.getRevisionNumber(),
         r.getOccurredAt(),
-        items.findById(r.getServiceId()).orElseThrow().isDeleted());
+        items.findByIdAndStoreId(r.getServiceId(), storeId).orElseThrow().isDeleted());
   }
 
   private void requirePage(int page, int size) {

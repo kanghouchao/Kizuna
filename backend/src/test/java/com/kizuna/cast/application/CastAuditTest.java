@@ -26,7 +26,6 @@ import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -52,6 +51,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.test.util.ReflectionTestUtils;
 
 class CastAuditTest {
+  private static final Long STORE_ID = 1L;
   private final CastEnrollmentRepository enrollments = mock(CastEnrollmentRepository.class);
   private final CastProfileRepository profiles = mock(CastProfileRepository.class);
   private final CastEnrollmentStatusHistoryRepository histories =
@@ -73,13 +73,10 @@ class CastAuditTest {
 
   @BeforeEach
   void setup() {
-    var context = new StoreContext();
-    context.setStoreId(1L);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
-    lifecycle =
-        new CastEnrollmentService(enrollments, histories, snapshots, users, stores, context, audit);
+    lifecycle = new CastEnrollmentService(enrollments, histories, snapshots, users, stores, audit);
     service =
         new CastService(
             enrollments,
@@ -87,9 +84,7 @@ class CastAuditTest {
             Mappers.getMapper(CastMapper.class),
             profiles,
             stores,
-            context,
-            new CastInvitationService(
-                enrollments, mock(CastInvitationRepository.class), stores, context),
+            new CastInvitationService(enrollments, mock(CastInvitationRepository.class), stores),
             definitions,
             ids -> Set.of(),
             ids -> Set.of(),
@@ -132,7 +127,8 @@ class CastAuditTest {
     request.setName("非公開の氏名");
     request.setIntroduction("非公開の紹介");
     request.setPhotoUrl("https://example.test/private-photo");
-    assertThat(service.create(request, "operator@example.test").getId()).isEqualTo("enrollment");
+    assertThat(service.create(STORE_ID, request, "operator@example.test").getId())
+        .isEqualTo("enrollment");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_ENROLLMENT_CREATED");
@@ -152,18 +148,18 @@ class CastAuditTest {
   @Test
   void privateOnlyEditIsAuditedButRepeatedAndEmptyInputsAreNot() {
     existing();
-    service.update("enrollment", new CastUpdateRequest(), "operator@example.test");
+    service.update(STORE_ID, "enrollment", new CastUpdateRequest(), "operator@example.test");
     assertThat(recorded).isEmpty();
     var request = new CastUpdateRequest();
     request.setName("変更後の非公開名");
-    service.update("enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_ENROLLMENT_UPDATED");
     assertThat(event.getAfterValues()).containsEntry("redacted_fields_changed", "name");
     assertThat(event.getBeforeValues().toString() + event.getAfterValues())
         .doesNotContain("非公開", "変更後");
-    service.update("enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(1);
   }
 
@@ -175,9 +171,9 @@ class CastAuditTest {
   @Test
   void publicationChangeOnlyAuditsTheProfileAndSameValueIsSilent() {
     existing();
-    service.changePublication("enrollment", CastPublicationStatus.UNPUBLISHED);
+    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.UNPUBLISHED);
     assertThat(recorded).isEmpty();
-    service.changePublication("enrollment", CastPublicationStatus.PUBLISHED);
+    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.PUBLISHED);
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_PROFILE_PUBLICATION_CHANGED");
@@ -189,16 +185,16 @@ class CastAuditTest {
     assertThat(event.getAfterValues())
         .containsEntry("publication_status", "PUBLISHED")
         .containsOnlyKeys("enrollment_id", "version", "publication_status");
-    service.changePublication("enrollment", CastPublicationStatus.PUBLISHED);
+    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.PUBLISHED);
     assertThat(recorded).hasSize(1);
   }
 
   @Test
   void lifecycleAuditsOnlyEnrollmentAndReferencesEachExistingHistory() {
     existing();
-    lifecycle.suspend("enrollment", "operator@example.test");
-    lifecycle.resume("enrollment", "operator@example.test");
-    lifecycle.withdraw("enrollment", "operator@example.test");
+    lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test");
+    lifecycle.resume(STORE_ID, "enrollment", "operator@example.test");
+    lifecycle.withdraw(STORE_ID, "enrollment", "operator@example.test");
     assertThat(recorded)
         .extracting(AuditEvent::getAction)
         .containsExactly(
@@ -218,24 +214,28 @@ class CastAuditTest {
     assertThat(recorded.get(1).getAfterValues()).containsEntry("status", "ENROLLED");
     assertThat(recorded.get(2).getAfterValues()).containsEntry("status", "WITHDRAWN");
     assertThat(recorded.get(2).getAfterValues().get("ended_at")).isNotBlank();
-    assertThatThrownBy(() -> lifecycle.withdraw("enrollment", "operator@example.test"))
+    assertThatThrownBy(() -> lifecycle.withdraw(STORE_ID, "enrollment", "operator@example.test"))
         .isInstanceOf(ServiceException.class);
     assertThat(recorded).hasSize(3);
-    assertThat(profiles.findByEnrollmentId("enrollment").orElseThrow().getPublicationStatus())
+    assertThat(
+            profiles
+                .findByEnrollmentIdAndStoreId("enrollment", STORE_ID)
+                .orElseThrow()
+                .getPublicationStatus())
         .isEqualTo(CastPublicationStatus.UNPUBLISHED);
   }
 
   @Test
   void internalAndPublicFieldsOnlyExposeFixedCategoryNamesAndKeepHistory() {
     existing();
-    when(definitions.findAllByOrderByDisplayOrderAsc())
+    when(definitions.findAllByStoreIdOrderByDisplayOrderAsc(STORE_ID))
         .thenReturn(
             List.of(
                 CastFieldDefinition.builder().key("private-key").isPublic(false).build(),
                 CastFieldDefinition.builder().key("public-key").isPublic(true).build()));
     var request = new CastUpdateRequest();
     request.setCustomFields(Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値"));
-    service.update("enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(1);
     assertThat(recorded.getFirst().getAfterValues())
         .containsEntry("redacted_fields_changed", "internal_custom_fields,public_custom_fields");
@@ -252,15 +252,22 @@ class CastAuditTest {
             "redacted_fields_changed");
     assertThat(recorded.getFirst().getAfterValues().toString())
         .doesNotContain("private-key", "public-key", "秘密");
-    service.update("enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(1);
     request.setCustomFields(Map.of());
-    service.update("enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(2);
     assertThat(recorded.getLast().getAfterValues())
         .containsEntry("redacted_fields_changed", "internal_custom_fields,public_custom_fields");
-    assertThat(enrollments.findById("enrollment").orElseThrow().getCustomFields()).isEmpty();
-    assertThat(profiles.findByEnrollmentId("enrollment").orElseThrow().getCustomFields()).isEmpty();
+    assertThat(
+            enrollments.findByIdAndStoreId("enrollment", STORE_ID).orElseThrow().getCustomFields())
+        .isEmpty();
+    assertThat(
+            profiles
+                .findByEnrollmentIdAndStoreId("enrollment", STORE_ID)
+                .orElseThrow()
+                .getCustomFields())
+        .isEmpty();
     assertThat(recordedSnapshots)
         .extracting(CastEnrollmentSnapshot::getCustomFields)
         .containsExactly(Map.of(), Map.of("private-key", "秘密の内部値"));
@@ -276,15 +283,16 @@ class CastAuditTest {
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
-    lifecycle.suspend("enrollment", "operator@example.test");
+    lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test");
     assertThat(recorded).hasSize(1);
     assertThat(recorded.getFirst().getActorId()).isEqualTo(9L);
     assertThat(recorded.getFirst().getStoreId()).isEqualTo(1L);
-    assertThatThrownBy(() -> lifecycle.suspend("enrollment", "operator@example.test"))
+    assertThatThrownBy(() -> lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test"))
         .isInstanceOf(ServiceException.class);
     var request = new CastUpdateRequest();
     request.setCustomFields(Map.of("unknown-private-key", "秘密"));
-    assertThatThrownBy(() -> service.update("enrollment", request, "operator@example.test"))
+    assertThatThrownBy(
+            () -> service.update(STORE_ID, "enrollment", request, "operator@example.test"))
         .isInstanceOf(ServiceException.class);
     assertThat(recorded).hasSize(1);
   }
@@ -293,14 +301,17 @@ class CastAuditTest {
     var enrollment = persisted(CastEnrollment.builder().build(), "enrollment");
     var profile =
         persisted(CastProfile.builder().enrollmentId("enrollment").name("非公開名").build(), "profile");
-    when(enrollments.findScopedByIdForUpdate("enrollment")).thenReturn(Optional.of(enrollment));
-    when(enrollments.findById("enrollment")).thenReturn(Optional.of(enrollment));
-    when(profiles.findByEnrollmentId("enrollment")).thenReturn(Optional.of(profile));
+    when(enrollments.findByIdAndStoreIdForUpdate("enrollment", STORE_ID))
+        .thenReturn(Optional.of(enrollment));
+    when(enrollments.findByIdAndStoreId("enrollment", STORE_ID))
+        .thenReturn(Optional.of(enrollment));
+    when(profiles.findByEnrollmentIdAndStoreId("enrollment", STORE_ID))
+        .thenReturn(Optional.of(profile));
   }
 
   private static <T extends StoreScopedEntity> T persisted(T entity, String id) {
     entity.setId(id);
-    entity.setStoreId(1L);
+    entity.setStoreId(STORE_ID);
     ReflectionTestUtils.setField(entity, "version", 0L);
     return entity;
   }

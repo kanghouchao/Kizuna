@@ -67,7 +67,7 @@ class CastShiftRequestServiceTest {
   @BeforeEach
   void membership() {
     lenient()
-        .when(castRepository.findByIdForUpdate(any()))
+        .when(castRepository.findByIdAndStoreIdForUpdate(any(), any()))
         .thenReturn(Optional.of(CastEnrollment.builder().build()));
   }
 
@@ -228,7 +228,8 @@ class CastShiftRequestServiceTest {
     User user = userWithId(42L);
     when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
-    when(shiftRepository.findById("sh1")).thenReturn(Optional.empty());
+    when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.submitChange(EMAIL, req))
         .isInstanceOf(NotFoundException.class)
@@ -245,8 +246,9 @@ class CastShiftRequestServiceTest {
     User user = userWithId(42L);
     when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
-    when(shiftRepository.findById("sh1"))
-        .thenReturn(Optional.of(shiftOf("other-cast", ShiftStatus.CONFIRMED)));
+    // 他人のシフトは本人の cast_id 集合で引く問い合わせに現れない。
+    when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.submitChange(EMAIL, req))
         .isInstanceOf(NotFoundException.class)
@@ -263,9 +265,9 @@ class CastShiftRequestServiceTest {
     User user = userWithId(42L);
     when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
-    when(shiftRepository.findById("sh1"))
+    when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
         .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.CONFIRMED)));
-    when(attendanceRepository.hasActiveAttendance("sh1")).thenReturn(true);
+    when(attendanceRepository.hasActiveAttendance(7L, "sh1")).thenReturn(true);
 
     assertThatThrownBy(() -> service.submitChange(EMAIL, req))
         .isInstanceOf(ServiceException.class)
@@ -282,7 +284,7 @@ class CastShiftRequestServiceTest {
     User user = userWithId(42L);
     when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
-    when(shiftRepository.findById("sh1"))
+    when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
         .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.TENTATIVE)));
 
     assertThatThrownBy(() -> service.submitChange(EMAIL, req))
@@ -300,7 +302,7 @@ class CastShiftRequestServiceTest {
     User user = userWithId(42L);
     when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
-    when(shiftRepository.findById("sh1"))
+    when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
         .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.CONFIRMED)));
     when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
     when(shiftRequestMapper.toResponse(any()))
@@ -354,6 +356,6 @@ class CastShiftRequestServiceTest {
     CursorPage<CastShiftRequestResponse> result = service.history(EMAIL, null, 20);
 
     assertThat(result.content()).containsExactly(response);
-    verify(shiftRequestRepository, never()).findAllByOrderByCreatedAtAsc();
+    verify(shiftRequestRepository, never()).findByStoreIdOrderByCreatedAtAsc(any());
   }
 }

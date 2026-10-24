@@ -14,7 +14,6 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -42,15 +41,17 @@ public class ServiceSettingsService {
   private final ServiceMapper mapper;
   private final ActorIdentityService actors;
   private final StoreRepository stores;
-  private final StoreContext context;
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
   @StoreScoped
-  public Page<ServiceSummary> list(ServiceKind kind, boolean deleted, int page, int size) {
+  public Page<ServiceSummary> list(
+      Long storeId, ServiceKind kind, boolean deleted, int page, int size) {
     if (page < 0 || size < 1 || size > CursorPage.MAX_SIZE)
       throw new ServiceException("ページ番号と取得件数が不正です");
-    Specification<ServiceItem> filter = (root, query, cb) -> cb.equal(root.get("deleted"), deleted);
+    Specification<ServiceItem> filter =
+        (root, query, cb) ->
+            cb.and(cb.equal(root.get("storeId"), storeId), cb.equal(root.get("deleted"), deleted));
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
     return items
@@ -60,17 +61,18 @@ public class ServiceSettingsService {
 
   @Transactional(readOnly = true)
   @StoreScoped
-  public ServiceResponse get(String id) {
-    return mapper.response(require(id));
+  public ServiceResponse get(Long storeId, String id) {
+    return mapper.response(require(storeId, id));
   }
 
   @Transactional
   @StoreScoped
-  public String create(ServiceCreateRequest request, String actor) {
-    stores.lockCastFields(context.getStoreId());
+  public String create(Long storeId, ServiceCreateRequest request, String actor) {
+    stores.lockCastFields(storeId);
     var actorId = actors.requireUserId(actor);
     var item =
         ServiceItem.create(
+            storeId,
             new ServiceTerms(
                 request.kind(),
                 request.name(),
@@ -95,10 +97,11 @@ public class ServiceSettingsService {
 
   @Transactional
   @StoreScoped
-  public ServiceResponse update(String id, ServiceUpdateRequest request, String actor) {
-    stores.lockCastFields(context.getStoreId());
+  public ServiceResponse update(
+      Long storeId, String id, ServiceUpdateRequest request, String actor) {
+    stores.lockCastFields(storeId);
     var actorId = actors.requireUserId(actor);
-    var item = lock(id);
+    var item = lock(storeId, id);
     var before = item.getTerms();
     var beforeValues = auditValues(item);
     var next =
@@ -130,11 +133,11 @@ public class ServiceSettingsService {
 
   @Transactional
   @StoreScoped
-  public void delete(String id, long expectedVersion, String actor) {
+  public void delete(Long storeId, String id, long expectedVersion, String actor) {
     if (expectedVersion < 1) throw new ServiceException("版本は 1 以上で指定してください");
-    stores.lockCastFields(context.getStoreId());
+    stores.lockCastFields(storeId);
     var actorId = actors.requireUserId(actor);
-    var item = lock(id);
+    var item = lock(storeId, id);
     var before = item.getTerms();
     var beforeValues = auditValues(item);
     item.delete(expectedVersion);
@@ -154,15 +157,16 @@ public class ServiceSettingsService {
 
   @Transactional(readOnly = true)
   @StoreScoped
-  public CursorPage<ServiceRevisionResponse> history(String id, String cursor, int requestedSize) {
-    require(id);
+  public CursorPage<ServiceRevisionResponse> history(
+      Long storeId, String id, String cursor, int requestedSize) {
+    require(storeId, id);
     int size = CursorPage.clampSize(requestedSize);
     var limit = Limit.of(size + 1);
     var found =
         cursor == null
-            ? revisions.findByServiceIdOrderByRevisionNumberDesc(id, limit)
-            : revisions.findByServiceIdAndRevisionNumberLessThanOrderByRevisionNumberDesc(
-                id, decodeVersion(cursor), limit);
+            ? revisions.findByStoreIdAndServiceIdOrderByRevisionNumberDesc(storeId, id, limit)
+            : revisions.findByStoreIdAndServiceIdAndRevisionNumberLessThanOrderByRevisionNumberDesc(
+                storeId, id, decodeVersion(cursor), limit);
     return CursorPage.of(
             found,
             size,
@@ -206,11 +210,15 @@ public class ServiceSettingsService {
     }
   }
 
-  private ServiceItem require(String id) {
-    return items.findById(id).orElseThrow(() -> new NotFoundException("サービスが見つかりません"));
+  private ServiceItem require(Long storeId, String id) {
+    return items
+        .findByIdAndStoreId(id, storeId)
+        .orElseThrow(() -> new NotFoundException("サービスが見つかりません"));
   }
 
-  private ServiceItem lock(String id) {
-    return items.findForUpdate(id).orElseThrow(() -> new NotFoundException("サービスが見つかりません"));
+  private ServiceItem lock(Long storeId, String id) {
+    return items
+        .findByIdAndStoreIdForUpdate(id, storeId)
+        .orElseThrow(() -> new NotFoundException("サービスが見つかりません"));
   }
 }

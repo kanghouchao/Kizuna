@@ -1,6 +1,6 @@
 package com.kizuna.shift.domain;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.kizuna.shared.persistence.StoreScopedRepository;
 
 public interface AttendanceCorrectionRepository
-    extends JpaRepository<AttendanceCorrection, String> {}
+    extends StoreScopedRepository<AttendanceCorrection> {}

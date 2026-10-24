@@ -63,11 +63,11 @@ public class CastInvitationAcceptanceService {
   @Transactional(readOnly = true)
   public CastInvitationDetailResponse view(String token) {
     CastInvitation invitation = findByToken(token);
-    CastEnrollment cast = requireCast(invitation.getCastId());
+    CastEnrollment cast = requireCast(invitation);
     return new CastInvitationDetailResponse(
         storeName(invitation.getStoreId()),
         profileRepository
-            .findByEnrollmentId(cast.getId())
+            .findByEnrollmentIdAndStoreId(cast.getId(), invitation.getStoreId())
             .orElseThrow(() -> new NotFoundException("プロフィールが見つかりません"))
             .getName(),
         viewStatus(invitation, cast),
@@ -80,7 +80,7 @@ public class CastInvitationAcceptanceService {
   public CastAcceptanceResponse acceptAsNewUser(String token, CastInvitationAcceptRequest request) {
     CastInvitation invitation = findByToken(token);
     storeRepository.lockAgainstDeletion(invitation.getStoreId());
-    CastEnrollment cast = requireCastForUpdate(invitation.getCastId());
+    CastEnrollment cast = requireCastForUpdate(invitation);
     if (userRepository.findByEmail(request.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
     }
@@ -110,7 +110,7 @@ public class CastInvitationAcceptanceService {
   public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
     CastInvitation invitation = findByToken(token);
     storeRepository.lockAgainstDeletion(invitation.getStoreId());
-    CastEnrollment cast = requireCastForUpdate(invitation.getCastId());
+    CastEnrollment cast = requireCastForUpdate(invitation);
     claim(invitation);
 
     // 身分は档案・招待の後に押さえる（順序は ADR 0016）。ロック取得後の新鮮な読み込みで storeIds の
@@ -155,7 +155,11 @@ public class CastInvitationAcceptanceService {
     }
     int claimed =
         castInvitationRepository.claimPending(
-            invitation.getId(), now, CastInvitation.Status.PENDING, CastInvitation.Status.ACCEPTED);
+            invitation.getId(),
+            invitation.getStoreId(),
+            now,
+            CastInvitation.Status.PENDING,
+            CastInvitation.Status.ACCEPTED);
     if (claimed != 1) {
       throw new CastInvitationStateException("この招待は既に受諾済みまたは失効しています");
     }
@@ -180,8 +184,11 @@ public class CastInvitationAcceptanceService {
         .orElseThrow(() -> new NotFoundException("招待が見つかりません"));
   }
 
-  private CastEnrollment requireCast(String castId) {
-    return castRepository.findById(castId).orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
+  /** 招待は発行時に档案の店舗を写すので、档案は招待行の店舗で引く。 */
+  private CastEnrollment requireCast(CastInvitation invitation) {
+    return castRepository
+        .findByIdAndStoreId(invitation.getCastId(), invitation.getStoreId())
+        .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
   }
 
   /**
@@ -190,10 +197,10 @@ public class CastInvitationAcceptanceService {
    * <p>押さえる順序は ADR 0016 に従う。受諾は身分の所属店舗も書くので、その手前で店舗行も押さえてある （{@link
    * StoreRepository#lockAgainstDeletion}）。照会（{@link #view}）は書かないのでこの口を通らない。
    */
-  private CastEnrollment requireCastForUpdate(String castId) {
+  private CastEnrollment requireCastForUpdate(CastInvitation invitation) {
     CastEnrollment enrollment =
         castRepository
-            .findByIdForUpdate(castId)
+            .findByIdAndStoreIdForUpdate(invitation.getCastId(), invitation.getStoreId())
             .orElseThrow(() -> new NotFoundException("キャストが見つかりません"));
     if (!enrollment.isMembershipActive()) {
       throw new CastInvitationStateException("退店済みの在籍の招待は受諾できません");

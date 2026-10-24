@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.store;
 
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shift.api.dto.AbsenceResponse;
 import com.kizuna.shift.application.AbsenceService;
 import java.time.LocalDate;
@@ -28,8 +29,9 @@ public class AbsenceController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<List<AbsenceResponse>> list(
+      @CurrentStore Long storeId,
       @RequestParam(name = "business_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate businessDate) {
-    return ResponseEntity.ok(absenceService.list(businessDate));
+    return ResponseEntity.ok(absenceService.list(storeId, businessDate));
   }
 }

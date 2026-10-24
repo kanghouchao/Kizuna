@@ -64,34 +64,37 @@ public class AttendanceService {
   private final BusinessDateService businessDateService;
   private final BusinessAudit audit;
 
-  /** （キャスト・店舗・営業日）での照会。店舗は文脈から、取消済みは常に除外される。 */
+  /** （キャスト・店舗・営業日）での照会。取消済みは常に除外される。 */
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<AttendanceResponse> list(LocalDate businessDate, String castId) {
+  public List<AttendanceResponse> list(Long storeId, LocalDate businessDate, String castId) {
     List<Attendance> rows =
         castId == null
             ? attendanceRepository
-                .findByBusinessDateAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(businessDate)
+                .findByStoreIdAndBusinessDateAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
+                    storeId, businessDate)
             : attendanceRepository
-                .findByBusinessDateAndCastIdAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
-                    businessDate, castId);
+                .findByStoreIdAndBusinessDateAndCastIdAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
+                    storeId, businessDate, castId);
     return rows.stream().map(attendanceMapper::toResponse).toList();
   }
 
   @StoreScoped
   @Transactional
-  public AttendanceResponse record(AttendanceCreateRequest request, String actorEmail) {
+  public AttendanceResponse record(
+      Long storeId, AttendanceCreateRequest request, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
     // 実績行はキャストとシフトの両方を指す。押さえる順序は系全体で キャスト → シフト に揃える
-    // （逆順に押さえるとキャスト削除の連鎖と環になる。契約は CastEnrollmentRepository#findScopedByIdForUpdate）。
-    if (!castService.existsForCurrentStoreForUpdate(request.getCastId())) {
+    // （逆順に押さえるとキャスト削除の連鎖と環になる。契約は CastEnrollmentRepository#findByIdAndStoreIdForUpdate）。
+    if (!castService.existsInStoreForUpdate(storeId, request.getCastId())) {
       throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
     }
     Attendance attendance =
         Attendance.record(
+            storeId,
             request.getCastId(),
             request.getShiftId(),
-            resolveBusinessDate(request),
+            resolveBusinessDate(storeId, request),
             request.getActualStartAt(),
             request.getActualEndAt(),
             request.getWaitingPlace(),
@@ -114,10 +117,10 @@ public class AttendanceService {
   @StoreScoped
   @Transactional
   public AttendanceResponse correct(
-      String id, AttendanceCorrectionRequest request, String actorEmail) {
+      Long storeId, String id, AttendanceCorrectionRequest request, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    Attendance attendance = findAttendance(id);
-    requireInheritedBusinessDate(attendance, request.getBusinessDate());
+    Attendance attendance = findAttendance(storeId, id);
+    requireInheritedBusinessDate(storeId, attendance, request.getBusinessDate());
 
     var before = ShiftAuditSnapshot.of(attendance);
     var correction =
@@ -146,9 +149,10 @@ public class AttendanceService {
   /** 誤建の実績に取消標記を付ける。行は残り、導出・照会から外れるだけである。 */
   @StoreScoped
   @Transactional
-  public void cancel(String id, AttendanceCancellationRequest request, String actorEmail) {
+  public void cancel(
+      Long storeId, String id, AttendanceCancellationRequest request, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    Attendance attendance = findAttendance(id);
+    Attendance attendance = findAttendance(storeId, id);
     var before = ShiftAuditSnapshot.of(attendance);
     attendance.cancel(request.getReason(), actorId, OffsetDateTime.now());
     attendanceRepository.save(attendance);
@@ -166,11 +170,11 @@ public class AttendanceService {
   }
 
   /** 帰属営業日を決める。優先順があり、シフトに紐づく実績はシフトの勤務日を継承する — 実開始が日付変更時刻を跨いでも 予実は同じ営業日に居る。飛び込みだけが実開始時刻から判定される。 */
-  private LocalDate resolveBusinessDate(AttendanceCreateRequest request) {
+  private LocalDate resolveBusinessDate(Long storeId, AttendanceCreateRequest request) {
     if (request.getShiftId() == null) {
       return businessDateService.businessDateOf(request.getActualStartAt());
     }
-    Shift shift = findShiftForUpdate(request.getShiftId());
+    Shift shift = findShiftForUpdate(storeId, request.getShiftId());
     if (!shift.getCastId().equals(request.getCastId())) {
       throw new ServiceException("シフトのキャストと実績のキャストが一致しません");
     }
@@ -183,11 +187,12 @@ public class AttendanceService {
   }
 
   /** シフト紐づきの実績の営業日は継承であって選択ではない。訂正でずらせてしまうと予実が別の営業日へ割れる。 */
-  private void requireInheritedBusinessDate(Attendance attendance, LocalDate businessDate) {
+  private void requireInheritedBusinessDate(
+      Long storeId, Attendance attendance, LocalDate businessDate) {
     if (attendance.getShiftId() == null) {
       return;
     }
-    if (!findShiftForUpdate(attendance.getShiftId()).getWorkDate().equals(businessDate)) {
+    if (!findShiftForUpdate(storeId, attendance.getShiftId()).getWorkDate().equals(businessDate)) {
       throw new ServiceException("シフトに紐づく実績の営業日はシフトの勤務日と一致していなければなりません");
     }
   }
@@ -197,21 +202,21 @@ public class AttendanceService {
         () -> attendanceRepository.saveAndFlush(attendance), DUPLICATE_ACTIVE_ATTENDANCE);
   }
 
-  private Attendance findAttendance(String id) {
+  private Attendance findAttendance(Long storeId, String id) {
     return attendanceRepository
-        .findById(id)
+        .findByIdAndStoreId(id, storeId)
         .orElseThrow(() -> new NotFoundException("実績が見つかりません: " + id));
   }
 
   /**
    * 営業日の継承元になるシフトを押さえて引く。記録も訂正もここを通る。
    *
-   * <p>押さえる理由と契約は {@link ShiftRepository#findScopedByIdForUpdate} にある。読むだけに見えて、読んだ値を
+   * <p>押さえる理由と契約は {@link ShiftRepository#findByIdAndStoreIdForUpdate} にある。読むだけに見えて、読んだ値を
    * 自分の行へ物化する以上、シフト側の更新と直列でなければ食い違う。
    */
-  private Shift findShiftForUpdate(String shiftId) {
+  private Shift findShiftForUpdate(Long storeId, String shiftId) {
     return shiftRepository
-        .findScopedByIdForUpdate(shiftId)
+        .findByIdAndStoreIdForUpdate(shiftId, storeId)
         .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + shiftId));
   }
 

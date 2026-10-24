@@ -68,7 +68,10 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                     .orElseGet(
                         () -> {
                           try {
-                            return snapshot(catalog.current(cast, id), cast, "ACCEPTED_TERMS");
+                            return snapshot(
+                                catalog.current(context.getStoreId(), cast, id),
+                                cast,
+                                "ACCEPTED_TERMS");
                           } catch (NotFoundException | ServiceException ex) {
                             if (confirmedInput)
                               throw new OrderConfirmationConflict("confirmation_token");
@@ -96,7 +99,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                         .orElseGet(
                             () ->
                                 snapshot(
-                                    catalog.historical(id),
+                                    catalog.historical(context.getStoreId(), id),
                                     order.getCastId(),
                                     "HISTORICAL_CORRECTION")))
             .toList();
@@ -155,7 +158,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                                         && e.getEnrollmentId().equals(s.enrollmentId())),
                     order.getStatus().isTerminal()
                         ? null
-                        : catalog.status(s.enrollmentId(), s.serviceId())))
+                        : catalog.status(context.getStoreId(), s.enrollmentId(), s.serviceId())))
         .toList();
   }
 

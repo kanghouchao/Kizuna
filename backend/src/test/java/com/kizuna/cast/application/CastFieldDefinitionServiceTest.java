@@ -18,7 +18,6 @@ import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.Optional;
@@ -33,11 +32,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 @ExtendWith(MockitoExtension.class)
 class CastFieldDefinitionServiceTest {
 
+  private static final Long STORE_ID = 1L;
+
   @Mock private CastFieldDefinitionRepository repository;
   @Mock private CastEnrollmentService enrollmentService;
   @Mock private CastFieldDefinitionMapper mapper;
   @Mock private StoreRepository storeRepository;
-  @Mock private StoreContext storeContext;
   @Mock private CastEnrollmentRepository enrollmentRepository;
   @Mock private CastProfileRepository profileRepository;
   @Mock private BusinessAudit audit;
@@ -53,28 +53,29 @@ class CastFieldDefinitionServiceTest {
 
   @Test
   void create_autoNumbersFromZeroWhenEmpty() {
-    when(repository.existsByKey("blood_type")).thenReturn(false);
-    when(repository.count()).thenReturn(0L);
-    when(repository.findMaxDisplayOrder()).thenReturn(null);
+    when(repository.existsByStoreIdAndKey(STORE_ID, "blood_type")).thenReturn(false);
+    when(repository.countByStoreId(STORE_ID)).thenReturn(0L);
+    when(repository.findMaxDisplayOrder(STORE_ID)).thenReturn(null);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
-    service.create(createRequest("blood_type", "血液型"));
+    service.create(STORE_ID, createRequest("blood_type", "血液型"));
 
     ArgumentCaptor<CastFieldDefinition> captor = ArgumentCaptor.forClass(CastFieldDefinition.class);
     verify(repository).saveAndFlush(captor.capture());
     assertThat(captor.getValue().getDisplayOrder()).isEqualTo(0);
+    assertThat(captor.getValue().getStoreId()).isEqualTo(STORE_ID);
   }
 
   @Test
   void create_autoNumbersMaxPlusOne() {
-    when(repository.existsByKey("hobby")).thenReturn(false);
-    when(repository.count()).thenReturn(3L);
-    when(repository.findMaxDisplayOrder()).thenReturn(5);
+    when(repository.existsByStoreIdAndKey(STORE_ID, "hobby")).thenReturn(false);
+    when(repository.countByStoreId(STORE_ID)).thenReturn(3L);
+    when(repository.findMaxDisplayOrder(STORE_ID)).thenReturn(5);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
-    service.create(createRequest("hobby", "趣味"));
+    service.create(STORE_ID, createRequest("hobby", "趣味"));
 
     ArgumentCaptor<CastFieldDefinition> captor = ArgumentCaptor.forClass(CastFieldDefinition.class);
     verify(repository).saveAndFlush(captor.capture());
@@ -83,13 +84,13 @@ class CastFieldDefinitionServiceTest {
 
   @Test
   void create_defaultsIsPublicToFalseWhenOmitted() {
-    when(repository.existsByKey("hobby")).thenReturn(false);
-    when(repository.count()).thenReturn(0L);
-    when(repository.findMaxDisplayOrder()).thenReturn(null);
+    when(repository.existsByStoreIdAndKey(STORE_ID, "hobby")).thenReturn(false);
+    when(repository.countByStoreId(STORE_ID)).thenReturn(0L);
+    when(repository.findMaxDisplayOrder(STORE_ID)).thenReturn(null);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
-    service.create(createRequest("hobby", "趣味"));
+    service.create(STORE_ID, createRequest("hobby", "趣味"));
 
     ArgumentCaptor<CastFieldDefinition> captor = ArgumentCaptor.forClass(CastFieldDefinition.class);
     verify(repository).saveAndFlush(captor.capture());
@@ -98,9 +99,9 @@ class CastFieldDefinitionServiceTest {
 
   @Test
   void create_rejectsDuplicateKeyWith400() {
-    when(repository.existsByKey("blood_type")).thenReturn(true);
+    when(repository.existsByStoreIdAndKey(STORE_ID, "blood_type")).thenReturn(true);
 
-    assertThatThrownBy(() -> service.create(createRequest("blood_type", "血液型")))
+    assertThatThrownBy(() -> service.create(STORE_ID, createRequest("blood_type", "血液型")))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に登録されています");
 
@@ -109,10 +110,10 @@ class CastFieldDefinitionServiceTest {
 
   @Test
   void create_rejectsWhenAtCapacityWith400() {
-    when(repository.existsByKey("hobby")).thenReturn(false);
-    when(repository.count()).thenReturn(20L);
+    when(repository.existsByStoreIdAndKey(STORE_ID, "hobby")).thenReturn(false);
+    when(repository.countByStoreId(STORE_ID)).thenReturn(20L);
 
-    assertThatThrownBy(() -> service.create(createRequest("hobby", "趣味")))
+    assertThatThrownBy(() -> service.create(STORE_ID, createRequest("hobby", "趣味")))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("最大20件");
 
@@ -124,14 +125,14 @@ class CastFieldDefinitionServiceTest {
     // 事前チェックをすり抜けた整合性違反はサービスで握りつぶさず、そのまま伝播すること。
     // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
     // サービス層で 400 に変換すると FK 等の実装欠陥まで「重複」に化けてしまう。
-    when(repository.existsByKey("blood_type")).thenReturn(false);
-    when(repository.count()).thenReturn(0L);
-    when(repository.findMaxDisplayOrder()).thenReturn(null);
+    when(repository.existsByStoreIdAndKey(STORE_ID, "blood_type")).thenReturn(false);
+    when(repository.countByStoreId(STORE_ID)).thenReturn(0L);
+    when(repository.findMaxDisplayOrder(STORE_ID)).thenReturn(null);
     DataIntegrityViolationException violation =
         new DataIntegrityViolationException("uq_t_cast_field_definitions_store_key");
     when(repository.saveAndFlush(any())).thenThrow(violation);
 
-    assertThatThrownBy(() -> service.create(createRequest("blood_type", "血液型")))
+    assertThatThrownBy(() -> service.create(STORE_ID, createRequest("blood_type", "血液型")))
         .isSameAs(violation);
   }
 
@@ -144,7 +145,7 @@ class CastFieldDefinitionServiceTest {
             .displayOrder(1)
             .isPublic(false)
             .build();
-    when(repository.findById("d1")).thenReturn(Optional.of(existing));
+    when(repository.findByIdAndStoreId("d1", STORE_ID)).thenReturn(Optional.of(existing));
     when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
     when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
@@ -152,7 +153,7 @@ class CastFieldDefinitionServiceTest {
     req.setLabel("血液型（更新）");
     when(mapper.toPatch(req)).thenReturn(new CastFieldDefinitionPatch("血液型（更新）", null, null));
 
-    service.update("d1", req);
+    service.update(STORE_ID, "d1", req);
 
     assertThat(existing.getLabel()).isEqualTo("血液型（更新）");
     // null フィールドは変更なし
@@ -163,31 +164,32 @@ class CastFieldDefinitionServiceTest {
 
   @Test
   void update_throwsWhenNotFound() {
-    when(repository.findById("missing")).thenReturn(Optional.empty());
+    when(repository.findByIdAndStoreId("missing", STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.update("missing", new CastFieldDefinitionUpdateRequest()))
+    assertThatThrownBy(
+            () -> service.update(STORE_ID, "missing", new CastFieldDefinitionUpdateRequest()))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("見つかりません");
   }
 
   @Test
   void delete_hardDeletesById() {
-    when(repository.findById("d1"))
-        .thenReturn(Optional.of(CastFieldDefinition.builder().key("memo").build()));
+    CastFieldDefinition definition = CastFieldDefinition.builder().key("memo").build();
+    when(repository.findByIdAndStoreId("d1", STORE_ID)).thenReturn(Optional.of(definition));
 
-    service.delete("d1", "actor");
+    service.delete(STORE_ID, "d1", "actor");
 
-    verify(repository).deleteById("d1");
+    verify(repository).delete(definition);
   }
 
   @Test
   void delete_throwsWhenNotFound() {
-    when(repository.findById("missing")).thenReturn(Optional.empty());
+    when(repository.findByIdAndStoreId("missing", STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.delete("missing", "actor"))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "missing", "actor"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("見つかりません");
 
-    verify(repository, never()).deleteById(any());
+    verify(repository, never()).delete(any());
   }
 }

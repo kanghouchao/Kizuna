@@ -34,7 +34,7 @@ public class OwnServiceConditionController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       Principal principal) {
-    return inStore(storeId, () -> service.list(principal.getName(), kind, page, size));
+    return inStore(storeId, () -> service.list(storeId, principal.getName(), kind, page, size));
   }
 
   @PutMapping("/{id}/consent")
@@ -44,7 +44,7 @@ public class OwnServiceConditionController {
       @RequestParam("store_id") Long storeId,
       @Valid @RequestBody OwnConsentRequest request,
       Principal principal) {
-    return inStore(storeId, () -> service.decide(principal.getName(), id, request));
+    return inStore(storeId, () -> service.decide(storeId, principal.getName(), id, request));
   }
 
   // 本人の現行在籍をサービス内で検証する。JWT の店舗集合では退店・再入店の即時性を保証できない。

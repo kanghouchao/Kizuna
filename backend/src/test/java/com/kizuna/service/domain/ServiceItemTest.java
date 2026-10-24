@@ -10,10 +10,22 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class ServiceItemTest {
+  private static final Long STORE_ID = 3L;
+
+  @Test
+  void creationAndRevisionCarryTheStore() {
+    var item =
+        ServiceItem.create(
+            STORE_ID, new ServiceTerms(ServiceKind.COURSE, "基本", 60, null, 12000, 7000));
+    assertThat(item.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(ServiceRevision.record(item, null, 9L).getStoreId()).isEqualTo(STORE_ID);
+  }
+
   @Test
   void namesPreserveConsentTermsButFinancialChangesRequireConfirmation() {
     var item =
         ServiceItem.create(
+            STORE_ID,
             new ServiceTerms(ServiceKind.SPECIAL_SERVICE, "追加", null, ChargeType.PAID, 2000, 1500));
     item.replace(
         new ServiceTerms(ServiceKind.SPECIAL_SERVICE, "新名称", null, ChargeType.PAID, 2000, 1500), 1);
@@ -34,7 +46,8 @@ class ServiceItemTest {
   @Test
   void courseKeepsIntegerPriceAndRemuneration() {
     var item =
-        ServiceItem.create(new ServiceTerms(ServiceKind.COURSE, " 基本 ", 60, null, 12000, 7000));
+        ServiceItem.create(
+            STORE_ID, new ServiceTerms(ServiceKind.COURSE, " 基本 ", 60, null, 12000, 7000));
     assertThat(item.getTerms().getName()).isEqualTo("基本");
     assertThat(item.getTerms().getPrice()).isEqualTo(12000);
     assertThat(item.getTerms().getRemuneration()).isEqualTo(7000);
@@ -46,7 +59,7 @@ class ServiceItemTest {
   @Test
   void revisionsOnlyAdvanceForChangesAndDeletionIsTerminal() {
     var first = new ServiceTerms(ServiceKind.COURSE, "基本", 60, null, 12000, 7000);
-    var item = ServiceItem.create(first);
+    var item = ServiceItem.create(STORE_ID, first);
     assertThat(item.replace(first, 1)).isFalse();
     assertThat(item.getRevisionNumber()).isEqualTo(1);
     var next = new ServiceTerms(ServiceKind.COURSE, "改定", 90, null, 15000, 9000);

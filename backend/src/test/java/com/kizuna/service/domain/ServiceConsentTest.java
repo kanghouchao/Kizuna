@@ -7,9 +7,19 @@ import com.kizuna.shared.exception.ConflictException;
 import org.junit.jupiter.api.Test;
 
 class ServiceConsentTest {
+  private static final Long STORE_ID = 3L;
+
+  @Test
+  void creationAndDecisionEventCarryTheStore() {
+    var consent = ServiceConsent.create(STORE_ID, "enrollment", "service");
+    assertThat(consent.getStoreId()).isEqualTo(STORE_ID);
+    consent.decide(ConsentDecision.ACCEPTED, 1, "revision1", 0);
+    assertThat(ServiceConsentEvent.record(consent, 9L).getStoreId()).isEqualTo(STORE_ID);
+  }
+
   @Test
   void consentKeepsOldTermsAndDistinguishesRejectionFromRevision() {
-    var consent = ServiceConsent.create("enrollment", "service");
+    var consent = ServiceConsent.create(STORE_ID, "enrollment", "service");
     assertThat(consent.status(1)).isEqualTo(ConsentStatus.NOT_ACCEPTED);
     assertThat(consent.decide(ConsentDecision.ACCEPTED, 1, "revision1", 0)).isTrue();
     assertThat(consent.status(1)).isEqualTo(ConsentStatus.ACCEPTED);

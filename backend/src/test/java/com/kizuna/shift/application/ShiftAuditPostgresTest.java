@@ -177,14 +177,14 @@ class ShiftAuditPostgresTest {
 
   @Test
   void realVersionsAndNoOpsSurvivePhysicalDeletion() {
-    var id = shifts.create(shiftRequest(), "operator@example.test").getId();
+    var id = shifts.create(1L, shiftRequest(), "operator@example.test").getId();
     var patch = new ShiftUpdateRequest();
     patch.setStartTime(LocalTime.of(11, 0));
-    shifts.update(id, patch, "operator@example.test");
-    shifts.update(id, patch, "operator@example.test");
-    shifts.changePublication(id, false, "operator@example.test");
-    shifts.changePublication(id, false, "operator@example.test");
-    shifts.delete(id);
+    shifts.update(1L, id, patch, "operator@example.test");
+    shifts.update(1L, id, patch, "operator@example.test");
+    shifts.changePublication(1L, id, false, "operator@example.test");
+    shifts.changePublication(1L, id, false, "operator@example.test");
+    shifts.delete(1L, id);
     var rows =
         jdbc.queryForList(
             "select action, before_values ->> 'version' as old_version, after_values ->> 'version' as new_version from t_audit_events where target_type='SHIFT' and target_id=? order by id",
@@ -204,7 +204,7 @@ class ShiftAuditPostgresTest {
     long shiftsBefore = count("t_shifts"), audits = count("t_audit_events");
     reject("SHIFT_REQUEST_APPROVED");
     try {
-      assertThatThrownBy(() -> decisions.approve(id, false, "operator@example.test"))
+      assertThatThrownBy(() -> decisions.approve(1L, id, false, "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForMap(
@@ -222,9 +222,9 @@ class ShiftAuditPostgresTest {
   @Test
   void deletionUnlinksRequestWithoutInventingVersionAndKeepsSafeSnapshots() {
     var id = submit();
-    var approved = decisions.approve(id, false, "operator@example.test");
+    var approved = decisions.approve(1L, id, false, "operator@example.test");
     var shiftId = approved.getShiftId();
-    shifts.delete(shiftId);
+    shifts.delete(1L, shiftId);
     assertThat(jdbc.queryForMap("select shift_id, version from t_shift_requests where id=?", id))
         .containsEntry("shift_id", null)
         .containsEntry("version", 1L);
@@ -249,11 +249,11 @@ class ShiftAuditPostgresTest {
   @Test
   void rejectedDeletionRestoresShiftLinkAndBothAudits() {
     var id = submit();
-    var shiftId = decisions.approve(id, false, "operator@example.test").getShiftId();
+    var shiftId = decisions.approve(1L, id, false, "operator@example.test").getShiftId();
     long audits = count("t_audit_events");
     reject("SHIFT_DELETED");
     try {
-      assertThatThrownBy(() -> shifts.delete(shiftId)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> shifts.delete(1L, shiftId)).isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
                   "select shift_id from t_shift_requests where id=?", String.class, id))
@@ -269,22 +269,22 @@ class ShiftAuditPostgresTest {
 
   @Test
   void auditFailureRollsBackEachAttendanceWriteAndItsCorrectionHistory() {
-    var id = shifts.create(shiftRequest(), "operator@example.test").getId();
+    var id = shifts.create(1L, shiftRequest(), "operator@example.test").getId();
     var patch = new ShiftUpdateRequest();
     patch.setStatus(ShiftStatus.CONFIRMED);
-    shifts.update(id, patch, "operator@example.test");
+    shifts.update(1L, id, patch, "operator@example.test");
     var r = attendance(id);
     long audits = count("t_audit_events"), records = count("t_attendances");
     reject("ATTENDANCE_RECORDED");
     try {
-      assertThatThrownBy(() -> actuals.record(r, "operator@example.test"))
+      assertThatThrownBy(() -> actuals.record(1L, r, "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(count("t_attendances")).isEqualTo(records);
       assertThat(count("t_audit_events")).isEqualTo(audits);
     } finally {
       allow();
     }
-    var attendanceId = actuals.record(r, "operator@example.test").getId();
+    var attendanceId = actuals.record(1L, r, "operator@example.test").getId();
     var correction = new AttendanceCorrectionRequest();
     correction.setBusinessDate(date);
     correction.setActualStartAt(date.atTime(11, 0));
@@ -293,7 +293,8 @@ class ShiftAuditPostgresTest {
     audits = count("t_audit_events");
     reject("ATTENDANCE_CORRECTED");
     try {
-      assertThatThrownBy(() -> actuals.correct(attendanceId, correction, "operator@example.test"))
+      assertThatThrownBy(
+              () -> actuals.correct(1L, attendanceId, correction, "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(count("t_attendance_corrections")).isEqualTo(histories);
       assertThat(count("t_audit_events")).isEqualTo(audits);
@@ -304,7 +305,7 @@ class ShiftAuditPostgresTest {
     } finally {
       allow();
     }
-    actuals.correct(attendanceId, correction, "operator@example.test");
+    actuals.correct(1L, attendanceId, correction, "operator@example.test");
     var source =
         jdbc.queryForObject(
             "select source_id from t_audit_events where action='ATTENDANCE_CORRECTED' and target_id=?",
@@ -321,7 +322,7 @@ class ShiftAuditPostgresTest {
     audits = count("t_audit_events");
     reject("ATTENDANCE_CANCELLED");
     try {
-      assertThatThrownBy(() -> actuals.cancel(attendanceId, cancel, "operator@example.test"))
+      assertThatThrownBy(() -> actuals.cancel(1L, attendanceId, cancel, "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -333,9 +334,9 @@ class ShiftAuditPostgresTest {
     } finally {
       allow();
     }
-    actuals.cancel(attendanceId, cancel, "operator@example.test");
+    actuals.cancel(1L, attendanceId, cancel, "operator@example.test");
     audits = count("t_audit_events");
-    assertThatThrownBy(() -> shifts.delete(id)).isInstanceOf(RuntimeException.class);
+    assertThatThrownBy(() -> shifts.delete(1L, id)).isInstanceOf(RuntimeException.class);
     assertThat(count("t_audit_events")).isEqualTo(audits);
     assertThat(
             jdbc.queryForList(
@@ -352,13 +353,13 @@ class ShiftAuditPostgresTest {
             () ->
                 transactions.executeWithoutResult(
                     status -> {
-                      shifts.create(shiftRequest(), "operator@example.test");
+                      shifts.create(1L, shiftRequest(), "operator@example.test");
                       throw new IllegalStateException("後続失敗");
                     }))
         .isInstanceOf(IllegalStateException.class);
     assertThat(count("t_shifts")).isEqualTo(rows);
     assertThat(count("t_audit_events")).isEqualTo(audits);
-    var id = shifts.create(shiftRequest(), "operator@example.test").getId();
+    var id = shifts.create(1L, shiftRequest(), "operator@example.test").getId();
     audits = count("t_audit_events");
     assertThatThrownBy(
             () ->
@@ -367,7 +368,7 @@ class ShiftAuditPostgresTest {
                       var em = context.getBean(EntityManager.class);
                       em.find(Shift.class, id);
                       jdbc.update("update t_shifts set version=version+1 where id=?", id);
-                      shifts.changePublication(id, false, "operator@example.test");
+                      shifts.changePublication(1L, id, false, "operator@example.test");
                     }))
         .isInstanceOf(RuntimeException.class);
     assertThat(count("t_audit_events")).isEqualTo(audits);
@@ -398,7 +399,7 @@ class ShiftAuditPostgresTest {
                       Thread.currentThread().interrupt();
                       throw new IllegalStateException(ex);
                     }
-                    decisions.approve(id, false, "operator@example.test");
+                    decisions.approve(1L, id, false, "operator@example.test");
                   });
               return true;
             } catch (ObjectOptimisticLockingFailureException ex) {
@@ -427,7 +428,7 @@ class ShiftAuditPostgresTest {
   @Test
   void deletionWinsAgainstAnAlreadyReadChangeApprovalWithoutGhostSuccess() throws Exception {
     var newId = submit();
-    var shiftId = decisions.approve(newId, false, "operator@example.test").getShiftId();
+    var shiftId = decisions.approve(1L, newId, false, "operator@example.test").getShiftId();
     var change = new ShiftChangeRequestCreateRequest();
     change.setShiftId(shiftId);
     change.setWorkDate(date);
@@ -447,7 +448,7 @@ class ShiftAuditPostgresTest {
                       status -> {
                         context
                             .getBean(ShiftRepository.class)
-                            .findScopedByIdForUpdate(shiftId)
+                            .findByIdAndStoreIdForUpdate(shiftId, 1L)
                             .orElseThrow();
                         locked.countDown();
                         try {
@@ -457,7 +458,7 @@ class ShiftAuditPostgresTest {
                           Thread.currentThread().interrupt();
                           throw new IllegalStateException(ex);
                         }
-                        shifts.delete(shiftId);
+                        shifts.delete(1L, shiftId);
                       });
                 } finally {
                   clear();
@@ -477,7 +478,7 @@ class ShiftAuditPostgresTest {
                                         .getBean(EntityManager.class)
                                         .find(ShiftRequest.class, changeId);
                                     read.countDown();
-                                    decisions.approve(changeId, null, "operator@example.test");
+                                    decisions.approve(1L, changeId, null, "operator@example.test");
                                   }))
                       .isInstanceOf(NotFoundException.class);
                 } finally {
@@ -598,7 +599,7 @@ class ShiftAuditPostgresTest {
     @Bean
     CastService casts() {
       var c = mock(CastService.class);
-      when(c.existsForCurrentStoreForUpdate("cast")).thenReturn(true);
+      when(c.existsInStoreForUpdate(1L, "cast")).thenReturn(true);
       return c;
     }
 
@@ -608,8 +609,7 @@ class ShiftAuditPostgresTest {
       var e = CastEnrollment.builder().build();
       e.setId("cast");
       e.setStoreId(1L);
-      when(r.findScopedByIdForUpdate("cast")).thenReturn(Optional.of(e));
-      when(r.findByIdForUpdate("cast")).thenReturn(Optional.of(e));
+      when(r.findByIdAndStoreIdForUpdate("cast", 1L)).thenReturn(Optional.of(e));
       when(r.findIdsByUserIdAndStoreId(10L, 1L)).thenReturn(List.of("cast"));
       when(r.findIdsByUserId(10L)).thenReturn(List.of("cast"));
       return r;

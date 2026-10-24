@@ -3,6 +3,7 @@ package com.kizuna.order.api.store;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -24,24 +25,26 @@ public class OrderSurchargeController {
   @GetMapping("/surcharge-candidates")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public Page<SurchargeCandidateResponse> candidates(
+      @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     return catalog
-        .candidates(OrderServiceCatalog.SelectionKind.SURCHARGE, search, page, size)
+        .candidates(storeId, OrderServiceCatalog.SelectionKind.SURCHARGE, search, page, size)
         .map(SurchargeCandidateResponse::of);
   }
 
   @GetMapping("/{id}/surcharge-revisions")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
   public CursorPage<SurchargeRevisionResponse> revisions(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
     orders.get(id);
     return catalog
-        .history(OrderServiceCatalog.SelectionKind.SURCHARGE, search, cursor, size)
+        .history(storeId, OrderServiceCatalog.SelectionKind.SURCHARGE, search, cursor, size)
         .map(SurchargeRevisionResponse::of);
   }
 

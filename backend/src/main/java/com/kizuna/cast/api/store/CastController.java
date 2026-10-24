@@ -14,6 +14,7 @@ import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
@@ -49,91 +50,106 @@ public class CastController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<Page<CastSummaryResponse>> list(
+      @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(castService.list(search, pageable));
+    return ResponseEntity.ok(castService.list(storeId, search, pageable));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public ResponseEntity<CastResponse> get(@PathVariable String id) {
-    return ResponseEntity.ok(castService.get(id));
+  public ResponseEntity<CastResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
+    return ResponseEntity.ok(castService.get(storeId, id));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<CastResponse> create(
-      @Valid @RequestBody CastCreateRequest request, Principal principal) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody CastCreateRequest request,
+      Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(castService.create(request, principal.getName()));
+        .body(castService.create(storeId, request, principal.getName()));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<CastResponse> update(
-      @PathVariable String id, @Valid @RequestBody CastUpdateRequest request, Principal principal) {
-    return ResponseEntity.ok(castService.update(id, request, principal.getName()));
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody CastUpdateRequest request,
+      Principal principal) {
+    return ResponseEntity.ok(castService.update(storeId, id, request, principal.getName()));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public ResponseEntity<Void> delete(@PathVariable String id) {
-    castService.delete(id);
+  public ResponseEntity<Void> delete(@CurrentStore Long storeId, @PathVariable String id) {
+    castService.delete(storeId, id);
     return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/{id}/invitation")
   @PreAuthorize("hasAuthority('PERM_CAST_INVITE')")
-  public ResponseEntity<CastInvitationResponse> issueInvitation(@PathVariable String id) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(castInvitationService.issue(id));
+  public ResponseEntity<CastInvitationResponse> issueInvitation(
+      @CurrentStore Long storeId, @PathVariable String id) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(castInvitationService.issue(storeId, id));
   }
 
   @PatchMapping("/{id}/publication")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<CastPublicationResponse> changePublication(
-      @PathVariable String id, @Valid @RequestBody CastPublicationRequest request) {
-    return ResponseEntity.ok(castService.changePublication(id, request.publicationStatus()));
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody CastPublicationRequest request) {
+    return ResponseEntity.ok(
+        castService.changePublication(storeId, id, request.publicationStatus()));
   }
 
   @PostMapping("/{id}/suspension")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public CastEnrollmentStatusResponse suspend(@PathVariable String id, Principal principal) {
-    return enrollmentService.suspend(id, principal.getName());
+  public CastEnrollmentStatusResponse suspend(
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    return enrollmentService.suspend(storeId, id, principal.getName());
   }
 
   @PostMapping("/{id}/resumption")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public CastEnrollmentStatusResponse resume(@PathVariable String id, Principal principal) {
-    return enrollmentService.resume(id, principal.getName());
+  public CastEnrollmentStatusResponse resume(
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    return enrollmentService.resume(storeId, id, principal.getName());
   }
 
   @PostMapping("/{id}/withdrawal")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public CastEnrollmentStatusResponse withdraw(@PathVariable String id, Principal principal) {
-    return enrollmentService.withdraw(id, principal.getName());
+  public CastEnrollmentStatusResponse withdraw(
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    return enrollmentService.withdraw(storeId, id, principal.getName());
   }
 
   @GetMapping("/{id}/status-histories")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public CursorPage<CastEnrollmentStatusHistoryResponse> history(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return enrollmentService.history(id, cursor, size);
+    return enrollmentService.history(storeId, id, cursor, size);
   }
 
   @GetMapping("/{id}/snapshots")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public CursorPage<CastEnrollmentSnapshotResponse> snapshots(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return enrollmentService.snapshots(id, cursor, size);
+    return enrollmentService.snapshots(storeId, id, cursor, size);
   }
 
   @GetMapping("/public")
   @PermitAll
-  public ResponseEntity<List<CastPublicResponse>> listPublic() {
-    return ResponseEntity.ok(castService.listPublished());
+  public ResponseEntity<List<CastPublicResponse>> listPublic(@CurrentStore Long storeId) {
+    return ResponseEntity.ok(castService.listPublished(storeId));
   }
 }

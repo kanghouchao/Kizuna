@@ -47,18 +47,19 @@ public class AbsenceService {
    */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public List<AbsenceResponse> list(LocalDate businessDate) {
+  public List<AbsenceResponse> list(Long storeId, LocalDate businessDate) {
     if (!businessDateService.hasEnded(businessDate)) {
       return List.of();
     }
     List<Shift> confirmed =
-        shiftRepository.findByWorkDateAndStatus(businessDate, ShiftStatus.CONFIRMED);
+        shiftRepository.findByStoreIdAndWorkDateAndStatus(
+            storeId, businessDate, ShiftStatus.CONFIRMED);
     if (confirmed.isEmpty()) {
       return List.of();
     }
 
     Set<String> attendedCastIds =
-        attendanceRepository.findCastIdsWithActiveAttendanceOn(businessDate);
+        attendanceRepository.findCastIdsWithActiveAttendanceOn(storeId, businessDate);
 
     LocalTime dateChangeTime = businessDateService.effectiveDateChangeTimeOn(businessDate);
     Map<String, Instant> latestScheduledEndByCast =

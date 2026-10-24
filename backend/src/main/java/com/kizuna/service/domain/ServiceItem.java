@@ -37,8 +37,10 @@ public class ServiceItem extends StoreScopedEntity {
     this.terms = Objects.requireNonNull(terms);
   }
 
-  public static ServiceItem create(ServiceTerms terms) {
-    return ServiceItem.builder().terms(terms).build();
+  public static ServiceItem create(Long storeId, ServiceTerms terms) {
+    var item = ServiceItem.builder().terms(terms).build();
+    item.setStoreId(storeId);
+    return item;
   }
 
   public boolean replace(ServiceTerms next, long expectedVersion) {

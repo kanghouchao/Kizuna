@@ -11,7 +11,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentSnapshot;
 import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -37,7 +36,6 @@ class CastEnrollmentServiceTest {
   @Mock CastEnrollmentStatusHistoryRepository histories;
   @Mock UserRepository users;
   @Mock StoreRepository stores;
-  @Mock StoreContext storeContext;
   @Mock BusinessAudit audit;
   @InjectMocks CastEnrollmentService service;
 

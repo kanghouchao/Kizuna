@@ -159,6 +159,10 @@ class CastFieldAuditPostgresTest {
     authenticate(storeId, ORDINARY);
   }
 
+  private Long currentStore() {
+    return context.getBean(StoreContext.class).getStoreId();
+  }
+
   private void authenticate(Long store, String email) {
     context.getBean(StoreContext.class).setStoreId(store);
     SecurityContextHolder.getContext()
@@ -181,13 +185,13 @@ class CastFieldAuditPostgresTest {
     request.setKey(key);
     request.setLabel("秘密のラベル");
     request.setIsPublic(isPublic);
-    return fields.create(request).getId();
+    return fields.create(currentStore(), request).getId();
   }
 
   private String cast(Map<String, String> values) {
     var request = new CastCreateRequest();
     request.setName("秘密の名前-" + UUID.randomUUID());
-    String id = casts.create(request, ORDINARY).getId();
+    String id = casts.create(currentStore(), request, ORDINARY).getId();
     if (!values.isEmpty()) write(id, values);
     return id;
   }
@@ -195,7 +199,7 @@ class CastFieldAuditPostgresTest {
   private void write(String id, Map<String, String> values) {
     var request = new CastUpdateRequest();
     request.setCustomFields(values);
-    casts.update(id, request, ORDINARY);
+    casts.update(currentStore(), id, request, ORDINARY);
   }
 
   private long count(String table) {
@@ -230,15 +234,15 @@ class CastFieldAuditPostgresTest {
     String untouched = cast(Map.of());
     var edit = new CastFieldDefinitionUpdateRequest();
     edit.setLabel("変更した秘密");
-    fields.update(internal, edit);
-    fields.update(internal, edit);
-    fields.update(internal, new CastFieldDefinitionUpdateRequest());
+    fields.update(storeId, internal, edit);
+    fields.update(storeId, internal, edit);
+    fields.update(storeId, internal, new CastFieldDefinitionUpdateRequest());
     assertThat(
             jdbc.queryForObject(
                 "select version from t_cast_field_definitions where id=?", Long.class, internal))
         .isEqualTo(1);
-    fields.delete(internal, ORDINARY);
-    assertThat(fields.list()).extracting(d -> d.getId()).containsExactly(external);
+    fields.delete(storeId, internal, ORDINARY);
+    assertThat(fields.list(storeId)).extracting(d -> d.getId()).containsExactly(external);
     assertThat(stored(first))
         .containsEntry("internal_values", "{}")
         .containsEntry("internal_version", 2L)
@@ -285,7 +289,7 @@ class CastFieldAuditPostgresTest {
               assertThat(row.get("target_id")).isEqualTo(row.get("enrollment_id"));
               assertThat(row.get("old_values").toString()).contains("private-key");
             });
-    fields.delete(external, ORDINARY);
+    fields.delete(storeId, external, ORDINARY);
     assertThat(stored(first))
         .containsEntry("public_values", "{}")
         .containsEntry("public_version", 2L);
@@ -339,9 +343,10 @@ class CastFieldAuditPostgresTest {
                   var request = new CastFieldDefinitionUpdateRequest();
                   request.setLabel("rollbackする秘密");
                   request.setDisplayOrder(10);
-                  fields.update(internal, request);
+                  fields.update(storeId, internal, request);
                 } else
                   fields.delete(
+                      storeId,
                       rejected.equals("CAST_PROFILE_FIELD_REMOVED") ? external : internal,
                       ORDINARY);
               })
@@ -371,9 +376,9 @@ class CastFieldAuditPostgresTest {
         status -> {
           var request = new CastFieldDefinitionUpdateRequest();
           request.setLabel("rollbackする秘密");
-          fields.update(internal, request);
-          fields.delete(internal, ORDINARY);
-          fields.delete(external, ORDINARY);
+          fields.update(storeId, internal, request);
+          fields.delete(storeId, internal, ORDINARY);
+          fields.delete(storeId, external, ORDINARY);
           definition("private-key", true);
           status.setRollbackOnly();
         });
@@ -397,14 +402,14 @@ class CastFieldAuditPostgresTest {
     String definition = definition("private-key", false);
     var request = new CastCreateRequest();
     request.setName("秘密の名前");
-    String id = casts.create(request, SECOND).getId();
+    String id = casts.create(storeId, request, SECOND).getId();
     var write = new CastUpdateRequest();
     write.setCustomFields(Map.of("private-key", "秘密の値"));
-    casts.update(id, write, SECOND);
+    casts.update(storeId, id, write, SECOND);
     var edit = new CastFieldDefinitionUpdateRequest();
     edit.setDisplayOrder(4);
-    fields.update(definition, edit);
-    fields.delete(definition, SECOND);
+    fields.update(storeId, definition, edit);
+    fields.delete(storeId, definition, SECOND);
     var rows =
         jdbc.queryForList(
             "select actor_id,actor_type,store_id from t_audit_events where target_id=? or source_id=? order by id",
@@ -418,7 +423,7 @@ class CastFieldAuditPostgresTest {
                     .containsEntry("actor_id", secondId)
                     .containsEntry("actor_type", "STAFF")
                     .containsEntry("store_id", storeId));
-    assertThat(lifecycle.snapshots(id, null, 20).content())
+    assertThat(lifecycle.snapshots(storeId, id, null, 20).content())
         .hasSize(2)
         .allSatisfy(snapshot -> assertThat(snapshot.actorId()).isEqualTo(secondId));
     assertNoSecrets();
@@ -438,11 +443,11 @@ class CastFieldAuditPostgresTest {
             "select count(*) from t_audit_events where store_id=?", Long.class, otherStore);
     authenticate(storeId, ORDINARY);
     assertThatThrownBy(
-            () -> fields.update(foreignDefinition, new CastFieldDefinitionUpdateRequest()))
+            () -> fields.update(storeId, foreignDefinition, new CastFieldDefinitionUpdateRequest()))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> fields.delete(foreignDefinition, ORDINARY))
+    assertThatThrownBy(() -> fields.delete(storeId, foreignDefinition, ORDINARY))
         .isInstanceOf(NotFoundException.class);
-    fields.delete(ownDefinition, ORDINARY);
+    fields.delete(storeId, ownDefinition, ORDINARY);
     assertThat(stored(ownCast)).containsEntry("internal_values", "{}");
     assertThat(stored(foreignCast)).isEqualTo(foreignBefore);
     assertThat(
@@ -466,7 +471,7 @@ class CastFieldAuditPostgresTest {
         .hasMessageContaining("既に登録");
     var request = new CastFieldDefinitionUpdateRequest();
     request.setIsPublic(true);
-    assertThatThrownBy(() -> fields.update(id, request))
+    assertThatThrownBy(() -> fields.update(storeId, id, request))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("公開区分");
     assertThat(count("t_audit_events")).isEqualTo(count);
@@ -496,7 +501,7 @@ class CastFieldAuditPostgresTest {
                   transactions.executeWithoutResult(
                       status -> {
                         if (writerFirst) write(id, Map.of("private-key", "秘密の並行更新値"));
-                        else fields.delete(definition, ORDINARY);
+                        else fields.delete(storeId, definition, ORDINARY);
                         locked.countDown();
                         await(release);
                       });
@@ -512,7 +517,7 @@ class CastFieldAuditPostgresTest {
                   authenticate(storeId, ORDINARY);
                   try {
                     attempting.countDown();
-                    if (writerFirst) fields.delete(definition, ORDINARY);
+                    if (writerFirst) fields.delete(storeId, definition, ORDINARY);
                     else
                       assertThatThrownBy(() -> write(id, Map.of("private-key", "秘密の遅延入力")))
                           .isInstanceOf(ServiceException.class)
@@ -535,7 +540,7 @@ class CastFieldAuditPostgresTest {
         .containsEntry("public_values", "{}");
     String rebuilt = definition("private-key", true);
     assertThat(rebuilt).isNotEqualTo(definition);
-    assertThat(casts.get(id).getCustomFields()).isEmpty();
+    assertThat(casts.get(storeId, id).getCustomFields()).isEmpty();
     assertThat(stored(id))
         .containsEntry("internal_values", "{}")
         .containsEntry("public_values", "{}");
@@ -550,7 +555,7 @@ class CastFieldAuditPostgresTest {
     assertThat(removed)
         .containsEntry("old", writerFirst ? "2" : "1")
         .containsEntry("new", writerFirst ? "3" : "2");
-    assertThat(lifecycle.snapshots(id, null, 20).content()).hasSize(writerFirst ? 3 : 2);
+    assertThat(lifecycle.snapshots(storeId, id, null, 20).content()).hasSize(writerFirst ? 3 : 2);
     assertNoSecrets();
   }
 
@@ -570,7 +575,7 @@ class CastFieldAuditPostgresTest {
       assertThat(List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS)))
           .containsExactlyInAnyOrder(true, false);
     }
-    assertThat(fields.list()).hasSize(20);
+    assertThat(fields.list(storeId)).hasSize(20);
     assertThat(count("t_audit_events")).isEqualTo(20);
   }
 

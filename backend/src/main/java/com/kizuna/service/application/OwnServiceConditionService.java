@@ -16,7 +16,6 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.domain.StoreRepository;
@@ -43,24 +42,26 @@ public class OwnServiceConditionService {
   private final CastEnrollmentRepository enrollments;
   private final ActorIdentityService actors;
   private final StoreRepository stores;
-  private final StoreContext context;
   private final SpecialServiceRejectionHandler rejectionHandler;
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
   @StoreScoped
-  public Page<OwnServiceConditionSummary> list(String actor, ServiceKind kind, int page, int size) {
-    String enrollment = requireEnrollment(actors.requireUserId(actor));
+  public Page<OwnServiceConditionSummary> list(
+      Long storeId, String actor, ServiceKind kind, int page, int size) {
+    String enrollment = requireEnrollment(storeId, actors.requireUserId(actor));
     if (page < 0 || size < 1 || size > CursorPage.MAX_SIZE)
       throw new ServiceException("ページ番号と取得件数が不正です");
-    Specification<ServiceItem> filter = (root, query, cb) -> cb.isFalse(root.get("deleted"));
+    Specification<ServiceItem> filter =
+        (root, query, cb) ->
+            cb.and(cb.equal(root.get("storeId"), storeId), cb.isFalse(root.get("deleted")));
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
     var found = items.findAll(filter, PageRequest.of(page, size, Sort.by(ServiceItem::getId)));
     var decisions =
         consents
-            .findByEnrollmentIdAndServiceIdIn(
-                enrollment, found.stream().map(ServiceItem::getId).toList())
+            .findByStoreIdAndEnrollmentIdAndServiceIdIn(
+                storeId, enrollment, found.stream().map(ServiceItem::getId).toList())
             .stream()
             .collect(Collectors.toMap(ServiceConsent::getServiceId, Function.identity()));
     return found.map(item -> summary(item, decisions.get(item.getId())));
@@ -68,13 +69,14 @@ public class OwnServiceConditionService {
 
   @Transactional
   @StoreScoped
-  public OwnServiceConditionSummary decide(String actor, String id, OwnConsentRequest request) {
-    stores.lockCastFields(context.getStoreId());
+  public OwnServiceConditionSummary decide(
+      Long storeId, String actor, String id, OwnConsentRequest request) {
+    stores.lockCastFields(storeId);
     Long actorId = actors.requireUserId(actor);
-    String enrollment = requireEnrollment(actorId);
+    String enrollment = requireEnrollment(storeId, actorId);
     var item =
         items
-            .findForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .filter(value -> !value.isDeleted())
             .orElseThrow(() -> new NotFoundException("サービスが見つかりません"));
     if (item.getTerms().getKind() != ServiceKind.SPECIAL_SERVICE)
@@ -83,11 +85,13 @@ public class OwnServiceConditionService {
       throw new ConflictException("条件が変更されています。最新の内容を再取得して確認してください");
     var consent =
         consents
-            .findByEnrollmentIdAndServiceId(enrollment, id)
-            .orElseGet(() -> ServiceConsent.create(enrollment, id));
+            .findByStoreIdAndEnrollmentIdAndServiceId(storeId, enrollment, id)
+            .orElseGet(() -> ServiceConsent.create(storeId, enrollment, id));
     var before = auditValues(consent);
     var revision =
-        revisions.findByServiceIdAndRevisionNumber(id, item.getRevisionNumber()).orElseThrow();
+        revisions
+            .findByStoreIdAndServiceIdAndRevisionNumber(storeId, id, item.getRevisionNumber())
+            .orElseThrow();
     if (consent.decide(
         request.decision(), item.getTermsVersion(), revision.getId(), request.consentVersion())) {
       consents.saveAndFlush(consent);
@@ -131,8 +135,8 @@ public class OwnServiceConditionService {
         consent.getServiceRevisionId());
   }
 
-  private String requireEnrollment(Long actorId) {
-    return enrollments.findIdsByUserIdAndStoreId(actorId, context.getStoreId()).stream()
+  private String requireEnrollment(Long storeId, Long actorId) {
+    return enrollments.findIdsByUserIdAndStoreId(actorId, storeId).stream()
         .findFirst()
         .orElseThrow(() -> new NotFoundException("本人の有効な在籍が見つかりません"));
   }
