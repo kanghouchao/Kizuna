@@ -39,8 +39,9 @@ public class ServiceConsent extends StoreScopedEntity {
   @Column(nullable = false)
   private long revisionNumber;
 
-  public static ServiceConsent create(String enrollmentId, String serviceId) {
+  public static ServiceConsent create(Long storeId, String enrollmentId, String serviceId) {
     var result = new ServiceConsent();
+    result.setStoreId(storeId);
     result.enrollmentId = enrollmentId;
     result.serviceId = serviceId;
     return result;

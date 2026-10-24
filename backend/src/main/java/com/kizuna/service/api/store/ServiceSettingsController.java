@@ -8,6 +8,7 @@ import com.kizuna.service.api.dto.ServiceSummary;
 import com.kizuna.service.api.dto.ServiceUpdateRequest;
 import com.kizuna.service.application.ServiceSettingsService;
 import com.kizuna.service.domain.ServiceKind;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -34,52 +35,58 @@ public class ServiceSettingsController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
   public Page<ServiceSummary> list(
+      @CurrentStore Long storeId,
       @RequestParam(required = false) ServiceKind kind,
       @RequestParam(defaultValue = "false") boolean deleted,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.list(kind, deleted, page, size);
+    return service.list(storeId, kind, deleted, page, size);
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
   public ResponseEntity<ServiceCreatedResponse> create(
-      @Valid @RequestBody ServiceCreateRequest request, Principal principal) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody ServiceCreateRequest request,
+      Principal principal) {
     return ResponseEntity.status(201)
-        .body(new ServiceCreatedResponse(service.create(request, principal.getName())));
+        .body(new ServiceCreatedResponse(service.create(storeId, request, principal.getName())));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
-  public ServiceResponse get(@PathVariable String id) {
-    return service.get(id);
+  public ServiceResponse get(@CurrentStore Long storeId, @PathVariable String id) {
+    return service.get(storeId, id);
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
   public ServiceResponse update(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody ServiceUpdateRequest request,
       Principal principal) {
-    return service.update(id, request, principal.getName());
+    return service.update(storeId, id, request, principal.getName());
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
   public ResponseEntity<Void> delete(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(name = "expected_version") long expectedVersion,
       Principal principal) {
-    service.delete(id, expectedVersion, principal.getName());
+    service.delete(storeId, id, expectedVersion, principal.getName());
     return ResponseEntity.noContent().build();
   }
 
   @GetMapping("/{id}/revisions")
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
   public CursorPage<ServiceRevisionResponse> history(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return service.history(id, cursor, size);
+    return service.history(storeId, id, cursor, size);
   }
 }

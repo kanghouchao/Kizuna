@@ -1,13 +1,14 @@
 package com.kizuna.service.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface ServiceConsentRepository extends JpaRepository<ServiceConsent, String> {
-  Optional<ServiceConsent> findByEnrollmentIdAndServiceId(String enrollmentId, String serviceId);
+public interface ServiceConsentRepository extends StoreScopedRepository<ServiceConsent> {
+  Optional<ServiceConsent> findByStoreIdAndEnrollmentIdAndServiceId(
+      Long storeId, String enrollmentId, String serviceId);
 
-  List<ServiceConsent> findByEnrollmentIdAndServiceIdIn(
-      String enrollmentId, Collection<String> serviceIds);
+  List<ServiceConsent> findByStoreIdAndEnrollmentIdAndServiceIdIn(
+      Long storeId, String enrollmentId, Collection<String> serviceIds);
 }

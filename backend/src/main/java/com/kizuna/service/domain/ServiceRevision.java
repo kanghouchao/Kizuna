@@ -83,6 +83,7 @@ public class ServiceRevision extends StoreScopedEntity {
 
   public static ServiceRevision record(ServiceItem item, ServiceTerms before, Long actorId) {
     var revision = new ServiceRevision();
+    revision.setStoreId(item.getStoreId());
     revision.termsVersion = item.getTermsVersion();
     revision.serviceId = item.getId();
     revision.revisionNumber = item.getRevisionNumber();
