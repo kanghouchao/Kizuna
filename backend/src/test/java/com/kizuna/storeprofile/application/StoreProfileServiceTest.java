@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
 import com.kizuna.storeprofile.api.dto.StoreProfileResponse;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
@@ -21,7 +20,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,16 +30,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class StoreProfileServiceTest {
 
   @Mock private StoreProfileRepository storeProfileRepository;
-  @Mock private StoreContext storeContext;
   @Mock private StoreProfileMapper storeProfileMapper;
   @InjectMocks private StoreProfileService storeProfileService;
 
   private static final Long STORE_ID = 1L;
-
-  @BeforeEach
-  void setUp() {
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
-  }
 
   @Test
   void get_returnsExistingConfig() {
@@ -50,7 +42,7 @@ class StoreProfileServiceTest {
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = storeProfileService.get();
+    StoreProfileResponse response = storeProfileService.get(STORE_ID);
 
     assertThat(response.getId()).isEqualTo("1");
     assertThat(response.getTemplateKey()).isEqualTo("default");
@@ -61,7 +53,7 @@ class StoreProfileServiceTest {
   void get_throwsExceptionIfNotExists() {
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> storeProfileService.get())
+    assertThatThrownBy(() -> storeProfileService.get(STORE_ID))
         .isInstanceOf(NotFoundException.class)
         .hasMessage("店舗設定が見つかりません");
   }
@@ -92,7 +84,7 @@ class StoreProfileServiceTest {
     expected.setDescription("Updated description");
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = storeProfileService.update(request);
+    StoreProfileResponse response = storeProfileService.update(STORE_ID, request);
 
     assertThat(response.getLogoUrl()).isEqualTo("https://example.com/new-logo.png");
     assertThat(response.getDescription()).isEqualTo("Updated description");
@@ -114,7 +106,7 @@ class StoreProfileServiceTest {
     expected.setSnsLinks(newSnsLinks);
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = storeProfileService.update(request);
+    StoreProfileResponse response = storeProfileService.update(STORE_ID, request);
 
     assertThat(response.getSnsLinks()).hasSize(1);
     assertThat(response.getSnsLinks().get(0).getPlatform()).isEqualTo("twitter");
@@ -136,7 +128,7 @@ class StoreProfileServiceTest {
     expected.setPartnerLinks(newPartnerLinks);
     when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = storeProfileService.update(request);
+    StoreProfileResponse response = storeProfileService.update(STORE_ID, request);
 
     assertThat(response.getPartnerLinks()).hasSize(1);
     assertThat(response.getPartnerLinks().get(0).getName()).isEqualTo("Partner1");
@@ -149,7 +141,7 @@ class StoreProfileServiceTest {
 
     StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
 
-    assertThatThrownBy(() -> storeProfileService.update(request))
+    assertThatThrownBy(() -> storeProfileService.update(STORE_ID, request))
         .isInstanceOf(NotFoundException.class)
         .hasMessage("店舗設定が見つかりません");
   }
