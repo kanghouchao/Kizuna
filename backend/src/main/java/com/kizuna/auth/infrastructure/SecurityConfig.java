@@ -49,6 +49,8 @@ public class SecurityConfig {
     // メソッドまで指定する。
     PathPatternRequestMatcher.withDefaults()
         .matcher(HttpMethod.POST, "/store/order-applications/public"),
+    // 匿名 POST の初期設定（最初の管理者の登録）。Bearer を持たない要求は末尾の Bearer ヘッダ免除に該当しない。
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/initial-setup"),
     request -> {
       String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
       return StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");

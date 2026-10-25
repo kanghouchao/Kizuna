@@ -45,6 +45,8 @@ public class ExemptingBearerTokenResolver implements BearerTokenResolver {
     // token cookie を持ちうるため、免除しないと申請そのものが 401 で通らなくなる。
     PathPatternRequestMatcher.withDefaults()
         .matcher(HttpMethod.POST, "/store/order-applications/public"),
+    // 初期設定の登録（POST）。開発 DB を作り直した後もブラウザに旧 DB の token cookie が残りうる。
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/initial-setup"),
   };
 
   private final BearerTokenResolver delegate = new DefaultBearerTokenResolver();
