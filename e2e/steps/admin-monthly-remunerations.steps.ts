@@ -45,7 +45,7 @@ async function monthly(request: APIRequestContext, token = firstReader, storeId 
 Given('月次横断照会用の本人と異なる授権集合の照会者がいる', async ({ request, $testInfo }) => {
   $testInfo.setTimeout(120000);
   manager = await loginAsStoreAdmin(request);
-  const admin = await loginUser(request, 'admin@kizuna.test', 'pass');
+  const admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
   const stores = await getAuthorizedStores(request, manager);
   storeName = stores.find(s => String(s.id) === STORE1_ID)!.name;
   const other = stores.find(s => String(s.id) !== STORE1_ID)!;

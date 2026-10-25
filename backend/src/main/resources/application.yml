@@ -28,18 +28,11 @@ spring:
     show-sql: ${SPRING_JPA_SHOW_SQL:true}
     open-in-view: ${SPRING_JPA_OPEN_IN_VIEW:false}
   liquibase:
-    # デモデータ（店舗 2 件と店長・スタッフ）の changeSet は contextFilter: demo で隔離してある。
+    # デモデータ（店舗 2 件とその店舗サイト設定。アカウントは含まない）の changeSet は contextFilter: demo で隔離してある。
     # 既定は production＝デモデータを投入しない（設定漏れが安全側に倒れるように）。
     # 開発・統合テスト・E2E はこのデータに依存するため compose 側で demo を明示する。
     # コンテキスト無指定の changeSet（スキーマ本体と必須シード）は、どの値でも常に適用される。
     contexts: ${LIQUIBASE_CONTEXTS:production}
-    parameters:
-      # 初期グループ管理者のパスワードハッシュ（seed/04-initial-admin.yaml が参照）。
-      # 既定値は開発・E2E 用の平文 pass の bcrypt ハッシュ。本番は必ず自前の値を設定すること。
-      initialAdminPasswordHash: ${INITIAL_ADMIN_PASSWORD_HASH:$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue}
-      # デモユーザー（田中花子・山田次郎）のパスワードハッシュ（seed/05-demo.yaml が参照）。
-      # demo コンテキストでしか使われないため本番で設定する必要はない。
-      demoUserPasswordHash: ${DEMO_USER_PASSWORD_HASH:$2a$10$vE/ReAxs2rLV.FEJSDUK4.EpsPrbllLD2uOgtPaEUh1koMTovAaue}
   # Jackson 3（Spring Boot 4 の既定）の JsonMapper をカスタマイズする。旧 JacksonConfig の
   # Jackson2ObjectMapperBuilderCustomizer をプロパティへ移設したもの。java.time は Jackson 3 が自動登録するため
   # JavaTimeModule の明示登録は不要。

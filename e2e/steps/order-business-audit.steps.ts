@@ -59,7 +59,7 @@ Given(
     privateMail = "private-" + suffix + "@example.test";
     privatePassword = "Audit-" + suffix + "-fixture";
     staff = await loginAsStoreAdmin(request);
-    const owner = await loginUser(request, "admin@kizuna.test", "pass");
+    const owner = await loginUser(request, "admin@kizuna.test", "pass1234");
     const role = await createPermissionRole(
       request,
       owner,

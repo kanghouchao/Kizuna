@@ -2,11 +2,11 @@ databaseChangeLog:
   - changeSet:
       id: seed-v0100-005-demo
       author: kanghouchao
-      # 開発・E2E 用のデモデータ（店舗 2 件とその店長・スタッフ）。本番には要らないため
+      # 開発・E2E 用のデモデータ（店舗 2 件とその店舗サイト設定。アカウントは含まない）。本番には要らないため
       # demo コンテキストに隔離する。実行時コンテキストは spring.liquibase.contexts（環境変数
       # LIQUIBASE_CONTEXTS）で切り替える。既定は production＝投入しないので、開発・統合テスト・E2E は
       # compose 側で demo を明示する。
-      # id は原則採番に委ね、FK は自然キー（domain / email / ロール名）の部分問い合わせで解決する
+      # id は原則採番に委ね、FK は自然キー（domain）の部分問い合わせで解決する
       # （例外はアプリ側採番の t_store_profiles のみ）。
       contextFilter: demo
       preConditions:
@@ -29,95 +29,6 @@ databaseChangeLog:
               - column: { name: domain, value: store2.kizuna.test }
               - column: { name: email, value: admin@store2.kizuna.com }
               - column: { name: status, value: ACTIVE }
-
-        # 田中花子: 店長・店舗{1,2} 授権。password は changelog パラメータ demoUserPasswordHash
-        # （spring.liquibase.parameters 経由。既定は平文 pass のハッシュ）から与える。
-        - insert:
-            tableName: t_users
-            columns:
-              - column: { name: email, value: tanaka.hanako@kizuna.test }
-              - column: { name: password, value: "${demoUserPasswordHash}" }
-              - column: { name: display_name, value: "田中花子" }
-              - column: { name: enabled, valueBoolean: true }
-              - column: { name: user_type, value: STAFF }
-              - column: { name: store_scope_type, value: SPECIFIC_STORES }
-        # 山田次郎: 店舗スタッフ・店舗{1} 授権。
-        - insert:
-            tableName: t_users
-            columns:
-              - column: { name: email, value: yamada.jiro@kizuna.test }
-              - column: { name: password, value: "${demoUserPasswordHash}" }
-              - column: { name: display_name, value: "山田次郎" }
-              - column: { name: enabled, valueBoolean: true }
-              - column: { name: user_type, value: STAFF }
-              - column: { name: store_scope_type, value: SPECIFIC_STORES }
-
-        - insert:
-            tableName: t_user_roles
-            columns:
-              - column:
-                  {
-                    name: user_id,
-                    valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
-                  }
-              - column:
-                  {
-                    name: role_id,
-                    valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')",
-                  }
-        - insert:
-            tableName: t_user_roles
-            columns:
-              - column:
-                  {
-                    name: user_id,
-                    valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')",
-                  }
-              - column:
-                  {
-                    name: role_id,
-                    valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')",
-                  }
-
-        - insert:
-            tableName: t_user_stores
-            columns:
-              - column:
-                  {
-                    name: user_id,
-                    valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
-                  }
-              - column:
-                  {
-                    name: store_id,
-                    valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')",
-                  }
-        - insert:
-            tableName: t_user_stores
-            columns:
-              - column:
-                  {
-                    name: user_id,
-                    valueComputed: "(SELECT id FROM t_users WHERE email = 'tanaka.hanako@kizuna.test')",
-                  }
-              - column:
-                  {
-                    name: store_id,
-                    valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store2.kizuna.test')",
-                  }
-        - insert:
-            tableName: t_user_stores
-            columns:
-              - column:
-                  {
-                    name: user_id,
-                    valueComputed: "(SELECT id FROM t_users WHERE email = 'yamada.jiro@kizuna.test')",
-                  }
-              - column:
-                  {
-                    name: store_id,
-                    valueComputed: "(SELECT id FROM t_stores WHERE domain = 'store1.kizuna.test')",
-                  }
 
         # t_store_profiles.id はアプリ側採番（Snowflake）のため、seed だけは固定 id を明示する。
         - insert:

@@ -101,8 +101,5 @@ databaseChangeLog:
       file: seed/03-system-configs.yaml
       relativeToChangelogFile: true
   - include:
-      file: seed/04-initial-admin.yaml
-      relativeToChangelogFile: true
-  - include:
       file: seed/05-demo.yaml
       relativeToChangelogFile: true

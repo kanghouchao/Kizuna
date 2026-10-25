@@ -47,13 +47,18 @@ E2E は**開発スタック（project `kizuna`）を使いません**。専用�
   `-` に置換して導出します。この結果が異なる worktree 同士は並行実行できます。同じ basename や
   正規化後の名前が一致する checkout、同じ worktree 内の複数実行は互いのスタックを回収するため並行実行できません
 - DB / Redis / SeaweedFS は tmpfs なので、毎回シードからやり直した状態で始まります
+- シードにアカウントは無く、最初に走る `initial-setup` プロジェクトが初期設定画面からスイートのアカウントを作ります
 
 ## 構成
 
-- `features/**/*.feature` — 日本語 Gherkin のシナリオ
-- `steps/**/*.ts` — ステップ定義
+- `features/*.feature` — 日本語 Gherkin のシナリオ（`chromium` プロジェクト）
+- `features/initial-setup/*.feature` — 初期設定のシナリオ（`initial-setup` プロジェクト）。
+  `admin@kizuna.test`（グループ管理者）、`tanaka.hanako@kizuna.test`（店長・店舗 1/2）、
+  `yamada.jiro@kizuna.test`（店舗スタッフ・店舗 1）をパスワード `pass1234` で作ります
+- `steps/**/*.ts` — ステップ定義（`initial-setup` プロジェクトは `steps/initial-setup.steps.ts` だけを読みます）
 - `base-url.ts` — 店舗の `BASE_URL` とアプリドメインの `APP_URL` の既定値
-- `playwright.config.ts` — `defineBddConfig` と Playwright 設定
+- `playwright.config.ts` — `defineBddProject` による 2 プロジェクトと Playwright 設定。
+  `chromium` は `dependencies` で `initial-setup` の完了を待ち、`initial-setup` が失敗すると実行されません
 - `docker-compose.e2e.yml` — E2E 専用の使い捨てフルスタック（DB / Redis / SeaweedFS /
   backend / frontend / gateway ＋ テストランナー）
 
@@ -66,7 +71,7 @@ alias はネットワーク単位なので、スタックを複数立てても�
 
 ## シナリオの追加手順
 
-1. `features/` に `.feature` を追加し、先頭に `# language: ja` を記述する
+1. `features/` 直下に `.feature` を追加し、先頭に `# language: ja` を記述する（`features/initial-setup/` は初期設定専用）
 2. `steps/` に対応するステップ定義を追加する（`createBdd()` の `Given` / `When` / `Then`）
 3. `task e2e` で実行する
 
@@ -92,14 +97,18 @@ Docker を使わず手元の Node で回す場合は、`e2e/` で以下を実行
 ——E2E 専用スタックはホストポートを公開しないため、この経路では使えません。開発スタックの
 データに対して走ることになるので、書き込みを伴うシナリオの扱いには注意してください。
 
-この経路は、[ステップ共通処理](steps/store-api.ts) と Gherkin に記載されたシードアカウント・
-固定パスワードに DB が一致している場合に限ります。README の手順で自分の初期パスワードを
-設定した開発 DB では、そのまま全シナリオを実行できません。通常の検証は専用シードを使う
-`task e2e` を使用してください。
+シードにアカウントは無いため、この経路は**作り直した直後でまだ誰も初期設定をしていない開発 DB**
+に限ります。最初に `initial-setup` プロジェクトを 1 回だけ流し、スイートのアカウント 3 件を
+パスワード `pass1234` で作ります。以後は初期設定が完了済みになり `initial-setup` は落ちるので、
+反復では `--no-deps` で依存を外します（`--project=chromium` だけでは依存も走ります）。
+自分の管理者を初期設定で登録済みの開発 DB では、そのまま全シナリオを実行できません。
+通常の検証は毎回まっさらなスタックを使う `task e2e` を使用してください。
 
 ```bash
 cd e2e
 npm install
 npx playwright install chromium
-npm run test:e2e  # 型検査 → .feature の変換 → シナリオ実行
+npm run typecheck && npx bddgen                 # 型検査 → .feature の変換
+npx playwright test --project=initial-setup     # DB を作り直した後に 1 回だけ（アカウント作成）
+npx playwright test --project=chromium --no-deps  # 反復はこちら
 ```

@@ -59,7 +59,7 @@ Given(
     secret = `監査に複写しない私的入力-${suffix}`;
     password = `Shift-${suffix}-fixture`;
     staff = await loginAsStoreAdmin(request);
-    const owner = await loginUser(request, "admin@kizuna.test", "pass");
+    const owner = await loginUser(request, "admin@kizuna.test", "pass1234");
     const role = await createPermissionRole(
       request,
       owner,

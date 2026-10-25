@@ -12,11 +12,11 @@ import { APP_URL } from "../base-url";
 export const STORE1_ID = "1";
 export const STORE_HEADERS = { "X-Store-ID": STORE1_ID };
 export const ADMIN_EMAIL = "tanaka.hanako@kizuna.test";
-export const ADMIN_PASSWORD = "pass";
+export const ADMIN_PASSWORD = "pass1234";
 
 /**
- * 店長ロール（STORE_MANAGER・store1/store2 双方に授権された v0.5.0 シード）のユーザーで
- * ログインし JWT を返す。返却トークンは STORE_HEADERS（X-Store-ID）と併用することで
+ * 店長（store1/store2 双方に授権。initial-setup プロジェクトが作成する）でログインし
+ * JWT を返す。返却トークンは STORE_HEADERS（X-Store-ID）と併用することで
  * /store/** に店舗文脈を確立できる。/auth/login は CSRF 免除。
  */
 export async function loginAsStoreAdmin(
@@ -1007,6 +1007,31 @@ export async function createStoreStaffFixture(request: APIRequestContext, token:
   const response = await request.post('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
+}
+
+/** 表示名を指定し、個別店舗に授権した従業員を作る（POST /admin/staff, PERM_STAFF_MANAGE）。 */
+export async function createStaffAccount(request: APIRequestContext, token: string, staff: { email: string; password: string; displayName: string; roleIds: number[]; storeIds: number[] }): Promise<number> {
+  const response = await request.post('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email: staff.email, password: staff.password, display_name: staff.displayName, role_ids: staff.roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: staff.storeIds } });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).id;
+}
+
+/** ロール名から id を引く（GET /admin/roles, PERM_ROLE_MANAGE）。 */
+export async function findRoleIdByName(request: APIRequestContext, token: string, name: string): Promise<number> {
+  const response = await request.get('/api/admin/roles', { headers: { Authorization: `Bearer ${token}` } });
+  expect(response.status()).toBe(200);
+  const role = ((await response.json()) as { id: number; name: string }[]).find((row) => row.name === name);
+  expect(role, `ロール ${name} がありません`).toBeDefined();
+  return role!.id;
+}
+
+/** 店舗ドメインから id を引く（GET /admin/stores, PERM_STORE_MANAGE）。検索は部分一致のため、ドメインの完全一致で選び直す。 */
+export async function findStoreIdByDomain(request: APIRequestContext, token: string, domain: string): Promise<string> {
+  const response = await request.get('/api/admin/stores', { headers: { Authorization: `Bearer ${token}` }, params: { search: domain } });
+  expect(response.status()).toBe(200);
+  const store = ((await response.json()).content as { id: string; domain: string }[]).find((row) => row.domain === domain);
+  expect(store, `店舗 ${domain} がありません`).toBeDefined();
+  return store!.id;
 }
 
 /** 現行同意文面で業務連絡を許可したゲスト申請を隔離テスト用に作る。 */

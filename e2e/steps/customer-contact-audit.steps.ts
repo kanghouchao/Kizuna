@@ -57,7 +57,7 @@ Given(
     privateEvidence = `監査へ転記しない根拠-${suffix}`;
     password = `Contact-${suffix}-fixture`;
     staff = await loginAsStoreAdmin(request);
-    const owner = await loginUser(request, "admin@kizuna.test", "pass");
+    const owner = await loginUser(request, "admin@kizuna.test", "pass1234");
     const role = await createPermissionRole(
       request,
       owner,

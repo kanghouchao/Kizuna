@@ -91,9 +91,8 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
   a DB default must be provided by every seed row that touches the table.
 - **Demo data lives only in `seed/05-demo.yaml` behind `contextFilter: demo`.** The application
   default is `production` (no demo data); dev/integration/e2e opt in via `LIQUIBASE_CONTEXTS`.
-- **Changelog parameters enter checksums** (`initialAdminPasswordHash`,
-  `demoUserPasswordHash`): they set the first-deployment value only; rotating them against an
-  existing DB fails validation. Pre-launch this just means "recreate the dev DB after changing
-  them".
+- **Seeds contain no user accounts** — neither the baseline nor the `demo` context. The first
+  administrator is registered through initial setup (`/auth/initial-setup`) on an empty DB.
+  The changelog takes no parameters.
 - This file is excluded from the jar by `processResources` in `build.gradle` (the glob covers
   any `CLAUDE.md` or `AGENTS.md` under resources) — keep the exclusion in step if you rename this file.

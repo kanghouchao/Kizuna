@@ -15,7 +15,7 @@ let asOf = '';
 const headers = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 Given('失効処理用の主体と権限不足の主体が用意されている', async ({ request }) => {
-  const admin = await loginUser(request, 'admin@kizuna.test', 'pass');
+  const admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
   const suffix = Date.now().toString();
   password = 'Expiry-' + suffix + '-fixture';
   email = 'expiry-' + suffix + '@kizuna.test';
