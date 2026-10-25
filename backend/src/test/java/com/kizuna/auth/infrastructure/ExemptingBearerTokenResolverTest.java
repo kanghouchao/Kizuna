@@ -61,6 +61,22 @@ class ExemptingBearerTokenResolverTest {
   }
 
   @Test
+  @DisplayName("初期設定の登録 POST は免除対象で、壊れた Bearer があっても null を返すこと")
+  void resolvesNullForInitialSetupPost() {
+    MockHttpServletRequest request = requestWithBearer("POST", "/auth/initial-setup");
+
+    assertThat(resolver.resolve(request)).isNull();
+  }
+
+  @Test
+  @DisplayName("初期設定の免除は POST 限定で、同一パスの GET には及ばないこと")
+  void doesNotExemptInitialSetupGet() {
+    MockHttpServletRequest request = requestWithBearer("GET", "/auth/initial-setup");
+
+    assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
+  }
+
+  @Test
   @DisplayName("既存ユーザーの招待受諾(/acceptance/existing)は免除対象でなく Bearer を解決すること")
   void resolvesTokenForAcceptAsExistingUser() {
     MockHttpServletRequest request =

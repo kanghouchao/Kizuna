@@ -19,6 +19,9 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   /** 指定 LINE ユーザー ID が既に別の身分へ連携済みか（連携要求の事前検証）。 */
   boolean existsByLineUserId(String lineUserId);
 
+  /** 指定した本人種別の行が 1 件でもあるか（停止中の行も数える）。 */
+  boolean existsByUserType(UserType userType);
+
   /**
    * 指定した本人種別で、現店舗を授権する（ALL_STORES または個別授権店舗集合に含む）有効なユーザーを表示名昇順で取得する。店舗スコープの絞り込みを DB
    * 層で行うことで、無関係な他店舗ユーザーの ElementCollection（ロール・店舗集合）を読み込まずに済む。
