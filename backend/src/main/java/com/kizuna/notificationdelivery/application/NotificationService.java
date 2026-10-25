@@ -36,83 +36,90 @@ public class NotificationService {
 
   @StoreScoped
   @Transactional
-  public Created create(String email, DeliveryContent content) {
-    var actor = actors.require(email, PermissionCode.NOTIFICATION_MANAGE);
-    var existing = deliveries.findByDedupeKey(content.dedupeKey());
+  public Created create(Long storeId, String email, DeliveryContent content) {
+    var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
+    var existing = deliveries.findByStoreIdAndDedupeKey(storeId, content.dedupeKey());
     if (existing.isPresent()) {
       existing.get().requireSame(content);
-      return new Created(response(existing.get()), false);
+      return new Created(response(storeId, existing.get()), false);
     }
     content.validateNewSchedule(OffsetDateTime.now(clock));
-    contacts.decide(content);
-    var row = deliveries.saveAndFlush(NotificationDelivery.draft(content));
+    contacts.decide(storeId, content);
+    var row = deliveries.saveAndFlush(NotificationDelivery.draft(storeId, content));
     audit.append(row, actor, "NOTIFICATION_CREATED");
-    return new Created(response(row), true);
+    return new Created(response(storeId, row), true);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Created replay(String email, DeliveryContent content) {
-    actors.require(email, PermissionCode.NOTIFICATION_MANAGE);
+  public Created replay(Long storeId, String email, DeliveryContent content) {
+    actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
     var row =
         deliveries
-            .findByDedupeKey(content.dedupeKey())
+            .findByStoreIdAndDedupeKey(storeId, content.dedupeKey())
             .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
     row.requireSame(content);
-    return new Created(response(row), false);
+    return new Created(response(storeId, row), false);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public CursorPage<DeliverySummary> list(String email, String cursor, int size) {
-    actors.require(email, PermissionCode.NOTIFICATION_VIEW);
+  public CursorPage<DeliverySummary> list(Long storeId, String email, String cursor, int size) {
+    actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
     checkSize(size);
-    var rows = deliveries.findByIdLessThanOrderByIdDesc(before(cursor), Limit.of(size + 1));
+    var rows =
+        deliveries.findByStoreIdAndIdLessThanOrderByIdDesc(
+            storeId, before(cursor), Limit.of(size + 1));
     return CursorPage.of(rows, size, d -> PageCursor.encodeKey(d.getId())).map(DeliverySummary::of);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public DeliveryResponse get(String email, String id) {
-    actors.require(email, PermissionCode.NOTIFICATION_VIEW);
-    return response(require(id));
+  public DeliveryResponse get(Long storeId, String email, String id) {
+    actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
+    return response(storeId, require(storeId, id));
   }
 
   @StoreScoped
   @Transactional
   public DeliveryResponse queue(
-      String email, String id, Long version, String reason, boolean retry) {
-    var actor = actors.require(email, PermissionCode.NOTIFICATION_SEND);
-    var row = deliveries.lockById(id).orElseThrow(() -> new NotFoundException("通知が見つかりません"));
-    contacts.decide(row.content());
+      Long storeId, String email, String id, Long version, String reason, boolean retry) {
+    var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_SEND);
+    var row =
+        deliveries
+            .findByIdAndStoreIdForUpdate(id, storeId)
+            .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
+    contacts.decide(storeId, row.content());
     row.queue(version, reason, retry);
     deliveries.flush();
     audit.append(row, actor, retry ? "NOTIFICATION_RETRIED" : "NOTIFICATION_QUEUED");
-    return response(row);
+    return response(storeId, row);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<DeliveryAttemptResponse> history(
-      String email, String id, String cursor, int size) {
-    actors.require(email, PermissionCode.NOTIFICATION_VIEW);
-    require(id);
+      Long storeId, String email, String id, String cursor, int size) {
+    actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
+    require(storeId, id);
     checkSize(size);
     return CursorPage.of(
-            attempts.findByDeliveryIdAndIdLessThanOrderByIdDesc(
-                id, before(cursor), Limit.of(size + 1)),
+            attempts.findByStoreIdAndDeliveryIdAndIdLessThanOrderByIdDesc(
+                storeId, id, before(cursor), Limit.of(size + 1)),
             size,
             a -> PageCursor.encodeKey(a.getId()))
         .map(DeliveryAttemptResponse::of);
   }
 
-  private NotificationDelivery require(String id) {
-    return deliveries.findById(id).orElseThrow(() -> new NotFoundException("通知が見つかりません"));
+  private NotificationDelivery require(Long storeId, String id) {
+    return deliveries
+        .findByIdAndStoreId(id, storeId)
+        .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
   }
 
-  private DeliveryResponse response(NotificationDelivery row) {
+  private DeliveryResponse response(Long storeId, NotificationDelivery row) {
     return DeliveryResponse.of(
-        row, contacts.decide(row.content()).decision().name(), transport.available());
+        row, contacts.decide(storeId, row.content()).decision().name(), transport.available());
   }
 
   private static String before(String cursor) {

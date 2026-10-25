@@ -57,6 +57,7 @@ public class DeliveryAttempt extends StoreScopedEntity {
       String serviceName,
       OffsetDateTime now) {
     var attempt = new DeliveryAttempt();
+    attempt.setStoreId(row.getStoreId());
     attempt.deliveryId = row.getId();
     attempt.attemptNumber = row.getAttemptCount();
     attempt.taskExecutionId = executionId;

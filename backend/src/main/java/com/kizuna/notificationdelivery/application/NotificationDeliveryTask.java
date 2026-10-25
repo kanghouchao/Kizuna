@@ -62,8 +62,8 @@ public class NotificationDeliveryTask implements TaskHandler {
         context.serviceUserId(), PermissionCode.TASK_EXECUTE, context.storeId());
     var actor = identities.requireService(context.serviceUserId(), permission(), context.storeId());
     var rows =
-        deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
-            DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100));
+        deliveries.findByStoreIdAndStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
+            context.storeId(), DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100));
     for (var row : rows) {
       row.dispatch();
       var attempt =

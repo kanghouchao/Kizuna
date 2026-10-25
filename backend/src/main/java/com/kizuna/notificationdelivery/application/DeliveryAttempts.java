@@ -57,7 +57,7 @@ public class DeliveryAttempts {
     var locked = lock(event);
     if (locked.attempt().getStatus() != DeliveryStatus.SENDING || allowed(locked, event) == null)
       return null;
-    var decision = contacts.decide(locked.delivery().content());
+    var decision = contacts.decide(event.storeId(), locked.delivery().content());
     if (decision.decision() != BusinessContactDecision.ALLOWED) {
       finish(locked, event, DeliveryStatus.BLOCKED, "CONTACT_NOT_ALLOWED");
       return null;
@@ -83,7 +83,7 @@ public class DeliveryAttempts {
   private AuditActor allowed(Locked locked, DeliveryDispatch event) {
     try {
       var actor = authorization.require(event.serviceUserId(), event.storeId());
-      if (contacts.decide(locked.delivery().content()).decision()
+      if (contacts.decide(event.storeId(), locked.delivery().content()).decision()
           != BusinessContactDecision.ALLOWED) {
         finish(locked, event, DeliveryStatus.BLOCKED, "CONTACT_NOT_ALLOWED");
         return null;
@@ -103,11 +103,11 @@ public class DeliveryAttempts {
       throw new AccessDeniedException("店舗文脈が不正です");
     var row =
         deliveries
-            .lockById(event.deliveryId())
+            .findByIdAndStoreIdForUpdate(event.deliveryId(), event.storeId())
             .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
     var attempt =
         attempts
-            .findById(event.attemptId())
+            .findByIdAndStoreId(event.attemptId(), event.storeId())
             .orElseThrow(() -> new NotFoundException("送信試行が見つかりません"));
     if (!attempt.getDeliveryId().equals(row.getId())
         || !attempt.getServiceUserId().equals(event.serviceUserId())

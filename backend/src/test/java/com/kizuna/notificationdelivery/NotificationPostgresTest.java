@@ -249,12 +249,13 @@ class NotificationPostgresTest {
 
   private DeliveryResponse draft() {
     var source = guest();
-    return inStore(storeId, () -> notifications.create(email, content(source)).delivery());
+    return inStore(storeId, () -> notifications.create(storeId, email, content(source)).delivery());
   }
 
   private DeliveryResponse queue(DeliveryResponse row) {
     return inStore(
-        storeId, () -> notifications.queue(email, row.id(), row.version(), "内容確認済み", false));
+        storeId,
+        () -> notifications.queue(storeId, email, row.id(), row.version(), "内容確認済み", false));
   }
 
   private void submitTask() {
@@ -280,7 +281,7 @@ class NotificationPostgresTest {
   }
 
   private DeliveryResponse get(String id) {
-    return inStore(storeId, () -> notifications.get(email, id));
+    return inStore(storeId, () -> notifications.get(storeId, email, id));
   }
 
   private DeliveryResponse await(String id, String status) throws Exception {
@@ -301,7 +302,7 @@ class NotificationPostgresTest {
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).containsExactly("permitted@example.invalid");
-    var history = inStore(storeId, () -> notifications.history(email, row.id(), null, 10));
+    var history = inStore(storeId, () -> notifications.history(storeId, email, row.id(), null, 10));
     assertThat(history.content()).hasSize(1);
     assertThat(history.content().getFirst().status()).isEqualTo("SENT");
     assertThat(
@@ -323,7 +324,8 @@ class NotificationPostgresTest {
             () ->
                 inStore(
                     storeId,
-                    () -> notifications.queue(email, row.id(), sent.version(), "再送", true)))
+                    () ->
+                        notifications.queue(storeId, email, row.id(), sent.version(), "再送", true)))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -356,11 +358,15 @@ class NotificationPostgresTest {
     var blocked = await(row.id(), "BLOCKED");
     assertThat(transport.results).isEmpty();
     jdbc.update("update t_customer_contacts set business_status='ALLOWED' where id=?", contact);
-    inStore(storeId, () -> notifications.queue(email, row.id(), blocked.version(), "同意再確認", true));
+    inStore(
+        storeId,
+        () -> notifications.queue(storeId, email, row.id(), blocked.version(), "同意再確認", true));
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).hasSize(1);
-    assertThat(inStore(storeId, () -> notifications.history(email, row.id(), null, 10)).content())
+    assertThat(
+            inStore(storeId, () -> notifications.history(storeId, email, row.id(), null, 10))
+                .content())
         .hasSize(2);
   }
 
@@ -371,7 +377,7 @@ class NotificationPostgresTest {
     runTask();
     await(row.id(), "FAILED");
     assertThat(
-            inStore(storeId, () -> notifications.history(email, row.id(), null, 10))
+            inStore(storeId, () -> notifications.history(storeId, email, row.id(), null, 10))
                 .content()
                 .getFirst()
                 .failureCode())
@@ -384,7 +390,9 @@ class NotificationPostgresTest {
             () ->
                 inStore(
                     storeId,
-                    () -> notifications.queue(email, next.id(), unknown.version(), "再送", true)))
+                    () ->
+                        notifications.queue(
+                            storeId, email, next.id(), unknown.version(), "再送", true)))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -430,7 +438,9 @@ class NotificationPostgresTest {
             () ->
                 inStore(
                     storeId,
-                    () -> notifications.queue(email, first.id(), sent.version(), "再送", true)))
+                    () ->
+                        notifications.queue(
+                            storeId, email, first.id(), sent.version(), "再送", true)))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -456,21 +466,24 @@ class NotificationPostgresTest {
             () ->
                 inStore(
                     storeId,
-                    () -> notifications.queue(email, row.id(), unknown.version(), "結果を再確認", true)))
+                    () ->
+                        notifications.queue(
+                            storeId, email, row.id(), unknown.version(), "結果を再確認", true)))
         .isInstanceOf(ConflictException.class);
   }
 
   @Test
   void otherStoreAndDuplicateActionsAreRejected() {
     var row = draft();
-    assertThatThrownBy(() -> inStore(otherStore, () -> notifications.get(email, row.id())))
+    assertThatThrownBy(
+            () -> inStore(otherStore, () -> notifications.get(otherStore, email, row.id())))
         .isInstanceOf(NotFoundException.class);
     queue(row);
     assertThatThrownBy(() -> queue(row)).isInstanceOf(ConflictException.class);
     String source = guest();
     var input = content(source);
-    var a = inStore(storeId, () -> notifications.create(email, input));
-    var b = inStore(storeId, () -> notifications.create(email, input));
+    var a = inStore(storeId, () -> notifications.create(storeId, email, input));
+    var b = inStore(storeId, () -> notifications.create(storeId, email, input));
     assertThat(a.delivery().id()).isEqualTo(b.delivery().id());
     assertThat(b.created()).isFalse();
   }
@@ -506,7 +519,7 @@ class NotificationPostgresTest {
     await(row.id(), "BLOCKED");
     assertThat(transport.results).isEmpty();
     assertThat(
-            inStore(storeId, () -> notifications.history(email, row.id(), null, 10))
+            inStore(storeId, () -> notifications.history(storeId, email, row.id(), null, 10))
                 .content()
                 .getFirst()
                 .failureCode())
@@ -560,7 +573,7 @@ class NotificationPostgresTest {
             c.body(),
             OffsetDateTime.now().plusDays(1),
             c.dedupeKey());
-    var row = inStore(storeId, () -> notifications.create(email, future).delivery());
+    var row = inStore(storeId, () -> notifications.create(storeId, email, future).delivery());
     queue(row);
     runTask();
     assertThat(get(row.id()).status()).isEqualTo("QUEUED");
@@ -635,7 +648,7 @@ class NotificationPostgresTest {
             "本文",
             OffsetDateTime.now().minusMinutes(1),
             UUID.randomUUID().toString());
-    var row = inStore(storeId, () -> notifications.create(email, input).delivery());
+    var row = inStore(storeId, () -> notifications.create(storeId, email, input).delivery());
     queue(row);
     runTask();
     await(row.id(), "SENT");
@@ -667,7 +680,7 @@ class NotificationPostgresTest {
             "本文",
             OffsetDateTime.now().minusMinutes(1),
             UUID.randomUUID().toString());
-    var next = inStore(storeId, () -> notifications.create(email, nextInput).delivery());
+    var next = inStore(storeId, () -> notifications.create(storeId, email, nextInput).delivery());
     queue(next);
     runTask();
     await(next.id(), "BLOCKED");
