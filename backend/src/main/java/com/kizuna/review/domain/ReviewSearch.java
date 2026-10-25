@@ -47,8 +47,8 @@ public record ReviewSearch(
         Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, field, ReviewRecord::getId));
   }
 
-  public Specification<ReviewRecord> specification() {
-    Specification<ReviewRecord> spec = (root, q, cb) -> cb.conjunction();
+  public Specification<ReviewRecord> specification(Long storeId) {
+    Specification<ReviewRecord> spec = (root, q, cb) -> cb.equal(root.get("storeId"), storeId);
     if (query != null) {
       String pattern =
           "%"

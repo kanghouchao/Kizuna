@@ -30,8 +30,8 @@ public class ReviewPublication {
     reviewIds.forEach(ReviewInput::id);
     var result = new LinkedHashMap<String, ApprovedReviewProjection>();
     for (var r :
-        reviews.findByIdInAndStatusAndPermissionStatus(
-            reviewIds, Status.APPROVED, PermissionStatus.GRANTED)) {
+        reviews.findByStoreIdAndIdInAndStatusAndPermissionStatus(
+            storeId, reviewIds, Status.APPROVED, PermissionStatus.GRANTED)) {
       result.put(
           r.getId(),
           new ApprovedReviewProjection(r.getId(), r.getVersion(), r.getDisplayName(), r.getBody()));

@@ -25,7 +25,6 @@ import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -53,22 +52,21 @@ public class ReviewService {
   private final ReviewActors actors;
   private final BusinessAudit audit;
   private final Clock clock;
-  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional
-  public ReviewWriteResponse create(String email, ReviewInput input, String key) {
-    var actor = intakeActor(email, input);
+  public ReviewWriteResponse create(Long storeId, String email, ReviewInput input, String key) {
+    var actor = intakeActor(storeId, email, input);
     key = ReviewInput.key(key);
     String fingerprint = ReviewFingerprint.receipt(input);
-    var existing = operations.findByActorIdAndDedupeKey(actor.id(), key);
-    if (existing.isPresent()) return replay(existing.get(), fingerprint);
+    var existing = operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), key);
+    if (existing.isPresent()) return replay(storeId, existing.get(), fingerprint);
     ReviewInput.requirePast(input.receivedAt(), OffsetDateTime.now(clock));
-    var origin = origin(input);
+    var origin = origin(storeId, input);
     var row =
         reviews.saveAndFlush(
             ReviewRecord.receive(
-                input, actor.id(), actor.name(), origin.checkedAt(), origin.version()));
+                storeId, input, actor.id(), actor.name(), origin.checkedAt(), origin.version()));
     history.save(
         ReviewHistory.record(
             row, Operation.RECEIVED, actor.id(), actor.name(), null, null, null, null));
@@ -85,30 +83,34 @@ public class ReviewService {
     var operation =
         operations.saveAndFlush(
             ReviewOperation.record(actor.id(), key, fingerprint, Operation.RECEIVED, row));
-    return ReviewWriteResponse.of(response(row), operation, false);
+    return ReviewWriteResponse.of(response(storeId, row), operation, false);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public ReviewWriteResponse replayCreate(String email, ReviewInput input, String key) {
-    var actor = intakeActor(email, input);
+  public ReviewWriteResponse replayCreate(
+      Long storeId, String email, ReviewInput input, String key) {
+    var actor = intakeActor(storeId, email, input);
     var operation =
         operations
-            .findByActorIdAndDedupeKey(actor.id(), ReviewInput.key(key))
+            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), ReviewInput.key(key))
             .orElseThrow(() -> new NotFoundException("口コミの受付結果が見つかりません"));
-    return replay(operation, ReviewFingerprint.receipt(input));
+    return replay(storeId, operation, ReviewFingerprint.receipt(input));
   }
 
   @StoreScoped
   @Transactional
-  public ReviewWriteResponse change(String email, ReviewChange change) {
-    var actor = changeActor(email, change);
-    var existing = operations.findByActorIdAndDedupeKey(actor.id(), change.key());
-    if (existing.isPresent()) return replay(existing.get(), change.fingerprint());
+  public ReviewWriteResponse change(Long storeId, String email, ReviewChange change) {
+    var actor = changeActor(storeId, email, change);
+    var existing =
+        operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), change.key());
+    if (existing.isPresent()) return replay(storeId, existing.get(), change.fingerprint());
     var row =
-        reviews.lockById(change.reviewId()).orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
-    existing = operations.findByActorIdAndDedupeKey(actor.id(), change.key());
-    if (existing.isPresent()) return replay(existing.get(), change.fingerprint());
+        reviews
+            .findByIdAndStoreIdForUpdate(change.reviewId(), storeId)
+            .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
+    existing = operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), change.key());
+    if (existing.isPresent()) return replay(storeId, existing.get(), change.fingerprint());
     row.requireVersion(change.version());
     var before = ReviewHistory.Before.of(row);
     String permissionId = null;
@@ -123,7 +125,7 @@ public class ReviewService {
         var p =
             permissions.saveAndFlush(
                 ReviewPermission.grant(
-                    row.getId(),
+                    row,
                     change.basis(),
                     change.eventAt(),
                     change.evidence(),
@@ -135,7 +137,7 @@ public class ReviewService {
         row.revokePermission();
         var p =
             permissions
-                .findByReviewId(row.getId())
+                .findByStoreIdAndReviewId(storeId, row.getId())
                 .orElseThrow(() -> new IllegalStateException("公開許可の記録が見つかりません"));
         p.revoke(
             change.eventAt(),
@@ -184,35 +186,37 @@ public class ReviewService {
         operations.saveAndFlush(
             ReviewOperation.record(
                 actor.id(), change.key(), change.fingerprint(), change.type(), row));
-    return ReviewWriteResponse.of(response(row), operation, false);
+    return ReviewWriteResponse.of(response(storeId, row), operation, false);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public ReviewWriteResponse replayChange(String email, ReviewChange change) {
-    var actor = changeActor(email, change);
+  public ReviewWriteResponse replayChange(Long storeId, String email, ReviewChange change) {
+    var actor = changeActor(storeId, email, change);
     var operation =
         operations
-            .findByActorIdAndDedupeKey(actor.id(), change.key())
+            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), change.key())
             .orElseThrow(() -> new NotFoundException("口コミの操作結果が見つかりません"));
-    return replay(operation, change.fingerprint());
+    return replay(storeId, operation, change.fingerprint());
   }
 
   @StoreScoped
   @Transactional
-  public ReviewWriteResponse correct(String email, ReviewCorrection correction) {
-    var actor = intakeActor(email, correction.input());
-    var existing = operations.findByActorIdAndDedupeKey(actor.id(), correction.key());
-    if (existing.isPresent()) return replay(existing.get(), correction.fingerprint());
+  public ReviewWriteResponse correct(Long storeId, String email, ReviewCorrection correction) {
+    var actor = intakeActor(storeId, email, correction.input());
+    var existing =
+        operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), correction.key());
+    if (existing.isPresent()) return replay(storeId, existing.get(), correction.fingerprint());
     var old =
         reviews
-            .lockById(correction.reviewId())
+            .findByIdAndStoreIdForUpdate(correction.reviewId(), storeId)
             .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
-    existing = operations.findByActorIdAndDedupeKey(actor.id(), correction.key());
-    if (existing.isPresent()) return replay(existing.get(), correction.fingerprint());
+    existing =
+        operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), correction.key());
+    if (existing.isPresent()) return replay(storeId, existing.get(), correction.fingerprint());
     old.requireVersion(correction.version());
     ReviewInput.requirePast(correction.input().receivedAt(), OffsetDateTime.now(clock));
-    var origin = origin(correction.input());
+    var origin = origin(storeId, correction.input());
     var before = ReviewHistory.Before.of(old);
     var row =
         reviews.saveAndFlush(
@@ -291,35 +295,38 @@ public class ReviewService {
                 correction.fingerprint(),
                 Operation.CORRECTION_RECEIVED,
                 row));
-    return ReviewWriteResponse.of(response(row), operation, false);
+    return ReviewWriteResponse.of(response(storeId, row), operation, false);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public ReviewWriteResponse replayCorrection(String email, ReviewCorrection correction) {
-    var actor = intakeActor(email, correction.input());
+  public ReviewWriteResponse replayCorrection(
+      Long storeId, String email, ReviewCorrection correction) {
+    var actor = intakeActor(storeId, email, correction.input());
     var operation =
         operations
-            .findByActorIdAndDedupeKey(actor.id(), correction.key())
+            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), correction.key())
             .orElseThrow(() -> new NotFoundException("訂正結果が見つかりません"));
-    return replay(operation, correction.fingerprint());
+    return replay(storeId, operation, correction.fingerprint());
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public ReviewResponse detail(String email, String id) {
-    actors.require(email, PermissionCode.REVIEW_VIEW);
-    return response(find(id));
+  public ReviewResponse detail(Long storeId, String email, String id) {
+    actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
+    return response(storeId, find(storeId, id));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<ReviewHistoryResponse> history(
-      String email, String id, String cursor, int size) {
-    actors.require(email, PermissionCode.REVIEW_VIEW);
-    find(id);
+      Long storeId, String email, String id, String cursor, int size) {
+    actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
+    find(storeId, id);
     if (size < 1 || size > 100) throw new ServiceException("履歴の取得件数は1〜100件で指定してください");
-    Specification<ReviewHistory> spec = (root, query, cb) -> cb.equal(root.get("reviewId"), id);
+    Specification<ReviewHistory> spec =
+        (root, query, cb) ->
+            cb.and(cb.equal(root.get("storeId"), storeId), cb.equal(root.get("reviewId"), id));
     if (cursor != null) {
       String last = ReviewInput.id(PageCursor.decodeKey(cursor));
       spec = spec.and((root, query, cb) -> cb.lessThan(root.get("id"), last));
@@ -340,40 +347,43 @@ public class ReviewService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Page<ReviewSummaryResponse> list(String email, ReviewSearch search) {
-    actors.require(email, PermissionCode.REVIEW_VIEW);
+  public Page<ReviewSummaryResponse> list(Long storeId, String email, ReviewSearch search) {
+    actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
     return reviews
-        .findBy(search.specification(), q -> q.as(ReviewSummaryView.class).page(search.pageable()))
+        .findBy(
+            search.specification(storeId),
+            q -> q.as(ReviewSummaryView.class).page(search.pageable()))
         .map(ReviewSummaryResponse::of);
   }
 
-  private ReviewDetailsView find(String id) {
+  private ReviewDetailsView find(Long storeId, String id) {
     return reviews
-        .findProjectedById(ReviewInput.id(id))
+        .findProjectedByIdAndStoreId(ReviewInput.id(id), storeId)
         .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
   }
 
-  private AuditActor intakeActor(String email, ReviewInput input) {
-    var actor = actors.require(email, PermissionCode.REVIEW_MANAGE);
-    if (input.originOrderId() != null) actors.require(email, PermissionCode.ORDER_MANAGE);
+  private AuditActor intakeActor(Long storeId, String email, ReviewInput input) {
+    var actor = actors.require(storeId, email, PermissionCode.REVIEW_MANAGE);
+    if (input.originOrderId() != null) actors.require(storeId, email, PermissionCode.ORDER_MANAGE);
     return actor;
   }
 
   private record OriginSnapshot(OffsetDateTime checkedAt, Long version) {}
 
-  private OriginSnapshot origin(ReviewInput input) {
+  private OriginSnapshot origin(Long storeId, ReviewInput input) {
     if (input.originOrderId() == null) return new OriginSnapshot(null, null);
     var facts =
         origins
-            .find(storeContext.getStoreId(), input.originOrderId())
+            .find(storeId, input.originOrderId())
             .orElseThrow(() -> new NotFoundException("関連受注が見つかりません"));
     if (!facts.status().equals("COMPLETED") || facts.completionInvalidated())
       throw new ServiceException("有効な完了受注だけを関連付けできます");
     return new OriginSnapshot(ReviewInput.time(OffsetDateTime.now(clock)), facts.orderVersion());
   }
 
-  private AuditActor changeActor(String email, ReviewChange change) {
+  private AuditActor changeActor(Long storeId, String email, ReviewChange change) {
     return actors.require(
+        storeId,
         email,
         switch (change.type()) {
           case APPROVED, REJECTED -> PermissionCode.REVIEW_MODERATE;
@@ -382,20 +392,21 @@ public class ReviewService {
         });
   }
 
-  private ReviewResponse response(ReviewRecord row) {
-    return response(find(row.getId()));
+  private ReviewResponse response(Long storeId, ReviewRecord row) {
+    return response(storeId, find(storeId, row.getId()));
   }
 
-  private ReviewResponse response(ReviewDetailsView row) {
-    return ReviewResponse.of(row, permissions.findProjectedByReviewId(row.getId()).orElse(null));
+  private ReviewResponse response(Long storeId, ReviewDetailsView row) {
+    return ReviewResponse.of(
+        row, permissions.findProjectedByStoreIdAndReviewId(storeId, row.getId()).orElse(null));
   }
 
-  private ReviewWriteResponse replay(ReviewOperation operation, String hash) {
+  private ReviewWriteResponse replay(Long storeId, ReviewOperation operation, String hash) {
     operation.requireSame(hash);
     var row =
         reviews
-            .findProjectedById(operation.getReviewId())
+            .findProjectedByIdAndStoreId(operation.getReviewId(), storeId)
             .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
-    return ReviewWriteResponse.of(response(row), operation, true);
+    return ReviewWriteResponse.of(response(storeId, row), operation, true);
   }
 }

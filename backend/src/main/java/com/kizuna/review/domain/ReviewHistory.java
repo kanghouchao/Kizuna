@@ -84,20 +84,23 @@ public class ReviewHistory extends StoreScopedEntity {
       String reason,
       String relatedId,
       String permissionId) {
-    return builder()
-        .reviewId(r.getId())
-        .type(type)
-        .actorId(actorId)
-        .actorName(actorName)
-        .beforeVersion(before == null ? null : before.version())
-        .beforeStatus(before == null ? null : before.status())
-        .beforePermissionStatus(before == null ? null : before.permissionStatus())
-        .afterVersion(r.getVersion())
-        .afterStatus(r.getStatus())
-        .afterPermissionStatus(r.getPermissionStatus())
-        .reason(reason)
-        .relatedReviewId(relatedId)
-        .permissionRecordId(permissionId)
-        .build();
+    var history =
+        builder()
+            .reviewId(r.getId())
+            .type(type)
+            .actorId(actorId)
+            .actorName(actorName)
+            .beforeVersion(before == null ? null : before.version())
+            .beforeStatus(before == null ? null : before.status())
+            .beforePermissionStatus(before == null ? null : before.permissionStatus())
+            .afterVersion(r.getVersion())
+            .afterStatus(r.getStatus())
+            .afterPermissionStatus(r.getPermissionStatus())
+            .reason(reason)
+            .relatedReviewId(relatedId)
+            .permissionRecordId(permissionId)
+            .build();
+    history.setStoreId(r.getStoreId());
+    return history;
   }
 }

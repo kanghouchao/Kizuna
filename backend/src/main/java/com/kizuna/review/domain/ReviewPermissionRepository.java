@@ -1,10 +1,10 @@
 package com.kizuna.review.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface ReviewPermissionRepository extends JpaRepository<ReviewPermission, String> {
-  Optional<ReviewPermission> findByReviewId(String reviewId);
+public interface ReviewPermissionRepository extends StoreScopedRepository<ReviewPermission> {
+  Optional<ReviewPermission> findByStoreIdAndReviewId(Long storeId, String reviewId);
 
-  Optional<ReviewPermissionView> findProjectedByReviewId(String reviewId);
+  Optional<ReviewPermissionView> findProjectedByStoreIdAndReviewId(Long storeId, String reviewId);
 }

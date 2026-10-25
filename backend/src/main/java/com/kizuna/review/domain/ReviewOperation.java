@@ -45,14 +45,17 @@ public class ReviewOperation extends StoreScopedEntity {
 
   public static ReviewOperation record(
       Long actorId, String key, String hash, Operation type, ReviewRecord result) {
-    return builder()
-        .actorId(actorId)
-        .dedupeKey(key)
-        .fingerprint(hash)
-        .type(type)
-        .reviewId(result.getId())
-        .committedVersion(result.getVersion())
-        .build();
+    var operation =
+        builder()
+            .actorId(actorId)
+            .dedupeKey(key)
+            .fingerprint(hash)
+            .type(type)
+            .reviewId(result.getId())
+            .committedVersion(result.getVersion())
+            .build();
+    operation.setStoreId(result.getStoreId());
+    return operation;
   }
 
   public void requireSame(String hash) {

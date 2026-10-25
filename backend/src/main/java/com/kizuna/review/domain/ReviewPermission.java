@@ -60,20 +60,23 @@ public class ReviewPermission extends StoreScopedEntity {
   private OffsetDateTime revokedAt;
 
   public static ReviewPermission grant(
-      String reviewId,
+      ReviewRecord review,
       Basis basis,
       OffsetDateTime at,
       String evidence,
       Long actorId,
       String actorName) {
-    return builder()
-        .reviewId(reviewId)
-        .basisType(basis)
-        .grantedAt(at)
-        .evidenceNote(evidence)
-        .recordedBy(actorId)
-        .recorderName(actorName)
-        .build();
+    var permission =
+        builder()
+            .reviewId(review.getId())
+            .basisType(basis)
+            .grantedAt(at)
+            .evidenceNote(evidence)
+            .recordedBy(actorId)
+            .recorderName(actorName)
+            .build();
+    permission.setStoreId(review.getStoreId());
+    return permission;
   }
 
   public void revoke(
