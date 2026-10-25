@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -48,11 +49,11 @@ class AttachmentAsyncCorrelationTest {
     var holder = new StoreScopeHolder();
     var scope = new StoreScopeExecutor(store, holder, id -> true);
     var controller =
-        new AttachmentController(service, receiver, store, scope, holder, new AppProperties());
+        new AttachmentController(service, receiver, scope, holder, new AppProperties());
     var filter = new RequestCorrelationFilter(store, holder);
     var receivedId = new AtomicReference<String>();
     var storedId = new AtomicReference<String>();
-    when(service.preflight(anyString(), nullable(String.class), anyString()))
+    when(service.preflight(eq(1L), anyString(), nullable(String.class), anyString()))
         .thenReturn(UUID.randomUUID());
     when(receiver.admit(any())).thenReturn(admission);
     when(admission.receive(any()))
@@ -61,7 +62,8 @@ class AttachmentAsyncCorrelationTest {
               receivedId.set(ThreadContext.get("requestId"));
               return new AttachmentBodyReceiver.Received(Path.of("unused"), "hash", "image/png");
             });
-    when(service.upload(anyString(), nullable(String.class), any(), any(), any(), any(), any()))
+    when(service.upload(
+            eq(1L), anyString(), nullable(String.class), any(), any(), any(), any(), any()))
         .thenAnswer(
             invocation -> {
               storedId.set(ThreadContext.get("requestId"));
@@ -86,8 +88,8 @@ class AttachmentAsyncCorrelationTest {
               store.setStoreId(1L);
               task.set(
                   recovery
-                      ? controller.recover("a", "image", "key", request, () -> "actor")
-                      : controller.upload("a", "key", request, () -> "actor"));
+                      ? controller.recover(1L, "a", "image", "key", request, () -> "actor")
+                      : controller.upload(1L, "a", "key", request, () -> "actor"));
             });
         SecurityContextHolder.clearContext();
         assertThat(ThreadContext.get("requestId")).isNull();

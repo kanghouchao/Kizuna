@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -45,6 +46,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ApplicantServiceTest {
+  private static final Long STORE_ID = 7L;
   @Mock ApplicantRepository applicants;
   @Mock ApplicantStatusHistoryRepository histories;
   @Mock UserRepository users;
@@ -70,9 +72,8 @@ class ApplicantServiceTest {
     service =
         new ApplicantService(
             applicants, histories, users, Mappers.getMapper(ApplicantMapper.class), audit);
-    applicant = Applicant.receive(intake.toIntake());
+    applicant = Applicant.receive(STORE_ID, intake.toIntake());
     applicant.setId("a");
-    applicant.setStoreId(1L);
     ReflectionTestUtils.setField(applicant, "version", 0L);
   }
 
@@ -83,7 +84,7 @@ class ApplicantServiceTest {
   }
 
   void lock() {
-    when(applicants.findScopedForUpdate("a")).thenReturn(Optional.of(applicant));
+    when(applicants.findByIdAndStoreIdForUpdate("a", STORE_ID)).thenReturn(Optional.of(applicant));
   }
 
   @Test
@@ -94,17 +95,16 @@ class ApplicantServiceTest {
             call -> {
               Applicant value = call.getArgument(0);
               value.setId("a");
-              value.setStoreId(1L);
               ReflectionTestUtils.setField(value, "version", 0L);
               return value;
             });
-    var response = service.create(intake, "actor");
+    var response = service.create(STORE_ID, intake, "actor");
     assertThat(response.status()).isEqualTo(ApplicantStatus.RECEIVED);
     assertThat(response.address()).isEqualTo("住所");
     assertThat(response.modifiedBy()).isEqualTo(9L);
     verify(audit)
         .recordCurrent(
-            1L,
+            STORE_ID,
             "APPLICANT_RECEIVED",
             "APPLICANT",
             "a",
@@ -114,22 +114,25 @@ class ApplicantServiceTest {
     verify(histories).save(captor.capture());
     assertThat(captor.getValue().getPreviousStatus()).isNull();
     assertThat(captor.getValue().getActorId()).isEqualTo(9L);
+    assertThat(captor.getValue().getStoreId()).isEqualTo(STORE_ID);
   }
 
   @Test
   void editsEvenIdenticalIntakeAndInterviewUnderVersionCheck() {
     actor();
     lock();
-    service.update("a", new ApplicantUpdateRequest(0L, intake), "actor");
+    service.update(STORE_ID, "a", new ApplicantUpdateRequest(0L, intake), "actor");
     service.interview(
+        STORE_ID,
         "a",
         new ApplicantInterviewRequest(0L, OffsetDateTime.now(), "担当", "私用メモ", Map.of("確認", true)),
         "actor");
     assertThat(applicant.getEditSequence()).isEqualTo(2);
     assertThat(applicant.getInterview().notes()).isEqualTo("私用メモ");
     var safe = Map.of("status", "RECEIVED", "version", "0");
-    verify(audit).recordCurrent(1L, "APPLICANT_INTAKE_UPDATED", "APPLICANT", "a", safe, safe);
-    verify(audit).recordCurrent(1L, "APPLICANT_INTERVIEW_UPDATED", "APPLICANT", "a", safe, safe);
+    verify(audit).recordCurrent(STORE_ID, "APPLICANT_INTAKE_UPDATED", "APPLICANT", "a", safe, safe);
+    verify(audit)
+        .recordCurrent(STORE_ID, "APPLICANT_INTERVIEW_UPDATED", "APPLICANT", "a", safe, safe);
   }
 
   @Test
@@ -137,7 +140,10 @@ class ApplicantServiceTest {
     actor();
     lock();
     service.transition(
-        "a", new ApplicantTransitionRequest(0L, ApplicantStatus.SCREENING, "  選考開始  "), "actor");
+        STORE_ID,
+        "a",
+        new ApplicantTransitionRequest(0L, ApplicantStatus.SCREENING, "  選考開始  "),
+        "actor");
     var captor = ArgumentCaptor.forClass(ApplicantStatusHistory.class);
     verify(histories).save(captor.capture());
     var history = captor.getValue();
@@ -145,9 +151,10 @@ class ApplicantServiceTest {
     assertThat(history.getNewStatus()).isEqualTo(ApplicantStatus.SCREENING);
     assertThat(history.getReason()).isEqualTo("選考開始");
     assertThat(history.getActorId()).isEqualTo(9L);
+    assertThat(history.getStoreId()).isEqualTo(STORE_ID);
     verify(audit)
         .recordCurrent(
-            1L,
+            STORE_ID,
             "APPLICANT_STATUS_CHANGED",
             "APPLICANT",
             "a",
@@ -158,7 +165,8 @@ class ApplicantServiceTest {
   @Test
   void rejectsStaleBeforeAnyMutation() {
     lock();
-    assertThatThrownBy(() -> service.update("a", new ApplicantUpdateRequest(3L, intake), "actor"))
+    assertThatThrownBy(
+            () -> service.update(STORE_ID, "a", new ApplicantUpdateRequest(3L, intake), "actor"))
         .isInstanceOf(ConflictException.class);
     assertThat(applicant.getEditSequence()).isZero();
     verifyNoInteractions(audit);
@@ -171,16 +179,18 @@ class ApplicantServiceTest {
     lock();
     for (var status : List.of(ApplicantStatus.HIRED, ApplicantStatus.REJECTED)) {
       var request = new ApplicantTransitionRequest(0L, status, "判断理由");
-      assertThatThrownBy(() -> service.decide("a", request))
+      assertThatThrownBy(() -> service.decide(STORE_ID, "a", request))
           .isInstanceOf(ConflictException.class)
           .hasMessageContaining("未設定");
-      assertThatThrownBy(() -> service.transition("a", request, "actor"))
+      assertThatThrownBy(() -> service.transition(STORE_ID, "a", request, "actor"))
           .isInstanceOf(ServiceException.class);
     }
     assertThatThrownBy(
             () ->
                 service.decide(
-                    "a", new ApplicantTransitionRequest(0L, ApplicantStatus.SCREENING, "確認")))
+                    STORE_ID,
+                    "a",
+                    new ApplicantTransitionRequest(0L, ApplicantStatus.SCREENING, "確認")))
         .isInstanceOf(ServiceException.class);
     assertThat(applicant.getStatus()).isEqualTo(ApplicantStatus.RECEIVED);
     verify(histories, never()).save(any());
@@ -188,18 +198,30 @@ class ApplicantServiceTest {
 
   @Test
   void scopeInvisibleReadsAndMutationsFailClosed() {
-    assertThatThrownBy(() -> service.get("outside")).isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.history("outside", null, 20))
+    assertThatThrownBy(() -> service.get(STORE_ID, "outside"))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.history(STORE_ID, "outside", null, 20))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
-            () -> service.update("outside", new ApplicantUpdateRequest(0L, intake), "actor"))
+            () ->
+                service.update(
+                    STORE_ID, "outside", new ApplicantUpdateRequest(0L, intake), "actor"))
         .isInstanceOf(NotFoundException.class);
-    verify(histories, never()).findByApplicantIdOrderByCreatedAtDescIdDesc(any(), any());
+    verify(histories, never())
+        .findByStoreIdAndApplicantIdOrderByCreatedAtDescIdDesc(any(), any(), any());
+  }
+
+  @Test
+  void applicantIsReadOnlyWithinTheGivenStore() {
+    // 別店舗の id での呼出を厳格スタブの引数不一致ではなく未検出として観測するため lenient にする。
+    lenient().when(applicants.findByIdAndStoreId("a", STORE_ID)).thenReturn(Optional.of(applicant));
+    assertThat(service.get(STORE_ID, "a").id()).isEqualTo("a");
+    assertThatThrownBy(() -> service.get(STORE_ID + 1, "a")).isInstanceOf(NotFoundException.class);
   }
 
   @Test
   void missingActorCannotCreateRecords() {
-    assertThatThrownBy(() -> service.create(intake, "missing"))
+    assertThatThrownBy(() -> service.create(STORE_ID, intake, "missing"))
         .isInstanceOf(StaleSessionException.class);
     verify(applicants, never()).saveAndFlush(any());
   }
@@ -210,15 +232,16 @@ class ApplicantServiceTest {
     lock();
     doThrow(new IllegalStateException("監査を保存できません"))
         .when(audit)
-        .recordCurrent(eq(1L), any(), any(), any(), any(), any());
-    assertThatThrownBy(() -> service.update("a", new ApplicantUpdateRequest(0L, intake), "actor"))
+        .recordCurrent(eq(STORE_ID), any(), any(), any(), any(), any());
+    assertThatThrownBy(
+            () -> service.update(STORE_ID, "a", new ApplicantUpdateRequest(0L, intake), "actor"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("監査を保存できません");
   }
 
   @Test
   void historyCursorUsesSameTupleAndCapsSize() {
-    when(applicants.findById("a")).thenReturn(Optional.of(applicant));
+    when(applicants.findByIdAndStoreId("a", STORE_ID)).thenReturn(Optional.of(applicant));
     var row =
         ApplicantStatusHistory.builder()
             .applicantId("a")
@@ -228,11 +251,13 @@ class ApplicantServiceTest {
             .build();
     row.setId("h");
     row.setCreatedAt(OffsetDateTime.parse("2026-10-01T00:00:00Z"));
-    when(histories.findByApplicantIdOrderByCreatedAtDescIdDesc("a", Limit.of(2)))
+    when(histories.findByStoreIdAndApplicantIdOrderByCreatedAtDescIdDesc(
+            STORE_ID, "a", Limit.of(2)))
         .thenReturn(List.of(row, row));
-    var page = service.history("a", null, 1);
+    var page = service.history(STORE_ID, "a", null, 1);
     assertThat(page.content()).hasSize(1);
-    when(histories.findAfter("a", row.getCreatedAt(), "h", Limit.of(101))).thenReturn(List.of());
-    assertThat(service.history("a", page.nextCursor(), 1000).content()).isEmpty();
+    when(histories.findAfter(STORE_ID, "a", row.getCreatedAt(), "h", Limit.of(101)))
+        .thenReturn(List.of());
+    assertThat(service.history(STORE_ID, "a", page.nextCursor(), 1000).content()).isEmpty();
   }
 }

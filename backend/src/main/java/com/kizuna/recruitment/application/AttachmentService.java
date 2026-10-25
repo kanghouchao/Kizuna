@@ -54,17 +54,18 @@ public class AttachmentService {
   }
 
   @PreAuthorize(WRITE)
-  public UUID preflight(String applicantId, String uploadId, String rawKey) {
+  public UUID preflight(Long storeId, String applicantId, String uploadId, String rawKey) {
     storage.requireConfigured();
     UUID key = operationKey(rawKey);
-    transactions.preflight(applicantId, uploadId, key);
+    transactions.preflight(storeId, applicantId, uploadId, key);
     return key;
   }
 
   @PreAuthorize(WRITE)
-  public AttachmentUploadResponse operation(String applicantId, String rawKey) {
+  public AttachmentUploadResponse operation(Long storeId, String applicantId, String rawKey) {
     storage.requireConfigured();
-    return AttachmentUploadResponse.from(transactions.operation(applicantId, operationKey(rawKey)));
+    return AttachmentUploadResponse.from(
+        transactions.operation(storeId, applicantId, operationKey(rawKey)));
   }
 
   private static UUID operationKey(String rawKey) {
@@ -79,19 +80,22 @@ public class AttachmentService {
   }
 
   @PreAuthorize(READ)
-  public CursorPage<AttachmentSummaryResponse> list(String id, String cursor, int size) {
+  public CursorPage<AttachmentSummaryResponse> list(
+      Long storeId, String id, String cursor, int size) {
     storage.requireConfigured();
-    return transactions.list(id, true, cursor, size).map(AttachmentSummaryResponse::from);
+    return transactions.list(storeId, id, true, cursor, size).map(AttachmentSummaryResponse::from);
   }
 
   @PreAuthorize(WRITE)
-  public CursorPage<AttachmentUploadResponse> uploads(String id, String cursor, int size) {
+  public CursorPage<AttachmentUploadResponse> uploads(
+      Long storeId, String id, String cursor, int size) {
     storage.requireConfigured();
-    return transactions.list(id, false, cursor, size).map(AttachmentUploadResponse::from);
+    return transactions.list(storeId, id, false, cursor, size).map(AttachmentUploadResponse::from);
   }
 
   @PreAuthorize(WRITE)
   public AttachmentTransactions.Completion upload(
+      Long storeId,
       String id,
       String uploadId,
       UUID key,
@@ -103,14 +107,15 @@ public class AttachmentService {
     AttachmentUpload reserved = null;
     boolean normalizing = false;
     try {
-      reserved = transactions.lookup(id, uploadId, key, originalHash, mediaType).orElse(null);
+      reserved =
+          transactions.lookup(storeId, id, uploadId, key, originalHash, mediaType).orElse(null);
       if (reserved != null) {
         if (reserved.getStatus() == AttachmentUpload.Status.READY)
           return new AttachmentTransactions.Completion(
               false, AttachmentSummaryResponse.from(reserved));
         var completed =
             transactions.complete(
-                id, reserved.getId(), key, originalHash, mediaType, null, actorEmail);
+                storeId, id, reserved.getId(), key, originalHash, mediaType, null, actorEmail);
         if (completed != null) return completed;
         if (!reserved.getNormalizerVersion().equals(RasterImageNormalizer.VERSION))
           throw new AttachmentNormalizationException("元の画像変換方式を利用できません。回復を待ってください");
@@ -120,9 +125,10 @@ public class AttachmentService {
         normalizing = false;
         if (!originalHash.equals(content.originalSha256()))
           throw new ConflictException("受信画像の一致を確認できません。再選択してください");
-        if (reserved == null) reserved = transactions.reserve(id, key, content, actorEmail);
+        if (reserved == null)
+          reserved = transactions.reserve(storeId, id, key, content, actorEmail);
         return transactions.complete(
-            id, reserved.getId(), key, originalHash, mediaType, content, actorEmail);
+            storeId, id, reserved.getId(), key, originalHash, mediaType, content, actorEmail);
       }
     } catch (PessimisticLockingFailureException exception) {
       throw new ConflictException("同じアップロードを処理中です。時間をおいて再試行してください");
@@ -131,6 +137,7 @@ public class AttachmentService {
     } catch (RuntimeException exception) {
       if (reserved != null)
         markFailure(
+            storeId,
             id,
             reserved.getId(),
             exception instanceof AttachmentNormalizationException || normalizing
@@ -145,15 +152,15 @@ public class AttachmentService {
       throw unavailable();
     } catch (IOException exception) {
       if (reserved != null)
-        markFailure(id, reserved.getId(), AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
+        markFailure(storeId, id, reserved.getId(), AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
       throw unavailable();
     }
   }
 
   @PreAuthorize(READ)
-  public Download download(String id, String attachmentId, boolean head) {
+  public Download download(Long storeId, String id, String attachmentId, boolean head) {
     storage.requireConfigured();
-    AttachmentObject object = transactions.download(id, attachmentId);
+    AttachmentObject object = transactions.download(storeId, id, attachmentId);
     try {
       if (head) {
         storage.verifyMetadata(object);
@@ -165,9 +172,10 @@ public class AttachmentService {
     }
   }
 
-  private void markFailure(String id, String uploadId, AttachmentUpload.Failure failure) {
+  private void markFailure(
+      Long storeId, String id, String uploadId, AttachmentUpload.Failure failure) {
     try {
-      transactions.recordFailure(id, uploadId, failure);
+      transactions.recordFailure(storeId, id, uploadId, failure);
     } catch (RuntimeException ignored) {
       // 保存失敗時にも、先行確定したPENDINGの所有記録を残して回復可能にする。
     }

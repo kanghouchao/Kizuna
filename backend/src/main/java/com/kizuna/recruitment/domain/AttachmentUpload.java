@@ -72,6 +72,7 @@ public class AttachmentUpload extends StoreScopedEntity {
   private Failure failure;
 
   public static AttachmentUpload reserve(
+      Long storeId,
       String applicantId,
       UUID key,
       String originalSha256,
@@ -93,6 +94,7 @@ public class AttachmentUpload extends StoreScopedEntity {
       throw new IllegalArgumentException("添付の予約情報が不正です");
     }
     AttachmentUpload upload = new AttachmentUpload();
+    upload.setStoreId(storeId);
     upload.applicantId = applicantId;
     upload.idempotencyKey = Objects.requireNonNull(key);
     upload.objectId = UUID.randomUUID();

@@ -10,6 +10,7 @@ import com.kizuna.recruitment.api.dto.ApplicantUpdateRequest;
 import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.application.ApplicantService;
 import com.kizuna.recruitment.domain.ApplicantStatus;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -38,10 +39,11 @@ public class ApplicantController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW')")
   public Page<ApplicantSummaryResponse> list(
+      @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) ApplicantStatus status,
       @PageableDefault(size = 20) Pageable pageable) {
-    return applicants.list(search, status, pageable);
+    return applicants.list(storeId, search, status, pageable);
   }
 
   @GetMapping("/policy")
@@ -52,58 +54,66 @@ public class ApplicantController {
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW')")
-  public ApplicantResponse get(@PathVariable String id) {
-    return applicants.get(id);
+  public ApplicantResponse get(@CurrentStore Long storeId, @PathVariable String id) {
+    return applicants.get(storeId, id);
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW') and hasAuthority('PERM_RECRUITMENT_MANAGE')")
   public ResponseEntity<ApplicantResponse> create(
-      @Valid @RequestBody ApplicantIntakeRequest request, Principal principal) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody ApplicantIntakeRequest request,
+      Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(applicants.create(request, principal.getName()));
+        .body(applicants.create(storeId, request, principal.getName()));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW') and hasAuthority('PERM_RECRUITMENT_MANAGE')")
   public ApplicantResponse update(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody ApplicantUpdateRequest request,
       Principal principal) {
-    return applicants.update(id, request, principal.getName());
+    return applicants.update(storeId, id, request, principal.getName());
   }
 
   @PutMapping("/{id}/interview")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW') and hasAuthority('PERM_RECRUITMENT_MANAGE')")
   public ApplicantResponse interview(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody ApplicantInterviewRequest request,
       Principal principal) {
-    return applicants.interview(id, request, principal.getName());
+    return applicants.interview(storeId, id, request, principal.getName());
   }
 
   @PostMapping("/{id}/transitions")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW') and hasAuthority('PERM_RECRUITMENT_MANAGE')")
   public ApplicantResponse transition(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody ApplicantTransitionRequest request,
       Principal principal) {
-    return applicants.transition(id, request, principal.getName());
+    return applicants.transition(storeId, id, request, principal.getName());
   }
 
   @PostMapping("/{id}/decision")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW') and hasAuthority('PERM_RECRUITMENT_DECIDE')")
   public ApplicantResponse decide(
-      @PathVariable String id, @Valid @RequestBody ApplicantTransitionRequest request) {
-    return applicants.decide(id, request);
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody ApplicantTransitionRequest request) {
+    return applicants.decide(storeId, id, request);
   }
 
   @GetMapping("/{id}/history")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW')")
   public CursorPage<ApplicantHistoryResponse> history(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return applicants.history(id, cursor, size);
+    return applicants.history(storeId, id, cursor, size);
   }
 }

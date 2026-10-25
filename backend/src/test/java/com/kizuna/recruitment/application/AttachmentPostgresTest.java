@@ -92,6 +92,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @EnabledIfEnvironmentVariable(named = "KIZUNA_ATTACHMENT_TEST_JDBC_URL", matches = ".+")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AttachmentPostgresTest {
+  private static final Long STORE_ID = 1L;
+  private static final Long OTHER_STORE_ID = 2L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate transactions;
@@ -136,7 +138,7 @@ class AttachmentPostgresTest {
     var limits = context.getBean(AppProperties.class).getPrivateAttachments();
     limits.setMaxApplicantFiles(20);
     limits.setMaxApplicantBytes(200L * 1024 * 1024);
-    authorize(1L);
+    authorize(STORE_ID);
   }
 
   private void authorize(Long storeId) {
@@ -151,6 +153,7 @@ class AttachmentPostgresTest {
         tx -> {
           var applicant =
               Applicant.receive(
+                  STORE_ID,
                   new ApplicantIntake(
                       "合成応募者",
                       ReceptionChannel.WEB,
@@ -163,7 +166,6 @@ class AttachmentPostgresTest {
                       null,
                       null,
                       null));
-          applicant.setStoreId(1L);
           applicant.recordEditor(9L);
           em.persist(applicant);
           em.flush();
@@ -183,6 +185,7 @@ class AttachmentPostgresTest {
   private AttachmentTransactions.Completion complete(
       String applicant, AttachmentUpload upload, NormalizedImage image) {
     return service.complete(
+        STORE_ID,
         applicant,
         upload.getId(),
         upload.getIdempotencyKey(),
@@ -218,7 +221,8 @@ class AttachmentPostgresTest {
                 source.sizeBytes(),
                 failure.equals("version") ? "historical-version" : source.normalizerVersion());
         var upload =
-            service.reserve(applicant, UUID.randomUUID(), reservedContent, "operator@example.test");
+            service.reserve(
+                STORE_ID, applicant, UUID.randomUUID(), reservedContent, "operator@example.test");
         doThrow(new AttachmentStorageMissingException()).when(storage).readVerified(any());
         if (failure.equals("busy")) {
           when(normalizer.normalize(source.path(), source.mediaType()))
@@ -240,6 +244,7 @@ class AttachmentPostgresTest {
         assertThatThrownBy(
                 () ->
                     orchestration.upload(
+                        STORE_ID,
                         applicant,
                         upload.getId(),
                         upload.getIdempotencyKey(),
@@ -260,6 +265,7 @@ class AttachmentPostgresTest {
         assertThat(
                 orchestration
                     .upload(
+                        STORE_ID,
                         applicant,
                         upload.getId(),
                         upload.getIdempotencyKey(),
@@ -286,17 +292,24 @@ class AttachmentPostgresTest {
     var applicant = applicant();
     var key = UUID.randomUUID();
     try (var image = content()) {
-      var upload = service.reserve(applicant, key, image, "operator@example.test");
+      var upload = service.reserve(STORE_ID, applicant, key, image, "operator@example.test");
       assertThat(status(upload.getId())).isEqualTo("PENDING");
-      assertThat(service.reserve(applicant, key, image, "operator@example.test").getId())
+      assertThat(service.reserve(STORE_ID, applicant, key, image, "operator@example.test").getId())
           .isEqualTo(upload.getId());
-      authorize(2L);
+      authorize(OTHER_STORE_ID);
       assertThatThrownBy(
-              () -> service.lookup(applicant, null, key, image.originalSha256(), image.mediaType()))
+              () ->
+                  service.lookup(
+                      OTHER_STORE_ID,
+                      applicant,
+                      null,
+                      key,
+                      image.originalSha256(),
+                      image.mediaType()))
           .isInstanceOf(NotFoundException.class);
-      assertThatThrownBy(() -> service.download(applicant, upload.getId()))
+      assertThatThrownBy(() -> service.download(OTHER_STORE_ID, applicant, upload.getId()))
           .isInstanceOf(NotFoundException.class);
-      authorize(1L);
+      authorize(STORE_ID);
       assertThat(complete(applicant, upload, image).created()).isTrue();
       assertThat(complete(applicant, upload, image).created()).isFalse();
       assertThat(auditCount(upload.getId())).isEqualTo(1);
@@ -307,7 +320,7 @@ class AttachmentPostgresTest {
                   upload.getId()))
           .contains("applicant_id", "attachment_id")
           .doesNotContain("sha256", "image/png", "object_id");
-      assertThat(service.list(applicant, true, null, 20).content()).hasSize(1);
+      assertThat(service.list(STORE_ID, applicant, true, null, 20).content()).hasSize(1);
     }
   }
 
@@ -315,7 +328,8 @@ class AttachmentPostgresTest {
   void auditFailureRollsBackReadyButKeepsDurableOwnershipAndCanRecover() throws Exception {
     var applicant = applicant();
     try (var image = content()) {
-      var upload = service.reserve(applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload =
+          service.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
       jdbc.execute(
           "alter table t_audit_events add constraint ck_attachment_test_fail check(action <> 'APPLICANT_ATTACHMENT_STORED') not valid");
       try {
@@ -335,7 +349,8 @@ class AttachmentPostgresTest {
   void withdrawalDuringRemoteWriteIsObservedBeforeReadyCommit() throws Exception {
     var applicant = applicant();
     try (var image = content()) {
-      var upload = service.reserve(applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload =
+          service.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
       doAnswer(
               call -> {
                 jdbc.update(
@@ -359,7 +374,8 @@ class AttachmentPostgresTest {
     var release = new CountDownLatch(1);
     try (var image = content();
         var executor = Executors.newSingleThreadExecutor()) {
-      var upload = service.reserve(applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload =
+          service.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
       doAnswer(
               call -> {
                 started.countDown();
@@ -372,7 +388,7 @@ class AttachmentPostgresTest {
       var first =
           executor.submit(
               () -> {
-                authorize(1L);
+                authorize(STORE_ID);
                 try {
                   return complete(applicant, upload, image);
                 } finally {
@@ -406,14 +422,17 @@ class AttachmentPostgresTest {
         var executor = Executors.newFixedThreadPool(2);
         var first = new DatabaseTransaction();
         var second = new DatabaseTransaction()) {
-      var recovery = service.reserve(applicant, UUID.randomUUID(), image, "operator@example.test");
+      var recovery =
+          service.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
       service.recordFailure(
-          applicant, recovery.getId(), AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
+          STORE_ID, applicant, recovery.getId(), AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
       var winner =
           first.submit(
               executor,
               () -> {
-                var upload = service.reserve(applicant, winningKey, image, "operator@example.test");
+                var upload =
+                    service.reserve(
+                        STORE_ID, applicant, winningKey, image, "operator@example.test");
                 first.hold();
                 return upload;
               });
@@ -421,7 +440,8 @@ class AttachmentPostgresTest {
       var loser =
           second.submit(
               executor,
-              () -> service.reserve(applicant, losingKey, image, "operator@example.test"));
+              () ->
+                  service.reserve(STORE_ID, applicant, losingKey, image, "operator@example.test"));
       second.awaitBlockedBy(first);
       first.close();
       var committed = winner.get(5, TimeUnit.SECONDS);
@@ -432,10 +452,11 @@ class AttachmentPostgresTest {
       assertThat(status(recovery.getId())).isEqualTo("RECOVERY_REQUIRED");
       assertThat(status(committed.getId())).isEqualTo("PENDING");
       assertThat(
-              service.lookup(applicant, null, losingKey, image.originalSha256(), image.mediaType()))
+              service.lookup(
+                  STORE_ID, applicant, null, losingKey, image.originalSha256(), image.mediaType()))
           .isEmpty();
-      assertThat(service.list(applicant, false, null, 20).content()).hasSize(2);
-      assertThat(service.list(applicant, true, null, 20).content()).isEmpty();
+      assertThat(service.list(STORE_ID, applicant, false, null, 20).content()).hasSize(2);
+      assertThat(service.list(STORE_ID, applicant, true, null, 20).content()).isEmpty();
       assertApplicantAuditCount(applicant, 0);
       verifyNoInteractions(storage);
       assertThat(complete(applicant, committed, image).created()).isTrue();
@@ -460,14 +481,16 @@ class AttachmentPostgresTest {
           first.submit(
               executor,
               () -> {
-                var upload = service.reserve(applicant, key, image, "operator@example.test");
+                var upload =
+                    service.reserve(STORE_ID, applicant, key, image, "operator@example.test");
                 first.hold();
                 return upload;
               });
       first.awaitHeld();
       var replay =
           second.submit(
-              executor, () -> service.reserve(applicant, key, image, "operator@example.test"));
+              executor,
+              () -> service.reserve(STORE_ID, applicant, key, image, "operator@example.test"));
       second.awaitBlockedBy(first);
       first.close();
       var committed = original.get(5, TimeUnit.SECONDS);
@@ -477,7 +500,7 @@ class AttachmentPostgresTest {
       verifyNoInteractions(storage);
       assertThat(complete(applicant, committed, image).created()).isTrue();
       assertThat(complete(applicant, replay.get(), image).created()).isFalse();
-      assertThat(service.list(applicant, true, null, 20).content()).hasSize(1);
+      assertThat(service.list(STORE_ID, applicant, true, null, 20).content()).hasSize(1);
       assertReservations(applicant, 1, 3);
       assertApplicantAuditCount(applicant, 1);
     }
@@ -499,7 +522,8 @@ class AttachmentPostgresTest {
               executor,
               () -> {
                 var upload =
-                    service.reserve(applicant, UUID.randomUUID(), image, "operator@example.test");
+                    service.reserve(
+                        STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
                 first.hold();
                 return upload;
               });
@@ -509,7 +533,7 @@ class AttachmentPostgresTest {
               executor,
               () ->
                   service.reserve(
-                      otherApplicant, UUID.randomUUID(), image, "operator@example.test"));
+                      STORE_ID, otherApplicant, UUID.randomUUID(), image, "operator@example.test"));
       assertThat(independent.get(5, TimeUnit.SECONDS).getStatus())
           .isEqualTo(AttachmentUpload.Status.PENDING);
       assertThat(second.connectionId.get()).isNotEqualTo(first.connectionId.get());
@@ -543,7 +567,7 @@ class AttachmentPostgresTest {
           first.submit(
               executor,
               () -> {
-                service.reserve(applicant, abortedKey, image, "operator@example.test");
+                service.reserve(STORE_ID, applicant, abortedKey, image, "operator@example.test");
                 first.hold();
                 throw new IllegalStateException("合成トランザクションの失敗");
               });
@@ -551,7 +575,8 @@ class AttachmentPostgresTest {
       var waiting =
           second.submit(
               executor,
-              () -> service.reserve(applicant, waitingKey, image, "operator@example.test"));
+              () ->
+                  service.reserve(STORE_ID, applicant, waitingKey, image, "operator@example.test"));
       second.awaitBlockedBy(first);
       first.close();
       assertThatThrownBy(() -> aborted.get(5, TimeUnit.SECONDS))
@@ -562,7 +587,7 @@ class AttachmentPostgresTest {
       assertThat(committed.getStatus()).isEqualTo(AttachmentUpload.Status.PENDING);
       assertThat(
               service.lookup(
-                  applicant, null, abortedKey, image.originalSha256(), image.mediaType()))
+                  STORE_ID, applicant, null, abortedKey, image.originalSha256(), image.mediaType()))
           .isEmpty();
       assertReservations(applicant, 1, 3);
       assertApplicantAuditCount(applicant, 0);
@@ -606,7 +631,7 @@ class AttachmentPostgresTest {
     <T> Future<T> submit(ExecutorService executor, Supplier<T> action) {
       return executor.submit(
           () -> {
-            authorize(1L);
+            authorize(STORE_ID);
             try {
               return transactions.execute(
                   tx -> {
@@ -663,7 +688,7 @@ class AttachmentPostgresTest {
   void ownedUploadsBlockPhysicalApplicantAndStoreDeletion() throws Exception {
     var applicant = applicant();
     try (var image = content()) {
-      service.reserve(applicant, UUID.randomUUID(), image, "operator@example.test");
+      service.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
       assertThatThrownBy(() -> jdbc.update("delete from t_applicants where id=?", applicant))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThatThrownBy(() -> jdbc.update("delete from attachment_test_stores where id=1"))

@@ -36,7 +36,8 @@ class ApplicantTest {
 
   @Test
   void progressesWithInterviewAndReasonAndWithdrawalIsTerminal() {
-    var applicant = Applicant.receive(intake());
+    var applicant = Applicant.receive(7L, intake());
+    assertThat(applicant.getStoreId()).isEqualTo(7L);
     assertThat(applicant.getStatus()).isEqualTo(ApplicantStatus.RECEIVED);
     applicant.transition(ApplicantStatus.SCREENING, "確認開始");
     assertThatThrownBy(() -> applicant.transition(ApplicantStatus.INTERVIEWED, "面接終了"))
@@ -57,7 +58,7 @@ class ApplicantTest {
   @EnumSource(ApplicantStatus.class)
   void enforcesEveryTransitionEdge(ApplicantStatus source) {
     for (ApplicantStatus target : ApplicantStatus.values()) {
-      var applicant = Applicant.receive(intake());
+      var applicant = Applicant.receive(7L, intake());
       applicant.recordInterview(interview());
       ReflectionTestUtils.setField(applicant, "status", source);
       boolean allowed =
@@ -79,7 +80,7 @@ class ApplicantTest {
 
   @Test
   void rejectsStaleVersionAndTracksEverySaveEvenUnchanged() {
-    var applicant = Applicant.receive(intake());
+    var applicant = Applicant.receive(7L, intake());
     ReflectionTestUtils.setField(applicant, "version", 2L);
     applicant.requireVersion(2L);
     assertThatThrownBy(() -> applicant.requireVersion(1L)).isInstanceOf(ConflictException.class);

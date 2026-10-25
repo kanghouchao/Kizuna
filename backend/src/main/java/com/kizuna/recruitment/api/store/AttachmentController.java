@@ -7,7 +7,7 @@ import com.kizuna.recruitment.application.AttachmentService;
 import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeExecutor;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -46,7 +46,6 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 public class AttachmentController {
   private final AttachmentService attachments;
   private final AttachmentBodyReceiver receiver;
-  private final StoreContext storeContext;
   private final StoreScopeExecutor scope;
   private final StoreScopeHolder storeScopeHolder;
   private final AppProperties properties;
@@ -60,53 +59,62 @@ public class AttachmentController {
   @GetMapping("/{id}/attachments")
   @PreAuthorize(AttachmentService.READ)
   public CursorPage<AttachmentSummaryResponse> list(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return attachments.list(id, cursor, size);
+    return attachments.list(storeId, id, cursor, size);
   }
 
   @GetMapping("/{id}/attachment-uploads")
   @PreAuthorize(AttachmentService.WRITE)
   public CursorPage<AttachmentUploadResponse> uploads(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return attachments.uploads(id, cursor, size);
+    return attachments.uploads(storeId, id, cursor, size);
   }
 
   @GetMapping("/{id}/attachment-operations/{key}")
   @PreAuthorize(AttachmentService.WRITE)
-  public AttachmentUploadResponse operation(@PathVariable String id, @PathVariable String key) {
-    return attachments.operation(id, key);
+  public AttachmentUploadResponse operation(
+      @CurrentStore Long storeId, @PathVariable String id, @PathVariable String key) {
+    return attachments.operation(storeId, id, key);
   }
 
   @PostMapping("/{id}/attachments")
   @PreAuthorize(AttachmentService.WRITE)
   public WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>> upload(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestHeader(value = "Idempotency-Key", required = false) String key,
       HttpServletRequest request,
       Principal principal) {
-    return receive(id, null, key, request, principal.getName());
+    return receive(storeId, id, null, key, request, principal.getName());
   }
 
   @PutMapping("/{id}/attachment-uploads/{uploadId}/content")
   @PreAuthorize(AttachmentService.WRITE)
   public WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>> recover(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @PathVariable String uploadId,
       @RequestHeader(value = "Idempotency-Key", required = false) String key,
       HttpServletRequest request,
       Principal principal) {
-    return receive(id, uploadId, key, request, principal.getName());
+    return receive(storeId, id, uploadId, key, request, principal.getName());
   }
 
   private WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>> receive(
-      String id, String uploadId, String rawKey, HttpServletRequest request, String actorEmail) {
-    UUID key = attachments.preflight(id, uploadId, rawKey);
+      Long storeId,
+      String id,
+      String uploadId,
+      String rawKey,
+      HttpServletRequest request,
+      String actorEmail) {
+    UUID key = attachments.preflight(storeId, id, uploadId, rawKey);
     var admission = receiver.admit(request);
-    Long storeId = storeContext.getStoreId();
     var loggingContext = ThreadContext.getImmutableContext();
     // 作用域の保持器は要求スレッド局所なので、認証文脈・ログ文脈と同じく解決済みの値を作業スレッドへ運び、
     // 作業後に必ず消す（作業スレッドは pool で再利用される）。
@@ -123,6 +131,7 @@ public class AttachmentController {
                         var received = admission.receive(request);
                         var completed =
                             attachments.upload(
+                                storeId,
                                 id,
                                 uploadId,
                                 key,
@@ -162,8 +171,12 @@ public class AttachmentController {
   @GetMapping("/{id}/attachments/{attachmentId}/content")
   @PreAuthorize(AttachmentService.READ)
   public ResponseEntity<StreamingResponseBody> download(
-      @PathVariable String id, @PathVariable String attachmentId, HttpServletRequest request) {
-    var download = attachments.download(id, attachmentId, "HEAD".equals(request.getMethod()));
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @PathVariable String attachmentId,
+      HttpServletRequest request) {
+    var download =
+        attachments.download(storeId, id, attachmentId, "HEAD".equals(request.getMethod()));
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.parseMediaType(download.mediaType()));
     headers.setContentLength(download.sizeBytes());
