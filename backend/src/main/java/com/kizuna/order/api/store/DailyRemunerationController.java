@@ -2,6 +2,7 @@ package com.kizuna.order.api.store;
 
 import com.kizuna.order.api.dto.DailyRemunerationResponse;
 import com.kizuna.order.application.DailyRemunerationService;
+import com.kizuna.shared.storescope.CurrentStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,10 +19,11 @@ public class DailyRemunerationController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public DailyRemunerationResponse daily(
+      @CurrentStore Long storeId,
       @RequestParam(name = "person_id") Long personId,
       @RequestParam(name = "business_date") String businessDate,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.store(personId, businessDate, page, size);
+    return service.store(storeId, personId, businessDate, page, size);
   }
 }

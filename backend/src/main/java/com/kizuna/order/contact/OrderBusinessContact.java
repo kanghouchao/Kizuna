@@ -5,7 +5,6 @@ import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,18 +15,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderBusinessContact {
   private final OrderRepository orders;
   private final BusinessContactPermissions permissions;
-  private final StoreContext storeContext;
 
   public record Decision(String value, BusinessContactDecision decision) {}
 
-  /** 授権済み店舗文脈で送信・再送の直前に呼び、返された宛先だけへ送信する。 */
+  /** 授権済みの店舗について送信・再送の直前に呼び、返された宛先だけへ送信する。 */
   @StoreScoped
   @Transactional(readOnly = true)
-  public Decision decide(String orderId, ContactType type) {
-    if (!storeContext.hasStoreId()) throw new ServiceException("店舗を指定してください");
+  public Decision decide(Long storeId, String orderId, ContactType type) {
+    if (storeId == null) throw new ServiceException("店舗を指定してください");
     var order =
         orders
-            .findByIdAndStoreId(orderId, storeContext.getStoreId())
+            .findByIdAndStoreId(orderId, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     return permissions.describe(order).stream()
         .filter(p -> p.type() == type)

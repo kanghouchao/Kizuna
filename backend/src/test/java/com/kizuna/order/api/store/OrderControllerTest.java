@@ -155,6 +155,39 @@ class OrderControllerTest {
   }
 
   @Test
+  @DisplayName("伝票の再発行は名乗られた店舗の id で service を呼ぶこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void receiptTokenReissuePassesTheCurrentStore() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any(), any()))
+        .thenReturn(new OrderReceiptTokenResponse("raw-token"));
+
+    mockMvc
+        .perform(
+            post("/store/orders/o1/receipt-token")
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(csrf()))
+        .andExpect(status().isCreated());
+
+    verify(orderPointRollbackService).reissueReceiptTokenUnlessRolledBack(STORE_ID, "o1");
+  }
+
+  @Test
+  @DisplayName("訂正履歴は名乗られた店舗の id で service を呼ぶこと")
+  @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
+  void correctionHistoryPassesTheCurrentStore() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(correctionHistory.store(any(), any(), any(), anyInt()))
+        .thenReturn(new CursorPage<>(List.of(), null));
+
+    mockMvc
+        .perform(get("/store/orders/o1/corrections").header("X-Store-ID", STORE_ID.toString()))
+        .andExpect(status().isOk());
+
+    verify(correctionHistory).store(STORE_ID, "o1", null, 20);
+  }
+
+  @Test
   @DisplayName("GET /store/orders?sort=businessDate でも id が副キーとして補われること")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
@@ -484,7 +517,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void receiptTokenReissueRespondsCreated() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any()))
+    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any(), any()))
         .thenReturn(new OrderReceiptTokenResponse("raw-token"));
 
     mockMvc
@@ -608,7 +641,7 @@ class OrderControllerTest {
         .andExpect(status().isBadRequest());
 
     // 正向対照: 上限ちょうどは通る
-    when(orderAttributionService.invalidate(any(), any(), any()))
+    when(orderAttributionService.invalidate(any(), any(), any(), any()))
         .thenReturn(
             new OrderAttributionResponse(null, false, null, null, null, null, null, null, null));
     mockMvc
@@ -624,13 +657,13 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void receiptTokenIsNotReissuedForARolledBackOrder() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack("o1"))
+    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(1L, "o1"))
         .thenThrow(new ServiceException("ポイントを巻き戻した受注には伝票を再発行できません"));
 
     mockMvc
         .perform(storePost("/store/orders/o1/receipt-token", ""))
         .andExpect(status().isBadRequest());
-    verify(orderAttributionService, never()).reissueReceiptToken(any());
+    verify(orderAttributionService, never()).reissueReceiptToken(any(), any());
   }
 
   @Test
@@ -691,7 +724,7 @@ class OrderControllerTest {
     verifyNoInteractions(orderPointRollbackService);
 
     // 正向対照: 上限ちょうどは通る（400 が端点の不在でない証明）。新たな操作記録を生むので 201
-    when(orderPointRollbackService.rollback(any(), any(), any()))
+    when(orderPointRollbackService.rollback(any(), any(), any(), any()))
         .thenReturn(
             new OrderPointRollbackResponse("1", "理由", 1L, null, 120, 300, 11700, 300, 12000));
     mockMvc
@@ -711,7 +744,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT"})
   void correctionIsReachableWithOrderCorrect() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderCorrectionService.correct(any(), any(), any()))
+    when(orderCorrectionService.correct(any(), any(), any(), any()))
         .thenReturn(
             new OrderCorrectionResponse(
                 "correction",
@@ -751,9 +784,10 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
   void crossStoreViewerReadsOnlyCorrectionHistory() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(correctionHistory.store("o1", null, 20)).thenReturn(new CursorPage<>(List.of(), null));
+    when(correctionHistory.store(1L, "o1", null, 20)).thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc.perform(storeGet("/store/orders/o1/corrections")).andExpect(status().isOk());
+    verify(correctionHistory).store(1L, "o1", null, 20);
     mockMvc.perform(storeGet("/store/orders/o1")).andExpect(status().isForbidden());
     mockMvc
         .perform(storePost("/store/orders/o1/corrections", CORRECTION_BODY))
@@ -791,7 +825,7 @@ class OrderControllerTest {
     verifyNoInteractions(orderCorrectionService);
 
     // 正向対照: 凍結字段を外した同じ本文は通る（400 が「内訳が空だから」でない証明）
-    when(orderCorrectionService.correct(any(), any(), any()))
+    when(orderCorrectionService.correct(any(), any(), any(), any()))
         .thenReturn(
             new OrderCorrectionResponse(
                 "correction",

@@ -14,7 +14,6 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -64,8 +63,6 @@ class OrderAttributionCorrectionServiceTest {
 
   @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
-  @Mock private StoreContext storeContext;
-
   @InjectMocks private OrderAttributionCorrectionService service;
 
   @BeforeEach
@@ -83,7 +80,6 @@ class OrderAttributionCorrectionServiceTest {
             .build();
     actor.setId(ACTOR_ID);
     Mockito.lenient().when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
-    Mockito.lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
   }
 
   @Test
@@ -94,7 +90,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     givenCorrected(0L, ATTRIBUTION_ID);
 
-    service.correct(ORDER_ID, request(100), ACTOR_EMAIL);
+    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL);
 
     // 顧客経路を一切読まないことが、関連の解除・張り替えがあっても宛先がぶれない理由そのものである。
     Mockito.verify(pointLedgerService)
@@ -111,7 +107,7 @@ class OrderAttributionCorrectionServiceTest {
     active.setId(ATTRIBUTION_ID);
     givenAttribution(active);
 
-    assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("無効化");
 
@@ -130,7 +126,7 @@ class OrderAttributionCorrectionServiceTest {
     own.invalidate(REASON, ACTOR_ID, NOW);
     givenAttributions(own);
 
-    assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
 
     Mockito.verifyNoInteractions(pointLedgerService);
@@ -147,7 +143,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(200L);
     givenCorrected(100L, ATTRIBUTION_ID, OTHER_ATTRIBUTION_ID);
 
-    assertThatThrownBy(() -> service.correct(ORDER_ID, request(200), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(200), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("上限");
 
@@ -165,7 +161,7 @@ class OrderAttributionCorrectionServiceTest {
     active.setId(OTHER_ATTRIBUTION_ID);
     givenAttributions(active, invalidatedAttribution());
 
-    assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("現に帰属している");
 
@@ -182,7 +178,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     givenCorrected(0L, ATTRIBUTION_ID);
 
-    service.correct(ORDER_ID, request(100), ACTOR_EMAIL);
+    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL);
 
     Mockito.verify(pointLedgerService)
         .correctForAttribution(
@@ -201,7 +197,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     Mockito.when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID))).thenReturn(0L);
 
-    assertThat(service.findPendingCorrection(ORDER_ID))
+    assertThat(service.findPendingCorrection(STORE_ID, ORDER_ID))
         .contains(
             new OrderAttributionCorrectionService.PendingCorrection(ATTRIBUTION_ID, MEMBER_CODE));
   }
@@ -222,7 +218,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     Mockito.when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID))).thenReturn(0L);
 
-    assertThat(service.findPendingCorrection(ORDER_ID))
+    assertThat(service.findPendingCorrection(STORE_ID, ORDER_ID))
         .contains(
             new OrderAttributionCorrectionService.PendingCorrection(ATTRIBUTION_ID, MEMBER_CODE));
   }
@@ -241,7 +237,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(200L);
     givenCorrected(0L, ATTRIBUTION_ID);
 
-    service.correct(ORDER_ID, request(100), ACTOR_EMAIL);
+    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL);
 
     Mockito.verify(pointLedgerService)
         .correctForAttribution(
@@ -256,7 +252,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     Mockito.when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID))).thenReturn(100L);
 
-    assertThat(service.findPendingCorrection(ORDER_ID)).isEmpty();
+    assertThat(service.findPendingCorrection(STORE_ID, ORDER_ID)).isEmpty();
   }
 
   @Test
@@ -268,7 +264,7 @@ class OrderAttributionCorrectionServiceTest {
     active.setId(OTHER_ATTRIBUTION_ID);
     givenAttributions(active, invalidatedAttribution());
 
-    assertThat(service.findPendingCorrection(ORDER_ID)).isEmpty();
+    assertThat(service.findPendingCorrection(STORE_ID, ORDER_ID)).isEmpty();
   }
 
   @Test
@@ -277,7 +273,7 @@ class OrderAttributionCorrectionServiceTest {
     Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
 
     Mockito.verifyNoInteractions(orderAttributionRepository);
@@ -292,7 +288,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     givenCorrected(70L, ATTRIBUTION_ID);
 
-    assertThatThrownBy(() -> service.correct(ORDER_ID, request(31), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(31), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("上限");
 
@@ -308,7 +304,7 @@ class OrderAttributionCorrectionServiceTest {
     givenCorrected(70L, ATTRIBUTION_ID);
 
     OrderAttributionCorrectionResponse response =
-        service.correct(ORDER_ID, request(30), ACTOR_EMAIL);
+        service.correct(STORE_ID, ORDER_ID, request(30), ACTOR_EMAIL);
 
     assertThat(response.grantedPoints()).isEqualTo(100L);
     assertThat(response.correctedPoints()).isEqualTo(100L);
@@ -328,7 +324,7 @@ class OrderAttributionCorrectionServiceTest {
         .when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID)))
         .thenReturn(100L);
 
-    service.correct(ORDER_ID, request(100), ACTOR_EMAIL);
+    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL);
 
     Mockito.verify(pointLedgerService)
         .correctForAttribution(
@@ -349,7 +345,8 @@ class OrderAttributionCorrectionServiceTest {
                             && ids.containsAll(List.of(ATTRIBUTION_ID, OTHER_ATTRIBUTION_ID)))))
         .thenReturn(100L);
 
-    OrderAttributionCorrectionResponse response = service.status(ORDER_ID, ATTRIBUTION_ID);
+    OrderAttributionCorrectionResponse response =
+        service.status(STORE_ID, ORDER_ID, ATTRIBUTION_ID);
 
     // 画面はこの差を既定値に取る。書き込み側と作用域がずれると、撥ねられる額を既定値として描く。
     assertThat(response.grantedPoints()).isEqualTo(200L);
@@ -365,7 +362,7 @@ class OrderAttributionCorrectionServiceTest {
     active.setId(OTHER_ATTRIBUTION_ID);
     givenAttributions(active, invalidatedAttribution());
 
-    assertThatThrownBy(() -> service.status(ORDER_ID, ATTRIBUTION_ID))
+    assertThatThrownBy(() -> service.status(STORE_ID, ORDER_ID, ATTRIBUTION_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("現に帰属している");
   }
@@ -378,7 +375,7 @@ class OrderAttributionCorrectionServiceTest {
     ReflectionMemberId.clear(orphaned);
     givenAttribution(orphaned);
 
-    assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("削除");
 
@@ -394,7 +391,7 @@ class OrderAttributionCorrectionServiceTest {
     givenCorrected(0L, ATTRIBUTION_ID);
     Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);
 
     // 上限を判じるために台帳を読むところまでは進むので、見るべきは「記帳していない」ことである。
@@ -435,7 +432,7 @@ class OrderAttributionCorrectionServiceTest {
   /** この受注が持つ帰属記録（新しい順）。候補は受注から引くので、ここに無い ID は名指せない。 */
   private void givenAttributions(OrderAttribution... rows) {
     Mockito.lenient()
-        .when(orderAttributionRepository.findByOrderIdOrderByIdDesc(ORDER_ID))
+        .when(orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(STORE_ID, ORDER_ID))
         .thenReturn(List.of(rows));
   }
 

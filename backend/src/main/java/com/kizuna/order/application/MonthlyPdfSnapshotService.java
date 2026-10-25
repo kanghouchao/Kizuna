@@ -5,7 +5,6 @@ import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.StoreNames;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
@@ -26,7 +25,6 @@ public class MonthlyPdfSnapshotService {
   private final SelfMonthlyRemunerationService self;
   private final RemunerationQuery query;
   private final StoreNames stores;
-  private final StoreContext context;
   private final ActorIdentityService actors;
   private final CastRepository people;
   private final Clock clock;
@@ -36,12 +34,13 @@ public class MonthlyPdfSnapshotService {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.monthlyPdf.readTimeoutSeconds}")
-  public MonthlyPdfSnapshot store(Long personId, String month, MonthlyPdfBudget budget) {
-    var first = store.monthly(personId, month, 0, 1);
+  public MonthlyPdfSnapshot store(
+      Long storeId, Long personId, String month, MonthlyPdfBudget budget) {
+    var first = store.monthly(storeId, personId, month, 0, 1);
     return collect(
-        context.getStoreId(),
+        storeId,
         personId,
-        stores.name(context.getStoreId()),
+        stores.name(storeId),
         first.name(),
         month,
         first.totalRemuneration(),

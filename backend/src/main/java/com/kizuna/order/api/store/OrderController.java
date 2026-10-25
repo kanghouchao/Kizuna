@@ -173,10 +173,11 @@ public class OrderController {
   @GetMapping("/{id}/business-contact-permission-history")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public CursorPage<BusinessContactHistoryResponse> businessContactHistory(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return businessContactPermissions.history(id, cursor, size);
+    return businessContactPermissions.history(storeId, id, cursor, size);
   }
 
   @GetMapping("/receptionists")
@@ -227,9 +228,11 @@ public class OrderController {
   /** 受注 1 件の帰属の現況（会員コード・成立の機構・無効化の理由）。無効化と再発行のどちらを提示するかはこの読み口で決まる。 */
   @GetMapping("/{id}/attribution")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderAttributionResponse> attribution(@PathVariable String id) {
+  public ResponseEntity<OrderAttributionResponse> attribution(
+      @CurrentStore Long storeId, @PathVariable String id) {
     return ResponseEntity.ok(
-        withPendingCorrection(id, orderAttributionService.currentAttribution(id)));
+        withPendingCorrection(
+            storeId, id, orderAttributionService.currentAttribution(storeId, id)));
   }
 
   /**
@@ -239,9 +242,9 @@ public class OrderController {
    * 0009）の構造的な証跡だからである。あちらへ台帳の読みを足すとその証跡が失われる。
    */
   private OrderAttributionResponse withPendingCorrection(
-      String orderId, OrderAttributionResponse current) {
+      Long storeId, String orderId, OrderAttributionResponse current) {
     return orderAttributionCorrectionService
-        .findPendingCorrection(orderId)
+        .findPendingCorrection(storeId, orderId)
         .map(
             pending -> current.withPendingCorrection(pending.attributionId(), pending.memberCode()))
         .orElse(current);
@@ -258,6 +261,7 @@ public class OrderController {
   @PostMapping("/{id}/attribution/invalidation")
   @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderAttributionResponse> invalidateAttribution(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderAttributionInvalidationRequest request,
       Principal principal) {
@@ -265,7 +269,9 @@ public class OrderController {
     // 戻った先で差し引きへの入口を失う。
     return ResponseEntity.ok(
         withPendingCorrection(
-            id, orderAttributionService.invalidate(id, request, principal.getName())));
+            storeId,
+            id,
+            orderAttributionService.invalidate(storeId, id, request, principal.getName())));
   }
 
   /**
@@ -275,19 +281,22 @@ public class OrderController {
    */
   @PostMapping("/{id}/receipt-token")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderReceiptTokenResponse> reissueReceiptToken(@PathVariable String id) {
+  public ResponseEntity<OrderReceiptTokenResponse> reissueReceiptToken(
+      @CurrentStore Long storeId, @PathVariable String id) {
     // 巻き戻し済みの受注へは発行しない。発行しても申領は拒まれるので、店舗は成功したと告げられたうえで
     // 使えない QR を客へ見せることになる。判定と発行は受注行を押さえたまま 1 つの取引で行う。
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(id));
+        .body(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(storeId, id));
   }
 
   /** 誤帰属の訂正の進み具合（この受注がその会員へ与えた付与の合計と、既に差し引いた合計）。画面の既定値はここから取る。 */
   @GetMapping("/{id}/attribution/correction")
   @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderAttributionCorrectionResponse> correctionStatus(
-      @PathVariable String id, @RequestParam(name = "attribution_id") Long attributionId) {
-    return ResponseEntity.ok(orderAttributionCorrectionService.status(id, attributionId));
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @RequestParam(name = "attribution_id") Long attributionId) {
+    return ResponseEntity.ok(orderAttributionCorrectionService.status(storeId, id, attributionId));
   }
 
   /**
@@ -299,18 +308,20 @@ public class OrderController {
   @PostMapping("/{id}/attribution/correction")
   @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderAttributionCorrectionResponse> correctAttribution(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderAttributionCorrectionRequest request,
       Principal principal) {
     try {
       return ResponseEntity.ok(
-          orderAttributionCorrectionService.correct(id, request, principal.getName()));
+          orderAttributionCorrectionService.correct(storeId, id, request, principal.getName()));
     } catch (DataIntegrityViolationException ex) {
       if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY)) {
         throw ex;
       }
       return ResponseEntity.ok(
-          orderAttributionCorrectionService.replayCorrect(id, request, principal.getName()));
+          orderAttributionCorrectionService.replayCorrect(
+              storeId, id, request, principal.getName()));
     }
   }
 
@@ -318,8 +329,8 @@ public class OrderController {
   @GetMapping("/{id}/point-rollback-preview")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderPointRollbackPreviewResponse> pointRollbackPreview(
-      @PathVariable String id) {
-    return ResponseEntity.ok(orderPointRollbackService.preview(id));
+      @CurrentStore Long storeId, @PathVariable String id) {
+    return ResponseEntity.ok(orderPointRollbackService.preview(storeId, id));
   }
 
   /**
@@ -333,12 +344,13 @@ public class OrderController {
   @PostMapping("/{id}/point-rollback")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderPointRollbackResponse> pointRollback(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderPointRollbackRequest request,
       Principal principal) {
     try {
       return ResponseEntity.status(HttpStatus.CREATED)
-          .body(orderPointRollbackService.rollback(id, request, principal.getName()));
+          .body(orderPointRollbackService.rollback(storeId, id, request, principal.getName()));
     } catch (DataIntegrityViolationException ex) {
       if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ROLLBACKS_ORDER)) {
         throw ex;
@@ -372,22 +384,25 @@ public class OrderController {
   @PostMapping("/{id}/completion-invalidation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
   public ResponseEntity<OrderCorrectionResult> invalidateCompletion(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderCompletionInvalidationRequest request,
       Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(orderCorrectionService.invalidateCompletion(id, request, principal.getName()));
+        .body(
+            orderCorrectionService.invalidateCompletion(storeId, id, request, principal.getName()));
   }
 
   /** 完了受注の明細・実績時刻・コース・特殊サービスを理由付きで訂正する。 状態・ポイントを変えず、訂正前後の採用条件・金額・分数・報酬を返す。 */
   @PostMapping("/{id}/corrections")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
   public ResponseEntity<OrderCorrectionResponse> correct(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderCorrectionRequest request,
       Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(orderCorrectionService.correct(id, request, principal.getName()));
+        .body(orderCorrectionService.correct(storeId, id, request, principal.getName()));
   }
 
   /**
@@ -426,17 +441,20 @@ public class OrderController {
   @PostMapping("/{id}/correction-preview")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
   public OrderPreviewResponse previewCorrection(
-      @PathVariable String id, @Valid @RequestBody OrderCorrectionRequest request) {
-    return orderCorrectionService.preview(id, request);
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody OrderCorrectionRequest request) {
+    return orderCorrectionService.preview(storeId, id, request);
   }
 
   /** 訂正履歴。横断一覧（/admin/orders）からも行の店舗を X-Store-ID に名指して読むので、横断照会者も通す。 */
   @GetMapping("/{id}/corrections")
   @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
   public CursorPage<OrderCorrectionResult> corrections(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return correctionHistory.store(id, cursor, size);
+    return correctionHistory.store(storeId, id, cursor, size);
   }
 }

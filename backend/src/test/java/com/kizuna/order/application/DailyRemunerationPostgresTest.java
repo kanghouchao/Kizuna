@@ -168,21 +168,22 @@ class DailyRemunerationPostgresTest {
 
   @Test
   void bothReadsAggregateHistoricalEnrollmentsAndKeepInvalidatedRows() {
-    var store = service.store(personId, DAY.toString(), 0, 1);
+    var store = service.store(storeId, personId, DAY.toString(), 0, 1);
     var self = service.self(email, storeId, DAY.toString(), 0, 1);
     assertThat(store.totalRemuneration()).isEqualTo(16000);
     assertThat(self.totalRemuneration()).isEqualTo(16000);
     assertThat(store.orders().getTotalElements()).isEqualTo(3);
     assertThat(store.orders().getContent()).hasSize(1);
-    var all = service.store(personId, DAY.toString(), 0, 20);
+    var all = service.store(storeId, personId, DAY.toString(), 0, 20);
     assertThat(all.orders().stream().mapToInt(row -> row.accruedRemuneration()).sum())
         .isEqualTo(16000);
     assertThat(all.orders().stream().filter(row -> row.completionInvalidated()))
         .singleElement()
         .satisfies(row -> assertThat(row.accruedRemuneration()).isZero());
-    assertThat(service.store(personId, DAY.toString(), 10, 20).orders()).isEmpty();
-    assertThat(service.store(personId, "0001-01-01", 0, 20).totalRemuneration()).isZero();
-    assertThat(service.store(personId, "9999-12-31", 0, 20).totalRemuneration()).isEqualTo(3000);
+    assertThat(service.store(storeId, personId, DAY.toString(), 10, 20).orders()).isEmpty();
+    assertThat(service.store(storeId, personId, "0001-01-01", 0, 20).totalRemuneration()).isZero();
+    assertThat(service.store(storeId, personId, "9999-12-31", 0, 20).totalRemuneration())
+        .isEqualTo(3000);
   }
 
   @ParameterizedTest
@@ -244,7 +245,8 @@ class DailyRemunerationPostgresTest {
       probe.reached = null;
       probe.resume = null;
     }
-    assertThat(service.store(personId, DAY.toString(), 0, 20).totalRemuneration()).isEqualTo(20000);
+    assertThat(service.store(storeId, personId, DAY.toString(), 0, 20).totalRemuneration())
+        .isEqualTo(20000);
     assertThat(service.self(email, storeId, DAY.toString(), 0, 20).totalRemuneration())
         .isEqualTo(20000);
   }

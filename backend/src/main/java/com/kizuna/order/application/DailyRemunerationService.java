@@ -8,7 +8,6 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
@@ -25,18 +24,17 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DailyRemunerationService {
   private final RemunerationQuery query;
-  private final StoreContext storeContext;
   private final ActorIdentityService actors;
   private final CastRepository people;
   private final SelfMonthlyRemunerationQuery selfQuery;
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public DailyRemunerationResponse store(Long personId, String businessDate, int page, int size) {
+  public DailyRemunerationResponse store(
+      Long storeId, Long personId, String businessDate, int page, int size) {
     var target = day(businessDate);
     var pageable = page(page, size);
     if (personId <= 0) throw new ServiceException("キャスト本人の指定が不正です");
-    Long storeId = storeContext.getStoreId();
     String name = query.personName(storeId, personId);
     return new DailyRemunerationResponse(
         personId,

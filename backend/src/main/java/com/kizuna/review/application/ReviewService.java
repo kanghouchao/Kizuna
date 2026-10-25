@@ -25,6 +25,7 @@ import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -52,6 +53,7 @@ public class ReviewService {
   private final ReviewActors actors;
   private final BusinessAudit audit;
   private final Clock clock;
+  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional
@@ -363,7 +365,7 @@ public class ReviewService {
     if (input.originOrderId() == null) return new OriginSnapshot(null, null);
     var facts =
         origins
-            .find(input.originOrderId())
+            .find(storeContext.getStoreId(), input.originOrderId())
             .orElseThrow(() -> new NotFoundException("関連受注が見つかりません"));
     if (!facts.status().equals("COMPLETED") || facts.completionInvalidated())
       throw new ServiceException("有効な完了受注だけを関連付けできます");

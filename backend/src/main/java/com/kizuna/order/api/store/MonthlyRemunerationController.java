@@ -3,6 +3,7 @@ package com.kizuna.order.api.store;
 import com.kizuna.order.api.dto.MonthlyRemunerationCastSummary;
 import com.kizuna.order.api.dto.MonthlyRemunerationResponse;
 import com.kizuna.order.application.MonthlyRemunerationService;
+import com.kizuna.shared.storescope.CurrentStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,19 +22,21 @@ public class MonthlyRemunerationController {
   @GetMapping("/casts")
   @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
   public Page<MonthlyRemunerationCastSummary> casts(
+      @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.casts(search, page, size);
+    return service.casts(storeId, search, page, size);
   }
 
   @GetMapping
   @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
   public MonthlyRemunerationResponse monthly(
+      @CurrentStore Long storeId,
       @RequestParam(name = "person_id") Long personId,
       @RequestParam String month,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.monthly(personId, month, page, size);
+    return service.monthly(storeId, personId, month, page, size);
   }
 }

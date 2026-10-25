@@ -9,6 +9,8 @@ import com.kizuna.reporting.domain.AdvertisingAmounts;
 import com.kizuna.reporting.domain.OperationalReport;
 import com.kizuna.reporting.domain.ReportCriteria;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import java.util.List;
@@ -24,6 +26,8 @@ public class ReportSnapshot {
   private final RemunerationReportReader remuneration;
   private final AdvertisingReportReader advertising;
   private final AppProperties properties;
+  private final StoreContext storeContext;
+  private final StoreScopeHolder storeScopeHolder;
 
   @StoreScoped
   @Transactional(
@@ -32,7 +36,7 @@ public class ReportSnapshot {
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
   public OperationalReport store(
       ReportCriteria criteria, boolean includeRemuneration, boolean includeAdvertising) {
-    var facts = orders.store(criteria.from(), criteria.to());
+    var facts = orders.store(storeContext.getStoreId(), criteria.from(), criteria.to());
     return OperationalReport.aggregate(
         criteria,
         facts,
@@ -53,7 +57,7 @@ public class ReportSnapshot {
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
   public OperationalReport groupWide(
       ReportCriteria criteria, boolean includeRemuneration, boolean includeAdvertising) {
-    var facts = orders.groupWide(criteria.from(), criteria.to());
+    var facts = orders.groupWide(storeScopeHolder.current(), criteria.from(), criteria.to());
     return OperationalReport.aggregate(
         criteria,
         facts,

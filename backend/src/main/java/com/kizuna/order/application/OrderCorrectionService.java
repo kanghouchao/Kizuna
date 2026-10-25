@@ -18,7 +18,6 @@ import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -49,14 +48,12 @@ public class OrderCorrectionService {
   private final OrderMapper orderMapper;
   private final OrderCalculation calculation;
   private final OrderSpecialServices specialServices;
-  private final StoreContext storeContext;
 
   /** 訂正前の快照と更新を同じトランザクションに保存する。受注行をロックしてから要求の版を照合し、 同時訂正による上書きを防ぐ。快照は管理下の集約を書き換える前に作成する。 */
   @StoreScoped
   @Transactional
   public OrderCorrectionResponse correct(
-      String id, OrderCorrectionRequest request, String actorEmail) {
-    Long storeId = storeContext.getStoreId();
+      Long storeId, String id, OrderCorrectionRequest request, String actorEmail) {
     specialServices.lock(storeId);
     Order order =
         orderRepository
@@ -173,10 +170,10 @@ public class OrderCorrectionService {
   @StoreScoped
   @Transactional
   public OrderCorrectionResult invalidateCompletion(
-      String id, OrderCompletionInvalidationRequest request, String actorEmail) {
+      Long storeId, String id, OrderCompletionInvalidationRequest request, String actorEmail) {
     var order =
         orderRepository
-            .findByIdAndStoreIdForUpdate(id, storeContext.getStoreId())
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     if (!Objects.equals(order.getVersion(), request.expectedVersion())) {
       throw new ConflictException(
@@ -219,8 +216,7 @@ public class OrderCorrectionService {
 
   @StoreScoped
   @Transactional
-  public OrderPreviewResponse preview(String id, OrderCorrectionRequest request) {
-    Long storeId = storeContext.getStoreId();
+  public OrderPreviewResponse preview(Long storeId, String id, OrderCorrectionRequest request) {
     specialServices.lock(storeId);
     calculation.requirePreviewInput(request.getConfirmationToken());
     var order =

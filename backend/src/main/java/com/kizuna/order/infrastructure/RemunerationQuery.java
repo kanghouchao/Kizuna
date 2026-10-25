@@ -27,7 +27,7 @@ public class RemunerationQuery {
   private static final String PEOPLE =
       """
       from com.kizuna.cast.domain.CastEnrollment e
-      join com.kizuna.cast.domain.CastProfile p on p.enrollmentId = e.id
+      join com.kizuna.cast.domain.CastProfile p on p.enrollmentId = e.id and p.storeId = e.storeId
       where e.storeId = :storeId and e.castId is not null
       and not exists (
         select newer.id from com.kizuna.cast.domain.CastEnrollment newer
@@ -51,7 +51,8 @@ public class RemunerationQuery {
           """
         and exists (
           select old.id from com.kizuna.cast.domain.CastEnrollment old
-          join com.kizuna.cast.domain.CastProfile profile on profile.enrollmentId = old.id
+          join com.kizuna.cast.domain.CastProfile profile
+            on profile.enrollmentId = old.id and profile.storeId = old.storeId
           where old.storeId = e.storeId and old.castId = e.castId
             and locate(:search, lower(profile.name)) > 0)
         """;

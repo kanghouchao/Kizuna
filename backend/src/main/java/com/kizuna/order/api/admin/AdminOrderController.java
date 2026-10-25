@@ -2,12 +2,15 @@ package com.kizuna.order.api.admin;
 
 import com.kizuna.order.api.dto.AdminOrderResponse;
 import com.kizuna.order.application.AdminOrderService;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,11 +23,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminOrderController {
 
   private final AdminOrderService adminOrderService;
+  private final StoreScopeHolder storeScopeHolder;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_SET_VIEW')")
   public ResponseEntity<Page<AdminOrderResponse>> list(
       @PageableDefault(sort = "businessDate", direction = Sort.Direction.DESC) Pageable pageable) {
-    return ResponseEntity.ok(adminOrderService.list(pageable));
+    StoreScope scope = storeScopeHolder.current();
+    if (scope == null) throw new AccessDeniedException("店舗集合スコープを解決できません");
+    return ResponseEntity.ok(adminOrderService.list(scope, pageable));
   }
 }

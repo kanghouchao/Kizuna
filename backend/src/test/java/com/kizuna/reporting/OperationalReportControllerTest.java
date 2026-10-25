@@ -103,8 +103,8 @@ class OperationalReportControllerTest {
         .thenReturn(new RemunerationReportFacts(List.of(), List.of()));
     when(advertising.read(anyBoolean(), any(), any(), any(), anyInt()))
         .thenReturn(new AdvertisingReportFacts(List.of()));
-    when(reader.store(any(), any())).thenReturn(facts);
-    when(reader.groupWide(any(), any())).thenReturn(facts);
+    when(reader.store(any(), any(), any())).thenReturn(facts);
+    when(reader.groupWide(any(), any(), any())).thenReturn(facts);
   }
 
   /**
@@ -328,7 +328,7 @@ class OperationalReportControllerTest {
 
   @Test
   void inapplicableAdvertisingKeepsAllExplicitNullKeysWithoutReadingCosts() throws Exception {
-    when(reader.store(any(), any()))
+    when(reader.store(any(), any(), any()))
         .thenReturn(
             new OperationalFacts(
                 OffsetDateTime.parse("2026-10-01T12:00:00+09:00"),

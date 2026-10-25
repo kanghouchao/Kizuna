@@ -3,6 +3,7 @@ package com.kizuna.order.api;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -110,6 +111,25 @@ class DailyRemunerationControllerTest {
         .andExpect(jsonPath("$.orders.content[0].customer_name").doesNotExist())
         .andExpect(jsonPath("$.orders.content[0].actor_id").doesNotExist())
         .andExpect(jsonPath("$.confirmation").doesNotExist());
+  }
+
+  @Test
+  void storeReadUsesTheNamedStore() throws Exception {
+    when(query.personName(7L, 34L)).thenReturn("本人");
+    when(query.dailyTotal(eq(7L), eq(34L), any())).thenReturn(7000L);
+    when(query.dailyOrders(eq(7L), eq(34L), any(), any()))
+        .thenAnswer(call -> new PageImpl<>(List.of(), call.getArgument(3), 0));
+
+    mvc.perform(
+            get("/store/daily-remunerations")
+                .header("X-Store-ID", "7")
+                .param("person_id", "34")
+                .param("business_date", "2026-09-30"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_remuneration").value(7000));
+
+    verify(query).personName(7L, 34L);
+    verify(query).dailyOrders(eq(7L), eq(34L), any(), any());
   }
 
   @ParameterizedTest

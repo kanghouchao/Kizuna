@@ -4,6 +4,7 @@ import com.kizuna.order.api.dto.AdminOrderResponse;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,13 +22,16 @@ public class AdminOrderService {
   private final OrderRepository orderRepository;
   private final OrderMapper orderMapper;
 
-  /** 授権店舗集合での受注横断一覧。濾過は storeSetFilter（@StoreSetScoped）が機構的に行う。 */
+  /** 授権店舗集合での受注横断一覧。SPECIFIC_STORES は集合内の店舗だけ、ALL_STORES は全店舗を返す。 */
   @StoreSetScoped
   @Transactional(readOnly = true)
-  public Page<AdminOrderResponse> list(Pageable pageable) {
+  public Page<AdminOrderResponse> list(StoreScope scope, Pageable pageable) {
     var sort = pageable.getSort().and(Sort.by(Order::getId).descending());
-    return orderRepository
-        .findGroupWideViews(PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort))
-        .map(orderMapper::toAdminResponse);
+    var page = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+    var views =
+        scope.allStores()
+            ? orderRepository.findGroupWideViews(page)
+            : orderRepository.findGroupWideViewsInStores(scope.storeIds(), page);
+    return views.map(orderMapper::toAdminResponse);
   }
 }
