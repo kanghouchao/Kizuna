@@ -20,6 +20,7 @@ import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -65,6 +66,7 @@ class OrderPointRollbackServiceTest {
   @Mock private OrderAttributionService orderAttributionService;
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock private PointLedgerService pointLedgerService;
+  @Mock private StoreContext storeContext;
   private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
   @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
@@ -86,6 +88,7 @@ class OrderPointRollbackServiceTest {
             .build();
     actor.setId(ACTOR_ID);
     Mockito.lenient().when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    Mockito.lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
   }
 
   @Test
@@ -121,7 +124,7 @@ class OrderPointRollbackServiceTest {
 
     InOrder inOrder =
         Mockito.inOrder(orderRepository, orderReceiptTokenRepository, pointLedgerService);
-    inOrder.verify(orderRepository).findScopedByIdForUpdate(ORDER_ID);
+    inOrder.verify(orderRepository).findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID);
     inOrder.verify(orderReceiptTokenRepository).findByOrderIdForUpdate(ORDER_ID);
     inOrder.verify(pointLedgerService).rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0);
   }
@@ -148,7 +151,8 @@ class OrderPointRollbackServiceTest {
   @Test
   @DisplayName("現店舗で引けない受注は 404 で、他店舗か不在かを区別しないこと")
   void refusesAnOrderOutsideTheCurrentStore() {
-    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID)).thenReturn(Optional.empty());
+    Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.rollback(ORDER_ID, request(), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
@@ -178,7 +182,7 @@ class OrderPointRollbackServiceTest {
         .hasMessageContaining("巻き戻した受注には伝票を再発行できません");
 
     InOrder inOrder = Mockito.inOrder(orderRepository, pointLedgerService);
-    inOrder.verify(orderRepository).findScopedByIdForUpdate(ORDER_ID);
+    inOrder.verify(orderRepository).findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID);
     inOrder.verify(pointLedgerService).isRolledBack(ORDER_ID);
     Mockito.verifyNoInteractions(orderAttributionService);
   }
@@ -197,7 +201,7 @@ class OrderPointRollbackServiceTest {
   @Test
   @DisplayName("下見は台帳の見込みに、現に帰属している会員コードを添えて返すこと")
   void previewCarriesTheActiveMemberCode() {
-    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
+    Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.of(completedOrder()));
     Mockito.when(pointLedgerService.previewRollbackForOrder(ORDER_ID))
         .thenReturn(new PointRollbackPreview(false, 120, 300));
@@ -214,7 +218,7 @@ class OrderPointRollbackServiceTest {
   @DisplayName("無効化された帰属しか無い受注の下見は、宛先の会員を名乗らないこと")
   void previewNamesNoMemberWhenTheAttributionIsInvalidated() {
     // 無効化済みの記録は「現に帰属している」ではない。名乗ると、既に外れた相手の台帳を見に行かせる。
-    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
+    Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.of(completedOrder()));
     Mockito.when(pointLedgerService.previewRollbackForOrder(ORDER_ID))
         .thenReturn(new PointRollbackPreview(true, 0, 0));
@@ -233,7 +237,8 @@ class OrderPointRollbackServiceTest {
         Order.builder().businessDate(LocalDate.parse("2026-08-28")).status(status).build();
     order.setId(ORDER_ID);
     order.setStoreId(STORE_ID);
-    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
+    Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
+        .thenReturn(Optional.of(order));
   }
 
   private static Order completedOrder() {

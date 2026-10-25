@@ -179,7 +179,7 @@ public class Order extends StoreScopedEntity {
               .filter(line -> line.getSnapshot().serviceId().equals(snapshot.serviceId()))
               .findFirst();
       if (existing.isPresent()) existing.get().adopt(snapshot);
-      else specialServiceLines.add(OrderSpecialService.of(snapshot));
+      else specialServiceLines.add(OrderSpecialService.of(getStoreId(), snapshot));
     }
   }
 
@@ -446,7 +446,11 @@ public class Order extends StoreScopedEntity {
               .filter(line -> item.serviceId().equals(line.getServiceId()))
               .findFirst();
       if (existing.isPresent()) existing.get().applySpecialService(item);
-      else feeLines.add(OrderFeeLine.specialService(item));
+      else {
+        var line = OrderFeeLine.specialService(item);
+        line.attachStore(getStoreId());
+        feeLines.add(line);
+      }
     }
     for (var line : replaced) if (!feeLines.contains(line)) feeLines.add(line);
     return recalculateTotalFee();

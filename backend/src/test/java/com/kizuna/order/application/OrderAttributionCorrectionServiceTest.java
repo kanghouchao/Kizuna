@@ -274,7 +274,8 @@ class OrderAttributionCorrectionServiceTest {
   @Test
   @DisplayName("他店舗の受注は帰属記録を読む前に 404 で止まること")
   void refusesAnOrderOutsideTheStore() {
-    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID)).thenReturn(Optional.empty());
+    Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.correct(ORDER_ID, request(100), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
@@ -423,9 +424,11 @@ class OrderAttributionCorrectionServiceTest {
             .build();
     order.setId(ORDER_ID);
     order.setStoreId(STORE_ID);
-    Mockito.lenient().when(orderRepository.findScopedById(ORDER_ID)).thenReturn(Optional.of(order));
     Mockito.lenient()
-        .when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
+        .when(orderRepository.findByIdAndStoreId(ORDER_ID, STORE_ID))
+        .thenReturn(Optional.of(order));
+    Mockito.lenient()
+        .when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.of(order));
   }
 

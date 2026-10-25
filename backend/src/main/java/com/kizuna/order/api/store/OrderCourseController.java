@@ -42,7 +42,7 @@ public class OrderCourseController {
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    orders.get(id);
+    orders.get(storeId, id);
     return catalog
         .history(storeId, OrderServiceCatalog.SelectionKind.COURSE, search, cursor, size)
         .map(Revision::of);

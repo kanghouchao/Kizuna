@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -96,6 +97,9 @@ class OrderControllerTest {
           + "\"course_revision_id\":\"revision\","
           + "\"fee_lines\":[{\"kind\":\"CREDIT_SURCHARGE\",\"name\":\"指名料\",\"amount\":15000}]}";
 
+  /** handler が名乗られた店舗をそのまま渡すことを見る店舗。既定値と紛れない値にする。 */
+  private static final Long STORE_ID = 7L;
+
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private OrderCorrectionHistory correctionHistory;
@@ -113,13 +117,51 @@ class OrderControllerTest {
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
+  @DisplayName("顧客の注文履歴は名乗られた店舗の id で service を呼ぶこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void listPassesTheCurrentStore() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.list(any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+    mockMvc
+        .perform(
+            get("/store/orders")
+                .param("customer_id", "c1")
+                .header("X-Store-ID", STORE_ID.toString()))
+        .andExpect(status().isOk());
+
+    verify(orderService).list(eq(STORE_ID), eq("c1"), any());
+  }
+
+  @Test
+  @DisplayName("完了は名乗られた店舗の id で service を呼ぶこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void completionPassesTheCurrentStore() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.complete(any(), any(), any(), any()))
+        .thenReturn(new OrderCompletionResponse(null));
+
+    mockMvc
+        .perform(
+            post("/store/orders/o1/completion")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(() -> "staff@kizuna.test")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(COMPLETION_BODY))
+        .andExpect(status().isOk());
+
+    verify(orderService).complete(eq(STORE_ID), eq("o1"), any(), eq("staff@kizuna.test"));
+  }
+
+  @Test
   @DisplayName("GET /store/orders?sort=businessDate でも id が副キーとして補われること")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<OrderSummaryResponse> empty = new PageImpl<>(List.of());
-    when(orderService.list(any(), pageableCaptor.capture())).thenReturn(empty);
+    when(orderService.list(any(), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
         .perform(get("/store/orders?sort=businessDate").header("X-Store-ID", "1"))
@@ -138,7 +180,7 @@ class OrderControllerTest {
     ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
     when(orderService.listWorkQueue(
-            criteriaCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
+            any(), criteriaCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
@@ -165,7 +207,7 @@ class OrderControllerTest {
     // 抑制ではなく型から消えていることを見る。NON_NULL 下では値が null でもキーは消えるので、
     // isNull() では「型に残ったまま詰め忘れただけ」の状態と区別できない。
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.listWorkQueue(any(), any(), anyInt()))
+    when(orderService.listWorkQueue(any(), any(), any(), anyInt()))
         .thenReturn(
             new CursorPage<>(
                 List.of(OrderWorkQueueResponse.builder().id("o1").status("CONFIRMED").build()),
@@ -184,7 +226,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void archiveRowCarriesNeitherTheReceiptTokenNorTheDriverMessage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.listArchive(any(), any()))
+    when(orderService.listArchive(any(), any(), any()))
         .thenReturn(
             new PageImpl<>(
                 List.of(OrderArchiveResponse.builder().id("o1").status("COMPLETED").build())));
@@ -202,7 +244,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void completionResponseCarriesOnlyTheReceiptToken() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.complete(any(), any(), any()))
+    when(orderService.complete(any(), any(), any(), any()))
         .thenReturn(new OrderCompletionResponse("raw-token"));
 
     mockMvc
@@ -226,7 +268,7 @@ class OrderControllerTest {
                 "/store/orders/o1/completion", "{\"expected_version\":3,\"fee_lines\":[null]}"))
         .andExpect(status().isBadRequest());
 
-    verify(orderService, never()).complete(any(), any(), any());
+    verify(orderService, never()).complete(any(), any(), any(), any());
   }
 
   @Test
@@ -243,7 +285,7 @@ class OrderControllerTest {
                 "{\"fee_lines\":[{\"kind\":\"CREDIT_SURCHARGE\",\"name\":\"会計\",\"amount\":12000}]}"))
         .andExpect(status().isBadRequest());
 
-    verify(orderService, never()).complete(any(), any(), any());
+    verify(orderService, never()).complete(any(), any(), any(), any());
   }
 
   @Test
@@ -251,7 +293,8 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void completionOfAMemberOrderOmitsTheReceiptTokenKey() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.complete(any(), any(), any())).thenReturn(new OrderCompletionResponse(null));
+    when(orderService.complete(any(), any(), any(), any()))
+        .thenReturn(new OrderCompletionResponse(null));
 
     mockMvc
         .perform(storePost("/store/orders/o1/completion", COMPLETION_BODY))
@@ -267,7 +310,8 @@ class OrderControllerTest {
     ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
         ArgumentCaptor.forClass(OrderQueryCriteria.class);
     ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
-    when(orderService.listWorkQueue(criteriaCaptor.capture(), cursorCaptor.capture(), anyInt()))
+    when(orderService.listWorkQueue(
+            any(), criteriaCaptor.capture(), cursorCaptor.capture(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
@@ -290,7 +334,7 @@ class OrderControllerTest {
     ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
         ArgumentCaptor.forClass(OrderQueryCriteria.class);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    when(orderService.listArchive(criteriaCaptor.capture(), pageableCaptor.capture()))
+    when(orderService.listArchive(any(), criteriaCaptor.capture(), pageableCaptor.capture()))
         .thenReturn(Page.empty());
 
     mockMvc
@@ -324,8 +368,9 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void completionAndPreviewAreAllowedForOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.complete(any(), any(), any())).thenReturn(new OrderCompletionResponse(null));
-    when(orderService.completionPreview(any(), any()))
+    when(orderService.complete(any(), any(), any(), any()))
+        .thenReturn(new OrderCompletionResponse(null));
+    when(orderService.completionPreview(any(), any(), any()))
         .thenReturn(
             new OrderPreviewResponse(
                 "token", null, List.of(), 0, 0, 0, 0, null, List.of(), false, 0, List.of()));
@@ -371,7 +416,8 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void orderUpdateContractAcceptsAnOmittedCastAndReceptionist() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.update(any(), any(), any())).thenReturn(OrderResponse.builder().build());
+    when(orderService.update(any(), any(), any(), any()))
+        .thenReturn(OrderResponse.builder().build());
 
     // 省略を契約で撥ねると、指名・受付担当が未設定のまま確定した受注が編集できなくなる。
     // 「既にある指名・受付担当は外せない」判定は受注の状態を見るサービス層が持つ（OrderServiceTest）。

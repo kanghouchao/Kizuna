@@ -48,7 +48,8 @@ class OrderBusinessContactTest {
   private final BusinessContactPolicy policy =
       new BusinessContactPolicy(new BusinessContactRestrictions(contacts));
   private final BusinessContactPermissions permissions =
-      new BusinessContactPermissions(new ActorIdentityService(users), histories, orders, policy);
+      new BusinessContactPermissions(
+          new ActorIdentityService(users), histories, orders, policy, store);
   private final OrderBusinessContact boundary =
       new OrderBusinessContact(orders, permissions, store);
 
@@ -83,11 +84,11 @@ class OrderBusinessContactTest {
     order.setStoreId(STORE_ID);
     order.replaceContact(
         ContactSnapshot.normalize(null, "090-1234-5678", "Person@EXAMPLE.COM", "once-line"));
-    when(orders.findById("o1")).thenReturn(Optional.of(order));
-    when(histories.findFirstByOrderIdAndTypeOrderByIdDesc(eq("o1"), any()))
+    when(orders.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    when(histories.findFirstByStoreIdAndOrderIdAndTypeOrderByIdDesc(eq(STORE_ID), eq("o1"), any()))
         .thenAnswer(
             invocation -> {
-              ContactType type = invocation.getArgument(1);
+              ContactType type = invocation.getArgument(2);
               String value =
                   switch (type) {
                     case PHONE -> "+819012345678";
@@ -96,6 +97,7 @@ class OrderBusinessContactTest {
                   };
               return Optional.of(
                   BusinessContactHistory.record(
+                      STORE_ID,
                       "o1",
                       type,
                       "RECORDED",
@@ -121,7 +123,7 @@ class OrderBusinessContactTest {
     var order = Order.builder().build();
     order.setId("o1");
     order.setStoreId(STORE_ID);
-    when(orders.findById("o1")).thenReturn(Optional.of(order));
+    when(orders.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     assertThat(boundary.decide("o1", ContactType.EMAIL))
         .isEqualTo(new OrderBusinessContact.Decision(null, BusinessContactDecision.NOT_ALLOWED));
     order.replaceContact(ContactSnapshot.normalize(null, null, "once@example.com", null));
@@ -137,11 +139,13 @@ class OrderBusinessContactTest {
     order.setId("o1");
     order.setStoreId(STORE_ID);
     order.replaceContact(ContactSnapshot.normalize(null, null, "new@example.com", null));
-    when(orders.findById("o1")).thenReturn(Optional.of(order));
-    when(histories.findFirstByOrderIdAndTypeOrderByIdDesc("o1", ContactType.EMAIL))
+    when(orders.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    when(histories.findFirstByStoreIdAndOrderIdAndTypeOrderByIdDesc(
+            STORE_ID, "o1", ContactType.EMAIL))
         .thenReturn(
             Optional.of(
                 BusinessContactHistory.record(
+                    STORE_ID,
                     "o1",
                     ContactType.EMAIL,
                     "RECORDED",
@@ -168,7 +172,7 @@ class OrderBusinessContactTest {
             .build();
     actor.setId(1L);
     when(users.findByEmail("actor@kizuna.test")).thenReturn(Optional.of(actor));
-    when(orders.findById("o1")).thenReturn(Optional.of(order));
+    when(orders.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     var stored = new EnumMap<ContactType, BusinessContactHistory>(ContactType.class);
     when(histories.save(any()))
         .thenAnswer(
@@ -177,8 +181,8 @@ class OrderBusinessContactTest {
               stored.put(history.getType(), history);
               return history;
             });
-    when(histories.findFirstByOrderIdAndTypeOrderByIdDesc(eq("o1"), any()))
-        .thenAnswer(invocation -> Optional.ofNullable(stored.get(invocation.getArgument(1))));
+    when(histories.findFirstByStoreIdAndOrderIdAndTypeOrderByIdDesc(eq(STORE_ID), eq("o1"), any()))
+        .thenAnswer(invocation -> Optional.ofNullable(stored.get(invocation.getArgument(2))));
     var original = ContactSnapshot.normalize(null, null, "first@example.com", null);
     order.replaceContact(original);
     permissions.record(
@@ -188,6 +192,7 @@ class OrderBusinessContactTest {
             new BusinessContactPermissionRequest(
                 ContactType.EMAIL, ContactPermissionStatus.ALLOWED, "本人申告", "今回の連絡を希望")),
         "actor@kizuna.test");
+    assertThat(stored.get(ContactType.EMAIL).getStoreId()).isEqualTo(STORE_ID);
     assertThat(boundary.decide("o1", ContactType.EMAIL).decision())
         .isEqualTo(BusinessContactDecision.ALLOWED);
     var changed = ContactSnapshot.normalize(null, null, "second@example.com", null);

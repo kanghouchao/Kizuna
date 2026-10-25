@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -258,7 +259,8 @@ class MemberOrderApplicationServiceTest {
             .businessDate(today())
             .requesterMemberId(MEMBER_ID)
             .build();
-    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(own));
+    when(orderApplicationRepository.findByIdAndRequesterMemberId("a1", MEMBER_ID))
+        .thenReturn(Optional.of(own));
     when(orderApplicationRepository.save(any(OrderApplication.class)))
         .thenAnswer(i -> i.getArgument(0));
     when(orderApplicationRepository.findMemberView(MEMBER_ID, "a1"))
@@ -279,7 +281,8 @@ class MemberOrderApplicationServiceTest {
             .businessDate(today())
             .requesterMemberId(MEMBER_ID)
             .build();
-    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(own));
+    when(orderApplicationRepository.findByIdAndRequesterMemberId("a1", MEMBER_ID))
+        .thenReturn(Optional.of(own));
 
     assertThatThrownBy(() -> service.withdraw(EMAIL, "a1"))
         .isInstanceOf(InvalidOrderApplicationOperationException.class);
@@ -296,9 +299,13 @@ class MemberOrderApplicationServiceTest {
             .businessDate(today())
             .requesterMemberId(999L)
             .build();
-    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(others));
+    // 申請者の一致は問い合わせが持つ。他人の申請はその本人の会員 id でしか引けない
+    lenient()
+        .when(orderApplicationRepository.findByIdAndRequesterMemberId("a1", 999L))
+        .thenReturn(Optional.of(others));
 
     assertThatThrownBy(() -> service.withdraw(EMAIL, "a1")).isInstanceOf(NotFoundException.class);
+    verify(orderApplicationRepository).findByIdAndRequesterMemberId("a1", MEMBER_ID);
     assertThat(others.getStatus()).isEqualTo(OrderApplicationStatus.PENDING);
     verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
@@ -311,7 +318,9 @@ class MemberOrderApplicationServiceTest {
             .status(OrderApplicationStatus.PENDING)
             .businessDate(today())
             .build();
-    when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(detached));
+    lenient()
+        .when(orderApplicationRepository.findByIdAndRequesterMemberId(eq("a1"), isNull()))
+        .thenReturn(Optional.of(detached));
 
     assertThatThrownBy(() -> service.withdraw(EMAIL, "a1")).isInstanceOf(NotFoundException.class);
     verify(orderApplicationRepository, never()).save(any(OrderApplication.class));

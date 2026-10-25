@@ -13,7 +13,6 @@ import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -28,13 +27,11 @@ public class OrderCalculation {
   private final OrderConfirmation confirmation;
   private final OrderFeeLineSelection selection;
   private final OrderSpecialServices specialServices;
-  private final StoreContext storeContext;
 
-  public OrderCourse current(String courseId, boolean saving) {
+  public OrderCourse current(Long storeId, String courseId, boolean saving) {
     try {
       return snapshot(
-          catalog.current(
-              storeContext.getStoreId(), courseId, OrderServiceCatalog.SelectionKind.COURSE),
+          catalog.current(storeId, courseId, OrderServiceCatalog.SelectionKind.COURSE),
           "CURRENT_SETTING");
     } catch (NotFoundException ex) {
       if (saving) throw new OrderConfirmationConflict("confirmation_token");
@@ -42,10 +39,9 @@ public class OrderCalculation {
     }
   }
 
-  public OrderCourse historical(String revisionId) {
+  public OrderCourse historical(Long storeId, String revisionId) {
     return snapshot(
-        catalog.historical(
-            storeContext.getStoreId(), revisionId, OrderServiceCatalog.SelectionKind.COURSE),
+        catalog.historical(storeId, revisionId, OrderServiceCatalog.SelectionKind.COURSE),
         "HISTORICAL_CORRECTION");
   }
 
@@ -68,8 +64,13 @@ public class OrderCalculation {
   }
 
   public Order calculate(
-      Order original, OrderCourse course, List<OrderFeeLineRequest> lines, boolean saving) {
+      Long storeId,
+      Order original,
+      OrderCourse course,
+      List<OrderFeeLineRequest> lines,
+      boolean saving) {
     return calculate(
+        storeId,
         original,
         course,
         lines,
@@ -78,6 +79,7 @@ public class OrderCalculation {
   }
 
   public Order calculate(
+      Long storeId,
       Order original,
       OrderCourse course,
       List<OrderFeeLineRequest> lines,
@@ -89,6 +91,7 @@ public class OrderCalculation {
         course,
         specials,
         selection.resolve(
+            storeId,
             original,
             lines,
             original != null && original.getStatus() == OrderStatus.COMPLETED,
@@ -96,15 +99,17 @@ public class OrderCalculation {
   }
 
   public OrderPreviewResponse preview(
+      Long storeId,
       String operation,
       String id,
       Object input,
       Order calculated,
       OrderPreviewResponse.Points points) {
-    return preview(operation, id, input, calculated, points, List.of());
+    return preview(storeId, operation, id, input, calculated, points, List.of());
   }
 
   public OrderPreviewResponse preview(
+      Long storeId,
       String operation,
       String id,
       Object input,
@@ -116,7 +121,7 @@ public class OrderCalculation {
     lines.stream()
         .filter(line -> line.getLineId() == null)
         .forEach(line -> line.setAdoptedAt(null));
-    var specials = specialServices.describe(calculated);
+    var specials = specialServices.describe(storeId, calculated);
     int unresolved =
         (int) specials.stream().filter(OrderSpecialServiceResponse::requiresAttention).count();
     var result =
@@ -142,7 +147,7 @@ public class OrderCalculation {
             unresolved,
             contactImports);
     return new OrderPreviewResponse(
-        confirmation.sign(operation, id, input, result),
+        confirmation.sign(storeId, operation, id, input, result),
         result.course(),
         result.feeLines(),
         result.totalFee(),
@@ -160,8 +165,9 @@ public class OrderCalculation {
     if (token != null) throw new ServiceException("試算要求に確認値は指定できません");
   }
 
-  public boolean wasPreviewed(String operation, String id, Object input, String token) {
-    return confirmation.wasPreviewed(operation, id, input, token);
+  public boolean wasPreviewed(
+      Long storeId, String operation, String id, Object input, String token) {
+    return confirmation.wasPreviewed(storeId, operation, id, input, token);
   }
 
   public void verify(String token, OrderPreviewResponse preview) {

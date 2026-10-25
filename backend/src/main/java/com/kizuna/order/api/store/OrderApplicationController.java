@@ -15,7 +15,7 @@ import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
 import com.kizuna.shared.exception.TooManyRequestsException;
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,7 +43,6 @@ public class OrderApplicationController {
   private final OrderService orderService;
   private final GuestOrderApplicationService guestOrderApplicationService;
   private final GuestApplicationRateLimiter guestApplicationRateLimiter;
-  private final StoreContext storeContext;
 
   @GetMapping("/public/contact-consent")
   @PermitAll
@@ -61,13 +60,14 @@ public class OrderApplicationController {
   @PostMapping("/public")
   @PermitAll
   public ResponseEntity<GuestOrderApplicationResponse> requestAsGuest(
+      @CurrentStore Long storeId,
       @Valid @RequestBody GuestOrderApplicationCreateRequest request,
       HttpServletRequest httpRequest) {
-    if (!guestApplicationRateLimiter.tryConsume(storeContext.getStoreId(), originOf(httpRequest))) {
+    if (!guestApplicationRateLimiter.tryConsume(storeId, originOf(httpRequest))) {
       throw new TooManyRequestsException("送信が続いたため受け付けられませんでした。しばらく時間をおいてからお試しください");
     }
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(guestOrderApplicationService.request(request));
+        .body(guestOrderApplicationService.request(storeId, request));
   }
 
   /**
@@ -94,17 +94,19 @@ public class OrderApplicationController {
    */
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public OrderApplicationDetailResponse detail(@PathVariable String id) {
-    return orderService.applicationDetail(id);
+  public OrderApplicationDetailResponse detail(
+      @CurrentStore Long storeId, @PathVariable String id) {
+    return orderService.applicationDetail(storeId, id);
   }
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<CursorPage<OrderApplicationResponse>> list(
+      @CurrentStore Long storeId,
       @RequestParam(name = "statuses") Set<OrderApplicationStatus> statuses,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(orderService.listApplications(statuses, cursor, size));
+    return ResponseEntity.ok(orderService.listApplications(storeId, statuses, cursor, size));
   }
 
   /**
@@ -118,15 +120,16 @@ public class OrderApplicationController {
   @PostMapping("/{id}/confirmation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> confirm(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderApplicationConfirmationRequest request,
       Principal principal) {
     try {
       return ResponseEntity.status(HttpStatus.CREATED)
-          .body(orderService.confirmApplication(id, request, principal.getName()));
+          .body(orderService.confirmApplication(storeId, id, request, principal.getName()));
     } catch (MemberCustomerConflictException ex) {
       return ResponseEntity.status(HttpStatus.CREATED)
-          .body(orderService.confirmApplication(id, request, principal.getName()));
+          .body(orderService.confirmApplication(storeId, id, request, principal.getName()));
     }
   }
 
@@ -134,17 +137,20 @@ public class OrderApplicationController {
   @PostMapping("/{id}/refusal")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Void> decline(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderApplicationDeclineRequest request,
       Principal principal) {
-    orderService.declineApplication(id, request, principal.getName());
+    orderService.declineApplication(storeId, id, request, principal.getName());
     return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/{id}/confirmation-preview")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public OrderPreviewResponse preview(
-      @PathVariable String id, @Valid @RequestBody OrderApplicationConfirmationRequest request) {
-    return orderService.previewConfirmation(id, request);
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody OrderApplicationConfirmationRequest request) {
+    return orderService.previewConfirmation(storeId, id, request);
   }
 }

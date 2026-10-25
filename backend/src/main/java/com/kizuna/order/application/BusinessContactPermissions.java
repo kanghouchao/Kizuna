@@ -13,6 +13,7 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
@@ -37,6 +38,7 @@ public class BusinessContactPermissions {
   private final BusinessContactHistoryRepository histories;
   private final OrderRepository orders;
   private final BusinessContactPolicy policy;
+  private final StoreContext storeContext;
 
   public static String value(ContactSnapshot snapshot, ContactType type) {
     if (snapshot == null) return null;
@@ -86,7 +88,10 @@ public class BusinessContactPermissions {
       var request = requests.get(type);
       if (request == null && Objects.equals(oldValue, nextValue)) continue;
       var latest =
-          histories.findFirstByOrderIdAndTypeOrderByIdDesc(order.getId(), type).orElse(null);
+          histories
+              .findFirstByStoreIdAndOrderIdAndTypeOrderByIdDesc(
+                  order.getStoreId(), order.getId(), type)
+              .orElse(null);
       var before = latest == null ? BusinessContactState.unknown(oldValue) : latest.getAfter();
       var after =
           request == null
@@ -95,6 +100,7 @@ public class BusinessContactPermissions {
                   nextValue, request.status(), request.source().strip(), request.reason().strip());
       histories.save(
           BusinessContactHistory.record(
+              order.getStoreId(),
               order.getId(),
               type,
               request == null ? "CONTACT_CHANGED" : "RECORDED",
@@ -114,7 +120,10 @@ public class BusinessContactPermissions {
       String value = value(order.getContactSnapshot(), type);
       if (value == null) continue;
       var latest =
-          histories.findFirstByOrderIdAndTypeOrderByIdDesc(order.getId(), type).orElse(null);
+          histories
+              .findFirstByStoreIdAndOrderIdAndTypeOrderByIdDesc(
+                  order.getStoreId(), order.getId(), type)
+              .orElse(null);
       var state = latest == null ? BusinessContactState.unknown(value) : latest.getAfter();
       if (state == null || !value.equals(state.value()))
         throw new IllegalStateException("受注の連絡先と許可記録が一致しません");
@@ -136,11 +145,17 @@ public class BusinessContactPermissions {
   @Transactional(readOnly = true)
   public CursorPage<BusinessContactHistoryResponse> history(
       String orderId, String cursor, int requestedSize) {
-    orders.findById(orderId).orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    Long storeId = storeContext.getStoreId();
+    orders
+        .findByIdAndStoreId(orderId, storeId)
+        .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     int size = CursorPage.clampSize(requestedSize);
     return CursorPage.of(
-            histories.findByOrderIdAndIdLessThanOrderByIdDesc(
-                orderId, cursor == null ? "~" : PageCursor.decodeKey(cursor), Limit.of(size + 1)),
+            histories.findByStoreIdAndOrderIdAndIdLessThanOrderByIdDesc(
+                storeId,
+                orderId,
+                cursor == null ? "~" : PageCursor.decodeKey(cursor),
+                Limit.of(size + 1)),
             size,
             h -> PageCursor.encodeKey(h.getId()))
         .map(BusinessContactHistoryResponse::from);

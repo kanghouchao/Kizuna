@@ -28,7 +28,6 @@ import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.service.domain.ServiceRevision;
 import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.service.domain.ServiceTerms;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -185,8 +184,6 @@ class ServiceAuditTest {
 
   @Test
   void ownDecisionReferencesRealConsentEventAndSuppressesDuplicateChoice() {
-    var store = new StoreContext();
-    store.setStoreId(STORE_ID);
     var stores = mock(StoreRepository.class);
     var enrollments = mock(CastEnrollmentRepository.class);
     var consents = mock(ServiceConsentRepository.class);
@@ -198,7 +195,6 @@ class ServiceAuditTest {
             mock(OrderSpecialServiceEventRepository.class),
             mock(OrderRepository.class),
             stores,
-            store,
             actors);
     var own =
         new OwnServiceConditionService(

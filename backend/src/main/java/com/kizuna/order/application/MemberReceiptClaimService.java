@@ -74,7 +74,7 @@ public class MemberReceiptClaimService {
     // 結ばれているので、引けない受注は実装欠陥だが、その場合も利用者へは同形のエラーで返す。
     Order order =
         orderRepository
-            .findById(token.getOrderId())
+            .findByReceiptTokenDigest(token.getTokenDigest())
             .orElseThrow(() -> new NotFoundException(UNCLAIMABLE_MESSAGE));
 
     if (order.isCompletionInvalidated()) {

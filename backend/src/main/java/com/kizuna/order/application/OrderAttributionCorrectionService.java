@@ -113,7 +113,7 @@ public class OrderAttributionCorrectionService {
     // 上限を数えてから記帳し終えるまで、同じ受注に対する並行の訂正と直列化する。押さえないと双方が同じ
     // 「まだ引かれていない」を観測し、合計が付与額を超えて通る。
     orderRepository
-        .findScopedByIdForUpdate(orderId)
+        .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     List<OrderAttribution> attributions =
         orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
@@ -188,7 +188,7 @@ public class OrderAttributionCorrectionService {
    * <p>引けない受注は他店舗のものか存在しないかを区別せず 404 にする（区別すると受注 ID の存在が漏れる）。
    */
   private void requireScopedOrder(String orderId) {
-    if (orderRepository.findScopedById(orderId).isEmpty()) {
+    if (orderRepository.findByIdAndStoreId(orderId, storeContext.getStoreId()).isEmpty()) {
       throw new NotFoundException("注文が見つかりません: " + orderId);
     }
   }

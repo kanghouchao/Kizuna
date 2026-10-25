@@ -55,7 +55,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -120,7 +119,6 @@ public class OrderService {
   private final BusinessContactPermissions businessContactPermissions;
   private final GuestApplicationConsent guestConsent;
   private final ReceptionistEligibilityService receptionistEligibilityService;
-  private final StoreContext storeContext;
   private final BusinessDateService businessDateService;
   private final OrderMapper orderMapper;
   private final OrderCalculation calculation;
@@ -128,10 +126,12 @@ public class OrderService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Page<OrderSummaryResponse> list(String customerId, Pageable pageable) {
+  public Page<OrderSummaryResponse> list(Long storeId, String customerId, Pageable pageable) {
     // 一覧は集約を経由せず JPQL join projection で取得。customerId は顧客詳細の注文履歴用
     String filter = (customerId == null || customerId.isBlank()) ? null : customerId;
-    return orderRepository.findAllViews(filter, pageable).map(orderMapper::toSummaryResponse);
+    return orderRepository
+        .findAllViews(storeId, filter, pageable)
+        .map(orderMapper::toSummaryResponse);
   }
 
   /**
@@ -158,18 +158,18 @@ public class OrderService {
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<OrderWorkQueueResponse> listWorkQueue(
-      OrderQueryCriteria criteria, String cursor, int requestedSize) {
+      Long storeId, OrderQueryCriteria criteria, String cursor, int requestedSize) {
     int size = CursorPage.clampSize(requestedSize);
     // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
     List<OrderedRow> rows =
         orderSearchQuery.findRows(
-            criteria, cursor == null ? null : PageCursor.decode(cursor), size + 1);
+            storeId, criteria, cursor == null ? null : PageCursor.decode(cursor), size + 1);
     // 続きの位置は並びを決めたこの問い合わせが返した鍵から組む。行の中身を引く 2 本目から組むと、
     // 2 本が別の断面を見た場合に並べたときの値と食い違い、間の受注を丸ごと飛ばす（OrderedRow に理由を記す）。
     Map<String, String> cursorsById =
         rows.stream()
             .collect(Collectors.toMap(OrderedRow::id, row -> String.valueOf(row.sortKey())));
-    List<OrderView> views = viewsInOrder(rows.stream().map(OrderedRow::id).toList());
+    List<OrderView> views = viewsInOrder(storeId, rows.stream().map(OrderedRow::id).toList());
     return CursorPage.of(views, size, view -> cursorOf(view, cursorsById))
         .map(orderMapper::toWorkQueueResponse);
   }
@@ -184,12 +184,13 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<OrderArchiveResponse> listArchive(OrderQueryCriteria criteria, Pageable pageable) {
+  public Page<OrderArchiveResponse> listArchive(
+      Long storeId, OrderQueryCriteria criteria, Pageable pageable) {
     // アーカイブは位置をページ番号で指すため、鍵の値そのものは要らない
-    List<String> ids = orderSearchQuery.findIds(criteria, pageable);
+    List<String> ids = orderSearchQuery.findIds(storeId, criteria, pageable);
     List<OrderArchiveResponse> rows =
-        viewsInOrder(ids).stream().map(orderMapper::toArchiveResponse).toList();
-    return new PageImpl<>(rows, pageable, orderSearchQuery.count(criteria));
+        viewsInOrder(storeId, ids).stream().map(orderMapper::toArchiveResponse).toList();
+    return new PageImpl<>(rows, pageable, orderSearchQuery.count(storeId, criteria));
   }
 
   /**
@@ -199,18 +200,18 @@ public class OrderService {
    * 件ぶん狂い、続きがあるのに「もう無い」と返る — 呼出側はそこで読むのをやめるので、 対応が要る受注が画面から永久に消える。件数の減った 1
    * ページとして現れるため、断らなければ表示上は正常に見えてしまう。
    *
-   * <p>2 つの問い合わせは同じ店舗の文脈・同じトランザクションで走るので、母集合が食い違うこと自体が実装の欠陥である （典型は動的な問い合わせの側に店舗行分離が効いていない場合）。
+   * <p>2 つの問い合わせは同じ店舗・同じトランザクションで走るので、母集合が食い違うこと自体が実装の欠陥である （典型は片方の問い合わせに店舗条件が欠けている場合）。
    *
    * <p>捕まえるのは<b>行が消えたこと</b>だけで、行の値が変わったことは見ない。READ COMMITTED では 2 本が別の断面を
    * 見るため値の食い違い自体は起こりうるが、続きの位置は並びを決めた 1 本目の鍵から組むので（{@code OrderSearchQuery.OrderedRow}）、表示が 1
    * 拍古いことしか意味しない。
    */
-  private List<OrderView> viewsInOrder(List<String> ids) {
+  private List<OrderView> viewsInOrder(Long storeId, List<String> ids) {
     if (ids.isEmpty()) {
       return List.of();
     }
     Map<String, OrderView> byId =
-        orderRepository.findViewsByIds(ids).stream()
+        orderRepository.findViewsByIds(storeId, ids).stream()
             .collect(Collectors.toMap(OrderView::getId, view -> view));
     List<OrderView> views = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
     if (views.size() != ids.size()) {
@@ -228,9 +229,12 @@ public class OrderService {
   /** 集約・表示用 projection・現在の受諾と要対応を同じ断面から返す。 */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public OrderResponse get(String id) {
+  public OrderResponse get(Long storeId, String id) {
     return toResponse(
-        orderRepository.findById(id).orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id)));
+        storeId,
+        orderRepository
+            .findByIdAndStoreId(id, storeId)
+            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id)));
   }
 
   /**
@@ -239,9 +243,9 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public OrderResponse create(OrderCreateRequest request, String actorEmail) {
-    specialServices.lock();
-    validateReplacement(request.getReplacementForOrderId());
+  public OrderResponse create(Long storeId, OrderCreateRequest request, String actorEmail) {
+    specialServices.lock(storeId);
+    validateReplacement(storeId, request.getReplacementForOrderId());
     // Web 申請の経路（MEMBER_WEB / GUEST_WEB）は申請の確定だけが書く値。台帳を触るより先に撥ねる —
     // 広告費と効果集計の根拠になる記録が代理入力で偽装されると、後から申請と手入力を切り分ける手立てが無い。
     if (request.getReceptionRoute() != null && !request.getReceptionRoute().isStoreSelectable()) {
@@ -249,75 +253,83 @@ public class OrderService {
     }
 
     Order order = orderMapper.toEntity(request);
+    // 明細の店舗は採用時に受注から写すため、採用より先に置く
+    order.setStoreId(storeId);
 
     // 指名は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
     // 店舗が起こす受注は常に新しい指名を立てるため、据え置きの余地は無く無条件に要求する。
     nominatableCast
-        .findForUpdate(storeContext.getStoreId(), request.getCastId())
+        .findForUpdate(storeId, request.getCastId())
         .orElseThrow(
             () ->
                 eligibilityFailure(
-                    calculation.wasPreviewed("CREATE", "", request, request.getConfirmationToken()),
+                    calculation.wasPreviewed(
+                        storeId, "CREATE", "", request, request.getConfirmationToken()),
                     NOT_NOMINATABLE_MESSAGE));
-    var course = calculation.current(request.getCourseId(), true);
+    var course = calculation.current(storeId, request.getCourseId(), true);
     var calculated =
         calculation.calculate(
+            storeId,
             null,
             course,
             request.getFeeLines(),
             specialServices.select(
+                storeId,
                 null,
                 request.getCastId(),
                 request.getSpecialServiceIds(),
-                calculation.wasPreviewed("CREATE", "", request, request.getConfirmationToken())),
+                calculation.wasPreviewed(
+                    storeId, "CREATE", "", request, request.getConfirmationToken())),
             true);
     order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
 
-    order.linkCustomer(selectCustomer(request.getCustomerSelection(), true));
+    order.linkCustomer(selectCustomer(storeId, request.getCustomerSelection(), true));
     order.replaceContact(snapshot(request.getContactSnapshot()));
     calculated.linkCustomer(order.getCustomerId());
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview("CREATE", "", request, calculated, completionPoints(calculated, 0)));
+        calculation.preview(
+            storeId, "CREATE", "", request, calculated, completionPoints(storeId, calculated, 0)));
 
     order.assignCast(request.getCastId());
-    order.assignReceptionist(resolveReceptionist(request.getReceptionistId(), actorEmail));
+    order.assignReceptionist(resolveReceptionist(storeId, request.getReceptionistId(), actorEmail));
 
     Order saved = orderRepository.save(order);
     orderRepository.flush();
     businessContactPermissions.record(
         saved, ContactSnapshot.empty(), request.getBusinessContactPermissions(), actorEmail);
     auditOrder(saved, "ORDER_CREATED", actorEmail, null, null, null);
-    return toResponse(saved);
+    return toResponse(storeId, saved);
   }
 
-  private void validateReplacement(String id) {
+  private void validateReplacement(Long storeId, String id) {
     if (id == null) return;
     var original =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("再提供の元受注が見つかりません"));
     if (!original.isCompletionInvalidated()) throw new ServiceException("無効化した受注だけを再提供の元受注に指定できます");
   }
 
   /** 作成時は適格な受付担当を必須とし、省略時も実行者本人の適格性を検証する。 会員申請の確定と異なり既に成立した申請を引き継がないため、未設定のまま受注を起こさない。 */
-  private Long resolveReceptionist(Long requested, String actorEmail) {
+  private Long resolveReceptionist(Long storeId, Long requested, String actorEmail) {
     if (requested != null) {
-      validateReceptionist(requested);
+      validateReceptionist(storeId, requested);
       return requested;
     }
-    return eligibleReceptionistId(actorEmail)
+    return eligibleReceptionistId(storeId, actorEmail)
         .orElseThrow(() -> new ServiceException("受付担当を指定してください"));
   }
 
   /** 未完了の受注だけを部分更新する。状態遷移と完了後の訂正は、それぞれの専用操作で検証する。 */
   @StoreScoped
   @Transactional
-  public OrderResponse update(String id, OrderUpdateRequest request, String actorEmail) {
-    specialServices.lock();
+  public OrderResponse update(
+      Long storeId, String id, OrderUpdateRequest request, String actorEmail) {
+    specialServices.lock(storeId);
     Order order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
     calculation.requireVersion(order, request.getExpectedVersion());
@@ -337,14 +349,15 @@ public class OrderService {
     Long receptionistId = request.getReceptionistId();
 
     validateUpdateAssignments(
+        storeId,
         order,
         castId,
         receptionistId,
-        calculation.wasPreviewed("UPDATE", id, request, request.getConfirmationToken()));
+        calculation.wasPreviewed(storeId, "UPDATE", id, request, request.getConfirmationToken()));
 
     validateEditableCustomer(order, request.getCustomerSelection());
     if (request.getCustomerSelection() != null)
-      order.linkCustomer(selectCustomer(request.getCustomerSelection(), true));
+      order.linkCustomer(selectCustomer(storeId, request.getCustomerSelection(), true));
     var previousContact = order.getContactSnapshot();
     if (request.getContactSnapshot() != null)
       order.replaceContact(snapshot(request.getContactSnapshot()));
@@ -352,22 +365,26 @@ public class OrderService {
     var course =
         request.getCourseId() == null
             ? order.getCourse()
-            : calculation.current(request.getCourseId(), true);
+            : calculation.current(storeId, request.getCourseId(), true);
     var calculated =
         calculation.calculate(
+            storeId,
             order,
             course,
             request.getFeeLines(),
             specialServices.select(
+                storeId,
                 order,
                 castId,
                 request.getSpecialServiceIds(),
-                calculation.wasPreviewed("UPDATE", id, request, request.getConfirmationToken())),
+                calculation.wasPreviewed(
+                    storeId, "UPDATE", id, request, request.getConfirmationToken())),
             true);
-    lockCustomerWithoutWaiting(order);
+    lockCustomerWithoutWaiting(storeId, order);
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview("UPDATE", id, request, calculated, completionPoints(calculated, 0)));
+        calculation.preview(
+            storeId, "UPDATE", id, request, calculated, completionPoints(storeId, calculated, 0)));
     var previousSpecials = order.getSpecialServices();
     int previousTotal = order.getTotalFee();
     String previousCast = order.getCastId();
@@ -381,13 +398,13 @@ public class OrderService {
       order.assignReceptionist(receptionistId);
     }
 
-    specialServices.resolve(order, previousSpecials, previousTotal, previousCast);
+    specialServices.resolve(storeId, order, previousSpecials, previousTotal, previousCast);
     businessContactPermissions.record(
         order, previousContact, request.getBusinessContactPermissions(), actorEmail);
 
     Order saved = orderRepository.save(order);
     auditOrder(saved, "ORDER_UPDATED", actorEmail, before, null, null);
-    return toResponse(saved);
+    return toResponse(storeId, saved);
   }
 
   /**
@@ -402,22 +419,22 @@ public class OrderService {
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<OrderApplicationResponse> listApplications(
-      Set<OrderApplicationStatus> statuses, String cursor, int requestedSize) {
+      Long storeId, Set<OrderApplicationStatus> statuses, String cursor, int requestedSize) {
     int size = CursorPage.clampSize(requestedSize);
     Limit limit = Limit.of(size + 1);
     List<OrderApplicationView> fetched =
         cursor == null
-            ? orderApplicationRepository.findViews(statuses, limit)
-            : fetchApplicationsAfter(statuses, PageCursor.decode(cursor), limit);
+            ? orderApplicationRepository.findViews(storeId, statuses, limit)
+            : fetchApplicationsAfter(storeId, statuses, PageCursor.decode(cursor), limit);
     LocalDate today = businessDateService.currentBusinessDate();
     return CursorPage.of(fetched, size, OrderService::applicationCursorOf)
         .map(view -> toApplicationResponse(view, today));
   }
 
   private List<OrderApplicationView> fetchApplicationsAfter(
-      Set<OrderApplicationStatus> statuses, PageCursor cursor, Limit limit) {
+      Long storeId, Set<OrderApplicationStatus> statuses, PageCursor cursor, Limit limit) {
     return orderApplicationRepository.findViewsAfter(
-        statuses, cursor.dateKey(), cursor.id(), limit);
+        storeId, statuses, cursor.dateKey(), cursor.id(), limit);
   }
 
   private static String applicationCursorOf(OrderApplicationView view) {
@@ -426,14 +443,14 @@ public class OrderService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public OrderApplicationDetailResponse applicationDetail(String id) {
+  public OrderApplicationDetailResponse applicationDetail(Long storeId, String id) {
     var application =
         orderApplicationRepository
-            .findById(id)
+            .findByIdAndStoreId(id, storeId)
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません"));
     var view =
         orderApplicationRepository
-            .findView(id)
+            .findView(storeId, id)
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません"));
     return new OrderApplicationDetailResponse(
         toApplicationResponse(view, businessDateService.currentBusinessDate()),
@@ -485,11 +502,11 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public OrderResponse confirmApplication(
-      String id, OrderApplicationConfirmationRequest request, String actorEmail) {
-    specialServices.lock();
+      Long storeId, String id, OrderApplicationConfirmationRequest request, String actorEmail) {
+    specialServices.lock(storeId);
     OrderApplication application =
         orderApplicationRepository
-            .findForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
 
     // 検証は書き換えより先にすべて済ませる。撥ねる要求が集約や台帳を触った後だと、拒否の健全さが
@@ -499,38 +516,42 @@ public class OrderService {
     application.ensureDecidable(today);
     if (request.getCastId() != null) {
       nominatableCast
-          .findForUpdate(storeContext.getStoreId(), request.getCastId())
+          .findForUpdate(storeId, request.getCastId())
           .orElseThrow(
               () ->
                   eligibilityFailure(
                       calculation.wasPreviewed(
-                          "CONFIRM", id, request, request.getConfirmationToken()),
+                          storeId, "CONFIRM", id, request, request.getConfirmationToken()),
                       "指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
       if (!confirmedShiftLookupService.hasConfirmedShift(
-          storeContext.getStoreId(), request.getCastId(), request.getBusinessDate())) {
+          storeId, request.getCastId(), request.getBusinessDate())) {
         throw eligibilityFailure(
-            calculation.wasPreviewed("CONFIRM", id, request, request.getConfirmationToken()),
+            calculation.wasPreviewed(
+                storeId, "CONFIRM", id, request, request.getConfirmationToken()),
             "指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
       }
     }
     if (request.getReceptionistId() != null) {
-      validateReceptionist(request.getReceptionistId());
+      validateReceptionist(storeId, request.getReceptionistId());
     }
-    validateCustomerChoice(application, request);
+    validateCustomerChoice(storeId, application, request);
     var contactImports = guestConsent.previewImports(application, request);
     Long actorId = actorIdentityService.requireUserId(actorEmail);
 
-    var course = calculation.current(request.getCourseId(), true);
+    var course = calculation.current(storeId, request.getCourseId(), true);
     var calculated =
         calculation.calculate(
+            storeId,
             null,
             course,
             request.getFeeLines(),
             specialServices.select(
+                storeId,
                 null,
                 request.getCastId(),
                 request.getSpecialServiceIds(),
-                calculation.wasPreviewed("CONFIRM", id, request, request.getConfirmationToken())),
+                calculation.wasPreviewed(
+                    storeId, "CONFIRM", id, request, request.getConfirmationToken())),
             true);
     Order order =
         Order.builder()
@@ -549,6 +570,7 @@ public class OrderService {
             .requesterMemberCode(application.getRequesterMemberCode())
             .requesterDeclaredName(application.getRequesterDeclaredName())
             .build();
+    order.setStoreId(storeId);
     order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
     if (request.getCastId() != null) {
       order.assignCast(request.getCastId());
@@ -556,16 +578,16 @@ public class OrderService {
     if (request.getReceptionistId() != null) {
       order.assignReceptionist(request.getReceptionistId());
     } else {
-      eligibleReceptionistId(actorEmail).ifPresent(order::assignReceptionist);
+      eligibleReceptionistId(storeId, actorEmail).ifPresent(order::assignReceptionist);
     }
     if (application.isGuest()) {
-      order.linkCustomer(selectCustomer(request.getCustomerSelection(), true));
+      order.linkCustomer(selectCustomer(storeId, request.getCustomerSelection(), true));
     } else if (application.getRequesterMemberId() != null) {
       // 申請者の会員 ID が欠落した申請（会員行の削除後）は整える先が無いため、顧客未設定のまま成立させる
       // （無帰属受注は正規の状態）。
       order.linkCustomer(
           customerProvisioningService.ensureMemberRequestCustomer(
-              application.getStoreId(),
+              storeId,
               new MemberRequestCustomerInput(
                   application.getRequesterMemberId(),
                   application.getRequesterMemberCode(),
@@ -587,7 +609,13 @@ public class OrderService {
     calculation.verify(
         request.getConfirmationToken(),
         calculation.preview(
-            "CONFIRM", id, request, calculated, completionPoints(calculated, 0), contactImports));
+            storeId,
+            "CONFIRM",
+            id,
+            request,
+            calculated,
+            completionPoints(storeId, calculated, 0),
+            contactImports));
     Order saved = orderRepository.save(order);
     businessContactPermissions.record(
         saved,
@@ -599,14 +627,14 @@ public class OrderService {
     orderApplicationRepository.save(application);
     auditOrder(saved, "ORDER_CREATED", actorEmail, null, "ORDER_APPLICATION", application.getId());
     auditApplication(application, "ORDER_APPLICATION_CONFIRMED", actorEmail, before);
-    return toResponse(saved);
+    return toResponse(storeId, saved);
   }
 
   private void validateCustomerChoice(
-      OrderApplication application, OrderApplicationConfirmationRequest request) {
+      Long storeId, OrderApplication application, OrderApplicationConfirmationRequest request) {
     if (!application.isGuest() && request.getCustomerSelection() != null)
       throw new ServiceException("会員の申請では顧客を選べません。顧客は会員の紐づけから決まります");
-    if (application.isGuest()) selectCustomer(request.getCustomerSelection(), false);
+    if (application.isGuest()) selectCustomer(storeId, request.getCustomerSelection(), false);
     if (request.getContactSnapshot() != null) snapshot(request.getContactSnapshot());
   }
 
@@ -614,11 +642,11 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public OrderCompletionResponse complete(
-      String id, OrderCompletionRequest request, String actorEmail) {
-    specialServices.lock();
+      Long storeId, String id, OrderCompletionRequest request, String actorEmail) {
+    specialServices.lock(storeId);
     Order order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
     // 検証は台帳を触るより先に済ませる。撥ねる要求が仕訳を積んだ後だと、拒否の健全さがトランザクションの
@@ -637,19 +665,21 @@ public class OrderService {
     }
 
     var before = OrderAuditSnapshot.of(order);
-    specialServices.requireProgress(order);
-    var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), true);
+    specialServices.requireProgress(storeId, order);
+    var calculated =
+        calculation.calculate(storeId, order, order.getCourse(), request.getFeeLines(), true);
     order.replaceStoreFeeLines(calculated.editableFeeLines());
     // 付与の基準と利用の上限は、ポイント利用の行を除いた総和で決める。利用の行を入れた後の合計は
     // ポイント控除後の請求額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
     int chargeAmount = order.grantBasisAmount();
 
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
-    lockCustomerWithoutWaiting(order);
-    CustomerMemberLink link = activeLink(order).orElse(null);
+    lockCustomerWithoutWaiting(storeId, order);
+    CustomerMemberLink link = activeLink(storeId, order).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
     if (memberId == null && usePoints > 0) {
-      if (calculation.wasPreviewed("COMPLETE", id, request, request.getConfirmationToken()))
+      if (calculation.wasPreviewed(
+          storeId, "COMPLETE", id, request, request.getConfirmationToken()))
         throw new OrderConfirmationConflict("confirmation_token");
       throw new ServiceException("非会員の受注ではポイントを利用できません");
     }
@@ -665,11 +695,12 @@ public class OrderService {
             link == null ? null : link.getMemberCode(),
             chargeAmount,
             usePoints,
-            calculation.wasPreviewed("COMPLETE", id, request, request.getConfirmationToken()));
+            calculation.wasPreviewed(
+                storeId, "COMPLETE", id, request, request.getConfirmationToken()));
     calculated.completeWith(usePoints, pointsPreview.grantPoints());
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview("COMPLETE", id, request, calculated, pointsPreview));
+        calculation.preview(storeId, "COMPLETE", id, request, calculated, pointsPreview));
     int granted = 0;
     String receiptToken = null;
     if (memberId != null) {
@@ -723,62 +754,67 @@ public class OrderService {
 
   @StoreScoped
   @Transactional
-  public OrderPreviewResponse previewCreate(OrderCreateRequest request, String actor) {
-    specialServices.lock();
-    validateReplacement(request.getReplacementForOrderId());
+  public OrderPreviewResponse previewCreate(
+      Long storeId, OrderCreateRequest request, String actor) {
+    specialServices.lock(storeId);
+    validateReplacement(storeId, request.getReplacementForOrderId());
     calculation.requirePreviewInput(request.getConfirmationToken());
     if (request.getReceptionRoute() != null && !request.getReceptionRoute().isStoreSelectable())
       throw new ServiceException("受付経路に Web 申請は指定できません");
     nominatableCast
-        .findForUpdate(storeContext.getStoreId(), request.getCastId())
+        .findForUpdate(storeId, request.getCastId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
-    resolveReceptionist(request.getReceptionistId(), actor);
+    resolveReceptionist(storeId, request.getReceptionistId(), actor);
     businessContactPermissions.validate(
         snapshot(request.getContactSnapshot()), request.getBusinessContactPermissions());
-    var course = calculation.current(request.getCourseId(), false);
+    var course = calculation.current(storeId, request.getCourseId(), false);
     var calculated =
         calculation.calculate(
+            storeId,
             null,
             course,
             request.getFeeLines(),
             specialServices.select(
-                null, request.getCastId(), request.getSpecialServiceIds(), false),
+                storeId, null, request.getCastId(), request.getSpecialServiceIds(), false),
             false);
-    String customerId = selectCustomer(request.getCustomerSelection(), false);
+    String customerId = selectCustomer(storeId, request.getCustomerSelection(), false);
     calculated.linkCustomer(customerId);
-    return calculation.preview("CREATE", "", request, calculated, completionPoints(calculated, 0));
+    return calculation.preview(
+        storeId, "CREATE", "", request, calculated, completionPoints(storeId, calculated, 0));
   }
 
   @StoreScoped
   @Transactional
   public OrderPreviewResponse previewConfirmation(
-      String id, OrderApplicationConfirmationRequest request) {
-    specialServices.lock();
+      Long storeId, String id, OrderApplicationConfirmationRequest request) {
+    specialServices.lock(storeId);
     calculation.requirePreviewInput(request.getConfirmationToken());
     var application =
         orderApplicationRepository
-            .findForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません"));
     application.ensureDecidable(businessDateService.currentBusinessDate());
-    validateCustomerChoice(application, request);
+    validateCustomerChoice(storeId, application, request);
     if (request.getCastId() != null) {
       nominatableCast
-          .findForUpdate(storeContext.getStoreId(), request.getCastId())
+          .findForUpdate(storeId, request.getCastId())
           .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
       if (!confirmedShiftLookupService.hasConfirmedShift(
-          storeContext.getStoreId(), request.getCastId(), request.getBusinessDate()))
+          storeId, request.getCastId(), request.getBusinessDate()))
         throw new ServiceException("確定シフトがありません");
     }
-    if (request.getReceptionistId() != null) validateReceptionist(request.getReceptionistId());
+    if (request.getReceptionistId() != null)
+      validateReceptionist(storeId, request.getReceptionistId());
     snapshot(request.getContactSnapshot());
-    var course = calculation.current(request.getCourseId(), false);
+    var course = calculation.current(storeId, request.getCourseId(), false);
     var calculated =
         calculation.calculate(
+            storeId,
             null,
             course,
             request.getFeeLines(),
             specialServices.select(
-                null, request.getCastId(), request.getSpecialServiceIds(), false),
+                storeId, null, request.getCastId(), request.getSpecialServiceIds(), false),
             false);
     OrderPreviewResponse.Points points;
     if (!application.isGuest() && application.getRequesterMemberId() != null) {
@@ -791,10 +827,13 @@ public class OrderService {
               false);
     } else {
       calculated.linkCustomer(
-          application.isGuest() ? selectCustomer(request.getCustomerSelection(), false) : null);
-      points = completionPoints(calculated, 0);
+          application.isGuest()
+              ? selectCustomer(storeId, request.getCustomerSelection(), false)
+              : null);
+      points = completionPoints(storeId, calculated, 0);
     }
     return calculation.preview(
+        storeId,
         "CONFIRM",
         id,
         request,
@@ -804,7 +843,7 @@ public class OrderService {
   }
 
   private void validateUpdateAssignments(
-      Order order, String castId, Long receptionistId, boolean confirmedInput) {
+      Long storeId, Order order, String castId, Long receptionistId, boolean confirmedInput) {
     // 指名・受付担当の検証は書き換えより先に済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
     // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
     //
@@ -816,7 +855,7 @@ public class OrderService {
       // 受付担当の付いた受注に receptionist_id の再送を必須にしているため、無条件に適格を要求すると、
       // 受付担当が退職・権限剥奪・他店異動で適格でなくなった受注が備考・人数の修正もできなくなる。
       if (!receptionistId.equals(order.getReceptionistId())) {
-        validateReceptionist(receptionistId);
+        validateReceptionist(storeId, receptionistId);
       }
     } else if (order.getReceptionistId() != null) {
       throw new ServiceException("受付担当を外すことはできません。受付担当を指定してください");
@@ -828,7 +867,7 @@ public class OrderService {
       // cast_id には FK も掛かっているので、素通しが存在しないキャストを通すことにはならない。
       if (!castId.equals(order.getCastId())) {
         nominatableCast
-            .findForUpdate(storeContext.getStoreId(), castId)
+            .findForUpdate(storeId, castId)
             .orElseThrow(() -> eligibilityFailure(confirmedInput, NOT_NOMINATABLE_MESSAGE));
       }
     } else if (order.getCastId() != null) {
@@ -838,18 +877,18 @@ public class OrderService {
 
   @StoreScoped
   @Transactional
-  public OrderPreviewResponse previewUpdate(String id, OrderUpdateRequest request) {
-    specialServices.lock();
+  public OrderPreviewResponse previewUpdate(Long storeId, String id, OrderUpdateRequest request) {
+    specialServices.lock(storeId);
     calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     calculation.requireVersion(order, request.getExpectedVersion());
     if (order.getStatus().isTerminal()) throw new ServiceException("完了・取消済みの受注は編集できません");
     String castId =
         request.getCastId() == null || request.getCastId().isBlank() ? null : request.getCastId();
-    validateUpdateAssignments(order, castId, request.getReceptionistId(), false);
+    validateUpdateAssignments(storeId, order, castId, request.getReceptionistId(), false);
     validateEditableCustomer(order, request.getCustomerSelection());
     businessContactPermissions.validate(
         request.getContactSnapshot() == null
@@ -859,43 +898,47 @@ public class OrderService {
     var course =
         request.getCourseId() == null
             ? order.getCourse()
-            : calculation.current(request.getCourseId(), false);
+            : calculation.current(storeId, request.getCourseId(), false);
     var calculated =
         calculation.calculate(
+            storeId,
             order,
             course,
             request.getFeeLines(),
-            specialServices.select(order, castId, request.getSpecialServiceIds(), false),
+            specialServices.select(storeId, order, castId, request.getSpecialServiceIds(), false),
             false);
     if (request.getCustomerSelection() != null)
-      calculated.linkCustomer(selectCustomer(request.getCustomerSelection(), false));
-    return calculation.preview("UPDATE", id, request, calculated, completionPoints(calculated, 0));
+      calculated.linkCustomer(selectCustomer(storeId, request.getCustomerSelection(), false));
+    return calculation.preview(
+        storeId, "UPDATE", id, request, calculated, completionPoints(storeId, calculated, 0));
   }
 
   @StoreScoped
   @Transactional
-  public OrderPreviewResponse completionPreview(String id, OrderCompletionRequest request) {
-    specialServices.lock();
+  public OrderPreviewResponse completionPreview(
+      Long storeId, String id, OrderCompletionRequest request) {
+    specialServices.lock(storeId);
     calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     calculation.requireVersion(order, request.getExpectedVersion());
     if (order.getStatus().isTerminal()) throw new ServiceException("未完了の受注だけを完了できます");
-    specialServices.requireProgress(order);
-    lockCustomerWithoutWaiting(order);
-    var calculated = calculation.calculate(order, order.getCourse(), request.getFeeLines(), false);
+    specialServices.requireProgress(storeId, order);
+    lockCustomerWithoutWaiting(storeId, order);
+    var calculated =
+        calculation.calculate(storeId, order, order.getCourse(), request.getFeeLines(), false);
     int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
-    var points = completionPoints(calculated, usePoints);
+    var points = completionPoints(storeId, calculated, usePoints);
     calculated.completeWith(usePoints, points.grantPoints());
-    return calculation.preview("COMPLETE", id, request, calculated, points);
+    return calculation.preview(storeId, "COMPLETE", id, request, calculated, points);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<OrderCustomerCandidateResponse> customerCandidates(
-      String search, String cursor, int size) {
+      Long storeId, String search, String cursor, int size) {
     if (size < 1 || size > 100 || (cursor != null && !cursor.matches("[0-9]{1,64}")))
       throw new ServiceException("検索の件数またはカーソルを確認してください");
     boolean canReadContacts =
@@ -904,7 +947,7 @@ public class OrderService {
     Specification<Customer> spec =
         (root, query, cb) -> {
           var predicates = new ArrayList<Predicate>();
-          predicates.add(cb.equal(root.get("storeId"), storeContext.getStoreId()));
+          predicates.add(cb.equal(root.get("storeId"), storeId));
           predicates.add(cb.isNull(root.get("mergedIntoId")));
           if (cursor != null) predicates.add(cb.greaterThan(root.get("id"), cursor));
           if (search != null && !search.isBlank()) {
@@ -933,7 +976,7 @@ public class OrderService {
         canReadContacts
             ? customerContactRepository
                 .findByStoreIdAndCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(
-                    storeContext.getStoreId(), candidates.stream().map(Customer::getId).toList())
+                    storeId, candidates.stream().map(Customer::getId).toList())
                 .stream()
                 .filter(c -> c.getType() == ContactType.PHONE)
                 .collect(
@@ -962,7 +1005,7 @@ public class OrderService {
       throw new ServiceException("会員申請の顧客は変更できません");
   }
 
-  private String selectCustomer(CustomerSelectionRequest selection, boolean create) {
+  private String selectCustomer(Long storeId, CustomerSelectionRequest selection, boolean create) {
     if (selection == null) throw new ServiceException("顧客の選択方法を指定してください");
     selection.validate();
     return switch (selection.mode()) {
@@ -975,7 +1018,7 @@ public class OrderService {
           throw new AccessDeniedException("顧客の新規登録には顧客管理権限が必要です");
         yield create
             ? customerProvisioningService.createCustomer(
-                storeContext.getStoreId(), new NewCustomerInput(selection.newCustomer().name()))
+                storeId, new NewCustomerInput(selection.newCustomer().name()))
             : null;
       }
       case EXISTING -> {
@@ -983,8 +1026,7 @@ public class OrderService {
         try {
           var customer =
               customerRepository
-                  .findByIdAndStoreIdForUpdateNoWait(
-                      selection.customerId(), storeContext.getStoreId())
+                  .findByIdAndStoreIdForUpdateNoWait(selection.customerId(), storeId)
                   .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
           if (customer.getMergedIntoId() != null) throw new NotFoundException("顧客が見つかりません");
           yield customer.getId();
@@ -996,19 +1038,18 @@ public class OrderService {
   }
 
   /** 受注行を保持したまま顧客行を待つと、顧客から受注へ進む統合と循環するため、競合時は巻き戻す。 */
-  private void lockCustomerWithoutWaiting(Order order) {
+  private void lockCustomerWithoutWaiting(Long storeId, Order order) {
     if (order.getCustomerId() == null) return;
     try {
-      customerRepository.findByIdAndStoreIdForUpdateNoWait(
-          order.getCustomerId(), storeContext.getStoreId());
+      customerRepository.findByIdAndStoreIdForUpdateNoWait(order.getCustomerId(), storeId);
     } catch (CannotAcquireLockException ex) {
       throw new ConflictException(
           "顧客情報が変更中です。しばらく待ってから再試算してください", Map.of("customer_lock", "入力を保持したまま、しばらく待ってから再試算してください"));
     }
   }
 
-  private OrderPreviewResponse.Points completionPoints(Order order, int usePoints) {
-    var link = activeLink(order).orElse(null);
+  private OrderPreviewResponse.Points completionPoints(Long storeId, Order order, int usePoints) {
+    var link = activeLink(storeId, order).orElse(null);
     return pointPreview(
         link == null ? null : link.getMemberId(),
         link == null ? null : link.getMemberCode(),
@@ -1043,12 +1084,12 @@ public class OrderService {
    * この問い合わせ自体はロックを取らない。通常更新・完了・完了試算は呼出前に顧客行を NOWAIT で押さえ、 取得競合は customer_lock の 409
    * で返す。他の試算は顧客行のロックをこの問い合わせの前提としない。
    */
-  private Optional<CustomerMemberLink> activeLink(Order order) {
+  private Optional<CustomerMemberLink> activeLink(Long storeId, Order order) {
     if (order.getCustomerId() == null) {
       return Optional.empty();
     }
     return customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
-        storeContext.getStoreId(), order.getCustomerId(), LinkStatus.ACTIVE);
+        storeId, order.getCustomerId(), LinkStatus.ACTIVE);
   }
 
   /**
@@ -1057,11 +1098,11 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional
-  public void cancel(String id, OrderCancellationRequest request, String actorEmail) {
-    specialServices.lock();
+  public void cancel(Long storeId, String id, OrderCancellationRequest request, String actorEmail) {
+    specialServices.lock(storeId);
     Order order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
     var before = OrderAuditSnapshot.of(order);
     order.cancelWith(
@@ -1074,10 +1115,10 @@ public class OrderService {
   @StoreScoped
   @Transactional
   public void declineApplication(
-      String id, OrderApplicationDeclineRequest request, String actorEmail) {
+      Long storeId, String id, OrderApplicationDeclineRequest request, String actorEmail) {
     OrderApplication application =
         orderApplicationRepository
-            .findById(id)
+            .findByIdAndStoreId(id, storeId)
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + id));
     var before = OrderAuditSnapshot.application(application);
     application.decline(
@@ -1098,8 +1139,8 @@ public class OrderService {
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<OrderCastCandidateResponse> listCastCandidates(String search) {
-    return nominatableCast.searchCandidates(storeContext.getStoreId(), search).stream()
+  public List<OrderCastCandidateResponse> listCastCandidates(Long storeId, String search) {
+    return nominatableCast.searchCandidates(storeId, search).stream()
         .map(
             cast ->
                 OrderCastCandidateResponse.builder()
@@ -1111,19 +1152,20 @@ public class OrderService {
 
   @StoreScoped
   @Transactional
-  public OrderResponse start(String id, Long expectedVersion, String reason, String actor) {
-    specialServices.lock();
+  public OrderResponse start(
+      Long storeId, String id, Long expectedVersion, String reason, String actor) {
+    specialServices.lock(storeId);
     var order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     calculation.requireVersion(order, expectedVersion);
     var before = OrderAuditSnapshot.of(order);
     order.start(reason, actorIdentityService.requireUserId(actor), OffsetDateTime.now());
-    specialServices.requireProgress(order);
+    specialServices.requireProgress(storeId, order);
     orderRepository.saveAndFlush(order);
     auditOrder(order, "ORDER_STARTED", actor, before, null, null);
-    return toResponse(order);
+    return toResponse(storeId, order);
   }
 
   private void auditOrder(
@@ -1162,38 +1204,37 @@ public class OrderService {
         OrderAuditSnapshot.application(application));
   }
 
-  private Optional<Long> eligibleReceptionistId(String actorEmail) {
-    return receptionistEligibilityService.findEligibleIdByEmail(
-        actorEmail, storeContext.getStoreId());
+  private Optional<Long> eligibleReceptionistId(Long storeId, String actorEmail) {
+    return receptionistEligibilityService.findEligibleIdByEmail(actorEmail, storeId);
   }
 
   /**
    * 受注 1 件の詳細。表示名の join を持つ読み側 projection と、行の集合を持つ集約の 2 本から組む — 1 行 1 受注の projection では明細を運べない。
    */
-  private OrderResponse toResponse(Order order) {
+  private OrderResponse toResponse(Long storeId, Order order) {
     OrderResponse response =
         orderRepository
-            .findViewById(order.getId())
+            .findViewById(storeId, order.getId())
             .map(orderMapper::toResponse)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + order.getId()));
     response.setBusinessContactPermissions(businessContactPermissions.describe(order));
-    response.setSpecialServices(specialServices.describe(order));
+    response.setSpecialServices(specialServices.describe(storeId, order));
     response.setFeeLines(orderMapper.toFeeLineResponses(order.getFeeLines()));
     response.setTotalRemuneration(order.getTotalRemuneration());
     response.setTotalDurationMinutes(order.getTotalDurationMinutes());
     return response;
   }
 
-  private void validateReceptionist(Long receptionistId) {
-    if (!receptionistEligibilityService.isEligible(receptionistId, storeContext.getStoreId())) {
+  private void validateReceptionist(Long storeId, Long receptionistId) {
+    if (!receptionistEligibilityService.isEligible(receptionistId, storeId)) {
       throw new NotFoundException("受付担当者が見つかりません: " + receptionistId);
     }
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public List<OrderReceptionistResponse> listReceptionists() {
-    return receptionistEligibilityService.listCandidates(storeContext.getStoreId()).stream()
+  public List<OrderReceptionistResponse> listReceptionists(Long storeId) {
+    return receptionistEligibilityService.listCandidates(storeId).stream()
         .map(
             candidate ->
                 OrderReceptionistResponse.builder()

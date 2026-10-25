@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -62,6 +63,9 @@ class OrderApplicationControllerTest {
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
 
+  /** ヘッダで名乗る店舗。既定値と紛れない値にして、handler が名乗られた店舗をそのまま渡すことを見る。 */
+  private static final Long STORE_ID = 7L;
+
   private static final String CONFIRMATION_BODY =
       "{\"course_id\":\"course-1\",\"business_date\": \"2026-08-20\", \"pax\": 2}";
 
@@ -86,7 +90,7 @@ class OrderApplicationControllerTest {
     ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
     when(orderService.listApplications(
-            statusesCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
+            eq(STORE_ID), statusesCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
@@ -96,6 +100,7 @@ class OrderApplicationControllerTest {
     assertThat(statusesCaptor.getValue()).containsExactly(OrderApplicationStatus.PENDING);
     assertThat(cursorCaptor.getValue()).isEqualTo("abc");
     assertThat(sizeCaptor.getValue()).isEqualTo(5);
+    verify(orderService).listApplications(eq(STORE_ID), any(), any(), anyInt());
   }
 
   @Test
@@ -103,7 +108,7 @@ class OrderApplicationControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmAndDeclineAreAllowedForOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any()))
+    when(orderService.confirmApplication(any(), any(), any(), any()))
         .thenReturn(OrderResponse.builder().id("order-1").build());
 
     mockMvc
@@ -190,7 +195,7 @@ class OrderApplicationControllerTest {
     // 保証できない（勝者が先に commit すれば敗者は素直に再利用の枝へ落ちる）ため、取り直しの
     // 配線そのものは決定的なこの単体テストが受け持つ。
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any()))
+    when(orderService.confirmApplication(any(), any(), any(), any()))
         .thenThrow(new MemberCustomerConflictException())
         .thenReturn(OrderResponse.builder().id("order-1").build());
 
@@ -198,19 +203,19 @@ class OrderApplicationControllerTest {
         .perform(storePost("/store/order-applications/a1/confirmation", CONFIRMATION_BODY))
         .andExpect(status().isCreated());
 
-    verify(orderService, times(2)).confirmApplication(any(), any(), any());
+    verify(orderService, times(2)).confirmApplication(any(), any(), any(), any());
   }
 
   @Test
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmationReturnsConflictAfterOneRetry() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any()))
+    when(orderService.confirmApplication(any(), any(), any(), any()))
         .thenThrow(new MemberCustomerConflictException());
     mockMvc
         .perform(storePost("/store/order-applications/a1/confirmation", CONFIRMATION_BODY))
         .andExpect(status().isConflict());
-    verify(orderService, times(2)).confirmApplication(any(), any(), any());
+    verify(orderService, times(2)).confirmApplication(any(), any(), any(), any());
   }
 
   @Test
@@ -218,7 +223,7 @@ class OrderApplicationControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmationDoesNotRetryOnOtherIntegrityViolations() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any()))
+    when(orderService.confirmApplication(any(), any(), any(), any()))
         .thenThrow(integrityViolation("uq_t_users_email"));
 
     // 写像を持たない違反は実装欠陥として全域ハンドラの分類（一意違反 = 409）へ落とす
@@ -226,7 +231,7 @@ class OrderApplicationControllerTest {
         .perform(storePost("/store/order-applications/a1/confirmation", CONFIRMATION_BODY))
         .andExpect(status().isConflict());
 
-    verify(orderService, times(1)).confirmApplication(any(), any(), any());
+    verify(orderService, times(1)).confirmApplication(any(), any(), any(), any());
   }
 
   @Test
@@ -259,7 +264,7 @@ class OrderApplicationControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void applicationRowCarriesOnlyApplicationFields() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.listApplications(any(), any(), anyInt()))
+    when(orderService.listApplications(any(), any(), any(), anyInt()))
         .thenReturn(
             new CursorPage<>(
                 List.of(OrderApplicationResponse.builder().id("a1").status("PENDING").build()),
@@ -292,7 +297,8 @@ class OrderApplicationControllerTest {
   void guestRequestIsAcceptedAndReturnsOnlyTheIdentifier() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(guestOrderApplicationService.request(any(GuestOrderApplicationCreateRequest.class)))
+    when(guestOrderApplicationService.request(
+            eq(STORE_ID), any(GuestOrderApplicationCreateRequest.class)))
         .thenReturn(new GuestOrderApplicationResponse("app-1"));
 
     mockMvc
@@ -354,7 +360,7 @@ class OrderApplicationControllerTest {
   void guestRequestCountsTheProxyAppendedHop() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(guestOrderApplicationService.request(any(GuestOrderApplicationCreateRequest.class)))
+    when(guestOrderApplicationService.request(any(), any(GuestOrderApplicationCreateRequest.class)))
         .thenReturn(new GuestOrderApplicationResponse("app-1"));
 
     mockMvc
@@ -362,14 +368,14 @@ class OrderApplicationControllerTest {
         .andExpect(status().isCreated());
 
     ArgumentCaptor<String> origin = ArgumentCaptor.forClass(String.class);
-    verify(guestApplicationRateLimiter).tryConsume(any(), origin.capture());
+    verify(guestApplicationRateLimiter).tryConsume(eq(STORE_ID), origin.capture());
     assertThat(origin.getValue()).isEqualTo("203.0.113.7");
   }
 
   /** 匿名の来訪者を模す。店舗文脈だけをヘッダで名乗り、認証主体は載せない。 */
   private MockHttpServletRequestBuilder guestPost(String body) {
     return post("/store/order-applications/public")
-        .header("X-Store-ID", "1")
+        .header("X-Store-ID", STORE_ID.toString())
         .with(csrf())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body);
@@ -378,7 +384,7 @@ class OrderApplicationControllerTest {
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder storePost(String path, String body) {
     return post(path)
-        .header("X-Store-ID", "1")
+        .header("X-Store-ID", STORE_ID.toString())
         .principal(() -> "staff@kizuna.test")
         .with(csrf())
         .contentType(MediaType.APPLICATION_JSON)
@@ -386,6 +392,6 @@ class OrderApplicationControllerTest {
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path).header("X-Store-ID", "1").principal(() -> "staff@kizuna.test");
+    return get(path).header("X-Store-ID", STORE_ID.toString()).principal(() -> "staff@kizuna.test");
   }
 }

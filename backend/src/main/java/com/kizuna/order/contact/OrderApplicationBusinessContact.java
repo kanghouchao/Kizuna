@@ -25,7 +25,7 @@ public class OrderApplicationBusinessContact {
     if (!store.hasStoreId()) throw new ServiceException("店舗を指定してください");
     var application =
         applications
-            .findById(applicationId)
+            .findByIdAndStoreId(applicationId, store.getStoreId())
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません"));
     return consent.describe(application).stream()
         .filter(p -> p.type() == type)

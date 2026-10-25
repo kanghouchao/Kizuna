@@ -1,21 +1,25 @@
 package com.kizuna.order.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface OrderApplicationRepository extends JpaRepository<OrderApplication, String> {
+public interface OrderApplicationRepository extends StoreScopedRepository<OrderApplication> {
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select a from OrderApplication a where a.id = :id")
-  Optional<OrderApplication> findForUpdate(String id);
+  @Query("select a from OrderApplication a where a.id = :id and a.storeId = :storeId")
+  Optional<OrderApplication> findByIdAndStoreIdForUpdate(
+      @Param("id") String id, @Param("storeId") Long storeId);
+
+  /** 店舗を跨ぐ照会。境界は申請者の会員 id（requester_member_id）。 */
+  Optional<OrderApplication> findByIdAndRequesterMemberId(String id, Long requesterMemberId);
 
   // キャストの表示名は ID 参照のため JPQL join で取得する。
   String VIEW_SELECT =
@@ -32,14 +36,16 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
              a.contactEmail as contactEmail, a.contactLineId as contactLineId,
              a.orderId as orderId, a.declinedReason as declinedReason
       from com.kizuna.order.domain.OrderApplication a
-        left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = a.castId
-        left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
+        left join com.kizuna.cast.domain.CastEnrollment ce
+          on ce.id = a.castId and ce.storeId = a.storeId
+        left join com.kizuna.cast.domain.CastProfile k
+          on k.enrollmentId = ce.id and k.storeId = a.storeId
       """;
 
-  @Query(VIEW_SELECT + " where a.id = :id")
-  Optional<OrderApplicationView> findView(String id);
+  @Query(VIEW_SELECT + " where a.id = :id and a.storeId = :storeId")
+  Optional<OrderApplicationView> findView(@Param("storeId") Long storeId, @Param("id") String id);
 
-  String VIEW_WHERE = " where a.status in :statuses ";
+  String VIEW_WHERE = " where a.storeId = :storeId and a.status in :statuses ";
 
   // 受付箱は希望日の早い順（近い来店から処理する）。一意な副キー id を重ねて全順序にし、カーソルの比較
   // （下記 AFTER 条件）はこの並びと同じ列の組で行う。
@@ -48,7 +54,9 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
   /** 店舗の申請一覧の先頭。状態の群を指定して辿る（受付箱は PENDING）。 */
   @Query(VIEW_SELECT + VIEW_WHERE + VIEW_ORDER)
   List<OrderApplicationView> findViews(
-      @Param("statuses") Collection<OrderApplicationStatus> statuses, Limit limit);
+      @Param("storeId") Long storeId,
+      @Param("statuses") Collection<OrderApplicationStatus> statuses,
+      Limit limit);
 
   /** 店舗の申請一覧の続き。渡された位置より後ろだけを返す。 */
   @Query(
@@ -60,6 +68,7 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
             """
           + VIEW_ORDER)
   List<OrderApplicationView> findViewsAfter(
+      @Param("storeId") Long storeId,
       @Param("statuses") Collection<OrderApplicationStatus> statuses,
       @Param("cursorBusinessDate") LocalDate cursorBusinessDate,
       @Param("cursorId") String cursorId,
@@ -73,8 +82,10 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
              a.pax as pax, k.name as castName, a.status as status
       from com.kizuna.order.domain.OrderApplication a
         join com.kizuna.store.domain.Store st on st.id = a.storeId
-        left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = a.castId
-        left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
+        left join com.kizuna.cast.domain.CastEnrollment ce
+          on ce.id = a.castId and ce.storeId = a.storeId
+        left join com.kizuna.cast.domain.CastProfile k
+          on k.enrollmentId = ce.id and k.storeId = a.storeId
       """;
 
   // 本人は店舗文脈を確立できず storeFilter は働かないため、申請者の一致が唯一の隔離境界である。先頭と続きの
@@ -85,14 +96,14 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
   String MEMBER_VIEW_ORDER = " order by a.businessDate desc, a.id desc";
 
   /**
-   * 会員本人の予約申請一覧（跨店集約）の先頭。
+   * 店舗を跨ぐ照会。境界は申請者の会員 id。会員本人の予約申請一覧（跨店集約）の先頭。
    *
    * <p>並びは希望日の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
    */
   @Query(MEMBER_VIEW_SELECT + MEMBER_VIEW_WHERE + MEMBER_VIEW_ORDER)
   List<MemberOrderApplicationView> findMemberViews(@Param("memberId") Long memberId, Limit limit);
 
-  /** 会員本人の予約申請一覧の続き。渡された位置より後ろだけを返す。 */
+  /** 店舗を跨ぐ照会。境界は申請者の会員 id。会員本人の予約申請一覧の続き。 */
   @Query(
       MEMBER_VIEW_SELECT
           + MEMBER_VIEW_WHERE
@@ -107,7 +118,7 @@ public interface OrderApplicationRepository extends JpaRepository<OrderApplicati
       @Param("cursorId") String cursorId,
       Limit limit);
 
-  /** 会員本人の予約申請 1 件。一覧と同じく申請者の一致を問い合わせに載せ、他人の申請には到達させない。 */
+  /** 店舗を跨ぐ照会。境界は申請者の会員 id。一覧と同じく申請者の一致を問い合わせに載せ、他人の申請には到達させない。 */
   @Query(MEMBER_VIEW_SELECT + " where a.requesterMemberId = :memberId and a.id = :applicationId")
   Optional<MemberOrderApplicationView> findMemberView(
       @Param("memberId") Long memberId, @Param("applicationId") String applicationId);

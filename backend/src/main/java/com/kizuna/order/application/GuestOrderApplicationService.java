@@ -9,7 +9,6 @@ import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -31,12 +30,12 @@ public class GuestOrderApplicationService {
 
   private final OrderApplicationRepository orderApplicationRepository;
   private final OrderApplicationIntake orderApplicationIntake;
-  private final StoreContext storeContext;
 
   /** 予約を申請する。予約申請の PENDING 行だけが起き、受注（t_orders）には行が生まれない。 */
   @StoreScoped
   @Transactional
-  public GuestOrderApplicationResponse request(GuestOrderApplicationCreateRequest request) {
+  public GuestOrderApplicationResponse request(
+      Long storeId, GuestOrderApplicationCreateRequest request) {
     var consent = request.getContactConsent();
     if (consent == null
         || !Boolean.TRUE.equals(consent.businessAllowed())
@@ -49,11 +48,9 @@ public class GuestOrderApplicationService {
         || (contact.phoneNumber() == null && contact.email() == null && contact.lineId() == null))
       throw new ServiceException("お名前と電話・メール・LINEのいずれかを入力してください");
     var original = request.getContactSnapshot().original();
-    Long storeId = storeContext.getStoreId();
     // 指名はこの経路では受けないため常に指名なしで検める（会員の入口と同じ判定を通す）
     orderApplicationIntake.validateRequestedVisit(storeId, request.getBusinessDate(), null);
 
-    // store_id は StoreScopeStampListener が @PrePersist で採番する
     OrderApplication application =
         OrderApplication.builder()
             .contactConsent(
@@ -75,6 +72,7 @@ public class GuestOrderApplicationService {
             .contactEmail(original.email())
             .contactLineId(original.lineId())
             .build();
+    application.setStoreId(storeId);
 
     return new GuestOrderApplicationResponse(orderApplicationRepository.save(application).getId());
   }

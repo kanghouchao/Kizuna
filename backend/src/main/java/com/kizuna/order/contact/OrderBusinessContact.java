@@ -25,7 +25,10 @@ public class OrderBusinessContact {
   @Transactional(readOnly = true)
   public Decision decide(String orderId, ContactType type) {
     if (!storeContext.hasStoreId()) throw new ServiceException("店舗を指定してください");
-    var order = orders.findById(orderId).orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    var order =
+        orders
+            .findByIdAndStoreId(orderId, storeContext.getStoreId())
+            .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     return permissions.describe(order).stream()
         .filter(p -> p.type() == type)
         .map(p -> new Decision(p.value(), p.decision()))

@@ -15,7 +15,6 @@ import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,12 +29,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class GuestOrderApplicationServiceTest {
 
-  private static final Long STORE_ID = 1L;
+  private static final Long STORE_ID = 5L;
   private static final LocalDate VISIT_DATE = LocalDate.of(2026, 8, 25);
 
   @Mock private OrderApplicationRepository orderApplicationRepository;
   @Mock private OrderApplicationIntake orderApplicationIntake;
-  @Mock private StoreContext storeContext;
 
   @InjectMocks private GuestOrderApplicationService service;
 
@@ -53,7 +51,6 @@ class GuestOrderApplicationServiceTest {
   @Test
   @DisplayName("ゲスト申請が PENDING の予約申請として起き、連絡先が残ること")
   void requestCreatesAPendingApplicationCarryingTheContact() {
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderApplicationRepository.save(any(OrderApplication.class)))
         .thenAnswer(
             invocation -> {
@@ -62,7 +59,7 @@ class GuestOrderApplicationServiceTest {
               return saved;
             });
 
-    assertThat(service.request(request()).id()).isEqualTo("app-1");
+    assertThat(service.request(STORE_ID, request()).id()).isEqualTo("app-1");
 
     verify(orderApplicationRepository).save(applicationCaptor.capture());
     OrderApplication created = applicationCaptor.getValue();
@@ -71,18 +68,18 @@ class GuestOrderApplicationServiceTest {
     assertThat(created.getContactPhoneNumber()).isEqualTo("09012345678");
     assertThat(created.isGuest()).as("会員コードを持たない申請がゲスト申請であること").isTrue();
     assertThat(created.getRequesterMemberId()).isNull();
+    assertThat(created.getStoreId()).as("生成時に店舗が明示されていること").isEqualTo(STORE_ID);
   }
 
   @Test
   @DisplayName("希望内容が受け付けられない申請では行が起きないこと")
   void requestDoesNotWriteWhenTheRequestedVisitIsRejected() {
     // 匿名の入口が会員の入口より緩ければ、会員が撥ねられる希望内容を匿名で通せてしまう
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
     doThrow(new ServiceException("過去の日付は申請できません"))
         .when(orderApplicationIntake)
         .validateRequestedVisit(STORE_ID, VISIT_DATE, null);
 
-    assertThatThrownBy(() -> service.request(request()))
+    assertThatThrownBy(() -> service.request(STORE_ID, request()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("過去の日付");
 
@@ -90,13 +87,12 @@ class GuestOrderApplicationServiceTest {
   }
 
   @Test
-  @DisplayName("店舗は文脈から取り、申請本体には自称させないこと")
+  @DisplayName("店舗は引数で受け、申請本体には自称させないこと")
   void requestTakesTheStoreFromTheContext() {
-    when(storeContext.getStoreId()).thenReturn(STORE_ID);
     when(orderApplicationRepository.save(any(OrderApplication.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    service.request(request());
+    service.request(STORE_ID, request());
 
     verify(orderApplicationIntake).validateRequestedVisit(STORE_ID, VISIT_DATE, null);
   }
