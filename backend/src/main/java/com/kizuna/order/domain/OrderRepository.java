@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository extends StoreScopedRepository<Order> {
 
+  /** 本人報酬の読口が共有する FROM 句。店舗を跨ぐ本人照会で、境界は担当在籍の本人の user_id。 */
   String SELF_FROM =
       """
       from com.kizuna.order.domain.Order o
@@ -22,6 +23,7 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
       join com.kizuna.store.domain.Store st on st.id = o.storeId
       where c.userId = :userId
       """;
+
   String SELF_SELECT =
       """
       select o.id as orderId, o.castId as enrollmentId, o.storeId as storeId,
@@ -34,22 +36,18 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
       """;
   String SELF_SORT = " order by o.businessDate desc, o.id desc";
 
-  /** 店舗を跨ぐ本人照会。境界は担当在籍の本人の user_id。 */
   @Query(value = SELF_SELECT + SELF_FROM + SELF_SORT, countQuery = "select count(o) " + SELF_FROM)
   Page<SelfRemunerationView> findSelfRemunerations(Long userId, Pageable pageable);
 
-  /** 店舗を跨ぐ本人照会。境界は担当在籍の本人の user_id。 */
   @Query(
       value = SELF_SELECT + SELF_FROM + " and e.id = :enrollmentId" + SELF_SORT,
       countQuery = "select count(o) " + SELF_FROM + " and e.id = :enrollmentId")
   Page<SelfRemunerationView> findSelfRemunerationsByEnrollment(
       Long userId, String enrollmentId, Pageable pageable);
 
-  /** 店舗を跨ぐ本人照会。境界は担当在籍の本人の user_id。 */
   @Query(SELF_SELECT + SELF_FROM + " and o.id = :id")
   Optional<SelfRemunerationView> findSelfRemuneration(Long userId, String id);
 
-  /** 店舗を跨ぐ本人照会。境界は担当在籍の本人の user_id。 */
   @Query("select o " + SELF_FROM + " and o.id = :id")
   Optional<Order> findSelfOrder(Long userId, String id);
 
