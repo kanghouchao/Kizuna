@@ -1,31 +1,32 @@
 package com.kizuna.customer.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface CustomerMemberLinkRepository extends JpaRepository<CustomerMemberLink, String> {
+public interface CustomerMemberLinkRepository extends StoreScopedRepository<CustomerMemberLink> {
 
-  List<CustomerMemberLink> findByCustomerIdOrderByIdAsc(String customerId);
+  List<CustomerMemberLink> findByStoreIdAndCustomerIdOrderByIdAsc(Long storeId, String customerId);
 
   /**
    * 顧客に紐づく会員（ロックなし）。書き換える経路も同じ問い合わせを使い、直列化は先に取る顧客行のロックが担う（{@code
-   * CustomerRepository#findByIdForUpdate}）。
+   * CustomerRepository#findByIdAndStoreIdForUpdate}）。
    */
-  Optional<CustomerMemberLink> findByCustomerIdAndStatus(String customerId, LinkStatus status);
+  Optional<CustomerMemberLink> findByStoreIdAndCustomerIdAndStatus(
+      Long storeId, String customerId, LinkStatus status);
 
-  List<CustomerMemberLink> findByCustomerIdInAndStatus(
-      Collection<String> customerIds, LinkStatus status);
+  List<CustomerMemberLink> findByStoreIdAndCustomerIdInAndStatus(
+      Long storeId, Collection<String> customerIds, LinkStatus status);
 
-  boolean existsByMemberIdAndStatus(Long memberId, LinkStatus status);
+  boolean existsByStoreIdAndMemberIdAndStatus(Long storeId, Long memberId, LinkStatus status);
 
-  boolean existsByCustomerIdAndStatus(String customerId, LinkStatus status);
+  boolean existsByStoreIdAndCustomerIdAndStatus(Long storeId, String customerId, LinkStatus status);
 
   /**
    * 統合の付替えで、被統合行の関連を存続行へ移す。状態では絞らない — 解除済み（RELEASED）の区間も移さなければ「過去に誰と紐づいていたか」の 履歴が統合で切れる。
@@ -68,14 +69,15 @@ public interface CustomerMemberLinkRepository extends JpaRepository<CustomerMemb
         left join com.kizuna.user.domain.User ru on ru.id = l.releasedBy
       """;
 
-  String HISTORY_WHERE = " where l.customerId = :customerId ";
+  String HISTORY_WHERE = " where l.storeId = :storeId and l.customerId = :customerId ";
 
   // 新しい区間が先頭。linkedAt の同値は id で決定的に解く。カーソルの比較も同じ組で行う。
   String HISTORY_ORDER = " order by l.linkedAt desc, l.id desc";
 
   /** 顧客 1 件の紐づけ履歴の先頭。並びは linkedAt の降順に一意な副キー id を重ねて全順序にする。 */
   @Query(HISTORY_SELECT + HISTORY_WHERE + HISTORY_ORDER)
-  List<CustomerMemberLinkView> findHistory(@Param("customerId") String customerId, Limit limit);
+  List<CustomerMemberLinkView> findHistory(
+      @Param("storeId") Long storeId, @Param("customerId") String customerId, Limit limit);
 
   /**
    * 顧客 1 件の紐づけ履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。
@@ -91,6 +93,7 @@ public interface CustomerMemberLinkRepository extends JpaRepository<CustomerMemb
             """
           + HISTORY_ORDER)
   List<CustomerMemberLinkView> findHistoryAfter(
+      @Param("storeId") Long storeId,
       @Param("customerId") String customerId,
       @Param("cursorLinkedAt") OffsetDateTime cursorLinkedAt,
       @Param("cursorId") String cursorId,

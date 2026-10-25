@@ -20,7 +20,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -51,7 +50,6 @@ class CustomerPointServiceTest {
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private PointLedgerService pointLedgerService;
   @Mock private UserRepository userRepository;
-  @Mock private StoreContext storeContext;
 
   @InjectMocks private CustomerPointService service;
 
@@ -60,10 +58,11 @@ class CustomerPointServiceTest {
   void balanceOfUnlinkedCustomerCarriesNoAmount() {
     givenCustomerExists();
     Mockito.when(
-            customerMemberLinkRepository.findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
-    CustomerPointBalanceResponse response = service.balance(CUSTOMER_ID);
+    CustomerPointBalanceResponse response = service.balance(STORE_ID, CUSTOMER_ID);
 
     assertThat(response.isLinked()).isFalse();
     assertThat(response.getBalance()).isNull();
@@ -81,7 +80,7 @@ class CustomerPointServiceTest {
     Mockito.when(detached.getMemberId()).thenReturn(null);
     givenActiveLink(detached);
 
-    CustomerPointBalanceResponse response = service.balance(CUSTOMER_ID);
+    CustomerPointBalanceResponse response = service.balance(STORE_ID, CUSTOMER_ID);
 
     assertThat(response.isLinked()).isFalse();
     assertThat(response.getBalance()).isNull();
@@ -95,7 +94,7 @@ class CustomerPointServiceTest {
     givenActiveLink(MEMBER_ID);
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(1500L);
 
-    CustomerPointBalanceResponse response = service.balance(CUSTOMER_ID);
+    CustomerPointBalanceResponse response = service.balance(STORE_ID, CUSTOMER_ID);
 
     assertThat(response.isLinked()).isTrue();
     assertThat(response.getBalance()).isEqualTo(1500);
@@ -104,11 +103,12 @@ class CustomerPointServiceTest {
   @Test
   @DisplayName("存在しない顧客の残高照会は 404 相当で撥ねられること")
   void balanceOfUnknownCustomerIsNotFound() {
-    Mockito.when(customerRepository.existsById(CUSTOMER_ID)).thenReturn(false);
+    Mockito.when(customerRepository.existsByIdAndStoreId(CUSTOMER_ID, STORE_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.balance(CUSTOMER_ID)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.balance(STORE_ID, CUSTOMER_ID))
+        .isInstanceOf(NotFoundException.class);
     Mockito.verify(customerMemberLinkRepository, Mockito.never())
-        .findByCustomerIdAndStatus(anyString(), any());
+        .findByStoreIdAndCustomerIdAndStatus(any(), anyString(), any());
   }
 
   @Test
@@ -116,10 +116,12 @@ class CustomerPointServiceTest {
   void adjustingAnUnlinkedCustomerIsRefused() {
     givenCustomerLocked();
     Mockito.when(
-            customerMemberLinkRepository.findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.adjust(CUSTOMER_ID, request(100, "誤記帳の訂正", null), ACTOR_EMAIL))
+    assertThatThrownBy(
+            () -> service.adjust(STORE_ID, CUSTOMER_ID, request(100, "誤記帳の訂正", null), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("会員に紐づいていない顧客");
     Mockito.verify(pointLedgerService, Mockito.never())
@@ -131,13 +133,12 @@ class CustomerPointServiceTest {
   void adjustDelegatesToTheLedgerWithTheCurrentStore() {
     givenCustomerLocked();
     givenActiveLink(MEMBER_ID);
-    Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
     Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(300L);
     LocalDate expiresOn = LocalDate.of(2099, 12, 31);
 
     CustomerPointBalanceResponse response =
-        service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", expiresOn), ACTOR_EMAIL);
+        service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", expiresOn), ACTOR_EMAIL);
 
     Mockito.verify(pointLedgerService)
         .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", expiresOn, ACTOR_ID, IDEMPOTENCY_KEY);
@@ -155,7 +156,7 @@ class CustomerPointServiceTest {
     Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
+            () -> service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);
     Mockito.verify(pointLedgerService, Mockito.never())
         .adjust(anyLong(), any(), anyInt(), anyString(), any(), any(), anyString());
@@ -168,13 +169,12 @@ class CustomerPointServiceTest {
     // 解除済みの会員へ調整だけが残る
     givenCustomerLocked();
     givenActiveLink(MEMBER_ID);
-    Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
     Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
 
-    service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
+    service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
 
-    Mockito.verify(customerRepository).findByIdForUpdate(CUSTOMER_ID);
-    Mockito.verify(customerRepository, Mockito.never()).existsById(anyString());
+    Mockito.verify(customerRepository).findByIdAndStoreIdForUpdate(CUSTOMER_ID, STORE_ID);
+    Mockito.verify(customerRepository, Mockito.never()).existsByIdAndStoreId(anyString(), any());
   }
 
   @Test
@@ -183,14 +183,14 @@ class CustomerPointServiceTest {
     // 統合は関連を存続行へ移しているので、後ろに置くと「未紐づけの顧客」の分岐に落ち、
     // 統合済みであることが利用者に伝わらない
     givenCustomerLocked();
-    Mockito.when(customerRepository.isMerged(CUSTOMER_ID)).thenReturn(true);
+    Mockito.when(customerRepository.isMerged(STORE_ID, CUSTOMER_ID)).thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.adjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
+            () -> service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
     Mockito.verify(customerMemberLinkRepository, Mockito.never())
-        .findByCustomerIdAndStatus(anyString(), any());
+        .findByStoreIdAndCustomerIdAndStatus(any(), anyString(), any());
     Mockito.verify(pointLedgerService, Mockito.never())
         .adjust(anyLong(), any(), anyInt(), anyString(), any(), any(), anyString());
   }
@@ -201,16 +201,16 @@ class CustomerPointServiceTest {
     // 読み取り専用トランザクションでは行ロックが取れない。勝者は commit 済みで直列化する相手もいない
     givenCustomerExists();
     givenActiveLink(MEMBER_ID);
-    Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
     Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800L);
 
     CustomerPointBalanceResponse response =
-        service.replayAdjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
+        service.replayAdjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
 
     Mockito.verify(pointLedgerService)
         .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", null, ACTOR_ID, IDEMPOTENCY_KEY);
-    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(anyString());
+    Mockito.verify(customerRepository, Mockito.never())
+        .findByIdAndStoreIdForUpdate(anyString(), any());
     assertThat(response.isLinked()).isTrue();
     assertThat(response.getBalance()).isEqualTo(800);
   }
@@ -220,11 +220,14 @@ class CustomerPointServiceTest {
   void replayOfAnUnlinkedCustomerIsRefused() {
     givenCustomerExists();
     Mockito.when(
-            customerMemberLinkRepository.findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> service.replayAdjust(CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
+            () ->
+                service.replayAdjust(
+                    STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("会員に紐づいていない顧客");
     Mockito.verify(pointLedgerService, Mockito.never())
@@ -238,20 +241,21 @@ class CustomerPointServiceTest {
     givenCustomerExists();
     givenActiveLink(MEMBER_ID);
 
-    service.balance(CUSTOMER_ID);
+    service.balance(STORE_ID, CUSTOMER_ID);
 
     Mockito.verify(customerMemberLinkRepository)
-        .findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE);
-    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(anyString());
+        .findByStoreIdAndCustomerIdAndStatus(STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE);
+    Mockito.verify(customerRepository, Mockito.never())
+        .findByIdAndStoreIdForUpdate(anyString(), any());
   }
 
   private void givenCustomerExists() {
-    Mockito.when(customerRepository.existsById(CUSTOMER_ID)).thenReturn(true);
+    Mockito.when(customerRepository.existsByIdAndStoreId(CUSTOMER_ID, STORE_ID)).thenReturn(true);
   }
 
   /** 記帳の経路（手動調整）が引く顧客。紐づけを解決する前にこの行を押さえる。 */
   private void givenCustomerLocked() {
-    Mockito.when(customerRepository.findByIdForUpdate(CUSTOMER_ID))
+    Mockito.when(customerRepository.findByIdAndStoreIdForUpdate(CUSTOMER_ID, STORE_ID))
         .thenReturn(Optional.of(Customer.builder().build()));
   }
 
@@ -272,7 +276,8 @@ class CustomerPointServiceTest {
 
   private void givenActiveLink(CustomerMemberLink link) {
     Mockito.when(
-            customerMemberLinkRepository.findByCustomerIdAndStatus(CUSTOMER_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
   }
 

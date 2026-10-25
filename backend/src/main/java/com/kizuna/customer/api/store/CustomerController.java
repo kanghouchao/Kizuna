@@ -8,6 +8,7 @@ import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.application.CustomerService;
 import com.kizuna.customer.domain.ContactType;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -38,31 +39,36 @@ public class CustomerController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Page<CustomerSummaryResponse>> list(
+      @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String classification,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(customerService.list(search, classification, pageable));
+    return ResponseEntity.ok(customerService.list(storeId, search, classification, pageable));
   }
 
   /** 同店の未統合顧客が共有する有効連絡先を、種類・値の順で提示する。 */
   @GetMapping("/duplicates")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CursorPage<CustomerDuplicateGroupResponse>> listDuplicates(
+      @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) ContactType type,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(customerService.listDuplicateCandidates(search, type, cursor, size));
+    return ResponseEntity.ok(
+        customerService.listDuplicateCandidates(storeId, search, type, cursor, size));
   }
 
   @GetMapping("/duplicates/customers")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CursorPage<CustomerMergeComparisonResponse>> duplicateCustomers(
+      @CurrentStore Long storeId,
       @RequestParam ContactType type,
       @RequestParam String value,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(customerService.duplicateCustomers(type, value, cursor, size));
+    return ResponseEntity.ok(
+        customerService.duplicateCustomers(storeId, type, value, cursor, size));
   }
 
   /**
@@ -73,34 +79,36 @@ public class CustomerController {
   @GetMapping("/merge-comparison")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<List<CustomerMergeComparisonResponse>> mergeComparison(
-      @RequestParam List<String> ids) {
-    return ResponseEntity.ok(customerService.mergeComparison(ids));
+      @CurrentStore Long storeId, @RequestParam List<String> ids) {
+    return ResponseEntity.ok(customerService.mergeComparison(storeId, ids));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<CustomerResponse> get(@PathVariable String id) {
-    return ResponseEntity.ok(customerService.get(id));
+  public ResponseEntity<CustomerResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
+    return ResponseEntity.ok(customerService.get(storeId, id));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerResponse> create(
-      @Valid @RequestBody CustomerCreateRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(customerService.create(request));
+      @CurrentStore Long storeId, @Valid @RequestBody CustomerCreateRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(customerService.create(storeId, request));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerResponse> update(
-      @PathVariable String id, @Valid @RequestBody CustomerUpdateRequest request) {
-    return ResponseEntity.ok(customerService.update(id, request));
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody CustomerUpdateRequest request) {
+    return ResponseEntity.ok(customerService.update(storeId, id, request));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<Void> delete(@PathVariable String id) {
-    customerService.delete(id);
+  public ResponseEntity<Void> delete(@CurrentStore Long storeId, @PathVariable String id) {
+    customerService.delete(storeId, id);
     return ResponseEntity.noContent().build();
   }
 }

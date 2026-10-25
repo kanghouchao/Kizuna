@@ -22,13 +22,18 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
 
   @Override
   public List<Group> groups(
-      String search, ContactType type, ContactType afterType, String afterValue, int limit) {
+      Long storeId,
+      String search,
+      ContactType type,
+      ContactType afterType,
+      String afterValue,
+      int limit) {
     var cb = em.getCriteriaBuilder();
     var query = cb.createTupleQuery();
     var contact = query.from(CustomerContact.class);
     var customer = query.from(Customer.class);
     var predicates = new ArrayList<Predicate>();
-    predicates.add(live(cb, contact, customer));
+    predicates.add(live(cb, contact, customer, storeId));
     if (type != null) predicates.add(cb.equal(contact.get("type"), type));
     if (search != null && !search.isBlank())
       predicates.add(CustomerContactSearch.matches(contact, cb, search));
@@ -59,7 +64,7 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
   }
 
   @Override
-  public List<Match> members(List<Group> groups) {
+  public List<Match> members(Long storeId, List<Group> groups) {
     if (groups.isEmpty()) return List.of();
     var cb = em.getCriteriaBuilder();
     var query = cb.createTupleQuery();
@@ -76,13 +81,14 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
     query
         .select(cb.tuple(contact.get("type"), contact.get("value"), customer))
         .distinct(true)
-        .where(live(cb, contact, customer), cb.or(keys))
+        .where(live(cb, contact, customer, storeId), cb.or(keys))
         .orderBy(cb.asc(customer.get("id")));
     return em.createQuery(query).getResultList().stream().map(this::match).toList();
   }
 
   @Override
-  public List<Customer> members(ContactType type, String value, String afterId, int limit) {
+  public List<Customer> members(
+      Long storeId, ContactType type, String value, String afterId, int limit) {
     var cb = em.getCriteriaBuilder();
     var query = cb.createQuery(Customer.class);
     var customer = query.from(Customer.class);
@@ -91,7 +97,7 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
         .select(customer)
         .distinct(true)
         .where(
-            live(cb, contact, customer),
+            live(cb, contact, customer, storeId),
             cb.equal(contact.get("type"), type),
             cb.equal(contact.get("value"), value),
             cb.greaterThan(customer.get("id"), afterId))
@@ -100,8 +106,9 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
   }
 
   private Predicate live(
-      CriteriaBuilder cb, Root<CustomerContact> contact, Root<Customer> customer) {
+      CriteriaBuilder cb, Root<CustomerContact> contact, Root<Customer> customer, Long storeId) {
     return cb.and(
+        cb.equal(customer.get("storeId"), storeId),
         cb.equal(contact.get("customerId"), customer.get("id")),
         cb.equal(contact.get("storeId"), customer.get("storeId")),
         cb.isFalse(contact.get("deleted")),

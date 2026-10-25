@@ -192,10 +192,7 @@ class OrderServiceTest {
         service,
         "customerProvisioningService",
         new CustomerProvisioningService(
-            customerRepository,
-            customerMemberLinkRepository,
-            customerReferenceResolver,
-            storeContext));
+            customerRepository, customerMemberLinkRepository, customerReferenceResolver));
     Mockito.lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
   }
 
@@ -351,7 +348,8 @@ class OrderServiceTest {
     // 指定された顧客は共有の解決口を通って書き込み先になる（そこで行が押さえられる）
     Customer selected = Customer.builder().build();
     selected.setId("c1");
-    when(customerRepository.findByIdForUpdateNoWait("c1")).thenReturn(Optional.of(selected));
+    when(customerRepository.findByIdAndStoreIdForUpdateNoWait("c1", STORE_ID))
+        .thenReturn(Optional.of(selected));
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(userRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
     when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -392,7 +390,7 @@ class OrderServiceTest {
                 .course(OrderCourses.course("基本", 60, 0))
                 .build());
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
-    when(customerRepository.findByIdForUpdateNoWait("missing"))
+    when(customerRepository.findByIdAndStoreIdForUpdateNoWait("missing", STORE_ID))
         .thenThrow(new NotFoundException("顧客が見つかりません"));
 
     assertThatThrownBy(() -> service.create(req, ACTOR_EMAIL))
@@ -1583,7 +1581,8 @@ class OrderServiceTest {
     when(orderApplicationRepository.findById("a1")).thenReturn(Optional.of(application));
     Customer selected = Customer.builder().build();
     selected.setId("cust-既存");
-    when(customerRepository.findByIdForUpdateNoWait("cust-既存")).thenReturn(Optional.of(selected));
+    when(customerRepository.findByIdAndStoreIdForUpdateNoWait("cust-既存", STORE_ID))
+        .thenReturn(Optional.of(selected));
     stubConfirmActor();
     stubOrderCreation();
 
@@ -1712,7 +1711,7 @@ class OrderServiceTest {
             STORE_ID, 100L, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
     // 関連の照会は行を押さえないため、着ける前に共有の解決口を通る
-    when(customerReferenceResolver.resolveForWrite("cust-1")).thenReturn("cust-1");
+    when(customerReferenceResolver.resolveForWrite(STORE_ID, "cust-1")).thenReturn("cust-1");
     stubConfirmActor();
     stubOrderCreation();
 
@@ -2113,7 +2112,8 @@ class OrderServiceTest {
   }
 
   private void stubLink(CustomerMemberLink link) {
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
   }
 
@@ -2226,7 +2226,8 @@ class OrderServiceTest {
     // 非会員には台帳そのものが存在しない。利用の指定は黙って 0 に丸めず撥ねる
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.complete("o1", completion(12000, 300), "staff@kizuna.test"))
@@ -2349,8 +2350,9 @@ class OrderServiceTest {
     // 台帳へは何も積まない（付与予定額の算定で規則は読むが、書き込みは起きない）
     verifyNoInteractions(materializer);
     // 顧客が未設定なら押さえる行も引く紐づけも無い
-    verify(customerRepository, never()).findByIdForUpdateNoWait(any());
-    verify(customerMemberLinkRepository, never()).findByCustomerIdAndStatus(any(), any());
+    verify(customerRepository, never()).findByIdAndStoreIdForUpdateNoWait(any(), any());
+    verify(customerMemberLinkRepository, never())
+        .findByStoreIdAndCustomerIdAndStatus(any(), any(), any());
   }
 
   @Test
@@ -2406,7 +2408,8 @@ class OrderServiceTest {
     // 来店特典の条件は「会員へ帰属した受注の完了」。帰属しない完了で評価すると、台帳の宛先が無い。
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
     stubReceiptTokenIssuance();
     stubWriteBackResponse();
@@ -2435,7 +2438,8 @@ class OrderServiceTest {
   void completeOfANonMemberOrderRecordsNoAttribution() {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
     stubReceiptTokenIssuance();
     stubWriteBackResponse();
@@ -2506,7 +2510,8 @@ class OrderServiceTest {
     // 会員と分からないまま完了した来店を本人が取り戻す経路が無い
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
     when(pointLedgerService.previewGrant(12000)).thenReturn(120);
     stubReceiptTokenIssuance();
@@ -2686,11 +2691,11 @@ class OrderServiceTest {
     service.complete("o1", completion(12000, 300), "staff@kizuna.test");
 
     InOrder inOrder = inOrder(customerRepository, customerMemberLinkRepository);
-    inOrder.verify(customerRepository).findByIdForUpdateNoWait("cust-1");
+    inOrder.verify(customerRepository).findByIdAndStoreIdForUpdateNoWait("cust-1", STORE_ID);
     // 紐づけ自体はロック取得後の新しい問い合わせで引く。置換の commit 後ならその新しい行が必ず見える
     inOrder
         .verify(customerMemberLinkRepository, Mockito.atLeastOnce())
-        .findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE);
+        .findByStoreIdAndCustomerIdAndStatus(STORE_ID, "cust-1", LinkStatus.ACTIVE);
   }
 
   @Test
@@ -2703,8 +2708,9 @@ class OrderServiceTest {
 
     service.completionPreview("o1", completion(12000, 0));
 
-    verify(customerMemberLinkRepository).findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE);
-    verify(customerRepository).findByIdForUpdateNoWait(any());
+    verify(customerMemberLinkRepository)
+        .findByStoreIdAndCustomerIdAndStatus(STORE_ID, "cust-1", LinkStatus.ACTIVE);
+    verify(customerRepository).findByIdAndStoreIdForUpdateNoWait(any(), any());
   }
 
   @Test
@@ -2729,7 +2735,8 @@ class OrderServiceTest {
   void completionPreviewOfAnUnlinkedOrderOmitsTheBalance() {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("cust-1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
     when(pointLedgerService.usageUnit()).thenReturn(100);
 

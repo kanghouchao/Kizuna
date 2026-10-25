@@ -3,6 +3,7 @@ package com.kizuna.customer.api.store;
 import com.kizuna.customer.api.dto.CustomerMergePreviewRequest;
 import com.kizuna.customer.api.dto.CustomerMergePreviewResponse;
 import com.kizuna.customer.application.CustomerMergeService;
+import com.kizuna.shared.storescope.CurrentStore;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,7 +20,9 @@ public class CustomerMergePreviewController {
   @PostMapping("/store/customers/{customerId}/merge-preview")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public CustomerMergePreviewResponse preview(
-      @PathVariable String customerId, @Valid @RequestBody CustomerMergePreviewRequest request) {
-    return service.preview(customerId, request);
+      @CurrentStore Long storeId,
+      @PathVariable String customerId,
+      @Valid @RequestBody CustomerMergePreviewRequest request) {
+    return service.preview(storeId, customerId, request);
   }
 }

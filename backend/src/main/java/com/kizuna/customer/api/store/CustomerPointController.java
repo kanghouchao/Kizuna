@@ -5,6 +5,7 @@ import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
 import com.kizuna.customer.application.CustomerPointService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
+import com.kizuna.shared.storescope.CurrentStore;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +33,9 @@ public class CustomerPointController {
 
   @GetMapping("/member-point-balance")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<CustomerPointBalanceResponse> balance(@PathVariable String customerId) {
-    return ResponseEntity.ok(customerPointService.balance(customerId));
+  public ResponseEntity<CustomerPointBalanceResponse> balance(
+      @CurrentStore Long storeId, @PathVariable String customerId) {
+    return ResponseEntity.ok(customerPointService.balance(storeId, customerId));
   }
 
   /**
@@ -45,18 +47,19 @@ public class CustomerPointController {
   @PostMapping("/point-adjustments")
   @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<CustomerPointBalanceResponse> adjust(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @Valid @RequestBody CustomerPointAdjustmentRequest request,
       Principal principal) {
     try {
       return ResponseEntity.ok(
-          customerPointService.adjust(customerId, request, principal.getName()));
+          customerPointService.adjust(storeId, customerId, request, principal.getName()));
     } catch (DataIntegrityViolationException ex) {
       if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY)) {
         throw ex;
       }
       return ResponseEntity.ok(
-          customerPointService.replayAdjust(customerId, request, principal.getName()));
+          customerPointService.replayAdjust(storeId, customerId, request, principal.getName()));
     }
   }
 }

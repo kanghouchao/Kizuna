@@ -15,7 +15,6 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -35,21 +34,19 @@ public class MergePreparation {
   private final UserRepository users;
   private final PointLedgerService points;
   private final MemberLookupService members;
-  private final StoreContext store;
   private final MergeConfirmation confirmation;
 
   public record Prepared(CustomerMergePreviewResponse response, List<String> movedOrderIds) {}
 
   /** 呼出元が両顧客をロックし、受注の状態変更も快照取得から確定まで直列化する。 */
   @StoreScoped
-  public Prepared prepare(String survivingId, CustomerMergePreviewRequest input) {
-    var orders =
-        merges.lockOrders(store.getStoreId(), List.of(survivingId, input.mergedCustomerId()));
-    var surviving = snapshot(survivingId);
-    var merged = snapshot(input.mergedCustomerId());
+  public Prepared prepare(Long storeId, String survivingId, CustomerMergePreviewRequest input) {
+    var orders = merges.lockOrders(storeId, List.of(survivingId, input.mergedCustomerId()));
+    var surviving = snapshot(storeId, survivingId);
+    var merged = snapshot(storeId, input.mergedCustomerId());
     var active =
-        links.findByCustomerIdInAndStatus(
-            List.of(survivingId, input.mergedCustomerId()), LinkStatus.ACTIVE);
+        links.findByStoreIdAndCustomerIdInAndStatus(
+            storeId, List.of(survivingId, input.mergedCustomerId()), LinkStatus.ACTIVE);
     if (active.size() > 1) throw new ConflictException("両方の顧客に会員が紐づいています。先に理由付きで関連を解除してください");
     var allContacts =
         Stream.concat(surviving.contacts().stream(), merged.contacts().stream()).toList();
@@ -112,7 +109,8 @@ public class MergePreparation {
         orders.stream()
             .map(o -> List.of(o.getId(), o.getCustomerId(), o.getStatus(), o.getVersion()))
             .toList();
-    String token = conflicts.isEmpty() ? confirmation.sign(List.of(result, versions)) : null;
+    String token =
+        conflicts.isEmpty() ? confirmation.sign(storeId, List.of(result, versions)) : null;
     return new Prepared(
         new CustomerMergePreviewResponse(
             surviving,
@@ -132,8 +130,8 @@ public class MergePreparation {
   }
 
   @StoreScoped
-  public MergeSnapshot snapshot(String id) {
-    var rows = contacts.findByCustomerIdOrderByIdAsc(id);
+  public MergeSnapshot snapshot(Long storeId, String id) {
+    var rows = contacts.findByStoreIdAndCustomerIdOrderByIdAsc(storeId, id);
     var contactStates =
         rows.stream()
             .map(
@@ -151,14 +149,17 @@ public class MergePreparation {
                 })
             .toList();
     var intervals =
-        links.findByCustomerIdOrderByIdAsc(id).stream()
+        links.findByStoreIdAndCustomerIdOrderByIdAsc(storeId, id).stream()
             .map(
                 l ->
                     MergeSnapshot.Link.from(
                         l, userName(l.getLinkedBy()), userName(l.getReleasedBy())))
             .toList();
     return new MergeSnapshot(
-        id, MergeProfile.from(customers.findById(id).orElseThrow()), contactStates, intervals);
+        id,
+        MergeProfile.from(customers.findByIdAndStoreId(id, storeId).orElseThrow()),
+        contactStates,
+        intervals);
   }
 
   private String userName(Long id) {

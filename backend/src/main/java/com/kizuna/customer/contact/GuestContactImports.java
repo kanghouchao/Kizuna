@@ -32,30 +32,37 @@ public class GuestContactImports {
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   @Transactional(propagation = Propagation.MANDATORY)
   public GuestContactImport preview(
-      String customerId, String contactId, ContactType type, String value, boolean marketing) {
-    if (customerId != null) lock(customerId);
+      Long storeId,
+      String customerId,
+      String contactId,
+      ContactType type,
+      String value,
+      boolean marketing) {
+    if (customerId != null) lock(storeId, customerId);
     if (contactId != null) {
       if (customerId == null) throw new ServiceException("新規顧客には既存の連絡先を指定できません");
-      target(customerId, contactId, type, value);
+      target(storeId, customerId, contactId, type, value);
     }
     return new GuestContactImport(
-        type, value, result(customerId, type, value, marketing), contactId);
+        type, value, result(storeId, customerId, type, value, marketing), contactId);
   }
 
   @StoreScoped
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   @Transactional(propagation = Propagation.MANDATORY)
   public GuestContactImport record(
+      Long storeId,
       String customerId,
       GuestContactImport input,
       String applicationId,
       String evidence,
       Long actorId) {
-    lock(customerId);
+    lock(storeId, customerId);
     var contact =
         input.contactId() == null
-            ? contacts.saveAndFlush(CustomerContact.create(customerId, input.type(), input.value()))
-            : target(customerId, input.contactId(), input.type(), input.value());
+            ? contacts.saveAndFlush(
+                CustomerContact.create(storeId, customerId, input.type(), input.value()))
+            : target(storeId, customerId, input.contactId(), input.type(), input.value());
     String operationId = UUID.randomUUID().toString();
     if (input.contactId() == null)
       histories.save(
@@ -72,30 +79,34 @@ public class GuestContactImports {
   }
 
   private GuestContactImport.MarketingResult result(
-      String customerId, ContactType type, String value, boolean marketing) {
+      Long storeId, String customerId, ContactType type, String value, boolean marketing) {
     if (!marketing) return GuestContactImport.MarketingResult.NOT_REQUESTED;
     if (customerId != null
-        && contacts.findByCustomerIdAndTypeAndValueAndDeletedFalse(customerId, type, value).stream()
+        && contacts
+            .findByStoreIdAndCustomerIdAndTypeAndValueAndDeletedFalse(
+                storeId, customerId, type, value)
+            .stream()
             .anyMatch(c -> c.getMarketingStatus() == ContactPermissionStatus.DENIED))
       return GuestContactImport.MarketingResult.DENIED_PRESERVED;
     return GuestContactImport.MarketingResult.ALLOWED;
   }
 
-  private CustomerContact target(String customerId, String id, ContactType type, String value) {
+  private CustomerContact target(
+      Long storeId, String customerId, String id, ContactType type, String value) {
     var contact =
         contacts
-            .findByIdAndCustomerIdAndDeletedFalse(id, customerId)
+            .findByIdAndStoreIdAndCustomerIdAndDeletedFalse(id, storeId, customerId)
             .orElseThrow(() -> new NotFoundException("連絡先が見つかりません"));
     if (contact.getType() != type || !contact.getValue().equals(value))
       throw new ServiceException("申請と同じ種類・値の連絡先を選択してください");
     return contact;
   }
 
-  private void lock(String id) {
+  private void lock(Long storeId, String id) {
     try {
       var customer =
           customers
-              .findByIdForUpdateNoWait(id)
+              .findByIdAndStoreIdForUpdateNoWait(id, storeId)
               .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
       if (customer.getMergedIntoId() != null) throw new ConflictException("顧客が統合されました。選択し直してください");
     } catch (CannotAcquireLockException ex) {

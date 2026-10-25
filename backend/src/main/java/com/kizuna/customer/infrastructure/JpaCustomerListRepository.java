@@ -51,12 +51,13 @@ public class JpaCustomerListRepository implements CustomerListRepository {
   private final AppProperties appProperties;
 
   @Override
-  public Page<Row> findAll(Specification<Customer> specification, Pageable pageable) {
+  public Page<Row> findAll(Long storeId, Specification<Customer> specification, Pageable pageable) {
     var cb = em.unwrap(Session.class).getCriteriaBuilder();
     var query = cb.createQuery(SELECT, Object[].class);
     @SuppressWarnings("unchecked")
     Root<Customer> customer = (Root<Customer>) query.getRoot(0, Customer.class);
-    query.where(specification.toPredicate(customer, query, cb));
+    query.where(
+        cb.equal(customer.get("storeId"), storeId), specification.toPredicate(customer, query, cb));
     var selections = query.getSelection().getCompoundSelectionItems();
     var visit = (Expression<?>) selections.get(1);
     var balance = (Expression<?>) selections.get(2);
@@ -99,7 +100,11 @@ public class JpaCustomerListRepository implements CustomerListRepository {
             .toList();
     var count = cb.createQuery(Long.class);
     var countRoot = count.from(Customer.class);
-    count.select(cb.count(countRoot)).where(specification.toPredicate(countRoot, count, cb));
+    count
+        .select(cb.count(countRoot))
+        .where(
+            cb.equal(countRoot.get("storeId"), storeId),
+            specification.toPredicate(countRoot, count, cb));
     return new PageImpl<>(rows, pageable, em.createQuery(count).getSingleResult());
   }
 }

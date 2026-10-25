@@ -3,6 +3,7 @@ package com.kizuna.customer.api.store;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -51,6 +52,8 @@ class CustomerPointControllerTest {
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
 
+  private static final Long STORE_ID = 7L;
+
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private CustomerPointService customerPointService;
@@ -66,7 +69,7 @@ class CustomerPointControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void balanceIsReachableWithCustomerManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerPointService.balance(anyString()))
+    when(customerPointService.balance(eq(STORE_ID), anyString()))
         .thenReturn(CustomerPointBalanceResponse.builder().linked(false).build());
 
     mockMvc
@@ -101,7 +104,7 @@ class CustomerPointControllerTest {
   @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void adjustmentIsReachableWithThePointPermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerPointService.adjust(anyString(), any(), anyString()))
+    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), anyString()))
         .thenReturn(CustomerPointBalanceResponse.builder().linked(true).balance(100L).build());
 
     mockMvc
@@ -152,9 +155,9 @@ class CustomerPointControllerTest {
   @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void adjustmentLosingTheKeyRaceIsReplayed() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerPointService.adjust(anyString(), any(), anyString()))
+    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), anyString()))
         .thenThrow(integrityViolation("uq_t_point_entries_idempotency_key"));
-    when(customerPointService.replayAdjust(anyString(), any(), anyString()))
+    when(customerPointService.replayAdjust(eq(STORE_ID), anyString(), any(), anyString()))
         .thenReturn(CustomerPointBalanceResponse.builder().linked(true).balance(800L).build());
 
     mockMvc
@@ -167,14 +170,14 @@ class CustomerPointControllerTest {
   @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void otherIntegrityViolationsAreNotReplayed() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerPointService.adjust(anyString(), any(), anyString()))
+    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), anyString()))
         .thenThrow(integrityViolation("uq_t_users_email"));
 
     mockMvc
         .perform(storePost("/store/customers/c1/point-adjustments", adjustmentBody("訂正")))
         .andExpect(status().isConflict());
     Mockito.verify(customerPointService, Mockito.never())
-        .replayAdjust(anyString(), any(), anyString());
+        .replayAdjust(any(), anyString(), any(), anyString());
   }
 
   /** 冪等キー付きの正常な調整ボディ。 */
@@ -193,12 +196,14 @@ class CustomerPointControllerTest {
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path).header("X-Store-ID", "1").principal(() -> "tanaka.hanako@kizuna.test");
+    return get(path)
+        .header("X-Store-ID", STORE_ID.toString())
+        .principal(() -> "tanaka.hanako@kizuna.test");
   }
 
   private MockHttpServletRequestBuilder storePost(String path, String body) {
     return post(path)
-        .header("X-Store-ID", "1")
+        .header("X-Store-ID", STORE_ID.toString())
         .principal(() -> "tanaka.hanako@kizuna.test")
         .with(csrf())
         .contentType(MediaType.APPLICATION_JSON)

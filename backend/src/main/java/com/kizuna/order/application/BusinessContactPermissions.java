@@ -127,7 +127,7 @@ public class BusinessContactPermissions {
               state.reason(),
               latest == null || state.source() == null ? null : latest.getRecordedBy(),
               latest == null || state.source() == null ? null : latest.getRecordedAt(),
-              policy.evaluate(type, value, state.status())));
+              policy.evaluate(order.getStoreId(), type, value, state.status())));
     }
     return result;
   }

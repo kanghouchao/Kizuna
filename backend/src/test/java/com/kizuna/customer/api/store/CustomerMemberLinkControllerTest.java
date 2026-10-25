@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -57,6 +58,8 @@ class CustomerMemberLinkControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
+  private static final Long STORE_ID = 7L;
+
   @MockitoBean private CustomerMemberLinkService customerMemberLinkService;
 
   // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
@@ -70,7 +73,7 @@ class CustomerMemberLinkControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void currentReturnsTheMemberCodeWhenLinked() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerMemberLinkService.current(anyString()))
+    when(customerMemberLinkService.current(eq(STORE_ID), anyString()))
         .thenReturn(
             new CustomerMemberLinkResponse(
                 "l1", true, "123456789012", OffsetDateTime.parse("2026-08-01T10:00:00+09:00")));
@@ -88,7 +91,7 @@ class CustomerMemberLinkControllerTest {
   void currentIsNotFoundWhenTheCustomerHasNoLink() throws Exception {
     // 「紐づいていない」を 200 の本体で表すと、呼出側が本体を読んでからもう一度分岐することになる
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerMemberLinkService.current(anyString()))
+    when(customerMemberLinkService.current(eq(STORE_ID), anyString()))
         .thenThrow(new NotFoundException("紐づけられている会員がいません"));
 
     mockMvc
@@ -111,14 +114,14 @@ class CustomerMemberLinkControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void historyForwardsTheCursorAndSize() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerMemberLinkService.history(anyString(), any(), anyInt()))
+    when(customerMemberLinkService.history(eq(STORE_ID), anyString(), any(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
         .perform(storeGet("/store/customers/c1/member-link/history?cursor=abc&size=5"))
         .andExpect(status().isOk());
 
-    verify(customerMemberLinkService).history("c1", "abc", 5);
+    verify(customerMemberLinkService).history(STORE_ID, "c1", "abc", 5);
   }
 
   @Test
@@ -133,14 +136,17 @@ class CustomerMemberLinkControllerTest {
                 .contentType("application/json")
                 .content("{\"expected_link_id\":\"l1\",\"operation_reason\":\"本人依頼\"}")
                 .with(csrf())
-                .header("X-Store-ID", "1")
+                .header("X-Store-ID", STORE_ID.toString())
                 .principal(() -> "tanaka.hanako@kizuna.test"))
         .andExpect(status().isNoContent());
 
-    verify(customerMemberLinkService).unlink("c1", "l1", "本人依頼", "tanaka.hanako@kizuna.test");
+    verify(customerMemberLinkService)
+        .unlink(STORE_ID, "c1", "l1", "本人依頼", "tanaka.hanako@kizuna.test");
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path).header("X-Store-ID", "1").principal(() -> "tanaka.hanako@kizuna.test");
+    return get(path)
+        .header("X-Store-ID", STORE_ID.toString())
+        .principal(() -> "tanaka.hanako@kizuna.test");
   }
 }

@@ -117,6 +117,7 @@ public class CustomerContactHistory extends StoreScopedEntity {
       ContactState before,
       String operationId) {
     var history = new CustomerContactHistory();
+    history.setStoreId(contact.getStoreId());
     history.operationId = operationId;
     history.contactId = contact.getId();
     history.originCustomerId = contact.getOriginCustomerId();

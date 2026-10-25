@@ -565,6 +565,7 @@ public class OrderService {
       // （無帰属受注は正規の状態）。
       order.linkCustomer(
           customerProvisioningService.ensureMemberRequestCustomer(
+              application.getStoreId(),
               new MemberRequestCustomerInput(
                   application.getRequesterMemberId(),
                   application.getRequesterMemberCode(),
@@ -903,6 +904,7 @@ public class OrderService {
     Specification<Customer> spec =
         (root, query, cb) -> {
           var predicates = new ArrayList<Predicate>();
+          predicates.add(cb.equal(root.get("storeId"), storeContext.getStoreId()));
           predicates.add(cb.isNull(root.get("mergedIntoId")));
           if (cursor != null) predicates.add(cb.greaterThan(root.get("id"), cursor));
           if (search != null && !search.isBlank()) {
@@ -930,8 +932,8 @@ public class OrderService {
     var phoneByCustomer =
         canReadContacts
             ? customerContactRepository
-                .findByCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(
-                    candidates.stream().map(Customer::getId).toList())
+                .findByStoreIdAndCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(
+                    storeContext.getStoreId(), candidates.stream().map(Customer::getId).toList())
                 .stream()
                 .filter(c -> c.getType() == ContactType.PHONE)
                 .collect(
@@ -973,7 +975,7 @@ public class OrderService {
           throw new AccessDeniedException("顧客の新規登録には顧客管理権限が必要です");
         yield create
             ? customerProvisioningService.createCustomer(
-                new NewCustomerInput(selection.newCustomer().name()))
+                storeContext.getStoreId(), new NewCustomerInput(selection.newCustomer().name()))
             : null;
       }
       case EXISTING -> {
@@ -981,7 +983,8 @@ public class OrderService {
         try {
           var customer =
               customerRepository
-                  .findByIdForUpdateNoWait(selection.customerId())
+                  .findByIdAndStoreIdForUpdateNoWait(
+                      selection.customerId(), storeContext.getStoreId())
                   .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
           if (customer.getMergedIntoId() != null) throw new NotFoundException("顧客が見つかりません");
           yield customer.getId();
@@ -996,7 +999,8 @@ public class OrderService {
   private void lockCustomerWithoutWaiting(Order order) {
     if (order.getCustomerId() == null) return;
     try {
-      customerRepository.findByIdForUpdateNoWait(order.getCustomerId());
+      customerRepository.findByIdAndStoreIdForUpdateNoWait(
+          order.getCustomerId(), storeContext.getStoreId());
     } catch (CannotAcquireLockException ex) {
       throw new ConflictException(
           "顧客情報が変更中です。しばらく待ってから再試算してください", Map.of("customer_lock", "入力を保持したまま、しばらく待ってから再試算してください"));
@@ -1043,8 +1047,8 @@ public class OrderService {
     if (order.getCustomerId() == null) {
       return Optional.empty();
     }
-    return customerMemberLinkRepository.findByCustomerIdAndStatus(
-        order.getCustomerId(), LinkStatus.ACTIVE);
+    return customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+        storeContext.getStoreId(), order.getCustomerId(), LinkStatus.ACTIVE);
   }
 
   /**

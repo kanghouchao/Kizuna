@@ -3,7 +3,6 @@ package com.kizuna.customer.application;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -20,9 +19,8 @@ import tools.jackson.databind.ObjectMapper;
 public class MergeConfirmation {
   private final ObjectMapper json;
   private final AppProperties properties;
-  private final StoreContext store;
 
-  public String sign(Object state) {
+  public String sign(Long storeId, Object state) {
     try {
       Mac mac = Mac.getInstance("HmacSHA256");
       mac.init(
@@ -31,8 +29,7 @@ public class MergeConfirmation {
       return Base64.getUrlEncoder()
           .withoutPadding()
           .encodeToString(
-              mac.doFinal(
-                  json.writeValueAsBytes(List.of("customer-merge-v1", store.getStoreId(), state))));
+              mac.doFinal(json.writeValueAsBytes(List.of("customer-merge-v1", storeId, state))));
     } catch (GeneralSecurityException ex) {
       throw new IllegalStateException("統合の確認値を作成できません", ex);
     }

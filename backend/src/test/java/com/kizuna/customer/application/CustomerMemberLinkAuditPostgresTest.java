@@ -77,6 +77,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CustomerMemberLinkAuditPostgresTest {
   private static final AtomicLong MEMBERS = new AtomicLong(100);
+  private static final Long STORE_ID = 1L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private CustomerMemberLinkService links;
@@ -100,7 +101,7 @@ class CustomerMemberLinkAuditPostgresTest {
 
   @BeforeEach
   void authenticate() {
-    context.getBean(StoreContext.class).setStoreId(1L);
+    context.getBean(StoreContext.class).setStoreId(STORE_ID);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
@@ -121,10 +122,13 @@ class CustomerMemberLinkAuditPostgresTest {
   void successfulReplacementAndReleaseKeepRealVersionsAndSafeSnapshots() {
     String customer = customer();
     String code = memberCode();
-    String first = links.link(customer, code, null, "秘密の建立理由", "operator@example.test").id();
+    String first =
+        links.link(STORE_ID, customer, code, null, "秘密の建立理由", "operator@example.test").id();
     String second =
-        links.link(customer, memberCode(), first, "秘密の変更理由", "operator@example.test").id();
-    links.unlink(customer, second, "秘密の解除理由", "operator@example.test");
+        links
+            .link(STORE_ID, customer, memberCode(), first, "秘密の変更理由", "operator@example.test")
+            .id();
+    links.unlink(STORE_ID, customer, second, "秘密の解除理由", "operator@example.test");
     var events =
         jdbc.queryForList(
             "select action,target_id,source_id,before_values ->> 'version' as old_version,after_values ->> 'version' as new_version from t_audit_events where source_id=? order by id",
@@ -163,7 +167,7 @@ class CustomerMemberLinkAuditPostgresTest {
             "operation_reason",
             "release_reason",
             "operator@example.test");
-    assertThat(links.history(customer, null, 20).content()).hasSize(2);
+    assertThat(links.history(STORE_ID, customer, null, 20).content()).hasSize(2);
   }
 
   @Test
@@ -172,12 +176,13 @@ class CustomerMemberLinkAuditPostgresTest {
     reject("CUSTOMER_MEMBER_LINK_CREATED");
     try {
       assertThatThrownBy(
-              () -> links.link(customer, memberCode(), null, "秘密", "operator@example.test"))
+              () ->
+                  links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test"))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       allow();
     }
-    assertThat(links.history(customer, null, 20).content()).isEmpty();
+    assertThat(links.history(STORE_ID, customer, null, 20).content()).isEmpty();
     assertThat(auditCount(customer)).isZero();
   }
 
@@ -185,11 +190,14 @@ class CustomerMemberLinkAuditPostgresTest {
   void eitherReplacementAuditFailureRestoresOldActiveInterval() {
     for (String action : List.of("CUSTOMER_MEMBER_LINK_RELEASED", "CUSTOMER_MEMBER_LINK_CREATED")) {
       String customer = customer();
-      String first = links.link(customer, memberCode(), null, "秘密", "operator@example.test").id();
+      String first =
+          links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
       reject(action);
       try {
         assertThatThrownBy(
-                () -> links.link(customer, memberCode(), first, "秘密の変更", "operator@example.test"))
+                () ->
+                    links.link(
+                        STORE_ID, customer, memberCode(), first, "秘密の変更", "operator@example.test"))
             .isInstanceOf(DataIntegrityViolationException.class);
       } finally {
         allow();
@@ -201,10 +209,12 @@ class CustomerMemberLinkAuditPostgresTest {
   @Test
   void auditFailureRollsBackExplicitRelease() {
     String customer = customer();
-    String first = links.link(customer, memberCode(), null, "秘密", "operator@example.test").id();
+    String first =
+        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
     reject("CUSTOMER_MEMBER_LINK_RELEASED");
     try {
-      assertThatThrownBy(() -> links.unlink(customer, first, "秘密の解除", "operator@example.test"))
+      assertThatThrownBy(
+              () -> links.unlink(STORE_ID, customer, first, "秘密の解除", "operator@example.test"))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       allow();
@@ -215,12 +225,19 @@ class CustomerMemberLinkAuditPostgresTest {
   @Test
   void outerRollbackRestoresLinkAndBothReplacementEvents() {
     String customer = customer();
-    String first = links.link(customer, memberCode(), null, "秘密", "operator@example.test").id();
+    String first =
+        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
     assertThatThrownBy(
             () ->
                 transactions.executeWithoutResult(
                     status -> {
-                      links.link(customer, memberCode(), first, "秘密の変更", "operator@example.test");
+                      links.link(
+                          STORE_ID,
+                          customer,
+                          memberCode(),
+                          first,
+                          "秘密の変更",
+                          "operator@example.test");
                       throw new IllegalStateException("外側の取引を中止");
                     }))
         .isInstanceOf(IllegalStateException.class);
@@ -230,7 +247,8 @@ class CustomerMemberLinkAuditPostgresTest {
   @Test
   void actorAndStoreComeFromContextForBothReplacementEvents() {
     String customer = customer();
-    String first = links.link(customer, memberCode(), null, "秘密", "operator@example.test").id();
+    String first =
+        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
     var jwt =
         Jwt.withTokenValue(UUID.randomUUID().toString())
             .header("alg", "HS256")
@@ -238,7 +256,7 @@ class CustomerMemberLinkAuditPostgresTest {
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
-    links.link(customer, memberCode(), first, "秘密の変更", "operator@example.test");
+    links.link(STORE_ID, customer, memberCode(), first, "秘密の変更", "operator@example.test");
     var events =
         jdbc.queryForList(
             "select actor_id,store_id from t_audit_events where source_id=? order by id", customer);
@@ -251,7 +269,8 @@ class CustomerMemberLinkAuditPostgresTest {
   @Test
   void concurrentReplacementOfOneCustomerRejectsStaleExpectedLink() throws Exception {
     String customer = customer();
-    String first = links.link(customer, memberCode(), null, "秘密", "operator@example.test").id();
+    String first =
+        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
     var start = new CountDownLatch(1);
     try (var workers = Executors.newFixedThreadPool(2)) {
       var one = workers.submit(() -> replaceAfter(start, customer, memberCode(), first));
@@ -262,16 +281,18 @@ class CustomerMemberLinkAuditPostgresTest {
       assertThat(results.stream().filter(value -> value instanceof ConflictException).count())
           .isEqualTo(1);
     }
-    assertThat(links.history(customer, null, 20).content()).hasSize(2);
+    assertThat(links.history(STORE_ID, customer, null, 20).content()).hasSize(2);
     assertThat(auditCount(customer)).isEqualTo(3);
-    assertThat(links.current(customer).id()).isNotEqualTo(first);
+    assertThat(links.current(STORE_ID, customer).id()).isNotEqualTo(first);
   }
 
   @Test
   void uniqueMemberRaceRollsBackLosersReleaseAndAudit() throws Exception {
     String customerOne = customer(), customerTwo = customer();
-    String oldOne = links.link(customerOne, memberCode(), null, "秘密", "operator@example.test").id();
-    String oldTwo = links.link(customerTwo, memberCode(), null, "秘密", "operator@example.test").id();
+    String oldOne =
+        links.link(STORE_ID, customerOne, memberCode(), null, "秘密", "operator@example.test").id();
+    String oldTwo =
+        links.link(STORE_ID, customerTwo, memberCode(), null, "秘密", "operator@example.test").id();
     String targetCode = memberCode();
     long targetMember = Long.parseLong(targetCode.substring("private-code-".length()));
     jdbc.execute(
@@ -317,9 +338,9 @@ class CustomerMemberLinkAuditPostgresTest {
       String loser = firstResult == null ? customerTwo : customerOne;
       assertActiveUnchanged(loser, firstResult == null ? oldTwo : oldOne);
       String winner = firstResult == null ? customerOne : customerTwo;
-      assertThat(links.history(winner, null, 20).content()).hasSize(2);
+      assertThat(links.history(STORE_ID, winner, null, 20).content()).hasSize(2);
       assertThat(auditCount(winner)).isEqualTo(3);
-      assertThat(links.current(winner).memberCode()).isEqualTo(targetCode);
+      assertThat(links.current(STORE_ID, winner).memberCode()).isEqualTo(targetCode);
     } finally {
       jdbc.execute("drop trigger link_test_gate on t_customer_member_links");
       jdbc.execute("drop function link_test_gate()");
@@ -331,7 +352,7 @@ class CustomerMemberLinkAuditPostgresTest {
     authenticate();
     try {
       if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("開始待機が時間切れ");
-      links.link(customer, code, expected, "秘密の並行変更", "operator@example.test");
+      links.link(STORE_ID, customer, code, expected, "秘密の並行変更", "operator@example.test");
       return null;
     } catch (Throwable failure) {
       return failure;
@@ -341,8 +362,8 @@ class CustomerMemberLinkAuditPostgresTest {
   }
 
   private void assertActiveUnchanged(String customer, String first) {
-    assertThat(links.current(customer).id()).isEqualTo(first);
-    assertThat(links.history(customer, null, 20).content()).hasSize(1);
+    assertThat(links.current(STORE_ID, customer).id()).isEqualTo(first);
+    assertThat(links.history(STORE_ID, customer, null, 20).content()).hasSize(1);
     assertThat(
             jdbc.queryForMap(
                 "select status,version,released_at,released_by from t_customer_member_links where id=?",

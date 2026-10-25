@@ -30,6 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @EnabledIfEnvironmentVariable(named = "KIZUNA_CONTACT_AUDIT_TEST_JDBC_URL", matches = ".+")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CustomerAuditPostgresTest {
+  private static final Long STORE_ID = 1L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private CustomerService customers;
@@ -45,7 +46,7 @@ class CustomerAuditPostgresTest {
 
   @BeforeEach
   void authenticate() {
-    context.getBean(StoreContext.class).setStoreId(1L);
+    context.getBean(StoreContext.class).setStoreId(STORE_ID);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
@@ -64,13 +65,13 @@ class CustomerAuditPostgresTest {
 
   @Test
   void committedCrudVersionsSurvivePhysicalDeletionAndNoOpsAddNothing() {
-    var id = customers.create(request(false)).getId();
+    var id = customers.create(STORE_ID, request(false)).getId();
     var patch = new CustomerUpdateRequest();
     patch.setAddress("監査へ残さない住所");
-    customers.update(id, patch);
-    customers.update(id, patch);
-    customers.update(id, new CustomerUpdateRequest());
-    customers.delete(id);
+    customers.update(STORE_ID, id, patch);
+    customers.update(STORE_ID, id, patch);
+    customers.update(STORE_ID, id, new CustomerUpdateRequest());
+    customers.delete(STORE_ID, id);
     assertThat(jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
         .isZero();
     var events =
@@ -101,7 +102,8 @@ class CustomerAuditPostgresTest {
     long audits = count("t_audit_events");
     reject("CUSTOMER_CREATED");
     try {
-      assertThatThrownBy(() -> customers.create(request)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> customers.create(STORE_ID, request))
+          .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
                   "select count(*) from t_customers where name = ?", Long.class, request.getName()))
@@ -128,7 +130,7 @@ class CustomerAuditPostgresTest {
             () ->
                 transactions.executeWithoutResult(
                     status -> {
-                      customers.create(request);
+                      customers.create(STORE_ID, request);
                       assertThat(count("t_audit_events")).isEqualTo(audits + 3);
                       throw new IllegalStateException("後続失敗");
                     }))
@@ -145,13 +147,14 @@ class CustomerAuditPostgresTest {
   @Test
   void updateAuditRejectionRestoresAttributesAndVersion() {
     var request = request(false);
-    var id = customers.create(request).getId();
+    var id = customers.create(STORE_ID, request).getId();
     long audits = count("t_audit_events");
     var patch = new CustomerUpdateRequest();
     patch.setName("確定しない秘密名");
     reject("CUSTOMER_UPDATED");
     try {
-      assertThatThrownBy(() -> customers.update(id, patch)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> customers.update(STORE_ID, id, patch))
+          .isInstanceOf(RuntimeException.class);
       assertThat(jdbc.queryForMap("select name, version from t_customers where id = ?", id))
           .containsEntry("name", request.getName())
           .containsEntry("version", 0L);
@@ -163,11 +166,11 @@ class CustomerAuditPostgresTest {
 
   @Test
   void deleteAuditRejectionRestoresThePhysicallyRemovedCustomer() {
-    var id = customers.create(request(false)).getId();
+    var id = customers.create(STORE_ID, request(false)).getId();
     long audits = count("t_audit_events");
     reject("CUSTOMER_DELETED");
     try {
-      assertThatThrownBy(() -> customers.delete(id)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> customers.delete(STORE_ID, id)).isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject("select version from t_customers where id = ?", Long.class, id))
           .isZero();
@@ -179,9 +182,9 @@ class CustomerAuditPostgresTest {
 
   @Test
   void existingContactHistoryProtectsItsParentWithoutASuccessfulDeletionAudit() {
-    var id = customers.create(request(true)).getId();
+    var id = customers.create(STORE_ID, request(true)).getId();
     long audits = count("t_audit_events");
-    assertThatThrownBy(() -> customers.delete(id)).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> customers.delete(STORE_ID, id)).isInstanceOf(ConflictException.class);
     assertThat(jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
         .isEqualTo(1);
     assertThat(count("t_audit_events")).isEqualTo(audits);
@@ -189,19 +192,19 @@ class CustomerAuditPostgresTest {
 
   @Test
   void databaseReferenceRejectsPhysicalDeletionWithoutAddingAnAudit() {
-    var id = customers.create(request(false)).getId();
+    var id = customers.create(STORE_ID, request(false)).getId();
     long audits = count("t_audit_events");
     jdbc.execute(
         "create table customer_audit_test_reference (customer_id varchar(64) references t_customers(id))");
     try {
       jdbc.update("insert into customer_audit_test_reference(customer_id) values (?)", id);
-      assertThatThrownBy(() -> customers.delete(id)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> customers.delete(STORE_ID, id)).isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
           .isEqualTo(1);
       assertThat(count("t_audit_events")).isEqualTo(audits);
       jdbc.update("delete from customer_audit_test_reference where customer_id = ?", id);
-      customers.delete(id);
+      customers.delete(STORE_ID, id);
       assertThat(
               jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
           .isZero();

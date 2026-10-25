@@ -49,6 +49,7 @@ public class GuestApplicationConsent {
         throw new ServiceException("申請で販促同意が選択されていません");
       results.add(
           imports.preview(
+              application.getStoreId(),
               selection.customerId(),
               item.contactId(),
               item.type(),
@@ -68,6 +69,7 @@ public class GuestApplicationConsent {
       var consent = application.getContactConsent();
       results.add(
           imports.record(
+              application.getStoreId(),
               customerId,
               item,
               application.getId(),
@@ -97,7 +99,7 @@ public class GuestApplicationConsent {
               reason(application),
               null,
               consent.acquiredAt(),
-              policy.evaluate(type, value, status)));
+              policy.evaluate(application.getStoreId(), type, value, status)));
     }
     return result;
   }

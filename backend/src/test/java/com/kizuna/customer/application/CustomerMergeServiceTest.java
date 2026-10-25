@@ -21,7 +21,6 @@ import com.kizuna.customer.domain.MergeSnapshot;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
@@ -55,7 +54,7 @@ class CustomerMergeServiceTest {
 
   private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final long ACTOR_ID = 42L;
-  private static final long STORE_ID = 1L;
+  private static final long STORE_ID = 7L;
 
   /** 昇順で押さえることを見るため、存続行のほうが辞書順で後になる組にする。 */
   private static final String SURVIVING_ID = "c-2";
@@ -70,7 +69,6 @@ class CustomerMergeServiceTest {
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;
   @Mock private UserRepository userRepository;
-  @Mock private StoreContext storeContext;
 
   @Mock private MergePreparation preparation;
   @Mock private MergeConfirmation confirmation;
@@ -86,19 +84,22 @@ class CustomerMergeServiceTest {
   @Test
   @DisplayName("同じ顧客同士の統合は 400 系で拒まれ、行を一切押さえないこと")
   void rejectsSelfMerge() {
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(SURVIVING_ID), ACTOR_EMAIL))
+    assertThatThrownBy(
+            () -> service.merge(STORE_ID, SURVIVING_ID, input(SURVIVING_ID), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class);
 
-    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(Mockito.anyString());
+    Mockito.verify(customerRepository, Mockito.never())
+        .findByIdAndStoreIdForUpdate(Mockito.anyString(), Mockito.any());
   }
 
   @Test
   @DisplayName("押さえられない顧客は他店舗も不在も区別なく 404 になること")
   void rejectsUnknownCustomer() {
     givenActor();
-    Mockito.when(customerRepository.findByIdForUpdate(MERGED_ID)).thenReturn(Optional.empty());
+    Mockito.when(customerRepository.findByIdAndStoreIdForUpdate(MERGED_ID, STORE_ID))
+        .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -111,11 +112,11 @@ class CustomerMergeServiceTest {
     givenNoActiveLinks();
     givenStore();
 
-    service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
+    service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
 
     InOrder inOrder = Mockito.inOrder(customerRepository);
-    inOrder.verify(customerRepository).findByIdForUpdate(MERGED_ID);
-    inOrder.verify(customerRepository).findByIdForUpdate(SURVIVING_ID);
+    inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate(MERGED_ID, STORE_ID);
+    inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate(SURVIVING_ID, STORE_ID);
   }
 
   @Test
@@ -123,15 +124,16 @@ class CustomerMergeServiceTest {
   void rejectsMergingIntoATombstone() {
     givenActor();
     givenFirstRowLocked();
-    Mockito.when(customerRepository.isMerged(SURVIVING_ID)).thenReturn(true);
+    Mockito.when(customerRepository.isMerged(STORE_ID, SURVIVING_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済み");
 
     // 参照の解決は墓標 → 統合先の順に押さえるので、墓標を名指した要求がここで 2 本目を待つと
     // ID 昇順と逆向きの待ちが環になる
-    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(SURVIVING_ID);
+    Mockito.verify(customerRepository, Mockito.never())
+        .findByIdAndStoreIdForUpdate(SURVIVING_ID, STORE_ID);
     verifyNothingWasMoved();
   }
 
@@ -140,14 +142,15 @@ class CustomerMergeServiceTest {
   void rejectsMergingATombstoneAgain() {
     givenActor();
     givenFirstRowLocked();
-    Mockito.when(customerRepository.isMerged(SURVIVING_ID)).thenReturn(false);
-    Mockito.when(customerRepository.isMerged(MERGED_ID)).thenReturn(true);
+    Mockito.when(customerRepository.isMerged(STORE_ID, SURVIVING_ID)).thenReturn(false);
+    Mockito.when(customerRepository.isMerged(STORE_ID, MERGED_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済み");
 
-    Mockito.verify(customerRepository, Mockito.never()).findByIdForUpdate(SURVIVING_ID);
+    Mockito.verify(customerRepository, Mockito.never())
+        .findByIdAndStoreIdForUpdate(SURVIVING_ID, STORE_ID);
     verifyNothingWasMoved();
   }
 
@@ -158,14 +161,15 @@ class CustomerMergeServiceTest {
     givenBothRowsLocked();
     givenNeitherIsMerged();
     Mockito.when(
-            customerMemberLinkRepository.existsByCustomerIdAndStatus(
-                SURVIVING_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.existsByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, SURVIVING_ID, LinkStatus.ACTIVE))
         .thenReturn(true);
     Mockito.when(
-            customerMemberLinkRepository.existsByCustomerIdAndStatus(MERGED_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.existsByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, MERGED_ID, LinkStatus.ACTIVE))
         .thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("先に関連を解除");
 
@@ -179,15 +183,19 @@ class CustomerMergeServiceTest {
     givenBothRowsLocked();
     givenNeitherIsMerged();
     Mockito.when(
-            customerMemberLinkRepository.existsByCustomerIdAndStatus(
-                SURVIVING_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.existsByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, SURVIVING_ID, LinkStatus.ACTIVE))
         .thenReturn(true);
     Mockito.when(
-            customerMemberLinkRepository.existsByCustomerIdAndStatus(MERGED_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.existsByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, MERGED_ID, LinkStatus.ACTIVE))
         .thenReturn(false);
     givenStore();
 
-    assertThat(service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL).survivingCustomerId())
+    assertThat(
+            service
+                .merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL)
+                .survivingCustomerId())
         .isEqualTo(SURVIVING_ID);
   }
 
@@ -204,7 +212,8 @@ class CustomerMergeServiceTest {
     Mockito.when(customerMemberLinkRepository.repointCustomer(SURVIVING_ID, MERGED_ID, STORE_ID))
         .thenReturn(3);
 
-    CustomerMergeResponse response = service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
+    CustomerMergeResponse response =
+        service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
 
     assertThat(response.movedOrderCount()).isEqualTo(7);
     assertThat(response.movedLinkCount()).isEqualTo(3);
@@ -216,6 +225,7 @@ class CustomerMergeServiceTest {
     assertThat(recorded.getValue().getMergedAt()).isNotNull();
     assertThat(recorded.getValue().getMovedOrderCount()).isEqualTo(7);
     assertThat(recorded.getValue().getMovedLinkCount()).isEqualTo(3);
+    assertThat(recorded.getValue().getStoreId()).isEqualTo(STORE_ID);
   }
 
   @Test
@@ -227,7 +237,7 @@ class CustomerMergeServiceTest {
     givenNoActiveLinks();
     givenStore();
 
-    service.merge(SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
+    service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
 
     InOrder inOrder = Mockito.inOrder(customerRepository);
     inOrder.verify(customerRepository).flattenMergedInto(SURVIVING_ID, MERGED_ID, STORE_ID);
@@ -243,12 +253,15 @@ class CustomerMergeServiceTest {
     HistoryRow row = new HistoryRow("m-1", SURVIVING_ID, MERGED_ID, MERGED_AT);
     givenCustomerExists(SURVIVING_ID);
     givenCustomerExists(MERGED_ID);
-    Mockito.when(customerMergeRepository.findHistory(Mockito.anyString(), Mockito.any()))
+    Mockito.when(
+            customerMergeRepository.findHistory(
+                Mockito.eq(STORE_ID), Mockito.anyString(), Mockito.any()))
         .thenReturn(List.of(row));
 
     CustomerMergeHistoryResponse fromSurviving =
-        service.history(SURVIVING_ID, null, 20).content().get(0);
-    CustomerMergeHistoryResponse fromMerged = service.history(MERGED_ID, null, 20).content().get(0);
+        service.history(STORE_ID, SURVIVING_ID, null, 20).content().get(0);
+    CustomerMergeHistoryResponse fromMerged =
+        service.history(STORE_ID, MERGED_ID, null, 20).content().get(0);
 
     assertThat(fromSurviving.direction()).isEqualTo(MergeDirection.SURVIVING);
     assertThat(fromSurviving.counterpartCustomerId()).isEqualTo(MERGED_ID);
@@ -266,10 +279,13 @@ class CustomerMergeServiceTest {
   @DisplayName("統合の無い顧客は空の一覧で返り、404 にならないこと")
   void returnsAnEmptyPageInsteadOfNotFoundWhenThereAreNoMerges() {
     givenCustomerExists(SURVIVING_ID);
-    Mockito.when(customerMergeRepository.findHistory(Mockito.anyString(), Mockito.any()))
+    Mockito.when(
+            customerMergeRepository.findHistory(
+                Mockito.eq(STORE_ID), Mockito.anyString(), Mockito.any()))
         .thenReturn(List.of());
 
-    CursorPage<CustomerMergeHistoryResponse> page = service.history(SURVIVING_ID, null, 20);
+    CursorPage<CustomerMergeHistoryResponse> page =
+        service.history(STORE_ID, SURVIVING_ID, null, 20);
 
     assertThat(page.content()).isEmpty();
     assertThat(page.nextCursor()).isNull();
@@ -278,13 +294,13 @@ class CustomerMergeServiceTest {
   @Test
   @DisplayName("引けない顧客の履歴は 404 になり、統合の記録を読みに行かないこと")
   void refusesToReadTheHistoryOfACustomerItCannotSee() {
-    Mockito.when(customerRepository.existsById(SURVIVING_ID)).thenReturn(false);
+    Mockito.when(customerRepository.existsByIdAndStoreId(SURVIVING_ID, STORE_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.history(SURVIVING_ID, null, 20))
+    assertThatThrownBy(() -> service.history(STORE_ID, SURVIVING_ID, null, 20))
         .isInstanceOf(NotFoundException.class);
 
     Mockito.verify(customerMergeRepository, Mockito.never())
-        .findHistory(Mockito.anyString(), Mockito.any());
+        .findHistory(Mockito.any(), Mockito.anyString(), Mockito.any());
   }
 
   @Test
@@ -293,13 +309,17 @@ class CustomerMergeServiceTest {
     HistoryRow first = new HistoryRow("m-2", SURVIVING_ID, MERGED_ID, MERGED_AT);
     HistoryRow last = new HistoryRow("m-1", SURVIVING_ID, "c-0", MERGED_AT.minusDays(1));
     givenCustomerExists(SURVIVING_ID);
-    Mockito.when(customerMergeRepository.findHistory(Mockito.anyString(), Mockito.any()))
+    Mockito.when(
+            customerMergeRepository.findHistory(
+                Mockito.eq(STORE_ID), Mockito.anyString(), Mockito.any()))
         .thenReturn(List.of(first, last));
 
-    CursorPage<CustomerMergeHistoryResponse> page = service.history(SURVIVING_ID, null, 1);
+    CursorPage<CustomerMergeHistoryResponse> page =
+        service.history(STORE_ID, SURVIVING_ID, null, 1);
 
     ArgumentCaptor<Limit> limit = ArgumentCaptor.forClass(Limit.class);
-    Mockito.verify(customerMergeRepository).findHistory(Mockito.eq(SURVIVING_ID), limit.capture());
+    Mockito.verify(customerMergeRepository)
+        .findHistory(Mockito.eq(STORE_ID), Mockito.eq(SURVIVING_ID), limit.capture());
     assertThat(limit.getValue().max()).isEqualTo(2);
     assertThat(page.content()).hasSize(1);
     // 続きの位置は返した最後の行から組む。余分の 1 件から組むと、その行が次の頁で消える
@@ -313,14 +333,23 @@ class CustomerMergeServiceTest {
     givenCustomerExists(SURVIVING_ID);
     Mockito.when(
             customerMergeRepository.findHistoryAfter(
-                Mockito.anyString(), Mockito.any(), Mockito.anyString(), Mockito.any()))
+                Mockito.eq(STORE_ID),
+                Mockito.anyString(),
+                Mockito.any(),
+                Mockito.anyString(),
+                Mockito.any()))
         .thenReturn(List.of());
 
-    service.history(SURVIVING_ID, new PageCursor(MERGED_AT.toString(), "m-9").encode(), 20);
+    service.history(
+        STORE_ID, SURVIVING_ID, new PageCursor(MERGED_AT.toString(), "m-9").encode(), 20);
 
     Mockito.verify(customerMergeRepository)
         .findHistoryAfter(
-            Mockito.eq(SURVIVING_ID), Mockito.eq(MERGED_AT), Mockito.eq("m-9"), Mockito.any());
+            Mockito.eq(STORE_ID),
+            Mockito.eq(SURVIVING_ID),
+            Mockito.eq(MERGED_AT),
+            Mockito.eq("m-9"),
+            Mockito.any());
   }
 
   // ==================== 前提の組み立て ====================
@@ -387,7 +416,9 @@ class CustomerMergeServiceTest {
   }
 
   private void givenCustomerExists(String customerId) {
-    Mockito.lenient().when(customerRepository.existsById(customerId)).thenReturn(true);
+    Mockito.lenient()
+        .when(customerRepository.existsByIdAndStoreId(customerId, STORE_ID))
+        .thenReturn(true);
   }
 
   private void givenActor() {
@@ -409,32 +440,32 @@ class CustomerMergeServiceTest {
   /** 両行が押さえられた状態。戻り値は被統合行の実体（墓標化の宛先）。 */
   /** 昇順の 1 本目（被統合行）だけを押さえられる状態。墓標の判定で 2 本目より前に撥ねる経路で使う。 */
   private void givenFirstRowLocked() {
-    Mockito.when(customerRepository.findByIdForUpdate(MERGED_ID))
+    Mockito.when(customerRepository.findByIdAndStoreIdForUpdate(MERGED_ID, STORE_ID))
         .thenReturn(Optional.of(Customer.builder().build()));
   }
 
   private Customer givenBothRowsLocked() {
     Customer merged = Customer.builder().build();
-    Mockito.when(customerRepository.findByIdForUpdate(MERGED_ID)).thenReturn(Optional.of(merged));
-    Mockito.when(customerRepository.findByIdForUpdate(SURVIVING_ID))
+    Mockito.when(customerRepository.findByIdAndStoreIdForUpdate(MERGED_ID, STORE_ID))
+        .thenReturn(Optional.of(merged));
+    Mockito.when(customerRepository.findByIdAndStoreIdForUpdate(SURVIVING_ID, STORE_ID))
         .thenReturn(Optional.of(Customer.builder().build()));
     return merged;
   }
 
   private void givenNeitherIsMerged() {
-    Mockito.when(customerRepository.isMerged(SURVIVING_ID)).thenReturn(false);
-    Mockito.when(customerRepository.isMerged(MERGED_ID)).thenReturn(false);
+    Mockito.when(customerRepository.isMerged(STORE_ID, SURVIVING_ID)).thenReturn(false);
+    Mockito.when(customerRepository.isMerged(STORE_ID, MERGED_ID)).thenReturn(false);
   }
 
   private void givenNoActiveLinks() {
     Mockito.when(
-            customerMemberLinkRepository.existsByCustomerIdAndStatus(
-                SURVIVING_ID, LinkStatus.ACTIVE))
+            customerMemberLinkRepository.existsByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, SURVIVING_ID, LinkStatus.ACTIVE))
         .thenReturn(false);
   }
 
   private void givenStore() {
-    Mockito.when(storeContext.getStoreId()).thenReturn(STORE_ID);
     var profile = new MergeProfile(null, null, null, null, null, null, null, null, null);
     var survivor = new MergeSnapshot(SURVIVING_ID, profile, List.of(), List.of());
     var merged = new MergeSnapshot(MERGED_ID, profile, List.of(), List.of());
@@ -453,10 +484,10 @@ class CustomerMergeServiceTest {
             0,
             0,
             "proof");
-    Mockito.when(preparation.prepare(Mockito.eq(SURVIVING_ID), Mockito.any()))
+    Mockito.when(preparation.prepare(Mockito.eq(STORE_ID), Mockito.eq(SURVIVING_ID), Mockito.any()))
         .thenReturn(new MergePreparation.Prepared(preview, List.of()));
-    Mockito.when(preparation.snapshot(SURVIVING_ID)).thenReturn(survivor);
-    Mockito.when(customerRepository.findById(SURVIVING_ID))
+    Mockito.when(preparation.snapshot(STORE_ID, SURVIVING_ID)).thenReturn(survivor);
+    Mockito.when(customerRepository.findByIdAndStoreId(SURVIVING_ID, STORE_ID))
         .thenReturn(Optional.of(Customer.builder().build()));
     Mockito.when(customerMergeRepository.save(Mockito.any()))
         .thenAnswer(invocation -> invocation.getArgument(0));

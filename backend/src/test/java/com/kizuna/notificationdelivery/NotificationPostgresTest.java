@@ -342,7 +342,10 @@ class NotificationPostgresTest {
                               .saveAndFlush(Customer.builder().name("検証顧客").build());
                       var c =
                           CustomerContact.create(
-                              customer.getId(), ContactType.EMAIL, "permitted@example.invalid");
+                              storeId,
+                              customer.getId(),
+                              ContactType.EMAIL,
+                              "permitted@example.invalid");
                       c.changePermission(ContactPurpose.BUSINESS, ContactPermissionStatus.DENIED);
                       return context
                           .getBean(CustomerContactRepository.class)

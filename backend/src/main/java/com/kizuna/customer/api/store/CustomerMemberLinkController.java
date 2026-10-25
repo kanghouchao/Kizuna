@@ -5,6 +5,7 @@ import com.kizuna.customer.api.dto.CustomerMemberLinkReleaseRequest;
 import com.kizuna.customer.api.dto.CustomerMemberLinkRequest;
 import com.kizuna.customer.api.dto.CustomerMemberLinkResponse;
 import com.kizuna.customer.application.CustomerMemberLinkService;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -29,12 +30,14 @@ public class CustomerMemberLinkController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerMemberLinkResponse> link(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @Valid @RequestBody CustomerMemberLinkRequest request,
       Principal principal) {
     return ResponseEntity.status(201)
         .body(
             customerMemberLinkService.link(
+                storeId,
                 customerId,
                 request.getMemberCode(),
                 request.getExpectedLinkId(),
@@ -45,28 +48,35 @@ public class CustomerMemberLinkController {
   @PostMapping("/releases")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Void> unlink(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @Valid @RequestBody CustomerMemberLinkReleaseRequest request,
       Principal principal) {
     customerMemberLinkService.unlink(
-        customerId, request.expectedLinkId(), request.operationReason(), principal.getName());
+        storeId,
+        customerId,
+        request.expectedLinkId(),
+        request.operationReason(),
+        principal.getName());
     return ResponseEntity.noContent().build();
   }
 
   /** 現に有効な紐づけ。紐づいていない顧客では 404 で返る。 */
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<CustomerMemberLinkResponse> current(@PathVariable String customerId) {
-    return ResponseEntity.ok(customerMemberLinkService.current(customerId));
+  public ResponseEntity<CustomerMemberLinkResponse> current(
+      @CurrentStore Long storeId, @PathVariable String customerId) {
+    return ResponseEntity.ok(customerMemberLinkService.current(storeId, customerId));
   }
 
   /** 紐づけ履歴。続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。 */
   @GetMapping("/history")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CursorPage<CustomerMemberLinkHistoryResponse>> history(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(customerMemberLinkService.history(customerId, cursor, size));
+    return ResponseEntity.ok(customerMemberLinkService.history(storeId, customerId, cursor, size));
   }
 }

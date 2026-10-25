@@ -11,7 +11,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 店舗の CRM から見た会員ポイントのユースケース。残高は顧客ではなく紐づく会員の台帳が持つため、店舗側は顧客 ID を入口にして 台帳へ問い合わせる。
  *
- * <p>顧客の指名は id で行うため、他店舗の顧客は storeFilter 経由で 404 となり存在の有無が漏れない。
+ * <p>顧客は店舗 id と id で引くため、他店舗の顧客は 404 となり存在の有無が漏れない。
  *
  * <p>増減 0・減算への有効期限・残高不足はいずれも台帳側の判定に委ねる。入口ごとに規則を書き写すと、規則が変わったときに片方だけ古くなる。
  */
@@ -36,13 +35,12 @@ public class CustomerPointService {
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final PointLedgerService pointLedgerService;
   private final UserRepository userRepository;
-  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public CustomerPointBalanceResponse balance(String customerId) {
-    requireCustomer(customerId);
-    Long memberId = activeMemberId(customerId);
+  public CustomerPointBalanceResponse balance(Long storeId, String customerId) {
+    requireCustomer(storeId, customerId);
+    Long memberId = activeMemberId(storeId, customerId);
     if (memberId == null) {
       return CustomerPointBalanceResponse.builder().linked(false).build();
     }
@@ -50,24 +48,24 @@ public class CustomerPointService {
   }
 
   /**
-   * 運用者による手動調整。発生店舗は操作中の店舗文脈で、残高の作用域ではなく帰属情報として台帳へ残る。
+   * 運用者による手動調整。発生店舗は操作中の店舗で、残高の作用域ではなく帰属情報として台帳へ残る。
    *
    * <p>会員に紐づかない顧客は調整できない。台帳は会員が持つものなので、紐づけの無い顧客には積み先そのものが無い。
    */
   @StoreScoped
   @Transactional
   public CustomerPointBalanceResponse adjust(
-      String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
-    // 積み先を決める前に顧客行を押さえる。契約は CustomerRepository#findByIdForUpdate に記す。
+      Long storeId, String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
+    // 積み先を決める前に顧客行を押さえる。契約は CustomerRepository#findByIdAndStoreIdForUpdate に記す。
     customerRepository
-        .findByIdForUpdate(customerId)
+        .findByIdAndStoreIdForUpdate(customerId, storeId)
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません: " + customerId));
     // 墓標の判定は関連の照会より前に置く。統合は関連を存続行へ移しているので、後ろに置くと
     // 「紐づいていない顧客」の分岐に落ち、統合済みであることが利用者に伝わらない。
-    if (customerRepository.isMerged(customerId)) {
+    if (customerRepository.isMerged(storeId, customerId)) {
       throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
     }
-    Long memberId = activeMemberId(customerId);
+    Long memberId = activeMemberId(storeId, customerId);
     if (memberId == null) {
       throw new ServiceException("会員に紐づいていない顧客のポイントは調整できません");
     }
@@ -75,7 +73,7 @@ public class CustomerPointService {
     Long actorId = resolveActorId(actorEmail);
     pointLedgerService.adjust(
         memberId,
-        storeContext.getStoreId(),
+        storeId,
         request.getDelta(),
         request.getReason(),
         request.getExpiresOn(),
@@ -94,16 +92,16 @@ public class CustomerPointService {
   @StoreScoped
   @Transactional(readOnly = true)
   public CustomerPointBalanceResponse replayAdjust(
-      String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
-    requireCustomer(customerId);
-    Long memberId = activeMemberId(customerId);
+      Long storeId, String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
+    requireCustomer(storeId, customerId);
+    Long memberId = activeMemberId(storeId, customerId);
     if (memberId == null) {
       throw new ServiceException("会員に紐づいていない顧客のポイントは調整できません");
     }
     Long actorId = resolveActorId(actorEmail);
     pointLedgerService.adjust(
         memberId,
-        storeContext.getStoreId(),
+        storeId,
         request.getDelta(),
         request.getReason(),
         request.getExpiresOn(),
@@ -119,8 +117,8 @@ public class CustomerPointService {
         .build();
   }
 
-  private void requireCustomer(String customerId) {
-    if (!customerRepository.existsById(customerId)) {
+  private void requireCustomer(Long storeId, String customerId) {
+    if (!customerRepository.existsByIdAndStoreId(customerId, storeId)) {
       throw new NotFoundException("顧客が見つかりません: " + customerId);
     }
   }
@@ -145,9 +143,9 @@ public class CustomerPointService {
    *
    * <p>この問い合わせ自体はロックを取らない。台帳へ積む経路では、呼ぶ前に顧客行を押さえることで紐づけの書き換えと直列化する。
    */
-  private Long activeMemberId(String customerId) {
+  private Long activeMemberId(Long storeId, String customerId) {
     return customerMemberLinkRepository
-        .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
+        .findByStoreIdAndCustomerIdAndStatus(storeId, customerId, LinkStatus.ACTIVE)
         .map(CustomerMemberLink::getMemberId)
         .orElse(null);
   }

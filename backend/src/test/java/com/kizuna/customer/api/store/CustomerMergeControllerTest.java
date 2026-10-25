@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +60,8 @@ import tools.jackson.databind.ObjectMapper;
 })
 class CustomerMergeControllerTest {
 
+  private static final Long STORE_ID = 7L;
+
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
   @EnableMethodSecurity
@@ -79,7 +82,7 @@ class CustomerMergeControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
   void historyExposesTheEvidenceInSnakeCase() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerMergeService.history(anyString(), any(), anyInt()))
+    when(customerMergeService.history(eq(STORE_ID), anyString(), any(), anyInt()))
         .thenReturn(
             new CursorPage<>(
                 List.of(
@@ -114,14 +117,14 @@ class CustomerMergeControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
   void historyForwardsTheCursorAndSize() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerMergeService.history(anyString(), any(), anyInt()))
+    when(customerMergeService.history(eq(STORE_ID), anyString(), any(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
         .perform(storeGet("/store/customers/c1/merges?cursor=abc&size=5"))
         .andExpect(status().isOk());
 
-    verify(customerMergeService).history("c1", "abc", 5);
+    verify(customerMergeService).history(STORE_ID, "c1", "abc", 5);
   }
 
   @Test
@@ -133,7 +136,7 @@ class CustomerMergeControllerTest {
     mockMvc.perform(storeGet("/store/customers/c1/merges")).andExpect(status().isForbidden());
 
     // 履歴は誰がどの顧客を畳んだかを明かす。拒否は読み取りの手前で成立していること
-    verify(customerMergeService, never()).history(anyString(), any(), anyInt());
+    verify(customerMergeService, never()).history(any(), anyString(), any(), anyInt());
   }
 
   @Autowired private ObjectMapper json;
@@ -145,7 +148,7 @@ class CustomerMergeControllerTest {
     String reason = "理由".repeat(250);
     mockMvc.perform(mergeRequest(" \t" + reason + "\n　")).andExpect(status().isOk());
     var captured = ArgumentCaptor.forClass(CustomerMergeRequest.class);
-    verify(customerMergeService).merge(anyString(), captured.capture(), anyString());
+    verify(customerMergeService).merge(eq(STORE_ID), anyString(), captured.capture(), anyString());
     assertThat(captured.getValue().operationReason()).isEqualTo(reason);
   }
 
@@ -158,7 +161,7 @@ class CustomerMergeControllerTest {
     mockMvc
         .perform(mergeRequest("too-long".equals(reason) ? "理".repeat(501) : reason))
         .andExpect(status().isBadRequest());
-    verify(customerMergeService, never()).merge(anyString(), any(), anyString());
+    verify(customerMergeService, never()).merge(any(), anyString(), any(), anyString());
   }
 
   private MockHttpServletRequestBuilder mergeRequest(String reason) {
@@ -172,12 +175,14 @@ class CustomerMergeControllerTest {
     return post("/store/customers/c1/merges")
         .principal(() -> "tanaka.hanako@kizuna.test")
         .with(csrf())
-        .header("X-Store-ID", "1")
+        .header("X-Store-ID", STORE_ID.toString())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body.toString());
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path).header("X-Store-ID", "1").principal(() -> "tanaka.hanako@kizuna.test");
+    return get(path)
+        .header("X-Store-ID", STORE_ID.toString())
+        .principal(() -> "tanaka.hanako@kizuna.test");
   }
 }

@@ -8,6 +8,7 @@ import com.kizuna.customer.api.dto.ContactResponse;
 import com.kizuna.customer.application.CustomerContactService;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,62 +34,70 @@ public class CustomerContactController {
   @GetMapping("/contacts")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public CursorPage<ContactResponse> list(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return service.list(customerId, cursor, size);
+    return service.list(storeId, customerId, cursor, size);
   }
 
   @PostMapping("/contacts")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<ContactResponse> create(
-      @PathVariable String customerId, @Valid @RequestBody ContactRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(service.create(customerId, request));
+      @CurrentStore Long storeId,
+      @PathVariable String customerId,
+      @Valid @RequestBody ContactRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(service.create(storeId, customerId, request));
   }
 
   @PutMapping("/contacts/{contactId}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ContactResponse update(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @PathVariable String contactId,
       @Valid @RequestBody ContactRequest request) {
-    return service.update(customerId, contactId, request);
+    return service.update(storeId, customerId, contactId, request);
   }
 
   @PutMapping("/contacts/{contactId}/permissions/{purpose}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ContactResponse permission(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @PathVariable String contactId,
       @PathVariable ContactPurpose purpose,
       @Valid @RequestBody ContactPermissionRequest request) {
-    return service.changePermission(customerId, contactId, purpose, request);
+    return service.changePermission(storeId, customerId, contactId, purpose, request);
   }
 
   @DeleteMapping("/contacts/{contactId}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Void> delete(
-      @PathVariable String customerId, @PathVariable String contactId) {
-    service.delete(customerId, contactId);
+      @CurrentStore Long storeId, @PathVariable String customerId, @PathVariable String contactId) {
+    service.delete(storeId, customerId, contactId);
     return ResponseEntity.noContent().build();
   }
 
   @PutMapping("/contact-preferences/{type}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Void> prefer(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @PathVariable ContactType type,
       @Valid @RequestBody ContactPreferenceRequest request) {
-    service.prefer(customerId, type, request.getContactId());
+    service.prefer(storeId, customerId, type, request.getContactId());
     return ResponseEntity.noContent().build();
   }
 
   @GetMapping("/contact-history")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public CursorPage<ContactHistoryResponse> history(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return service.history(customerId, cursor, size);
+    return service.history(storeId, customerId, cursor, size);
   }
 }
