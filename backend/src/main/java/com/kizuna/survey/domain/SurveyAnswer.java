@@ -68,18 +68,21 @@ public class SurveyAnswer extends StoreScopedEntity {
 
   public static SurveyAnswer receive(
       SurveyRevision revision, SurveyAnswers input, Long actor, String name, String previous) {
-    return builder()
-        .surveyId(revision.getSurveyId())
-        .revisionId(revision.getId())
-        .revisionNumber(revision.getRevisionNumber())
-        .receivedVia(input.receivedVia())
-        .receivedAt(input.receivedAt())
-        .answers(input.answers())
-        .status(AnswerStatus.ACTIVE)
-        .recordedBy(actor)
-        .recorderName(name)
-        .supersedesId(previous)
-        .build();
+    var answer =
+        builder()
+            .surveyId(revision.getSurveyId())
+            .revisionId(revision.getId())
+            .revisionNumber(revision.getRevisionNumber())
+            .receivedVia(input.receivedVia())
+            .receivedAt(input.receivedAt())
+            .answers(input.answers())
+            .status(AnswerStatus.ACTIVE)
+            .recordedBy(actor)
+            .recorderName(name)
+            .supersedesId(previous)
+            .build();
+    answer.setStoreId(revision.getStoreId());
+    return answer;
   }
 
   public void requireVersion(Long version) {

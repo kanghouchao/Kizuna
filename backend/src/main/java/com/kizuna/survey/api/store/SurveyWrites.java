@@ -13,14 +13,18 @@ final class SurveyWrites {
   private SurveyWrites() {}
 
   static ResponseEntity<SurveyWriteResponse> write(
-      SurveyService service, Authentication auth, SurveyCommand command, boolean create) {
+      SurveyService service,
+      Long storeId,
+      Authentication auth,
+      SurveyCommand command,
+      boolean create) {
     SurveyWriteResponse result;
     try {
-      result = service.write(auth.getName(), command);
+      result = service.write(storeId, auth.getName(), command);
     } catch (DataIntegrityViolationException error) {
       if (!IntegrityViolations.violates(error, DbConstraint.UQ_T_SURVEY_OPERATIONS_KEY))
         throw error;
-      result = service.replayOnly(auth.getName(), command);
+      result = service.replayOnly(storeId, auth.getName(), command);
     }
     return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }

@@ -30,8 +30,10 @@ public class SurveySeries extends StoreScopedEntity {
   @Column(nullable = false, updatable = false, length = 255)
   private String recorderName;
 
-  public static SurveySeries create(Long actorId, String name) {
-    return builder().recordedBy(actorId).recorderName(name).build();
+  public static SurveySeries create(Long storeId, Long actorId, String name) {
+    var series = builder().recordedBy(actorId).recorderName(name).build();
+    series.setStoreId(storeId);
+    return series;
   }
 
   public void advance(String revisionId) {

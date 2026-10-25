@@ -26,6 +26,7 @@ import com.kizuna.survey.domain.SurveyAnswerRepository;
 import com.kizuna.survey.domain.SurveyAnswers;
 import com.kizuna.survey.domain.SurveyCommand;
 import com.kizuna.survey.domain.SurveyDefinition;
+import com.kizuna.survey.domain.SurveyHistory;
 import com.kizuna.survey.domain.SurveyHistoryRepository;
 import com.kizuna.survey.domain.SurveyOperation;
 import com.kizuna.survey.domain.SurveyOperationRepository;
@@ -58,6 +59,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class SurveyApplicationTest {
   private static final OffsetDateTime AT = OffsetDateTime.parse("2026-01-01T00:00:00Z");
+  private static final Long STORE_ID = 7L;
   private final SurveySeriesRepository surveys = mock(SurveySeriesRepository.class);
   private final SurveyRevisionRepository revisions = mock(SurveyRevisionRepository.class);
   private final SurveyAnswerRepository answers = mock(SurveyAnswerRepository.class);
@@ -85,67 +87,80 @@ class SurveyApplicationTest {
             actors,
             audit,
             Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC));
-    when(actors.require(anyString(), any())).thenReturn(new AuditActor(1L, "STAFF", "担当者"));
+    when(actors.require(eq(STORE_ID), anyString(), any()))
+        .thenReturn(new AuditActor(1L, "STAFF", "担当者"));
     when(surveys.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), series));
     when(revisions.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), versions));
     when(answers.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), responses));
-    when(operations.saveAndFlush(any()))
+    when(operations.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), receipts));
+    when(history.save(any()))
         .thenAnswer(
             call -> {
-              SurveyOperation row = call.getArgument(0);
-              metadata(row);
-              receipts.put(row.getDedupeKey(), row);
+              SurveyHistory row = call.getArgument(0);
+              assertThat(row.getStoreId()).isEqualTo(STORE_ID);
               return row;
             });
-    when(surveys.findById(anyString()))
-        .thenAnswer(call -> Optional.ofNullable(series.get(call.getArgument(0))));
-    when(surveys.lockById(anyString()))
-        .thenAnswer(call -> Optional.ofNullable(series.get(call.getArgument(0))));
-    when(revisions.findById(anyString()))
-        .thenAnswer(call -> Optional.ofNullable(versions.get(call.getArgument(0))));
-    when(revisions.lockById(anyString()))
-        .thenAnswer(call -> Optional.ofNullable(versions.get(call.getArgument(0))));
-    when(revisions.findByIdAndSurveyId(anyString(), anyString()))
-        .thenAnswer(call -> revision(call.getArgument(0), call.getArgument(1)));
-    when(revisions.findProjectedByIdAndSurveyId(anyString(), anyString()))
+    when(surveys.findByIdAndStoreId(anyString(), anyLong()))
+        .thenAnswer(call -> scoped(series, call.getArgument(0), call.getArgument(1)));
+    when(surveys.findByIdAndStoreIdForUpdate(anyString(), anyLong()))
+        .thenAnswer(call -> scoped(series, call.getArgument(0), call.getArgument(1)));
+    when(revisions.findByIdAndStoreId(anyString(), anyLong()))
+        .thenAnswer(call -> scoped(versions, call.getArgument(0), call.getArgument(1)));
+    when(revisions.findByIdAndStoreIdForUpdate(anyString(), anyLong()))
+        .thenAnswer(call -> scoped(versions, call.getArgument(0), call.getArgument(1)));
+    when(revisions.findByIdAndStoreIdAndSurveyId(anyString(), anyLong(), anyString()))
+        .thenAnswer(
+            call -> revision(call.getArgument(0), call.getArgument(1), call.getArgument(2)));
+    when(revisions.findProjectedByIdAndStoreIdAndSurveyId(anyString(), anyLong(), anyString()))
         .thenAnswer(
             call ->
-                revision(call.getArgument(0), call.getArgument(1))
+                revision(call.getArgument(0), call.getArgument(1), call.getArgument(2))
                     .map(row -> projections.createProjection(SurveyRevisionDetailView.class, row)));
-    when(revisions.existsBySurveyIdAndStatus(anyString(), any()))
+    when(revisions.existsByStoreIdAndSurveyIdAndStatus(anyLong(), anyString(), any()))
         .thenAnswer(
             call ->
                 versions.values().stream()
                     .anyMatch(
                         row ->
-                            row.getSurveyId().equals(call.getArgument(0))
-                                && row.getStatus() == call.getArgument(1)));
-    when(answers.findById(anyString()))
-        .thenAnswer(call -> Optional.ofNullable(responses.get(call.getArgument(0))));
-    when(answers.lockById(anyString()))
-        .thenAnswer(call -> Optional.ofNullable(responses.get(call.getArgument(0))));
-    when(answers.findProjectedById(anyString()))
+                            row.getStoreId().equals(call.getArgument(0))
+                                && row.getSurveyId().equals(call.getArgument(1))
+                                && row.getStatus() == call.getArgument(2)));
+    when(answers.findByIdAndStoreId(anyString(), anyLong()))
+        .thenAnswer(call -> scoped(responses, call.getArgument(0), call.getArgument(1)));
+    when(answers.findByIdAndStoreIdForUpdate(anyString(), anyLong()))
+        .thenAnswer(call -> scoped(responses, call.getArgument(0), call.getArgument(1)));
+    when(answers.findProjectedByIdAndStoreId(anyString(), anyLong()))
         .thenAnswer(
             call ->
-                Optional.ofNullable(responses.get(call.getArgument(0)))
+                scoped(responses, call.getArgument(0), call.getArgument(1))
                     .map(row -> projections.createProjection(SurveyAnswerDetailView.class, row)));
-    when(operations.findByActorIdAndDedupeKey(anyLong(), anyString()))
-        .thenAnswer(call -> Optional.ofNullable(receipts.get(call.getArgument(1))));
+    when(operations.findByStoreIdAndActorIdAndDedupeKey(anyLong(), anyLong(), anyString()))
+        .thenAnswer(
+            call ->
+                Optional.ofNullable(receipts.get(call.getArgument(2)))
+                    .filter(row -> row.getStoreId().equals(call.getArgument(0))));
   }
 
-  private Optional<SurveyRevision> revision(String id, String surveyId) {
-    return Optional.ofNullable(versions.get(id)).filter(row -> row.getSurveyId().equals(surveyId));
+  private <T extends StoreScopedEntity> Optional<T> scoped(
+      Map<String, T> rows, String id, Long storeId) {
+    return Optional.ofNullable(rows.get(id)).filter(row -> row.getStoreId().equals(storeId));
   }
 
+  private Optional<SurveyRevision> revision(String id, Long storeId, String surveyId) {
+    return scoped(versions, id, storeId).filter(row -> row.getSurveyId().equals(surveyId));
+  }
+
+  /** 保存される行は、生成した側が店舗を設定していなければならない。 */
   private <T extends StoreScopedEntity> T store(T row, Map<String, T> rows) {
+    assertThat(row.getStoreId()).isEqualTo(STORE_ID);
     metadata(row);
-    rows.put(row.getId(), row);
+    rows.put(
+        row instanceof SurveyOperation operation ? operation.getDedupeKey() : row.getId(), row);
     return row;
   }
 
   private void metadata(StoreScopedEntity row) {
     row.setId(Long.toString(ids.incrementAndGet()));
-    row.setStoreId(1L);
     row.setCreatedAt(AT);
     row.setUpdatedAt(AT);
     ReflectionTestUtils.setField(row, "version", 0L);
@@ -173,7 +188,8 @@ class SurveyApplicationTest {
 
   private SurveyRevisionWriteResponse create() {
     return (SurveyRevisionWriteResponse)
-        service.write("actor", new SurveyCommand.Create(definition("  利用後アンケート  "), "create"));
+        service.write(
+            STORE_ID, "actor", new SurveyCommand.Create(definition("  利用後アンケート  "), "create"));
   }
 
   private SurveyCommand.RevisionAction action(
@@ -193,12 +209,16 @@ class SurveyApplicationTest {
     var replace =
         new SurveyCommand.Replace(
             first.revision().surveyId(), first.revision().id(), 0L, definition("差替設問"), "replace");
-    assertThat(((SurveyRevisionWriteResponse) service.write("actor", replace)).revision().title())
+    assertThat(
+            ((SurveyRevisionWriteResponse) service.write(STORE_ID, "actor", replace))
+                .revision()
+                .title())
         .isEqualTo("差替設問");
-    service.write("actor", action(first, Operation.OPENED, "open"));
+    service.write(STORE_ID, "actor", action(first, Operation.OPENED, "open"));
     assertThatThrownBy(
             () ->
                 service.write(
+                    STORE_ID,
                     "actor",
                     new SurveyCommand.Replace(
                         first.revision().surveyId(),
@@ -210,14 +230,16 @@ class SurveyApplicationTest {
     var nextCommand =
         new SurveyCommand.Revise(
             first.revision().surveyId(), first.revision().id(), definition("第二版"), "revise");
-    var next = (SurveyRevisionWriteResponse) service.write("actor", nextCommand);
+    var next = (SurveyRevisionWriteResponse) service.write(STORE_ID, "actor", nextCommand);
     assertThat(next.revision().revisionNumber()).isEqualTo(2);
     assertThat(next.revision().basedOnRevisionId()).isEqualTo(first.revision().id());
-    assertThatThrownBy(() -> service.write("actor", action(next, Operation.OPENED, "open-next")))
+    assertThatThrownBy(
+            () -> service.write(STORE_ID, "actor", action(next, Operation.OPENED, "open-next")))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(
             () ->
                 service.write(
+                    STORE_ID,
                     "actor",
                     new SurveyCommand.Revise(
                         first.revision().surveyId(),
@@ -225,46 +247,53 @@ class SurveyApplicationTest {
                         definition("競合"),
                         "revise-again")))
         .isInstanceOf(ConflictException.class);
-    service.write("actor", action(first, Operation.CLOSED, "close"));
-    service.write("actor", action(next, Operation.OPENED, "open-next"));
+    service.write(STORE_ID, "actor", action(first, Operation.CLOSED, "close"));
+    service.write(STORE_ID, "actor", action(next, Operation.OPENED, "open-next"));
     assertThat(
-            service.revision("actor", first.revision().surveyId(), first.revision().id()).title())
+            service
+                .revision(STORE_ID, "actor", first.revision().surveyId(), first.revision().id())
+                .title())
         .isEqualTo("差替設問");
     assertThat(
-            ((SurveyRevisionWriteResponse) service.replayOnly("actor", nextCommand))
+            ((SurveyRevisionWriteResponse) service.replayOnly(STORE_ID, "actor", nextCommand))
                 .revision()
                 .status())
         .isEqualTo(RevisionStatus.OPEN);
-    assertThatThrownBy(() -> service.write("actor", action(first, Operation.OPENED, "reopen")))
+    assertThatThrownBy(
+            () -> service.write(STORE_ID, "actor", action(first, Operation.OPENED, "reopen")))
         .isInstanceOf(ConflictException.class);
   }
 
   @Test
   void correctionAfterClosurePreservesOriginalAndReturnsCurrentSuccessorOnReplay() {
     var revision = create();
-    service.write("actor", action(revision, Operation.OPENED, "open"));
-    var original = (SurveyAnswerWriteResponse) service.write("actor", receive(revision, "receive"));
-    service.write("actor", action(revision, Operation.CLOSED, "close"));
-    assertThatThrownBy(() -> service.write("actor", receive(revision, "late")))
+    service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
+    var original =
+        (SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", receive(revision, "receive"));
+    service.write(STORE_ID, "actor", action(revision, Operation.CLOSED, "close"));
+    assertThatThrownBy(() -> service.write(STORE_ID, "actor", receive(revision, "late")))
         .isInstanceOf(ConflictException.class);
     var correction =
         new SurveyCommand.Correct(original.answer().id(), 0L, "訂正理由", input("訂正後"), "correct");
-    var successor = (SurveyAnswerWriteResponse) service.write("actor", correction);
+    var successor = (SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", correction);
     assertThat(successor.answer().revisionId()).isEqualTo(original.answer().revisionId());
     assertThat(successor.answer().supersedesId()).isEqualTo(original.answer().id());
-    var previous = service.answer("actor", original.answer().id());
+    var previous = service.answer(STORE_ID, "actor", original.answer().id());
     assertThat(previous.answers().getFirst().text()).isEqualTo("  原文\n二行目  ");
     assertThat(previous.status()).isEqualTo(AnswerStatus.WITHDRAWN);
     assertThat(previous.supersededById()).isEqualTo(successor.answer().id());
     service.write(
-        "actor", new SurveyCommand.Withdraw(successor.answer().id(), 0L, "取り下げ理由", "withdraw"));
-    var replay = (SurveyAnswerWriteResponse) service.replayOnly("actor", correction);
+        STORE_ID,
+        "actor",
+        new SurveyCommand.Withdraw(successor.answer().id(), 0L, "取り下げ理由", "withdraw"));
+    var replay = (SurveyAnswerWriteResponse) service.replayOnly(STORE_ID, "actor", correction);
     assertThat(replay.answer().status()).isEqualTo(AnswerStatus.WITHDRAWN);
     assertThat(replay.operation().id()).isEqualTo(successor.operation().id());
     assertThat(replay.operation().replayed()).isTrue();
     assertThatThrownBy(
             () ->
                 service.write(
+                    STORE_ID,
                     "actor",
                     new SurveyCommand.Correct(
                         original.answer().id(), 0L, "再訂正", input("別回答"), "other-correction")))
@@ -272,7 +301,7 @@ class SurveyApplicationTest {
     verify(audit)
         .record(
             eq("actor"),
-            eq(1L),
+            eq(STORE_ID),
             eq("SURVEY_CORRECTION_LINKED"),
             eq("SURVEY_RESPONSE"),
             eq(original.answer().id()),
@@ -285,23 +314,27 @@ class SurveyApplicationTest {
   @Test
   void withdrawnResponseCanHaveOneCorrectionWithoutReactivatingOriginal() {
     var revision = create();
-    service.write("actor", action(revision, Operation.OPENED, "open"));
-    var first = (SurveyAnswerWriteResponse) service.write("actor", receive(revision, "receive"));
+    service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
+    var first =
+        (SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", receive(revision, "receive"));
     var withdrawal = new SurveyCommand.Withdraw(first.answer().id(), 0L, "撤回済み", "withdraw");
-    service.write("actor", withdrawal);
+    service.write(STORE_ID, "actor", withdrawal);
     assertThatThrownBy(
             () ->
                 service.write(
-                    "actor", new SurveyCommand.Withdraw(first.answer().id(), 0L, "再撤回", "again")))
+                    STORE_ID,
+                    "actor",
+                    new SurveyCommand.Withdraw(first.answer().id(), 0L, "再撤回", "again")))
         .isInstanceOf(ConflictException.class);
     var corrected =
         (SurveyAnswerWriteResponse)
             service.write(
+                STORE_ID,
                 "actor",
                 new SurveyCommand.Correct(first.answer().id(), 0L, "訂正根拠", input("訂正"), "correct"));
     assertThat(corrected.answer().status()).isEqualTo(AnswerStatus.ACTIVE);
     assertThat(
-            ((SurveyAnswerWriteResponse) service.write("actor", withdrawal))
+            ((SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", withdrawal))
                 .answer()
                 .supersededById())
         .isEqualTo(corrected.answer().id());
@@ -310,7 +343,7 @@ class SurveyApplicationTest {
   @Test
   void replayNormalizesAnswerOrderButRejectsChangedMeaningAndRechecksAuthority() {
     var revision = create();
-    service.write("actor", action(revision, Operation.OPENED, "open"));
+    service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
     var text = new SurveyAnswers.Answer("text", "自由回答", null);
     var choice = new SurveyAnswers.Answer("choice", null, "yes");
     var command =
@@ -320,7 +353,7 @@ class SurveyApplicationTest {
             0L,
             new SurveyAnswers(ReceivedVia.PAPER, AT, List.of(choice, text)),
             "receive");
-    var original = (SurveyAnswerWriteResponse) service.write("actor", command);
+    var original = (SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", command);
     var reordered =
         new SurveyCommand.Receive(
             revision.revision().surveyId(),
@@ -328,24 +361,26 @@ class SurveyApplicationTest {
             0L,
             new SurveyAnswers(ReceivedVia.PAPER, AT, List.of(text, choice)),
             "receive");
-    assertThat(service.write("actor", reordered).operation().id())
+    assertThat(service.write(STORE_ID, "actor", reordered).operation().id())
         .isEqualTo(original.operation().id());
     assertThat(original.answer().answers())
         .extracting("questionKey")
         .containsExactly("text", "choice");
-    assertThatThrownBy(() -> service.write("actor", receive(revision, "receive")))
+    assertThatThrownBy(() -> service.write(STORE_ID, "actor", receive(revision, "receive")))
         .isInstanceOf(ConflictException.class);
     doThrow(new AccessDeniedException("権限なし"))
         .when(actors)
-        .require("actor", PermissionCode.SURVEY_RECORD);
-    assertThatThrownBy(() -> service.replayOnly("actor", reordered))
+        .require(STORE_ID, "actor", PermissionCode.SURVEY_RECORD);
+    assertThatThrownBy(() -> service.replayOnly(STORE_ID, "actor", reordered))
         .isInstanceOf(AccessDeniedException.class);
-    assertThatThrownBy(() -> service.write("actor", reordered))
+    assertThatThrownBy(() -> service.write(STORE_ID, "actor", reordered))
         .isInstanceOf(AccessDeniedException.class);
     assertThat(
             ((SurveyRevisionWriteResponse)
                     service.write(
-                        "actor", new SurveyCommand.Create(definition("利用後アンケート"), "create")))
+                        STORE_ID,
+                        "actor",
+                        new SurveyCommand.Create(definition("利用後アンケート"), "create")))
                 .revision()
                 .status())
         .isEqualTo(RevisionStatus.OPEN);
@@ -357,6 +392,7 @@ class SurveyApplicationTest {
     assertThatThrownBy(
             () ->
                 service.write(
+                    STORE_ID,
                     "actor",
                     new SurveyCommand.Replace(
                         revision.revision().surveyId(),
@@ -365,16 +401,19 @@ class SurveyApplicationTest {
                         definition("更新"),
                         "stale")))
         .isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> service.revision("actor", "999", revision.revision().id()))
+    assertThatThrownBy(() -> service.revision(STORE_ID, "actor", "999", revision.revision().id()))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.answer("actor", "999")).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.answer(STORE_ID, "actor", "999"))
+        .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
-                service.replayOnly("actor", new SurveyCommand.Create(definition("不存在"), "missing")))
+                service.replayOnly(
+                    STORE_ID, "actor", new SurveyCommand.Create(definition("不存在"), "missing")))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
                 service.write(
+                    STORE_ID,
                     "actor",
                     new SurveyCommand.RevisionAction(
                         "999",
@@ -387,14 +426,16 @@ class SurveyApplicationTest {
     assertThatThrownBy(
             () ->
                 service.write(
+                    STORE_ID,
                     "actor",
                     new SurveyCommand.Receive(
                         "999", revision.revision().id(), 0L, input("原文"), "wrong-series")))
         .isInstanceOf(NotFoundException.class);
-    service.write("actor", action(revision, Operation.OPENED, "open"));
+    service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
     assertThatThrownBy(
             () ->
                 service.write(
+                    STORE_ID,
                     "actor",
                     new SurveyCommand.Receive(
                         revision.revision().surveyId(),
@@ -404,10 +445,12 @@ class SurveyApplicationTest {
                             ReceivedVia.PAPER, AT.plusYears(2), input("原文").answers()),
                         "future")))
         .isInstanceOf(ServiceException.class);
-    var response = (SurveyAnswerWriteResponse) service.write("actor", receive(revision, "receive"));
+    var response =
+        (SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", receive(revision, "receive"));
     assertThatThrownBy(
             () ->
                 service.write(
+                    STORE_ID,
                     "actor",
                     new SurveyCommand.Withdraw(response.answer().id(), 1L, "理由", "stale-answer")))
         .isInstanceOf(ConflictException.class);
@@ -419,7 +462,7 @@ class SurveyApplicationTest {
   @Test
   void requiredQuestionsAndOptionMembershipPreventInvalidReceipts() {
     var revision = create();
-    service.write("actor", action(revision, Operation.OPENED, "open"));
+    service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
     for (var values :
         List.of(
             List.of(new SurveyAnswers.Answer("choice", null, "yes")),
@@ -435,7 +478,7 @@ class SurveyApplicationTest {
               0L,
               new SurveyAnswers(ReceivedVia.PAPER, AT, values),
               "invalid");
-      assertThatThrownBy(() -> service.write("actor", command))
+      assertThatThrownBy(() -> service.write(STORE_ID, "actor", command))
           .isInstanceOf(ServiceException.class);
     }
     assertThat(responses).isEmpty();

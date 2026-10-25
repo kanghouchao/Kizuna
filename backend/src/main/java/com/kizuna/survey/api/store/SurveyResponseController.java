@@ -1,5 +1,6 @@
 package com.kizuna.survey.api.store;
 
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.survey.api.dto.SurveyAnswerActionRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerCorrectionRequest;
@@ -31,9 +32,13 @@ public class SurveyResponseController {
   @PostMapping("/withdrawals")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_RECORD')")
   public ResponseEntity<SurveyWriteResponse> withdraw(
-      Authentication auth, @PathVariable String aid, @RequestBody SurveyAnswerActionRequest r) {
+      @CurrentStore Long storeId,
+      Authentication auth,
+      @PathVariable String aid,
+      @RequestBody SurveyAnswerActionRequest r) {
     return SurveyWrites.write(
         service,
+        storeId,
         auth,
         new SurveyCommand.Withdraw(aid, r.version(), r.reason(), r.dedupeKey()),
         false);
@@ -42,9 +47,13 @@ public class SurveyResponseController {
   @PostMapping("/corrections")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_RECORD')")
   public ResponseEntity<SurveyWriteResponse> correct(
-      Authentication auth, @PathVariable String aid, @RequestBody SurveyAnswerCorrectionRequest r) {
+      @CurrentStore Long storeId,
+      Authentication auth,
+      @PathVariable String aid,
+      @RequestBody SurveyAnswerCorrectionRequest r) {
     return SurveyWrites.write(
         service,
+        storeId,
         auth,
         new SurveyCommand.Correct(aid, r.version(), r.reason(), r.input(), r.dedupeKey()),
         true);
@@ -52,17 +61,19 @@ public class SurveyResponseController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
-  public SurveyAnswerResponse answer(Authentication auth, @PathVariable String aid) {
-    return service.answer(auth.getName(), aid);
+  public SurveyAnswerResponse answer(
+      @CurrentStore Long storeId, Authentication auth, @PathVariable String aid) {
+    return service.answer(storeId, auth.getName(), aid);
   }
 
   @GetMapping("/history")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public CursorPage<SurveyAnswerHistoryResponse> answerHistory(
+      @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String aid,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return reads.answerHistory(auth.getName(), aid, cursor, size);
+    return reads.answerHistory(storeId, auth.getName(), aid, cursor, size);
   }
 }

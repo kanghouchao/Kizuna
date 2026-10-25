@@ -1,10 +1,9 @@
 package com.kizuna.survey.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface SurveyOperationRepository
-    extends JpaRepository<SurveyOperation, String>, JpaSpecificationExecutor<SurveyOperation> {
-  Optional<SurveyOperation> findByActorIdAndDedupeKey(Long actorId, String key);
+public interface SurveyOperationRepository extends StoreScopedRepository<SurveyOperation> {
+  Optional<SurveyOperation> findByStoreIdAndActorIdAndDedupeKey(
+      Long storeId, Long actorId, String key);
 }
