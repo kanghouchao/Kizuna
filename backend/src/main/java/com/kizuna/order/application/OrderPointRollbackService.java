@@ -16,6 +16,7 @@ import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,7 @@ public class OrderPointRollbackService {
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final PointLedgerService pointLedgerService;
   private final ActorIdentityService actorIdentityService;
+  private final StoreContext storeContext;
 
   /**
    * 巻き戻し済みでないことを確かめてから伝票を再発行する。
@@ -54,7 +56,7 @@ public class OrderPointRollbackService {
   @Transactional
   public OrderReceiptTokenResponse reissueReceiptTokenUnlessRolledBack(String orderId) {
     orderRepository
-        .findScopedByIdForUpdate(orderId)
+        .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     if (pointLedgerService.isRolledBack(orderId)) {
       throw new ServiceException("ポイントを巻き戻した受注には伝票を再発行できません");
@@ -68,7 +70,7 @@ public class OrderPointRollbackService {
   public OrderPointRollbackPreviewResponse preview(String orderId) {
     Order order =
         orderRepository
-            .findScopedByIdForUpdate(orderId)
+            .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     requireCompleted(order);
     PointLedgerService.PointRollbackPreview preview =
@@ -105,7 +107,7 @@ public class OrderPointRollbackService {
       String orderId, OrderPointRollbackRequest request, String actorEmail) {
     Order order =
         orderRepository
-            .findScopedByIdForUpdate(orderId)
+            .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     requireCompleted(order);
     orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);

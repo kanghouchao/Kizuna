@@ -1,5 +1,6 @@
 package com.kizuna.order.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
@@ -7,19 +8,16 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface OrderRepository
-    extends JpaRepository<Order, String>, JpaSpecificationExecutor<Order> {
+public interface OrderRepository extends StoreScopedRepository<Order> {
 
   String SELF_FROM =
       """
       from com.kizuna.order.domain.Order o
-      join com.kizuna.cast.domain.CastEnrollment e on e.id = o.castId
+      join com.kizuna.cast.domain.CastEnrollment e on e.id = o.castId and e.storeId = o.storeId
       join com.kizuna.cast.domain.Cast c on c.id = e.castId
       join com.kizuna.store.domain.Store st on st.id = o.storeId
       where c.userId = :userId
@@ -31,25 +29,40 @@ public interface OrderRepository
              o.status as status, o.completionInvalidated as completionInvalidated,
              o.accruedRemuneration as accruedRemuneration,
              (select cast(coalesce(sum(l.remuneration), 0) as Integer)
-              from com.kizuna.order.domain.OrderFeeLine l where l.orderId = o.id) as agreedRemuneration
+              from com.kizuna.order.domain.OrderFeeLine l
+              where l.orderId = o.id and l.storeId = o.storeId) as agreedRemuneration
       """;
   String SELF_SORT = " order by o.businessDate desc, o.id desc";
 
+  /** 店舗を跨ぐ本人照会。境界は担当在籍の本人の user_id。 */
   @Query(value = SELF_SELECT + SELF_FROM + SELF_SORT, countQuery = "select count(o) " + SELF_FROM)
   Page<SelfRemunerationView> findSelfRemunerations(Long userId, Pageable pageable);
 
+  /** 店舗を跨ぐ本人照会。境界は担当在籍の本人の user_id。 */
   @Query(
       value = SELF_SELECT + SELF_FROM + " and e.id = :enrollmentId" + SELF_SORT,
       countQuery = "select count(o) " + SELF_FROM + " and e.id = :enrollmentId")
   Page<SelfRemunerationView> findSelfRemunerationsByEnrollment(
       Long userId, String enrollmentId, Pageable pageable);
 
+  /** 店舗を跨ぐ本人照会。境界は担当在籍の本人の user_id。 */
   @Query(SELF_SELECT + SELF_FROM + " and o.id = :id")
   Optional<SelfRemunerationView> findSelfRemuneration(Long userId, String id);
 
+  /** 店舗を跨ぐ本人照会。境界は担当在籍の本人の user_id。 */
   @Query("select o " + SELF_FROM + " and o.id = :id")
   Optional<Order> findSelfOrder(Long userId, String id);
 
+  /** 店舗を跨ぐ照会。境界は伝票トークンのダイジェストで、そのトークンが指す受注だけを返す。 */
+  @Query(
+      """
+      select o from com.kizuna.order.domain.Order o
+      join com.kizuna.order.domain.OrderReceiptToken t on t.orderId = o.id
+      where t.tokenDigest = :tokenDigest
+      """)
+  Optional<Order> findByReceiptTokenDigest(@Param("tokenDigest") String tokenDigest);
+
+  /** 店舗を跨ぐ参照照会。境界は呼び手が店舗条件で引いた在籍 id（cast_id）集合。 */
   @Query(
       """
       select o.castId from com.kizuna.order.domain.Order o where o.castId in :castIds
@@ -69,21 +82,21 @@ public interface OrderRepository
   // Order は HQL の予約語と衝突しうるため FQCN でエンティティを参照する。
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
-      "select o from com.kizuna.order.domain.Order o where o.castId = :enrollment"
+      "select o from com.kizuna.order.domain.Order o where o.storeId = :storeId and o.castId = :enrollment"
           + " and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)"
-          + " and exists (select s.id from OrderSpecialService s where s.orderId = o.id and s.serviceId = :serviceId) order by o.id")
-  List<Order> findUnfinishedSpecialOrders(String enrollment, String serviceId);
+          + " and exists (select s.id from OrderSpecialService s where s.orderId = o.id and s.storeId = o.storeId and s.serviceId = :serviceId) order by o.id")
+  List<Order> findUnfinishedSpecialOrders(Long storeId, String enrollment, String serviceId);
 
   String VIEW_SELECT =
       """
       select o.completionInvalidated as completionInvalidated, o.replacementForOrderId as replacementForOrderId,
              o.startedAt as startedAt,
              o.completedAt as completedAt, o.accruedRemuneration as accruedRemuneration,
-             case when o.completionInvalidated then 0 else (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id) end as totalRemuneration,
+             case when o.completionInvalidated then 0 else (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id and r.storeId = o.storeId) end as totalRemuneration,
              (select cast(count(distinct e.serviceId) as Integer) from OrderSpecialServiceEvent e
-              where e.orderId = o.id and e.kind = 'REJECTED'
+              where e.orderId = o.id and e.storeId = o.storeId and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
-              and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id)) as unresolvedSpecialServiceCount,
+              and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id and r.storeId = e.storeId)) as unresolvedSpecialServiceCount,
              o.id as id,
              o.receptionistId as receptionistId, u.displayName as receptionistName,
              o.businessDate as businessDate,
@@ -101,7 +114,7 @@ public interface OrderRepository
              o.mediaName as mediaName, o.totalFee as totalFee,
              (select cast(coalesce(sum(-fl.amount), 0) as Integer)
                 from com.kizuna.order.domain.OrderFeeLine fl
-               where fl.orderId = o.id
+               where fl.orderId = o.id and fl.storeId = o.storeId
                  and fl.kind = com.kizuna.order.domain.OrderFeeLineKind.POINT_REDEMPTION)
                as usedPoints,
              o.autoGrantPoints as autoGrantPoints,
@@ -115,24 +128,30 @@ public interface OrderRepository
              o.cancelledAt as cancelledAt,
              o.createdAt as createdAt, o.version as version
       from com.kizuna.order.domain.Order o
-        left join com.kizuna.customer.domain.Customer c on c.id = o.customerId
-        left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = o.castId
-        left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
+        left join com.kizuna.customer.domain.Customer c
+          on c.id = o.customerId and c.storeId = o.storeId
+        left join com.kizuna.cast.domain.CastEnrollment ce
+          on ce.id = o.castId and ce.storeId = o.storeId
+        left join com.kizuna.cast.domain.CastProfile k
+          on k.enrollmentId = ce.id and k.storeId = o.storeId
         left join com.kizuna.user.domain.User u on u.id = o.receptionistId
         left join com.kizuna.user.domain.User cu on cu.id = o.cancelledBy
       """;
 
   @Query(
-      value = VIEW_SELECT + " where (:customerId is null or o.customerId = :customerId)",
+      value =
+          VIEW_SELECT
+              + " where o.storeId = :storeId and (:customerId is null or o.customerId = :customerId)",
       countQuery =
           """
           select count(o) from com.kizuna.order.domain.Order o
-          where (:customerId is null or o.customerId = :customerId)
+          where o.storeId = :storeId and (:customerId is null or o.customerId = :customerId)
           """)
-  Page<OrderView> findAllViews(@Param("customerId") String customerId, Pageable pageable);
+  Page<OrderView> findAllViews(
+      @Param("storeId") Long storeId, @Param("customerId") String customerId, Pageable pageable);
 
-  @Query(VIEW_SELECT + " where o.id = :id")
-  Optional<OrderView> findViewById(@Param("id") String id);
+  @Query(VIEW_SELECT + " where o.id = :id and o.storeId = :storeId")
+  Optional<OrderView> findViewById(@Param("storeId") Long storeId, @Param("id") String id);
 
   /**
    * 名指された受注の読み側 projection をまとめて引く。
@@ -140,22 +159,20 @@ public interface OrderRepository
    * <p>並びは<b>返さない</b> — 検索・並び替えの条件は {@code OrderSearchQuery} が動的に組み立てて ID の並びを確定させており、 ここで別の並びを掛けると
    * 2 箇所が並びを主張して食い違う。呼出側が ID の並びどおりに並べ直す。
    */
-  @Query(VIEW_SELECT + " where o.id in :ids")
-  List<OrderView> findViewsByIds(@Param("ids") Collection<String> ids);
+  @Query(VIEW_SELECT + " where o.id in :ids and o.storeId = :storeId")
+  List<OrderView> findViewsByIds(
+      @Param("storeId") Long storeId, @Param("ids") Collection<String> ids);
 
   /**
-   * 現店舗の受注 1 件を集約として引く。
+   * 指定店舗の受注 1 件を集約として引く。
    *
-   * <p>{@code storeFilter} は applyToLoadByKey により派生の {@code findById} にも掛かる（StoreScopedLoadByKeyIT
-   * が実測で固定）。JPQL で書くのは境界の明示で、フィルタの代替ではない。
-   *
-   * <p>受注に紐づく帰属記録・伝票トークンは グループ帰属で店舗行分離機構に載らない。それらを受注 ID で引く操作は、 先にこの読み口で店舗の所有を確かめてから行う。
+   * <p>受注に紐づく帰属記録・伝票トークンは グループ帰属で店舗条件を持たない。それらを受注 ID で引く操作は、 先にこの読み口で店舗の所有を確かめてから行う。
    */
-  @Query("select o from com.kizuna.order.domain.Order o where o.id = :id")
-  Optional<Order> findScopedById(@Param("id") String id);
+  @Override
+  Optional<Order> findByIdAndStoreId(String id, Long storeId);
 
   /**
-   * 現店舗の受注 1 件を、その受注に紐づく行を書き換える間だけ押さえて引く。
+   * 指定店舗の受注 1 件を、その受注に紐づく行を書き換える間だけ押さえて引く。
    *
    * <p>伝票トークンの再発行は、先行するトークンを失効させてから 1 本発行する。押さえるのが受注なのは、まだ 1 本も発行されて
    * いない受注（完了時に会員へ帰属した受注）には押さえられるトークン行が無く、並行する 2 つの再発行が両方とも発行して
@@ -165,8 +182,9 @@ public interface OrderRepository
    * MemberReceiptClaimService}）が押さえるのはトークン行だけで受注行を要求しないため、受注 → トークンの 一方向しか無く待ちが環にならない。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select o from com.kizuna.order.domain.Order o where o.id = :id")
-  Optional<Order> findScopedByIdForUpdate(@Param("id") String id);
+  @Query("select o from com.kizuna.order.domain.Order o where o.id = :id and o.storeId = :storeId")
+  Optional<Order> findByIdAndStoreIdForUpdate(
+      @Param("id") String id, @Param("storeId") Long storeId);
 
   // 全群横断一覧（集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う。
   // 店舗（store）表示名の join は張らない。

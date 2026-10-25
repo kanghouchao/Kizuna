@@ -18,6 +18,7 @@ import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -48,16 +49,18 @@ public class OrderCorrectionService {
   private final OrderMapper orderMapper;
   private final OrderCalculation calculation;
   private final OrderSpecialServices specialServices;
+  private final StoreContext storeContext;
 
   /** 訂正前の快照と更新を同じトランザクションに保存する。受注行をロックしてから要求の版を照合し、 同時訂正による上書きを防ぐ。快照は管理下の集約を書き換える前に作成する。 */
   @StoreScoped
   @Transactional
   public OrderCorrectionResponse correct(
       String id, OrderCorrectionRequest request, String actorEmail) {
-    specialServices.lock();
+    Long storeId = storeContext.getStoreId();
+    specialServices.lock(storeId);
     Order order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
     // 版の照合は何も触る前に行う。全量置換なので、開いたまま別の操作者が訂正を済ませていると、送らなかった
     // 項目まで開いた時点の値で押し戻す — 楽観ロックは要求ごとに現物を読み直すため、この照合が無いと
@@ -76,17 +79,18 @@ public class OrderCorrectionService {
     var course =
         request.getCourseRevisionId() == null
             ? previousCourse
-            : calculation.historical(request.getCourseRevisionId());
+            : calculation.historical(storeId, request.getCourseRevisionId());
     var calculated =
         calculation.calculate(
+            storeId,
             order,
             course,
             request.getFeeLines(),
-            specialServices.historical(order, request.getSpecialServiceRevisionIds()),
+            specialServices.historical(storeId, order, request.getSpecialServiceRevisionIds()),
             true);
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview("CORRECT", id, request, calculated, null));
+        calculation.preview(storeId, "CORRECT", id, request, calculated, null));
     long beforeVersion = order.getVersion();
     var before = OrderCorrectionSnapshot.of(order);
     // 子明細だけの同額訂正でも、親の受注版を進めて履歴順と競合検出を確定する。
@@ -152,7 +156,7 @@ public class OrderCorrectionService {
         previousSpecials.stream()
             .map(s -> new OrderSpecialServiceResponse(s, false, null))
             .toList(),
-        specialServices.describe(order),
+        specialServices.describe(storeId, order),
         order.getId(),
         order.getStoreId(),
         correction.getBusinessDate(),
@@ -172,7 +176,7 @@ public class OrderCorrectionService {
       String id, OrderCompletionInvalidationRequest request, String actorEmail) {
     var order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeContext.getStoreId())
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     if (!Objects.equals(order.getVersion(), request.expectedVersion())) {
       throw new ConflictException(
@@ -216,11 +220,12 @@ public class OrderCorrectionService {
   @StoreScoped
   @Transactional
   public OrderPreviewResponse preview(String id, OrderCorrectionRequest request) {
-    specialServices.lock();
+    Long storeId = storeContext.getStoreId();
+    specialServices.lock(storeId);
     calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
         orderRepository
-            .findScopedByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     calculation.requireVersion(order, request.getExpectedVersion());
     if (order.isCompletionInvalidated() || order.getStatus() != OrderStatus.COMPLETED)
@@ -228,16 +233,18 @@ public class OrderCorrectionService {
     var course =
         request.getCourseRevisionId() == null
             ? order.getCourse()
-            : calculation.historical(request.getCourseRevisionId());
+            : calculation.historical(storeId, request.getCourseRevisionId());
     return calculation.preview(
+        storeId,
         "CORRECT",
         id,
         request,
         calculation.calculate(
+            storeId,
             order,
             course,
             request.getFeeLines(),
-            specialServices.historical(order, request.getSpecialServiceRevisionIds()),
+            specialServices.historical(storeId, order, request.getSpecialServiceRevisionIds()),
             false),
         null);
   }

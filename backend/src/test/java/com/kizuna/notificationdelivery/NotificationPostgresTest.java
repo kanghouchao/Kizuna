@@ -607,6 +607,7 @@ class NotificationPostgresTest {
                       .getBean(BusinessContactHistoryRepository.class)
                       .saveAndFlush(
                           BusinessContactHistory.record(
+                              storeId,
                               saved.getId(),
                               ContactType.EMAIL,
                               "RECORDED",
@@ -649,6 +650,7 @@ class NotificationPostgresTest {
                         .getBean(BusinessContactHistoryRepository.class)
                         .saveAndFlush(
                             BusinessContactHistory.record(
+                                storeId,
                                 source,
                                 ContactType.EMAIL,
                                 "CONTACT_CHANGED",

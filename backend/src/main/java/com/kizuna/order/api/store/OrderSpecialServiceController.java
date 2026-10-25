@@ -50,24 +50,29 @@ public class OrderSpecialServiceController {
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    orders.get(id);
+    orders.get(storeId, id);
     return catalog.history(storeId, search, cursor, size).map(Revision::of);
   }
 
   @GetMapping("/{id}/special-service-events")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public CursorPage<OrderSpecialServiceEventResponse> events(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return specials.history(id, cursor, size);
+    return specials.history(storeId, id, cursor, size);
   }
 
   @PostMapping("/{id}/start")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public OrderResponse start(
-      @PathVariable String id, @Valid @RequestBody OrderStartRequest request, Principal principal) {
-    return orders.start(id, request.expectedVersion(), request.reason(), principal.getName());
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody OrderStartRequest request,
+      Principal principal) {
+    return orders.start(
+        storeId, id, request.expectedVersion(), request.reason(), principal.getName());
   }
 
   public record Candidate(

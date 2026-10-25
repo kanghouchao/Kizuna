@@ -4,6 +4,7 @@ import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.domain.OrderCorrectionRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import java.util.Optional;
@@ -18,6 +19,7 @@ public class OrderCompletionResults {
   private final OrderRepository orders;
   private final OrderCorrectionRepository corrections;
   private final OrderCorrectionHistory history;
+  private final StoreContext storeContext;
 
   public CursorPage<OrderCorrectionResult> corrections(String orderId, String cursor, int size) {
     return history.store(orderId, cursor, size);
@@ -27,13 +29,14 @@ public class OrderCompletionResults {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Optional<OrderCompletionResult> find(String orderId) {
     return orders
-        .findById(orderId)
+        .findByIdAndStoreId(orderId, storeContext.getStoreId())
         .filter(order -> order.getStatus() == OrderStatus.COMPLETED)
         .map(
             order -> {
               var latest =
                   corrections
-                      .findFirstByOrderIdOrderByAfterVersionDescIdDesc(orderId)
+                      .findFirstByStoreIdAndOrderIdOrderByAfterVersionDescIdDesc(
+                          order.getStoreId(), orderId)
                       .map(OrderCorrectionHistory::result)
                       .orElse(null);
               return new OrderCompletionResult(

@@ -20,7 +20,7 @@ public class ReviewOriginLookup {
   public Optional<ReviewOriginFacts> find(String orderId) {
     if (!context.hasStoreId()) throw new AccessDeniedException("受注の店舗指定を確認してください");
     return orders
-        .findById(orderId)
+        .findByIdAndStoreId(orderId, context.getStoreId())
         .map(
             o ->
                 new ReviewOriginFacts(

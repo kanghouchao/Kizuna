@@ -6,8 +6,51 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class OrderSpecialServiceTest {
+  @Test
+  void adoptedSpecialServiceRowsCarryTheOrderStore() {
+    var order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast").build();
+    order.setStoreId(7L);
+    order.adoptServices(
+        new OrderCourse(
+            "course",
+            "revision",
+            1,
+            "コース",
+            60,
+            12000,
+            7000,
+            "CURRENT_SETTING",
+            OffsetDateTime.now()),
+        List.of(special("special", 2000, 1500)),
+        List.of());
+
+    assertThat(order.getFeeLines())
+        .hasSize(2)
+        .allSatisfy(line -> assertThat(line.getStoreId()).isEqualTo(7L));
+    @SuppressWarnings("unchecked")
+    var rows =
+        (List<OrderSpecialService>) ReflectionTestUtils.getField(order, "specialServiceLines");
+    assertThat(rows).singleElement().extracting(OrderSpecialService::getStoreId).isEqualTo(7L);
+  }
+
+  @Test
+  void rejectionAndResolutionEventsCarryTheOrderStore() {
+    var order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast").build();
+    order.setId("o1");
+    order.setStoreId(7L);
+
+    var rejected =
+        OrderSpecialServiceEvent.rejected(
+            order, List.of(), "cast", "special", "consent", 1L, OffsetDateTime.now());
+    var resolved = rejected.resolved(order, List.of(), List.of(), 0, "REMOVED", 1L);
+
+    assertThat(rejected.getStoreId()).isEqualTo(7L);
+    assertThat(resolved.getStoreId()).isEqualTo(7L);
+  }
+
   @Test
   void specialServicesHaveFixedFeesWithoutChangingCourseDuration() {
     var order = Order.builder().status(OrderStatus.CONFIRMED).castId("cast").build();

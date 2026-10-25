@@ -20,6 +20,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -47,6 +48,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class OrderAttributionServiceTest {
 
   private static final String ORDER_ID = "o1";
+  private static final long STORE_ID = 1L;
   private static final String ACTOR_EMAIL = "staff@kizuna.test";
   private static final long ACTOR_ID = 42L;
   private static final long MEMBER_ID = 7L;
@@ -60,6 +62,7 @@ class OrderAttributionServiceTest {
   @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock private ReceiptTokenGenerator receiptTokenGenerator;
+  @Mock private StoreContext storeContext;
   private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
   @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
@@ -83,6 +86,7 @@ class OrderAttributionServiceTest {
             .build();
     actor.setId(ACTOR_ID);
     Mockito.lenient().when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    Mockito.lenient().when(storeContext.getStoreId()).thenReturn(STORE_ID);
   }
 
   // ==================== 現況の読み出し ====================
@@ -134,7 +138,8 @@ class OrderAttributionServiceTest {
   @Test
   @DisplayName("他店舗の受注（storeFilter で引けない）は帰属記録に触れる前に 404 になること")
   void getRejectsAnOrderOutsideTheStore() {
-    Mockito.when(orderRepository.findScopedById(ORDER_ID)).thenReturn(Optional.empty());
+    Mockito.when(orderRepository.findByIdAndStoreId(ORDER_ID, STORE_ID))
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.currentAttribution(ORDER_ID))
         .isInstanceOf(NotFoundException.class);
@@ -217,7 +222,8 @@ class OrderAttributionServiceTest {
   @Test
   @DisplayName("他店舗の受注の無効化は帰属記録に触れる前に 404 になること")
   void invalidateRejectsAnOrderOutsideTheStore() {
-    Mockito.when(orderRepository.findScopedById(ORDER_ID)).thenReturn(Optional.empty());
+    Mockito.when(orderRepository.findByIdAndStoreId(ORDER_ID, STORE_ID))
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.invalidate(ORDER_ID, request(REASON), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
@@ -311,7 +317,7 @@ class OrderAttributionServiceTest {
   @Test
   @DisplayName("完了を無効化した受注には伝票を再発行せず、既存トークンにも触れないこと")
   void reissueRejectsAnInvalidatedCompletion() {
-    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
+    Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(
             Optional.of(
                 Order.builder().status(OrderStatus.COMPLETED).completionInvalidated(true).build()));
@@ -408,8 +414,8 @@ class OrderAttributionServiceTest {
 
     // 実際の待ち合わせは統合テストが踏む。ここが固定するのは配線と順序そのもので、素の読み口へ
     // 差し替わるか順序が入れ替わると、門が在途の申領を見ない check-then-act に戻る
-    Mockito.verify(orderRepository).findScopedByIdForUpdate(ORDER_ID);
-    Mockito.verify(orderRepository, Mockito.never()).findScopedById(ORDER_ID);
+    Mockito.verify(orderRepository).findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID);
+    Mockito.verify(orderRepository, Mockito.never()).findByIdAndStoreId(ORDER_ID, STORE_ID);
     InOrder reads = Mockito.inOrder(orderReceiptTokenRepository, orderAttributionRepository);
     reads.verify(orderReceiptTokenRepository).findByOrderIdForUpdate(ORDER_ID);
     reads.verify(orderAttributionRepository).findByOrderIdOrderByIdDesc(ORDER_ID);
@@ -418,7 +424,8 @@ class OrderAttributionServiceTest {
   @Test
   @DisplayName("他店舗の受注の再発行は帰属記録に触れる前に 404 になること")
   void reissueRejectsAnOrderOutsideTheStore() {
-    Mockito.when(orderRepository.findScopedByIdForUpdate(ORDER_ID)).thenReturn(Optional.empty());
+    Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.reissueReceiptToken(ORDER_ID))
         .isInstanceOf(NotFoundException.class);
@@ -446,10 +453,12 @@ class OrderAttributionServiceTest {
             .autoGrantPoints(COMPLETION_GRANT)
             .build();
     order.setId(ORDER_ID);
-    order.setStoreId(1L);
-    Mockito.lenient().when(orderRepository.findScopedById(ORDER_ID)).thenReturn(Optional.of(order));
+    order.setStoreId(STORE_ID);
     Mockito.lenient()
-        .when(orderRepository.findScopedByIdForUpdate(ORDER_ID))
+        .when(orderRepository.findByIdAndStoreId(ORDER_ID, STORE_ID))
+        .thenReturn(Optional.of(order));
+    Mockito.lenient()
+        .when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.of(order));
   }
 

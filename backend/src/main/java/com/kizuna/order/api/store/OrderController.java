@@ -39,6 +39,7 @@ import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -82,9 +83,10 @@ public class OrderController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Page<OrderSummaryResponse>> list(
+      @CurrentStore Long storeId,
       @RequestParam(name = "customer_id", required = false) String customerId,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(orderService.list(customerId, pageable));
+    return ResponseEntity.ok(orderService.list(storeId, customerId, pageable));
   }
 
   /**
@@ -98,6 +100,7 @@ public class OrderController {
   @GetMapping("/work-queue")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<CursorPage<OrderWorkQueueResponse>> listWorkQueue(
+      @CurrentStore Long storeId,
       @RequestParam(name = "statuses") Set<OrderStatus> statuses,
       @RequestParam(name = "customer_name", required = false) String customerName,
       @RequestParam(name = "business_date", required = false) @DateTimeFormat(iso = ISO.DATE)
@@ -108,7 +111,10 @@ public class OrderController {
       @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok(
         orderService.listWorkQueue(
-            criteria(statuses, customerName, businessDate, sortKey, descending), cursor, size));
+            storeId,
+            criteria(statuses, customerName, businessDate, sortKey, descending),
+            cursor,
+            size));
   }
 
   /**
@@ -119,6 +125,7 @@ public class OrderController {
   @GetMapping("/archive")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Page<OrderArchiveResponse>> listArchive(
+      @CurrentStore Long storeId,
       @RequestParam(name = "statuses") Set<OrderStatus> statuses,
       @RequestParam(name = "customer_name", required = false) String customerName,
       @RequestParam(name = "business_date", required = false) @DateTimeFormat(iso = ISO.DATE)
@@ -131,7 +138,9 @@ public class OrderController {
           Pageable pageable) {
     return ResponseEntity.ok(
         orderService.listArchive(
-            criteria(statuses, customerName, businessDate, sortKey, descending), pageable));
+            storeId,
+            criteria(statuses, customerName, businessDate, sortKey, descending),
+            pageable));
   }
 
   /** 空文字の検索語は「送っていない」と同じに扱う。画面の検索欄をクリアした状態がそのまま乗ってくるため。 */
@@ -148,16 +157,17 @@ public class OrderController {
   @GetMapping("/customer-candidates")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public CursorPage<OrderCustomerCandidateResponse> customerCandidates(
+      @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return orderService.customerCandidates(search, cursor, size);
+    return orderService.customerCandidates(storeId, search, cursor, size);
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<OrderResponse> get(@PathVariable String id) {
-    return ResponseEntity.ok(orderService.get(id));
+  public ResponseEntity<OrderResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
+    return ResponseEntity.ok(orderService.get(storeId, id));
   }
 
   @GetMapping("/{id}/business-contact-permission-history")
@@ -171,8 +181,9 @@ public class OrderController {
 
   @GetMapping("/receptionists")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<List<OrderReceptionistResponse>> listReceptionists() {
-    return ResponseEntity.ok(orderService.listReceptionists());
+  public ResponseEntity<List<OrderReceptionistResponse>> listReceptionists(
+      @CurrentStore Long storeId) {
+    return ResponseEntity.ok(orderService.listReceptionists(storeId));
   }
 
   /**
@@ -183,8 +194,8 @@ public class OrderController {
   @GetMapping("/cast-candidates")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<List<OrderCastCandidateResponse>> listCastCandidates(
-      @RequestParam(required = false) String search) {
-    return ResponseEntity.ok(orderService.listCastCandidates(search));
+      @CurrentStore Long storeId, @RequestParam(required = false) String search) {
+    return ResponseEntity.ok(orderService.listCastCandidates(storeId, search));
   }
 
   /**
@@ -195,19 +206,22 @@ public class OrderController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> create(
-      @Valid @RequestBody OrderCreateRequest request, Principal principal) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody OrderCreateRequest request,
+      Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(orderService.create(request, principal.getName()));
+        .body(orderService.create(storeId, request, principal.getName()));
   }
 
   /** 受注を完了する（会計の確定）。ポイントの付与・利用はこの経路でのみ台帳へ入る。 */
   @PostMapping("/{id}/completion")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderCompletionResponse> complete(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderCompletionRequest request,
       Principal principal) {
-    return ResponseEntity.ok(orderService.complete(id, request, principal.getName()));
+    return ResponseEntity.ok(orderService.complete(storeId, id, request, principal.getName()));
   }
 
   /** 受注 1 件の帰属の現況（会員コード・成立の機構・無効化の理由）。無効化と再発行のどちらを提示するかはこの読み口で決まる。 */
@@ -337,18 +351,21 @@ public class OrderController {
   @PostMapping("/{id}/completion-preview")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderPreviewResponse> completionPreview(
-      @PathVariable String id, @Valid @RequestBody OrderCompletionRequest request) {
-    return ResponseEntity.ok(orderService.completionPreview(id, request));
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody OrderCompletionRequest request) {
+    return ResponseEntity.ok(orderService.completionPreview(storeId, id, request));
   }
 
   /** 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消す。二度目の取消は状態違反（400）として拒否する。 */
   @PostMapping("/{id}/cancellation")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Void> cancel(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderCancellationRequest request,
       Principal principal) {
-    orderService.cancel(id, request, principal.getName());
+    orderService.cancel(storeId, id, request, principal.getName());
     return ResponseEntity.noContent().build();
   }
 
@@ -381,24 +398,29 @@ public class OrderController {
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> update(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderUpdateRequest request,
       Principal principal) {
-    return ResponseEntity.ok(orderService.update(id, request, principal.getName()));
+    return ResponseEntity.ok(orderService.update(storeId, id, request, principal.getName()));
   }
 
   @PostMapping("/preview")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public OrderPreviewResponse previewCreate(
-      @Valid @RequestBody OrderCreateRequest request, Principal principal) {
-    return orderService.previewCreate(request, principal.getName());
+      @CurrentStore Long storeId,
+      @Valid @RequestBody OrderCreateRequest request,
+      Principal principal) {
+    return orderService.previewCreate(storeId, request, principal.getName());
   }
 
   @PostMapping("/{id}/preview")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public OrderPreviewResponse previewUpdate(
-      @PathVariable String id, @Valid @RequestBody OrderUpdateRequest request) {
-    return orderService.previewUpdate(id, request);
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody OrderUpdateRequest request) {
+    return orderService.previewUpdate(storeId, id, request);
   }
 
   @PostMapping("/{id}/correction-preview")

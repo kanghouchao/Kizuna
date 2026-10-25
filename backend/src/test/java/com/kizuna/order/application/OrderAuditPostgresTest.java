@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -61,6 +62,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @EnabledIfEnvironmentVariable(named = "KIZUNA_ORDER_AUDIT_TEST_JDBC_URL", matches = ".+")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OrderAuditPostgresTest {
+  private static final long STORE_ID = 1L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate transactions;
@@ -84,7 +86,7 @@ class OrderAuditPostgresTest {
   @Test
   void cancellationAndItsAuditCommitTogetherWithDatabaseVersions() {
     var id = createOrder();
-    service.cancel(id, cancellation(), "operator@example.test");
+    service.cancel(STORE_ID, id, cancellation(), "operator@example.test");
 
     assertThat(status(id)).isEqualTo("CANCELLED");
     assertThat(auditCount(id)).isEqualTo(1);
@@ -106,7 +108,7 @@ class OrderAuditPostgresTest {
                 String.class,
                 id))
         .isEqualTo("1");
-    assertThatThrownBy(() -> service.cancel(id, cancellation(), "operator@example.test"))
+    assertThatThrownBy(() -> service.cancel(STORE_ID, id, cancellation(), "operator@example.test"))
         .isInstanceOf(RuntimeException.class);
     assertThat(auditCount(id)).isEqualTo(1);
   }
@@ -117,7 +119,8 @@ class OrderAuditPostgresTest {
     jdbc.execute(
         "alter table t_audit_events add constraint ck_audit_test_reject check (action <> 'ORDER_CANCELLED') not valid");
     try {
-      assertThatThrownBy(() -> service.cancel(id, cancellation(), "operator@example.test"))
+      assertThatThrownBy(
+              () -> service.cancel(STORE_ID, id, cancellation(), "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(status(id)).isEqualTo("CONFIRMED");
       assertThat(auditCount(id)).isZero();
@@ -135,7 +138,7 @@ class OrderAuditPostgresTest {
             () ->
                 transactions.executeWithoutResult(
                     transaction -> {
-                      service.cancel(id, cancellation(), "operator@example.test");
+                      service.cancel(STORE_ID, id, cancellation(), "operator@example.test");
                       assertThat(auditCount(id)).isEqualTo(1);
                       throw new IllegalStateException("同じ業務取引の後続失敗");
                     }))
@@ -152,7 +155,7 @@ class OrderAuditPostgresTest {
                   .status(OrderStatus.CONFIRMED)
                   .businessDate(LocalDate.of(2026, 10, 7))
                   .build();
-          order.setStoreId(1L);
+          order.setStoreId(STORE_ID);
           order.adoptCourse(OrderCourses.course("検証コース", 60, 1000), List.of());
           entityManager.persist(order);
           entityManager.flush();
@@ -244,7 +247,7 @@ class OrderAuditPostgresTest {
     @Bean
     OrderService orders(EntityManager em, BusinessAudit audit) throws ReflectiveOperationException {
       var repository = mock(OrderRepository.class);
-      when(repository.findScopedByIdForUpdate(anyString()))
+      when(repository.findByIdAndStoreIdForUpdate(anyString(), eq(STORE_ID)))
           .thenAnswer(
               call ->
                   Optional.ofNullable(

@@ -8,6 +8,7 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
@@ -23,11 +24,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderCorrectionHistory {
   private final OrderRepository orders;
   private final OrderCorrectionRepository corrections;
+  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<OrderCorrectionResult> store(String orderId, String cursor, int size) {
-    var order = orders.findById(orderId).orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    var order =
+        orders
+            .findByIdAndStoreId(orderId, storeContext.getStoreId())
+            .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     return readChanges(order, cursor, size, "store").map(OrderCorrectionHistory::result);
   }
 
@@ -51,7 +56,7 @@ public class OrderCorrectionHistory {
       var key = PageCursor.decode(cursor);
       var anchor =
           corrections
-              .findById(key.id())
+              .findByIdAndStoreId(key.id(), order.getStoreId())
               .orElseThrow(() -> new ServiceException("続きの位置（cursor）が不正です"));
       if (!anchor.getOrderId().equals(orderId)
           || !anchor.getStoreId().equals(order.getStoreId())
@@ -61,7 +66,7 @@ public class OrderCorrectionHistory {
       id = anchor.getId();
     }
     return CursorPage.of(
-        corrections.history(orderId, version, id, PageRequest.of(0, limit + 1)),
+        corrections.history(order.getStoreId(), orderId, version, id, PageRequest.of(0, limit + 1)),
         limit,
         c -> new PageCursor(cursorKey(surface, c), c.getId()).encode());
   }

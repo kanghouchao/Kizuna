@@ -36,7 +36,8 @@ public class OrderSearchQuery {
   private static final String FROM_CLAUSE =
       """
       from com.kizuna.order.domain.Order o
-        left join com.kizuna.customer.domain.Customer c on c.id = o.customerId
+        left join com.kizuna.customer.domain.Customer c
+          on c.id = o.customerId and c.storeId = o.storeId
       """;
 
   private final EntityManager entityManager;
@@ -58,7 +59,8 @@ public class OrderSearchQuery {
    * @param cursor 続きの位置。null なら先頭から
    * @param limit 取得件数の上限（呼出側が「続きの有無」の判定ぶんを足して渡す）
    */
-  public List<OrderedRow> findRows(OrderQueryCriteria criteria, PageCursor cursor, int limit) {
+  public List<OrderedRow> findRows(
+      Long storeId, OrderQueryCriteria criteria, PageCursor cursor, int limit) {
     List<String> conditions = new ArrayList<>(baseConditions(criteria));
     if (cursor != null) {
       conditions.add(keysetCondition(criteria));
@@ -70,7 +72,7 @@ public class OrderSearchQuery {
                 + where(conditions)
                 + orderBy(criteria),
             Object[].class);
-    bindBase(query, criteria);
+    bindBase(query, storeId, criteria);
     if (cursor != null) {
       bindCursor(query, criteria, cursor);
     }
@@ -80,12 +82,12 @@ public class OrderSearchQuery {
   }
 
   /** アーカイブの並び（オフセット型）。増えるだけの記録なので、位置をページ番号で指せる。 */
-  public List<String> findIds(OrderQueryCriteria criteria, Pageable pageable) {
+  public List<String> findIds(Long storeId, OrderQueryCriteria criteria, Pageable pageable) {
     TypedQuery<String> query =
         entityManager.createQuery(
             "select o.id " + FROM_CLAUSE + where(baseConditions(criteria)) + orderBy(criteria),
             String.class);
-    bindBase(query, criteria);
+    bindBase(query, storeId, criteria);
     return query
         .setFirstResult((int) pageable.getOffset())
         .setMaxResults(pageable.getPageSize())
@@ -93,16 +95,17 @@ public class OrderSearchQuery {
   }
 
   /** アーカイブの総件数。ページャが最終ページを出すために要る。 */
-  public long count(OrderQueryCriteria criteria) {
+  public long count(Long storeId, OrderQueryCriteria criteria) {
     TypedQuery<Long> query =
         entityManager.createQuery(
             "select count(o.id) " + FROM_CLAUSE + where(baseConditions(criteria)), Long.class);
-    bindBase(query, criteria);
+    bindBase(query, storeId, criteria);
     return query.getSingleResult();
   }
 
   private List<String> baseConditions(OrderQueryCriteria criteria) {
     List<String> conditions = new ArrayList<>();
+    conditions.add("o.storeId = :storeId");
     conditions.add("o.status in :statuses");
     if (criteria.customerName() != null) {
       // 表示と同じ規則で照合する — 台帳の顧客名が無ければ受付で録入された連絡先の氏名、それも無ければ
@@ -143,7 +146,8 @@ public class OrderSearchQuery {
     return " where " + String.join(" and ", conditions);
   }
 
-  private void bindBase(TypedQuery<?> query, OrderQueryCriteria criteria) {
+  private void bindBase(TypedQuery<?> query, Long storeId, OrderQueryCriteria criteria) {
+    query.setParameter("storeId", storeId);
     query.setParameter("statuses", criteria.statuses());
     if (criteria.customerName() != null) {
       query.setParameter(

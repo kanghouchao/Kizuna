@@ -14,7 +14,6 @@ import com.kizuna.service.application.SpecialServiceRejectionHandler;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -37,19 +36,18 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   private final OrderSpecialServiceEventRepository events;
   private final OrderRepository orders;
   private final StoreRepository stores;
-  private final StoreContext context;
   private final ActorIdentityService actors;
 
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
-  public void lock() {
-    stores.lockCastFields(context.getStoreId());
+  public void lock(Long storeId) {
+    stores.lockCastFields(storeId);
   }
 
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public List<SpecialServiceSnapshot> select(
-      Order original, String cast, List<String> ids, boolean confirmedInput) {
+      Long storeId, Order original, String cast, List<String> ids, boolean confirmedInput) {
     if (original != null && !Objects.equals(original.getCastId(), cast)) {
       if (ids != null && !ids.isEmpty()) throw new ServiceException("担当変更を保存してから特殊サービスを選び直してください");
       return List.of();
@@ -69,9 +67,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                         () -> {
                           try {
                             return snapshot(
-                                catalog.current(context.getStoreId(), cast, id),
-                                cast,
-                                "ACCEPTED_TERMS");
+                                catalog.current(storeId, cast, id), cast, "ACCEPTED_TERMS");
                           } catch (NotFoundException | ServiceException ex) {
                             if (confirmedInput)
                               throw new OrderConfirmationConflict("confirmation_token");
@@ -83,7 +79,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
 
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
-  public List<SpecialServiceSnapshot> historical(Order order, List<String> ids) {
+  public List<SpecialServiceSnapshot> historical(Long storeId, Order order, List<String> ids) {
     if (ids == null) return order.getSpecialServices();
     requireUnique(ids);
     if (!ids.isEmpty() && order.getCastId() == null)
@@ -99,7 +95,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                         .orElseGet(
                             () ->
                                 snapshot(
-                                    catalog.historical(context.getStoreId(), id),
+                                    catalog.historical(storeId, id),
                                     order.getCastId(),
                                     "HISTORICAL_CORRECTION")))
             .toList();
@@ -133,18 +129,18 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
 
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
-  public void requireProgress(Order order) {
-    if (!events.unresolved(order.getId()).isEmpty())
+  public void requireProgress(Long storeId, Order order) {
+    if (!events.unresolved(storeId, order.getId()).isEmpty())
       throw new OrderConfirmationConflict("special_services", "拒否された特殊サービスを編集画面で修復してください");
   }
 
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
-  public List<OrderSpecialServiceResponse> describe(Order order) {
+  public List<OrderSpecialServiceResponse> describe(Long storeId, Order order) {
     var unresolved =
         order.getId() == null
             ? List.<OrderSpecialServiceEvent>of()
-            : events.unresolved(order.getId());
+            : events.unresolved(storeId, order.getId());
     return order.getSpecialServices().stream()
         .map(
             s ->
@@ -158,15 +154,19 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                                         && e.getEnrollmentId().equals(s.enrollmentId())),
                     order.getStatus().isTerminal()
                         ? null
-                        : catalog.status(context.getStoreId(), s.enrollmentId(), s.serviceId())))
+                        : catalog.status(storeId, s.enrollmentId(), s.serviceId())))
         .toList();
   }
 
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void resolve(
-      Order order, List<SpecialServiceSnapshot> previous, int previousTotal, String previousCast) {
-    var unresolved = events.unresolved(order.getId());
+      Long storeId,
+      Order order,
+      List<SpecialServiceSnapshot> previous,
+      int previousTotal,
+      String previousCast) {
+    var unresolved = events.unresolved(storeId, order.getId());
     var before = historySnapshots(previous, unresolved);
     var after = historySnapshots(order.getSpecialServices(), unresolved);
     for (var rejection : unresolved) {
@@ -215,11 +215,14 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void applyRejection(SpecialServiceRejection event) {
-    for (var order : orders.findUnfinishedSpecialOrders(event.enrollmentId(), event.serviceId())) {
+    for (var order :
+        orders.findUnfinishedSpecialOrders(
+            event.storeId(), event.enrollmentId(), event.serviceId())) {
       events.save(
           OrderSpecialServiceEvent.rejected(
               order,
-              historySnapshots(order.getSpecialServices(), events.unresolved(order.getId())),
+              historySnapshots(
+                  order.getSpecialServices(), events.unresolved(event.storeId(), order.getId())),
               event.enrollmentId(),
               event.serviceId(),
               event.consentEventId(),
@@ -232,8 +235,10 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<OrderSpecialServiceEventResponse> history(
-      String orderId, String cursor, int size) {
-    orders.findScopedById(orderId).orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+      Long storeId, String orderId, String cursor, int size) {
+    orders
+        .findByIdAndStoreId(orderId, storeId)
+        .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     if (size < 1 || size > Math.min(100, CursorPage.MAX_SIZE))
       throw new ServiceException("取得件数が正しくありません");
     var key = cursor == null ? null : PageCursor.decode(cursor);
@@ -247,7 +252,8 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
       throw new ServiceException("カーソルが正しくありません");
     }
     return CursorPage.of(
-            events.history(orderId, at, key == null ? "" : key.id(), PageRequest.of(0, size + 1)),
+            events.history(
+                storeId, orderId, at, key == null ? "" : key.id(), PageRequest.of(0, size + 1)),
             size,
             e -> new PageCursor(e.getOccurredAt().toString(), e.getId()).encode())
         .map(OrderSpecialServiceEventResponse::of);

@@ -50,6 +50,7 @@ public class OrderSpecialServiceEvent extends StoreScopedEntity {
       Long actor,
       OffsetDateTime at) {
     var e = new OrderSpecialServiceEvent();
+    e.setStoreId(order.getStoreId());
     e.orderId = order.getId();
     e.enrollmentId = enrollment;
     e.serviceId = service;
@@ -81,6 +82,7 @@ public class OrderSpecialServiceEvent extends StoreScopedEntity {
       String resolution,
       Long actor) {
     var e = new OrderSpecialServiceEvent();
+    e.setStoreId(order.getStoreId());
     e.orderId = orderId;
     e.enrollmentId = enrollmentId;
     e.serviceId = serviceId;

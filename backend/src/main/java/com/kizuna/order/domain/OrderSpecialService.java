@@ -51,8 +51,9 @@ public class OrderSpecialService extends StoreScopedEntity {
         consentVersion);
   }
 
-  public static OrderSpecialService of(SpecialServiceSnapshot snapshot) {
+  public static OrderSpecialService of(Long storeId, SpecialServiceSnapshot snapshot) {
     var line = new OrderSpecialService();
+    line.setStoreId(storeId);
     line.adopt(snapshot);
     return line;
   }

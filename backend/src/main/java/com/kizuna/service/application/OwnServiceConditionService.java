@@ -99,7 +99,7 @@ public class OwnServiceConditionService {
       if (request.decision() == ConsentDecision.REJECTED)
         rejectionHandler.applyRejection(
             new SpecialServiceRejection(
-                enrollment, id, event.getId(), actorId, event.getOccurredAt()));
+                storeId, enrollment, id, event.getId(), actorId, event.getOccurredAt()));
       audit.recordById(
           actorId,
           consent.getStoreId(),

@@ -15,6 +15,7 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
@@ -32,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 分けている理由でもある。
  *
  * <p>帰属記録も伝票トークンも グループ帰属で店舗行分離機構に載らないため、店舗の境界を決めるのは受注だけである。 どの操作も先に {@link
- * OrderRepository#findScopedById} で受注を引き、引けなければそこで終える。
+ * OrderRepository#findByIdAndStoreId} で受注を引き、引けなければそこで終える。
  *
  * <p>完了（{@link OrderService#complete}）が受け持つのは帰属の<b>成立</b>で、こちらは成立済みの記録の訂正にあたる。
  * 台帳への記帳を伴うかどうかで責務が分かれる。
@@ -46,6 +47,7 @@ public class OrderAttributionService {
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final ActorIdentityService actorIdentityService;
+  private final StoreContext storeContext;
 
   /** 受注 1 件の帰属の現況。無効化・再発行のどちらを提示するかを店舗側の画面が判じるための読み口。 */
   @StoreScoped
@@ -110,7 +112,7 @@ public class OrderAttributionService {
     // 押さえる行が下に無いため、ここだけが直列化点になる。
     Order order =
         orderRepository
-            .findScopedByIdForUpdate(orderId)
+            .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     if (order.getStatus() != OrderStatus.COMPLETED) {
       throw new ServiceException("完了していない受注に伝票は発行できません");
@@ -156,7 +158,7 @@ public class OrderAttributionService {
    */
   private Order requireScopedOrder(String orderId) {
     return orderRepository
-        .findScopedById(orderId)
+        .findByIdAndStoreId(orderId, storeContext.getStoreId())
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
   }
 

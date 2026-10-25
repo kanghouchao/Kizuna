@@ -208,7 +208,7 @@ class MemberReceiptClaimServiceTest {
   void refusesTheReceiptOfAnInvalidatedOrder() {
     OrderReceiptToken token = issuedToken(OffsetDateTime.now());
     givenToken(token);
-    Mockito.when(orderRepository.findById(ORDER_ID))
+    Mockito.when(orderRepository.findByReceiptTokenDigest(DIGEST))
         .thenReturn(Optional.of(Order.builder().completionInvalidated(true).build()));
 
     Throwable invalidated = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
@@ -277,6 +277,6 @@ class MemberReceiptClaimServiceTest {
             .build();
     order.setId(ORDER_ID);
     order.setStoreId(STORE_ID);
-    Mockito.when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+    Mockito.when(orderRepository.findByReceiptTokenDigest(DIGEST)).thenReturn(Optional.of(order));
   }
 }

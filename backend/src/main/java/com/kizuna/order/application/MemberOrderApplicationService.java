@@ -132,8 +132,7 @@ public class MemberOrderApplicationService {
   /** 本人が申請した予約を取り出す。他人の申請・存在しない id は「見つからない」として扱う — 権限違反として区別すると、その id の申請が存在することそのものが分かってしまう。 */
   private OrderApplication ownedApplication(Long memberId, String applicationId) {
     return orderApplicationRepository
-        .findById(applicationId)
-        .filter(application -> memberId.equals(application.getRequesterMemberId()))
+        .findByIdAndRequesterMemberId(applicationId, memberId)
         .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + applicationId));
   }
 
