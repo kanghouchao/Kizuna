@@ -2,10 +2,10 @@ package com.kizuna.advertising.reporting;
 
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.storescope.StoreScope;
 import jakarta.persistence.EntityManager;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,8 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AdvertisingReportReader {
   private final EntityManager em;
-  private final StoreContext context;
-  private final StoreScopeHolder storeScopeHolder;
 
   public record Cost(
       Long storeId,
@@ -29,17 +27,25 @@ public class AdvertisingReportReader {
       Integer amount) {}
 
   // 店舗経路での担当者／横断照会者と広告費権限の対は呼び出す端点が判定する。ここは店舗経路の下限だけを持つ。
-  @PreAuthorize(
-      "#groupWide ? hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') : hasAnyAuthority('PERM_ADVERTISING_COST_VIEW', 'PERM_ADVERTISING_COST_SET_VIEW')")
+  @PreAuthorize("hasAnyAuthority('PERM_ADVERTISING_COST_VIEW', 'PERM_ADVERTISING_COST_SET_VIEW')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
-  public AdvertisingReportFacts read(
-      boolean groupWide, List<Long> stores, String from, String to, int limit) {
-    var scope = storeScopeHolder.current();
+  public AdvertisingReportFacts store(
+      Long storeId, List<Long> stores, String from, String to, int limit) {
+    return read(new StoreScope(false, Set.of(storeId)), stores, from, to, limit);
+  }
+
+  @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_SET_VIEW')")
+  @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
+  public AdvertisingReportFacts groupWide(
+      StoreScope scope, List<Long> stores, String from, String to, int limit) {
+    if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
+    return read(scope, stores, from, to, limit);
+  }
+
+  private AdvertisingReportFacts read(
+      StoreScope scope, List<Long> stores, String from, String to, int limit) {
     for (var store : stores)
-      if (groupWide
-          ? scope == null || !scope.authorizes(store)
-          : !context.hasStoreId() || !store.equals(context.getStoreId()))
-        throw new AccessDeniedException("授権店舗集合に含まれません");
+      if (!scope.authorizes(store)) throw new AccessDeniedException("授権店舗集合に含まれません");
     if (limit < 1 || limit > 100_000) throw tooLarge();
     if (stores.isEmpty()) return new AdvertisingReportFacts(List.of());
     var costs =

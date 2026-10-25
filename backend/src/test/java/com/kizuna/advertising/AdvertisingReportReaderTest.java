@@ -12,62 +12,55 @@ import static org.mockito.Mockito.when;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.reporting.AdvertisingReportReader;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreScopeHolder;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import java.util.List;
 import java.util.Set;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
 import org.springframework.security.access.AccessDeniedException;
 
 class AdvertisingReportReaderTest {
   EntityManager em = mock(EntityManager.class);
-  StoreContext context = mock(StoreContext.class);
-  StoreScopeHolder holder = new StoreScopeHolder();
-  AdvertisingReportReader reader = new AdvertisingReportReader(em, context, holder);
-
-  @AfterEach
-  void clear() {
-    holder.clear();
-  }
+  AdvertisingReportReader reader = new AdvertisingReportReader(em);
+  StoreScope scope = new StoreScope(false, Set.of(1L));
 
   @Test
-  void foreignAndUnresolvedScopesFailBeforeReadingEvenWithAdminStoreContext() {
-    assertThatThrownBy(() -> reader.read(true, List.of(1L), "2026-01", "2026-12", 20))
+  void foreignAndUnresolvedScopesFailBeforeReading() {
+    assertThatThrownBy(() -> reader.groupWide(null, List.of(1L), "2026-01", "2026-12", 20))
         .isInstanceOf(AccessDeniedException.class);
-    authorize();
-    when(context.hasStoreId()).thenReturn(true);
-    when(context.getStoreId()).thenReturn(2L);
-    assertThatThrownBy(() -> reader.read(true, List.of(2L), "2026-01", "2026-12", 20))
+    assertThatThrownBy(() -> reader.groupWide(scope, List.of(1L, 2L), "2026-01", "2026-12", 20))
         .isInstanceOf(AccessDeniedException.class);
-    assertThatThrownBy(() -> reader.read(false, List.of(1L), "2026-01", "2026-12", 20))
+    assertThatThrownBy(() -> reader.store(2L, List.of(1L), "2026-01", "2026-12", 20))
         .isInstanceOf(AccessDeniedException.class);
-    when(context.hasStoreId()).thenReturn(false);
-    assertThatThrownBy(() -> reader.read(false, List.of(1L), "2026-01", "2026-12", 20))
+    assertThatThrownBy(() -> reader.store(1L, List.of(1L, 2L), "2026-01", "2026-12", 20))
         .isInstanceOf(AccessDeniedException.class);
     verifyNoInteractions(em);
   }
 
   @Test
   void emptySelectionDoesNotReadAndInvalidBudgetsFailBeforeDatabaseAccess() {
-    authorize();
-    assertThat(reader.read(true, List.of(), "2026-01", "2026-12", 20).costs()).isEmpty();
+    assertThat(reader.groupWide(scope, List.of(), "2026-01", "2026-12", 20).costs()).isEmpty();
     for (int limit : List.of(0, 100_001))
-      assertThatThrownBy(() -> reader.read(true, List.of(1L), "2026-01", "2026-12", limit))
+      assertThatThrownBy(() -> reader.groupWide(scope, List.of(1L), "2026-01", "2026-12", limit))
           .isInstanceOf(ServiceUnavailableException.class);
     verifyNoInteractions(em);
   }
 
   @Test
+  void storePathReadsTheNamedStore() {
+    var query = query();
+    when(query.getResultList()).thenReturn(List.of(cost(10)));
+    assertThat(reader.store(1L, List.of(1L), "2026-01", "2026-12", 20).costs()).hasSize(1);
+    verify(query).setParameter("stores", List.of(1L));
+  }
+
+  @Test
   void boundedMinimalFactsRetainTheSavedMonthCategoryVersionAndAmount() {
-    authorize();
     var query = query();
     when(query.getResultList()).thenReturn(List.of(cost(0), cost(123)));
-    var result = reader.read(true, List.of(1L), "2026-01", "2026-12", 2);
+    var result = reader.groupWide(scope, List.of(1L), "2026-01", "2026-12", 2);
     assertThat(result.costs()).hasSize(2);
     assertThat(result.costs().getLast().month()).isEqualTo("2026-02");
     assertThat(result.costs().getLast().category()).isEqualTo("RECRUITMENT");
@@ -77,22 +70,21 @@ class AdvertisingReportReaderTest {
     verify(query).setParameter("stores", List.of(1L));
     verify(query).setParameter("from", "2026-01");
     verify(query).setParameter("to", "2026-12");
-    assertThatThrownBy(() -> reader.read(true, List.of(1L), "2026-01", "2026-12", 1))
+    assertThatThrownBy(() -> reader.groupWide(scope, List.of(1L), "2026-01", "2026-12", 1))
         .isInstanceOf(ServiceUnavailableException.class);
   }
 
   @Test
   void invalidFactsCannotBecomeZeroOrPartialSuccess() {
-    authorize();
     var query = query();
     for (Integer amount : new Integer[] {null, -1}) {
       when(query.getResultList()).thenReturn(List.of(cost(amount)));
-      assertThatThrownBy(() -> reader.read(true, List.of(1L), "2026-01", "2026-12", 20))
+      assertThatThrownBy(() -> reader.groupWide(scope, List.of(1L), "2026-01", "2026-12", 20))
           .isInstanceOf(ServiceUnavailableException.class);
     }
     when(query.getResultList())
         .thenReturn(List.of(new AdvertisingReportReader.Cost(1L, "01", 1L, "2026-02", null, 0)));
-    assertThatThrownBy(() -> reader.read(true, List.of(1L), "2026-01", "2026-12", 20))
+    assertThatThrownBy(() -> reader.groupWide(scope, List.of(1L), "2026-01", "2026-12", 20))
         .isInstanceOf(ServiceUnavailableException.class);
   }
 
@@ -106,9 +98,5 @@ class AdvertisingReportReaderTest {
   AdvertisingReportReader.Cost cost(Integer amount) {
     return new AdvertisingReportReader.Cost(
         1L, "0001", 7L, "2026-02", AdvertisingCategory.RECRUITMENT, amount);
-  }
-
-  void authorize() {
-    holder.install(() -> new StoreScope(false, Set.of(1L)));
   }
 }

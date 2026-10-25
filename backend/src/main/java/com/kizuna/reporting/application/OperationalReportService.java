@@ -7,9 +7,11 @@ import com.kizuna.reporting.infrastructure.ReportRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
+import com.kizuna.shared.storescope.StoreScope;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.concurrent.Semaphore;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.stereotype.Service;
@@ -23,8 +25,8 @@ public class OperationalReportService {
   private final AppProperties properties;
   private final Semaphore slot = new Semaphore(1);
 
-  public OperationalReportResponse view(
-      boolean groupWide,
+  public OperationalReportResponse viewStore(
+      Long storeId,
       String from,
       String to,
       String groupBy,
@@ -32,24 +34,35 @@ public class OperationalReportService {
       int size,
       boolean includeRemuneration,
       boolean includeAdvertising) {
-    if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
-      throw new ServiceException("ページ番号と件数（1〜100）の指定が不正です");
-    try {
-      return execute(
-          groupWide,
-          from,
-          to,
-          groupBy,
-          includeRemuneration,
-          includeAdvertising,
-          (report, budget) -> OperationalReportResponse.from(report, page, size));
-    } catch (IOException ex) {
-      throw new IllegalStateException(ex);
-    }
+    return view(
+        criteria -> snapshot.store(storeId, criteria, includeRemuneration, includeAdvertising),
+        from,
+        to,
+        groupBy,
+        page,
+        size);
   }
 
-  public byte[] export(
-      boolean groupWide,
+  public OperationalReportResponse viewGroupWide(
+      StoreScope scope,
+      String from,
+      String to,
+      String groupBy,
+      int page,
+      int size,
+      boolean includeRemuneration,
+      boolean includeAdvertising) {
+    return view(
+        criteria -> snapshot.groupWide(scope, criteria, includeRemuneration, includeAdvertising),
+        from,
+        to,
+        groupBy,
+        page,
+        size);
+  }
+
+  public byte[] exportStore(
+      Long storeId,
       String from,
       String to,
       String groupBy,
@@ -57,35 +70,77 @@ public class OperationalReportService {
       boolean includeRemuneration,
       boolean includeAdvertising)
       throws IOException {
-    if (!"csv".equals(format) && !"xlsx".equals(format))
-      throw new ServiceException("出力形式は csv / xlsx で指定してください");
-    return execute(
-        groupWide,
+    return export(
+        criteria -> snapshot.store(storeId, criteria, includeRemuneration, includeAdvertising),
         from,
         to,
         groupBy,
-        includeRemuneration,
-        includeAdvertising,
-        (report, budget) -> renderer.render(report, format, budget));
+        format);
   }
 
-  private <T> T execute(
-      boolean groupWide,
+  public byte[] exportGroupWide(
+      StoreScope scope,
       String from,
       String to,
       String groupBy,
+      String format,
       boolean includeRemuneration,
-      boolean includeAdvertising,
+      boolean includeAdvertising)
+      throws IOException {
+    return export(
+        criteria -> snapshot.groupWide(scope, criteria, includeRemuneration, includeAdvertising),
+        from,
+        to,
+        groupBy,
+        format);
+  }
+
+  private OperationalReportResponse view(
+      Function<ReportCriteria, OperationalReport> read,
+      String from,
+      String to,
+      String groupBy,
+      int page,
+      int size) {
+    if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
+      throw new ServiceException("ページ番号と件数（1〜100）の指定が不正です");
+    try {
+      return execute(
+          read,
+          from,
+          to,
+          groupBy,
+          (report, budget) -> OperationalReportResponse.from(report, page, size));
+    } catch (IOException ex) {
+      throw new IllegalStateException(ex);
+    }
+  }
+
+  private byte[] export(
+      Function<ReportCriteria, OperationalReport> read,
+      String from,
+      String to,
+      String groupBy,
+      String format)
+      throws IOException {
+    if (!"csv".equals(format) && !"xlsx".equals(format))
+      throw new ServiceException("出力形式は csv / xlsx で指定してください");
+    return execute(
+        read, from, to, groupBy, (report, budget) -> renderer.render(report, format, budget));
+  }
+
+  private <T> T execute(
+      Function<ReportCriteria, OperationalReport> read,
+      String from,
+      String to,
+      String groupBy,
       Render<T> render)
       throws IOException {
     var criteria = ReportCriteria.parse(from, to, groupBy);
     if (!slot.tryAcquire()) throw new ServiceUnavailableException("集計を生成中です。しばらくしてから再試行してください");
     try {
       var budget = new ReportBudget(properties.getOperationalReport());
-      var report =
-          groupWide
-              ? snapshot.groupWide(criteria, includeRemuneration, includeAdvertising)
-              : snapshot.store(criteria, includeRemuneration, includeAdvertising);
+      var report = read.apply(criteria);
       var facts = report.facts();
       if (facts.orders().size() > properties.getOperationalReport().getMaxOrders()
           || facts.orders().size() > 100_000

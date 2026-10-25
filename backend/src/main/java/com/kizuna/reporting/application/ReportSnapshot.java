@@ -9,11 +9,11 @@ import com.kizuna.reporting.domain.AdvertisingAmounts;
 import com.kizuna.reporting.domain.OperationalReport;
 import com.kizuna.reporting.domain.ReportCriteria;
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -26,8 +26,6 @@ public class ReportSnapshot {
   private final RemunerationReportReader remuneration;
   private final AdvertisingReportReader advertising;
   private final AppProperties properties;
-  private final StoreContext storeContext;
-  private final StoreScopeHolder storeScopeHolder;
 
   @StoreScoped
   @Transactional(
@@ -35,19 +33,27 @@ public class ReportSnapshot {
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
   public OperationalReport store(
-      ReportCriteria criteria, boolean includeRemuneration, boolean includeAdvertising) {
-    var facts = orders.store(storeContext.getStoreId(), criteria.from(), criteria.to());
+      Long storeId,
+      ReportCriteria criteria,
+      boolean includeRemuneration,
+      boolean includeAdvertising) {
+    var facts = orders.store(storeId, criteria.from(), criteria.to());
     return OperationalReport.aggregate(
         criteria,
         facts,
         includeRemuneration
             ? remuneration.read(
+                new StoreScope(false, Set.of(storeId)),
                 facts,
                 criteria.from(),
                 criteria.to(),
                 properties.getOperationalReport().getMaxOrders())
             : null,
-        advertising(false, facts, criteria, includeAdvertising));
+        advertising(
+            facts,
+            criteria,
+            includeAdvertising,
+            (stores, from, to, limit) -> advertising.store(storeId, stores, from, to, limit)));
   }
 
   @StoreSetScoped
@@ -56,31 +62,42 @@ public class ReportSnapshot {
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
   public OperationalReport groupWide(
-      ReportCriteria criteria, boolean includeRemuneration, boolean includeAdvertising) {
-    var facts = orders.groupWide(storeScopeHolder.current(), criteria.from(), criteria.to());
+      StoreScope scope,
+      ReportCriteria criteria,
+      boolean includeRemuneration,
+      boolean includeAdvertising) {
+    var facts = orders.groupWide(scope, criteria.from(), criteria.to());
     return OperationalReport.aggregate(
         criteria,
         facts,
         includeRemuneration
             ? remuneration.read(
+                scope,
                 facts,
                 criteria.from(),
                 criteria.to(),
                 properties.getOperationalReport().getMaxOrders())
             : null,
-        advertising(true, facts, criteria, includeAdvertising));
+        advertising(
+            facts,
+            criteria,
+            includeAdvertising,
+            (stores, from, to, limit) -> advertising.groupWide(scope, stores, from, to, limit)));
   }
 
   private AdvertisingReportFacts advertising(
-      boolean groupWide, OperationalFacts facts, ReportCriteria criteria, boolean include) {
+      OperationalFacts facts, ReportCriteria criteria, boolean include, AdvertisingRead read) {
     if (!include) return null;
     if (AdvertisingAmounts.inapplicableStatus(criteria) != null)
       return new AdvertisingReportFacts(List.of());
-    return advertising.read(
-        groupWide,
+    return read.apply(
         facts.stores().stream().map(OperationalFacts.Store::storeId).toList(),
         criteria.from().toString().substring(0, 7),
         criteria.to().toString().substring(0, 7),
         properties.getOperationalReport().getMaxOrders());
+  }
+
+  private interface AdvertisingRead {
+    AdvertisingReportFacts apply(List<Long> stores, String from, String to, int limit);
   }
 }
