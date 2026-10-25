@@ -2,7 +2,7 @@
 
 ## Read by task
 
-Kizuna operates multiple stores within one group (CMS / CRM / HRM). Before reasoning about domain terms, read [CONTEXT.md](CONTEXT.md). Before revisiting an architectural decision, inspect the relevant implementation, tests, and git history.
+Kizuna operates multiple stores within one group (CMS / CRM / HRM). Before reasoning about domain terms, read [GLOSSARY.md](GLOSSARY.md). Before revisiting an architectural decision, inspect the relevant implementation, tests, and git history.
 
 - Backend work: [backend/AGENTS.md](backend/AGENTS.md); builds, tests, and Spotless require JDK 25.
 - Endpoint work: read [API contract](backend/AGENTS.md#api-contract) before adding or changing an endpoint. Cross-frontend/backend work requires approval of the API contract before implementation.
@@ -14,10 +14,24 @@ Kizuna operates multiple stores within one group (CMS / CRM / HRM). Before reaso
 
 `AGENTS.md` is the instruction source in each directory; `CLAUDE.md` is its single-line loader.
 
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues via `gh`, scheduled on Project #5. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels, applied alongside `spec` / `implementation`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
 ## Language Policy
 
 - **AI-instruction docs** (this file, per-directory `AGENTS.md`, and `CLAUDE.md` loaders): **English**.
-- **Human-facing docs** (`README.md`, `CONTEXT.md`, `CONTRIBUTING.md`, `frontend/DESIGN.md`, `e2e/README.md`), **code comments**, **GitHub issues/PRs**, and **commit messages**: **Japanese**.
+- **Human-facing docs** (`README.md`, `GLOSSARY.md`, `CONTRIBUTING.md`, `frontend/DESIGN.md`, `e2e/README.md`), **code comments**, **GitHub issues/PRs**, and **commit messages**: **Japanese**.
 - Code identifiers, module names, and shell commands stay verbatim regardless of the surrounding language.
 
 ## Comment Policy

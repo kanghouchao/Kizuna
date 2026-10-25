@@ -72,9 +72,9 @@ task up
 | 目的 | 文書 |
 | --- | --- |
 | 開発・検証・PR | [貢献ガイド](CONTRIBUTING.md) |
-| ドメインの用語と境界 | [CONTEXT.md](CONTEXT.md) |
+| ドメインの用語と境界 | [GLOSSARY.md](GLOSSARY.md) |
 | UI の設計 | [デザインシステム](frontend/DESIGN.md) |
-| 設計の履歴 | Git 履歴と[過去の ADR・資料索引](https://github.com/kanghouchao/Kizuna/blob/d9a81d6c79026899aea2fe421b2bcff0b4dc0fc3/docs/README.md) |
+| 設計の履歴 | Git 履歴と [ADR](docs/adr/) |
 | AI の作業規則 | [AGENTS.md](AGENTS.md) |
 | 脆弱性の報告 | [セキュリティ方針](SECURITY.md) |
 
