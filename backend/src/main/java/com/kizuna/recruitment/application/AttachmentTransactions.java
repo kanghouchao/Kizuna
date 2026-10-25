@@ -16,7 +16,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -41,7 +40,6 @@ public class AttachmentTransactions {
   private final ApplicantRepository applicants;
   private final AttachmentUploadRepository uploads;
   private final StoreRepository stores;
-  private final StoreContext storeContext;
   private final UserRepository users;
   private final BusinessAudit audit;
   private final AppProperties properties;
@@ -50,21 +48,21 @@ public class AttachmentTransactions {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public AttachmentUpload operation(String applicantId, UUID key) {
-    requireApplicant(applicantId);
+  public AttachmentUpload operation(Long storeId, String applicantId, UUID key) {
+    requireApplicant(storeId, applicantId);
     return uploads
-        .findByApplicantIdAndIdempotencyKey(applicantId, key)
+        .findByStoreIdAndApplicantIdAndIdempotencyKey(storeId, applicantId, key)
         .orElseThrow(AttachmentTransactions::missing);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public void preflight(String applicantId, String uploadId, UUID key) {
-    Applicant applicant = requireApplicant(applicantId);
+  public void preflight(Long storeId, String applicantId, String uploadId, UUID key) {
+    Applicant applicant = requireApplicant(storeId, applicantId);
     Optional<AttachmentUpload> existing =
         uploadId == null
-            ? uploads.findByApplicantIdAndIdempotencyKey(applicantId, key)
-            : Optional.of(requireUpload(applicantId, uploadId));
+            ? uploads.findByStoreIdAndApplicantIdAndIdempotencyKey(storeId, applicantId, key)
+            : Optional.of(requireUpload(storeId, applicantId, uploadId));
     existing.ifPresent(
         upload -> upload.requireReplay(key, upload.getOriginalSha256(), upload.getMediaType()));
     if (existing.isEmpty() || existing.get().getStatus() != AttachmentUpload.Status.READY) {
@@ -75,12 +73,17 @@ public class AttachmentTransactions {
   @StoreScoped
   @Transactional(readOnly = true)
   public Optional<AttachmentUpload> lookup(
-      String applicantId, String uploadId, UUID key, String originalHash, String mediaType) {
-    requireApplicant(applicantId);
+      Long storeId,
+      String applicantId,
+      String uploadId,
+      UUID key,
+      String originalHash,
+      String mediaType) {
+    requireApplicant(storeId, applicantId);
     Optional<AttachmentUpload> existing =
         uploadId == null
-            ? uploads.findByApplicantIdAndIdempotencyKey(applicantId, key)
-            : Optional.of(requireUpload(applicantId, uploadId));
+            ? uploads.findByStoreIdAndApplicantIdAndIdempotencyKey(storeId, applicantId, key)
+            : Optional.of(requireUpload(storeId, applicantId, uploadId));
     existing.ifPresent(upload -> upload.requireReplay(key, originalHash, mediaType));
     return existing;
   }
@@ -88,25 +91,28 @@ public class AttachmentTransactions {
   @StoreScoped
   @Transactional
   public AttachmentUpload reserve(
-      String applicantId, UUID key, NormalizedImage content, String actorEmail) {
-    lockStore();
+      Long storeId, String applicantId, UUID key, NormalizedImage content, String actorEmail) {
+    lockStore(storeId);
     Applicant applicant =
-        applicants.findScopedForUpdate(applicantId).orElseThrow(AttachmentTransactions::missing);
+        applicants
+            .findByIdAndStoreIdForUpdate(applicantId, storeId)
+            .orElseThrow(AttachmentTransactions::missing);
     Optional<AttachmentUpload> existing =
-        uploads.findByApplicantIdAndIdempotencyKey(applicantId, key);
+        uploads.findByStoreIdAndApplicantIdAndIdempotencyKey(storeId, applicantId, key);
     if (existing.isPresent()) {
       existing.get().requireReplay(key, content.originalSha256(), content.mediaType());
       return existing.get();
     }
     requireEditable(applicant);
     var limits = properties.getPrivateAttachments();
-    if (uploads.countReserved(applicantId) >= limits.getMaxApplicantFiles()
-        || uploads.reservedBytes(applicantId)
+    if (uploads.countReserved(storeId, applicantId) >= limits.getMaxApplicantFiles()
+        || uploads.reservedBytes(storeId, applicantId)
             > limits.getMaxApplicantBytes() - content.sizeBytes()) {
       throw new ConflictException("添付の件数または容量が上限に達しています。未完了のアップロードを確認してください");
     }
     AttachmentUpload upload =
         AttachmentUpload.reserve(
+            storeId,
             applicantId,
             key,
             content.originalSha256(),
@@ -121,6 +127,7 @@ public class AttachmentTransactions {
   @StoreScoped
   @Transactional
   public Completion complete(
+      Long storeId,
       String applicantId,
       String uploadId,
       UUID key,
@@ -128,14 +135,16 @@ public class AttachmentTransactions {
       String mediaType,
       NormalizedImage content,
       String actorEmail) {
-    lockStore();
+    lockStore(storeId);
     AttachmentUpload upload =
-        uploads.lockScoped(applicantId, uploadId).orElseThrow(AttachmentTransactions::missing);
+        uploads
+            .findByIdAndStoreIdAndApplicantIdForUpdate(uploadId, storeId, applicantId)
+            .orElseThrow(AttachmentTransactions::missing);
     upload.requireReplay(key, originalHash, mediaType);
     if (upload.getStatus() == AttachmentUpload.Status.READY)
       return new Completion(false, AttachmentSummaryResponse.from(upload));
     if (applicants
-        .findScopedStatus(applicantId)
+        .findStatusByIdAndStoreId(applicantId, storeId)
         .orElseThrow(AttachmentTransactions::missing)
         .isTerminal()) throw new ServiceException("選考が終了した応募者には画像を追加できません");
     AttachmentObject object = object(upload);
@@ -156,7 +165,9 @@ public class AttachmentTransactions {
       storage.ensureStored(object, content.path());
     }
     Applicant applicant =
-        applicants.findScopedForUpdate(applicantId).orElseThrow(AttachmentTransactions::missing);
+        applicants
+            .findByIdAndStoreIdForUpdate(applicantId, storeId)
+            .orElseThrow(AttachmentTransactions::missing);
     requireEditable(applicant);
     upload.complete(actorId(actorEmail), OffsetDateTime.now(clock));
     uploads.flush();
@@ -172,15 +183,18 @@ public class AttachmentTransactions {
 
   @StoreScoped
   @Transactional
-  public void recordFailure(String applicantId, String uploadId, AttachmentUpload.Failure failure) {
-    uploads.lockScoped(applicantId, uploadId).ifPresent(upload -> upload.recordFailure(failure));
+  public void recordFailure(
+      Long storeId, String applicantId, String uploadId, AttachmentUpload.Failure failure) {
+    uploads
+        .findByIdAndStoreIdAndApplicantIdForUpdate(uploadId, storeId, applicantId)
+        .ifPresent(upload -> upload.recordFailure(failure));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<AttachmentUpload> list(
-      String applicantId, boolean completed, String cursor, int size) {
-    requireApplicant(applicantId);
+      Long storeId, String applicantId, boolean completed, String cursor, int size) {
+    requireApplicant(storeId, applicantId);
     if (size < 1 || size > 100 || cursor != null && cursor.length() > 512)
       throw new ServiceException("取得件数または続きの位置が不正です");
     PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
@@ -188,6 +202,7 @@ public class AttachmentTransactions {
         (root, query, cb) -> {
           var condition =
               cb.and(
+                  cb.equal(root.get("storeId"), storeId),
                   cb.equal(root.get("applicantId"), applicantId),
                   completed
                       ? cb.equal(root.get("status"), AttachmentUpload.Status.READY)
@@ -223,28 +238,25 @@ public class AttachmentTransactions {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public AttachmentObject download(String applicantId, String uploadId) {
-    requireApplicant(applicantId);
-    AttachmentUpload upload = requireUpload(applicantId, uploadId);
+  public AttachmentObject download(Long storeId, String applicantId, String uploadId) {
+    requireApplicant(storeId, applicantId);
+    AttachmentUpload upload = requireUpload(storeId, applicantId, uploadId);
     if (upload.getStatus() != AttachmentUpload.Status.READY) throw missing();
     return object(upload);
   }
 
-  private Applicant requireApplicant(String id) {
-    return applicants.findById(id).orElseThrow(AttachmentTransactions::missing);
+  private Applicant requireApplicant(Long storeId, String id) {
+    return applicants.findByIdAndStoreId(id, storeId).orElseThrow(AttachmentTransactions::missing);
   }
 
-  private AttachmentUpload requireUpload(String applicantId, String id) {
+  private AttachmentUpload requireUpload(Long storeId, String applicantId, String id) {
     return uploads
-        .findById(id)
-        .filter(upload -> upload.getApplicantId().equals(applicantId))
+        .findByIdAndStoreIdAndApplicantId(id, storeId, applicantId)
         .orElseThrow(AttachmentTransactions::missing);
   }
 
-  private void lockStore() {
-    stores
-        .lockAgainstDeletion(storeContext.getStoreId())
-        .orElseThrow(AttachmentTransactions::missing);
+  private void lockStore(Long storeId) {
+    stores.lockAgainstDeletion(storeId).orElseThrow(AttachmentTransactions::missing);
   }
 
   private Long actorId(String email) {

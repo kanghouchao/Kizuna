@@ -3,6 +3,8 @@ package com.kizuna.recruitment.api.store;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -12,6 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
 import com.kizuna.recruitment.application.ApplicantService;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
@@ -93,7 +96,7 @@ class ApplicantControllerTest {
             "担当",
             OffsetDateTime.now(),
             0L);
-    when(service.list(any(), any(), any())).thenReturn(new PageImpl<>(List.of(summary)));
+    when(service.list(eq(1L), any(), any(), any())).thenReturn(new PageImpl<>(List.of(summary)));
     mvc.perform(
             get("/store/applicants")
                 .header("X-Store-ID", "1")
@@ -116,6 +119,33 @@ class ApplicantControllerTest {
             "assignee",
             "createdAt",
             "version");
+  }
+
+  @Test
+  void readPassesTheNamedStoreToTheService() throws Exception {
+    mvc.perform(
+            get("/store/applicants/a")
+                .header("X-Store-ID", "7")
+                .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
+        .andExpect(status().isOk());
+    verify(service).get(7L, "a");
+  }
+
+  @Test
+  void writePassesTheNamedStoreToTheService() throws Exception {
+    mvc.perform(
+            post("/store/applicants")
+                .with(csrf())
+                .header("X-Store-ID", "7")
+                .contentType("application/json")
+                .content("{\"name\":\"応募者\",\"channel\":\"WEB\",\"source_type\":\"DIRECT\"}")
+                .with(
+                    actor()
+                        .authorities(
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_MANAGE"))))
+        .andExpect(status().isCreated());
+    verify(service).create(eq(7L), any(ApplicantIntakeRequest.class), eq("actor"));
   }
 
   @Test

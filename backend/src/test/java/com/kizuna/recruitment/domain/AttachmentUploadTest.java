@@ -14,7 +14,16 @@ class AttachmentUploadTest {
     UUID key = UUID.randomUUID();
     AttachmentUpload upload =
         AttachmentUpload.reserve(
-            "applicant", key, "a".repeat(64), "image/png", "b".repeat(64), 100L, "raster-v1", 1L);
+            7L,
+            "applicant",
+            key,
+            "a".repeat(64),
+            "image/png",
+            "b".repeat(64),
+            100L,
+            "raster-v1",
+            1L);
+    assertThat(upload.getStoreId()).isEqualTo(7L);
     upload.requireReplay(key, "a".repeat(64), "image/png");
     OffsetDateTime completed = OffsetDateTime.parse("2026-10-07T12:00:00Z");
     assertThat(upload.complete(2L, completed)).isTrue();
@@ -31,7 +40,15 @@ class AttachmentUploadTest {
     UUID key = UUID.randomUUID();
     AttachmentUpload upload =
         AttachmentUpload.reserve(
-            "applicant", key, "a".repeat(64), "image/png", "b".repeat(64), 100L, "raster-v1", 1L);
+            7L,
+            "applicant",
+            key,
+            "a".repeat(64),
+            "image/png",
+            "b".repeat(64),
+            100L,
+            "raster-v1",
+            1L);
     assertThatThrownBy(() -> upload.requireReplay(key, "c".repeat(64), "image/png"))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(() -> upload.requireReplay(UUID.randomUUID(), "a".repeat(64), "image/png"))

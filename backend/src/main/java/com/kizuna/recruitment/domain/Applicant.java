@@ -76,8 +76,9 @@ public class Applicant extends StoreScopedEntity {
     editSequence++;
   }
 
-  public static Applicant receive(ApplicantIntake intake) {
+  public static Applicant receive(Long storeId, ApplicantIntake intake) {
     Applicant applicant = new Applicant();
+    applicant.setStoreId(storeId);
     applicant.replaceIntake(intake);
     return applicant;
   }

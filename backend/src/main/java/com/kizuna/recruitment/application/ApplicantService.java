@@ -49,10 +49,11 @@ public class ApplicantService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<ApplicantSummaryResponse> list(
-      String search, ApplicantStatus status, Pageable pageable) {
+      Long storeId, String search, ApplicantStatus status, Pageable pageable) {
     Specification<Applicant> spec =
         (root, query, cb) -> {
           var conditions = new ArrayList<Predicate>();
+          conditions.add(cb.equal(root.get("storeId"), storeId));
           if (search != null && !search.isBlank()) {
             String term = search.strip();
             if (term.length() > 100 || term.indexOf('\0') >= 0)
@@ -79,15 +80,15 @@ public class ApplicantService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public ApplicantResponse get(String id) {
-    return mapper.toResponse(require(id));
+  public ApplicantResponse get(Long storeId, String id) {
+    return mapper.toResponse(require(storeId, id));
   }
 
   @StoreScoped
   @Transactional
-  public ApplicantResponse create(ApplicantIntakeRequest request, String actorEmail) {
+  public ApplicantResponse create(Long storeId, ApplicantIntakeRequest request, String actorEmail) {
     Long actorId = actorId(actorEmail);
-    Applicant applicant = Applicant.receive(request.toIntake());
+    Applicant applicant = Applicant.receive(storeId, request.toIntake());
     applicant.recordEditor(actorId);
     applicants.saveAndFlush(applicant);
     record(applicant, null, actorId, "応募受付");
@@ -97,8 +98,9 @@ public class ApplicantService {
 
   @StoreScoped
   @Transactional
-  public ApplicantResponse update(String id, ApplicantUpdateRequest request, String actorEmail) {
-    Applicant applicant = locked(id, request.version());
+  public ApplicantResponse update(
+      Long storeId, String id, ApplicantUpdateRequest request, String actorEmail) {
+    Applicant applicant = locked(storeId, id, request.version());
     var before = auditValues(applicant);
     applicant.replaceIntake(request.intake().toIntake());
     applicant.recordEditor(actorId(actorEmail));
@@ -110,8 +112,8 @@ public class ApplicantService {
   @StoreScoped
   @Transactional
   public ApplicantResponse interview(
-      String id, ApplicantInterviewRequest request, String actorEmail) {
-    Applicant applicant = locked(id, request.version());
+      Long storeId, String id, ApplicantInterviewRequest request, String actorEmail) {
+    Applicant applicant = locked(storeId, id, request.version());
     var before = auditValues(applicant);
     applicant.recordInterview(request.toInterview());
     applicant.recordEditor(actorId(actorEmail));
@@ -123,8 +125,8 @@ public class ApplicantService {
   @StoreScoped
   @Transactional
   public ApplicantResponse transition(
-      String id, ApplicantTransitionRequest request, String actorEmail) {
-    Applicant applicant = locked(id, request.version());
+      Long storeId, String id, ApplicantTransitionRequest request, String actorEmail) {
+    Applicant applicant = locked(storeId, id, request.version());
     var before = auditValues(applicant);
     ApplicantStatus previous = applicant.getStatus();
     applicant.transition(request.status(), request.reason());
@@ -138,8 +140,8 @@ public class ApplicantService {
 
   @StoreScoped
   @Transactional
-  public ApplicantResponse decide(String id, ApplicantTransitionRequest request) {
-    locked(id, request.version());
+  public ApplicantResponse decide(Long storeId, String id, ApplicantTransitionRequest request) {
+    locked(storeId, id, request.version());
     if (request.status() != ApplicantStatus.HIRED && request.status() != ApplicantStatus.REJECTED)
       throw new ServiceException("採否の確定には採用または不採用を指定してください");
     throw new ConflictException("選考の最終責任者が未設定のため、採否を確定できません");
@@ -147,15 +149,16 @@ public class ApplicantService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public CursorPage<ApplicantHistoryResponse> history(String id, String cursor, int requestedSize) {
-    require(id);
+  public CursorPage<ApplicantHistoryResponse> history(
+      Long storeId, String id, String cursor, int requestedSize) {
+    require(storeId, id);
     int size = Math.min(100, CursorPage.clampSize(requestedSize));
     Limit limit = Limit.of(size + 1);
     PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
     var rows =
         after == null
-            ? histories.findByApplicantIdOrderByCreatedAtDescIdDesc(id, limit)
-            : histories.findAfter(id, after.timestampKey(), after.id(), limit);
+            ? histories.findByStoreIdAndApplicantIdOrderByCreatedAtDescIdDesc(storeId, id, limit)
+            : histories.findAfter(storeId, id, after.timestampKey(), after.id(), limit);
     return CursorPage.of(
             rows, size, row -> new PageCursor(row.getCreatedAt().toString(), row.getId()).encode())
         .map(mapper::toHistory);
@@ -177,13 +180,17 @@ public class ApplicantService {
         "status", applicant.getStatus().name(), "version", String.valueOf(applicant.getVersion()));
   }
 
-  private Applicant require(String id) {
-    return applicants.findById(id).orElseThrow(() -> new NotFoundException("応募者が見つかりません"));
+  private Applicant require(Long storeId, String id) {
+    return applicants
+        .findByIdAndStoreId(id, storeId)
+        .orElseThrow(() -> new NotFoundException("応募者が見つかりません"));
   }
 
-  private Applicant locked(String id, Long version) {
+  private Applicant locked(Long storeId, String id, Long version) {
     Applicant applicant =
-        applicants.findScopedForUpdate(id).orElseThrow(() -> new NotFoundException("応募者が見つかりません"));
+        applicants
+            .findByIdAndStoreIdForUpdate(id, storeId)
+            .orElseThrow(() -> new NotFoundException("応募者が見つかりません"));
     applicant.requireVersion(version);
     return applicant;
   }
@@ -196,13 +203,15 @@ public class ApplicantService {
   }
 
   private void record(Applicant applicant, ApplicantStatus previous, Long actorId, String reason) {
-    histories.save(
+    var history =
         ApplicantStatusHistory.builder()
             .applicantId(applicant.getId())
             .actorId(actorId)
             .previousStatus(previous)
             .newStatus(applicant.getStatus())
             .reason(reason)
-            .build());
+            .build();
+    history.setStoreId(applicant.getStoreId());
+    histories.save(history);
   }
 }

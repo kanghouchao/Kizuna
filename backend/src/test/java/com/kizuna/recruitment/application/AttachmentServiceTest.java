@@ -3,6 +3,7 @@ package com.kizuna.recruitment.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class AttachmentServiceTest {
+  private static final Long STORE_ID = 7L;
   private final AttachmentTransactions transactions = mock(AttachmentTransactions.class);
   private final PrivateAttachmentStorage storage = mock(PrivateAttachmentStorage.class);
   private final RasterImageNormalizer normalizer = mock(RasterImageNormalizer.class);
@@ -37,12 +39,20 @@ class AttachmentServiceTest {
   void operationUsesCanonicalKeyWithoutUploadPreflightOrStorageAccess() {
     var row =
         AttachmentUpload.reserve(
-            "applicant", key, "a".repeat(64), "image/png", "b".repeat(64), 3, "version", 1L);
-    when(transactions.operation("applicant", key)).thenReturn(row);
-    assertThat(service.operation("applicant", key.toString().toUpperCase()).status())
+            STORE_ID,
+            "applicant",
+            key,
+            "a".repeat(64),
+            "image/png",
+            "b".repeat(64),
+            3,
+            "version",
+            1L);
+    when(transactions.operation(STORE_ID, "applicant", key)).thenReturn(row);
+    assertThat(service.operation(STORE_ID, "applicant", key.toString().toUpperCase()).status())
         .isEqualTo(AttachmentUpload.Status.PENDING);
     verify(storage).requireConfigured();
-    verify(transactions).operation("applicant", key);
+    verify(transactions).operation(STORE_ID, "applicant", key);
     verifyNoMoreInteractions(storage, transactions);
     verifyNoInteractions(normalizer);
   }
@@ -50,7 +60,7 @@ class AttachmentServiceTest {
   @Test
   void operationRejectsNonCanonicalKeysWithoutEchoingThem() {
     for (String raw : new String[] {null, "", "1-1-1-1-1", " " + key, key + " ", "invalid"}) {
-      assertThatThrownBy(() -> service.operation("applicant", raw))
+      assertThatThrownBy(() -> service.operation(STORE_ID, "applicant", raw))
           .isInstanceOf(ServiceException.class)
           .hasMessage("アップロードの操作キーが不正です");
     }
@@ -60,15 +70,24 @@ class AttachmentServiceTest {
   private AttachmentUpload pending(String version) {
     var upload =
         AttachmentUpload.reserve(
-            "applicant", key, "a".repeat(64), "image/png", "b".repeat(64), 3, version, 1L);
+            STORE_ID,
+            "applicant",
+            key,
+            "a".repeat(64),
+            "image/png",
+            "b".repeat(64),
+            3,
+            version,
+            1L);
     upload.setId("upload");
-    when(transactions.lookup("applicant", "upload", key, "a".repeat(64), "image/png"))
+    when(transactions.lookup(STORE_ID, "applicant", "upload", key, "a".repeat(64), "image/png"))
         .thenReturn(Optional.of(upload));
     return upload;
   }
 
   private void recover() {
-    service.upload("applicant", "upload", key, source, "a".repeat(64), "image/png", "actor");
+    service.upload(
+        STORE_ID, "applicant", "upload", key, source, "a".repeat(64), "image/png", "actor");
   }
 
   @Test
@@ -76,7 +95,8 @@ class AttachmentServiceTest {
     pending("historical-version");
     assertThatThrownBy(this::recover).isInstanceOf(ConflictException.class);
     verify(transactions)
-        .recordFailure("applicant", "upload", AttachmentUpload.Failure.NORMALIZER_UNAVAILABLE);
+        .recordFailure(
+            STORE_ID, "applicant", "upload", AttachmentUpload.Failure.NORMALIZER_UNAVAILABLE);
     verifyNoInteractions(normalizer);
   }
 
@@ -92,17 +112,19 @@ class AttachmentServiceTest {
       assertThatThrownBy(this::recover).isSameAs(failure);
     }
     verify(transactions, times(2))
-        .recordFailure("applicant", "upload", AttachmentUpload.Failure.NORMALIZER_UNAVAILABLE);
+        .recordFailure(
+            STORE_ID, "applicant", "upload", AttachmentUpload.Failure.NORMALIZER_UNAVAILABLE);
   }
 
   @Test
   void storageFailureRemainsStorageFailure() {
     pending(RasterImageNormalizer.VERSION);
-    when(transactions.complete(any(), any(), any(), any(), any(), any(), any()))
+    when(transactions.complete(eq(STORE_ID), any(), any(), any(), any(), any(), any(), any()))
         .thenThrow(new ServiceUnavailableException("保存先を利用できません"));
     assertThatThrownBy(this::recover).isInstanceOf(ServiceUnavailableException.class);
     verify(transactions)
-        .recordFailure("applicant", "upload", AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
+        .recordFailure(
+            STORE_ID, "applicant", "upload", AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
     verifyNoInteractions(normalizer);
   }
 }

@@ -1,9 +1,14 @@
 package com.kizuna.recruitment.api.store;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,11 +16,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.recruitment.api.dto.AttachmentPolicyResponse;
+import com.kizuna.recruitment.api.dto.AttachmentSummaryResponse;
 import com.kizuna.recruitment.api.dto.AttachmentUploadResponse;
 import com.kizuna.recruitment.application.AttachmentService;
+import com.kizuna.recruitment.application.AttachmentTransactions;
 import com.kizuna.recruitment.domain.AttachmentUpload;
 import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.settings.application.SystemConfigService;
@@ -27,9 +35,11 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeExecutor;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,7 +67,7 @@ class AttachmentControllerTest {
   void exactOperationIncludesAllStatesOnlyBehindWritePermission() throws Exception {
     UUID key = UUID.randomUUID();
     for (var state : AttachmentUpload.Status.values()) {
-      when(service.operation("a", key.toString()))
+      when(service.operation(1L, "a", key.toString()))
           .thenReturn(
               new AttachmentUploadResponse(
                   "u", key, state, "image/png", 3, OffsetDateTime.now(), null));
@@ -85,7 +95,7 @@ class AttachmentControllerTest {
   @Test
   void terminalPreflightFailureDoesNotAcquireOrReadBody() throws Exception {
     String key = "b61c89c9-9272-4ff5-a30a-e8f27f11c27c";
-    when(service.preflight("a", null, key))
+    when(service.preflight(1L, "a", null, key))
         .thenThrow(new ServiceException("選考が終了した応募者には画像を追加できません"));
     mvc.perform(
             post("/store/applicants/a/attachments")
@@ -101,6 +111,41 @@ class AttachmentControllerTest {
                         new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(receiver);
+  }
+
+  @Test
+  void asyncUploadCarriesTheNamedStoreIntoTheWorkerAndService() throws Exception {
+    UUID key = UUID.randomUUID();
+    Path received = Path.of("synthetic");
+    var admission = mock(AttachmentBodyReceiver.Admission.class);
+    when(service.preflight(7L, "a", null, key.toString())).thenReturn(key);
+    when(receiver.admit(any())).thenReturn(admission);
+    when(admission.receive(any()))
+        .thenReturn(new AttachmentBodyReceiver.Received(received, "hash", "image/png"));
+    when(scope.runInStore(eq(7L), any()))
+        .thenAnswer(call -> call.<Supplier<?>>getArgument(1).get());
+    when(service.upload(7L, "a", null, key, received, "hash", "image/png", "actor"))
+        .thenReturn(
+            new AttachmentTransactions.Completion(
+                true,
+                new AttachmentSummaryResponse("image", "image/png", 3, OffsetDateTime.now())));
+    var started =
+        mvc.perform(
+                post("/store/applicants/a/attachments")
+                    .with(csrf())
+                    .header("X-Store-ID", "7")
+                    .header("Idempotency-Key", key.toString())
+                    .contentType("image/png")
+                    .content(new byte[] {1})
+                    .with(
+                        actor(
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"),
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
+            .andExpect(request().asyncStarted())
+            .andReturn();
+    mvc.perform(asyncDispatch(started)).andExpect(status().isCreated());
+    verify(service).upload(7L, "a", null, key, received, "hash", "image/png", "actor");
   }
 
   @Test
@@ -223,7 +268,7 @@ class AttachmentControllerTest {
         .andExpect(jsonPath("$.configured").value(false))
         .andExpect(jsonPath("$.bucket").doesNotExist())
         .andExpect(jsonPath("$.endpoint").doesNotExist());
-    when(service.download("a", "x", true))
+    when(service.download(1L, "a", "x", true))
         .thenReturn(new AttachmentService.Download("image/png", 123, null));
     mvc.perform(
             head("/store/applicants/a/attachments/x/content").header("X-Store-ID", "1").with(read))

@@ -1,18 +1,18 @@
 package com.kizuna.recruitment.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 public interface ApplicantRepository
-    extends JpaRepository<Applicant, String>, JpaSpecificationExecutor<Applicant> {
-  @Query("select a.status from Applicant a where a.id = :id")
-  Optional<ApplicantStatus> findScopedStatus(String id);
+    extends StoreScopedRepository<Applicant>, JpaSpecificationExecutor<Applicant> {
+  @Query("select a.status from Applicant a where a.id = :id and a.storeId = :storeId")
+  Optional<ApplicantStatus> findStatusByIdAndStoreId(String id, Long storeId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select a from Applicant a where a.id = :id")
-  Optional<Applicant> findScopedForUpdate(String id);
+  @Query("select a from Applicant a where a.id = :id and a.storeId = :storeId")
+  Optional<Applicant> findByIdAndStoreIdForUpdate(String id, Long storeId);
 }

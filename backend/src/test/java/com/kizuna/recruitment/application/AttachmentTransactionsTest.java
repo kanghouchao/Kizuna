@@ -23,35 +23,40 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class AttachmentTransactionsTest {
+  private static final Long STORE_ID = 7L;
+
   @Test
   void operationReadsEveryStateOnTerminalApplicantsWithoutMutation() {
     var applicants = mock(ApplicantRepository.class);
     var uploads = mock(AttachmentUploadRepository.class);
     var service =
-        new AttachmentTransactions(applicants, uploads, null, null, null, null, null, null, null);
+        new AttachmentTransactions(applicants, uploads, null, null, null, null, null, null);
     var applicant = mock(Applicant.class);
-    when(applicants.findById("a")).thenReturn(Optional.of(applicant));
+    when(applicants.findByIdAndStoreId("a", STORE_ID)).thenReturn(Optional.of(applicant));
     UUID key = UUID.randomUUID();
     var row =
         AttachmentUpload.reserve(
-            "a", key, "a".repeat(64), "image/png", "b".repeat(64), 3, "version", 1L);
-    when(uploads.findByApplicantIdAndIdempotencyKey("a", key)).thenReturn(Optional.of(row));
+            STORE_ID, "a", key, "a".repeat(64), "image/png", "b".repeat(64), 3, "version", 1L);
+    when(uploads.findByStoreIdAndApplicantIdAndIdempotencyKey(STORE_ID, "a", key))
+        .thenReturn(Optional.of(row));
     for (var state : AttachmentUpload.Status.values()) {
       if (state == AttachmentUpload.Status.RECOVERY_REQUIRED)
         row.recordFailure(AttachmentUpload.Failure.CONTENT_MISMATCH);
       if (state == AttachmentUpload.Status.READY) row.complete(1L, OffsetDateTime.now());
       clearInvocations(applicants);
       clearInvocations(uploads);
-      assertThat(service.operation("a", key)).isSameAs(row);
+      assertThat(service.operation(STORE_ID, "a", key)).isSameAs(row);
       assertThat(row.getStatus()).isEqualTo(state);
-      verify(applicants).findById("a");
-      verify(uploads).findByApplicantIdAndIdempotencyKey("a", key);
+      verify(applicants).findByIdAndStoreId("a", STORE_ID);
+      verify(uploads).findByStoreIdAndApplicantIdAndIdempotencyKey(STORE_ID, "a", key);
       verifyNoMoreInteractions(applicants, uploads);
       verify(applicant, never()).getStatus();
     }
-    assertThatThrownBy(() -> service.operation("hidden", key))
+    assertThatThrownBy(() -> service.operation(STORE_ID, "hidden", key))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.operation("a", UUID.randomUUID()))
+    assertThatThrownBy(() -> service.operation(STORE_ID, "a", UUID.randomUUID()))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.operation(STORE_ID + 1, "a", key))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -60,26 +65,38 @@ class AttachmentTransactionsTest {
     var applicants = mock(ApplicantRepository.class);
     var uploads = mock(AttachmentUploadRepository.class);
     var service =
-        new AttachmentTransactions(applicants, uploads, null, null, null, null, null, null, null);
+        new AttachmentTransactions(applicants, uploads, null, null, null, null, null, null);
     var applicant = mock(Applicant.class);
-    when(applicants.findById("applicant")).thenReturn(Optional.of(applicant));
+    when(applicants.findByIdAndStoreId("applicant", STORE_ID)).thenReturn(Optional.of(applicant));
     UUID key = UUID.randomUUID();
     var pending =
         AttachmentUpload.reserve(
-            "applicant", key, "a".repeat(64), "image/png", "b".repeat(64), 3, "version", 1L);
+            STORE_ID,
+            "applicant",
+            key,
+            "a".repeat(64),
+            "image/png",
+            "b".repeat(64),
+            3,
+            "version",
+            1L);
     when(applicant.getStatus()).thenReturn(ApplicantStatus.WITHDRAWN);
-    when(uploads.findByApplicantIdAndIdempotencyKey("applicant", key)).thenReturn(Optional.empty());
-    assertThatThrownBy(() -> service.preflight("applicant", null, key))
+    when(uploads.findByStoreIdAndApplicantIdAndIdempotencyKey(STORE_ID, "applicant", key))
+        .thenReturn(Optional.empty());
+    assertThatThrownBy(() -> service.preflight(STORE_ID, "applicant", null, key))
         .isInstanceOf(ServiceException.class);
-    when(uploads.findByApplicantIdAndIdempotencyKey("applicant", key))
+    when(uploads.findByStoreIdAndApplicantIdAndIdempotencyKey(STORE_ID, "applicant", key))
         .thenReturn(Optional.of(pending));
-    when(uploads.findById("upload")).thenReturn(Optional.of(pending));
-    assertThatThrownBy(() -> service.preflight("applicant", null, key))
+    when(uploads.findByIdAndStoreIdAndApplicantId("upload", STORE_ID, "applicant"))
+        .thenReturn(Optional.of(pending));
+    assertThatThrownBy(() -> service.preflight(STORE_ID, "applicant", null, key))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> service.preflight("applicant", "upload", key))
+    assertThatThrownBy(() -> service.preflight(STORE_ID, "applicant", "upload", key))
         .isInstanceOf(ServiceException.class);
     pending.complete(1L, OffsetDateTime.now());
-    assertThatCode(() -> service.preflight("applicant", null, key)).doesNotThrowAnyException();
-    assertThatCode(() -> service.preflight("applicant", "upload", key)).doesNotThrowAnyException();
+    assertThatCode(() -> service.preflight(STORE_ID, "applicant", null, key))
+        .doesNotThrowAnyException();
+    assertThatCode(() -> service.preflight(STORE_ID, "applicant", "upload", key))
+        .doesNotThrowAnyException();
   }
 }
