@@ -32,19 +32,19 @@ public class AdvertisingExportService {
 
   private final Semaphore slot = new Semaphore(1);
 
-  public byte[] export(String month, String format) {
-    return generate(month, format, Kind.COSTS);
+  public byte[] export(Long storeId, String month, String format) {
+    return generate(storeId, month, format, Kind.COSTS);
   }
 
-  public byte[] exportMedia(String month, String format) {
-    return generate(month, format, Kind.MEDIA);
+  public byte[] exportMedia(Long storeId, String month, String format) {
+    return generate(storeId, month, format, Kind.MEDIA);
   }
 
-  public byte[] exportOrderCost(String month, String format) {
-    return generate(month, format, Kind.ORDER_COSTS);
+  public byte[] exportOrderCost(Long storeId, String month, String format) {
+    return generate(storeId, month, format, Kind.ORDER_COSTS);
   }
 
-  private byte[] generate(String month, String format, Kind kind) {
+  private byte[] generate(Long storeId, String month, String format, Kind kind) {
     AdvertisingInput.month(month);
     if (!"csv".equals(format) && !"xlsx".equals(format))
       throw new ServiceException("出力形式はcsvまたはxlsxで指定してください");
@@ -55,10 +55,11 @@ public class AdvertisingExportService {
             var budget = new DocumentBudget(properties.getAdvertisingCost());
             try {
               if (kind == Kind.ORDER_COSTS)
-                return orderCostRenderer.render(orderCosts.snapshot(month, budget), format, budget);
+                return orderCostRenderer.render(
+                    orderCosts.snapshot(storeId, month, budget), format, budget);
               if (kind == Kind.MEDIA)
-                return mediaRenderer.render(media.snapshot(month, budget), format, budget);
-              var snapshot = service.snapshot(month);
+                return mediaRenderer.render(media.snapshot(storeId, month, budget), format, budget);
+              var snapshot = service.snapshot(storeId, month);
               budget.check();
               return renderer.render(snapshot, format, budget);
             } catch (IOException ex) {

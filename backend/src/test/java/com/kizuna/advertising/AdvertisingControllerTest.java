@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -11,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -109,7 +112,7 @@ class AdvertisingControllerTest {
   @Test
   void creationPreservesRequiredNullFields() throws Exception {
     var at = OffsetDateTime.now();
-    when(service.create(any(), anyString()))
+    when(service.create(any(), any(), anyString()))
         .thenReturn(
             new CostResponse(
                 "c",
@@ -137,6 +140,62 @@ class AdvertisingControllerTest {
             .andReturn();
     assertThat(result.getResponse().getContentAsString())
         .contains("\"inquiry_count\":null", "\"agency_name\":null", "\"plan_name\":null");
+  }
+
+  @Test
+  void readPassesTheNamedStoreToTheService() throws Exception {
+    var at = OffsetDateTime.now();
+    when(service.get(7L, "c"))
+        .thenReturn(
+            new CostResponse(
+                "c",
+                7L,
+                "2026-09",
+                AdvertisingCategory.SALES,
+                "媒体",
+                null,
+                null,
+                null,
+                0,
+                0,
+                at,
+                at));
+    mvc.perform(
+            get("/store/advertising-costs/c").header("X-Store-ID", "7").with(permissions("VIEW")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.store_id").value(7));
+    verify(service).get(7L, "c");
+  }
+
+  @Test
+  void writePassesTheNamedStoreToTheService() throws Exception {
+    mvc.perform(
+            post("/store/advertising-costs")
+                .header("X-Store-ID", "7")
+                .with(permissions("VIEW", "MANAGE"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body()))
+        .andExpect(status().isCreated());
+    verify(service).create(eq(7L), any(), eq("actor"));
+  }
+
+  @Test
+  void exportReadsAndNamesTheFileAfterTheNamedStore() throws Exception {
+    when(exports.export(7L, "2026-09", "csv")).thenReturn(new byte[] {1});
+    mvc.perform(
+            get("/store/advertising-costs/exports")
+                .param("month", "2026-09")
+                .param("format", "csv")
+                .header("X-Store-ID", "7")
+                .with(permissions("VIEW", "EXPORT")))
+        .andExpect(status().isOk())
+        .andExpect(
+            header()
+                .string(
+                    "Content-Disposition",
+                    "attachment; filename=\"advertising-costs-7-2026-09.csv\""));
+    verify(exports).export(7L, "2026-09", "csv");
   }
 
   @Test
@@ -201,7 +260,7 @@ class AdvertisingControllerTest {
             AdvertisingMediaReport.aggregate(
                 List.of(
                     new AdvertisingMediaReport.Entry(AdvertisingCategory.SALES, "媒体", 0, null))));
-    when(media.view("2026-09")).thenReturn(snapshot);
+    when(media.view(1L, "2026-09")).thenReturn(snapshot);
     var query =
         get("/store/advertising-media-summaries")
             .param("month", "2026-09")
@@ -293,7 +352,7 @@ class AdvertisingControllerTest {
     var report =
         AdvertisingOrderCostReport.aggregate(
             List.of(), List.of(new AdvertisingOrderCostReport.Order("注文だけ", true)));
-    when(orderCosts.view("2026-09"))
+    when(orderCosts.view(1L, "2026-09"))
         .thenReturn(
             new AdvertisingOrderCostService.Snapshot(
                 1, "2026-09", 0, OffsetDateTime.now(), report));
@@ -359,7 +418,7 @@ class AdvertisingControllerTest {
                 .header("X-Store-ID", "1")
                 .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
         .andExpect(status().isForbidden());
-    when(exports.exportOrderCost("2026-09", "csv")).thenReturn(new byte[] {1});
+    when(exports.exportOrderCost(1L, "2026-09", "csv")).thenReturn(new byte[] {1});
     mvc.perform(
             get("/store/advertising-order-costs/exports")
                 .param("month", "2026-09")

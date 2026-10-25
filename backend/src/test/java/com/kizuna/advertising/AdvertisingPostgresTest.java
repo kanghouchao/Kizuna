@@ -130,7 +130,7 @@ class AdvertisingPostgresTest {
   @Test
   void lifecycleReplaysOldSuccessAndRetainsDeletedHistory() {
     var request = create("2026-09", null, 100, UUID.randomUUID());
-    var first = service.create(request, "actor");
+    var first = service.create(1L, request, "actor");
     assertThat(first.inquiryCount()).isNull();
     var update =
         new ReplaceRequest(
@@ -143,36 +143,37 @@ class AdvertisingPostgresTest {
             first.version(),
             "修正",
             UUID.randomUUID());
-    var second = service.replace(first.id(), update, "actor");
+    var second = service.replace(1L, first.id(), update, "actor");
     assertThat(second.version()).isGreaterThan(first.version());
     assertThat(second.inquiryCount()).isZero();
-    assertThat(service.create(request, "actor")).isEqualTo(first);
-    assertThat(service.replace(first.id(), update, "actor")).isEqualTo(second);
+    assertThat(service.create(1L, request, "actor")).isEqualTo(first);
+    assertThat(service.replace(1L, first.id(), update, "actor")).isEqualTo(second);
     var deletion = new DeleteRequest(second.version(), "誤入力", UUID.randomUUID());
-    service.delete(first.id(), deletion, "actor");
-    service.delete(first.id(), deletion, "actor");
-    assertThatThrownBy(() -> service.get(first.id())).isInstanceOf(NotFoundException.class);
-    assertThat(service.month("2026-09").recordedTotalAmount()).isZero();
-    assertThat(service.month("2026-09").version()).isEqualTo(3);
-    var history = service.changes("2026-09", null, 2);
+    service.delete(1L, first.id(), deletion, "actor");
+    service.delete(1L, first.id(), deletion, "actor");
+    assertThatThrownBy(() -> service.get(1L, first.id())).isInstanceOf(NotFoundException.class);
+    assertThat(service.month(1L, "2026-09").recordedTotalAmount()).isZero();
+    assertThat(service.month(1L, "2026-09").version()).isEqualTo(3);
+    var history = service.changes(1L, "2026-09", null, 2);
     assertThat(history.content()).hasSize(2);
     assertThat(history.nextCursor()).isNotNull();
-    assertThat(service.changes("2026-09", history.nextCursor(), 2).content()).hasSize(1);
-    var change = service.changeDetail("2026-09", history.content().getFirst().id());
+    assertThat(service.changes(1L, "2026-09", history.nextCursor(), 2).content()).hasSize(1);
+    var change = service.changeDetail(1L, "2026-09", history.content().getFirst().id());
     assertThat(change.before().amount()).isEqualTo(200);
     assertThat(change.after()).isNull();
     assertThat(change.actorId()).isEqualTo(42);
-    assertThatThrownBy(() -> service.changeDetail("2026-10", change.id()))
+    assertThatThrownBy(() -> service.changeDetail(1L, "2026-10", change.id()))
         .isInstanceOf(NotFoundException.class);
   }
 
   @Test
   void rejectsKeyReuseAndStaleVersions() {
     UUID key = UUID.randomUUID();
-    var c = service.create(create("2026-09", 0, 0, key), "actor");
-    assertThatThrownBy(() -> service.create(create("2026-09", 0, 1, key), "actor"))
+    var c = service.create(1L, create("2026-09", 0, 0, key), "actor");
+    assertThatThrownBy(() -> service.create(1L, create("2026-09", 0, 1, key), "actor"))
         .isInstanceOf(ConflictException.class);
     service.replace(
+        1L,
         c.id(),
         new ReplaceRequest(
             AdvertisingCategory.SALES,
@@ -188,42 +189,44 @@ class AdvertisingPostgresTest {
     assertThatThrownBy(
             () ->
                 service.delete(
-                    c.id(), new DeleteRequest(c.version(), "削除", UUID.randomUUID()), "actor"))
+                    1L, c.id(), new DeleteRequest(c.version(), "削除", UUID.randomUUID()), "actor"))
         .isInstanceOf(ConflictException.class);
   }
 
   @Test
   void copiesOnlyEmptyMonthAndClearsInquiryCounts() {
-    service.create(create("2026-09", 0, 100, UUID.randomUUID()), "actor");
-    service.create(create("2026-09", 5, 200, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 5, 200, UUID.randomUUID()), "actor");
     var request = new CopyRequest(2L, 0L, "引継ぎ", UUID.randomUUID());
-    var copied = service.copy("2026-10", request, "actor");
+    var copied = service.copy(1L, "2026-10", request, "actor");
     assertThat(copied.copiedCount()).isEqualTo(2);
-    assertThat(service.copy("2026-10", request, "actor")).isEqualTo(copied);
-    assertThat(service.list("2026-10", 0, 100).getContent())
+    assertThat(service.copy(1L, "2026-10", request, "actor")).isEqualTo(copied);
+    assertThat(service.list(1L, "2026-10", 0, 100).getContent())
         .allSatisfy(c -> assertThat(c.inquiryCount()).isNull());
-    assertThat(service.month("2026-10").recordedTotalAmount()).isEqualTo(300);
+    assertThat(service.month(1L, "2026-10").recordedTotalAmount()).isEqualTo(300);
     assertThatThrownBy(
             () ->
-                service.copy("2026-10", new CopyRequest(2L, 1L, "再度", UUID.randomUUID()), "actor"))
+                service.copy(
+                    1L, "2026-10", new CopyRequest(2L, 1L, "再度", UUID.randomUUID()), "actor"))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(
             () ->
-                service.copy("2026-12", new CopyRequest(0L, 0L, "空月", UUID.randomUUID()), "actor"))
+                service.copy(
+                    1L, "2026-12", new CopyRequest(0L, 0L, "空月", UUID.randomUUID()), "actor"))
         .isInstanceOf(ServiceException.class);
   }
 
   @Test
   void filtersAllStoreResourcesAndHistories() {
-    var c = service.create(create("2026-09", 0, 100, UUID.randomUUID()), "actor");
-    var change = service.changes("2026-09", null, 20).content().getFirst();
+    var c = service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    var change = service.changes(1L, "2026-09", null, 20).content().getFirst();
     stores.setStoreId(2L);
-    assertThat(service.list("2026-09", 0, 20).getContent()).isEmpty();
-    assertThat(service.month("2026-09").recordedTotalAmount()).isZero();
-    assertThat(service.snapshot("2026-09").costs()).isEmpty();
-    assertThat(service.changes("2026-09", null, 20).content()).isEmpty();
-    assertThatThrownBy(() -> service.get(c.id())).isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.changeDetail("2026-09", change.id()))
+    assertThat(service.list(2L, "2026-09", 0, 20).getContent()).isEmpty();
+    assertThat(service.month(2L, "2026-09").recordedTotalAmount()).isZero();
+    assertThat(service.snapshot(2L, "2026-09").costs()).isEmpty();
+    assertThat(service.changes(2L, "2026-09", null, 20).content()).isEmpty();
+    assertThatThrownBy(() -> service.get(2L, c.id())).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.changeDetail(2L, "2026-09", change.id()))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -232,7 +235,8 @@ class AdvertisingPostgresTest {
     doThrow(new IllegalStateException("監査失敗"))
         .when((BusinessAudit) AopTestUtils.getTargetObject(context.getBean(BusinessAudit.class)))
         .record(any(), any(), any(), any(), any(), any(), any(), any(), any());
-    assertThatThrownBy(() -> service.create(create("2026-09", 0, 100, UUID.randomUUID()), "actor"))
+    assertThatThrownBy(
+            () -> service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor"))
         .isInstanceOf(IllegalStateException.class);
     for (var name : List.of("costs", "months", "changes", "requests"))
       assertThat(jdbc.queryForObject("SELECT count(*) FROM t_advertising_" + name, Long.class))
@@ -243,27 +247,31 @@ class AdvertisingPostgresTest {
   void concurrentSameKeyCreatesExactlyOneRecordAndAuditHistory() throws Exception {
     var request = create("2026-09", 0, 100, UUID.randomUUID());
     var result =
-        race(() -> service.create(request, "actor"), () -> service.create(request, "actor"));
+        race(
+            () -> service.create(1L, request, "actor"), () -> service.create(1L, request, "actor"));
     assertThat(result.get(0)).isEqualTo(result.get(1));
-    assertThat(service.month("2026-09").entryCount()).isEqualTo(1);
-    assertThat(service.changes("2026-09", null, 20).content()).hasSize(1);
+    assertThat(service.month(1L, "2026-09").entryCount()).isEqualTo(1);
+    assertThat(service.changes(1L, "2026-09", null, 20).content()).hasSize(1);
   }
 
   @Test
   void competingCopiesAndEditsRejectOneOperation() throws Exception {
-    var c = service.create(create("2026-09", 1, 100, UUID.randomUUID()), "actor");
+    var c = service.create(1L, create("2026-09", 1, 100, UUID.randomUUID()), "actor");
     var copies =
         race(
             () ->
-                service.copy("2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"),
+                service.copy(
+                    1L, "2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"),
             () ->
-                service.copy("2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"));
+                service.copy(
+                    1L, "2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"));
     assertThat(copies.stream().filter(v -> v instanceof ConflictException)).hasSize(1);
-    assertThat(service.month("2026-10").entryCount()).isEqualTo(1);
+    assertThat(service.month(1L, "2026-10").entryCount()).isEqualTo(1);
     var edits =
         race(
             () ->
                 service.replace(
+                    1L,
                     c.id(),
                     new ReplaceRequest(
                         AdvertisingCategory.SALES,
@@ -278,6 +286,7 @@ class AdvertisingPostgresTest {
                     "actor"),
             () ->
                 service.replace(
+                    1L,
                     c.id(),
                     new ReplaceRequest(
                         AdvertisingCategory.SALES,
@@ -291,29 +300,31 @@ class AdvertisingPostgresTest {
                         UUID.randomUUID()),
                     "actor"));
     assertThat(edits.stream().filter(v -> v instanceof ConflictException)).hasSize(1);
-    assertThat(service.month("2026-09").recordedTotalAmount()).isIn(200L, 300L);
+    assertThat(service.month(1L, "2026-09").recordedTotalAmount()).isIn(200L, 300L);
   }
 
   @Test
   void changedSourceAndCopyLimitNeverPartiallyWrite() {
-    service.create(create("2026-09", 0, 100, UUID.randomUUID()), "actor");
-    service.create(create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
     assertThatThrownBy(
             () ->
-                service.copy("2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"))
+                service.copy(
+                    1L, "2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"))
         .isInstanceOf(ConflictException.class);
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(1);
     assertThatThrownBy(
             () ->
-                service.copy("2026-10", new CopyRequest(2L, 0L, "複製", UUID.randomUUID()), "actor"))
+                service.copy(
+                    1L, "2026-10", new CopyRequest(2L, 0L, "複製", UUID.randomUUID()), "actor"))
         .isInstanceOf(ServiceUnavailableException.class);
-    assertThat(service.month("2026-10").entryCount()).isZero();
-    assertThat(service.month("2026-10").version()).isZero();
+    assertThat(service.month(1L, "2026-10").entryCount()).isZero();
+    assertThat(service.month(1L, "2026-10").version()).isZero();
   }
 
   @Test
   void exportKeepsRowsAndTotalsInTheSameSnapshotDuringWrites() {
-    service.create(create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
     doAnswer(
             invocation -> {
               var rows = invocation.callRealMethod();
@@ -322,7 +333,8 @@ class AdvertisingPostgresTest {
                         () -> {
                           stores.setStoreId(1L);
                           try {
-                            service.create(create("2026-09", 0, 200, UUID.randomUUID()), "actor");
+                            service.create(
+                                1L, create("2026-09", 0, 200, UUID.randomUUID()), "actor");
                           } finally {
                             stores.clear();
                           }
@@ -332,20 +344,20 @@ class AdvertisingPostgresTest {
               return rows;
             })
         .when(context.getBean(AdvertisingRecords.class))
-        .all(eq("2026-09"), anyInt());
-    var snapshot = service.snapshot("2026-09");
+        .all(eq(1L), eq("2026-09"), anyInt());
+    var snapshot = service.snapshot(1L, "2026-09");
     assertThat(snapshot.costs()).hasSize(1);
     assertThat(snapshot.summary().recordedTotalAmount()).isEqualTo(100);
     assertThat(snapshot.summary().version()).isEqualTo(1);
-    assertThat(service.month("2026-09").recordedTotalAmount()).isEqualTo(300);
+    assertThat(service.month(1L, "2026-09").recordedTotalAmount()).isEqualTo(300);
   }
 
   @Test
   void mediaSummaryKeepsInquiryAmountAndRevisionTogetherAndRecalculatesAfterDeletion() {
-    var first = service.create(create("2026-09", 5, 100, UUID.randomUUID()), "actor");
+    var first = service.create(1L, create("2026-09", 5, 100, UUID.randomUUID()), "actor");
     var media = new AdvertisingMediaService(service, context.getBean(AppProperties.class));
     stores.setStoreId(2L);
-    service.create(create("2026-09", 100, 10000, UUID.randomUUID()), "actor");
+    service.create(2L, create("2026-09", 100, 10000, UUID.randomUUID()), "actor");
     stores.setStoreId(1L);
     doAnswer(
             invocation -> {
@@ -356,7 +368,7 @@ class AdvertisingPostgresTest {
                           stores.setStoreId(1L);
                           try {
                             service.create(
-                                create("2026-09", null, 200, UUID.randomUUID()), "actor");
+                                1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
                           } finally {
                             stores.clear();
                           }
@@ -366,31 +378,32 @@ class AdvertisingPostgresTest {
               return rows;
             })
         .when(context.getBean(AdvertisingRecords.class))
-        .all(eq("2026-09"), anyInt());
-    var before = media.view("2026-09");
+        .all(eq(1L), eq("2026-09"), anyInt());
+    var before = media.view(1L, "2026-09");
     assertThat(before.monthVersion()).isEqualTo(1);
     assertThat(before.report().recordedTotalAmount()).isEqualTo(100);
     assertThat(before.report().rows().getFirst().recordedInquiryCountSum()).isEqualTo(5);
     assertThat(before.report().entryCount()).isEqualTo(1);
     reset(context.getBean(AdvertisingRecords.class));
-    var after = media.view("2026-09");
+    var after = media.view(1L, "2026-09");
     assertThat(after.monthVersion()).isEqualTo(2);
     assertThat(after.report().recordedTotalAmount()).isEqualTo(300);
     assertThat(after.report().rows().getFirst().unrecordedInquiryEntryCount()).isEqualTo(1);
     service.delete(
-        first.id(), new DeleteRequest(first.version(), "修正", UUID.randomUUID()), "actor");
-    var deleted = media.view("2026-09");
+        1L, first.id(), new DeleteRequest(first.version(), "修正", UUID.randomUUID()), "actor");
+    var deleted = media.view(1L, "2026-09");
     assertThat(deleted.report().recordedTotalAmount()).isEqualTo(200);
     assertThat(deleted.report().rows().getFirst().recordedInquiryCountSum()).isNull();
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(1);
-    service.create(create("2026-09", 0, 0, UUID.randomUUID()), "actor");
-    assertThatThrownBy(() -> media.view("2026-09")).isInstanceOf(ServiceUnavailableException.class);
+    service.create(1L, create("2026-09", 0, 0, UUID.randomUUID()), "actor");
+    assertThatThrownBy(() -> media.view(1L, "2026-09"))
+        .isInstanceOf(ServiceUnavailableException.class);
   }
 
   @Test
   void copyAuditFailureRollsBackEveryCopiedRowAndAllowsRetry() {
-    service.create(create("2026-09", 0, 100, UUID.randomUUID()), "actor");
-    service.create(create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
     var audits = (BusinessAudit) AopTestUtils.getTargetObject(context.getBean(BusinessAudit.class));
     var count = new AtomicInteger();
     doAnswer(
@@ -401,13 +414,13 @@ class AdvertisingPostgresTest {
         .when(audits)
         .record(any(), any(), any(), any(), any(), any(), any(), any(), any());
     var request = new CopyRequest(2L, 0L, "引継ぎ", UUID.randomUUID());
-    assertThatThrownBy(() -> service.copy("2026-10", request, "actor"))
+    assertThatThrownBy(() -> service.copy(1L, "2026-10", request, "actor"))
         .isInstanceOf(IllegalStateException.class);
-    assertThat(service.month("2026-10").entryCount()).isZero();
-    assertThat(service.month("2026-10").version()).isZero();
-    assertThat(service.changes("2026-10", null, 20).content()).isEmpty();
+    assertThat(service.month(1L, "2026-10").entryCount()).isZero();
+    assertThat(service.month(1L, "2026-10").version()).isZero();
+    assertThat(service.changes(1L, "2026-10", null, 20).content()).isEmpty();
     reset(audits);
-    assertThat(service.copy("2026-10", request, "actor").copiedCount()).isEqualTo(2);
+    assertThat(service.copy(1L, "2026-10", request, "actor").copiedCount()).isEqualTo(2);
   }
 
   List<Object> race(Callable<?> first, Callable<?> second) throws Exception {
@@ -462,8 +475,9 @@ class AdvertisingPostgresTest {
 
   @Test
   void orderComparisonUsesOriginalMonthValidOrdersAndExcludesRecruitment() {
-    var cost = service.create(create("2026-09", 999, 100, UUID.randomUUID()), "actor");
+    var cost = service.create(1L, create("2026-09", 999, 100, UUID.randomUUID()), "actor");
     service.create(
+        1L,
         new CreateRequest(
             "2026-09",
             AdvertisingCategory.RECRUITMENT,
@@ -486,7 +500,7 @@ class AdvertisingPostgresTest {
     order(2, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
     stores.setStoreId(1L);
     var compare = context.getBean(AdvertisingOrderCostService.class);
-    var report = compare.view("2026-09").report();
+    var report = compare.view(1L, "2026-09").report();
     assertThat(report.costEntryCount()).isEqualTo(1);
     assertThat(report.recordedSalesAmount()).isEqualTo(100);
     assertThat(report.validCompletedOrderCount()).isEqualTo(4);
@@ -494,15 +508,16 @@ class AdvertisingPostgresTest {
     assertThat(report.unnamedMediaOrderCount()).isEqualTo(1);
     assertThat(report.rows().getLast().costPerOrder()).isEqualTo("50.00");
     jdbc.update("update t_orders set completion_invalidated=true where id=?", free);
-    assertThat(compare.view("2026-09").report().rows().getLast().costPerOrder())
+    assertThat(compare.view(1L, "2026-09").report().rows().getLast().costPerOrder())
         .isEqualTo("100.00");
-    service.delete(cost.id(), new DeleteRequest(cost.version(), "訂正", UUID.randomUUID()), "actor");
-    assertThat(compare.view("2026-09").report().recordedSalesAmount()).isNull();
+    service.delete(
+        1L, cost.id(), new DeleteRequest(cost.version(), "訂正", UUID.randomUUID()), "actor");
+    assertThat(compare.view(1L, "2026-09").report().recordedSalesAmount()).isNull();
   }
 
   @Test
   void orderAndCostChangesShareOneSnapshotAndReadLimitFailsClosed() throws Exception {
-    service.create(create("2026-09", null, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", null, 100, UUID.randomUUID()), "actor");
     order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
     var changed = new AtomicInteger();
     doAnswer(
@@ -515,7 +530,7 @@ class AdvertisingPostgresTest {
                             try {
                               stores.setStoreId(1L);
                               service.create(
-                                  create("2026-09", null, 200, UUID.randomUUID()), "actor");
+                                  1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
                               order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 0);
                             } finally {
                               stores.clear();
@@ -527,26 +542,26 @@ class AdvertisingPostgresTest {
               return rows;
             })
         .when(context.getBean(AdvertisingRecords.class))
-        .all(eq("2026-09"), anyInt());
+        .all(eq(1L), eq("2026-09"), anyInt());
     var compare = context.getBean(AdvertisingOrderCostService.class);
-    var first = compare.view("2026-09");
+    var first = compare.view(1L, "2026-09");
     assertThat(first.monthVersion()).isEqualTo(1);
     assertThat(first.report().rows().getFirst().costPerOrder()).isEqualTo("100.00");
     assertThat(first.report().validCompletedOrderCount()).isEqualTo(1);
     reset(context.getBean(AdvertisingRecords.class));
-    var second = compare.view("2026-09");
+    var second = compare.view(1L, "2026-09");
     assertThat(second.monthVersion()).isEqualTo(2);
     assertThat(second.report().rows().getFirst().costPerOrder()).isEqualTo("150.00");
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(1);
-    assertThatThrownBy(() -> compare.view("2026-09"))
+    assertThatThrownBy(() -> compare.view(1L, "2026-09"))
         .isInstanceOf(ServiceUnavailableException.class);
     jdbc.execute("delete from t_advertising_costs");
-    assertThatThrownBy(() -> compare.view("2026-09"))
+    assertThatThrownBy(() -> compare.view(1L, "2026-09"))
         .isInstanceOf(ServiceUnavailableException.class);
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(20000);
-    assertThat(compare.view("2026-09").report().validCompletedOrderCount()).isEqualTo(2);
+    assertThat(compare.view(1L, "2026-09").report().validCompletedOrderCount()).isEqualTo(2);
     stores.clear();
-    assertThatThrownBy(() -> compare.view("2026-09")).isInstanceOf(RuntimeException.class);
+    assertThatThrownBy(() -> compare.view(null, "2026-09")).isInstanceOf(RuntimeException.class);
   }
 
   @Configuration

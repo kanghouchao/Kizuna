@@ -6,7 +6,6 @@ import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
@@ -25,7 +24,6 @@ public class AdvertisingOrderCostService {
   private final AdvertisingService costs;
   private final AdvertisingOrderReader orders;
   private final AppProperties properties;
-  private final StoreContext storeContext;
 
   public record Snapshot(
       long storeId,
@@ -35,19 +33,19 @@ public class AdvertisingOrderCostService {
       AdvertisingOrderCostReport report) {}
 
   @StoreScoped
-  public Snapshot view(String month) {
+  public Snapshot view(Long storeId, String month) {
     return AdvertisingFailures.run(
-        () -> read(month, new DocumentBudget(properties.getAdvertisingCost())));
+        () -> read(storeId, month, new DocumentBudget(properties.getAdvertisingCost())));
   }
 
   @StoreScoped
-  public Snapshot snapshot(String month, DocumentBudget budget) {
-    return read(month, budget);
+  public Snapshot snapshot(Long storeId, String month, DocumentBudget budget) {
+    return read(storeId, month, budget);
   }
 
-  private Snapshot read(String month, DocumentBudget budget) {
+  private Snapshot read(Long storeId, String month, DocumentBudget budget) {
     var period = YearMonth.parse(AdvertisingInput.month(month));
-    var source = costs.snapshot(month);
+    var source = costs.snapshot(storeId, month);
     budget.check();
     var sales =
         source.costs().stream()
@@ -61,7 +59,7 @@ public class AdvertisingOrderCostService {
     var validOrders =
         orders
             .read(
-                storeContext.getStoreId(),
+                storeId,
                 period.atDay(1),
                 period.atEndOfMonth(),
                 properties.getAdvertisingCost().getMaxOrders())

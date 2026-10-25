@@ -20,8 +20,8 @@ public class AdvertisingMediaService {
       OffsetDateTime generatedAt,
       AdvertisingMediaReport report) {}
 
-  public Snapshot snapshot(String month, DocumentBudget budget) {
-    var source = costs.snapshot(month);
+  public Snapshot snapshot(Long storeId, String month, DocumentBudget budget) {
+    var source = costs.snapshot(storeId, month);
     budget.check();
     var entries =
         source.costs().stream()
@@ -46,8 +46,8 @@ public class AdvertisingMediaService {
         report);
   }
 
-  public Snapshot view(String month) {
+  public Snapshot view(Long storeId, String month) {
     return AdvertisingFailures.run(
-        () -> snapshot(month, new DocumentBudget(properties.getAdvertisingCost())));
+        () -> snapshot(storeId, month, new DocumentBudget(properties.getAdvertisingCost())));
   }
 }

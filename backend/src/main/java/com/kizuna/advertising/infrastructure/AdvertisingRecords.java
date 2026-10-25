@@ -41,20 +41,23 @@ public class AdvertisingRecords {
     lock("month:" + store + ":" + month);
   }
 
-  public Optional<AdvertisingMonth> month(String month) {
+  public Optional<AdvertisingMonth> month(Long store, String month) {
     return em.createQuery(
-            "select m from AdvertisingMonth m where m.month=:month", AdvertisingMonth.class)
+            "select m from AdvertisingMonth m where m.storeId=:store and m.month=:month",
+            AdvertisingMonth.class)
+        .setParameter("store", store)
         .setParameter("month", month)
         .getResultStream()
         .findFirst();
   }
 
-  public AdvertisingMonth advance(String month) {
+  public AdvertisingMonth advance(Long store, String month) {
     var value =
-        month(month)
+        month(store, month)
             .orElseGet(
                 () -> {
                   var m = AdvertisingMonth.builder().month(month).build();
+                  m.setStoreId(store);
                   persist(m);
                   return m;
                 });
@@ -62,10 +65,11 @@ public class AdvertisingRecords {
     return value;
   }
 
-  public AdvertisingCost cost(String id) {
+  public AdvertisingCost cost(Long store, String id) {
     return em.createQuery(
-            "select c from AdvertisingCost c where c.id=:id and c.deleted=false",
+            "select c from AdvertisingCost c where c.storeId=:store and c.id=:id and c.deleted=false",
             AdvertisingCost.class)
+        .setParameter("store", store)
         .setParameter("id", id)
         .getResultStream()
         .findFirst()
@@ -78,71 +82,78 @@ public class AdvertisingRecords {
     return cost;
   }
 
-  public Page<AdvertisingCost> list(String month, Pageable page) {
+  public Page<AdvertisingCost> list(Long store, String month, Pageable page) {
     var q =
         em.createQuery(
-                "select c from AdvertisingCost c where c.month=:month and c.deleted=false order by c.id",
+                "select c from AdvertisingCost c where c.storeId=:store and c.month=:month and c.deleted=false order by c.id",
                 AdvertisingCost.class)
+            .setParameter("store", store)
             .setParameter("month", month);
     return new PageImpl<>(
         q.setFirstResult((int) page.getOffset()).setMaxResults(page.getPageSize()).getResultList(),
         page,
-        count(month));
+        count(store, month));
   }
 
-  public long count(String month) {
+  public long count(Long store, String month) {
     return em.createQuery(
-            "select count(c) from AdvertisingCost c where c.month=:month and c.deleted=false",
+            "select count(c) from AdvertisingCost c where c.storeId=:store and c.month=:month and c.deleted=false",
             Long.class)
+        .setParameter("store", store)
         .setParameter("month", month)
         .getSingleResult();
   }
 
-  public List<AdvertisingCost> all(String month, int max) {
+  public List<AdvertisingCost> all(Long store, String month, int max) {
     return em.createQuery(
-            "select c from AdvertisingCost c where c.month=:month and c.deleted=false order by c.id",
+            "select c from AdvertisingCost c where c.storeId=:store and c.month=:month and c.deleted=false order by c.id",
             AdvertisingCost.class)
+        .setParameter("store", store)
         .setParameter("month", month)
         .setMaxResults(max + 1)
         .getResultList();
   }
 
-  public List<Object[]> totals(String month) {
+  public List<Object[]> totals(Long store, String month) {
     return em.createQuery(
-            "select c.category, sum(c.amount), count(c) from AdvertisingCost c where c.month=:month and c.deleted=false group by c.category",
+            "select c.category, sum(c.amount), count(c) from AdvertisingCost c where c.storeId=:store and c.month=:month and c.deleted=false group by c.category",
             Object[].class)
+        .setParameter("store", store)
         .setParameter("month", month)
         .getResultList();
   }
 
-  public Optional<AdvertisingRequest> receipt(Long actor, UUID request) {
+  public Optional<AdvertisingRequest> receipt(Long store, Long actor, UUID request) {
     return em.createQuery(
-            "select r from AdvertisingRequest r where r.actorId=:actor and r.requestId=:request",
+            "select r from AdvertisingRequest r where r.storeId=:store and r.actorId=:actor and r.requestId=:request",
             AdvertisingRequest.class)
+        .setParameter("store", store)
         .setParameter("actor", actor)
         .setParameter("request", request)
         .getResultStream()
         .findFirst();
   }
 
-  public List<AdvertisingChange> changes(String month, String cursor, int size) {
+  public List<AdvertisingChange> changes(Long store, String month, String cursor, int size) {
     var after = cursor == null ? null : PageCursor.decode(cursor);
     String extra = after == null ? "" : " and (c.createdAt<:at or (c.createdAt=:at and c.id<:id))";
     var q =
         em.createQuery(
-                "select c from AdvertisingChange c where c.month=:month"
+                "select c from AdvertisingChange c where c.storeId=:store and c.month=:month"
                     + extra
                     + " order by c.createdAt desc,c.id desc",
                 AdvertisingChange.class)
+            .setParameter("store", store)
             .setParameter("month", month);
     if (after != null) q.setParameter("at", after.timestampKey()).setParameter("id", after.id());
     return q.setMaxResults(size + 1).getResultList();
   }
 
-  public AdvertisingChange change(String month, String id) {
+  public AdvertisingChange change(Long store, String month, String id) {
     return em.createQuery(
-            "select c from AdvertisingChange c where c.month=:month and c.id=:id",
+            "select c from AdvertisingChange c where c.storeId=:store and c.month=:month and c.id=:id",
             AdvertisingChange.class)
+        .setParameter("store", store)
         .setParameter("month", month)
         .setParameter("id", id)
         .getResultStream()
