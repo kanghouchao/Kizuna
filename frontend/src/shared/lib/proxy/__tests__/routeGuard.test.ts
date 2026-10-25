@@ -334,6 +334,22 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
+  it('allows access to /auth/initial-setup without token', () => {
+    const req = createRequest('/auth/initial-setup', false);
+    const res = handleRouteProtection(req, 'app');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
+  it('allows /auth/initial-setup with a token left over from a rebuilt database', () => {
+    const req = createRequest('/auth/initial-setup', true, { 'session-kind': 'admin' });
+    const res = handleRouteProtection(req, 'app');
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(res).toBeNull();
+  });
+
   it('does not redirect the public /casts route without token', () => {
     const req = createRequest('/casts', false);
     const res = handleRouteProtection(req, 'store');

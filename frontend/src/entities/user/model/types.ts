@@ -276,3 +276,10 @@ export interface LineRegisterRequest {
   display_name: string;
   email: string;
 }
+
+// 初期設定（最初の管理者の登録）リクエスト。ロールと店舗集合はサーバーが決めるため送らない。
+export interface InitialSetupRequest {
+  email: string;
+  password: string;
+  display_name: string;
+}
