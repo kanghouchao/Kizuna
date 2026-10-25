@@ -63,14 +63,14 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
   String MEMBER_VISIT_ORDER = " order by a.createdAt desc, a.id desc";
 
   /**
-   * 店舗を跨ぐ会員本人照会。境界は帰属先の会員 id。来店履歴（跨店集約）の先頭を返す。
+   * 来店履歴（跨店集約）の先頭を返す。
    *
    * <p>並びは帰属の作成時刻の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
    */
   @Query(MEMBER_VISIT_SELECT + MEMBER_VISIT_WHERE + MEMBER_VISIT_ORDER)
   List<MemberVisitView> findMemberVisitViews(@Param("memberId") Long memberId, Limit limit);
 
-  /** 店舗を跨ぐ会員本人照会。境界は帰属先の会員 id。来店履歴の続き（渡された位置より古い側）だけを返す。 */
+  /** 来店履歴の続き（渡された位置より古い側）だけを返す。 */
   @Query(
       MEMBER_VISIT_SELECT
           + MEMBER_VISIT_WHERE

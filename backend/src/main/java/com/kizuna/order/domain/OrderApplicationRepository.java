@@ -96,14 +96,14 @@ public interface OrderApplicationRepository extends StoreScopedRepository<OrderA
   String MEMBER_VIEW_ORDER = " order by a.businessDate desc, a.id desc";
 
   /**
-   * 店舗を跨ぐ照会。境界は申請者の会員 id。会員本人の予約申請一覧（跨店集約）の先頭。
+   * 会員本人の予約申請一覧（跨店集約）の先頭。
    *
    * <p>並びは希望日の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
    */
   @Query(MEMBER_VIEW_SELECT + MEMBER_VIEW_WHERE + MEMBER_VIEW_ORDER)
   List<MemberOrderApplicationView> findMemberViews(@Param("memberId") Long memberId, Limit limit);
 
-  /** 店舗を跨ぐ照会。境界は申請者の会員 id。会員本人の予約申請一覧の続き。 */
+  /** 会員本人の予約申請一覧の続き。 */
   @Query(
       MEMBER_VIEW_SELECT
           + MEMBER_VIEW_WHERE
@@ -118,7 +118,7 @@ public interface OrderApplicationRepository extends StoreScopedRepository<OrderA
       @Param("cursorId") String cursorId,
       Limit limit);
 
-  /** 店舗を跨ぐ照会。境界は申請者の会員 id。一覧と同じく申請者の一致を問い合わせに載せ、他人の申請には到達させない。 */
+  /** 一覧と同じく申請者の一致を問い合わせに載せ、他人の申請には到達させない。 */
   @Query(MEMBER_VIEW_SELECT + " where a.requesterMemberId = :memberId and a.id = :applicationId")
   Optional<MemberOrderApplicationView> findMemberView(
       @Param("memberId") Long memberId, @Param("applicationId") String applicationId);
