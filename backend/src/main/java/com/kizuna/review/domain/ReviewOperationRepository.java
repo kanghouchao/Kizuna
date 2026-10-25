@@ -1,8 +1,9 @@
 package com.kizuna.review.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface ReviewOperationRepository extends JpaRepository<ReviewOperation, String> {
-  Optional<ReviewOperation> findByActorIdAndDedupeKey(Long actorId, String key);
+public interface ReviewOperationRepository extends StoreScopedRepository<ReviewOperation> {
+  Optional<ReviewOperation> findByStoreIdAndActorIdAndDedupeKey(
+      Long storeId, Long actorId, String key);
 }

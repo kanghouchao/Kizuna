@@ -24,6 +24,7 @@ import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
+import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.user.application.BusinessAudit;
@@ -116,6 +117,7 @@ class ReviewPostgresTest {
     store = context.getBean(StoreContext.class);
     mvc =
         MockMvcBuilders.standaloneSetup(context.getBean(ReviewController.class))
+            .setCustomArgumentResolvers(new CurrentStoreArgumentResolver(store))
             .setControllerAdvice(new CommonExceptionHandler())
             .setMessageConverters(new JacksonJsonHttpMessageConverter(json))
             .build();

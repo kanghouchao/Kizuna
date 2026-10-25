@@ -70,24 +70,28 @@ public class ReviewRecord extends StoreScopedEntity {
   private String supersededById;
 
   public static ReviewRecord receive(
+      Long storeId,
       ReviewInput input,
       Long actorId,
       String actorName,
       OffsetDateTime originCheckedAt,
       Long originVersion) {
-    return builder()
-        .body(input.body())
-        .displayName(input.displayName())
-        .receivedVia(input.receivedVia())
-        .receivedAt(input.receivedAt())
-        .originOrderId(input.originOrderId())
-        .originCheckedAt(originCheckedAt)
-        .originOrderVersion(originVersion)
-        .recordedBy(actorId)
-        .recorderName(actorName)
-        .status(Status.PENDING)
-        .permissionStatus(PermissionStatus.NOT_GRANTED)
-        .build();
+    var row =
+        builder()
+            .body(input.body())
+            .displayName(input.displayName())
+            .receivedVia(input.receivedVia())
+            .receivedAt(input.receivedAt())
+            .originOrderId(input.originOrderId())
+            .originCheckedAt(originCheckedAt)
+            .originOrderVersion(originVersion)
+            .recordedBy(actorId)
+            .recorderName(actorName)
+            .status(Status.PENDING)
+            .permissionStatus(PermissionStatus.NOT_GRANTED)
+            .build();
+    row.setStoreId(storeId);
+    return row;
   }
 
   public static ReviewRecord correction(
@@ -98,7 +102,8 @@ public class ReviewRecord extends StoreScopedEntity {
       OffsetDateTime originCheckedAt,
       Long originVersion) {
     previous.requireNoSuccessor();
-    var row = receive(input, actorId, actorName, originCheckedAt, originVersion);
+    var row =
+        receive(previous.getStoreId(), input, actorId, actorName, originCheckedAt, originVersion);
     row.supersedesId = previous.getId();
     return row;
   }

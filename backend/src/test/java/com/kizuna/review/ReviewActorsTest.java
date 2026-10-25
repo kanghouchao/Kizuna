@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.review.application.ReviewActors;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.User;
@@ -23,9 +22,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class ReviewActorsTest {
   private final UserRepository users = mock(UserRepository.class);
   private final RoleRepository roles = mock(RoleRepository.class);
-  private final StoreContext store = mock(StoreContext.class);
   private final User user = mock(User.class);
-  private final ReviewActors actors = new ReviewActors(users, roles, store);
+  private final ReviewActors actors = new ReviewActors(users, roles);
 
   @BeforeEach
   void setup() {
@@ -35,8 +33,6 @@ class ReviewActorsTest {
     when(user.getDisplayName()).thenReturn("担当者");
     when(user.getUserType()).thenReturn(UserType.STAFF);
     when(user.getEnabled()).thenReturn(true);
-    when(store.hasStoreId()).thenReturn(true);
-    when(store.getStoreId()).thenReturn(2L);
     when(user.getRoleIds()).thenReturn(Set.of(3L));
   }
 
@@ -53,11 +49,22 @@ class ReviewActorsTest {
     when(roles.findIdsByPermissionCode("REVIEW_VIEW")).thenReturn(Set.of(3L));
     denied();
     when(roles.findIdsByPermissionCode("REVIEW_MANAGE")).thenReturn(Set.of(3L));
-    assertThat(actors.require("actor", PermissionCode.REVIEW_MANAGE).id()).isEqualTo(1L);
+    assertThat(actors.require(2L, "actor", PermissionCode.REVIEW_MANAGE).id()).isEqualTo(1L);
+    assertThatThrownBy(() -> actors.require(3L, "actor", PermissionCode.REVIEW_MANAGE))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void missingStoreIsDeniedEvenWithEveryGrant() {
+    when(user.authorizes(null)).thenReturn(true);
+    when(roles.findIdsByPermissionCode("REVIEW_VIEW")).thenReturn(Set.of(3L));
+    when(roles.findIdsByPermissionCode("REVIEW_MANAGE")).thenReturn(Set.of(3L));
+    assertThatThrownBy(() -> actors.require(null, "actor", PermissionCode.REVIEW_MANAGE))
+        .isInstanceOf(AccessDeniedException.class);
   }
 
   private void denied() {
-    assertThatThrownBy(() -> actors.require("actor", PermissionCode.REVIEW_MANAGE))
+    assertThatThrownBy(() -> actors.require(2L, "actor", PermissionCode.REVIEW_MANAGE))
         .isInstanceOf(AccessDeniedException.class);
   }
 }

@@ -40,7 +40,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
@@ -65,6 +64,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class ReviewApplicationTest {
   private static final OffsetDateTime AT = OffsetDateTime.parse("2026-01-01T00:00:00Z");
+  private static final Long STORE_ID = 7L;
   private final ReviewRepository rows = mock(ReviewRepository.class);
   private final ReviewPermissionRepository permissions = mock(ReviewPermissionRepository.class);
   private final ReviewOperationRepository operations = mock(ReviewOperationRepository.class);
@@ -72,7 +72,6 @@ class ReviewApplicationTest {
   private final ReviewActors actors = mock(ReviewActors.class);
   private final ReviewOriginLookup origins = mock(ReviewOriginLookup.class);
   private final BusinessAudit audit = mock(BusinessAudit.class);
-  private final StoreContext store = new StoreContext();
   private final Map<String, ReviewRecord> records = new HashMap<>();
   private final Map<String, ReviewPermission> consent = new HashMap<>();
   private final Map<String, ReviewOperation> receipts = new HashMap<>();
@@ -91,10 +90,9 @@ class ReviewApplicationTest {
             operations,
             actors,
             audit,
-            Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC),
-            store);
-    store.setStoreId(7L);
-    when(actors.require(anyString(), any())).thenReturn(new AuditActor(1L, "STAFF", "担当者"));
+            Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC));
+    when(actors.require(eq(STORE_ID), anyString(), any()))
+        .thenReturn(new AuditActor(1L, "STAFF", "担当者"));
     when(rows.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -103,13 +101,13 @@ class ReviewApplicationTest {
               records.put(row.getId(), row);
               return row;
             });
-    when(rows.findProjectedById(anyString()))
+    when(rows.findProjectedByIdAndStoreId(anyString(), anyLong()))
         .thenAnswer(
             call ->
-                Optional.ofNullable(records.get(call.getArgument(0)))
+                scoped(records, call.getArgument(0), call.getArgument(1))
                     .map(r -> projections.createProjection(ReviewDetailsView.class, r)));
-    when(rows.lockById(anyString()))
-        .thenAnswer(call -> Optional.ofNullable(records.get(call.getArgument(0))));
+    when(rows.findByIdAndStoreIdForUpdate(anyString(), anyLong()))
+        .thenAnswer(call -> scoped(records, call.getArgument(0), call.getArgument(1)));
     when(permissions.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -118,13 +116,13 @@ class ReviewApplicationTest {
               consent.put(permission.getReviewId(), permission);
               return permission;
             });
-    when(permissions.findProjectedByReviewId(anyString()))
+    when(permissions.findProjectedByStoreIdAndReviewId(anyLong(), anyString()))
         .thenAnswer(
             call ->
-                Optional.ofNullable(consent.get(call.getArgument(0)))
+                scoped(consent, call.getArgument(1), call.getArgument(0))
                     .map(r -> projections.createProjection(ReviewPermissionView.class, r)));
-    when(permissions.findByReviewId(anyString()))
-        .thenAnswer(call -> Optional.ofNullable(consent.get(call.getArgument(0))));
+    when(permissions.findByStoreIdAndReviewId(anyLong(), anyString()))
+        .thenAnswer(call -> scoped(consent, call.getArgument(1), call.getArgument(0)));
     when(operations.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -133,13 +131,26 @@ class ReviewApplicationTest {
               receipts.put(operation.getDedupeKey(), operation);
               return operation;
             });
-    when(operations.findByActorIdAndDedupeKey(anyLong(), anyString()))
-        .thenAnswer(call -> Optional.ofNullable(receipts.get(call.getArgument(1))));
+    when(operations.findByStoreIdAndActorIdAndDedupeKey(anyLong(), anyLong(), anyString()))
+        .thenAnswer(call -> scoped(receipts, call.getArgument(2), call.getArgument(0)));
+    when(history.save(any()))
+        .thenAnswer(
+            call -> {
+              ReviewHistory row = call.getArgument(0);
+              assertThat(row.getStoreId()).isEqualTo(STORE_ID);
+              return row;
+            });
   }
 
+  private <T extends StoreScopedEntity> Optional<T> scoped(
+      Map<String, T> rows, String key, Long storeId) {
+    return Optional.ofNullable(rows.get(key)).filter(row -> row.getStoreId().equals(storeId));
+  }
+
+  /** 保存される行は、生成した側が店舗を設定していなければならない。 */
   private void metadata(StoreScopedEntity entity) {
+    assertThat(entity.getStoreId()).isEqualTo(STORE_ID);
     entity.setId(Long.toString(ids.incrementAndGet()));
-    entity.setStoreId(1L);
     entity.setCreatedAt(AT);
     entity.setUpdatedAt(AT);
     ReflectionTestUtils.setField(entity, "version", 0L);
@@ -150,36 +161,42 @@ class ReviewApplicationTest {
   }
 
   private String create() {
-    return service.create("actor", input(), "create").review().id();
+    return service.create(STORE_ID, "actor", input(), "create").review().id();
   }
 
   @Test
   void originalReceiptReturnsCurrentStateAndCurrentAuthorizationAlwaysApplies() {
     String id = create();
     var approval = new ReviewChange(id, 0L, Operation.APPROVED, "確認理由", "approve");
-    service.change("actor", approval);
-    service.change("actor", new ReviewChange(id, 0L, Operation.WITHDRAWN, "取り下げ理由", "withdraw"));
-    var replay = service.replayCreate("actor", input(), "create");
+    service.change(STORE_ID, "actor", approval);
+    service.change(
+        STORE_ID, "actor", new ReviewChange(id, 0L, Operation.WITHDRAWN, "取り下げ理由", "withdraw"));
+    var replay = service.replayCreate(STORE_ID, "actor", input(), "create");
     assertThat(replay.review().status()).isEqualTo(Status.WITHDRAWN);
     assertThat(replay.review().body()).isEqualTo("  原文\n二行目  ");
-    assertThat(service.replayChange("actor", approval).operation().replayed()).isTrue();
-    assertThat(service.change("actor", approval).review().status()).isEqualTo(Status.WITHDRAWN);
+    assertThat(service.replayChange(STORE_ID, "actor", approval).operation().replayed()).isTrue();
+    assertThat(service.change(STORE_ID, "actor", approval).review().status())
+        .isEqualTo(Status.WITHDRAWN);
     assertThatThrownBy(
             () ->
                 service.create(
-                    "actor", new ReviewInput("別本文", null, ReceivedVia.PAPER, AT, null), "create"))
+                    STORE_ID,
+                    "actor",
+                    new ReviewInput("別本文", null, ReceivedVia.PAPER, AT, null),
+                    "create"))
         .isInstanceOf(ConflictException.class);
     doThrow(new AccessDeniedException("権限なし"))
         .when(actors)
-        .require("actor", PermissionCode.REVIEW_MANAGE);
-    assertThatThrownBy(() -> service.create("actor", input(), "create"))
+        .require(STORE_ID, "actor", PermissionCode.REVIEW_MANAGE);
+    assertThatThrownBy(() -> service.create(STORE_ID, "actor", input(), "create"))
         .isInstanceOf(AccessDeniedException.class);
   }
 
   @Test
   void permissionRevocationRetainsEvidenceAndDoesNotReverseApprovalOrWithdrawal() {
     String id = create();
-    service.change("actor", new ReviewChange(id, 0L, Operation.APPROVED, "審査理由", "approve"));
+    service.change(
+        STORE_ID, "actor", new ReviewChange(id, 0L, Operation.APPROVED, "審査理由", "approve"));
     var grant =
         new ReviewChange(
             id,
@@ -190,13 +207,15 @@ class ReviewApplicationTest {
             Basis.ELECTRONIC_RECORD,
             AT,
             "  根拠  ");
-    var permitted = service.change("actor", grant);
+    var permitted = service.change(STORE_ID, "actor", grant);
     assertThat(permitted.review().publicationEligible()).isTrue();
-    service.change("actor", new ReviewChange(id, 0L, Operation.WITHDRAWN, "取り下げ", "withdraw"));
     service.change(
+        STORE_ID, "actor", new ReviewChange(id, 0L, Operation.WITHDRAWN, "取り下げ", "withdraw"));
+    service.change(
+        STORE_ID,
         "actor",
         new ReviewChange(id, 0L, Operation.PERMISSION_REVOKED, "撤回理由", "revoke", null, AT, null));
-    var replay = service.change("actor", grant);
+    var replay = service.change(STORE_ID, "actor", grant);
     assertThat(replay.review().publicationBlockers())
         .containsExactly("WITHDRAWN", "PERMISSION_REVOKED");
     assertThat(replay.review().permission().evidenceNote()).isEqualTo("根拠");
@@ -204,6 +223,7 @@ class ReviewApplicationTest {
     assertThatThrownBy(
             () ->
                 service.change(
+                    STORE_ID,
                     "actor",
                     new ReviewChange(
                         id,
@@ -221,11 +241,11 @@ class ReviewApplicationTest {
   void correctionStartsIndependentRecordAndReplaysItsCurrentDetail() {
     String id = create();
     var correction = new ReviewCorrection(id, 0L, "訂正", input(), "correct");
-    var result = service.correct("actor", correction);
+    var result = service.correct(STORE_ID, "actor", correction);
     verify(audit)
         .record(
             eq("actor"),
-            eq(1L),
+            eq(STORE_ID),
             eq("REVIEW_CORRECTION_LINKED"),
             eq("REVIEW"),
             eq(id),
@@ -235,76 +255,91 @@ class ReviewApplicationTest {
             eq(Map.of("status", "WITHDRAWN", "permission_status", "NOT_GRANTED", "version", "0")));
     assertThat(result.review().supersedesId()).isEqualTo(id);
     assertThat(result.review().permissionStatus()).isEqualTo(PermissionStatus.NOT_GRANTED);
-    assertThat(service.detail("actor", id).supersededById()).isEqualTo(result.review().id());
+    assertThat(service.detail(STORE_ID, "actor", id).supersededById())
+        .isEqualTo(result.review().id());
     service.change(
-        "actor", new ReviewChange(result.review().id(), 0L, Operation.REJECTED, "却下理由", "reject"));
-    assertThat(service.correct("actor", correction).review().status()).isEqualTo(Status.REJECTED);
-    assertThat(service.replayCorrection("actor", correction).operation().id())
+        STORE_ID,
+        "actor",
+        new ReviewChange(result.review().id(), 0L, Operation.REJECTED, "却下理由", "reject"));
+    assertThat(service.correct(STORE_ID, "actor", correction).review().status())
+        .isEqualTo(Status.REJECTED);
+    assertThat(service.replayCorrection(STORE_ID, "actor", correction).operation().id())
         .isEqualTo(result.operation().id());
     assertThatThrownBy(
-            () -> service.correct("actor", new ReviewCorrection(id, 0L, "再訂正", input(), "second")))
+            () ->
+                service.correct(
+                    STORE_ID, "actor", new ReviewCorrection(id, 0L, "再訂正", input(), "second")))
         .isInstanceOf(ConflictException.class);
   }
 
   @Test
   void originIsOnlyValidatedForNewReceiptsButItsAuthorityIsRequiredForReplay() {
     var input = new ReviewInput("本文", null, ReceivedVia.VERBAL, AT, "90");
-    when(origins.find(7L, "90")).thenReturn(Optional.empty());
-    assertThatThrownBy(() -> service.create("actor", input, "origin"))
+    when(origins.find(STORE_ID, "90")).thenReturn(Optional.empty());
+    assertThatThrownBy(() -> service.create(STORE_ID, "actor", input, "origin"))
         .isInstanceOf(NotFoundException.class);
-    when(origins.find(7L, "90"))
+    when(origins.find(STORE_ID, "90"))
         .thenReturn(Optional.of(new ReviewOriginFacts("90", 4L, "CONFIRMED", false)));
-    assertThatThrownBy(() -> service.create("actor", input, "origin"))
+    assertThatThrownBy(() -> service.create(STORE_ID, "actor", input, "origin"))
         .isInstanceOf(ServiceException.class);
-    when(origins.find(7L, "90"))
+    when(origins.find(STORE_ID, "90"))
         .thenReturn(Optional.of(new ReviewOriginFacts("90", 4L, "COMPLETED", false)));
-    var result = service.create("actor", input, "origin");
+    var result = service.create(STORE_ID, "actor", input, "origin");
     assertThat(result.review().originOrderVersion()).isEqualTo(4);
-    when(origins.find(7L, "90"))
+    when(origins.find(STORE_ID, "90"))
         .thenReturn(Optional.of(new ReviewOriginFacts("90", 5L, "COMPLETED", true)));
-    assertThat(service.create("actor", input, "origin").operation().replayed()).isTrue();
-    assertThatThrownBy(() -> service.create("actor", input, "other"))
+    assertThat(service.create(STORE_ID, "actor", input, "origin").operation().replayed()).isTrue();
+    assertThatThrownBy(() -> service.create(STORE_ID, "actor", input, "other"))
         .isInstanceOf(ServiceException.class);
     doThrow(new AccessDeniedException("受注の権限なし"))
         .when(actors)
-        .require("actor", PermissionCode.ORDER_MANAGE);
-    assertThatThrownBy(() -> service.replayCreate("actor", input, "origin"))
+        .require(STORE_ID, "actor", PermissionCode.ORDER_MANAGE);
+    assertThatThrownBy(() -> service.replayCreate(STORE_ID, "actor", input, "origin"))
         .isInstanceOf(AccessDeniedException.class);
   }
 
   @Test
   void missingAndMalformedOperationsFailWithoutSuccessfulReceipts() {
     String id = create();
-    assertThatThrownBy(() -> service.detail("actor", "999")).isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.replayCreate("actor", input(), "missing"))
+    assertThatThrownBy(() -> service.detail(STORE_ID, "actor", "999"))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.replayCreate(STORE_ID, "actor", input(), "missing"))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
                 service.replayChange(
-                    "actor", new ReviewChange(id, 0L, Operation.APPROVED, "確認", "missing")))
+                    STORE_ID,
+                    "actor",
+                    new ReviewChange(id, 0L, Operation.APPROVED, "確認", "missing")))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
                 service.replayCorrection(
-                    "actor", new ReviewCorrection(id, 0L, "訂正", input(), "missing")))
+                    STORE_ID, "actor", new ReviewCorrection(id, 0L, "訂正", input(), "missing")))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
                 service.change(
-                    "actor", new ReviewChange("999", 0L, Operation.APPROVED, "確認", "missing")))
+                    STORE_ID,
+                    "actor",
+                    new ReviewChange("999", 0L, Operation.APPROVED, "確認", "missing")))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
-                service.correct("actor", new ReviewCorrection("999", 0L, "訂正", input(), "missing")))
+                service.correct(
+                    STORE_ID, "actor", new ReviewCorrection("999", 0L, "訂正", input(), "missing")))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
                 service.change(
-                    "actor", new ReviewChange(id, 1L, Operation.APPROVED, "確認", "old-version")))
+                    STORE_ID,
+                    "actor",
+                    new ReviewChange(id, 1L, Operation.APPROVED, "確認", "old-version")))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(
             () ->
-                service.change("actor", new ReviewChange(id, 0L, Operation.RECEIVED, "不正", "bad")))
+                service.change(
+                    STORE_ID, "actor", new ReviewChange(id, 0L, Operation.RECEIVED, "不正", "bad")))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -320,6 +355,7 @@ class ReviewApplicationTest {
                 List.of(projections.createProjection(ReviewSummaryView.class, records.get(id)))));
     var page =
         service.list(
+            STORE_ID,
             "actor",
             new ReviewSearch(0, 20, null, null, null, null, ReviewSearch.Order.RECEIVED_DESC));
     assertThat(page.getContent().getFirst().displayName()).isEqualTo("表示名");
@@ -328,9 +364,9 @@ class ReviewApplicationTest {
             ArgumentMatchers
                 .<Function<? super SpecificationFluentQuery<ReviewHistory>, Object>>any()))
         .thenReturn(new PageImpl<>(List.of()));
-    assertThat(service.history("actor", id, null, 20).content()).isEmpty();
-    assertThatThrownBy(() -> service.history("actor", id, null, 101))
+    assertThat(service.history(STORE_ID, "actor", id, null, 20).content()).isEmpty();
+    assertThatThrownBy(() -> service.history(STORE_ID, "actor", id, null, 101))
         .isInstanceOf(ServiceException.class);
-    assertThat(service.history("actor", id, "MTIz", 1).content()).isEmpty();
+    assertThat(service.history(STORE_ID, "actor", id, "MTIz", 1).content()).isEmpty();
   }
 }
