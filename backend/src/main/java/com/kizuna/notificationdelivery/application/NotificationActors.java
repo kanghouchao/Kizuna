@@ -1,7 +1,6 @@
 package com.kizuna.notificationdelivery.application;
 
 import com.kizuna.audit.recording.AuditActor;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.UserRepository;
@@ -16,14 +15,13 @@ import org.springframework.stereotype.Component;
 public class NotificationActors {
   private final UserRepository users;
   private final RoleRepository roles;
-  private final StoreContext store;
 
-  public AuditActor require(String email, PermissionCode action) {
+  public AuditActor require(Long storeId, String email, PermissionCode action) {
     var user = users.findByEmail(email).orElseThrow(NotificationActors::denied);
-    if (!store.hasStoreId()
+    if (storeId == null
         || user.getUserType() != UserType.STAFF
         || !Boolean.TRUE.equals(user.getEnabled())
-        || !user.authorizes(store.getStoreId())
+        || !user.authorizes(storeId)
         || Collections.disjoint(
             user.getRoleIds(),
             roles.findIdsByPermissionCode(PermissionCode.NOTIFICATION_VIEW.name()))

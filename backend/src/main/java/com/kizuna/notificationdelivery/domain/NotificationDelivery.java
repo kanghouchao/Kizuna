@@ -59,8 +59,9 @@ public class NotificationDelivery extends StoreScopedEntity {
   @Column(length = 500)
   private String reason;
 
-  public static NotificationDelivery draft(DeliveryContent input) {
+  public static NotificationDelivery draft(Long storeId, DeliveryContent input) {
     var row = new NotificationDelivery();
+    row.setStoreId(storeId);
     row.sourceType = input.sourceType();
     if (input.sourceType() == DeliveryContent.SourceType.ORDER) row.orderId = input.sourceId();
     else row.applicationId = input.sourceId();
