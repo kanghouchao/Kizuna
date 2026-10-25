@@ -3,6 +3,7 @@ package com.kizuna.reporting.api.store;
 import com.kizuna.reporting.api.ReportDownload;
 import com.kizuna.reporting.api.dto.OperationalReportResponse;
 import com.kizuna.reporting.application.OperationalReportService;
+import com.kizuna.shared.storescope.CurrentStore;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -24,6 +25,7 @@ public class StoreOperationalReportController {
   @PreAuthorize(
       "hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and ((hasAuthority('PERM_ORDER_MANAGE') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_VIEW'))) or (hasAuthority('PERM_ORDER_SET_VIEW') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_VIEW'))))")
   public ResponseEntity<OperationalReportResponse> view(
+      @CurrentStore Long storeId,
       @RequestParam String from,
       @RequestParam String to,
       @RequestParam(name = "group_by", defaultValue = "day") String groupBy,
@@ -36,14 +38,15 @@ public class StoreOperationalReportController {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
         .body(
-            service.view(
-                false, from, to, groupBy, page, size, includeRemuneration, includeAdvertising));
+            service.viewStore(
+                storeId, from, to, groupBy, page, size, includeRemuneration, includeAdvertising));
   }
 
   @GetMapping("/exports")
   @PreAuthorize(
       "hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and ((hasAuthority('PERM_ORDER_MANAGE') and (!#includeAdvertising or (hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_EXPORT')))) or (hasAuthority('PERM_ORDER_SET_VIEW') and (!#includeAdvertising or (hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') and hasAuthority('PERM_ADVERTISING_COST_SET_EXPORT')))))")
   public ResponseEntity<byte[]> export(
+      @CurrentStore Long storeId,
       @RequestParam String from,
       @RequestParam String to,
       @RequestParam(name = "group_by", defaultValue = "day") String groupBy,
@@ -55,6 +58,7 @@ public class StoreOperationalReportController {
       throws IOException {
     return ReportDownload.response(
         format,
-        service.export(false, from, to, groupBy, format, includeRemuneration, includeAdvertising));
+        service.exportStore(
+            storeId, from, to, groupBy, format, includeRemuneration, includeAdvertising));
   }
 }

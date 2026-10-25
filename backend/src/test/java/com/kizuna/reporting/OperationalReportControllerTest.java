@@ -1,10 +1,12 @@
 package com.kizuna.reporting;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -99,9 +101,11 @@ class OperationalReportControllerTest {
             OffsetDateTime.parse("2026-10-01T12:00:00+09:00"),
             List.of(new OperationalFacts.Store(1L, "日本語店舗")),
             List.of());
-    when(remuneration.read(any(), any(), any(), anyInt()))
+    when(remuneration.read(any(), any(), any(), any(), anyInt()))
         .thenReturn(new RemunerationReportFacts(List.of(), List.of()));
-    when(advertising.read(anyBoolean(), any(), any(), any(), anyInt()))
+    when(advertising.store(anyLong(), any(), any(), any(), anyInt()))
+        .thenReturn(new AdvertisingReportFacts(List.of()));
+    when(advertising.groupWide(any(), any(), any(), any(), anyInt()))
         .thenReturn(new AdvertisingReportFacts(List.of()));
     when(reader.store(any(), any(), any())).thenReturn(facts);
     when(reader.groupWide(any(), any(), any())).thenReturn(facts);
@@ -125,6 +129,68 @@ class OperationalReportControllerTest {
                             .toArray(SimpleGrantedAuthority[]::new)));
     if (!scope.equals("admin")) request.header("X-Store-ID", "1");
     return request;
+  }
+
+  @Test
+  void storeReportReadsEverySourceForTheNamedStore() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(7L)));
+    mvc.perform(
+            get("/store/operational-reports")
+                .param("from", "2026-09-01")
+                .param("to", "2026-09-30")
+                .param("group_by", "month")
+                .param("include_remuneration", "true")
+                .param("include_advertising", "true")
+                .header("X-Store-ID", "7")
+                .with(
+                    jwt()
+                        .jwt(j -> j.subject("actor"))
+                        .authorities(
+                            new SimpleGrantedAuthority("PERM_ORDER_MANAGE"),
+                            new SimpleGrantedAuthority("PERM_OPERATIONAL_REPORT_VIEW"),
+                            new SimpleGrantedAuthority("PERM_REMUNERATION_VIEW"),
+                            new SimpleGrantedAuthority("PERM_ADVERTISING_COST_VIEW"))))
+        .andExpect(status().isOk());
+    verify(reader).store(eq(7L), any(), any());
+    verify(remuneration).read(eq(new StoreScope(false, Set.of(7L))), any(), any(), any(), anyInt());
+    verify(advertising).store(eq(7L), any(), any(), any(), anyInt());
+  }
+
+  @Test
+  void groupWideReportPassesTheResolvedScopeToEverySource() throws Exception {
+    var scope = new StoreScope(false, Set.of(1L, 7L));
+    when(storeScopeResolver.resolve(any())).thenReturn(scope);
+    mvc.perform(
+            request(
+                    "admin",
+                    "",
+                    "ORDER_SET_VIEW",
+                    "OPERATIONAL_REPORT_VIEW",
+                    "REMUNERATION_VIEW",
+                    "ADVERTISING_COST_SET_VIEW")
+                .param("group_by", "month")
+                .param("include_remuneration", "true")
+                .param("include_advertising", "true"))
+        .andExpect(status().isOk());
+    verify(reader).groupWide(same(scope), any(), any());
+    verify(remuneration).read(same(scope), any(), any(), any(), anyInt());
+    verify(advertising).groupWide(same(scope), any(), any(), any(), anyInt());
+  }
+
+  @Test
+  void groupWideReportIsForbiddenWithoutResolvedScope() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(null);
+    for (String path : List.of("", "/exports"))
+      mvc.perform(
+              request(
+                      "admin",
+                      path,
+                      "ORDER_SET_VIEW",
+                      "OPERATIONAL_REPORT_VIEW",
+                      "OPERATIONAL_REPORT_EXPORT")
+                  .param("format", "csv"))
+          .andExpect(status().isForbidden());
+    verifyNoInteractions(reader, remuneration, advertising);
   }
 
   @Test
@@ -229,7 +295,7 @@ class OperationalReportControllerTest {
             "NOT_CONFIGURED",
             null,
             500);
-    when(remuneration.read(any(), any(), any(), anyInt()))
+    when(remuneration.read(any(), any(), any(), any(), anyInt()))
         .thenReturn(new RemunerationReportFacts(List.of(day), List.of()));
     mvc.perform(
             request("store", "", "ORDER_MANAGE", "OPERATIONAL_REPORT_VIEW", "REMUNERATION_VIEW")

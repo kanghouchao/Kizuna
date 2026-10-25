@@ -7,8 +7,7 @@ import com.kizuna.remuneration.domain.GuaranteeState;
 import com.kizuna.remuneration.domain.RemunerationAmounts;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shift.remuneration.AttendanceFacts;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
@@ -30,8 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class RemunerationReportReader {
   private final EntityManager em;
   private final AttendanceFacts attendances;
-  private final StoreContext context;
-  private final StoreScopeHolder storeScopeHolder;
 
   public record Term(
       Long storeId,
@@ -53,14 +50,11 @@ public class RemunerationReportReader {
   @PreAuthorize("hasAuthority('PERM_REMUNERATION_VIEW')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
   public RemunerationReportFacts read(
-      OperationalFacts orders, LocalDate from, LocalDate to, int limit) {
+      StoreScope scope, OperationalFacts orders, LocalDate from, LocalDate to, int limit) {
+    if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
     var stores = orders.stores().stream().map(OperationalFacts.Store::storeId).toList();
-    var scope = storeScopeHolder.current();
     for (var store : stores)
-      if (context.hasStoreId()
-          ? !store.equals(context.getStoreId())
-          : scope == null || !scope.authorizes(store))
-        throw new AccessDeniedException("授権店舗集合に含まれません");
+      if (!scope.authorizes(store)) throw new AccessDeniedException("授権店舗集合に含まれません");
     if (stores.isEmpty()) return new RemunerationReportFacts(List.of(), List.of());
     if (limit < 1 || limit > 100_000) throw tooLarge();
     var intervals = attendances.forReport(stores, from, to, limit);

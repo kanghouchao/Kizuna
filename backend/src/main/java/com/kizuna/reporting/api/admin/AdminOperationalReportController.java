@@ -3,10 +3,13 @@ package com.kizuna.reporting.api.admin;
 import com.kizuna.reporting.api.ReportDownload;
 import com.kizuna.reporting.api.dto.OperationalReportResponse;
 import com.kizuna.reporting.application.OperationalReportService;
+import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AdminOperationalReportController {
   private final OperationalReportService service;
+  private final StoreScopeHolder storeScopeHolder;
 
   @GetMapping
   @PreAuthorize(
@@ -32,11 +36,13 @@ public class AdminOperationalReportController {
           boolean includeRemuneration,
       @RequestParam(name = "include_advertising", defaultValue = "false")
           boolean includeAdvertising) {
+    StoreScope scope = storeScopeHolder.current();
+    if (scope == null) throw new AccessDeniedException("店舗集合スコープを解決できません");
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
         .body(
-            service.view(
-                true, from, to, groupBy, page, size, includeRemuneration, includeAdvertising));
+            service.viewGroupWide(
+                scope, from, to, groupBy, page, size, includeRemuneration, includeAdvertising));
   }
 
   @GetMapping("/exports")
@@ -52,8 +58,11 @@ public class AdminOperationalReportController {
       @RequestParam(name = "include_advertising", defaultValue = "false")
           boolean includeAdvertising)
       throws IOException {
+    StoreScope scope = storeScopeHolder.current();
+    if (scope == null) throw new AccessDeniedException("店舗集合スコープを解決できません");
     return ReportDownload.response(
         format,
-        service.export(true, from, to, groupBy, format, includeRemuneration, includeAdvertising));
+        service.exportGroupWide(
+            scope, from, to, groupBy, format, includeRemuneration, includeAdvertising));
   }
 }
