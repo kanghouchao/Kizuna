@@ -40,7 +40,8 @@ export default defineConfig({
       ...initialSetup,
       // 登録の成功後に落ちて再試行すると、従業員が既に居るため無関係な理由で再び落ちる。
       retries: 0,
-      use: { ...devices['Desktop Chrome'] },
+      // 再試行が無いので on-first-retry では trace が残らない。失敗すると本体が実行されないため必ず残す。
+      use: { ...devices['Desktop Chrome'], trace: 'retain-on-failure' },
     },
     {
       ...main,

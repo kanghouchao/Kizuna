@@ -67,7 +67,7 @@ class InitialSetupControllerTest {
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
-  @MockitoBean StoreScopeResolver storeScopeResolver;
+  @MockitoBean private StoreScopeResolver storeScopeResolver;
 
   @BeforeEach
   void setUp() {
