@@ -354,7 +354,7 @@ Given("店舗スタッフと別店舗だけに在籍する本人がいる", asyn
   staffToken = await loginUser(
     request,
     "yamada.jiro@kizuna.test",
-    "pass",
+    "pass1234",
   );
   otherStoreId = String(
     (await getAuthorizedStores(request, managerToken)).find(

@@ -49,7 +49,7 @@ Given(
     secret = `顧客監査へ複写しない私的入力-${suffix}`;
     password = `Customer-${suffix}-fixture`;
     staff = await loginAsStoreAdmin(request);
-    const owner = await loginUser(request, "admin@kizuna.test", "pass");
+    const owner = await loginUser(request, "admin@kizuna.test", "pass1234");
     const role = await createPermissionRole(
       request,
       owner,

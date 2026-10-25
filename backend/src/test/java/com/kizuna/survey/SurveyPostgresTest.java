@@ -49,7 +49,6 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.JsonNode;
@@ -75,7 +74,6 @@ class SurveyPostgresTest {
     String url = System.getenv("KIZUNA_SURVEY_TEST_JDBC_URL");
     new JdbcTemplate(new DriverManagerDataSource(url, "postgres", ""))
         .execute("create schema " + schema);
-    String hash = new BCryptPasswordEncoder(4).encode(UUID.randomUUID().toString());
     context =
         new SpringApplicationBuilder(Config.class)
             .web(WebApplicationType.NONE)
@@ -88,8 +86,6 @@ class SurveyPostgresTest {
                         "spring.liquibase.change-log",
                         "classpath:db/changelog/db.changelog-master.yaml"),
                     Map.entry("spring.liquibase.contexts", "production"),
-                    Map.entry("spring.liquibase.parameters.initialAdminPasswordHash", hash),
-                    Map.entry("spring.liquibase.parameters.demoUserPasswordHash", hash),
                     Map.entry("spring.jpa.hibernate.ddl-auto", "validate"),
                     Map.entry("spring.jpa.open-in-view", "false"),
                     Map.entry("logging.level.root", "WARN")))

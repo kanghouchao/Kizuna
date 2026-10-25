@@ -19,7 +19,7 @@ const menuPaths = (menus: MenuNode[]): (string | null)[] => menus.flatMap(menu =
 
 Given('専用の処理実行者とサービスIDが用意されている', async ({ request, $testInfo }) => {
   $testInfo.setTimeout(120000);
-  admin = await loginUser(request, 'admin@kizuna.test', 'pass');
+  admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
   expect((await request.get('/api/admin/task-executions', { headers: headers(admin) })).status()).toBe(200);
   expect((await request.get('/api/admin/audit-events', { headers: headers(admin) })).status()).toBe(200);
   const suffix = Date.now().toString();

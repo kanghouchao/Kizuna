@@ -284,10 +284,6 @@ class CredentialRevocationPostgresTest {
       migration.setDataSource(source);
       migration.setChangeLog("classpath:db/changelog/db.changelog-master.yaml");
       migration.setContexts("production");
-      migration.setChangeLogParameters(
-          Map.of(
-              "initialAdminPasswordHash",
-              new BCryptPasswordEncoder().encode(UUID.randomUUID().toString())));
       return migration;
     }
 

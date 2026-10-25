@@ -60,7 +60,6 @@ services:
       - LIQUIBASE_CONTEXTS=${LIQUIBASE_CONTEXTS:-production}
       - APP_SCHEME=${APP_SCHEME:-https}
       - APP_JWT_SECRET=${APP_JWT_SECRET:?APP_JWT_SECRET を .env に設定してください（HMAC-SHA256 のため 256bit 以上）}
-      - INITIAL_ADMIN_PASSWORD_HASH=${INITIAL_ADMIN_PASSWORD_HASH:?INITIAL_ADMIN_PASSWORD_HASH を .env に設定してください（未設定だと開発用の既定パスワードで管理者が作成されます）}
       - SPRING_PROFILE
       - SERVER_PORT
       - APP_NAME
@@ -69,7 +68,6 @@ services:
       - APP_JWT_EXPIRATION_MS
       - APP_UPLOAD_URL_PREFIX
       - APP_UPLOAD_MAX_FILE_SIZE
-      - DEMO_USER_PASSWORD_HASH
       - POSTGRES_SSLMODE
       - POSTGRES_SSL
       - HIKARI_MINIMUM_IDLE

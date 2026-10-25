@@ -28,15 +28,6 @@ cp infrastructure/.env.example infrastructure/development/.env
 
 永続データは専用の `seaweedfs-data` ボリュームに保存するため、切り替え後は空のストレージで起動する。旧ストレージのボリュームは自動削除・変換しない。
 
-初回の `task up` より前に、開発用の管理者と demo スタッフのパスワードを自分で決め、bcrypt ハッシュを生成する。`htpasswd`（macOS 標準、Linux は Apache の utilities パッケージ）が必要。次のコマンドはパスワードを非表示で 2 回入力させる。平文を引数やシェル履歴に残す `-b` は使わない。
-
-```bash
-htpasswd -nBC 10 initial-admin
-htpasswd -nBC 10 demo-staff
-```
-
-それぞれの出力の `initial-admin:` / `demo-staff:` より後ろをコピーし、無視対象の `infrastructure/development/.env` に `INITIAL_ADMIN_PASSWORD_HASH` / `DEMO_USER_PASSWORD_HASH` として設定する。Compose の変数展開でハッシュ内の `$` が変わらないよう、各値の全体をシングルクォートで囲む。サンプルにはこの 2 変数がないため自分で追加する。管理者は最初に選んだパスワード、demo スタッフ 2 名は二つ目に選んだパスワードでログインする。この手順は空の開発 DB への初回投入用であり、適用済み DB のパスワード変更には使わない。
-
 `/etc/hosts` に次を追加する。
 
 ```text
@@ -50,9 +41,11 @@ task up
 
 [管理画面](http://kizuna.test/auth/login)と[公開店舗サイト](http://store1.kizuna.test)から利用できる。`task up` は再ビルドしないため、変更後は対象サービスを先にビルドする。
 
-開発環境は `LIQUIBASE_CONTEXTS=demo` でサンプル店舗とスタッフを投入する。HQ の `admin@kizuna.test` は baseline、店長 `tanaka.hanako@kizuna.test` とスタッフ `yamada.jiro@kizuna.test` は demo データである。初期パスワードのハッシュは `INITIAL_ADMIN_PASSWORD_HASH` / `DEMO_USER_PASSWORD_HASH` の設定を参照する。初回適用後の変更は Liquibase のチェックサムに影響するため、パスワード更新はアプリから行う。
+初回の `task up` の後、[初期設定画面](http://kizuna.test/auth/initial-setup)を開いて最初の管理者を登録する。入口の URL はバックエンドの起動ログ（`task -d infrastructure/development logs service=backend`）にも表示される。最初の管理者はグループ管理者ロールと全店舗の授権を持ち、以降の従業員は管理画面の従業員管理から作成する。登録したアカウントはデータボリュームを削除しない限り残る。
 
-起動しない場合は `task -d infrastructure/development ps` と `task -d infrastructure/development logs service=backend` で確認する。`localhost:8080` はバックエンドではなく Traefik。baseline の適用済みチェックサムが変わった開発 DB は、[DB 再作成手順](backend/src/main/resources/db/AGENTS.md#after-editing-the-baseline-the-dev-db-must-be-recreated)に従う。Docker ボリュームは削除しない。
+開発環境は `LIQUIBASE_CONTEXTS=demo` でサンプル店舗とその店舗サイト設定を投入する。baseline・demo のどちらにもアカウントは含まれない。
+
+起動しない場合は `task -d infrastructure/development ps` と `task -d infrastructure/development logs service=backend` で確認する。`localhost:8080` はバックエンドではなく Traefik。baseline の適用済みチェックサムが変わった開発 DB は、[DB 再作成手順](backend/src/main/resources/db/AGENTS.md#after-editing-the-baseline-the-dev-db-must-be-recreated)に従う。作り直した DB にはアカウントが無いため、初期設定から管理者を登録し直す。Docker ボリュームは削除しない。
 
 ## ポイント失効の運用
 

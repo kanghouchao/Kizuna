@@ -91,7 +91,6 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.modulith.events.IncompleteEventPublications;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -115,7 +114,6 @@ class NotificationPostgresTest {
         new DriverManagerDataSource(
             System.getenv("KIZUNA_NOTIFICATION_TEST_JDBC_URL"), "postgres", "");
     new JdbcTemplate(source).execute("create schema " + schema);
-    String hash = new BCryptPasswordEncoder(4).encode(UUID.randomUUID().toString());
 
     context =
         new SpringApplicationBuilder(Config.class)
@@ -133,8 +131,6 @@ class NotificationPostgresTest {
                         "spring.liquibase.change-log",
                         "classpath:db/changelog/db.changelog-master.yaml"),
                     Map.entry("spring.liquibase.contexts", "production"),
-                    Map.entry("spring.liquibase.parameters.initialAdminPasswordHash", hash),
-                    Map.entry("spring.liquibase.parameters.demoUserPasswordHash", hash),
                     Map.entry("spring.jpa.hibernate.ddl-auto", "validate"),
                     Map.entry("spring.jpa.open-in-view", "false"),
                     Map.entry(

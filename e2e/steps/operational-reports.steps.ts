@@ -23,7 +23,7 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
   params.from = `${1999 - $testInfo.retry}-09-01`;
   params.to = `${1999 - $testInfo.retry}-10-31`;
   manager = await loginAsStoreAdmin(request);
-  const admin = await loginUser(request, 'admin@kizuna.test', 'pass');
+  const admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
   const suffix = String(Date.now()); prefix = 'R388-' + suffix + '-'; password = 'Report-' + suffix + '-pass';
   const stores = await getAuthorizedStores(request, manager);
   foreign = String(stores.find(store => String(store.id) !== STORE1_ID)!.id);

@@ -94,7 +94,9 @@ class PointExpiryPostgresTest {
     operator =
         new AuditActor(
             jdbc.queryForObject(
-                "select id from t_users where user_type='STAFF' order by id limit 1", Long.class),
+                "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'検証担当','STAFF','ALL_STORES') returning id",
+                Long.class,
+                UUID.randomUUID() + "@example.test"),
             "STAFF",
             "検証担当");
   }
@@ -747,8 +749,6 @@ class PointExpiryPostgresTest {
       migration.setDataSource(source);
       migration.setChangeLog("classpath:db/changelog/db.changelog-master.yaml");
       migration.setContexts("demo");
-      migration.setChangeLogParameters(
-          Map.of("initialAdminPasswordHash", HASH, "demoUserPasswordHash", HASH));
       return migration;
     }
 
