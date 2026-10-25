@@ -2,7 +2,7 @@
 
 店舗運営システム（CMS/CRM/HRM）。一つのグループが一つまたは複数の店舗を運営し、各店舗は自身のサイト・従業員・顧客・注文を運営する。
 
-実装規約は [AGENTS.md](AGENTS.md)を参照する。本文中の ADR 番号は[過去の設計記録](https://github.com/kanghouchao/Kizuna/blob/d9a81d6c79026899aea2fe421b2bcff0b4dc0fc3/docs/README.md)を指す。現行の挙動は実装とテストで確認し、未実装事項は決定済みの概念と区別して記載する。
+実装規約は [AGENTS.md](AGENTS.md)を参照する。本文中の ADR 番号は[ADR](docs/adr/)を指す。現行の挙動は実装とテストで確認し、未実装事項は決定済みの概念と区別して記載する。
 
 ## 用語集
 
