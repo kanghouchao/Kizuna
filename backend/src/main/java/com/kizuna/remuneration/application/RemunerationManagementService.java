@@ -19,7 +19,6 @@ import com.kizuna.remuneration.domain.RemunerationRequest;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.ActorIdentityService;
@@ -41,7 +40,6 @@ import tools.jackson.databind.ObjectMapper;
 public class RemunerationManagementService {
   private final RemunerationRecords records;
   private final RemunerationPersonLookup people;
-  private final StoreContext stores;
   private final ActorIdentityService actors;
   private final BusinessDateService dates;
   private final BusinessAudit audit;
@@ -49,23 +47,24 @@ public class RemunerationManagementService {
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public GuaranteeListResponse guarantees(Long personId, int page, int size) {
-    requirePerson(personId);
+  public GuaranteeListResponse guarantees(Long storeId, Long personId, int page, int size) {
+    requirePerson(storeId, personId);
     return new GuaranteeListResponse(
-        records.timeline(store(), personId).map(t -> t.getRevision()).orElse(0L),
+        records.timeline(storeId, personId).map(t -> t.getRevision()).orElse(0L),
         records
-            .terms(store(), personId, RemunerationInput.page(page, size))
+            .terms(storeId, personId, RemunerationInput.page(page, size))
             .map(GuaranteeResponse::of));
   }
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<BonusResponse> bonuses(Long personId, String month, int page, int size) {
-    requirePerson(personId);
+  public Page<BonusResponse> bonuses(
+      Long storeId, Long personId, String month, int page, int size) {
+    requirePerson(storeId, personId);
     var target = RemunerationInput.month(month);
     return records
         .bonuses(
-            store(),
+            storeId,
             personId,
             target.atDay(1),
             target.atEndOfMonth(),
@@ -75,9 +74,11 @@ public class RemunerationManagementService {
 
   @StoreScoped
   @Transactional
-  public GuaranteeMutationResponse createGuarantee(GuaranteeCreateRequest request, String actor) {
-    requirePerson(request.personId());
+  public GuaranteeMutationResponse createGuarantee(
+      Long storeId, GuaranteeCreateRequest request, String actor) {
+    requirePerson(storeId, request.personId());
     return once(
+        storeId,
         actor,
         request.requestId(),
         "GUARANTEE_CREATE",
@@ -85,9 +86,9 @@ public class RemunerationManagementService {
         GuaranteeMutationResponse.class,
         () -> {
           if (request.effectiveFrom().isBefore(dates.currentBusinessDate())) requireCorrection();
-          var timeline = records.lockedTimeline(store(), request.personId());
+          var timeline = records.lockedTimeline(storeId, request.personId());
           timeline.advance(request.expectedVersion());
-          var terms = records.activeTerms(store(), request.personId());
+          var terms = records.activeTerms(storeId, request.personId());
           if (!terms.isEmpty()
               && !request.effectiveFrom().isAfter(terms.getLast().getEffectiveFrom()))
             throw new ConflictException("新しい保証条件は最後の適用開始日より後にしてください");
@@ -99,11 +100,13 @@ public class RemunerationManagementService {
                   .amount(request.dailyAmount())
                   .reason(request.reason())
                   .build();
+          term.setStoreId(storeId);
           records.persist(term);
           records.flush();
           var result = GuaranteeResponse.of(term);
           var change =
               change(
+                  storeId,
                   actor,
                   request.personId(),
                   "GUARANTEE",
@@ -119,21 +122,22 @@ public class RemunerationManagementService {
   @StoreScoped
   @Transactional
   public GuaranteeMutationResponse correctGuarantee(
-      String id, GuaranteeCorrectionRequest request, String actor) {
-    var term = records.term(store(), id);
-    requirePerson(term.getPersonId());
+      Long storeId, String id, GuaranteeCorrectionRequest request, String actor) {
+    var term = records.term(storeId, id);
+    requirePerson(storeId, term.getPersonId());
     return once(
+        storeId,
         actor,
         request.requestId(),
         "GUARANTEE_CORRECT:" + id,
         request,
         GuaranteeMutationResponse.class,
         () -> {
-          var timeline = records.lockedTimeline(store(), term.getPersonId());
+          var timeline = records.lockedTimeline(storeId, term.getPersonId());
           timeline.advance(request.expectedVersion());
           records.refreshForWrite(term);
           var before = GuaranteeResponse.of(term);
-          for (var other : records.activeTerms(store(), term.getPersonId())) {
+          for (var other : records.activeTerms(storeId, term.getPersonId())) {
             if (other.getId().equals(id)) continue;
             boolean previous = other.getEffectiveFrom().isBefore(term.getEffectiveFrom());
             if (previous && !request.effectiveFrom().isAfter(other.getEffectiveFrom())
@@ -146,6 +150,7 @@ public class RemunerationManagementService {
           var result = GuaranteeResponse.of(term);
           var change =
               change(
+                  storeId,
                   actor,
                   term.getPersonId(),
                   "GUARANTEE",
@@ -161,17 +166,18 @@ public class RemunerationManagementService {
   @StoreScoped
   @Transactional
   public GuaranteeMutationResponse cancelGuarantee(
-      String id, CancellationRequest request, String actor) {
-    var term = records.term(store(), id);
-    requirePerson(term.getPersonId());
+      Long storeId, String id, CancellationRequest request, String actor) {
+    var term = records.term(storeId, id);
+    requirePerson(storeId, term.getPersonId());
     return once(
+        storeId,
         actor,
         request.requestId(),
         "GUARANTEE_CANCEL:" + id,
         request,
         GuaranteeMutationResponse.class,
         () -> {
-          var timeline = records.lockedTimeline(store(), term.getPersonId());
+          var timeline = records.lockedTimeline(storeId, term.getPersonId());
           timeline.advance(request.expectedVersion());
           records.refreshForWrite(term);
           var before = GuaranteeResponse.of(term);
@@ -180,6 +186,7 @@ public class RemunerationManagementService {
           var result = GuaranteeResponse.of(term);
           var change =
               change(
+                  storeId,
                   actor,
                   term.getPersonId(),
                   "GUARANTEE",
@@ -194,9 +201,10 @@ public class RemunerationManagementService {
 
   @StoreScoped
   @Transactional
-  public BonusMutationResponse createBonus(BonusCreateRequest request, String actor) {
-    requirePerson(request.personId());
+  public BonusMutationResponse createBonus(Long storeId, BonusCreateRequest request, String actor) {
+    requirePerson(storeId, request.personId());
     return once(
+        storeId,
         actor,
         request.requestId(),
         "BONUS_CREATE",
@@ -210,11 +218,13 @@ public class RemunerationManagementService {
                   .amount(request.amount())
                   .reason(request.reason())
                   .build();
+          bonus.setStoreId(storeId);
           records.persist(bonus);
           records.flush();
           var result = BonusResponse.of(bonus);
           var change =
               change(
+                  storeId,
                   actor,
                   request.personId(),
                   "BONUS",
@@ -230,10 +240,11 @@ public class RemunerationManagementService {
   @StoreScoped
   @Transactional
   public BonusMutationResponse correctBonus(
-      String id, BonusCorrectionRequest request, String actor) {
-    var bonus = records.bonus(store(), id);
-    requirePerson(bonus.getPersonId());
+      Long storeId, String id, BonusCorrectionRequest request, String actor) {
+    var bonus = records.bonus(storeId, id);
+    requirePerson(storeId, bonus.getPersonId());
     return once(
+        storeId,
         actor,
         request.requestId(),
         "BONUS_CORRECT:" + id,
@@ -248,6 +259,7 @@ public class RemunerationManagementService {
           var result = BonusResponse.of(bonus);
           var change =
               change(
+                  storeId,
                   actor,
                   bonus.getPersonId(),
                   "BONUS",
@@ -262,10 +274,12 @@ public class RemunerationManagementService {
 
   @StoreScoped
   @Transactional
-  public BonusMutationResponse cancelBonus(String id, CancellationRequest request, String actor) {
-    var bonus = records.bonus(store(), id);
-    requirePerson(bonus.getPersonId());
+  public BonusMutationResponse cancelBonus(
+      Long storeId, String id, CancellationRequest request, String actor) {
+    var bonus = records.bonus(storeId, id);
+    requirePerson(storeId, bonus.getPersonId());
     return once(
+        storeId,
         actor,
         request.requestId(),
         "BONUS_CANCEL:" + id,
@@ -280,6 +294,7 @@ public class RemunerationManagementService {
           var result = BonusResponse.of(bonus);
           var change =
               change(
+                  storeId,
                   actor,
                   bonus.getPersonId(),
                   "BONUS",
@@ -295,23 +310,24 @@ public class RemunerationManagementService {
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<RemunerationChangeResponse> guaranteeChanges(
-      String id, String cursor, int size) {
-    requirePerson(records.term(store(), id).getPersonId());
-    return history("GUARANTEE", id, cursor, size);
+      Long storeId, String id, String cursor, int size) {
+    requirePerson(storeId, records.term(storeId, id).getPersonId());
+    return history(storeId, "GUARANTEE", id, cursor, size);
   }
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<RemunerationChangeResponse> bonusChanges(String id, String cursor, int size) {
-    requirePerson(records.bonus(store(), id).getPersonId());
-    return history("BONUS", id, cursor, size);
+  public CursorPage<RemunerationChangeResponse> bonusChanges(
+      Long storeId, String id, String cursor, int size) {
+    requirePerson(storeId, records.bonus(storeId, id).getPersonId());
+    return history(storeId, "BONUS", id, cursor, size);
   }
 
   private CursorPage<RemunerationChangeResponse> history(
-      String type, String id, String cursor, int size) {
+      Long storeId, String type, String id, String cursor, int size) {
     RemunerationInput.page(0, size);
     return CursorPage.of(
-            records.changes(store(), type, id, cursor, size),
+            records.changes(storeId, type, id, cursor, size),
             size,
             c -> c.getCreatedAt() + "|" + c.getId())
         .map(
@@ -327,6 +343,7 @@ public class RemunerationManagementService {
   }
 
   private <T> T once(
+      Long storeId,
       String actor,
       UUID requestId,
       String operation,
@@ -334,27 +351,30 @@ public class RemunerationManagementService {
       Class<T> type,
       Supplier<T> work) {
     Long actorId = actors.requireUserId(actor);
-    records.lock("request:" + store() + ":" + actorId + ":" + requestId);
+    records.lock("request:" + storeId + ":" + actorId + ":" + requestId);
     String value = operation + "\n" + json.writeValueAsString(request);
-    var prior = records.receipt(store(), actorId, requestId);
+    var prior = records.receipt(storeId, actorId, requestId);
     if (prior.isPresent()) {
       if (!prior.get().getRequestValue().equals(value))
         throw new ConflictException("同じリクエスト識別子に別の内容は指定できません");
       return json.readValue(prior.get().getResponseValue(), type);
     }
     T result = work.get();
-    records.persist(
+    var receipt =
         RemunerationRequest.builder()
             .actorId(actorId)
             .requestId(requestId)
             .requestValue(value)
             .responseValue(json.writeValueAsString(result))
-            .build());
+            .build();
+    receipt.setStoreId(storeId);
+    records.persist(receipt);
     records.flush();
     return result;
   }
 
   private RemunerationChange change(
+      Long storeId,
       String actor,
       Long person,
       String type,
@@ -374,11 +394,12 @@ public class RemunerationManagementService {
             .before(json.writeValueAsString(before))
             .after(json.writeValueAsString(after))
             .build();
+    change.setStoreId(storeId);
     records.persist(change);
     records.flush();
     audit.record(
         actor,
-        store(),
+        storeId,
         "REMUNERATION_" + type + "_" + action,
         type,
         id,
@@ -389,13 +410,9 @@ public class RemunerationManagementService {
     return change;
   }
 
-  private Long store() {
-    return stores.getStoreId();
-  }
-
-  private void requirePerson(Long person) {
+  private void requirePerson(Long storeId, Long person) {
     RemunerationInput.person(person);
-    people.require(store(), person);
+    people.require(storeId, person);
   }
 
   private void requireCorrection() {

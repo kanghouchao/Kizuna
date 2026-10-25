@@ -74,6 +74,7 @@ public class RemunerationRecords {
         .orElseGet(
             () -> {
               var t = GuaranteeTimeline.builder().personId(person).build();
+              t.setStoreId(store);
               persist(t);
               return t;
             });
