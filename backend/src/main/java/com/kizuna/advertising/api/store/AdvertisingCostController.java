@@ -13,7 +13,7 @@ import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingFailures;
 import com.kizuna.advertising.application.AdvertisingService;
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -42,39 +42,43 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdvertisingCostController {
   private final AdvertisingService service;
   private final AdvertisingExportService exports;
-  private final StoreContext stores;
 
   @GetMapping("/advertising-costs")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
   public ResponseEntity<Page<CostSummary>> list(
+      @CurrentStore Long storeId,
       @RequestParam String month,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(AdvertisingFailures.run(() -> service.list(month, page, size)));
+        .body(AdvertisingFailures.run(() -> service.list(storeId, month, page, size)));
   }
 
   @GetMapping("/advertising-costs/{id}")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
-  public ResponseEntity<CostResponse> get(@PathVariable String id) {
-    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.get(id));
+  public ResponseEntity<CostResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.get(storeId, id));
   }
 
   @PostMapping("/advertising-costs")
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize(
       "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
-  public CostResponse create(@Valid @RequestBody CreateRequest request, Principal actor) {
-    return AdvertisingFailures.run(() -> service.create(request, actor.getName()));
+  public CostResponse create(
+      @CurrentStore Long storeId, @Valid @RequestBody CreateRequest request, Principal actor) {
+    return AdvertisingFailures.run(() -> service.create(storeId, request, actor.getName()));
   }
 
   @PutMapping("/advertising-costs/{id}")
   @PreAuthorize(
       "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public CostResponse replace(
-      @PathVariable String id, @Valid @RequestBody ReplaceRequest request, Principal actor) {
-    return AdvertisingFailures.run(() -> service.replace(id, request, actor.getName()));
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody ReplaceRequest request,
+      Principal actor) {
+    return AdvertisingFailures.run(() -> service.replace(storeId, id, request, actor.getName()));
   }
 
   @DeleteMapping("/advertising-costs/{id}")
@@ -82,20 +86,24 @@ public class AdvertisingCostController {
   @PreAuthorize(
       "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public void delete(
-      @PathVariable String id, @Valid @RequestBody DeleteRequest request, Principal actor) {
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody DeleteRequest request,
+      Principal actor) {
     AdvertisingFailures.run(
         () -> {
-          service.delete(id, request, actor.getName());
+          service.delete(storeId, id, request, actor.getName());
           return true;
         });
   }
 
   @GetMapping("/advertising-cost-months/{month}")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
-  public ResponseEntity<MonthResponse> month(@PathVariable String month) {
+  public ResponseEntity<MonthResponse> month(
+      @CurrentStore Long storeId, @PathVariable String month) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(AdvertisingFailures.run(() -> service.month(month)));
+        .body(AdvertisingFailures.run(() -> service.month(storeId, month)));
   }
 
   @PostMapping("/advertising-cost-months/{month}/copies")
@@ -103,35 +111,40 @@ public class AdvertisingCostController {
   @PreAuthorize(
       "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public CopyResponse copy(
-      @PathVariable String month, @Valid @RequestBody CopyRequest request, Principal actor) {
-    return AdvertisingFailures.run(() -> service.copy(month, request, actor.getName()));
+      @CurrentStore Long storeId,
+      @PathVariable String month,
+      @Valid @RequestBody CopyRequest request,
+      Principal actor) {
+    return AdvertisingFailures.run(() -> service.copy(storeId, month, request, actor.getName()));
   }
 
   @GetMapping("/advertising-cost-months/{month}/changes")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
   public ResponseEntity<CursorPage<ChangeSummary>> changes(
+      @CurrentStore Long storeId,
       @PathVariable String month,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(service.changes(month, cursor, size));
+        .body(service.changes(storeId, month, cursor, size));
   }
 
   @GetMapping("/advertising-cost-months/{month}/changes/{id}")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
   public ResponseEntity<ChangeResponse> change(
-      @PathVariable String month, @PathVariable String id) {
+      @CurrentStore Long storeId, @PathVariable String month, @PathVariable String id) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(service.changeDetail(month, id));
+        .body(service.changeDetail(storeId, month, id));
   }
 
   @GetMapping("/advertising-costs/exports")
   @PreAuthorize(
       "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_EXPORT')")
-  public ResponseEntity<byte[]> export(@RequestParam String month, @RequestParam String format) {
-    var bytes = exports.export(month, format);
+  public ResponseEntity<byte[]> export(
+      @CurrentStore Long storeId, @RequestParam String month, @RequestParam String format) {
+    var bytes = exports.export(storeId, month, format);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
         .contentType(
@@ -142,7 +155,7 @@ public class AdvertisingCostController {
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
             "attachment; filename=\"advertising-costs-"
-                + stores.getStoreId()
+                + storeId
                 + "-"
                 + month
                 + "."

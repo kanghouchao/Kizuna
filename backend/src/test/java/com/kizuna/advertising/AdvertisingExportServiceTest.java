@@ -45,7 +45,7 @@ class AdvertisingExportServiceTest {
             orderRenderer);
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
-    when(records.snapshot("2026-09"))
+    when(records.snapshot(1L, "2026-09"))
         .thenAnswer(
             invocation -> {
               entered.countDown();
@@ -53,13 +53,13 @@ class AdvertisingExportServiceTest {
               throw new ServiceUnavailableException("読取期限");
             });
     try (var pool = Executors.newSingleThreadExecutor()) {
-      var first = pool.submit(() -> service.export("2026-09", "csv"));
+      var first = pool.submit(() -> service.export(1L, "2026-09", "csv"));
       assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
-      assertThatThrownBy(() -> service.export("2026-09", "csv"))
+      assertThatThrownBy(() -> service.export(1L, "2026-09", "csv"))
           .isInstanceOf(ServiceUnavailableException.class);
-      assertThatThrownBy(() -> service.exportMedia("2026-09", "csv"))
+      assertThatThrownBy(() -> service.exportMedia(1L, "2026-09", "csv"))
           .isInstanceOf(ServiceUnavailableException.class);
-      assertThatThrownBy(() -> service.exportOrderCost("2026-09", "csv"))
+      assertThatThrownBy(() -> service.exportOrderCost(1L, "2026-09", "csv"))
           .isInstanceOf(ServiceUnavailableException.class);
       release.countDown();
       assertThatThrownBy(() -> first.get(5, TimeUnit.SECONDS))
@@ -67,22 +67,23 @@ class AdvertisingExportServiceTest {
     } finally {
       release.countDown();
     }
-    doReturn(null).when(records).snapshot("2026-09");
+    doReturn(null).when(records).snapshot(1L, "2026-09");
     when(renderer.render(eq(null), eq("csv"), any())).thenReturn(new byte[] {1});
-    assertThat(service.export("2026-09", "csv")).containsExactly((byte) 1);
-    when(media.snapshot(eq("2026-09"), any())).thenReturn(null);
+    assertThat(service.export(1L, "2026-09", "csv")).containsExactly((byte) 1);
+    when(media.snapshot(eq(1L), eq("2026-09"), any())).thenReturn(null);
     when(mediaRenderer.render(eq(null), eq("csv"), any())).thenThrow(new IOException("生成失敗"));
-    assertThatThrownBy(() -> service.exportMedia("2026-09", "csv"))
+    assertThatThrownBy(() -> service.exportMedia(1L, "2026-09", "csv"))
         .isInstanceOf(UncheckedIOException.class);
     when(mediaRenderer.render(eq(null), eq("csv"), any())).thenReturn(new byte[] {2});
-    assertThat(service.exportMedia("2026-09", "csv")).containsExactly((byte) 2);
-    assertThatThrownBy(() -> service.exportMedia("2026-09", null))
+    assertThat(service.exportMedia(1L, "2026-09", "csv")).containsExactly((byte) 2);
+    assertThatThrownBy(() -> service.exportMedia(1L, "2026-09", null))
         .isInstanceOf(ServiceException.class);
     when(orderRenderer.render(eq(null), eq("xlsx"), any())).thenThrow(new IOException("生成失敗"));
-    assertThatThrownBy(() -> service.exportOrderCost("2026-09", "xlsx"))
+    assertThatThrownBy(() -> service.exportOrderCost(1L, "2026-09", "xlsx"))
         .isInstanceOf(UncheckedIOException.class);
     when(orderRenderer.render(eq(null), eq("xlsx"), any())).thenReturn(new byte[] {3});
-    assertThat(service.exportOrderCost("2026-09", "xlsx")).containsExactly((byte) 3);
-    assertThatThrownBy(() -> service.export("2026-09", "pdf")).isInstanceOf(ServiceException.class);
+    assertThat(service.exportOrderCost(1L, "2026-09", "xlsx")).containsExactly((byte) 3);
+    assertThatThrownBy(() -> service.export(1L, "2026-09", "pdf"))
+        .isInstanceOf(ServiceException.class);
   }
 }

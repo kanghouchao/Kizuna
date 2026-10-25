@@ -3,7 +3,7 @@ package com.kizuna.advertising.api.store;
 import com.kizuna.advertising.api.dto.AdvertisingMediaSummaryResponse;
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingMediaService;
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.CurrentStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -22,26 +22,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdvertisingMediaController {
   private final AdvertisingMediaService service;
   private final AdvertisingExportService exports;
-  private final StoreContext stores;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
   public ResponseEntity<AdvertisingMediaSummaryResponse> list(
-      @RequestParam MultiValueMap<String, String> params) {
+      @CurrentStore Long storeId, @RequestParam MultiValueMap<String, String> params) {
     var query = AdvertisingSummaryQuery.parse(params, false);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(AdvertisingMediaSummaryResponse.of(service.view(query.month()), query.page()));
+        .body(
+            AdvertisingMediaSummaryResponse.of(service.view(storeId, query.month()), query.page()));
   }
 
   @GetMapping("/exports")
   @PreAuthorize(
       "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_EXPORT')")
-  public ResponseEntity<byte[]> export(@RequestParam MultiValueMap<String, String> params) {
+  public ResponseEntity<byte[]> export(
+      @CurrentStore Long storeId, @RequestParam MultiValueMap<String, String> params) {
     var query = AdvertisingSummaryQuery.parse(params, true);
     String month = query.month();
     String format = query.format();
-    var bytes = exports.exportMedia(month, format);
+    var bytes = exports.exportMedia(storeId, month, format);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
         .contentType(
@@ -52,7 +53,7 @@ public class AdvertisingMediaController {
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
             "attachment; filename=\"advertising-media-summaries-"
-                + stores.getStoreId()
+                + storeId
                 + "-"
                 + month
                 + "."
