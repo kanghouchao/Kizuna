@@ -41,7 +41,7 @@ export function handleRouteProtection(request: NextRequest, _role: 'app' | 'stor
     return NextResponse.redirect(new URL(`${legacyTarget}${request.nextUrl.search}`, request.url));
   }
 
-  // 公開 auth ルート（ログインフォーム・招待受諾・会員登録・LINE コールバック）はセッション不要で、
+  // 公開 auth ルート（ログインフォーム・招待受諾・会員登録・LINE コールバック・初期設定）はセッション不要で、
   // 未認証の差し戻しにもエリア整合の守衛にも掛けない。
   const isPublicAuthRoute = isPublicAuthPath(path);
 

@@ -1,5 +1,5 @@
 /**
- * セッション不要の auth ルート（ログインフォーム・招待受諾・会員登録・LINE コールバック）。
+ * セッション不要の auth ルート（ログインフォーム・招待受諾・会員登録・LINE コールバック・初期設定）。
  * ルート守衛が参照する。LINE コールバックは未ログインのログイン/登録経路が通るため公開扱いが必須で、
  * 連携経路（ログイン済み）でも会員・キャストのコンソールから /admin/* へ到達するため
  * コンソール整合ガードの対象外である必要がある。
@@ -9,7 +9,8 @@ export function isPublicAuthPath(path: string): boolean {
     path.startsWith('/auth/login') ||
     path.startsWith('/auth/invite') ||
     path.startsWith('/auth/register') ||
-    path.startsWith('/auth/line/callback')
+    path.startsWith('/auth/line/callback') ||
+    path.startsWith('/auth/initial-setup')
   );
 }
 
