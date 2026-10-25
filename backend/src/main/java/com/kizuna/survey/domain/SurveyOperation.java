@@ -54,15 +54,18 @@ public class SurveyOperation extends StoreScopedEntity {
       Operation type,
       StoreScopedEntity result,
       boolean answer) {
-    return builder()
-        .actorId(actor)
-        .dedupeKey(key)
-        .fingerprint(hash)
-        .type(type)
-        .revisionId(answer ? null : result.getId())
-        .responseId(answer ? result.getId() : null)
-        .committedVersion(result.getVersion())
-        .build();
+    var operation =
+        builder()
+            .actorId(actor)
+            .dedupeKey(key)
+            .fingerprint(hash)
+            .type(type)
+            .revisionId(answer ? null : result.getId())
+            .responseId(answer ? result.getId() : null)
+            .committedVersion(result.getVersion())
+            .build();
+    operation.setStoreId(result.getStoreId());
+    return operation;
   }
 
   public void requireSame(String hash) {

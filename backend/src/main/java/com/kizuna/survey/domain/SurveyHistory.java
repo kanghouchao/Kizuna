@@ -86,18 +86,21 @@ public class SurveyHistory extends StoreScopedEntity {
       Before before,
       String reason,
       String related) {
-    return builder()
-        .revisionId(answer ? null : row.getId())
-        .responseId(answer ? row.getId() : null)
-        .type(type)
-        .actorId(actor)
-        .actorName(name)
-        .beforeVersion(before == null ? null : before.version())
-        .beforeStatus(before == null ? null : before.status())
-        .afterVersion(row.getVersion())
-        .afterStatus(status)
-        .reason(reason)
-        .relatedResponseId(related)
-        .build();
+    var history =
+        builder()
+            .revisionId(answer ? null : row.getId())
+            .responseId(answer ? row.getId() : null)
+            .type(type)
+            .actorId(actor)
+            .actorName(name)
+            .beforeVersion(before == null ? null : before.version())
+            .beforeStatus(before == null ? null : before.status())
+            .afterVersion(row.getVersion())
+            .afterStatus(status)
+            .reason(reason)
+            .relatedResponseId(related)
+            .build();
+    history.setStoreId(row.getStoreId());
+    return history;
   }
 }

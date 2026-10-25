@@ -49,22 +49,22 @@ public class SurveyService {
 
   @StoreScoped
   @Transactional
-  public SurveyWriteResponse write(String email, SurveyCommand command) {
-    var actor = actors.require(email, permission(command));
-    lock(command);
-    command = normalize(command);
+  public SurveyWriteResponse write(Long storeId, String email, SurveyCommand command) {
+    var actor = actors.require(storeId, email, permission(command));
+    lock(storeId, command);
+    command = normalize(storeId, command);
     var hash = fingerprint(command);
-    var old = operations.findByActorIdAndDedupeKey(actor.id(), command.key());
-    if (old.isPresent()) return replay(old.get(), hash);
+    var old = operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), command.key());
+    if (old.isPresent()) return replay(storeId, old.get(), hash);
     var result =
         switch (command) {
-          case SurveyCommand.Create c -> create(email, actor, c);
-          case SurveyCommand.Revise c -> revise(email, actor, c);
-          case SurveyCommand.Replace c -> replace(email, actor, c);
-          case SurveyCommand.RevisionAction c -> transition(email, actor, c);
-          case SurveyCommand.Receive c -> receive(email, actor, c);
-          case SurveyCommand.Withdraw c -> withdraw(email, actor, c);
-          case SurveyCommand.Correct c -> correct(email, actor, c);
+          case SurveyCommand.Create c -> create(storeId, email, actor, c);
+          case SurveyCommand.Revise c -> revise(storeId, email, actor, c);
+          case SurveyCommand.Replace c -> replace(storeId, email, actor, c);
+          case SurveyCommand.RevisionAction c -> transition(storeId, email, actor, c);
+          case SurveyCommand.Receive c -> receive(storeId, email, actor, c);
+          case SurveyCommand.Withdraw c -> withdraw(storeId, email, actor, c);
+          case SurveyCommand.Correct c -> correct(storeId, email, actor, c);
         };
     var receipt =
         operations.saveAndFlush(
@@ -85,42 +85,46 @@ public class SurveyService {
 
   @StoreScoped
   @Transactional
-  public SurveyWriteResponse replayOnly(String email, SurveyCommand command) {
-    var actor = actors.require(email, permission(command));
-    lock(command);
-    command = normalize(command);
+  public SurveyWriteResponse replayOnly(Long storeId, String email, SurveyCommand command) {
+    var actor = actors.require(storeId, email, permission(command));
+    lock(storeId, command);
+    command = normalize(storeId, command);
     var receipt =
         operations
-            .findByActorIdAndDedupeKey(actor.id(), command.key())
+            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), command.key())
             .orElseThrow(SurveyService::missing);
-    return replay(receipt, fingerprint(command));
+    return replay(storeId, receipt, fingerprint(command));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public SurveyRevisionResponse revision(String email, String surveyId, String id) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
+  public SurveyRevisionResponse revision(Long storeId, String email, String surveyId, String id) {
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     return SurveyRevisionResponse.of(
         revisions
-            .findProjectedByIdAndSurveyId(SurveyInput.id(id), SurveyInput.id(surveyId))
+            .findProjectedByIdAndStoreIdAndSurveyId(
+                SurveyInput.id(id), storeId, SurveyInput.id(surveyId))
             .orElseThrow(SurveyService::missing));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public SurveyAnswerResponse answer(String email, String id) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
+  public SurveyAnswerResponse answer(Long storeId, String email, String id) {
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     return SurveyAnswerResponse.of(
-        answers.findProjectedById(SurveyInput.id(id)).orElseThrow(SurveyService::missing));
+        answers
+            .findProjectedByIdAndStoreId(SurveyInput.id(id), storeId)
+            .orElseThrow(SurveyService::missing));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public SurveyResponseCountsResponse counts(String email, String surveyId, String id) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
-    if (!revisions.existsByIdAndSurveyId(SurveyInput.id(id), SurveyInput.id(surveyId)))
-      throw missing();
-    var count = answers.counts(id);
+  public SurveyResponseCountsResponse counts(
+      Long storeId, String email, String surveyId, String id) {
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+    if (!revisions.existsByIdAndStoreIdAndSurveyId(
+        SurveyInput.id(id), storeId, SurveyInput.id(surveyId))) throw missing();
+    var count = answers.counts(storeId, id);
     return new SurveyResponseCountsResponse(
         surveyId,
         id,
@@ -131,28 +135,29 @@ public class SurveyService {
 
   private record Result(SurveyRevision revision, SurveyAnswer answer, Operation type) {}
 
-  private Result create(String email, AuditActor actor, SurveyCommand.Create c) {
-    var survey = surveys.saveAndFlush(SurveySeries.create(actor.id(), actor.name()));
+  private Result create(Long storeId, String email, AuditActor actor, SurveyCommand.Create c) {
+    var survey = surveys.saveAndFlush(SurveySeries.create(storeId, actor.id(), actor.name()));
     var revision =
         revisions.saveAndFlush(
-            SurveyRevision.draft(
-                survey.getId(), 1, null, c.definition(), actor.id(), actor.name()));
+            SurveyRevision.draft(survey, 1, null, c.definition(), actor.id(), actor.name()));
     survey.advance(revision.getId());
     surveys.flush();
     revisionHistory(email, actor, revision, Operation.DRAFT_CREATED, null, null);
     return new Result(revision, null, Operation.DRAFT_CREATED);
   }
 
-  private Result revise(String email, AuditActor actor, SurveyCommand.Revise c) {
-    var survey = surveys.findById(c.surveyId()).orElseThrow(SurveyService::missing);
-    var based = revisionRow(c.surveyId(), c.basedOn());
+  private Result revise(Long storeId, String email, AuditActor actor, SurveyCommand.Revise c) {
+    var survey =
+        surveys.findByIdAndStoreId(c.surveyId(), storeId).orElseThrow(SurveyService::missing);
+    var based = revisionRow(storeId, c.surveyId(), c.basedOn());
     if (!survey.getLatestRevisionId().equals(based.getId())
-        || revisions.existsBySurveyIdAndStatus(c.surveyId(), RevisionStatus.DRAFT))
+        || revisions.existsByStoreIdAndSurveyIdAndStatus(
+            storeId, c.surveyId(), RevisionStatus.DRAFT))
       throw new ConflictException("最新版を確認してから改版してください");
     var revision =
         revisions.saveAndFlush(
             SurveyRevision.draft(
-                survey.getId(),
+                survey,
                 based.getRevisionNumber() + 1,
                 based.getId(),
                 c.definition(),
@@ -164,8 +169,8 @@ public class SurveyService {
     return new Result(revision, null, Operation.DRAFT_CREATED);
   }
 
-  private Result replace(String email, AuditActor actor, SurveyCommand.Replace c) {
-    var row = revisionRow(c.surveyId(), c.revisionId());
+  private Result replace(Long storeId, String email, AuditActor actor, SurveyCommand.Replace c) {
+    var row = revisionRow(storeId, c.surveyId(), c.revisionId());
     row.requireVersion(c.version());
     var before = before(row);
     row.replace(c.definition());
@@ -174,12 +179,13 @@ public class SurveyService {
     return new Result(row, null, Operation.DRAFT_REPLACED);
   }
 
-  private Result transition(String email, AuditActor actor, SurveyCommand.RevisionAction c) {
-    var row = revisionRow(c.surveyId(), c.revisionId());
+  private Result transition(
+      Long storeId, String email, AuditActor actor, SurveyCommand.RevisionAction c) {
+    var row = revisionRow(storeId, c.surveyId(), c.revisionId());
     row.requireVersion(c.version());
     var before = before(row);
     if (c.type() == Operation.OPENED) {
-      if (revisions.existsBySurveyIdAndStatus(c.surveyId(), RevisionStatus.OPEN))
+      if (revisions.existsByStoreIdAndSurveyIdAndStatus(storeId, c.surveyId(), RevisionStatus.OPEN))
         throw new ConflictException("受付中の版を終了してから開始してください");
       row.open(now());
     } else row.close(now());
@@ -188,8 +194,8 @@ public class SurveyService {
     return new Result(row, null, c.type());
   }
 
-  private Result receive(String email, AuditActor actor, SurveyCommand.Receive c) {
-    var revision = revisionRow(c.surveyId(), c.revisionId());
+  private Result receive(Long storeId, String email, AuditActor actor, SurveyCommand.Receive c) {
+    var revision = revisionRow(storeId, c.surveyId(), c.revisionId());
     revision.requireVersion(c.version());
     revision.require(RevisionStatus.OPEN);
     SurveyInput.requirePast(c.input().receivedAt(), now());
@@ -200,8 +206,8 @@ public class SurveyService {
     return new Result(null, row, Operation.RECEIVED);
   }
 
-  private Result withdraw(String email, AuditActor actor, SurveyCommand.Withdraw c) {
-    var row = answerRow(c.responseId());
+  private Result withdraw(Long storeId, String email, AuditActor actor, SurveyCommand.Withdraw c) {
+    var row = answerRow(storeId, c.responseId());
     row.requireVersion(c.version());
     var before = before(row);
     row.withdraw();
@@ -210,12 +216,12 @@ public class SurveyService {
     return new Result(null, row, Operation.WITHDRAWN);
   }
 
-  private Result correct(String email, AuditActor actor, SurveyCommand.Correct c) {
-    var old = answerRow(c.responseId());
+  private Result correct(Long storeId, String email, AuditActor actor, SurveyCommand.Correct c) {
+    var old = answerRow(storeId, c.responseId());
     old.requireVersion(c.version());
     old.requireNoSuccessor();
     SurveyInput.requirePast(c.input().receivedAt(), now());
-    var revision = revisionRow(old.getSurveyId(), old.getRevisionId());
+    var revision = revisionRow(storeId, old.getSurveyId(), old.getRevisionId());
     var before = before(old);
     var row =
         answers.saveAndFlush(
@@ -227,44 +233,57 @@ public class SurveyService {
     return new Result(null, row, Operation.CORRECTION_RECEIVED);
   }
 
-  private void lock(SurveyCommand command) {
+  private void lock(Long storeId, SurveyCommand command) {
     switch (command) {
       case SurveyCommand.Create _ -> {}
       case SurveyCommand.Revise c ->
-          surveys.lockById(c.surveyId()).orElseThrow(SurveyService::missing);
-      case SurveyCommand.Replace c -> lockRevision(c.surveyId(), c.revisionId(), true);
-      case SurveyCommand.RevisionAction c -> lockRevision(c.surveyId(), c.revisionId(), true);
-      case SurveyCommand.Receive c -> lockRevision(c.surveyId(), c.revisionId(), false);
+          surveys
+              .findByIdAndStoreIdForUpdate(c.surveyId(), storeId)
+              .orElseThrow(SurveyService::missing);
+      case SurveyCommand.Replace c -> lockRevision(storeId, c.surveyId(), c.revisionId(), true);
+      case SurveyCommand.RevisionAction c ->
+          lockRevision(storeId, c.surveyId(), c.revisionId(), true);
+      case SurveyCommand.Receive c -> lockRevision(storeId, c.surveyId(), c.revisionId(), false);
       case SurveyCommand.Withdraw c ->
-          answers.lockById(c.responseId()).orElseThrow(SurveyService::missing);
+          answers
+              .findByIdAndStoreIdForUpdate(c.responseId(), storeId)
+              .orElseThrow(SurveyService::missing);
       case SurveyCommand.Correct c ->
-          answers.lockById(c.responseId()).orElseThrow(SurveyService::missing);
+          answers
+              .findByIdAndStoreIdForUpdate(c.responseId(), storeId)
+              .orElseThrow(SurveyService::missing);
     }
   }
 
-  private void lockRevision(String surveyId, String revisionId, boolean series) {
-    if (series) surveys.lockById(surveyId).orElseThrow(SurveyService::missing);
-    var row = revisions.lockById(revisionId).orElseThrow(SurveyService::missing);
+  private void lockRevision(Long storeId, String surveyId, String revisionId, boolean series) {
+    if (series)
+      surveys.findByIdAndStoreIdForUpdate(surveyId, storeId).orElseThrow(SurveyService::missing);
+    var row =
+        revisions
+            .findByIdAndStoreIdForUpdate(revisionId, storeId)
+            .orElseThrow(SurveyService::missing);
     if (!row.getSurveyId().equals(surveyId)) throw missing();
   }
 
-  private SurveyCommand normalize(SurveyCommand command) {
+  private SurveyCommand normalize(Long storeId, SurveyCommand command) {
     return switch (command) {
       case SurveyCommand.Receive c ->
           new SurveyCommand.Receive(
               c.surveyId(),
               c.revisionId(),
               c.version(),
-              c.input().forDefinition(revisionRow(c.surveyId(), c.revisionId()).getQuestions()),
+              c.input()
+                  .forDefinition(revisionRow(storeId, c.surveyId(), c.revisionId()).getQuestions()),
               c.key());
       case SurveyCommand.Correct c -> {
-        var row = answerRow(c.responseId());
+        var row = answerRow(storeId, c.responseId());
         yield new SurveyCommand.Correct(
             c.responseId(),
             c.version(),
             c.reason(),
             c.input()
-                .forDefinition(revisionRow(row.getSurveyId(), row.getRevisionId()).getQuestions()),
+                .forDefinition(
+                    revisionRow(storeId, row.getSurveyId(), row.getRevisionId()).getQuestions()),
             c.key());
       }
       default -> command;
@@ -298,24 +317,28 @@ public class SurveyService {
         : PermissionCode.SURVEY_MANAGE;
   }
 
-  private SurveyWriteResponse replay(SurveyOperation operation, String hash) {
+  private SurveyWriteResponse replay(Long storeId, SurveyOperation operation, String hash) {
     operation.requireSame(hash);
     var receipt = SurveyOperationResponse.of(operation, true);
     if (operation.getResponseId() != null)
       return new SurveyAnswerWriteResponse(
-          SurveyAnswerResponse.of(answerRow(operation.getResponseId())), receipt);
+          SurveyAnswerResponse.of(answerRow(storeId, operation.getResponseId())), receipt);
     return new SurveyRevisionWriteResponse(
         SurveyRevisionResponse.of(
-            revisions.findById(operation.getRevisionId()).orElseThrow(SurveyService::missing)),
+            revisions
+                .findByIdAndStoreId(operation.getRevisionId(), storeId)
+                .orElseThrow(SurveyService::missing)),
         receipt);
   }
 
-  private SurveyRevision revisionRow(String surveyId, String id) {
-    return revisions.findByIdAndSurveyId(id, surveyId).orElseThrow(SurveyService::missing);
+  private SurveyRevision revisionRow(Long storeId, String surveyId, String id) {
+    return revisions
+        .findByIdAndStoreIdAndSurveyId(id, storeId, surveyId)
+        .orElseThrow(SurveyService::missing);
   }
 
-  private SurveyAnswer answerRow(String id) {
-    return answers.findById(id).orElseThrow(SurveyService::missing);
+  private SurveyAnswer answerRow(Long storeId, String id) {
+    return answers.findByIdAndStoreId(id, storeId).orElseThrow(SurveyService::missing);
   }
 
   private OffsetDateTime now() {

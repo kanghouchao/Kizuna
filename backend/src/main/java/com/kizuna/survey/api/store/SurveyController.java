@@ -1,5 +1,6 @@
 package com.kizuna.survey.api.store;
 
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.survey.api.dto.SurveyAnswerCreateRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerSummaryResponse;
@@ -44,17 +45,21 @@ public class SurveyController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> create(
-      Authentication auth, @RequestBody SurveyCreateRequest r) {
+      @CurrentStore Long storeId, Authentication auth, @RequestBody SurveyCreateRequest r) {
     return SurveyWrites.write(
-        service, auth, new SurveyCommand.Create(r.definition(), r.dedupeKey()), true);
+        service, storeId, auth, new SurveyCommand.Create(r.definition(), r.dedupeKey()), true);
   }
 
   @PostMapping("/{sid}/revisions")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> revise(
-      Authentication auth, @PathVariable String sid, @RequestBody SurveyRevisionCreateRequest r) {
+      @CurrentStore Long storeId,
+      Authentication auth,
+      @PathVariable String sid,
+      @RequestBody SurveyRevisionCreateRequest r) {
     return SurveyWrites.write(
         service,
+        storeId,
         auth,
         new SurveyCommand.Revise(sid, r.basedOnRevisionId(), r.definition(), r.dedupeKey()),
         true);
@@ -63,12 +68,14 @@ public class SurveyController {
   @PutMapping("/{sid}/revisions/{rid}")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> replace(
+      @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionReplaceRequest r) {
     return SurveyWrites.write(
         service,
+        storeId,
         auth,
         new SurveyCommand.Replace(sid, rid, r.version(), r.definition(), r.dedupeKey()),
         false);
@@ -77,12 +84,14 @@ public class SurveyController {
   @PostMapping("/{sid}/revisions/{rid}/openings")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> open(
+      @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionActionRequest r) {
     return SurveyWrites.write(
         service,
+        storeId,
         auth,
         new SurveyCommand.RevisionAction(
             sid, rid, r.version(), Operation.OPENED, r.reason(), r.dedupeKey()),
@@ -92,12 +101,14 @@ public class SurveyController {
   @PostMapping("/{sid}/revisions/{rid}/closures")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> close(
+      @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionActionRequest r) {
     return SurveyWrites.write(
         service,
+        storeId,
         auth,
         new SurveyCommand.RevisionAction(
             sid, rid, r.version(), Operation.CLOSED, r.reason(), r.dedupeKey()),
@@ -107,12 +118,14 @@ public class SurveyController {
   @PostMapping("/{sid}/revisions/{rid}/responses")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_RECORD')")
   public ResponseEntity<SurveyWriteResponse> receive(
+      @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyAnswerCreateRequest r) {
     return SurveyWrites.write(
         service,
+        storeId,
         auth,
         new SurveyCommand.Receive(sid, rid, r.revisionVersion(), r.input(), r.dedupeKey()),
         true);
@@ -121,20 +134,27 @@ public class SurveyController {
   @GetMapping("/{sid}/revisions/{rid}")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public SurveyRevisionResponse revision(
-      Authentication auth, @PathVariable String sid, @PathVariable String rid) {
-    return service.revision(auth.getName(), sid, rid);
+      @CurrentStore Long storeId,
+      Authentication auth,
+      @PathVariable String sid,
+      @PathVariable String rid) {
+    return service.revision(storeId, auth.getName(), sid, rid);
   }
 
   @GetMapping("/{sid}/revisions/{rid}/response-counts")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public SurveyResponseCountsResponse counts(
-      Authentication auth, @PathVariable String sid, @PathVariable String rid) {
-    return service.counts(auth.getName(), sid, rid);
+      @CurrentStore Long storeId,
+      Authentication auth,
+      @PathVariable String sid,
+      @PathVariable String rid) {
+    return service.counts(storeId, auth.getName(), sid, rid);
   }
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public Page<SurveySummaryResponse> list(
+      @CurrentStore Long storeId,
       Authentication auth,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
@@ -142,28 +162,31 @@ public class SurveyController {
       @RequestParam(name = "survey_id", required = false) String surveyId,
       @RequestParam(name = "latest_status", required = false) RevisionStatus latestStatus,
       @RequestParam(defaultValue = "CREATED_DESC") String sort) {
-    return reads.list(auth.getName(), page, size, q, surveyId, latestStatus, sort);
+    return reads.list(storeId, auth.getName(), page, size, q, surveyId, latestStatus, sort);
   }
 
   @GetMapping("/{sid}")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
-  public SurveyResponse survey(Authentication auth, @PathVariable String sid) {
-    return reads.detail(auth.getName(), sid);
+  public SurveyResponse survey(
+      @CurrentStore Long storeId, Authentication auth, @PathVariable String sid) {
+    return reads.detail(storeId, auth.getName(), sid);
   }
 
   @GetMapping("/{sid}/revisions")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public Page<SurveyRevisionSummaryResponse> revisions(
+      @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return reads.revisions(auth.getName(), sid, page, size);
+    return reads.revisions(storeId, auth.getName(), sid, page, size);
   }
 
   @GetMapping("/{sid}/revisions/{rid}/responses")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public Page<SurveyAnswerSummaryResponse> responses(
+      @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
@@ -172,17 +195,18 @@ public class SurveyController {
       @RequestParam(name = "response_id", required = false) String responseId,
       @RequestParam(required = false) AnswerStatus status,
       @RequestParam(defaultValue = "RECEIVED_DESC") String sort) {
-    return reads.answers(auth.getName(), sid, rid, page, size, responseId, status, sort);
+    return reads.answers(storeId, auth.getName(), sid, rid, page, size, responseId, status, sort);
   }
 
   @GetMapping("/{sid}/revisions/{rid}/history")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public CursorPage<SurveyRevisionHistoryResponse> revisionHistory(
+      @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return reads.revisionHistory(auth.getName(), sid, rid, cursor, size);
+    return reads.revisionHistory(storeId, auth.getName(), sid, rid, cursor, size);
   }
 }

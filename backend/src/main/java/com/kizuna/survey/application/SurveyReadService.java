@@ -54,10 +54,17 @@ public class SurveyReadService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<SurveySummaryResponse> list(
-      String email, int page, int size, String q, String id, RevisionStatus status, String sort) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
+      Long storeId,
+      String email,
+      int page,
+      int size,
+      String q,
+      String id,
+      RevisionStatus status,
+      String sort) {
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     var paging = page(page, size, sort, null, SurveySeries::getCreatedAt, SurveySeries::getId);
-    Specification<SurveySeries> spec = (r, query, cb) -> cb.conjunction();
+    Specification<SurveySeries> spec = (r, query, cb) -> cb.equal(r.get("storeId"), storeId);
     if (id != null) {
       var target = SurveyInput.id(id);
       spec = spec.and((r, query, cb) -> cb.equal(r.get("id"), target));
@@ -78,7 +85,10 @@ public class SurveyReadService {
               (r, query, cb) -> {
                 var sub = query.subquery(String.class);
                 var revision = sub.from(SurveyRevision.class);
-                var predicate = cb.equal(revision.get("id"), r.get("latestRevisionId"));
+                var predicate =
+                    cb.and(
+                        cb.equal(revision.get("id"), r.get("latestRevisionId")),
+                        cb.equal(revision.get("storeId"), r.get("storeId")));
                 if (pattern != null)
                   predicate =
                       cb.and(predicate, cb.like(cb.lower(revision.get("title")), pattern, '\\'));
@@ -94,18 +104,24 @@ public class SurveyReadService {
           row -> {
             throw new IllegalStateException("アンケートが見つかりません");
           });
-    var latest = latest(result.getContent());
-    var current = current(result.getContent());
+    var latest = latest(storeId, result.getContent());
+    var current = current(storeId, result.getContent());
     return result.map(row -> summary(row, latest.get(row.getLatestRevisionId()), current));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public SurveyResponse detail(String email, String id) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
-    var row = surveys.findProjectedById(SurveyInput.id(id)).orElseThrow(SurveyReadService::missing);
+  public SurveyResponse detail(Long storeId, String email, String id) {
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+    var row =
+        surveys
+            .findProjectedByIdAndStoreId(SurveyInput.id(id), storeId)
+            .orElseThrow(SurveyReadService::missing);
     var summary =
-        summary(row, latest(List.of(row)).get(row.getLatestRevisionId()), current(List.of(row)));
+        summary(
+            row,
+            latest(storeId, List.of(row)).get(row.getLatestRevisionId()),
+            current(storeId, List.of(row)));
     return new SurveyResponse(
         summary.id(),
         summary.latestRevisionId(),
@@ -122,11 +138,12 @@ public class SurveyReadService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<SurveyRevisionSummaryResponse> revisions(
-      String email, String sid, int page, int size) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
-    requireSurvey(sid);
+      Long storeId, String email, String sid, int page, int size) {
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+    requireSurvey(storeId, sid);
     validatePage(page, size);
-    Specification<SurveyRevision> spec = (r, q, cb) -> cb.equal(r.get("surveyId"), sid);
+    Specification<SurveyRevision> spec =
+        (r, q, cb) -> cb.and(cb.equal(r.get("storeId"), storeId), cb.equal(r.get("surveyId"), sid));
     return revisions
         .findBy(
             spec,
@@ -146,6 +163,7 @@ public class SurveyReadService {
   @StoreScoped
   @Transactional(readOnly = true)
   public Page<SurveyAnswerSummaryResponse> answers(
+      Long storeId,
       String email,
       String sid,
       String rid,
@@ -154,8 +172,8 @@ public class SurveyReadService {
       String id,
       AnswerStatus status,
       String sort) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
-    requireRevision(sid, rid);
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+    requireRevision(storeId, sid, rid);
     var paging =
         page(
             page,
@@ -164,7 +182,9 @@ public class SurveyReadService {
             SurveyAnswer::getReceivedAt,
             SurveyAnswer::getCreatedAt,
             SurveyAnswer::getId);
-    Specification<SurveyAnswer> spec = (r, q, cb) -> cb.equal(r.get("revisionId"), rid);
+    Specification<SurveyAnswer> spec =
+        (r, q, cb) ->
+            cb.and(cb.equal(r.get("storeId"), storeId), cb.equal(r.get("revisionId"), rid));
     if (id != null) {
       var target = SurveyInput.id(id);
       spec = spec.and((r, q, cb) -> cb.equal(r.get("id"), target));
@@ -178,24 +198,26 @@ public class SurveyReadService {
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<SurveyRevisionHistoryResponse> revisionHistory(
-      String email, String sid, String rid, String cursor, int size) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
-    requireRevision(sid, rid);
-    return history("revisionId", rid, cursor, size).map(SurveyRevisionHistoryResponse::of);
+      Long storeId, String email, String sid, String rid, String cursor, int size) {
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+    requireRevision(storeId, sid, rid);
+    return history(storeId, "revisionId", rid, cursor, size).map(SurveyRevisionHistoryResponse::of);
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<SurveyAnswerHistoryResponse> answerHistory(
-      String email, String aid, String cursor, int size) {
-    actors.require(email, PermissionCode.SURVEY_VIEW);
-    if (!answers.existsById(SurveyInput.id(aid))) throw missing();
-    return history("responseId", aid, cursor, size).map(SurveyAnswerHistoryResponse::of);
+      Long storeId, String email, String aid, String cursor, int size) {
+    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+    if (!answers.existsByIdAndStoreId(SurveyInput.id(aid), storeId)) throw missing();
+    return history(storeId, "responseId", aid, cursor, size).map(SurveyAnswerHistoryResponse::of);
   }
 
-  private CursorPage<SurveyHistoryView> history(String target, String id, String cursor, int size) {
+  private CursorPage<SurveyHistoryView> history(
+      Long storeId, String target, String id, String cursor, int size) {
     validatePage(0, size);
-    Specification<SurveyHistory> spec = (r, q, cb) -> cb.equal(r.get(target), id);
+    Specification<SurveyHistory> spec =
+        (r, q, cb) -> cb.and(cb.equal(r.get("storeId"), storeId), cb.equal(r.get(target), id));
     if (cursor != null) {
       var after = SurveyInput.id(PageCursor.decodeKey(cursor));
       spec = spec.and((r, q, cb) -> cb.lessThan(r.get("id"), after));
@@ -213,15 +235,17 @@ public class SurveyReadService {
     return CursorPage.of(rows, size, r -> PageCursor.encodeKey(r.getId()));
   }
 
-  private Map<String, SurveyRevisionSummaryView> latest(List<SurveySeriesView> rows) {
+  private Map<String, SurveyRevisionSummaryView> latest(Long storeId, List<SurveySeriesView> rows) {
     return revisions
-        .findProjectedByIdIn(rows.stream().map(SurveySeriesView::getLatestRevisionId).toList())
+        .findProjectedByIdInAndStoreId(
+            rows.stream().map(SurveySeriesView::getLatestRevisionId).toList(), storeId)
         .stream()
         .collect(Collectors.toMap(SurveyRevisionSummaryView::getId, Function.identity()));
   }
 
-  private List<SurveyRevisionSummaryView> current(Collection<SurveySeriesView> rows) {
-    return revisions.findProjectedBySurveyIdInAndStatusIn(
+  private List<SurveyRevisionSummaryView> current(Long storeId, Collection<SurveySeriesView> rows) {
+    return revisions.findProjectedByStoreIdAndSurveyIdInAndStatusIn(
+        storeId,
         rows.stream().map(SurveySeriesView::getId).toList(),
         List.of(RevisionStatus.DRAFT, RevisionStatus.OPEN));
   }
@@ -247,12 +271,13 @@ public class SurveyReadService {
         SurveyInput.time(row.getCreatedAt()));
   }
 
-  private void requireSurvey(String id) {
-    if (!surveys.existsById(SurveyInput.id(id))) throw missing();
+  private void requireSurvey(Long storeId, String id) {
+    if (!surveys.existsByIdAndStoreId(SurveyInput.id(id), storeId)) throw missing();
   }
 
-  private void requireRevision(String sid, String rid) {
-    if (!revisions.existsByIdAndSurveyId(SurveyInput.id(rid), SurveyInput.id(sid))) throw missing();
+  private void requireRevision(Long storeId, String sid, String rid) {
+    if (!revisions.existsByIdAndStoreIdAndSurveyId(
+        SurveyInput.id(rid), storeId, SurveyInput.id(sid))) throw missing();
   }
 
   private static NotFoundException missing() {

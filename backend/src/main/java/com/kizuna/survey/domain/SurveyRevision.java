@@ -59,22 +59,25 @@ public class SurveyRevision extends StoreScopedEntity {
   private OffsetDateTime closedAt;
 
   public static SurveyRevision draft(
-      String surveyId,
+      SurveySeries survey,
       int number,
       String basedOn,
       SurveyDefinition definition,
       Long actor,
       String name) {
-    return builder()
-        .surveyId(surveyId)
-        .revisionNumber(number)
-        .basedOnRevisionId(basedOn)
-        .title(definition.title())
-        .questions(definition.questions())
-        .status(RevisionStatus.DRAFT)
-        .recordedBy(actor)
-        .recorderName(name)
-        .build();
+    var revision =
+        builder()
+            .surveyId(survey.getId())
+            .revisionNumber(number)
+            .basedOnRevisionId(basedOn)
+            .title(definition.title())
+            .questions(definition.questions())
+            .status(RevisionStatus.DRAFT)
+            .recordedBy(actor)
+            .recorderName(name)
+            .build();
+    revision.setStoreId(survey.getStoreId());
+    return revision;
   }
 
   public void requireVersion(Long expected) {
