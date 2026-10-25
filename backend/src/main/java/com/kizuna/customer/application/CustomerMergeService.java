@@ -22,7 +22,6 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -59,39 +58,37 @@ public class CustomerMergeService {
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
   private final UserRepository userRepository;
-  private final StoreContext storeContext;
 
   /** 墓標は別の顧客へ読み替えず拒否する。確認した二行と原資料の一致が不可逆な統合の前提になる。 */
   @StoreScoped
   @Transactional
   public CustomerMergeResponse merge(
-      String survivingCustomerId, CustomerMergeRequest request, String actorEmail) {
+      Long storeId, String survivingCustomerId, CustomerMergeRequest request, String actorEmail) {
     String mergedCustomerId = request.mergedCustomerId();
     if (survivingCustomerId.equals(mergedCustomerId)) {
       throw new ServiceException("同じ顧客を統合することはできません");
     }
     Long actorId = resolveActorId(actorEmail);
-    Customer merged = lockBothInIdOrder(survivingCustomerId, mergedCustomerId);
+    Customer merged = lockBothInIdOrder(storeId, survivingCustomerId, mergedCustomerId);
 
     // 可否は実行の瞬間に判定し直す。確認画面を開いた時点の判定は、その後の統合で古くなりうる。
-    rejectTombstones(survivingCustomerId, mergedCustomerId);
-    if (hasActiveLink(survivingCustomerId) && hasActiveLink(mergedCustomerId)) {
+    rejectTombstones(storeId, survivingCustomerId, mergedCustomerId);
+    if (hasActiveLink(storeId, survivingCustomerId) && hasActiveLink(storeId, mergedCustomerId)) {
       // 部分一意索引により両者は必ず別会員を指す。二人の本人がそれぞれ認領している行なので、
       // 台帳級の「同一人物か」の判断と一緒に片付けさせない（ADR 0010）。
       throw new ConflictException(RELEASE_THE_LINK_FIRST);
     }
 
-    var prepared = preparation.prepare(survivingCustomerId, request.preview());
+    var prepared = preparation.prepare(storeId, survivingCustomerId, request.preview());
     confirmation.verify(request.previewToken(), prepared.response().previewToken());
 
     var preview = prepared.response();
     customerRepository
-        .findById(survivingCustomerId)
+        .findByIdAndStoreId(survivingCustomerId, storeId)
         .orElseThrow()
         .adoptMergeProfile(preview.profile());
     customerContactService.transfer(
-        survivingCustomerId, mergedCustomerId, actorId, preview.preferredContacts());
-    Long storeId = storeContext.getStoreId();
+        storeId, survivingCustomerId, mergedCustomerId, actorId, preview.preferredContacts());
     int movedOrderCount =
         customerMergeRepository.repointOrders(survivingCustomerId, mergedCustomerId, storeId);
     int movedLinkCount = repointLinks(survivingCustomerId, mergedCustomerId, storeId);
@@ -106,7 +103,7 @@ public class CustomerMergeService {
         new MergeEvidence(
             preview.surviving(),
             preview.merged(),
-            preparation.snapshot(survivingCustomerId),
+            preparation.snapshot(storeId, survivingCustomerId),
             prepared.movedOrderIds(),
             preview.merged().contacts().stream().map(MergeSnapshot.Contact::id).toList(),
             preview.merged().memberLinks().stream().map(MergeSnapshot.Link::id).toList(),
@@ -115,6 +112,7 @@ public class CustomerMergeService {
     var recorded =
         customerMergeRepository.save(
             CustomerMerge.record(
+                storeId,
                 survivingCustomerId,
                 mergedCustomerId,
                 actorId,
@@ -153,12 +151,12 @@ public class CustomerMergeService {
   @StoreScoped
   @Transactional
   public CustomerMergePreviewResponse preview(
-      String survivingId, CustomerMergePreviewRequest input) {
+      Long storeId, String survivingId, CustomerMergePreviewRequest input) {
     if (survivingId.equals(input.mergedCustomerId()))
       throw new ServiceException("同じ顧客を統合することはできません");
-    lockBothInIdOrder(survivingId, input.mergedCustomerId());
-    rejectTombstones(survivingId, input.mergedCustomerId());
-    return preparation.prepare(survivingId, input).response();
+    lockBothInIdOrder(storeId, survivingId, input.mergedCustomerId());
+    rejectTombstones(storeId, survivingId, input.mergedCustomerId());
+    return preparation.prepare(storeId, survivingId, input).response();
   }
 
   /**
@@ -174,8 +172,8 @@ public class CustomerMergeService {
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<CustomerMergeHistoryResponse> history(
-      String customerId, String cursor, int requestedSize) {
-    if (!customerRepository.existsById(customerId)) {
+      Long storeId, String customerId, String cursor, int requestedSize) {
+    if (!customerRepository.existsByIdAndStoreId(customerId, storeId)) {
       throw new NotFoundException("顧客が見つかりません");
     }
     int size = CursorPage.clampSize(requestedSize);
@@ -183,18 +181,18 @@ public class CustomerMergeService {
     Limit limit = Limit.of(size + 1);
     List<CustomerMergeView> fetched =
         cursor == null
-            ? customerMergeRepository.findHistory(customerId, limit)
-            : fetchHistoryAfter(customerId, PageCursor.decode(cursor), limit);
+            ? customerMergeRepository.findHistory(storeId, customerId, limit)
+            : fetchHistoryAfter(storeId, customerId, PageCursor.decode(cursor), limit);
     return CursorPage.of(fetched, size, CustomerMergeService::cursorOf)
         .map(view -> toHistoryResponse(customerId, view));
   }
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public CustomerMergeAuditResponse audit(String customerId, String mergeId) {
+  public CustomerMergeAuditResponse audit(Long storeId, String customerId, String mergeId) {
     var merge =
         customerMergeRepository
-            .findById(mergeId)
+            .findByIdAndStoreId(mergeId, storeId)
             .filter(
                 m ->
                     m.getSurvivingCustomerId().equals(customerId)
@@ -204,9 +202,9 @@ public class CustomerMergeService {
   }
 
   private List<CustomerMergeView> fetchHistoryAfter(
-      String customerId, PageCursor cursor, Limit limit) {
+      Long storeId, String customerId, PageCursor cursor, Limit limit) {
     return customerMergeRepository.findHistoryAfter(
-        customerId, cursor.timestampKey(), cursor.id(), limit);
+        storeId, customerId, cursor.timestampKey(), cursor.id(), limit);
   }
 
   /** 続きの位置は一覧の並び（統合時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
@@ -237,35 +235,38 @@ public class CustomerMergeService {
    * <p>昇順に固定するのは、同じ 2 行を逆向きに統合しようとする要求どうしがデッドロックしないため。統合は台帳の加算ロットを触らないので、 既存のロック順序（顧客行 → 関連 →
    * 台帳の加算ロット）と待ちが環にならない。
    */
-  private Customer lockBothInIdOrder(String survivingCustomerId, String mergedCustomerId) {
+  private Customer lockBothInIdOrder(
+      Long storeId, String survivingCustomerId, String mergedCustomerId) {
     boolean survivingFirst = survivingCustomerId.compareTo(mergedCustomerId) < 0;
-    Customer first = lockCustomer(survivingFirst ? survivingCustomerId : mergedCustomerId);
+    Customer first = lockCustomer(storeId, survivingFirst ? survivingCustomerId : mergedCustomerId);
     // 2 本目を待つ前に、墓標を名指した要求（再送・墓標を存続行に指定）を撥ねる。参照の解決は
     // 墓標 → 統合先の順に押さえるので、ここで待つと ID 昇順と逆向きの待ちが環になりうる。
     // 墓標は取消が無く元に戻らないため、ロック前の読みで撥ねても判定を誤らない。
-    rejectTombstones(survivingCustomerId, mergedCustomerId);
-    Customer second = lockCustomer(survivingFirst ? mergedCustomerId : survivingCustomerId);
+    rejectTombstones(storeId, survivingCustomerId, mergedCustomerId);
+    Customer second =
+        lockCustomer(storeId, survivingFirst ? mergedCustomerId : survivingCustomerId);
     return survivingFirst ? second : first;
   }
 
   /** 判定は押さえた実体の状態からではなく別問い合わせで行う（{@code CustomerRepository#isMerged} の契約）。 */
-  private void rejectTombstones(String survivingCustomerId, String mergedCustomerId) {
-    if (customerRepository.isMerged(survivingCustomerId)) {
+  private void rejectTombstones(Long storeId, String survivingCustomerId, String mergedCustomerId) {
+    if (customerRepository.isMerged(storeId, survivingCustomerId)) {
       throw new ConflictException("統合先の顧客は既に統合済みです。統合先の顧客を指定してください");
     }
-    if (customerRepository.isMerged(mergedCustomerId)) {
+    if (customerRepository.isMerged(storeId, mergedCustomerId)) {
       throw new ConflictException("この顧客は既に統合済みです");
     }
   }
 
-  private Customer lockCustomer(String customerId) {
+  private Customer lockCustomer(Long storeId, String customerId) {
     return customerRepository
-        .findByIdForUpdate(customerId)
+        .findByIdAndStoreIdForUpdate(customerId, storeId)
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
   }
 
-  private boolean hasActiveLink(String customerId) {
-    return customerMemberLinkRepository.existsByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE);
+  private boolean hasActiveLink(Long storeId, String customerId) {
+    return customerMemberLinkRepository.existsByStoreIdAndCustomerIdAndStatus(
+        storeId, customerId, LinkStatus.ACTIVE);
   }
 
   /**

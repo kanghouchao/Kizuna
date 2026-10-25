@@ -82,6 +82,7 @@ public class CustomerMerge extends StoreScopedEntity {
    * の結果から）。欠落は要求誤りではなく実装欠陥なので、NOT NULL 列による大きな失敗に委ねて構築時の検証は置かない。
    */
   public static CustomerMerge record(
+      Long storeId,
       String survivingCustomerId,
       String mergedCustomerId,
       Long mergedBy,
@@ -91,16 +92,19 @@ public class CustomerMerge extends StoreScopedEntity {
       int movedContactCount,
       String operationReason,
       MergeEvidence evidence) {
-    return new CustomerMerge(
-        survivingCustomerId,
-        mergedCustomerId,
-        mergedBy,
-        mergedAt,
-        movedOrderCount,
-        movedLinkCount,
-        movedContactCount,
-        operationReason,
-        evidence);
+    var merge =
+        new CustomerMerge(
+            survivingCustomerId,
+            mergedCustomerId,
+            mergedBy,
+            mergedAt,
+            movedOrderCount,
+            movedLinkCount,
+            movedContactCount,
+            operationReason,
+            evidence);
+    merge.setStoreId(storeId);
+    return merge;
   }
 
   @Override

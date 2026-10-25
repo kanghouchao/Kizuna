@@ -52,20 +52,24 @@ public class CustomerContactService {
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<ContactResponse> list(String customerId, String cursor, int requestedSize) {
-    String resolved = resolve(customerId);
+  public CursorPage<ContactResponse> list(
+      Long storeId, String customerId, String cursor, int requestedSize) {
+    String resolved = resolve(storeId, customerId);
     int size = CursorPage.clampSize(requestedSize);
     var page =
         CursorPage.of(
-            contacts.findByCustomerIdAndDeletedFalseAndIdGreaterThanOrderByIdAsc(
-                resolved, cursor == null ? "" : PageCursor.decodeKey(cursor), Limit.of(size + 1)),
+            contacts.findByStoreIdAndCustomerIdAndDeletedFalseAndIdGreaterThanOrderByIdAsc(
+                storeId,
+                resolved,
+                cursor == null ? "" : PageCursor.decodeKey(cursor),
+                Limit.of(size + 1)),
             size,
             c -> PageCursor.encodeKey(c.getId()));
     var values = page.content().stream().map(CustomerContact::getValue).distinct().toList();
     if (values.isEmpty()) return new CursorPage<>(List.of(), null);
     // 同値の状態組だけを読むため、重複行数によらず一値あたり最大 3 種類 × 9 状態組に収まる。
     var restrictions =
-        contacts.findRestrictions(resolved, values).stream()
+        contacts.findRestrictions(storeId, resolved, values).stream()
             .collect(
                 Collectors.toMap(
                     c -> new ContactKey(c.getType(), c.getValue()),
@@ -77,26 +81,27 @@ public class CustomerContactService {
 
   @StoreScoped
   @Transactional
-  public ContactResponse create(String customerId, ContactRequest input) {
-    lock(customerId);
+  public ContactResponse create(Long storeId, String customerId, ContactRequest input) {
+    lock(storeId, customerId);
     CustomerContact contact =
-        contacts.saveAndFlush(CustomerContact.create(customerId, input.type(), input.value()));
+        contacts.saveAndFlush(
+            CustomerContact.create(storeId, customerId, input.type(), input.value()));
     var history =
         record(contact, ContactAction.CREATE, null, actorId(), UUID.randomUUID().toString());
     audit(contact, null, history);
-    return response(contact);
+    return response(storeId, contact);
   }
 
   @StoreScoped
   @Transactional
-  public ContactResponse update(String customerId, String id, ContactRequest input) {
-    lock(customerId);
-    var contact = active(customerId, id);
+  public ContactResponse update(Long storeId, String customerId, String id, ContactRequest input) {
+    lock(storeId, customerId);
+    var contact = active(storeId, customerId, id);
     var before = contact.state();
     var auditBefore = ContactAuditSnapshot.of(contact);
     if (contact.isPreferred()) {
       contacts
-          .findPreferred(customerId, input.type())
+          .findPreferred(storeId, customerId, input.type())
           .filter(other -> !other.getId().equals(id))
           .ifPresent(
               other -> {
@@ -107,19 +112,23 @@ public class CustomerContactService {
     String operationId = UUID.randomUUID().toString();
     Long actorId = actorId();
     if (before.type() != contact.getType() || !before.value().equals(contact.getValue()))
-      inheritBeforeRemoval(contact, before, operationId, actorId);
+      inheritBeforeRemoval(storeId, contact, before, operationId, actorId);
     var history = record(contact, ContactAction.UPDATE, before, actorId, operationId);
     audit(contact, auditBefore, history);
     contacts.flush();
-    return response(contact);
+    return response(storeId, contact);
   }
 
   @StoreScoped
   @Transactional
   public ContactResponse changePermission(
-      String customerId, String id, ContactPurpose purpose, ContactPermissionRequest input) {
-    lock(customerId);
-    var contact = active(customerId, id);
+      Long storeId,
+      String customerId,
+      String id,
+      ContactPurpose purpose,
+      ContactPermissionRequest input) {
+    lock(storeId, customerId);
+    var contact = active(storeId, customerId, id);
     var before = contact.state();
     var auditBefore = ContactAuditSnapshot.of(contact);
     contact.changePermission(purpose, input.status());
@@ -135,19 +144,19 @@ public class CustomerContactService {
                 UUID.randomUUID().toString()));
     audit(contact, auditBefore, history);
     contacts.flush();
-    return response(contact);
+    return response(storeId, contact);
   }
 
   @StoreScoped
   @Transactional
-  public void delete(String customerId, String id) {
-    lock(customerId);
-    var contact = active(customerId, id);
+  public void delete(Long storeId, String customerId, String id) {
+    lock(storeId, customerId);
+    var contact = active(storeId, customerId, id);
     var before = contact.state();
     var auditBefore = ContactAuditSnapshot.of(contact);
     String operationId = UUID.randomUUID().toString();
     Long actorId = actorId();
-    inheritBeforeRemoval(contact, before, operationId, actorId);
+    inheritBeforeRemoval(storeId, contact, before, operationId, actorId);
     contact.delete();
     var history = record(contact, ContactAction.DELETE, before, actorId, operationId);
     audit(contact, auditBefore, history);
@@ -155,11 +164,11 @@ public class CustomerContactService {
 
   @StoreScoped
   @Transactional
-  public void prefer(String customerId, ContactType type, String id) {
-    lock(customerId);
-    CustomerContact chosen = id == null ? null : active(customerId, id);
+  public void prefer(Long storeId, String customerId, ContactType type, String id) {
+    lock(storeId, customerId);
+    CustomerContact chosen = id == null ? null : active(storeId, customerId, id);
     if (chosen != null && chosen.getType() != type) throw new ServiceException("連絡先の種類が一致しません");
-    var previous = contacts.findPreferred(customerId, type).orElse(null);
+    var previous = contacts.findPreferred(storeId, customerId, type).orElse(null);
     if (previous == chosen) return;
     Long actorId = actorId();
     String operationId = UUID.randomUUID().toString();
@@ -184,14 +193,15 @@ public class CustomerContactService {
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<ContactHistoryResponse> history(
-      String customerId, String cursor, int requestedSize) {
-    String resolved = resolve(customerId);
+      Long storeId, String customerId, String cursor, int requestedSize) {
+    String resolved = resolve(storeId, customerId);
     int size = CursorPage.clampSize(requestedSize);
     var key = cursor == null ? null : PageCursor.decode(cursor);
     var rows =
         key == null
-            ? histories.history(resolved, Limit.of(size + 1))
-            : histories.historyAfter(resolved, key.timestampKey(), key.id(), Limit.of(size + 1));
+            ? histories.history(storeId, resolved, Limit.of(size + 1))
+            : histories.historyAfter(
+                storeId, resolved, key.timestampKey(), key.id(), Limit.of(size + 1));
     return CursorPage.of(
             rows, size, h -> new PageCursor(h.getOccurredAt().toString(), h.getId()).encode())
         .map(
@@ -215,10 +225,11 @@ public class CustomerContactService {
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Map<String, List<ContactSummary>> preferred(Collection<String> customerIds) {
+  public Map<String, List<ContactSummary>> preferred(Long storeId, Collection<String> customerIds) {
     if (customerIds.isEmpty()) return Map.of();
     return contacts
-        .findByCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(customerIds)
+        .findByStoreIdAndCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(
+            storeId, customerIds)
         .stream()
         .collect(
             Collectors.groupingBy(
@@ -229,11 +240,15 @@ public class CustomerContactService {
   @StoreScoped
   @Transactional
   public void transfer(
-      String survivingId, String mergedId, Long actorId, MergePreferences preferences) {
+      Long storeId,
+      String survivingId,
+      String mergedId,
+      Long actorId,
+      MergePreferences preferences) {
     var rows =
         Stream.concat(
-                contacts.findByCustomerIdOrderByIdAsc(survivingId).stream(),
-                contacts.findByCustomerIdOrderByIdAsc(mergedId).stream())
+                contacts.findByStoreIdAndCustomerIdOrderByIdAsc(storeId, survivingId).stream(),
+                contacts.findByStoreIdAndCustomerIdOrderByIdAsc(storeId, mergedId).stream())
             .toList();
     var before =
         rows.stream().collect(Collectors.toMap(CustomerContact::getId, CustomerContact::state));
@@ -295,10 +310,10 @@ public class CustomerContactService {
 
   private record ContactKey(ContactType type, String value) {}
 
-  private ContactResponse response(CustomerContact contact) {
+  private ContactResponse response(Long storeId, CustomerContact contact) {
     var group =
-        contacts.findByCustomerIdAndTypeAndValueAndDeletedFalse(
-            contact.getCustomerId(), contact.getType(), contact.getValue());
+        contacts.findByStoreIdAndCustomerIdAndTypeAndValueAndDeletedFalse(
+            storeId, contact.getCustomerId(), contact.getType(), contact.getValue());
     return ContactResponse.from(contact, restriction(group));
   }
 
@@ -312,10 +327,14 @@ public class CustomerContactService {
   }
 
   private void inheritBeforeRemoval(
-      CustomerContact source, ContactState beforeRemoval, String operationId, Long actorId) {
+      Long storeId,
+      CustomerContact source,
+      ContactState beforeRemoval,
+      String operationId,
+      Long actorId) {
     var group =
-        contacts.findByCustomerIdAndTypeAndValueAndDeletedFalse(
-            source.getCustomerId(), beforeRemoval.type(), beforeRemoval.value());
+        contacts.findByStoreIdAndCustomerIdAndTypeAndValueAndDeletedFalse(
+            storeId, source.getCustomerId(), beforeRemoval.type(), beforeRemoval.value());
     // 値変更後の照会には除去元が含まれないため、操作直前の状態を共同制約へ戻す。
     var restriction =
         restriction(group)
@@ -335,22 +354,25 @@ public class CustomerContactService {
     }
   }
 
-  private CustomerContact active(String customerId, String id) {
+  private CustomerContact active(Long storeId, String customerId, String id) {
     return contacts
-        .findByIdAndCustomerIdAndDeletedFalse(id, customerId)
+        .findByIdAndStoreIdAndCustomerIdAndDeletedFalse(id, storeId, customerId)
         .orElseThrow(() -> new NotFoundException("連絡先が見つかりません"));
   }
 
-  private String resolve(String customerId) {
+  private String resolve(Long storeId, String customerId) {
     return customers
-        .findResolvingMerge(customerId)
+        .findResolvingMerge(storeId, customerId)
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません"))
         .getId();
   }
 
-  private void lock(String customerId) {
-    customers.findByIdForUpdate(customerId).orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
-    if (customers.isMerged(customerId)) throw new ConflictException("統合済みの顧客です。統合先の顧客を編集してください");
+  private void lock(Long storeId, String customerId) {
+    customers
+        .findByIdAndStoreIdForUpdate(customerId, storeId)
+        .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+    if (customers.isMerged(storeId, customerId))
+      throw new ConflictException("統合済みの顧客です。統合先の顧客を編集してください");
   }
 
   private Long actorId() {

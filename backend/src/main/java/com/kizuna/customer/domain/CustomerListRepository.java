@@ -8,5 +8,5 @@ import org.springframework.data.jpa.domain.Specification;
 public interface CustomerListRepository {
   record Row(Customer customer, LocalDate lastVisitDate, Long pointBalance, boolean memberLinked) {}
 
-  Page<Row> findAll(Specification<Customer> specification, Pageable pageable);
+  Page<Row> findAll(Long storeId, Specification<Customer> specification, Pageable pageable);
 }

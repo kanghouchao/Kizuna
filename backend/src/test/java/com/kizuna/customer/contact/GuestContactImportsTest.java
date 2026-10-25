@@ -35,15 +35,16 @@ class GuestContactImportsTest {
   @Mock CustomerContactHistoryRepository histories;
   @InjectMocks GuestContactImports imports;
 
+  private static final Long STORE_ID = 7L;
   private static final String VALUE = "guest@example.com";
 
   private void customer() {
-    when(customers.findByIdForUpdateNoWait("customer"))
+    when(customers.findByIdAndStoreIdForUpdateNoWait("customer", STORE_ID))
         .thenReturn(Optional.of(Customer.builder().name("顧客").build()));
   }
 
   private CustomerContact contact(String id) {
-    var contact = CustomerContact.create("customer", ContactType.EMAIL, VALUE);
+    var contact = CustomerContact.create(STORE_ID, "customer", ContactType.EMAIL, VALUE);
     contact.setId(id);
     return contact;
   }
@@ -51,11 +52,16 @@ class GuestContactImportsTest {
   @Test
   @DisplayName("新規顧客の販促取り込みは同意の明示選択に従う")
   void newCustomerPreviewUsesExplicitChoice() {
-    assertThat(imports.preview(null, null, ContactType.EMAIL, VALUE, true).marketingResult())
+    assertThat(
+            imports.preview(STORE_ID, null, null, ContactType.EMAIL, VALUE, true).marketingResult())
         .isEqualTo(GuestContactImport.MarketingResult.ALLOWED);
-    assertThat(imports.preview(null, null, ContactType.EMAIL, VALUE, false).marketingResult())
+    assertThat(
+            imports
+                .preview(STORE_ID, null, null, ContactType.EMAIL, VALUE, false)
+                .marketingResult())
         .isEqualTo(GuestContactImport.MarketingResult.NOT_REQUESTED);
-    assertThatThrownBy(() -> imports.preview(null, "existing", ContactType.EMAIL, VALUE, true))
+    assertThatThrownBy(
+            () -> imports.preview(STORE_ID, null, "existing", ContactType.EMAIL, VALUE, true))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -66,12 +72,12 @@ class GuestContactImportsTest {
     var target = contact("target");
     var denial = contact("denial");
     denial.changePermission(ContactPurpose.MARKETING, ContactPermissionStatus.DENIED);
-    when(contacts.findByIdAndCustomerIdAndDeletedFalse("target", "customer"))
+    when(contacts.findByIdAndStoreIdAndCustomerIdAndDeletedFalse("target", STORE_ID, "customer"))
         .thenReturn(Optional.of(target));
-    when(contacts.findByCustomerIdAndTypeAndValueAndDeletedFalse(
-            "customer", ContactType.EMAIL, VALUE))
+    when(contacts.findByStoreIdAndCustomerIdAndTypeAndValueAndDeletedFalse(
+            STORE_ID, "customer", ContactType.EMAIL, VALUE))
         .thenReturn(List.of(target, denial));
-    var result = imports.preview("customer", "target", ContactType.EMAIL, VALUE, true);
+    var result = imports.preview(STORE_ID, "customer", "target", ContactType.EMAIL, VALUE, true);
     assertThat(result.marketingResult())
         .isEqualTo(GuestContactImport.MarketingResult.DENIED_PRESERVED);
     assertThat(target.getMarketingStatus()).isEqualTo(ContactPermissionStatus.UNKNOWN);
@@ -81,26 +87,31 @@ class GuestContactImportsTest {
   @DisplayName("異なる値・種類とスコープ外の取り込み先を拒否する")
   void rejectsMismatchedTargets() {
     customer();
-    when(contacts.findByIdAndCustomerIdAndDeletedFalse("target", "customer"))
+    when(contacts.findByIdAndStoreIdAndCustomerIdAndDeletedFalse("target", STORE_ID, "customer"))
         .thenReturn(Optional.of(contact("target")));
     assertThatThrownBy(
             () ->
-                imports.preview("customer", "target", ContactType.EMAIL, "other@example.com", true))
+                imports.preview(
+                    STORE_ID, "customer", "target", ContactType.EMAIL, "other@example.com", true))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> imports.preview("customer", "target", ContactType.LINE, VALUE, true))
+    assertThatThrownBy(
+            () -> imports.preview(STORE_ID, "customer", "target", ContactType.LINE, VALUE, true))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> imports.preview("customer", "absent", ContactType.EMAIL, VALUE, true))
+    assertThatThrownBy(
+            () -> imports.preview(STORE_ID, "customer", "absent", ContactType.EMAIL, VALUE, true))
         .isInstanceOf(NotFoundException.class);
   }
 
   @Test
   @DisplayName("顧客の不存在と更新競合を判別する")
   void rejectsMissingOrContendedCustomer() {
-    assertThatThrownBy(() -> imports.preview("absent", null, ContactType.EMAIL, VALUE, true))
+    assertThatThrownBy(
+            () -> imports.preview(STORE_ID, "absent", null, ContactType.EMAIL, VALUE, true))
         .isInstanceOf(NotFoundException.class);
-    when(customers.findByIdForUpdateNoWait("busy"))
+    when(customers.findByIdAndStoreIdForUpdateNoWait("busy", STORE_ID))
         .thenThrow(new CannotAcquireLockException("test"));
-    assertThatThrownBy(() -> imports.preview("busy", null, ContactType.EMAIL, VALUE, true))
+    assertThatThrownBy(
+            () -> imports.preview(STORE_ID, "busy", null, ContactType.EMAIL, VALUE, true))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -125,6 +136,7 @@ class GuestContactImportsTest {
             });
     var result =
         imports.record(
+            STORE_ID,
             "customer",
             new GuestContactImport(
                 ContactType.EMAIL, VALUE, GuestContactImport.MarketingResult.ALLOWED, null),
@@ -132,6 +144,7 @@ class GuestContactImportsTest {
             "販促同意原文 取得日時: 2026-09-25T10:00:00Z",
             7L);
     assertThat(result.contactId()).isEqualTo("new-contact");
+    assertThat(stored).extracting(CustomerContactHistory::getStoreId).containsOnly(STORE_ID);
     assertThat(stored.getFirst().getAfter().marketingStatus())
         .isEqualTo(ContactPermissionStatus.UNKNOWN);
     var permission = stored.getLast();
@@ -151,7 +164,7 @@ class GuestContactImportsTest {
     customer();
     var target = contact("target");
     target.changePermission(ContactPurpose.MARKETING, ContactPermissionStatus.DENIED);
-    when(contacts.findByIdAndCustomerIdAndDeletedFalse("target", "customer"))
+    when(contacts.findByIdAndStoreIdAndCustomerIdAndDeletedFalse("target", STORE_ID, "customer"))
         .thenReturn(Optional.of(target));
     for (var result :
         List.of(
@@ -159,6 +172,7 @@ class GuestContactImportsTest {
             GuestContactImport.MarketingResult.DENIED_PRESERVED)) {
       var imported =
           imports.record(
+              STORE_ID,
               "customer",
               new GuestContactImport(ContactType.EMAIL, VALUE, result, "target"),
               "application",

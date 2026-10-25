@@ -30,8 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 来店した会員を店舗の顧客台帳へ紐づけるユースケース。紐づけ・変更・解除はいずれも履歴として残り、行は削除しない。
  *
- * <p>紐づけは会員コードの読み取りによる明示操作のみで成立する（電話番号等による自動マッチングは行わない既定）。顧客の指名は id で行うため、 他店舗の顧客は storeFilter 経由で
- * 404 となり存在の有無が漏れない。
+ * <p>紐づけは会員コードの読み取りによる明示操作のみで成立する（電話番号等による自動マッチングは行わない既定）。顧客は店舗 id と id で引くため、他店舗の顧客は 404
+ * となり存在の有無が漏れない。
  */
 @Service
 @RequiredArgsConstructor
@@ -49,17 +49,18 @@ public class CustomerMemberLinkService {
   @StoreScoped
   @Transactional
   public CustomerMemberLinkResponse link(
+      Long storeId,
       String customerId,
       String memberCode,
       String expectedLinkId,
       String operationReason,
       String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    lockEditableCustomer(customerId);
+    lockEditableCustomer(storeId, customerId);
     String targetId = customerId;
     CustomerMemberLink current =
         customerMemberLinkRepository
-            .findByCustomerIdAndStatus(targetId, LinkStatus.ACTIVE)
+            .findByStoreIdAndCustomerIdAndStatus(storeId, targetId, LinkStatus.ACTIVE)
             .orElse(null);
     requireExpectedLink(current, expectedLinkId);
     MemberLookup member =
@@ -72,8 +73,8 @@ public class CustomerMemberLinkService {
     if (current != null && member.memberId().equals(current.getMemberId())) {
       throw new ConflictException("この顧客は既にこの会員と紐づいています");
     }
-    if (customerMemberLinkRepository.existsByMemberIdAndStatus(
-        member.memberId(), LinkStatus.ACTIVE)) {
+    if (customerMemberLinkRepository.existsByStoreIdAndMemberIdAndStatus(
+        storeId, member.memberId(), LinkStatus.ACTIVE)) {
       throw new ConflictException("この会員は既に他の顧客と紐づいています");
     }
 
@@ -107,7 +108,7 @@ public class CustomerMemberLinkService {
             .linkedBy(actorId)
             .linkedAt(operatedAt)
             .build();
-    // store_id は StoreScopeStampListener が @PrePersist で採番する。
+    link.setStoreId(storeId);
     // 事前チェックをすり抜けた並行紐づけが部分一意索引に当たるレースはここで catch しない —
     // CommonExceptionHandler が SQLSTATE で一意違反だけを 409 へ写像し、FK 等の他の整合性違反は
     // 実装欠陥として 500 のまま大きく失敗させる分類を持っているため、そこへ委ねる。
@@ -129,12 +130,16 @@ public class CustomerMemberLinkService {
   @StoreScoped
   @Transactional
   public void unlink(
-      String customerId, String expectedLinkId, String operationReason, String actorEmail) {
+      Long storeId,
+      String customerId,
+      String expectedLinkId,
+      String operationReason,
+      String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
-    lockEditableCustomer(customerId);
+    lockEditableCustomer(storeId, customerId);
     CustomerMemberLink current =
         customerMemberLinkRepository
-            .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
+            .findByStoreIdAndCustomerIdAndStatus(storeId, customerId, LinkStatus.ACTIVE)
             .orElseThrow(() -> new ConflictException("関連状態が変わりました。再取得して確認してください"));
     requireExpectedLink(current, expectedLinkId);
     var before = snapshot(current);
@@ -171,10 +176,10 @@ public class CustomerMemberLinkService {
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public CustomerMemberLinkResponse current(String customerId) {
-    requireCustomer(customerId);
+  public CustomerMemberLinkResponse current(Long storeId, String customerId) {
+    requireCustomer(storeId, customerId);
     return customerMemberLinkRepository
-        .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
+        .findByStoreIdAndCustomerIdAndStatus(storeId, customerId, LinkStatus.ACTIVE)
         .map(
             link ->
                 new CustomerMemberLinkResponse(
@@ -190,23 +195,23 @@ public class CustomerMemberLinkService {
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<CustomerMemberLinkHistoryResponse> history(
-      String customerId, String cursor, int requestedSize) {
-    requireCustomer(customerId);
+      Long storeId, String customerId, String cursor, int requestedSize) {
+    requireCustomer(storeId, customerId);
     int size = CursorPage.clampSize(requestedSize);
     // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
     Limit limit = Limit.of(size + 1);
     List<CustomerMemberLinkView> fetched =
         cursor == null
-            ? customerMemberLinkRepository.findHistory(customerId, limit)
-            : fetchHistoryAfter(customerId, PageCursor.decode(cursor), limit);
+            ? customerMemberLinkRepository.findHistory(storeId, customerId, limit)
+            : fetchHistoryAfter(storeId, customerId, PageCursor.decode(cursor), limit);
     return CursorPage.of(fetched, size, CustomerMemberLinkService::cursorOf)
         .map(CustomerMemberLinkService::toHistoryResponse);
   }
 
   private List<CustomerMemberLinkView> fetchHistoryAfter(
-      String customerId, PageCursor cursor, Limit limit) {
+      Long storeId, String customerId, PageCursor cursor, Limit limit) {
     return customerMemberLinkRepository.findHistoryAfter(
-        customerId, cursor.timestampKey(), cursor.id(), limit);
+        storeId, customerId, cursor.timestampKey(), cursor.id(), limit);
   }
 
   /** 続きの位置は一覧の並び（紐づけ時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
@@ -214,18 +219,18 @@ public class CustomerMemberLinkService {
     return new PageCursor(view.getLinkedAt().toString(), view.getId()).encode();
   }
 
-  private void requireCustomer(String customerId) {
-    if (!customerRepository.existsById(customerId)) {
+  private void requireCustomer(Long storeId, String customerId) {
+    if (!customerRepository.existsByIdAndStoreId(customerId, storeId)) {
       throw new NotFoundException("顧客が見つかりません");
     }
   }
 
   /** 成立・変更・解除は名指された顧客行を直列化点とする。他店舗は 404、統合済みは 409 とし、 操作対象を暗黙に存続顧客へ向け直さない。 */
-  private void lockEditableCustomer(String customerId) {
+  private void lockEditableCustomer(Long storeId, String customerId) {
     customerRepository
-        .findByIdForUpdate(customerId)
+        .findByIdAndStoreIdForUpdate(customerId, storeId)
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
-    if (customerRepository.isMerged(customerId)) {
+    if (customerRepository.isMerged(storeId, customerId)) {
       throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
     }
   }

@@ -80,6 +80,8 @@ class CustomerSearchControllerTest {
   @MockitoBean StoreExistenceCheck stores;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
+  private static final Long STORE_ID = 7L;
+
   @BeforeEach
   void storeExists() {
     when(stores.exists(anyLong())).thenReturn(true);
@@ -89,23 +91,27 @@ class CustomerSearchControllerTest {
   void groupsIncludeComparisonMaterialAndOpaqueContinuation() throws Exception {
     var a = customer("1", "候補甲");
     var b = customer("2", "候補乙");
-    when(candidates.groups(any(), any(), any(), any(), anyInt()))
+    when(candidates.groups(eq(STORE_ID), any(), any(), any(), any(), anyInt()))
         .thenReturn(
             List.of(
                 new CustomerCandidateRepository.Group(ContactType.EMAIL, "Case@example.com", 2),
                 new CustomerCandidateRepository.Group(ContactType.LINE, "Case@example.com", 2)));
-    when(candidates.members(any()))
+    when(candidates.members(eq(STORE_ID), any()))
         .thenReturn(
             List.of(
                 new CustomerCandidateRepository.Match(ContactType.EMAIL, "Case@example.com", a),
                 new CustomerCandidateRepository.Match(ContactType.EMAIL, "Case@example.com", b)));
-    var preferred = CustomerContact.create("1", ContactType.PHONE, "090-1234-5678");
+    var preferred = CustomerContact.create(STORE_ID, "1", ContactType.PHONE, "090-1234-5678");
     preferred.setId("10");
     preferred.prefer(true);
-    when(contacts.findByCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(any()))
+    when(contacts.findByStoreIdAndCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(
+            eq(STORE_ID), any()))
         .thenReturn(List.of(preferred));
     var body =
-        mvc.perform(get("/store/customers/duplicates").param("size", "1").header("X-Store-ID", "1"))
+        mvc.perform(
+                get("/store/customers/duplicates")
+                    .param("size", "1")
+                    .header("X-Store-ID", STORE_ID.toString()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].matched_type").value("EMAIL"))
@@ -121,10 +127,13 @@ class CustomerSearchControllerTest {
             .getResponse()
             .getContentAsString();
     String cursor = json.readTree(body).path("next_cursor").asString();
-    when(candidates.groups(any(), any(), any(), any(), anyInt())).thenReturn(List.of());
-    when(candidates.members(any())).thenReturn(List.of());
+    when(candidates.groups(eq(STORE_ID), any(), any(), any(), any(), anyInt()))
+        .thenReturn(List.of());
+    when(candidates.members(eq(STORE_ID), any())).thenReturn(List.of());
     mvc.perform(
-            get("/store/customers/duplicates").param("cursor", cursor).header("X-Store-ID", "1"))
+            get("/store/customers/duplicates")
+                .param("cursor", cursor)
+                .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isEmpty())
         .andExpect(jsonPath("$.next_cursor").doesNotExist());
@@ -134,7 +143,8 @@ class CustomerSearchControllerTest {
   void largeGroupMembersArePagedWithNormalizedInput() throws Exception {
     var a = customer("1", "候補甲");
     var b = customer("2", "候補乙");
-    when(candidates.members(eq(ContactType.PHONE), eq("+819012345678"), any(), anyInt()))
+    when(candidates.members(
+            eq(STORE_ID), eq(ContactType.PHONE), eq("+819012345678"), any(), anyInt()))
         .thenReturn(List.of(a, b));
     var body =
         mvc.perform(
@@ -142,7 +152,7 @@ class CustomerSearchControllerTest {
                     .param("type", "PHONE")
                     .param("value", "090-1234-5678")
                     .param("size", "1")
-                    .header("X-Store-ID", "1"))
+                    .header("X-Store-ID", STORE_ID.toString()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].id").value("1"))
@@ -150,14 +160,15 @@ class CustomerSearchControllerTest {
             .getResponse()
             .getContentAsString();
     String cursor = json.readTree(body).path("next_cursor").asString();
-    when(candidates.members(eq(ContactType.PHONE), eq("+819012345678"), eq("1"), anyInt()))
+    when(candidates.members(
+            eq(STORE_ID), eq(ContactType.PHONE), eq("+819012345678"), eq("1"), anyInt()))
         .thenReturn(List.of(b));
     mvc.perform(
             get("/store/customers/duplicates/customers")
                 .param("type", "PHONE")
                 .param("value", "09012345678")
                 .param("cursor", cursor)
-                .header("X-Store-ID", "1"))
+                .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value("2"))
         .andExpect(jsonPath("$.next_cursor").doesNotExist());
@@ -166,15 +177,18 @@ class CustomerSearchControllerTest {
   @Test
   void listReturnsMatchEvidenceSeparatelyFromPreferredContacts() throws Exception {
     var customer = customer("1", "候補甲");
-    var contact = CustomerContact.create("1", ContactType.EMAIL, "Case@EXAMPLE.COM");
+    var contact = CustomerContact.create(STORE_ID, "1", ContactType.EMAIL, "Case@EXAMPLE.COM");
     contact.setId("10");
-    when(customerList.findAll(ArgumentMatchers.<Specification<Customer>>any(), any(Pageable.class)))
+    when(customerList.findAll(
+            eq(STORE_ID), ArgumentMatchers.<Specification<Customer>>any(), any(Pageable.class)))
         .thenReturn(
             new PageImpl<>(List.of(new CustomerListRepository.Row(customer, null, null, false))));
     when(contacts.findAll(ArgumentMatchers.<Specification<CustomerContact>>any(), any(Sort.class)))
         .thenReturn(List.of(contact));
     mvc.perform(
-            get("/store/customers").param("search", "Case@EXAMPLE.COM").header("X-Store-ID", "1"))
+            get("/store/customers")
+                .param("search", "Case@EXAMPLE.COM")
+                .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].preferred_contacts").isEmpty())
         .andExpect(jsonPath("$.content[0].matched_contacts[0].value").value("Case@example.com"));
@@ -190,7 +204,7 @@ class CustomerSearchControllerTest {
                     .param("type", "LINE")
                     .param("value", "Case")
                     .param("size", size)
-                    .header("X-Store-ID", "1"))
+                    .header("X-Store-ID", STORE_ID.toString()))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error").isString());
       }
@@ -199,7 +213,7 @@ class CustomerSearchControllerTest {
                   .param("type", "LINE")
                   .param("value", "Case")
                   .param("cursor", "bad")
-                  .header("X-Store-ID", "1"))
+                  .header("X-Store-ID", STORE_ID.toString()))
           .andExpect(status().isBadRequest());
     }
   }

@@ -8,9 +8,14 @@ public interface CustomerCandidateRepository {
   record Match(ContactType type, String value, Customer customer) {}
 
   List<Group> groups(
-      String search, ContactType type, ContactType afterType, String afterValue, int limit);
+      Long storeId,
+      String search,
+      ContactType type,
+      ContactType afterType,
+      String afterValue,
+      int limit);
 
-  List<Match> members(List<Group> groups);
+  List<Match> members(Long storeId, List<Group> groups);
 
-  List<Customer> members(ContactType type, String value, String afterId, int limit);
+  List<Customer> members(Long storeId, ContactType type, String value, String afterId, int limit);
 }

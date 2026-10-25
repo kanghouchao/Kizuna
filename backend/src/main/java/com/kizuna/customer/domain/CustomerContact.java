@@ -64,8 +64,10 @@ public class CustomerContact extends StoreScopedEntity {
     else marketingStatus = status;
   }
 
-  public static CustomerContact create(String customerId, ContactType type, String value) {
+  public static CustomerContact create(
+      Long storeId, String customerId, ContactType type, String value) {
     var contact = new CustomerContact();
+    contact.setStoreId(storeId);
     contact.customerId = customerId;
     contact.originCustomerId = customerId;
     contact.change(type, value);

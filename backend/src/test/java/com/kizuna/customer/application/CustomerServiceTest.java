@@ -3,6 +3,7 @@ package com.kizuna.customer.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,6 +48,8 @@ import org.springframework.data.jpa.domain.Specification;
 @ExtendWith(MockitoExtension.class)
 class CustomerServiceTest {
 
+  private static final Long STORE_ID = 7L;
+
   @Mock private CustomerContactService customerContactService;
   @Mock private CustomerContactRepository customerContactRepository;
   @Mock private CustomerRepository customerRepository;
@@ -70,12 +73,12 @@ class CustomerServiceTest {
     resp.setName("Test");
 
     when(customerListRepository.findAll(
-            ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
+            eq(STORE_ID), ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
     when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
 
     Page<CustomerSummaryResponse> result =
-        customerService.list("test", "VIP", PageRequest.of(0, 10));
+        customerService.list(STORE_ID, "test", "VIP", PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("Test");
   }
@@ -91,11 +94,12 @@ class CustomerServiceTest {
     resp.setName("All");
 
     when(customerListRepository.findAll(
-            ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
+            eq(STORE_ID), ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
     when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
 
-    Page<CustomerSummaryResponse> result = customerService.list(null, null, PageRequest.of(0, 10));
+    Page<CustomerSummaryResponse> result =
+        customerService.list(STORE_ID, null, null, PageRequest.of(0, 10));
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("All");
   }
@@ -108,17 +112,17 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c1");
 
-    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findResolvingMerge(STORE_ID, "c1")).thenReturn(Optional.of(c));
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
-    assertThat(customerService.get("c1").getId()).isEqualTo("c1");
+    assertThat(customerService.get(STORE_ID, "c1").getId()).isEqualTo("c1");
   }
 
   @Test
   void get_throwsWhenNotFound() {
-    when(customerRepository.findResolvingMerge("missing")).thenReturn(Optional.empty());
+    when(customerRepository.findResolvingMerge(STORE_ID, "missing")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> customerService.get("missing"))
+    assertThatThrownBy(() -> customerService.get(STORE_ID, "missing"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }
@@ -145,7 +149,8 @@ class CustomerServiceTest {
     resp.setName("New");
     when(customerMapper.toResponse(any())).thenReturn(resp);
 
-    CustomerResponse res = customerService.create(req);
+    CustomerResponse res = customerService.create(STORE_ID, req);
+    assertThat(customerEntity.getStoreId()).isEqualTo(STORE_ID);
     assertThat(res.getId()).isEqualTo("new_id");
     assertThat(res.getName()).isEqualTo("New");
   }
@@ -155,7 +160,7 @@ class CustomerServiceTest {
     Customer c = new Customer();
     c.setId("c1");
 
-    when(customerRepository.findById("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findByIdAndStoreId("c1", STORE_ID)).thenReturn(Optional.of(c));
     when(customerRepository.save(any())).thenReturn(c);
 
     CustomerUpdateRequest req = new CustomerUpdateRequest();
@@ -168,16 +173,17 @@ class CustomerServiceTest {
     resp.setName("Updated");
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
-    CustomerResponse res = customerService.update("c1", req);
+    CustomerResponse res = customerService.update(STORE_ID, "c1", req);
     assertThat(c.getName()).isEqualTo("Updated");
     assertThat(res.getName()).isEqualTo("Updated");
   }
 
   @Test
   void update_throwsWhenNotFound() {
-    when(customerRepository.findById("missing")).thenReturn(Optional.empty());
+    when(customerRepository.findByIdAndStoreId("missing", STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> customerService.update("missing", new CustomerUpdateRequest()))
+    assertThatThrownBy(
+            () -> customerService.update(STORE_ID, "missing", new CustomerUpdateRequest()))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }
@@ -201,13 +207,13 @@ class CustomerServiceTest {
     unlinkedResponse.setId("c2");
 
     when(customerListRepository.findAll(
-            ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
+            eq(STORE_ID), ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
     when(customerMapper.toSummaryResponse(linked)).thenReturn(linkedResponse);
     when(customerMapper.toSummaryResponse(unlinked)).thenReturn(unlinkedResponse);
 
     List<CustomerSummaryResponse> result =
-        customerService.list(null, null, PageRequest.of(0, 10)).getContent();
+        customerService.list(STORE_ID, null, null, PageRequest.of(0, 10)).getContent();
 
     assertThat(result.get(0).getMemberLinked()).isTrue();
     assertThat(result.get(1).getMemberLinked()).isFalse();
@@ -221,19 +227,21 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c1");
 
-    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findResolvingMerge(STORE_ID, "c1")).thenReturn(Optional.of(c));
     when(customerMapper.toResponse(c)).thenReturn(resp);
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("c1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "c1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(activeLink("c1", "123456789012")));
 
-    CustomerResponse linked = customerService.get("c1");
+    CustomerResponse linked = customerService.get(STORE_ID, "c1");
     assertThat(linked.getMemberLinked()).isTrue();
     assertThat(linked.getLinkedMemberCode()).isEqualTo("123456789012");
 
-    when(customerMemberLinkRepository.findByCustomerIdAndStatus("c1", LinkStatus.ACTIVE))
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "c1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
-    CustomerResponse unlinked = customerService.get("c1");
+    CustomerResponse unlinked = customerService.get(STORE_ID, "c1");
     assertThat(unlinked.getMemberLinked()).isFalse();
     assertThat(unlinked.getLinkedMemberCode()).isNull();
   }
@@ -248,15 +256,15 @@ class CustomerServiceTest {
 
     // 解決と取得を 1 文で行う。2 文に分けると、統合先を読んだ後に連鎖統合が確定した場合に
     // 既に墓標になった行を本体として返してしまう
-    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(surviving));
+    when(customerRepository.findResolvingMerge(STORE_ID, "c1")).thenReturn(Optional.of(surviving));
     when(customerMapper.toResponse(surviving)).thenReturn(resp);
 
-    CustomerResponse result = customerService.get("c1");
+    CustomerResponse result = customerService.get(STORE_ID, "c1");
 
     assertThat(result.getId()).isEqualTo("c2");
     assertThat(result.getMerged()).isTrue();
     assertThat(result.getMergedFromId()).isEqualTo("c1");
-    verify(customerRepository, never()).findById(any());
+    verify(customerRepository, never()).findByIdAndStoreId(any(), any());
   }
 
   @Test
@@ -267,10 +275,10 @@ class CustomerServiceTest {
     CustomerResponse resp = new CustomerResponse();
     resp.setId("c1");
 
-    when(customerRepository.findResolvingMerge("c1")).thenReturn(Optional.of(c));
+    when(customerRepository.findResolvingMerge(STORE_ID, "c1")).thenReturn(Optional.of(c));
     when(customerMapper.toResponse(c)).thenReturn(resp);
 
-    CustomerResponse result = customerService.get("c1");
+    CustomerResponse result = customerService.get(STORE_ID, "c1");
 
     assertThat(result.getMerged()).isNull();
     assertThat(result.getMergedFromId()).isNull();
@@ -281,10 +289,10 @@ class CustomerServiceTest {
   void update_rejectsTombstones() {
     Customer tombstone = new Customer();
     tombstone.setId("c1");
-    when(customerRepository.findById("c1")).thenReturn(Optional.of(tombstone));
-    when(customerRepository.isMerged("c1")).thenReturn(true);
+    when(customerRepository.findByIdAndStoreId("c1", STORE_ID)).thenReturn(Optional.of(tombstone));
+    when(customerRepository.isMerged(STORE_ID, "c1")).thenReturn(true);
 
-    assertThatThrownBy(() -> customerService.update("c1", new CustomerUpdateRequest()))
+    assertThatThrownBy(() -> customerService.update(STORE_ID, "c1", new CustomerUpdateRequest()))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
     verify(customerRepository, never()).save(any());
@@ -293,15 +301,16 @@ class CustomerServiceTest {
   @Test
   @DisplayName("墓標の削除は、統合に関与した行の案内より先に統合済みとして撥ねられること")
   void delete_rejectsTombstonesBeforeTheInvolvementCheck() {
-    when(customerRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(aliveCustomer("c1")));
-    when(customerRepository.isMerged("c1")).thenReturn(true);
+    when(customerRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(aliveCustomer("c1")));
+    when(customerRepository.isMerged(STORE_ID, "c1")).thenReturn(true);
 
-    assertThatThrownBy(() -> customerService.delete("c1"))
+    assertThatThrownBy(() -> customerService.delete(STORE_ID, "c1"))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
     // 墓標は「統合に関与した行」でもあるので、後ろに置くと次の一手の違う案内に潰れる
-    verify(customerMergeRepository, never()).existsInvolving(any());
-    verify(customerRepository, never()).deleteById(any());
+    verify(customerMergeRepository, never()).existsInvolving(any(), any());
+    verify(customerRepository, never()).delete(any(Customer.class));
   }
 
   private static CustomerMemberLink activeLink(String customerId, String memberCode) {
@@ -317,28 +326,32 @@ class CustomerServiceTest {
 
   @Test
   void delete_removesIfExists() {
-    when(customerRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(aliveCustomer("c1")));
-    customerService.delete("c1");
-    verify(customerRepository).deleteById("c1");
+    Customer row = aliveCustomer("c1");
+    when(customerRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(row));
+    customerService.delete(STORE_ID, "c1");
+    verify(customerRepository).delete(row);
   }
 
   @Test
   @DisplayName("統合に関与した顧客の削除は 409 で撥ねられ、行が消えないこと")
   void delete_rejectsCustomersInvolvedInAMerge() {
-    when(customerRepository.findByIdForUpdate("c1")).thenReturn(Optional.of(aliveCustomer("c1")));
-    when(customerMergeRepository.existsInvolving("c1")).thenReturn(true);
+    when(customerRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(aliveCustomer("c1")));
+    when(customerMergeRepository.existsInvolving(STORE_ID, "c1")).thenReturn(true);
 
-    assertThatThrownBy(() -> customerService.delete("c1"))
+    assertThatThrownBy(() -> customerService.delete(STORE_ID, "c1"))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合");
-    verify(customerRepository, never()).deleteById("c1");
+    verify(customerRepository, never()).delete(any(Customer.class));
   }
 
   @Test
   void delete_throwsWhenNotFound() {
-    when(customerRepository.findByIdForUpdate("missing")).thenReturn(Optional.empty());
+    when(customerRepository.findByIdAndStoreIdForUpdate("missing", STORE_ID))
+        .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> customerService.delete("missing"))
+    assertThatThrownBy(() -> customerService.delete(STORE_ID, "missing"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }
@@ -350,17 +363,20 @@ class CustomerServiceTest {
     Customer c1 = aliveCustomer("c1");
     Customer c2 = aliveCustomer("c2");
     // DB の並びは要求の並びと一致しない
-    when(customerRepository.findByIdInAndMergedIntoIdIsNull(requested)).thenReturn(List.of(c1, c2));
-    when(customerMemberLinkRepository.findByCustomerIdInAndStatus(requested, LinkStatus.ACTIVE))
+    when(customerRepository.findByIdInAndStoreIdAndMergedIntoIdIsNull(requested, STORE_ID))
+        .thenReturn(List.of(c1, c2));
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdInAndStatus(
+            STORE_ID, requested, LinkStatus.ACTIVE))
         .thenReturn(List.of(activeLink("c1", "123456789012")));
-    when(customerMergeRepository.countOrdersByCustomerId(requested))
+    when(customerMergeRepository.countOrdersByCustomerId(STORE_ID, requested))
         .thenReturn(List.of(new OrderCountView("c2", 3)));
     // 材料が食い違えば写像は素通しの null になり、下の containsExactly が落ちる
     when(customerMapper.toComparisonResponse(c2, false, 3L, List.of()))
         .thenReturn(comparison("c2"));
     when(customerMapper.toComparisonResponse(c1, true, 0L, List.of())).thenReturn(comparison("c1"));
 
-    List<CustomerMergeComparisonResponse> rows = customerService.mergeComparison(requested);
+    List<CustomerMergeComparisonResponse> rows =
+        customerService.mergeComparison(STORE_ID, requested);
 
     // 並びが要求と食い違うと、画面の左右が入れ替わって「残す行」の選択が別人を指す
     assertThat(rows).containsExactly(comparison("c2"), comparison("c1"));
@@ -370,31 +386,32 @@ class CustomerServiceTest {
   @DisplayName("同じ顧客を 2 つ指定した見比べは要求誤りとして撥ねること")
   void mergeComparison_rejectsTheSameCustomerTwice() {
     // 文言は見比べの言葉で述べる。この端点は統合しないので、統合の文言を借りると事実でない案内になる
-    assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1", "c1")))
+    assertThatThrownBy(() -> customerService.mergeComparison(STORE_ID, List.of("c1", "c1")))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("同じ顧客どうしは見比べられません");
-    verify(customerRepository, never()).findByIdInAndMergedIntoIdIsNull(any());
+    verify(customerRepository, never()).findByIdInAndStoreIdAndMergedIntoIdIsNull(any(), any());
   }
 
   @Test
   @DisplayName("2 件でない指定は要求誤りとして撥ねること")
   void mergeComparison_rejectsAnythingButAPair() {
     // 3 行以上を一度に畳む導線は持たない（ADR 0010）。読み口の側でも 2 行に閉じる
-    assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1", "c2", "c3")))
+    assertThatThrownBy(() -> customerService.mergeComparison(STORE_ID, List.of("c1", "c2", "c3")))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1")))
+    assertThatThrownBy(() -> customerService.mergeComparison(STORE_ID, List.of("c1")))
         .isInstanceOf(ServiceException.class);
-    verify(customerRepository, never()).findByIdInAndMergedIntoIdIsNull(any());
+    verify(customerRepository, never()).findByIdInAndStoreIdAndMergedIntoIdIsNull(any(), any());
   }
 
   @Test
   @DisplayName("片方が当店の生きた行でなければ 404 になること")
   void mergeComparison_rejectsWhenEitherRowIsNotAlive() {
-    // 墓標・他店舗・不存在はどれもここに落ちる（店舗の絞り込みは storeFilter が担う）
-    when(customerRepository.findByIdInAndMergedIntoIdIsNull(List.of("c1", "gone")))
+    // 墓標・他店舗・不存在はどれもここに落ちる
+    when(customerRepository.findByIdInAndStoreIdAndMergedIntoIdIsNull(
+            List.of("c1", "gone"), STORE_ID))
         .thenReturn(List.of(aliveCustomer("c1")));
 
-    assertThatThrownBy(() -> customerService.mergeComparison(List.of("c1", "gone")))
+    assertThatThrownBy(() -> customerService.mergeComparison(STORE_ID, List.of("c1", "gone")))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }

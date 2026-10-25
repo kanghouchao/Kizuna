@@ -5,6 +5,7 @@ import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
 import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.CustomerMergeResponse;
 import com.kizuna.customer.application.CustomerMergeService;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -34,18 +35,20 @@ public class CustomerMergeController {
   @GetMapping("/{mergeId}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
   public CustomerMergeAuditResponse audit(
-      @PathVariable String customerId, @PathVariable String mergeId) {
-    return customerMergeService.audit(customerId, mergeId);
+      @CurrentStore Long storeId, @PathVariable String customerId, @PathVariable String mergeId) {
+    return customerMergeService.audit(storeId, customerId, mergeId);
   }
 
   /** 統合を実行する。パスが名指すのが存続行で、本文が被統合行を指す。 */
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerMergeResponse> merge(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @Valid @RequestBody CustomerMergeRequest request,
       Principal principal) {
-    return ResponseEntity.ok(customerMergeService.merge(customerId, request, principal.getName()));
+    return ResponseEntity.ok(
+        customerMergeService.merge(storeId, customerId, request, principal.getName()));
   }
 
   /**
@@ -60,9 +63,10 @@ public class CustomerMergeController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
   public ResponseEntity<CursorPage<CustomerMergeHistoryResponse>> history(
+      @CurrentStore Long storeId,
       @PathVariable String customerId,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(customerMergeService.history(customerId, cursor, size));
+    return ResponseEntity.ok(customerMergeService.history(storeId, customerId, cursor, size));
   }
 }

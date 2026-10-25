@@ -30,7 +30,6 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -51,22 +50,22 @@ class CustomerMergePreviewTest {
   private final UserRepository users = mock(UserRepository.class);
   private final PointLedgerService points = mock(PointLedgerService.class);
   private final MemberLookupService members = mock(MemberLookupService.class);
-  private final StoreContext store = mock(StoreContext.class);
+  private static final Long STORE_ID = 7L;
+  private MergeConfirmation confirmation;
   private CustomerMergeService service;
   private CustomerContact first;
   private CustomerContact second;
 
   @BeforeEach
   void setUp() {
-    when(store.getStoreId()).thenReturn(1L);
     var properties = new AppProperties();
     var jwt = new AppProperties.Jwt();
     jwt.setSecret(UUID.randomUUID().toString());
     properties.setJwt(jwt);
-    var confirmation = new MergeConfirmation(JsonMapper.builder().build(), properties, store);
+    confirmation = new MergeConfirmation(JsonMapper.builder().build(), properties);
     var preparation =
         new MergePreparation(
-            customers, contacts, links, merges, users, points, members, store, confirmation);
+            customers, contacts, links, merges, users, points, members, confirmation);
     service =
         new CustomerMergeService(
             mock(BusinessAudit.class),
@@ -77,27 +76,29 @@ class CustomerMergePreviewTest {
             mock(CustomerContactService.class),
             links,
             merges,
-            users,
-            store);
+            users);
     for (String id : List.of("a", "b")) {
       var customer = Customer.builder().name(id).build();
       customer.setId(id);
-      when(customers.findByIdForUpdate(id)).thenReturn(Optional.of(customer));
-      when(customers.findById(id)).thenReturn(Optional.of(customer));
+      when(customers.findByIdAndStoreIdForUpdate(id, STORE_ID)).thenReturn(Optional.of(customer));
+      when(customers.findByIdAndStoreId(id, STORE_ID)).thenReturn(Optional.of(customer));
     }
     first = contact("a", "one");
     second = contact("b", "two");
-    when(contacts.findByCustomerIdOrderByIdAsc("a")).thenReturn(List.of(first));
-    when(contacts.findByCustomerIdOrderByIdAsc("b")).thenReturn(List.of(second));
+    when(contacts.findByStoreIdAndCustomerIdOrderByIdAsc(STORE_ID, "a")).thenReturn(List.of(first));
+    when(contacts.findByStoreIdAndCustomerIdOrderByIdAsc(STORE_ID, "b"))
+        .thenReturn(List.of(second));
   }
 
   @Test
   void requiresExplicitPreferenceWhenBothRowsHaveOne() {
-    var unresolved = service.preview("a", new CustomerMergePreviewRequest("b", null, null));
+    var unresolved =
+        service.preview(STORE_ID, "a", new CustomerMergePreviewRequest("b", null, null));
     assertThat(unresolved.preferenceConflicts()).containsExactly(ContactType.EMAIL);
     assertThat(unresolved.previewToken()).isNull();
     var selected =
         service.preview(
+            STORE_ID,
             "a",
             new CustomerMergePreviewRequest("b", null, new MergePreferences(null, "two", null)));
     assertThat(selected.preferenceConflicts()).isEmpty();
@@ -114,6 +115,7 @@ class CustomerMergePreviewTest {
     assertThatThrownBy(
             () ->
                 service.preview(
+                    STORE_ID,
                     "a",
                     new CustomerMergePreviewRequest(
                         "b", null, new MergePreferences(null, "two", null))))
@@ -121,6 +123,7 @@ class CustomerMergePreviewTest {
     assertThatThrownBy(
             () ->
                 service.preview(
+                    STORE_ID,
                     "a",
                     new CustomerMergePreviewRequest(
                         "b", null, new MergePreferences("one", null, null))))
@@ -138,22 +141,26 @@ class CustomerMergePreviewTest {
             .linkedBy(3L)
             .linkedAt(OffsetDateTime.now())
             .build();
-    when(links.findByCustomerIdInAndStatus(List.of("a", "b"), LinkStatus.ACTIVE))
+    when(links.findByStoreIdAndCustomerIdInAndStatus(
+            STORE_ID, List.of("a", "b"), LinkStatus.ACTIVE))
         .thenReturn(List.of(memberLink));
-    when(links.findByCustomerIdOrderByIdAsc("b")).thenReturn(List.of(memberLink));
+    when(links.findByStoreIdAndCustomerIdOrderByIdAsc(STORE_ID, "b"))
+        .thenReturn(List.of(memberLink));
     when(points.balance(10L)).thenReturn(120L);
     var order = mock(CustomerMergeRepository.OrderState.class);
     when(order.getId()).thenReturn("order");
     when(order.getCustomerId()).thenReturn("b");
     when(order.getStatus()).thenReturn("CONFIRMED");
     when(order.getVersion()).thenReturn(1L);
-    when(merges.lockOrders(1L, List.of("a", "b"))).thenReturn(List.of(order));
+    when(merges.lockOrders(STORE_ID, List.of("a", "b"))).thenReturn(List.of(order));
     var denying = contact("a", "denial");
     denying.changePermission(ContactPurpose.MARKETING, ContactPermissionStatus.DENIED);
-    when(contacts.findByCustomerIdOrderByIdAsc("a")).thenReturn(List.of(first, denying));
+    when(contacts.findByStoreIdAndCustomerIdOrderByIdAsc(STORE_ID, "a"))
+        .thenReturn(List.of(first, denying));
     var profile = new MergeProfile("選択名", null, null, null, null, null, null, null, "注意");
     var result =
         service.preview(
+            STORE_ID,
             "a",
             new CustomerMergePreviewRequest("b", profile, new MergePreferences(null, "one", null)));
     assertThat(result.profile()).isEqualTo(profile);
@@ -174,7 +181,8 @@ class CustomerMergePreviewTest {
   @Test
   void rejectsAlteredConfirmationBeforeAnyWrites() {
     var preferences = new MergePreferences(null, "one", null);
-    var preview = service.preview("a", new CustomerMergePreviewRequest("b", null, preferences));
+    var preview =
+        service.preview(STORE_ID, "a", new CustomerMergePreviewRequest("b", null, preferences));
     var actor = mock(User.class);
     when(actor.getId()).thenReturn(3L);
     when(users.findByEmail("actor")).thenReturn(Optional.of(actor));
@@ -182,6 +190,7 @@ class CustomerMergePreviewTest {
     assertThatThrownBy(
             () ->
                 service.merge(
+                    STORE_ID,
                     "a",
                     new CustomerMergeRequest(
                         "b", preview.previewToken(), null, preferences, true, "照合"),
@@ -192,8 +201,15 @@ class CustomerMergePreviewTest {
     verify(merges, never()).repointOrders(any(), any(), any());
   }
 
+  @Test
+  void confirmationIsBoundToTheStore() {
+    var state = List.of("a", "b");
+    assertThat(confirmation.sign(STORE_ID, state)).isNotEqualTo(confirmation.sign(8L, state));
+  }
+
   private CustomerContact contact(String customerId, String id) {
-    var result = CustomerContact.create(customerId, ContactType.EMAIL, "shared@example.com");
+    var result =
+        CustomerContact.create(STORE_ID, customerId, ContactType.EMAIL, "shared@example.com");
     result.setId(id);
     result.prefer(true);
     return result;

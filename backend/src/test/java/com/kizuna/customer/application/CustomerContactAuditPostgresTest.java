@@ -75,6 +75,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @EnabledIfEnvironmentVariable(named = "KIZUNA_CONTACT_AUDIT_TEST_JDBC_URL", matches = ".+")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CustomerContactAuditPostgresTest {
+  private static final Long STORE_ID = 1L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate transactions;
@@ -94,7 +95,7 @@ class CustomerContactAuditPostgresTest {
 
   @BeforeEach
   void authenticate() {
-    context.getBean(StoreContext.class).setStoreId(1L);
+    context.getBean(StoreContext.class).setStoreId(STORE_ID);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
@@ -114,7 +115,7 @@ class CustomerContactAuditPostgresTest {
   @Test
   void initialContactAndHistoryAndAuditCommitWithTheirParentCustomer() {
     var request = request();
-    var customer = customers.create(request);
+    var customer = customers.create(STORE_ID, request);
     String contactId =
         jdbc.queryForObject(
             "select id from t_customer_contacts where customer_id = ?",
@@ -152,7 +153,8 @@ class CustomerContactAuditPostgresTest {
     long auditsBefore = count("t_audit_events");
     reject("action <> 'CUSTOMER_CONTACT_CREATED'");
     try {
-      assertThatThrownBy(() -> customers.create(request)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> customers.create(STORE_ID, request))
+          .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
                   "select count(*) from t_customers where name = ?", Long.class, request.getName()))
@@ -175,7 +177,7 @@ class CustomerContactAuditPostgresTest {
             () ->
                 transactions.executeWithoutResult(
                     transaction -> {
-                      customers.create(request);
+                      customers.create(STORE_ID, request);
                       assertThat(count("t_audit_events")).isEqualTo(auditsBefore + 2);
                       throw new IllegalStateException("親取引の後続失敗");
                     }))
@@ -191,14 +193,15 @@ class CustomerContactAuditPostgresTest {
 
   @Test
   void preferenceSwitchKeepsTheUniqueIndexAndRecordsBothCommittedVersions() {
-    var customer = customers.create(request());
+    var customer = customers.create(STORE_ID, request());
     String first = firstContact(customer.getId());
     String second =
         service
-            .create(customer.getId(), new ContactRequest(ContactType.LINE, "other-private"))
+            .create(
+                STORE_ID, customer.getId(), new ContactRequest(ContactType.LINE, "other-private"))
             .id();
-    service.prefer(customer.getId(), ContactType.LINE, first);
-    service.prefer(customer.getId(), ContactType.LINE, second);
+    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, first);
+    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second);
     assertThat(
             jdbc.queryForList(
                 "select id from t_customer_contacts where customer_id = ? and preferred",
@@ -222,24 +225,25 @@ class CustomerContactAuditPostgresTest {
     assertThat(events.getFirst().get("operation_id"))
         .isEqualTo(events.getLast().get("operation_id"));
     long auditCount = count("t_audit_events");
-    service.prefer(customer.getId(), ContactType.LINE, second);
+    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second);
     assertThat(count("t_audit_events")).isEqualTo(auditCount);
   }
 
   @Test
   void secondPreferenceAuditFailureRollsBackBothSidesAndTheFirstAudit() {
-    var customer = customers.create(request());
+    var customer = customers.create(STORE_ID, request());
     String first = firstContact(customer.getId());
     String second =
         service
-            .create(customer.getId(), new ContactRequest(ContactType.LINE, "other-private"))
+            .create(
+                STORE_ID, customer.getId(), new ContactRequest(ContactType.LINE, "other-private"))
             .id();
-    service.prefer(customer.getId(), ContactType.LINE, first);
+    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, first);
     long auditsBefore = count("t_audit_events");
     long historiesBefore = count("t_customer_contact_history");
     reject("action <> 'CUSTOMER_CONTACT_PREFERENCE_CHANGED' or target_id <> '" + second + "'");
     try {
-      assertThatThrownBy(() -> service.prefer(customer.getId(), ContactType.LINE, second))
+      assertThatThrownBy(() -> service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForList(
@@ -265,10 +269,12 @@ class CustomerContactAuditPostgresTest {
   @Test
   void deletionAuditFailureAlsoRollsBackInheritedRestrictionsAndTheirAudits() {
     var request = request();
-    var customer = customers.create(request);
+    var customer = customers.create(STORE_ID, request);
     String source = firstContact(customer.getId());
-    String duplicate = service.create(customer.getId(), request.getContacts().getFirst()).id();
+    String duplicate =
+        service.create(STORE_ID, customer.getId(), request.getContacts().getFirst()).id();
     service.changePermission(
+        STORE_ID,
         customer.getId(),
         source,
         ContactPurpose.BUSINESS,
@@ -278,7 +284,7 @@ class CustomerContactAuditPostgresTest {
     long historiesBefore = count("t_customer_contact_history");
     reject("action <> 'CUSTOMER_CONTACT_DELETED'");
     try {
-      assertThatThrownBy(() -> service.delete(customer.getId(), source))
+      assertThatThrownBy(() -> service.delete(STORE_ID, customer.getId(), source))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -304,17 +310,22 @@ class CustomerContactAuditPostgresTest {
   @Test
   void valueChangeWithInheritanceRecordsVersionsBeforeAndAfterQueryAutoFlush() {
     var request = request();
-    var customer = customers.create(request);
+    var customer = customers.create(STORE_ID, request);
     String source = firstContact(customer.getId());
-    String duplicate = service.create(customer.getId(), request.getContacts().getFirst()).id();
+    String duplicate =
+        service.create(STORE_ID, customer.getId(), request.getContacts().getFirst()).id();
     service.changePermission(
+        STORE_ID,
         customer.getId(),
         source,
         ContactPurpose.BUSINESS,
         new ContactPermissionRequest(
             ContactPermissionStatus.DENIED, "private-source", "private-reason"));
     service.update(
-        customer.getId(), source, new ContactRequest(ContactType.EMAIL, "private@example.test"));
+        STORE_ID,
+        customer.getId(),
+        source,
+        new ContactRequest(ContactType.EMAIL, "private@example.test"));
     var sourceAudit =
         jdbc.queryForMap(
             "select before_values ->> 'version' as old_version, after_values ->> 'version' as new_version, after_values ->> 'business_status' as status from t_audit_events where target_id = ? and action = 'CUSTOMER_CONTACT_UPDATED'",
@@ -429,13 +440,13 @@ class CustomerContactAuditPostgresTest {
     @Bean
     CustomerRepository customerRepository(EntityManager em) {
       var repository = mock(CustomerRepository.class);
-      when(repository.findByIdForUpdate(anyString()))
+      when(repository.findByIdAndStoreIdForUpdate(anyString(), any()))
           .thenAnswer(
               call ->
                   Optional.ofNullable(
                       em.find(
                           Customer.class, call.getArgument(0), LockModeType.PESSIMISTIC_WRITE)));
-      when(repository.findById(anyString()))
+      when(repository.findByIdAndStoreId(anyString(), any()))
           .thenAnswer(call -> Optional.ofNullable(em.find(Customer.class, call.getArgument(0))));
       when(repository.save(any(Customer.class)))
           .thenAnswer(
@@ -452,11 +463,12 @@ class CustomerContactAuditPostgresTest {
           .flush();
       doAnswer(
               call -> {
-                em.remove(em.find(Customer.class, call.getArgument(0)));
+                Customer customer = call.getArgument(0);
+                em.remove(em.contains(customer) ? customer : em.merge(customer));
                 return null;
               })
           .when(repository)
-          .deleteById(anyString());
+          .delete(any(Customer.class));
       when(repository.saveAndFlush(any(Customer.class)))
           .thenAnswer(
               call -> {

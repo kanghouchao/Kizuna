@@ -1,17 +1,17 @@
 package com.kizuna.customer.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Limit;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, String> {
+public interface CustomerMergeRepository extends StoreScopedRepository<CustomerMerge> {
 
   interface OrderState {
     String getId();
@@ -66,22 +66,20 @@ public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, St
       """
       select o.customerId as customerId, count(o) as orderCount
       from com.kizuna.order.domain.Order o
-      where o.customerId in :customerIds
+      where o.storeId = :storeId and o.customerId in :customerIds
       group by o.customerId
       """)
   List<CustomerOrderCountView> countOrdersByCustomerId(
-      @Param("customerIds") Collection<String> customerIds);
+      @Param("storeId") Long storeId, @Param("customerIds") Collection<String> customerIds);
 
   /** その顧客が統合に関与しているか（存続行として受けた統合・自分が被統合となった統合のいずれも）。 */
   @Query(
       """
       select count(m) > 0 from com.kizuna.customer.domain.CustomerMerge m
-      where m.survivingCustomerId = :customerId or m.mergedCustomerId = :customerId
+      where m.storeId = :storeId
+        and (m.survivingCustomerId = :customerId or m.mergedCustomerId = :customerId)
       """)
-  boolean existsInvolving(@Param("customerId") String customerId);
-
-  /** ある行が被統合となった統合。統合履歴を両方向で読むうちの片側で、もう一方は存続行として受けた統合。 */
-  List<CustomerMerge> findByMergedCustomerId(String mergedCustomerId);
+  boolean existsInvolving(@Param("storeId") Long storeId, @Param("customerId") String customerId);
 
   // 一覧は現在の表示名を参照する。実行者削除後も履歴を返すため left join にする。
   // 統合時点の表示名と原資料は変更不能な evidence に保持する。
@@ -94,22 +92,26 @@ public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, St
              m.movedOrderCount as movedOrderCount, m.movedLinkCount as movedLinkCount,
              m.movedContactCount as movedContactCount, m.operationReason as operationReason
       from com.kizuna.customer.domain.CustomerMerge m
-        left join com.kizuna.customer.domain.Customer sc on sc.id = m.survivingCustomerId
-        left join com.kizuna.customer.domain.Customer mc on mc.id = m.mergedCustomerId
+        left join com.kizuna.customer.domain.Customer sc
+          on sc.id = m.survivingCustomerId and sc.storeId = m.storeId
+        left join com.kizuna.customer.domain.Customer mc
+          on mc.id = m.mergedCustomerId and mc.storeId = m.storeId
         left join com.kizuna.user.domain.User mu on mu.id = m.mergedBy
       """;
 
   // 両方向を 1 文で引く。括弧は必須 — 外すと続きの位置の条件が `or` の片方の枝にしか掛からず、
   // 2 ページ目が 1 ページ目をそのまま返して末尾へ到達できなくなる（外して実測）。
   String HISTORY_WHERE =
-      " where (m.survivingCustomerId = :customerId or m.mergedCustomerId = :customerId) ";
+      " where m.storeId = :storeId"
+          + " and (m.survivingCustomerId = :customerId or m.mergedCustomerId = :customerId) ";
 
   // 新しい統合が先頭。mergedAt の同値は id で決定的に解く。カーソルの比較も同じ組で行う。
   String HISTORY_ORDER = " order by m.mergedAt desc, m.id desc";
 
   /** 顧客 1 件の統合履歴の先頭。並びは mergedAt の降順に一意な副キー id を重ねて全順序にする。 */
   @Query(HISTORY_SELECT + HISTORY_WHERE + HISTORY_ORDER)
-  List<CustomerMergeView> findHistory(@Param("customerId") String customerId, Limit limit);
+  List<CustomerMergeView> findHistory(
+      @Param("storeId") Long storeId, @Param("customerId") String customerId, Limit limit);
 
   /**
    * 顧客 1 件の統合履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。
@@ -125,6 +127,7 @@ public interface CustomerMergeRepository extends JpaRepository<CustomerMerge, St
             """
           + HISTORY_ORDER)
   List<CustomerMergeView> findHistoryAfter(
+      @Param("storeId") Long storeId,
       @Param("customerId") String customerId,
       @Param("cursorMergedAt") OffsetDateTime cursorMergedAt,
       @Param("cursorId") String cursorId,

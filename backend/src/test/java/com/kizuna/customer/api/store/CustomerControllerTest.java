@@ -3,6 +3,9 @@ package com.kizuna.customer.api.store;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -35,7 +38,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** ハンドラ層で閉じている約束（offset ページングの全順序、生成 201 / 削除 204）の単体テスト。 */
+/** ハンドラ層で閉じている約束（offset ページングの全順序、生成 201 / 削除 204、名乗られた店舗の受け渡し）の単体テスト。 */
 @WebMvcTest(CustomerController.class)
 @Import({
   CustomerControllerTest.MethodSecurityConfig.class,
@@ -48,6 +51,8 @@ class CustomerControllerTest {
   @TestConfiguration
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
+
+  private static final Long STORE_ID = 7L;
 
   @Autowired private MockMvc mockMvc;
 
@@ -66,10 +71,11 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
-    when(customerService.list(any(), any(), pageableCaptor.capture())).thenReturn(empty);
+    when(customerService.list(eq(STORE_ID), any(), any(), pageableCaptor.capture()))
+        .thenReturn(empty);
 
     mockMvc
-        .perform(get("/store/customers?sort=name").header("X-Store-ID", "1"))
+        .perform(get("/store/customers?sort=name").header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
@@ -82,10 +88,14 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
     Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
-    when(customerService.list(searchCaptor.capture(), any(), any())).thenReturn(empty);
+    when(customerService.list(eq(STORE_ID), searchCaptor.capture(), any(), any()))
+        .thenReturn(empty);
 
     mockMvc
-        .perform(get("/store/customers").param("search", " yamada ").header("X-Store-ID", "1"))
+        .perform(
+            get("/store/customers")
+                .param("search", " yamada ")
+                .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk());
 
     assertThat(searchCaptor.getValue()).isEqualTo("yamada");
@@ -98,10 +108,12 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
     Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
-    when(customerService.list(searchCaptor.capture(), any(), any())).thenReturn(empty);
+    when(customerService.list(eq(STORE_ID), searchCaptor.capture(), any(), any()))
+        .thenReturn(empty);
 
     mockMvc
-        .perform(get("/store/customers").param("search", "　　").header("X-Store-ID", "1"))
+        .perform(
+            get("/store/customers").param("search", "　　").header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk());
 
     assertThat(searchCaptor.getValue()).isNull();
@@ -112,7 +124,8 @@ class CustomerControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void createRespondsWithCreated() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerService.create(any())).thenReturn(CustomerResponse.builder().id("c1").build());
+    when(customerService.create(eq(STORE_ID), any()))
+        .thenReturn(CustomerResponse.builder().id("c1").build());
 
     mockMvc
         .perform(
@@ -120,7 +133,7 @@ class CustomerControllerTest {
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"山田太郎\"}")
-                .header("X-Store-ID", "1"))
+                .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isCreated());
   }
 
@@ -130,14 +143,14 @@ class CustomerControllerTest {
   void mergeComparisonRoutesPastTheDetailHandlerWithBothIdsInOrder() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<List<String>> idsCaptor = ArgumentCaptor.captor();
-    when(customerService.mergeComparison(idsCaptor.capture())).thenReturn(List.of());
+    when(customerService.mergeComparison(eq(STORE_ID), idsCaptor.capture())).thenReturn(List.of());
 
     mockMvc
         .perform(
             get("/store/customers/merge-comparison")
                 .param("ids", "c2")
                 .param("ids", "c1")
-                .header("X-Store-ID", "1"))
+                .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk());
 
     // 字面セグメントが {id} に食われると、詳細の読み口が "merge-comparison" という顧客を探しに行く
@@ -155,7 +168,7 @@ class CustomerControllerTest {
             get("/store/customers/merge-comparison")
                 .param("ids", "c1")
                 .param("ids", "c2")
-                .header("X-Store-ID", "1"))
+                .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isForbidden());
   }
 
@@ -166,7 +179,41 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(delete("/store/customers/c1").with(csrf()).header("X-Store-ID", "1"))
+        .perform(
+            delete("/store/customers/c1").with(csrf()).header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isNoContent());
+
+    verify(customerService).delete(STORE_ID, "c1");
+  }
+
+  @Test
+  @DisplayName("一覧は名乗られた店舗の id で service を呼ぶこと")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void listPassesTheCurrentStore() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(get("/store/customers").header("X-Store-ID", STORE_ID.toString()))
+        .andExpect(status().isOk());
+
+    verify(customerService).list(eq(STORE_ID), isNull(), isNull(), any(Pageable.class));
+  }
+
+  @Test
+  @DisplayName("作成は名乗られた店舗の id で service を呼ぶこと")
+  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
+  void createPassesTheCurrentStore() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            post("/store/customers")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"山田太郎\"}")
+                .header("X-Store-ID", STORE_ID.toString()))
+        .andExpect(status().isCreated());
+
+    verify(customerService).create(eq(STORE_ID), any());
   }
 }

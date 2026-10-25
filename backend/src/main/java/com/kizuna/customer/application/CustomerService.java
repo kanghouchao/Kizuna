@@ -90,11 +90,11 @@ public class CustomerService {
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<CustomerSummaryResponse> list(
-      String search, String classification, Pageable pageable) {
+      Long storeId, String search, String classification, Pageable pageable) {
     Specification<Customer> spec = searchSpec(search, classification);
-    Page<CustomerListRepository.Row> page = customerListRepository.findAll(spec, pageable);
+    Page<CustomerListRepository.Row> page = customerListRepository.findAll(storeId, spec, pageable);
     List<String> ids = page.getContent().stream().map(row -> row.customer().getId()).toList();
-    var preferred = customerContactService.preferred(ids);
+    var preferred = customerContactService.preferred(storeId, ids);
     Map<String, List<ContactSummary>> matched =
         ids.isEmpty() || search == null || search.isBlank()
             ? Map.of()
@@ -102,6 +102,7 @@ public class CustomerService {
                 .findAll(
                     (root, query, cb) ->
                         cb.and(
+                            cb.equal(root.get("storeId"), storeId),
                             root.get("customerId").in(ids),
                             cb.isFalse(root.get("deleted")),
                             CustomerContactSearch.matches(root, cb, search)),
@@ -128,7 +129,7 @@ public class CustomerService {
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<CustomerDuplicateGroupResponse> listDuplicateCandidates(
-      String search, ContactType type, String cursor, int requestedSize) {
+      Long storeId, String search, ContactType type, String cursor, int requestedSize) {
     int size = candidatePageSize(requestedSize);
     ContactType afterType = null;
     String afterValue = null;
@@ -143,11 +144,12 @@ public class CustomerService {
     }
     var page =
         CursorPage.of(
-            candidateRepository.groups(search, type, afterType, afterValue, size + 1),
+            candidateRepository.groups(storeId, search, type, afterType, afterValue, size + 1),
             size,
             group -> groupCursor(group.type(), group.value()));
     var matches =
         candidateRepository.members(
+            storeId,
             page.content().stream()
                 .filter(group -> group.total() <= MAX_LISTED_GROUP_SIZE)
                 .toList());
@@ -161,9 +163,10 @@ public class CustomerService {
                         CustomerCandidateRepository.Match::customer, Collectors.toList())));
     var customers =
         matches.stream().map(CustomerCandidateRepository.Match::customer).distinct().toList();
-    var material = fetchComparisonMaterial(customers.stream().map(Customer::getId).toList());
+    var material =
+        fetchComparisonMaterial(storeId, customers.stream().map(Customer::getId).toList());
     var comparisons =
-        toComparisonRows(customers, material).stream()
+        toComparisonRows(storeId, customers, material).stream()
             .collect(Collectors.toMap(CustomerMergeComparisonResponse::id, Function.identity()));
     return page.map(
         group ->
@@ -179,7 +182,7 @@ public class CustomerService {
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<CustomerMergeComparisonResponse> duplicateCustomers(
-      ContactType type, String value, String cursor, int requestedSize) {
+      Long storeId, ContactType type, String value, String cursor, int requestedSize) {
     if (value == null || value.isBlank() || value.length() > 320)
       throw new ServiceException("320文字以内の連絡先を指定してください");
     String normalized =
@@ -193,13 +196,15 @@ public class CustomerService {
     if (!afterId.matches("[0-9]*")) throw new ServiceException("続きの位置（cursor）が不正です");
     var page =
         CursorPage.of(
-            candidateRepository.members(type, normalized, afterId, size + 1),
+            candidateRepository.members(storeId, type, normalized, afterId, size + 1),
             size,
             customer -> PageCursor.encodeKey(customer.getId()));
     return new CursorPage<>(
         toComparisonRows(
+            storeId,
             page.content(),
-            fetchComparisonMaterial(page.content().stream().map(Customer::getId).toList())),
+            fetchComparisonMaterial(
+                storeId, page.content().stream().map(Customer::getId).toList())),
         page.nextCursor());
   }
 
@@ -225,7 +230,8 @@ public class CustomerService {
    */
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public List<CustomerMergeComparisonResponse> mergeComparison(List<String> customerIds) {
+  public List<CustomerMergeComparisonResponse> mergeComparison(
+      Long storeId, List<String> customerIds) {
     if (customerIds.size() != COMPARISON_SIZE) {
       throw new ServiceException("見比べる顧客を 2 件指定してください");
     }
@@ -233,7 +239,7 @@ public class CustomerService {
       throw new ServiceException("同じ顧客どうしは見比べられません");
     }
     Map<String, Customer> rows =
-        customerRepository.findByIdInAndMergedIntoIdIsNull(customerIds).stream()
+        customerRepository.findByIdInAndStoreIdAndMergedIntoIdIsNull(customerIds, storeId).stream()
             .collect(Collectors.toMap(Customer::getId, Function.identity()));
     // 墓標・他店舗・不存在はどれもここに落ちる。区別して案内すると、他店舗の顧客の存在が漏れる
     if (rows.size() != COMPARISON_SIZE) {
@@ -241,13 +247,15 @@ public class CustomerService {
     }
     // 並びは要求のまま返す。左右が入れ替わると、画面で選んだ「残す行」が別人を指しうる
     return toComparisonRows(
-        customerIds.stream().map(rows::get).toList(), fetchComparisonMaterial(customerIds));
+        storeId,
+        customerIds.stream().map(rows::get).toList(),
+        fetchComparisonMaterial(storeId, customerIds));
   }
 
   private List<CustomerMergeComparisonResponse> toComparisonRows(
-      List<Customer> customers, ComparisonMaterial material) {
+      Long storeId, List<Customer> customers, ComparisonMaterial material) {
     var preferred =
-        customerContactService.preferred(customers.stream().map(Customer::getId).toList());
+        customerContactService.preferred(storeId, customers.stream().map(Customer::getId).toList());
     return customers.stream()
         .map(
             customer ->
@@ -263,17 +271,17 @@ public class CustomerService {
    * 見比べる材料（会員紐づけの有無・受注件数）を引く。どちらも顧客行が持たない事実で、候補ぜんたい・見比べる 2 行の どちらでも渡された ID をまとめて 1
    * 回ずつ引く（行ごとの追加問い合わせを作らない）。
    */
-  private ComparisonMaterial fetchComparisonMaterial(List<String> customerIds) {
+  private ComparisonMaterial fetchComparisonMaterial(Long storeId, List<String> customerIds) {
     if (customerIds.isEmpty()) {
       return new ComparisonMaterial(Set.of(), Map.of());
     }
     return new ComparisonMaterial(
         customerMemberLinkRepository
-            .findByCustomerIdInAndStatus(customerIds, LinkStatus.ACTIVE)
+            .findByStoreIdAndCustomerIdInAndStatus(storeId, customerIds, LinkStatus.ACTIVE)
             .stream()
             .map(CustomerMemberLink::getCustomerId)
             .collect(Collectors.toSet()),
-        customerMergeRepository.countOrdersByCustomerId(customerIds).stream()
+        customerMergeRepository.countOrdersByCustomerId(storeId, customerIds).stream()
             .collect(
                 Collectors.toMap(
                     CustomerOrderCountView::getCustomerId, CustomerOrderCountView::getOrderCount)));
@@ -327,27 +335,28 @@ public class CustomerService {
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public CustomerResponse get(String id) {
+  public CustomerResponse get(Long storeId, String id) {
     Customer customer =
         customerRepository
-            .findResolvingMerge(id)
+            .findResolvingMerge(storeId, id)
             .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
     CustomerResponse response = customerMapper.toResponse(customer);
     response.setPreferredContacts(
         customerContactService
-            .preferred(List.of(customer.getId()))
+            .preferred(storeId, List.of(customer.getId()))
             .getOrDefault(customer.getId(), List.of()));
-    withMemberLink(response, activeMemberCodeOf(customer.getId()));
+    withMemberLink(response, activeMemberCodeOf(storeId, customer.getId()));
     return withMergeMark(response, id, customer.getId());
   }
 
   @StoreScoped
   @Transactional
-  public CustomerResponse create(CustomerCreateRequest request) {
+  public CustomerResponse create(Long storeId, CustomerCreateRequest request) {
     Customer customer = customerMapper.toEntity(request);
+    customer.setStoreId(storeId);
     customerRepository.saveAndFlush(customer);
     for (var contact : request.getContacts())
-      customerContactService.create(customer.getId(), contact);
+      customerContactService.create(storeId, customer.getId(), contact);
     audit.recordCurrent(
         customer.getStoreId(),
         "CUSTOMER_CREATED",
@@ -362,10 +371,12 @@ public class CustomerService {
 
   @StoreScoped
   @Transactional
-  public CustomerResponse update(String id, CustomerUpdateRequest request) {
+  public CustomerResponse update(Long storeId, String id, CustomerUpdateRequest request) {
     Customer customer =
-        customerRepository.findById(id).orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
-    if (customerRepository.isMerged(id)) {
+        customerRepository
+            .findByIdAndStoreId(id, storeId)
+            .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+    if (customerRepository.isMerged(storeId, id)) {
       throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
     }
 
@@ -385,8 +396,8 @@ public class CustomerService {
 
     var response = customerMapper.toResponse(customer);
     response.setPreferredContacts(
-        customerContactService.preferred(List.of(id)).getOrDefault(id, List.of()));
-    return withMemberLink(response, activeMemberCodeOf(id));
+        customerContactService.preferred(storeId, List.of(id)).getOrDefault(id, List.of()));
+    return withMemberLink(response, activeMemberCodeOf(storeId, id));
   }
 
   /**
@@ -395,25 +406,25 @@ public class CustomerService {
    */
   @StoreScoped
   @Transactional
-  public void delete(String id) {
+  public void delete(Long storeId, String id) {
     var customer =
         customerRepository
-            .findByIdForUpdate(id)
+            .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
     // 墓標も「統合に関与した行」なので下の判定でも撥ねられるが、次の一手が違う — 墓標を消したい人が
     // 求めているのは統合先の編集である。先に判定して案内を分ける。
-    if (customerRepository.isMerged(id)) {
+    if (customerRepository.isMerged(storeId, id)) {
       throw new ConflictException(MERGED_CUSTOMER_NOT_EDITABLE);
     }
-    if (customerContactRepository.existsByCustomerIdOrOriginCustomerId(id, id)) {
+    if (customerContactRepository.existsReferencing(storeId, id)) {
       throw new ConflictException("連絡先の履歴がある顧客は削除できません");
     }
-    if (customerMergeRepository.existsInvolving(id)) {
+    if (customerMergeRepository.existsInvolving(storeId, id)) {
       throw new ConflictException(MERGED_CUSTOMER_UNDELETABLE);
     }
     var before = CustomerAuditSnapshot.of(customer);
     try {
-      customerRepository.deleteById(id);
+      customerRepository.delete(customer);
       // DELETE を今この場へ流す。トランザクション境界の commit まで遅れると、外部キー違反が
       // この catch を素通りして全域ハンドラの兜底（500）へ落ちる。
       customerRepository.flush();
@@ -449,9 +460,9 @@ public class CustomerService {
         Map.of("exists", "false"));
   }
 
-  private String activeMemberCodeOf(String customerId) {
+  private String activeMemberCodeOf(Long storeId, String customerId) {
     return customerMemberLinkRepository
-        .findByCustomerIdAndStatus(customerId, LinkStatus.ACTIVE)
+        .findByStoreIdAndCustomerIdAndStatus(storeId, customerId, LinkStatus.ACTIVE)
         .map(CustomerMemberLink::getMemberCode)
         .orElse(null);
   }
