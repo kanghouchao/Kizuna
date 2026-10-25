@@ -1,7 +1,6 @@
 package com.kizuna.order.reporting;
 
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
@@ -17,15 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AdvertisingOrderReader {
   private final EntityManager em;
-  private final StoreContext stores;
 
   public record Order(String mediaName, boolean zeroAmount) {}
 
   @StoreScoped
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
-  public List<Order> read(LocalDate from, LocalDate to, int limit) {
-    if (!stores.hasStoreId()) throw new AccessDeniedException("店舗の指定が必要です");
+  public List<Order> read(Long storeId, LocalDate from, LocalDate to, int limit) {
+    if (storeId == null) throw new AccessDeniedException("店舗の指定が必要です");
     if (limit < 1 || limit > 100_000) throw tooLarge();
     var rows =
         em.createQuery(
@@ -39,7 +37,7 @@ public class AdvertisingOrderReader {
         order by o.id
         """,
                 Order.class)
-            .setParameter("store", stores.getStoreId())
+            .setParameter("store", storeId)
             .setParameter("from", from)
             .setParameter("to", to)
             .setMaxResults(limit + 1)

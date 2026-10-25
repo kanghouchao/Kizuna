@@ -9,7 +9,6 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import java.util.List;
@@ -38,15 +37,15 @@ public class OrderAttributionCorrectionService {
   private final OrderAttributionRepository orderAttributionRepository;
   private final PointLedgerService pointLedgerService;
   private final ActorIdentityService actorIdentityService;
-  private final StoreContext storeContext;
 
   /** 訂正の進み具合。画面が差し引く既定値（付与の全額）と引き残しを示すための読み口。 */
   @StoreScoped
   @Transactional(readOnly = true)
-  public OrderAttributionCorrectionResponse status(String orderId, Long attributionId) {
-    requireScopedOrder(orderId);
+  public OrderAttributionCorrectionResponse status(
+      Long storeId, String orderId, Long attributionId) {
+    requireScopedOrder(storeId, orderId);
     List<OrderAttribution> attributions =
-        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
+        orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId);
     OrderAttribution attribution =
         requireInvalidatedAttribution(attributions, orderId, attributionId);
     Long memberId = attribution.getMemberId();
@@ -77,10 +76,10 @@ public class OrderAttributionCorrectionService {
    */
   @StoreScoped
   @Transactional(readOnly = true)
-  public Optional<PendingCorrection> findPendingCorrection(String orderId) {
-    requireScopedOrder(orderId);
+  public Optional<PendingCorrection> findPendingCorrection(Long storeId, String orderId) {
+    requireScopedOrder(storeId, orderId);
     List<OrderAttribution> attributions =
-        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
+        orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId);
     return attributions.stream()
         .filter(row -> row.getStatus() == OrderAttributionStatus.INVALIDATED)
         .filter(row -> row.getMemberId() != null)
@@ -109,14 +108,14 @@ public class OrderAttributionCorrectionService {
   @StoreScoped
   @Transactional
   public OrderAttributionCorrectionResponse correct(
-      String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
+      Long storeId, String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
     // 上限を数えてから記帳し終えるまで、同じ受注に対する並行の訂正と直列化する。押さえないと双方が同じ
     // 「まだ引かれていない」を観測し、合計が付与額を超えて通る。
     orderRepository
-        .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
+        .findByIdAndStoreIdForUpdate(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     List<OrderAttribution> attributions =
-        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
+        orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId);
     OrderAttribution attribution =
         requireInvalidatedAttribution(attributions, orderId, request.getAttributionId());
     long memberId = requireMemberId(attribution);
@@ -139,7 +138,7 @@ public class OrderAttributionCorrectionService {
 
     pointLedgerService.correctForAttribution(
         memberId,
-        storeContext.getStoreId(),
+        storeId,
         -request.getPoints(),
         request.getReason(),
         actorIdentityService.requireUserId(actorEmail),
@@ -159,10 +158,10 @@ public class OrderAttributionCorrectionService {
   @StoreScoped
   @Transactional(readOnly = true)
   public OrderAttributionCorrectionResponse replayCorrect(
-      String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
-    requireScopedOrder(orderId);
+      Long storeId, String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
+    requireScopedOrder(storeId, orderId);
     List<OrderAttribution> attributions =
-        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
+        orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId);
     OrderAttribution attribution =
         requireInvalidatedAttribution(attributions, orderId, request.getAttributionId());
     long memberId = requireMemberId(attribution);
@@ -173,7 +172,7 @@ public class OrderAttributionCorrectionService {
 
     pointLedgerService.correctForAttribution(
         memberId,
-        storeContext.getStoreId(),
+        storeId,
         -request.getPoints(),
         request.getReason(),
         actorIdentityService.requireUserId(actorEmail),
@@ -183,12 +182,12 @@ public class OrderAttributionCorrectionService {
   }
 
   /**
-   * 現店舗の受注。帰属記録も台帳も受注 ID からしか辿れないため、店舗の所有はここでだけ決まる。
+   * 指定店舗の受注。台帳は受注 ID からしか辿れず店舗条件を持たないため、店舗の所有と 404 の判定はここで決まる。
    *
    * <p>引けない受注は他店舗のものか存在しないかを区別せず 404 にする（区別すると受注 ID の存在が漏れる）。
    */
-  private void requireScopedOrder(String orderId) {
-    if (orderRepository.findByIdAndStoreId(orderId, storeContext.getStoreId()).isEmpty()) {
+  private void requireScopedOrder(Long storeId, String orderId) {
+    if (orderRepository.findByIdAndStoreId(orderId, storeId).isEmpty()) {
       throw new NotFoundException("注文が見つかりません: " + orderId);
     }
   }

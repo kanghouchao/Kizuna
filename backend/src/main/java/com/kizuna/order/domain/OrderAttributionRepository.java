@@ -2,7 +2,6 @@ package com.kizuna.order.domain;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -10,23 +9,31 @@ import org.springframework.data.repository.query.Param;
 
 public interface OrderAttributionRepository extends JpaRepository<OrderAttribution, Long> {
 
-  /**
-   * 受注の帰属記録を新しい順に。無効化で行を消さないため 1 受注が複数行を持ちうるが、有効な行は部分一意索引により高々 1 件。
-   *
-   * <p>この読み口は店舗行分離機構に載らない（帰属記録は グループ帰属）。店舗の所有は受注を先に引いて確かめること。
-   */
-  List<OrderAttribution> findByOrderIdOrderByIdDesc(String orderId);
+  // 帰属記録は店舗列を持たないグループ帰属なので、店舗の条件は受注への join に置く。
+  String FOR_ORDER =
+      """
+      select a from com.kizuna.order.domain.OrderAttribution a
+        join com.kizuna.order.domain.Order o on o.id = a.orderId
+      where o.storeId = :storeId and a.orderId = :orderId
+      order by a.id desc
+      """;
 
-  /** 会員へ有効に帰属している完了受注の件数（跨店舗合計）。会員ランクの昇格指標の一方で、無効化された帰属は数えない。 */
+  /** 指定店舗の受注の帰属記録を新しい順に。無効化で行を消さないため 1 受注が複数行を持ちうるが、有効な行は部分一意索引により高々 1 件。 */
+  @Query(FOR_ORDER)
+  List<OrderAttribution> findByStoreIdAndOrderIdOrderByIdDesc(
+      @Param("storeId") Long storeId, @Param("orderId") String orderId);
+
+  /**
+   * 指定店舗の受注の帰属記録を新しい順に、{@code limit} 件まで。先頭は有効な行があれば必ずそれになる（無効化は過去の行にしか起こらないため）。
+   *
+   * <p>現況だけが要る経路は履歴を丸ごと読まずに 1 件で引く。全件は「1 件でもあるか」と「有効な行があるか」を同時に判じる再発行の門で要る。
+   */
+  @Query(FOR_ORDER)
+  List<OrderAttribution> findByStoreIdAndOrderIdOrderByIdDesc(
+      @Param("storeId") Long storeId, @Param("orderId") String orderId, Limit limit);
+
+  /** 店舗を跨ぐ会員照会。境界は帰属先の会員 id。有効に帰属した完了受注の件数で、会員ランクの昇格指標の一方。無効化された帰属は数えない。 */
   long countByMemberIdAndStatus(Long memberId, OrderAttributionStatus status);
-
-  /**
-   * 受注の直近の帰属記録 1 件。有効な行があれば必ずこれになる（無効化は過去の行にしか起こらないため）。
-   *
-   * <p>現況だけが要る経路は履歴を丸ごと読まずにこちらを使う。{@link #findByOrderIdOrderByIdDesc} は「1 件でもあるか」と「有効な行があるか」を
-   * 同時に判じる再発行の門でだけ要る。
-   */
-  Optional<OrderAttribution> findFirstByOrderIdOrderByIdDesc(String orderId);
 
   // 会員本人の来店一覧。帰属記録が正本で、表示に要る属性は受注へ join して導出する（ADR 0003 と同じ扱い。
   // 帰属記録は台帳と同じく グループ帰属なので同 ADR が名指す店舗作用域エンティティそのものではない）。店舗は
@@ -40,8 +47,10 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
       from com.kizuna.order.domain.OrderAttribution a
         join com.kizuna.order.domain.Order o on o.id = a.orderId
         join com.kizuna.store.domain.Store st on st.id = o.storeId
-        left join com.kizuna.cast.domain.CastEnrollment ce on ce.id = o.castId
-        left join com.kizuna.cast.domain.CastProfile k on k.enrollmentId = ce.id
+        left join com.kizuna.cast.domain.CastEnrollment ce
+          on ce.id = o.castId and ce.storeId = o.storeId
+        left join com.kizuna.cast.domain.CastProfile k
+          on k.enrollmentId = ce.id and k.storeId = o.storeId
       """;
 
   // 本人は店舗文脈を確立できず storeFilter は働かないため、帰属先会員の一致が唯一の隔離境界である。受注の状態は
@@ -54,14 +63,14 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
   String MEMBER_VISIT_ORDER = " order by a.createdAt desc, a.id desc";
 
   /**
-   * 会員本人の来店履歴（跨店集約）の先頭。
+   * 店舗を跨ぐ会員本人照会。境界は帰属先の会員 id。来店履歴（跨店集約）の先頭を返す。
    *
    * <p>並びは帰属の作成時刻の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
    */
   @Query(MEMBER_VISIT_SELECT + MEMBER_VISIT_WHERE + MEMBER_VISIT_ORDER)
   List<MemberVisitView> findMemberVisitViews(@Param("memberId") Long memberId, Limit limit);
 
-  /** 会員本人の来店履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。 */
+  /** 店舗を跨ぐ会員本人照会。境界は帰属先の会員 id。来店履歴の続き（渡された位置より古い側）だけを返す。 */
   @Query(
       MEMBER_VISIT_SELECT
           + MEMBER_VISIT_WHERE

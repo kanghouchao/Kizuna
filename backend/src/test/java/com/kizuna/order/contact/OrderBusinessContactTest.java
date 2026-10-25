@@ -21,7 +21,6 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -32,7 +31,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -44,19 +42,11 @@ class OrderBusinessContactTest {
   private final OrderRepository orders = mock(OrderRepository.class);
   private final UserRepository users = mock(UserRepository.class);
   private static final Long STORE_ID = 7L;
-  private final StoreContext store = new StoreContext();
   private final BusinessContactPolicy policy =
       new BusinessContactPolicy(new BusinessContactRestrictions(contacts));
   private final BusinessContactPermissions permissions =
-      new BusinessContactPermissions(
-          new ActorIdentityService(users), histories, orders, policy, store);
-  private final OrderBusinessContact boundary =
-      new OrderBusinessContact(orders, permissions, store);
-
-  @BeforeEach
-  void storeContext() {
-    store.setStoreId(STORE_ID);
-  }
+      new BusinessContactPermissions(new ActorIdentityService(users), histories, orders, policy);
+  private final OrderBusinessContact boundary = new OrderBusinessContact(orders, permissions);
 
   @ParameterizedTest
   @EnumSource(ContactPermissionStatus.class)
@@ -106,15 +96,15 @@ class OrderBusinessContactTest {
                           value, ContactPermissionStatus.ALLOWED, "電話", "今回だけ"),
                       1L));
             });
-    assertThat(boundary.decide("o1", ContactType.PHONE))
+    assertThat(boundary.decide(STORE_ID, "o1", ContactType.PHONE))
         .isEqualTo(
             new OrderBusinessContact.Decision("+819012345678", BusinessContactDecision.ALLOWED));
     when(contacts.hasBusinessDenial(STORE_ID, ContactType.PHONE, "+819012345678")).thenReturn(true);
-    assertThat(boundary.decide("o1", ContactType.PHONE).decision())
+    assertThat(boundary.decide(STORE_ID, "o1", ContactType.PHONE).decision())
         .isEqualTo(BusinessContactDecision.STORE_DENIED);
     when(contacts.hasBusinessDenial(STORE_ID, ContactType.PHONE, "+819012345678"))
         .thenReturn(false);
-    assertThat(boundary.decide("o1", ContactType.PHONE).decision())
+    assertThat(boundary.decide(STORE_ID, "o1", ContactType.PHONE).decision())
         .isEqualTo(BusinessContactDecision.ALLOWED);
   }
 
@@ -124,10 +114,10 @@ class OrderBusinessContactTest {
     order.setId("o1");
     order.setStoreId(STORE_ID);
     when(orders.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
-    assertThat(boundary.decide("o1", ContactType.EMAIL))
+    assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL))
         .isEqualTo(new OrderBusinessContact.Decision(null, BusinessContactDecision.NOT_ALLOWED));
     order.replaceContact(ContactSnapshot.normalize(null, null, "once@example.com", null));
-    assertThat(boundary.decide("o1", ContactType.EMAIL))
+    assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL))
         .isEqualTo(
             new OrderBusinessContact.Decision(
                 "once@example.com", BusinessContactDecision.NOT_ALLOWED));
@@ -153,7 +143,7 @@ class OrderBusinessContactTest {
                     new BusinessContactState(
                         "old@example.com", ContactPermissionStatus.ALLOWED, "電話", "今回だけ"),
                     1L)));
-    assertThatThrownBy(() -> boundary.decide("o1", ContactType.EMAIL))
+    assertThatThrownBy(() -> boundary.decide(STORE_ID, "o1", ContactType.EMAIL))
         .isInstanceOf(IllegalStateException.class);
   }
 
@@ -193,24 +183,24 @@ class OrderBusinessContactTest {
                 ContactType.EMAIL, ContactPermissionStatus.ALLOWED, "本人申告", "今回の連絡を希望")),
         "actor@kizuna.test");
     assertThat(stored.get(ContactType.EMAIL).getStoreId()).isEqualTo(STORE_ID);
-    assertThat(boundary.decide("o1", ContactType.EMAIL).decision())
+    assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL).decision())
         .isEqualTo(BusinessContactDecision.ALLOWED);
     var changed = ContactSnapshot.normalize(null, null, "second@example.com", null);
     order.replaceContact(changed);
     permissions.record(order, original, List.of(), "actor@kizuna.test");
-    assertThat(boundary.decide("o1", ContactType.EMAIL))
+    assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL))
         .isEqualTo(
             new OrderBusinessContact.Decision(
                 "second@example.com", BusinessContactDecision.NOT_ALLOWED));
     order.replaceContact(original);
     permissions.record(order, changed, null, "actor@kizuna.test");
-    assertThat(boundary.decide("o1", ContactType.EMAIL).decision())
+    assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL).decision())
         .isEqualTo(BusinessContactDecision.NOT_ALLOWED);
   }
 
   @Test
   void invalidOrUnscopedCallsCannotProducePermission() {
-    assertThatThrownBy(() -> boundary.decide("missing", ContactType.PHONE))
+    assertThatThrownBy(() -> boundary.decide(STORE_ID, "missing", ContactType.PHONE))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
@@ -223,8 +213,7 @@ class OrderBusinessContactTest {
     assertThatThrownBy(
             () -> policy.evaluate(STORE_ID, ContactType.LINE, " ", ContactPermissionStatus.ALLOWED))
         .isInstanceOf(ServiceException.class);
-    store.clear();
-    assertThatThrownBy(() -> boundary.decide("o1", ContactType.PHONE))
+    assertThatThrownBy(() -> boundary.decide(null, "o1", ContactType.PHONE))
         .isInstanceOf(ServiceException.class);
     assertThatThrownBy(
             () ->

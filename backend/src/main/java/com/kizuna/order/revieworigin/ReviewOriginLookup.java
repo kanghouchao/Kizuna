@@ -1,7 +1,6 @@
 package com.kizuna.order.revieworigin;
 
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -13,14 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReviewOriginLookup {
   private final OrderRepository orders;
-  private final StoreContext context;
 
   @StoreScoped
   @Transactional(readOnly = true)
-  public Optional<ReviewOriginFacts> find(String orderId) {
-    if (!context.hasStoreId()) throw new AccessDeniedException("受注の店舗指定を確認してください");
+  public Optional<ReviewOriginFacts> find(Long storeId, String orderId) {
+    if (storeId == null) throw new AccessDeniedException("受注の店舗指定を確認してください");
     return orders
-        .findByIdAndStoreId(orderId, context.getStoreId())
+        .findByIdAndStoreId(orderId, storeId)
         .map(
             o ->
                 new ReviewOriginFacts(

@@ -13,7 +13,6 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
@@ -38,7 +37,6 @@ public class BusinessContactPermissions {
   private final BusinessContactHistoryRepository histories;
   private final OrderRepository orders;
   private final BusinessContactPolicy policy;
-  private final StoreContext storeContext;
 
   public static String value(ContactSnapshot snapshot, ContactType type) {
     if (snapshot == null) return null;
@@ -144,8 +142,7 @@ public class BusinessContactPermissions {
   @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<BusinessContactHistoryResponse> history(
-      String orderId, String cursor, int requestedSize) {
-    Long storeId = storeContext.getStoreId();
+      Long storeId, String orderId, String cursor, int requestedSize) {
     orders
         .findByIdAndStoreId(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("受注が見つかりません"));

@@ -6,6 +6,7 @@ import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
@@ -24,6 +25,7 @@ public class AdvertisingOrderCostService {
   private final AdvertisingService costs;
   private final AdvertisingOrderReader orders;
   private final AppProperties properties;
+  private final StoreContext storeContext;
 
   public record Snapshot(
       long storeId,
@@ -59,6 +61,7 @@ public class AdvertisingOrderCostService {
     var validOrders =
         orders
             .read(
+                storeContext.getStoreId(),
                 period.atDay(1),
                 period.atEndOfMonth(),
                 properties.getAdvertisingCost().getMaxOrders())

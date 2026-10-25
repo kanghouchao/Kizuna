@@ -15,13 +15,13 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,14 +47,13 @@ public class OrderAttributionService {
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final ActorIdentityService actorIdentityService;
-  private final StoreContext storeContext;
 
   /** 受注 1 件の帰属の現況。無効化・再発行のどちらを提示するかを店舗側の画面が判じるための読み口。 */
   @StoreScoped
   @Transactional(readOnly = true)
-  public OrderAttributionResponse currentAttribution(String orderId) {
-    requireScopedOrder(orderId);
-    return toResponse(latestAttribution(orderId).orElse(null));
+  public OrderAttributionResponse currentAttribution(Long storeId, String orderId) {
+    requireScopedOrder(storeId, orderId);
+    return toResponse(latestAttribution(storeId, orderId).orElse(null));
   }
 
   /**
@@ -71,10 +70,13 @@ public class OrderAttributionService {
   @StoreScoped
   @Transactional
   public OrderAttributionResponse invalidate(
-      String orderId, OrderAttributionInvalidationRequest request, String actorEmail) {
-    requireScopedOrder(orderId);
+      Long storeId,
+      String orderId,
+      OrderAttributionInvalidationRequest request,
+      String actorEmail) {
+    requireScopedOrder(storeId, orderId);
     OrderAttribution attribution =
-        latestAttribution(orderId)
+        latestAttribution(storeId, orderId)
             .filter(row -> row.getStatus() == OrderAttributionStatus.ACTIVE)
             .orElseThrow(() -> new ServiceException("この受注は会員へ帰属していません"));
     if (!attribution.getId().equals(request.getAttributionId())) {
@@ -107,12 +109,12 @@ public class OrderAttributionService {
    */
   @StoreScoped
   @Transactional
-  public OrderReceiptTokenResponse reissueReceiptToken(String orderId) {
+  public OrderReceiptTokenResponse reissueReceiptToken(Long storeId, String orderId) {
     // 受注を押さえて並行する再発行と直列化する。トークンが 1 本も無い受注（完了時に会員へ帰属した受注）は
     // 押さえる行が下に無いため、ここだけが直列化点になる。
     Order order =
         orderRepository
-            .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
+            .findByIdAndStoreIdForUpdate(orderId, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     if (order.getStatus() != OrderStatus.COMPLETED) {
       throw new ServiceException("完了していない受注に伝票は発行できません");
@@ -124,7 +126,7 @@ public class OrderAttributionService {
     // 「帰属していない」という観測のまま発行してしまい、有効な帰属と申領できる伝票が並ぶ。
     List<OrderReceiptToken> tokens = orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
     List<OrderAttribution> attributions =
-        orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId);
+        orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId);
     if (attributions.isEmpty()) {
       throw new ServiceException("この受注は会員へ帰属したことがありません。伝票の再発行は無効化された帰属の訂正にだけ使えます");
     }
@@ -152,19 +154,22 @@ public class OrderAttributionService {
   }
 
   /**
-   * 現店舗の受注。帰属記録・伝票トークンはどちらも受注 ID でしか辿れないため、店舗の所有はここでだけ決まる。
+   * 指定店舗の受注。伝票トークンは受注 ID でしか辿れず店舗条件を持たないため、店舗の所有と 404 の判定はここで決まる。
    *
    * <p>引けない受注は他店舗のものか存在しないかを区別せず 404 にする（区別すると受注 ID の存在が漏れる）。
    */
-  private Order requireScopedOrder(String orderId) {
+  private Order requireScopedOrder(Long storeId, String orderId) {
     return orderRepository
-        .findByIdAndStoreId(orderId, storeContext.getStoreId())
+        .findByIdAndStoreId(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
   }
 
   /** 直近の帰属記録。無効化で行を消さないため複数行を持ちうるが、有効な行は部分一意索引により高々 1 件で、あればそれが直近になる。 */
-  private Optional<OrderAttribution> latestAttribution(String orderId) {
-    return orderAttributionRepository.findFirstByOrderIdOrderByIdDesc(orderId);
+  private Optional<OrderAttribution> latestAttribution(Long storeId, String orderId) {
+    return orderAttributionRepository
+        .findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId, Limit.of(1))
+        .stream()
+        .findFirst();
   }
 
   /**

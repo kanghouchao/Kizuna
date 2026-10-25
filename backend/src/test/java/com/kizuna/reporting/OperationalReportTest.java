@@ -24,6 +24,8 @@ import com.kizuna.reporting.infrastructure.ReportRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
+import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -52,7 +54,9 @@ class OperationalReportTest {
               reader,
               mock(RemunerationReportReader.class),
               mock(AdvertisingReportReader.class),
-              properties),
+              properties,
+              new StoreContext(),
+              new StoreScopeHolder()),
           new ReportRenderer(),
           properties);
 
@@ -74,7 +78,7 @@ class OperationalReportTest {
   }
 
   void facts(List<OperationalFacts.Order> orders) {
-    when(reader.store(any(), any()))
+    when(reader.store(any(), any(), any()))
         .thenReturn(
             new OperationalFacts(
                 OffsetDateTime.parse("2026-10-01T12:00:00+09:00"),
@@ -261,7 +265,7 @@ class OperationalReportTest {
               var criteria = ReportCriteria.parse("2026-09-01", "2026-09-30", "day");
               var report =
                   OperationalReport.aggregate(
-                      criteria, reader.store(criteria.from(), criteria.to()));
+                      criteria, reader.store(1L, criteria.from(), criteria.to()));
               assertThatThrownBy(() -> new ReportRenderer().render(report, "xlsx", budget))
                   .isInstanceOf(IOException.class);
             } else {

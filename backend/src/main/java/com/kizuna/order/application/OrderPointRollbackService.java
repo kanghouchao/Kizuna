@@ -16,7 +16,6 @@ import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +40,6 @@ public class OrderPointRollbackService {
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final PointLedgerService pointLedgerService;
   private final ActorIdentityService actorIdentityService;
-  private final StoreContext storeContext;
 
   /**
    * 巻き戻し済みでないことを確かめてから伝票を再発行する。
@@ -54,23 +52,24 @@ public class OrderPointRollbackService {
    */
   @StoreScoped
   @Transactional
-  public OrderReceiptTokenResponse reissueReceiptTokenUnlessRolledBack(String orderId) {
+  public OrderReceiptTokenResponse reissueReceiptTokenUnlessRolledBack(
+      Long storeId, String orderId) {
     orderRepository
-        .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
+        .findByIdAndStoreIdForUpdate(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     if (pointLedgerService.isRolledBack(orderId)) {
       throw new ServiceException("ポイントを巻き戻した受注には伝票を再発行できません");
     }
-    return orderAttributionService.reissueReceiptToken(orderId);
+    return orderAttributionService.reissueReceiptToken(storeId, orderId);
   }
 
   /** 実行前の下見。画面はこれで「何がいくら動くか」を示し、済んでいる受注では実行の導線を出さない。 */
   @StoreScoped
   @Transactional
-  public OrderPointRollbackPreviewResponse preview(String orderId) {
+  public OrderPointRollbackPreviewResponse preview(Long storeId, String orderId) {
     Order order =
         orderRepository
-            .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
+            .findByIdAndStoreIdForUpdate(orderId, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     requireCompleted(order);
     PointLedgerService.PointRollbackPreview preview =
@@ -80,7 +79,7 @@ public class OrderPointRollbackService {
     }
     return new OrderPointRollbackPreviewResponse(
         preview.alreadyRolledBack(),
-        activeMemberCode(orderId),
+        activeMemberCode(storeId, orderId),
         preview.cancellablePoints(),
         preview.reversibleUsedPoints(),
         order.getTotalFee(),
@@ -104,10 +103,10 @@ public class OrderPointRollbackService {
   @StoreScoped
   @Transactional
   public OrderPointRollbackResponse rollback(
-      String orderId, OrderPointRollbackRequest request, String actorEmail) {
+      Long storeId, String orderId, OrderPointRollbackRequest request, String actorEmail) {
     Order order =
         orderRepository
-            .findByIdAndStoreIdForUpdate(orderId, storeContext.getStoreId())
+            .findByIdAndStoreIdForUpdate(orderId, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     requireCompleted(order);
     orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
@@ -136,8 +135,10 @@ public class OrderPointRollbackService {
   }
 
   /** この受注が現に帰属している会員のコード。帰属していなければ null。 */
-  private String activeMemberCode(String orderId) {
-    return orderAttributionRepository.findByOrderIdOrderByIdDesc(orderId).stream()
+  private String activeMemberCode(Long storeId, String orderId) {
+    return orderAttributionRepository
+        .findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId)
+        .stream()
         .filter(row -> row.getStatus() == OrderAttributionStatus.ACTIVE)
         .map(OrderAttribution::getMemberCode)
         .findFirst()

@@ -22,6 +22,7 @@ public class SelfMonthlyRemunerationQuery {
         where e.storeId = s.id and e.castId = :personId)
       """;
 
+  /** 店舗を跨ぐ本人照会。境界は本人 id（cast_id）で、在籍の歴史がある店舗だけを返す。 */
   public Page<SelfMonthlyRemunerationStoreSummary> stores(Long personId, Pageable page) {
     var content =
         entityManager

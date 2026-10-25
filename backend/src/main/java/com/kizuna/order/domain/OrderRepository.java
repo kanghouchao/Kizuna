@@ -186,18 +186,17 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
   Optional<Order> findByIdAndStoreIdForUpdate(
       @Param("id") String id, @Param("storeId") Long storeId);
 
-  // 全群横断一覧（集合作用域）。where 句を書かず、濾過は storeSetFilter が session 層で行う。
-  // 店舗（store）表示名の join は張らない。
+  // 店舗集合の横断一覧。店舗（store）表示名の join は張らない。
   String GROUP_WIDE_VIEW_SELECT =
       """
       select o.completionInvalidated as completionInvalidated, o.replacementForOrderId as replacementForOrderId,
              o.startedAt as startedAt,
              o.completedAt as completedAt, o.accruedRemuneration as accruedRemuneration,
-             case when o.completionInvalidated then 0 else (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id) end as totalRemuneration,
+             case when o.completionInvalidated then 0 else (select cast(coalesce(sum(r.remuneration), 0) as Integer) from com.kizuna.order.domain.OrderFeeLine r where r.orderId = o.id and r.storeId = o.storeId) end as totalRemuneration,
              (select cast(count(distinct e.serviceId) as Integer) from OrderSpecialServiceEvent e
-              where e.orderId = o.id and e.kind = 'REJECTED'
+              where e.orderId = o.id and e.storeId = o.storeId and e.kind = 'REJECTED'
               and o.status in (com.kizuna.order.domain.OrderStatus.CONFIRMED, com.kizuna.order.domain.OrderStatus.IN_SERVICE)
-              and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id)) as unresolvedSpecialServiceCount,
+              and not exists (select r.id from OrderSpecialServiceEvent r where r.rejectionEventId = e.id and r.storeId = e.storeId)) as unresolvedSpecialServiceCount,
              o.id as id, o.storeId as storeId, o.course as course, o.totalFee as totalFee,
              o.businessDate as businessDate,
              o.arrivalScheduledStartTime as arrivalScheduledStartTime,
@@ -206,8 +205,17 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
       from com.kizuna.order.domain.Order o
       """;
 
+  /** 店舗を跨ぐ照会。店舗の境界は無く、全店舗（ALL_STORES）を授権された呼び手だけが使う。 */
   @Query(
       value = GROUP_WIDE_VIEW_SELECT,
       countQuery = "select count(o) from com.kizuna.order.domain.Order o")
   Page<AdminOrderView> findGroupWideViews(Pageable pageable);
+
+  /** 店舗を跨ぐ照会。境界は呼び手の授権店舗集合（SPECIFIC_STORES）。 */
+  @Query(
+      value = GROUP_WIDE_VIEW_SELECT + " where o.storeId in :storeIds",
+      countQuery =
+          "select count(o) from com.kizuna.order.domain.Order o where o.storeId in :storeIds")
+  Page<AdminOrderView> findGroupWideViewsInStores(
+      @Param("storeIds") Collection<Long> storeIds, Pageable pageable);
 }

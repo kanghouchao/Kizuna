@@ -3,9 +3,7 @@ package com.kizuna.order.reporting;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.storescope.StoreSetScoped;
 import jakarta.persistence.EntityManager;
@@ -25,8 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OperationalReportReader {
   private final EntityManager entityManager;
-  private final StoreContext context;
-  private final StoreScopeHolder storeScopeHolder;
   private final AppProperties properties;
   private final Clock clock;
 
@@ -35,9 +31,8 @@ public class OperationalReportReader {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
-  public OperationalFacts store(LocalDate from, LocalDate to) {
-    return read(
-        new StoreScope(false, Set.of(context.getStoreId())), context.getStoreId(), from, to);
+  public OperationalFacts store(Long storeId, LocalDate from, LocalDate to) {
+    return read(new StoreScope(false, Set.of(storeId)), storeId, from, to);
   }
 
   @StoreSetScoped
@@ -45,8 +40,7 @@ public class OperationalReportReader {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
-  public OperationalFacts groupWide(LocalDate from, LocalDate to) {
-    var scope = storeScopeHolder.current();
+  public OperationalFacts groupWide(StoreScope scope, LocalDate from, LocalDate to) {
     if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
     return read(scope, null, from, to);
   }

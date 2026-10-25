@@ -4,7 +4,6 @@ import com.kizuna.order.api.dto.MonthlyRemunerationCastSummary;
 import com.kizuna.order.api.dto.MonthlyRemunerationResponse;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import java.time.YearMonth;
@@ -20,17 +19,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MonthlyRemunerationService {
   private final RemunerationQuery query;
-  private final StoreContext storeContext;
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<MonthlyRemunerationCastSummary> casts(String search, int page, int size) {
-    return query.casts(storeContext.getStoreId(), search, page(page, size));
+  public Page<MonthlyRemunerationCastSummary> casts(
+      Long storeId, String search, int page, int size) {
+    return query.casts(storeId, search, page(page, size));
   }
 
   @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public MonthlyRemunerationResponse monthly(Long personId, String month, int page, int size) {
+  public MonthlyRemunerationResponse monthly(
+      Long storeId, Long personId, String month, int page, int size) {
     var pageable = page(page, size);
     if (personId <= 0) throw new ServiceException("キャスト本人の指定が不正です");
     YearMonth target;
@@ -41,7 +41,6 @@ public class MonthlyRemunerationService {
     } catch (DateTimeParseException ex) {
       throw new ServiceException("対象月は YYYY-MM 形式で指定してください");
     }
-    Long storeId = storeContext.getStoreId();
     String name = query.personName(storeId, personId);
     return new MonthlyRemunerationResponse(
         personId,

@@ -40,6 +40,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
+import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
@@ -71,6 +72,7 @@ class ReviewApplicationTest {
   private final ReviewActors actors = mock(ReviewActors.class);
   private final ReviewOriginLookup origins = mock(ReviewOriginLookup.class);
   private final BusinessAudit audit = mock(BusinessAudit.class);
+  private final StoreContext store = new StoreContext();
   private final Map<String, ReviewRecord> records = new HashMap<>();
   private final Map<String, ReviewPermission> consent = new HashMap<>();
   private final Map<String, ReviewOperation> receipts = new HashMap<>();
@@ -89,7 +91,9 @@ class ReviewApplicationTest {
             operations,
             actors,
             audit,
-            Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC));
+            Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC),
+            store);
+    store.setStoreId(7L);
     when(actors.require(anyString(), any())).thenReturn(new AuditActor(1L, "STAFF", "担当者"));
     when(rows.saveAndFlush(any()))
         .thenAnswer(
@@ -245,18 +249,18 @@ class ReviewApplicationTest {
   @Test
   void originIsOnlyValidatedForNewReceiptsButItsAuthorityIsRequiredForReplay() {
     var input = new ReviewInput("本文", null, ReceivedVia.VERBAL, AT, "90");
-    when(origins.find("90")).thenReturn(Optional.empty());
+    when(origins.find(7L, "90")).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.create("actor", input, "origin"))
         .isInstanceOf(NotFoundException.class);
-    when(origins.find("90"))
+    when(origins.find(7L, "90"))
         .thenReturn(Optional.of(new ReviewOriginFacts("90", 4L, "CONFIRMED", false)));
     assertThatThrownBy(() -> service.create("actor", input, "origin"))
         .isInstanceOf(ServiceException.class);
-    when(origins.find("90"))
+    when(origins.find(7L, "90"))
         .thenReturn(Optional.of(new ReviewOriginFacts("90", 4L, "COMPLETED", false)));
     var result = service.create("actor", input, "origin");
     assertThat(result.review().originOrderVersion()).isEqualTo(4);
-    when(origins.find("90"))
+    when(origins.find(7L, "90"))
         .thenReturn(Optional.of(new ReviewOriginFacts("90", 5L, "COMPLETED", true)));
     assertThat(service.create("actor", input, "origin").operation().replayed()).isTrue();
     assertThatThrownBy(() -> service.create("actor", input, "other"))
