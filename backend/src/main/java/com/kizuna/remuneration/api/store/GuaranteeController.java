@@ -7,6 +7,7 @@ import com.kizuna.remuneration.api.dto.RemunerationRequests.CancellationRequest;
 import com.kizuna.remuneration.api.dto.RemunerationRequests.GuaranteeCorrectionRequest;
 import com.kizuna.remuneration.api.dto.RemunerationRequests.GuaranteeCreateRequest;
 import com.kizuna.remuneration.application.RemunerationManagementService;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -31,10 +32,11 @@ public class GuaranteeController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_REMUNERATION_VIEW')")
   public GuaranteeListResponse list(
+      @CurrentStore Long storeId,
       @RequestParam(name = "person_id") Long personId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.guarantees(personId, page, size);
+    return service.guarantees(storeId, personId, page, size);
   }
 
   @PostMapping
@@ -42,8 +44,10 @@ public class GuaranteeController {
   @PreAuthorize(
       "hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_REMUNERATION_VIEW') and hasAuthority('PERM_GUARANTEE_MANAGE')")
   public GuaranteeMutationResponse create(
-      @Valid @RequestBody GuaranteeCreateRequest request, Principal principal) {
-    return service.createGuarantee(request, principal.getName());
+      @CurrentStore Long storeId,
+      @Valid @RequestBody GuaranteeCreateRequest request,
+      Principal principal) {
+    return service.createGuarantee(storeId, request, principal.getName());
   }
 
   @PostMapping("/{id}/corrections")
@@ -51,28 +55,31 @@ public class GuaranteeController {
   @PreAuthorize(
       "hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_REMUNERATION_VIEW') and hasAuthority('PERM_GUARANTEE_MANAGE') and hasAuthority('PERM_REMUNERATION_CORRECT')")
   public GuaranteeMutationResponse correct(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody GuaranteeCorrectionRequest request,
       Principal principal) {
-    return service.correctGuarantee(id, request, principal.getName());
+    return service.correctGuarantee(storeId, id, request, principal.getName());
   }
 
   @PostMapping("/{id}/cancellation")
   @PreAuthorize(
       "hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_REMUNERATION_VIEW') and hasAuthority('PERM_GUARANTEE_MANAGE') and hasAuthority('PERM_REMUNERATION_CORRECT')")
   public GuaranteeMutationResponse cancel(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody CancellationRequest request,
       Principal principal) {
-    return service.cancelGuarantee(id, request, principal.getName());
+    return service.cancelGuarantee(storeId, id, request, principal.getName());
   }
 
   @GetMapping("/{id}/changes")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_REMUNERATION_VIEW')")
   public CursorPage<RemunerationChangeResponse> history(
+      @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return service.guaranteeChanges(id, cursor, size);
+    return service.guaranteeChanges(storeId, id, cursor, size);
   }
 }

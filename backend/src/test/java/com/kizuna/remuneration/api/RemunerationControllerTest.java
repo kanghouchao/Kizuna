@@ -1,8 +1,12 @@
 package com.kizuna.remuneration.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -21,10 +25,13 @@ import com.kizuna.remuneration.application.RemunerationStatementService;
 import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeState;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
+import com.kizuna.remuneration.domain.RemunerationChange;
+import com.kizuna.remuneration.domain.RemunerationRequest;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -36,10 +43,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -49,6 +59,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -134,6 +145,51 @@ class RemunerationControllerTest {
         .andExpect(jsonPath("$.bonus_total").value(2000))
         .andExpect(jsonPath("$.total").value(12000))
         .andExpect(jsonPath("$.actor_id").doesNotExist());
+  }
+
+  @Test
+  void guaranteeListReadsTheNamedStore() throws Exception {
+    when(people.require(7L, 34L)).thenReturn(new RemunerationPersonLookup.Person(34L, "本人", "七号店"));
+    when(records.timeline(7L, 34L)).thenReturn(Optional.empty());
+    when(records.terms(eq(7L), eq(34L), any())).thenReturn(new PageImpl<>(List.of()));
+    mvc.perform(
+            get("/store/remuneration-guarantees")
+                .header("X-Store-ID", "7")
+                .param("person_id", "34"))
+        .andExpect(status().isOk());
+    verify(people).require(7L, 34L);
+    verify(records).terms(eq(7L), eq(34L), any());
+  }
+
+  @Test
+  void bonusCreationLocksReadsAndStampsEveryRowInTheNamedStore() throws Exception {
+    when(people.require(7L, 34L)).thenReturn(new RemunerationPersonLookup.Person(34L, "本人", "七号店"));
+    doAnswer(
+            invocation -> {
+              Object row = invocation.getArgument(0);
+              ReflectionTestUtils.setField(row, "version", 0L);
+              return null;
+            })
+        .when(records)
+        .persist(any());
+    mvc.perform(
+            post("/store/bonus-awards")
+                .principal(() -> "person@example.test")
+                .with(csrf())
+                .header("X-Store-ID", "7")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"person_id\":34,\"award_date\":\"2026-09-30\",\"amount\":1000,\"reason\":\"付与\",\"request_id\":\"37caf776-d07e-418d-ad80-75c88de60480\"}"))
+        .andExpect(status().isCreated());
+    verify(records)
+        .receipt(eq(7L), eq(12L), eq(UUID.fromString("37caf776-d07e-418d-ad80-75c88de60480")));
+    var persisted = ArgumentCaptor.forClass(Object.class);
+    verify(records, times(3)).persist(persisted.capture());
+    assertThat(persisted.getAllValues())
+        .extracting(Object::getClass)
+        .containsExactly(BonusAward.class, RemunerationChange.class, RemunerationRequest.class);
+    assertThat(persisted.getAllValues())
+        .allSatisfy(row -> assertThat(((StoreScopedEntity) row).getStoreId()).isEqualTo(7L));
   }
 
   @Test
