@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -61,6 +63,7 @@ class AuthServiceTest {
   @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
   @Mock private AuthenticationManager authenticationManager;
   @Mock private Authentication authentication;
+  @Mock private LoginBenefitTrigger loginBenefitTrigger;
 
   @Captor private ArgumentCaptor<Map<String, Object>> claimsCaptor;
 
@@ -174,6 +177,40 @@ class AuthServiceTest {
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
     assertThat(authorities).isEqualTo(List.of("PERM_ORDER_MANAGE", "PERM_STORE_VIEW"));
+  }
+
+  @Test
+  void login_member_firesTheLoginBenefitTriggerAfterIssuingTheToken() {
+    User member =
+        User.builder()
+            .email("member@kizuna.test")
+            .password("stored-hash")
+            .displayName("会員")
+            .enabled(true)
+            .userType(UserType.MEMBER)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of())
+            .build();
+    stubSuccessfulAuthentication("member@kizuna.test", "pass", member);
+    when(jwtIssuer.issue(eq("member@kizuna.test"), any())).thenReturn(new Token("t", 1L));
+
+    Token token = authService.login("member@kizuna.test", "pass");
+
+    assertThat(token.token()).isEqualTo("t");
+    // 発火事象は認証成功 1 回。停止中の身分は発行側で先に拒まれるので、発行の後に 1 度だけ渡す。
+    InOrder inOrder = inOrder(jwtIssuer, loginBenefitTrigger);
+    inOrder.verify(jwtIssuer).issue(eq("member@kizuna.test"), any());
+    inOrder.verify(loginBenefitTrigger).onAuthenticated(member);
+  }
+
+  @Test
+  void issueTokenFor_doesNotCountAsALogin() {
+    stubHqRole();
+    when(jwtIssuer.issue(eq("admin@kizuna.test"), any())).thenReturn(new Token("t", 1L));
+
+    authService.issueTokenFor(hqAdmin());
+
+    verifyNoInteractions(loginBenefitTrigger);
   }
 
   @Test

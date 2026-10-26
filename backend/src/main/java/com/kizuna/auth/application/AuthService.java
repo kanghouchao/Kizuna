@@ -51,6 +51,7 @@ public class AuthService {
   private final JwtIssuer jwtIssuer;
   private final AuthenticationManager authenticationManager;
   private final CredentialOperations credentialOperations;
+  private final LoginBenefitTrigger loginBenefitTrigger;
 
   @Transactional(readOnly = true)
   public Token login(String email, String password) {
@@ -62,7 +63,10 @@ public class AuthService {
     // principal は認証成功時に自作 UserDetails が保持する User（二次クエリを避ける）。
     User user = ((UserPrincipal) authentication.getPrincipal()).getUser();
 
-    return issueTokenFor(user);
+    Token token = issueTokenFor(user);
+    // 発行の後に引く — 停止中の身分や SERVICE は発行側が先に拒むので、認証成功だけが発火事象になる。
+    loginBenefitTrigger.onAuthenticated(user);
+    return token;
   }
 
   /** 本人性を確認済みの身分に通常トークンを発行する。呼び出し側はパスワード照合や LINE の id_token 検証を済ませていること。 */

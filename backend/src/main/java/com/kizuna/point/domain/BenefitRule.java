@@ -33,6 +33,7 @@ import org.hibernate.annotations.BatchSize;
  *   <li>点数は種別が形を決める — 紹介は紹介者・被紹介者の二値、それ以外は一値で、いずれも 1 以上。
  *   <li>適用期間は開始 ≦ 終了。付与ポイント有効期間は 1 以上。
  *   <li>紹介規則は毎回のみ。一回性は条件側（被紹介者の初回受注）にあり、紹介者は紹介した人数ぶん受益する。
+ *   <li>ログイン規則は一人一回限りか一日一回。毎回を許すと認証の反復で無限に受益できる。一日一回を取れるのはログイン規則だけ。
  * </ol>
  *
  * <p>規則は停用で退場し、削除しない（付与仕訳が FK RESTRICT で指し返す）。停用は一方通行で、停用済みは再定義も受け付けない。
@@ -211,6 +212,13 @@ public class BenefitRule extends BaseEntity {
     // 一人一回限りを許すと、記帳側が重複可否を見た瞬間に二人目以降の紹介が黙って無報酬になる。
     if (type == BenefitRuleType.REFERRAL && repeatPolicy != BenefitRuleRepeatPolicy.EVERY_TIME) {
       throw new InvalidBenefitRuleException("紹介規則は毎回のみを取れます");
+    }
+    if (type == BenefitRuleType.LOGIN && repeatPolicy == BenefitRuleRepeatPolicy.EVERY_TIME) {
+      throw new InvalidBenefitRuleException("ログイン規則は毎回を取れません（一人一回限りか一日一回）");
+    }
+    // 受注条件の特典で「同じ日」が根拠受注の営業日か記帳日かは未裁定。曖昧なまま許すより閉じておく。
+    if (type != BenefitRuleType.LOGIN && repeatPolicy == BenefitRuleRepeatPolicy.ONCE_PER_DAY) {
+      throw new InvalidBenefitRuleException("一日一回を取れるのはログイン規則だけです");
     }
   }
 

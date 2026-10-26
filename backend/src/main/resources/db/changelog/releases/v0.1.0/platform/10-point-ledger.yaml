@@ -90,6 +90,12 @@ databaseChangeLog:
                     uniqueConstraintName: uq_t_point_entries_expiry_key
                   remarks: 失効の実行試行と会員の識別キー
               - column:
+                  # 受注を条件としない特典付与（ログイン）の発火事象を識別する日。受注条件の特典は order_id が
+                  # 発火事象を識別するので持たない。業務時間帯（app.timezone）の暦日。
+                  name: granted_on
+                  type: DATE
+                  remarks: ログイン特典の付与日（受注 ID の無い特典付与のみ。他は NULL）
+              - column:
                   # 誤帰属の訂正として積んだ手動調整が、どの帰属記録を訂正したのかを指し返す（ADR 0012）。
                   # 減算は期限の早いロットから引く引き当てで誤付与ロットを狙い撃ちにしないため、この列が
                   # 無いと訂正の由来を機械的に辿れず、同じ帰属記録への訂正累計の上限判定も成立しない。
@@ -263,6 +269,13 @@ databaseChangeLog:
               ALTER TABLE t_point_entries
               ADD CONSTRAINT ck_t_point_entries_benefit_rule_shape CHECK (
                 (entry_type = 'BENEFIT_GRANT') = (benefit_rule_id IS NOT NULL))
+        # 付与日は受注 ID の無い特典付与の収束鍵。欠けると下の部分一意索引が NULL 同士を別値と見て決して
+        # 衝突せず、同日の並行ログインが二件とも通る。受注条件の特典に載ると意味の無い日付が残る。双方向で縛る。
+        - sql:
+            sql: >-
+              ALTER TABLE t_point_entries
+              ADD CONSTRAINT ck_t_point_entries_granted_on_shape CHECK (
+                (entry_type = 'BENEFIT_GRANT' AND order_id IS NULL) = (granted_on IS NOT NULL))
         - sql:
             sql: >-
               ALTER TABLE t_point_usage_allocations
@@ -315,6 +328,14 @@ databaseChangeLog:
               CREATE UNIQUE INDEX uq_t_point_entries_benefit_firing
               ON t_point_entries (benefit_rule_id, member_id, order_id)
               WHERE benefit_rule_id IS NOT NULL AND order_id IS NOT NULL
+        # ログイン特典は受注を持たないので上の索引に乗らず、発火事象は (規則, 会員, 付与日) で識別する。
+        # 同日の並行ログインは生産者の事前判定を二本とも通り抜けるため、高々 1 件への収束はこの索引だけが
+        # 担う。一人一回限りの規則でも、初回の並行は必ず同日なので同じ索引で収束する。
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_point_entries_login_benefit_day
+              ON t_point_entries (benefit_rule_id, member_id, granted_on)
+              WHERE benefit_rule_id IS NOT NULL AND order_id IS NULL
         # 訂正の読み口も書き込みの上限判定もこの列で台帳を集計する。PostgreSQL は参照側の外部キー列に
         # 索引を作らないので、無いとグループ全体の追記型台帳を毎回走査することになる。
         # 値を持つのは訂正の仕訳だけなので部分索引にする。

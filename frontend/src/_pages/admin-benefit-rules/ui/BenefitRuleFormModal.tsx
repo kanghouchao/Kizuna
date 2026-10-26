@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import {
-  BENEFIT_RULE_REPEAT_POLICY_OPTIONS,
   BENEFIT_RULE_TYPE_OPTIONS,
   BenefitRuleCreateRequest,
   BenefitRuleResponse,
@@ -11,6 +10,7 @@ import {
   BenefitRuleStoreScopeType,
   BenefitRuleType,
   benefitRuleApi,
+  benefitRuleRepeatPolicyOptionsFor,
 } from '@/entities/benefit-rule';
 import { AuthorizedStore } from '@/entities/user';
 import { StoreSetPicker } from '@/features/staff-management';
@@ -157,13 +157,14 @@ export function BenefitRuleFormModal({
     }
   }, [type, storeScopeType, setValue]);
 
-  // 紹介の一回性は条件側（被紹介者の初回受注）にあり、紹介者は紹介した人数ぶん受益する。
-  // 一人一回限りを選べる形で見せると、二人目以降が黙って無報酬になる規則を作らせてしまう
+  // 重複可否は種別が取れる値に絞る（紹介は毎回のみ、ログインは毎回を取れない）。選べる形で見せて
+  // からサーバに撥ねさせるより選択肢ごと畳み、種別を切り替えた瞬間に外れた値はその種別の既定値へ戻す
+  const repeatPolicyOptions = benefitRuleRepeatPolicyOptionsFor(type);
   useEffect(() => {
-    if (type === 'REFERRAL' && repeatPolicy !== 'EVERY_TIME') {
-      setValue('repeat_policy', 'EVERY_TIME');
+    if (!repeatPolicyOptions.some(o => o.value === repeatPolicy)) {
+      setValue('repeat_policy', repeatPolicyOptions[0].value);
     }
-  }, [type, repeatPolicy, setValue]);
+  }, [repeatPolicyOptions, repeatPolicy, setValue]);
 
   // 404 は何度押しても取れないので再試行を出さない（削除の口は無いが、消えた店舗を
   // 参照する古いリンク等で届きうる）。読めなかっただけの失敗とは提示の形を分ける。
@@ -382,10 +383,10 @@ export function BenefitRuleFormModal({
                   <FormItem className="gap-1">
                     <FormLabel>重複可否</FormLabel>
                     <Select
-                      items={BENEFIT_RULE_REPEAT_POLICY_OPTIONS}
+                      items={repeatPolicyOptions}
                       value={field.value}
                       onValueChange={v => field.onChange(v as BenefitRuleRepeatPolicy)}
-                      disabled={isReferral}
+                      disabled={repeatPolicyOptions.length === 1}
                       required
                     >
                       <FormControl>
@@ -394,7 +395,7 @@ export function BenefitRuleFormModal({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {BENEFIT_RULE_REPEAT_POLICY_OPTIONS.map(o => (
+                        {repeatPolicyOptions.map(o => (
                           <SelectItem key={o.value} value={o.value}>
                             {o.label}
                           </SelectItem>
@@ -404,6 +405,11 @@ export function BenefitRuleFormModal({
                     {isReferral && (
                       <FormDescription className="text-xs">
                         紹介規則は毎回のみです（紹介者は紹介した人数ぶん受益し、一回性は被紹介者の初回受注が担います）
+                      </FormDescription>
+                    )}
+                    {type === 'LOGIN' && (
+                      <FormDescription className="text-xs">
+                        ログイン規則は毎回を取れません（認証の反復で無限に受益できるため）。一日一回はグループ時間帯の暦日で数えます
                       </FormDescription>
                     )}
                     <FormMessage />

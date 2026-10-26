@@ -3,6 +3,7 @@ package com.kizuna.point.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -24,8 +25,8 @@ class PointEntryTypeTest {
    * <p>受注を根拠とするものは受注 ID を持たなければならない — 持たなければ、受注から辿る巻き戻しがその行を永久に
    * 見つけられない。利用取消は受注の授受を打ち消す側なので付与ではなく、受注 ID を持たない。
    *
-   * <p>特典付与がここに居るのは、投産済みの特典が<b>受注を条件とする種別（来店）</b>だけだからである。受注を条件としない
-   * ログイン特典を投産するときは、その付与が巻き戻しの収集述語から外れることを承知のうえでこの枚挙を分けること。
+   * <p>特典付与は生成口で分かれる — 受注を条件とする特典（来店）は受注 ID を持って巻き戻しに拾われ、ログイン特典は受注 ID を
+   * 持たず拾われない（ログイン付与に取消は無い）。種別は同じ BENEFIT_GRANT なので、ここでは生成口ごとに断言する。
    */
   private static final Set<PointEntryType> ORDER_BASED_CREDITS =
       Set.of(PointEntryType.ORDER_GRANT, PointEntryType.BENEFIT_GRANT);
@@ -58,8 +59,11 @@ class PointEntryTypeTest {
         .as("手動調整は受注を根拠としない")
         .isNull();
     assertThat(PointEntry.grantForBenefit(7L, "o1", 3L, 200, null, 5L, 9L).getOrderId())
-        .as("投産済みの特典は受注を条件とするので受注 ID を持つ")
+        .as("受注を条件とする特典は受注 ID を持つ")
         .isEqualTo("o1");
+    assertThat(PointEntry.grantForLogin(7L, 100, null, 5L, LocalDate.of(2026, 10, 26)).getOrderId())
+        .as("ログイン特典は受注を条件とせず、巻き戻しの収集述語から外れる（取消は無い）")
+        .isNull();
     assertThat(PointEntry.reverseUse(persistedUse(), "巻き戻し", 9L).getOrderId())
         .as("利用取消は打ち消す側であって付与ではない")
         .isNull();

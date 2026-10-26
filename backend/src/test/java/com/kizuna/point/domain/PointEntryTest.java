@@ -309,6 +309,51 @@ class PointEntryTest {
         .hasMessageContaining("1 以上");
   }
 
+  @Test
+  @DisplayName("ログイン特典の付与は受注も発生店舗も持たず、付与日と産地の規則を名乗る加算ロットになること")
+  void aLoginBenefitGrantCarriesItsDayButNoOrderOrStore() {
+    LocalDate grantedOn = LocalDate.of(2026, 10, 26);
+
+    PointEntry entry = PointEntry.grantForLogin(7L, 100, LocalDate.of(2026, 12, 31), 5L, grantedOn);
+
+    assertThat(entry.getEntryType()).isEqualTo(PointEntryType.BENEFIT_GRANT);
+    assertThat(entry.getAmount()).isEqualTo(100);
+    assertThat(entry.getMemberId()).isEqualTo(7L);
+    assertThat(entry.getOrderId()).as("受注を条件としないので巻き戻しの収集述語に乗らない").isNull();
+    assertThat(entry.getOriginatingStoreId()).as("ログインは店舗での事象ではない").isNull();
+    assertThat(entry.getActorUserId()).as("操作者は居ない（機構が起こす仕訳）").isNull();
+    assertThat(entry.getBenefitRuleId()).isEqualTo(5L);
+    assertThat(entry.getGrantedOn()).isEqualTo(grantedOn);
+    assertThat(entry.getExpiresOn()).isEqualTo(LocalDate.of(2026, 12, 31));
+    assertThat(entry.getAllocations()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("付与日の無いログイン特典は記録できないこと（一日一回の収束鍵が欠ける）")
+  void aLoginBenefitGrantWithoutItsDayIsRefused() {
+    assertThatThrownBy(() -> PointEntry.grantForLogin(7L, 100, null, 5L, null))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessageContaining("付与日");
+  }
+
+  @Test
+  @DisplayName("規則を名乗らないログイン特典と 0 以下のログイン特典は記録できないこと")
+  void aLoginBenefitGrantKeepsTheBenefitGrantInvariants() {
+    LocalDate grantedOn = LocalDate.of(2026, 10, 26);
+    assertThatThrownBy(() -> PointEntry.grantForLogin(7L, 100, null, null, grantedOn))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessageContaining("特典規則");
+    assertThatThrownBy(() -> PointEntry.grantForLogin(7L, 0, null, 5L, grantedOn))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessageContaining("1 以上");
+  }
+
+  @Test
+  @DisplayName("受注を条件とする特典付与は付与日を持たないこと（部分一意索引の対象外）")
+  void anOrderBasedBenefitGrantHasNoGrantedOn() {
+    assertThat(PointEntry.grantForBenefit(7L, "o1", 3L, 200, null, 5L, 9L).getGrantedOn()).isNull();
+  }
+
   private static PointEntry credit(long id, int amount) {
     PointEntry entry = PointEntry.grantForOrder(7L, "o1", 3L, amount, 9L);
     entry.setId(id);

@@ -138,6 +138,14 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
   boolean existsByBenefitRuleIdAndMemberIdAndOrderId(
       Long benefitRuleId, Long memberId, String orderId);
 
+  /**
+   * その暦日に、その会員がその規則の付与を既に受けているか。重複可否「一日一回」の判定。
+   *
+   * <p>並行する同日のログインは二本ともここを通り抜けるので、収束は部分一意索引 {@code uq_t_point_entries_login_benefit_day} が担う。
+   */
+  boolean existsByBenefitRuleIdAndMemberIdAndGrantedOn(
+      Long benefitRuleId, Long memberId, LocalDate grantedOn);
+
   /** 冪等キーで初回の手動調整を引く。再送の判定入口（ADR 0007）。 */
   Optional<PointEntry> findByIdempotencyKey(String idempotencyKey);
 

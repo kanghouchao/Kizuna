@@ -58,7 +58,7 @@ databaseChangeLog:
                   type: VARCHAR(20)
                   constraints:
                     nullable: false
-                  remarks: 重複可否（ONCE_PER_MEMBER/EVERY_TIME）
+                  remarks: 重複可否（ONCE_PER_MEMBER/ONCE_PER_DAY/EVERY_TIME）
               - column:
                   name: points
                   type: INTEGER
@@ -176,3 +176,15 @@ databaseChangeLog:
               ALTER TABLE t_benefit_rules
               ADD CONSTRAINT ck_t_benefit_rules_login_all_stores CHECK (
                 type <> 'LOGIN' OR store_scope_type = 'ALL_STORES')
+        # ログイン規則が毎回を取ると認証の反復で無限に受益できる。一日一回を取れるのはログイン規則だけ
+        # （受注条件の「同じ日」が営業日か記帳日かは未裁定）。
+        - sql:
+            sql: >-
+              ALTER TABLE t_benefit_rules
+              ADD CONSTRAINT ck_t_benefit_rules_login_repeat CHECK (
+                type <> 'LOGIN' OR repeat_policy IN ('ONCE_PER_MEMBER', 'ONCE_PER_DAY'))
+        - sql:
+            sql: >-
+              ALTER TABLE t_benefit_rules
+              ADD CONSTRAINT ck_t_benefit_rules_once_per_day_login_only CHECK (
+                repeat_policy <> 'ONCE_PER_DAY' OR type = 'LOGIN')

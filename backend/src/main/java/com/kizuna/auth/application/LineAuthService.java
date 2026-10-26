@@ -47,6 +47,7 @@ public class LineAuthService {
   private final UserRepository userRepository;
   private final MemberRegistrationService memberRegistrationService;
   private final AuthService authService;
+  private final LoginBenefitTrigger loginBenefitTrigger;
 
   /** 前端が認可要求を組み立てるための公開設定。無効なら channelId は返さない。 */
   @Transactional(readOnly = true)
@@ -117,8 +118,10 @@ public class LineAuthService {
         channel, request.getCode(), request.getRedirectUri(), request.getCodeVerifier());
   }
 
-  /** 連携済み身分へのトークン発行。停止済みアカウントはパスワードログインと同じく 401 で拒否する。 */
+  /** 連携済み身分へのトークン発行。停止済みアカウントはパスワードログインと同じく 401 で拒否する。 認証成功はパスワードログインと同一の発火事象なので、同じ引き金を発行の後に引く。 */
   private LineLoginResponse issueTokenForLinkedUser(User user) {
-    return LineLoginResponse.registered(authService.issueTokenFor(user));
+    Token token = authService.issueTokenFor(user);
+    loginBenefitTrigger.onAuthenticated(user);
+    return LineLoginResponse.registered(token);
   }
 }

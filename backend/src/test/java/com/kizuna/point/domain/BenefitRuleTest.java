@@ -126,6 +126,59 @@ class BenefitRuleTest {
   }
 
   @Test
+  @DisplayName("ログイン規則は毎回を取れないこと（認証の反復で無限に受益できてしまう）")
+  void loginRuleCannotBeEveryTime() {
+    assertThatThrownBy(
+            () ->
+                BenefitRule.define(
+                    BenefitRuleType.LOGIN,
+                    definition()
+                        .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
+                        .points(100)
+                        .build()))
+        .isInstanceOf(InvalidBenefitRuleException.class)
+        .hasMessageContaining("ログイン規則は毎回");
+  }
+
+  @Test
+  @DisplayName("ログイン規則は一人一回限りと一日一回を取れること")
+  void loginRuleAcceptsOncePerMemberAndOncePerDay() {
+    assertThat(
+            BenefitRule.define(
+                    BenefitRuleType.LOGIN,
+                    definition()
+                        .repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_DAY)
+                        .points(100)
+                        .build())
+                .getRepeatPolicy())
+        .isEqualTo(BenefitRuleRepeatPolicy.ONCE_PER_DAY);
+    assertThat(
+            BenefitRule.define(
+                    BenefitRuleType.LOGIN,
+                    definition()
+                        .repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER)
+                        .points(100)
+                        .build())
+                .getRepeatPolicy())
+        .isEqualTo(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER);
+  }
+
+  @Test
+  @DisplayName("一日一回を取れるのはログイン規則だけであること")
+  void oncePerDayIsReservedForLoginRules() {
+    assertThatThrownBy(
+            () ->
+                BenefitRule.define(
+                    BenefitRuleType.VISIT,
+                    definition()
+                        .repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_DAY)
+                        .points(100)
+                        .build()))
+        .isInstanceOf(InvalidBenefitRuleException.class)
+        .hasMessageContaining("一日一回");
+  }
+
+  @Test
   @DisplayName("ログイン規則は全店舗しか取れないこと")
   void loginRuleMustBeAllStores() {
     assertThatThrownBy(
@@ -234,12 +287,16 @@ class BenefitRuleTest {
   @Test
   @DisplayName("再定義も構築と同じ不変条件で検証されること")
   void redefineValidatesTheSameInvariants() {
-    BenefitRule rule = BenefitRule.define(BenefitRuleType.LOGIN, definition().points(100).build());
+    BenefitRule rule =
+        BenefitRule.define(
+            BenefitRuleType.LOGIN,
+            definition().repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_DAY).points(100).build());
 
     assertThatThrownBy(
             () ->
                 rule.redefine(
                     definition()
+                        .repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_DAY)
                         .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                         .storeIds(Set.of(3L))
                         .points(100)

@@ -3,7 +3,8 @@
 export type BenefitRuleType = 'REFERRAL' | 'LOGIN' | 'VISIT';
 
 // 重複可否（同一会員が同じ規則で別の発火事象により再び受益できるか）。
-export type BenefitRuleRepeatPolicy = 'ONCE_PER_MEMBER' | 'EVERY_TIME';
+// 一日一回の「日」はグループ時間帯の暦日。
+export type BenefitRuleRepeatPolicy = 'ONCE_PER_MEMBER' | 'ONCE_PER_DAY' | 'EVERY_TIME';
 
 // 発火側の絞り込み種別。授権の店舗集合と同じ字面だが、意味は「どの店舗の事象を拾うか」。
 export type BenefitRuleStoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';
