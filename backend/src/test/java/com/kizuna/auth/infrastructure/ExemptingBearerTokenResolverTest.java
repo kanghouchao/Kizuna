@@ -23,9 +23,6 @@ class ExemptingBearerTokenResolverTest {
   @ValueSource(
       strings = {
         "/auth/login",
-        "/cast-invitations/view",
-        "/cast-invitations/acceptance",
-        "/members",
         "/auth/line/config",
         "/auth/line/login",
         "/auth/line/register",
@@ -41,10 +38,29 @@ class ExemptingBearerTokenResolverTest {
     assertThat(resolver.resolve(request)).isNull();
   }
 
+  @ParameterizedTest(name = "POST {0} は免除対象で Bearer を解決しない(null)こと")
+  @ValueSource(strings = {"/cast-invitations/view", "/cast-invitations/acceptance", "/members"})
+  @DisplayName("招待の照会・新規受諾と会員の自助登録の POST は、壊れた Bearer があっても null を返すこと")
+  void resolvesNullForAnonymousPosts(String uri) {
+    MockHttpServletRequest request = requestWithBearer("POST", uri);
+
+    assertThat(resolver.resolve(request)).isNull();
+  }
+
+  @ParameterizedTest(name = "GET {0} は免除対象でなく Bearer を解決すること")
+  @ValueSource(strings = {"/cast-invitations/view", "/cast-invitations/acceptance", "/members"})
+  @DisplayName("匿名 POST の免除は同一パスの他メソッドに及ばないこと")
+  void doesNotExemptOtherMethodsOnAnonymousPostPaths(String uri) {
+    // 接頭辞の無い /members などは認証付きの一覧を足しやすく、パスだけで免除するとその Bearer まで捨てる
+    MockHttpServletRequest request = requestWithBearer("GET", uri);
+
+    assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
+  }
+
   @Test
   @DisplayName("ゲスト予約申請の POST は免除対象で、壊れた Bearer があっても null を返すこと")
   void resolvesNullForGuestOrderApplicationPost() {
-    // 公開店面を見ている来訪者は会員・キャストの陳腐な token cookie を持ちうる。免除しないと申請が 401 になる
+    // 公開サイトを見ている来訪者は会員・キャストの陳腐な token cookie を持ちうる。免除しないと申請が 401 になる
     MockHttpServletRequest request = requestWithBearer("POST", "/order-applications/public");
 
     assertThat(resolver.resolve(request)).isNull();

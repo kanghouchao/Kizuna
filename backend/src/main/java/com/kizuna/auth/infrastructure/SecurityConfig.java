@@ -37,10 +37,11 @@ public class SecurityConfig {
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/files"),
     // 匿名 POST の招待照会と新規登録受諾（Bearer なしのため Bearer 免除に該当しない）。既存受諾(/existing)は Bearer 付きで既存免除に該当する。
     // 照会はトークンをパスに載せないため POST であり、読み取りでも CSRF 免除が要る。
-    PathPatternRequestMatcher.withDefaults().matcher("/cast-invitations/view"),
-    PathPatternRequestMatcher.withDefaults().matcher("/cast-invitations/acceptance"),
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/cast-invitations/view"),
+    PathPatternRequestMatcher.withDefaults()
+        .matcher(HttpMethod.POST, "/cast-invitations/acceptance"),
     // 匿名 POST の会員自助登録（同上: Bearer なしのため Bearer 免除に該当しない）。
-    PathPatternRequestMatcher.withDefaults().matcher("/members"),
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/members"),
     // 匿名 POST の LINE ログインと LINE 登録確定（同上）。連携(/me/line)は Bearer 付きで既存免除に該当する。
     PathPatternRequestMatcher.withDefaults().matcher("/auth/line/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/auth/line/register"),
