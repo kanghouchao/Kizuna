@@ -83,16 +83,13 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
   actually differs is how the violation is reported.
 - **Partial (predicate) indexes and CHECK constraints use raw `sql` changes** — Liquibase OSS
   cannot express them declaratively.
-- **Seeds take no explicit ids** (IDENTITY sequences must not collide with seeded rows), with
-  one exception: `t_store_profiles.id` is app-generated Snowflake text, so its demo rows pin
-  `"1"` / `"2"`. FKs in seeds resolve via natural-key subselects.
-- **Seed rows state values explicitly when the column default is not the intended value**
-  (demo stores are `ACTIVE` while the column default is `PREPARING`). A NOT NULL column without
-  a DB default must be provided by every seed row that touches the table.
-- **Demo data lives only in `seed/05-demo.yaml` behind `contextFilter: demo`.** The application
-  default is `production` (no demo data); dev/integration/e2e opt in via `LIQUIBASE_CONTEXTS`.
-- **Seeds contain no user accounts** — neither the baseline nor the `demo` context. The first
-  administrator is registered through initial setup (`/auth/initial-setup`) on an empty DB.
-  The changelog takes no parameters.
+- **Seeds take no explicit ids** (IDENTITY sequences must not collide with seeded rows). FKs in
+  seeds resolve via natural-key subselects.
+- **Seed rows state values explicitly when the column default is not the intended value.** A NOT
+  NULL column without a DB default must be provided by every seed row that touches the table.
+- **Seeds hold only what every environment needs** (roles, menus, system configs) — no stores, no
+  user accounts, no Liquibase contexts. The first administrator is registered through initial
+  setup (`/auth/initial-setup`) on an empty DB and registers stores from the admin console; dev
+  and e2e build their data the same way. The changelog takes no parameters.
 - This file is excluded from the jar by `processResources` in `build.gradle` (the glob covers
   any `CLAUDE.md` or `AGENTS.md` under resources) — keep the exclusion in step if you rename this file.

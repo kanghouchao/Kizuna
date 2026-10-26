@@ -4,6 +4,7 @@ import { APP_URL } from '../base-url';
 import {
   STORE1_ID,
   createStaffAccount,
+  createStore,
   findRoleIdByName,
   findStoreIdByDomain,
   getAuthorizedStores,
@@ -60,11 +61,26 @@ Then('一覧の {string} の行に {string} が表示される', async ({ page }
   await expect(row.getByRole('cell', { name: cellText, exact: true })).toBeVisible({ timeout: 15000 });
 });
 
+Then('店舗一覧に {string} と表示される', async ({ page }, message: string) => {
+  await expect(page.getByText(message, { exact: true })).toBeVisible({ timeout: 15000 });
+});
+
 Given('{string} とパスワード {string} で API にログインする', async ({ request }, email: string, password: string) => {
   adminToken = await loginUser(request, email, password);
 });
 
-Given('店舗 {string} の id が店舗文脈の固定 id と一致する', async ({ request }, domain: string) => {
+When('次の店舗を登録する', async ({ request }, table: DataTable) => {
+  // 登録順が採番順になり、先頭の店舗が STORE1_ID を得る。
+  for (const row of table.hashes()) {
+    await createStore(request, adminToken, {
+      name: row['店舗名'],
+      domain: row['ドメイン'],
+      email: row['メールアドレス'],
+    });
+  }
+});
+
+Then('店舗 {string} の id が店舗文脈の固定 id と一致する', async ({ request }, domain: string) => {
   // store-api.ts は店舗文脈の id を STORE1_ID に固定している。採番がずれると、それを使う全シナリオが
   // 別の店舗を指すため、ここで止める。
   expect(await findStoreIdByDomain(request, adminToken, domain)).toBe(STORE1_ID);

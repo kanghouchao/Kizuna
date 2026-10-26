@@ -211,7 +211,7 @@ class AuthServiceTest {
     Token res = authService.login("ADMIN@Kizuna.TEST", "pass");
 
     assertThat(res.token()).isEqualTo("issued_token");
-    // 照合は小文字正規化後の email を AuthenticationManager へ渡す（保存済みシードは全て小文字）。
+    // 照合は小文字正規化後の email を AuthenticationManager へ渡す（User は小文字で保存する）。
     ArgumentCaptor<UsernamePasswordAuthenticationToken> tokenCaptor =
         ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
     verify(authenticationManager).authenticate(tokenCaptor.capture());

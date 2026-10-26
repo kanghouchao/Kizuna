@@ -130,7 +130,6 @@ class NotificationPostgresTest {
                     Map.entry(
                         "spring.liquibase.change-log",
                         "classpath:db/changelog/db.changelog-master.yaml"),
-                    Map.entry("spring.liquibase.contexts", "production"),
                     Map.entry("spring.jpa.hibernate.ddl-auto", "validate"),
                     Map.entry("spring.jpa.open-in-view", "false"),
                     Map.entry(

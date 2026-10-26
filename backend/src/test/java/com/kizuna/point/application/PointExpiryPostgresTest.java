@@ -596,7 +596,11 @@ class PointExpiryPostgresTest {
   private record OrderFixture(String id, long storeId) {}
 
   private OrderFixture order() {
-    long store = jdbc.queryForObject("select id from t_stores limit 1", Long.class);
+    long store =
+        jdbc.queryForObject(
+            "insert into t_stores(name,domain) values ('検証店舗',?) returning id",
+            Long.class,
+            UUID.randomUUID() + ".invalid");
     String order = UUID.randomUUID().toString();
     String course = UUID.randomUUID().toString();
     String revision = UUID.randomUUID().toString();
@@ -748,7 +752,6 @@ class PointExpiryPostgresTest {
       var migration = new SpringLiquibase();
       migration.setDataSource(source);
       migration.setChangeLog("classpath:db/changelog/db.changelog-master.yaml");
-      migration.setContexts("demo");
       return migration;
     }
 
