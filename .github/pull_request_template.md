@@ -17,8 +17,9 @@ Closes #
 - [ ] `task lint` exit 0
 - [ ] `task test` exit 0
 - [ ] `task build` exit 0
-- [ ] `task e2e grep=...` exit 0（変更に関係するシナリオ: ）
-- [ ] CI の `E2E` チェック成功（全量）
+- [ ] `task e2e grep=...` exit 0（全量は master への合併後に CI が実行する）
+  - 実行した feature と選んだ理由: 
+  - 関係しうるが実行しなかった feature と理由: 
 - [ ] ローカルで code-review 実施済み
 
 ### 視覚確認（UI 変更時）
