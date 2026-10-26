@@ -22,7 +22,7 @@ cp infrastructure/.env.example infrastructure/development/.env
 
 コピー先の環境設定を調整する。ローカルのアプリホスト（管理画面・ポータルのドメイン）は `APP_DOMAIN=kizuna.test` とし、`APP_JWT_SECRET` は自分で生成したランダム値へ置き換える。実装は文字列の UTF-8 バイト列をそのまま HS256 の鍵として使い、32 バイト未満なら起動を拒否する。DB・Redis・SeaweedFS の資格情報も設定し、実際の `.env` はコミットしない。
 
-オブジェクトストレージは SeaweedFS 4.48 の単一ノード構成を使用する。`S3_ENDPOINT=http://storage:8333`、`S3_BUCKET=uploads`、`S3_ACCESS_KEY`、`S3_SECRET_KEY` を設定する。画像は gateway の `/static/uploads/` から公開する。
+オブジェクトストレージは SeaweedFS 4.50 の単一ノード構成を使用する。`S3_ENDPOINT=http://storage:8333`、`S3_BUCKET=uploads`、`S3_ACCESS_KEY`、`S3_SECRET_KEY` を設定する。画像は gateway の `/static/uploads/` から公開する。
 
 開発環境の管理画面は [http://localhost:23646](http://localhost:23646) で開ける（ホストのループバックのみ公開）。リリース・E2E では管理画面を無効にする。既存データで管理画面が 404 になる場合は、`/data/mini.options` の `admin.ui` が `false` のまま保存されていないか確認し、バックアップ後に `true` へ変更して storage を再作成する。
 

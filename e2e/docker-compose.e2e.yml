@@ -44,7 +44,7 @@ services:
       retries: 10
 
   storage:
-    image: chrislusf/seaweedfs:4.48
+    image: chrislusf/seaweedfs:4.50
     command: mini -dir=/data -admin.ui=false -webdav=false
     tmpfs:
       - /data
@@ -60,7 +60,7 @@ services:
       retries: 10
 
   private-storage:
-    image: chrislusf/seaweedfs:4.48
+    image: chrislusf/seaweedfs:4.50
     command: mini -dir=/data -admin.ui=false -webdav=false -bucket=applicant-images -volume.max=4 -master.volumeSizeLimitMB=16
     tmpfs:
       - /data:size=134217728

@@ -116,7 +116,7 @@ services:
 
   # S3 互換オブジェクトストレージ
   storage:
-    image: chrislusf/seaweedfs:4.48
+    image: chrislusf/seaweedfs:4.50
     container_name: storage
     command: mini -dir=/data -admin.ui=true -webdav=false
     environment:
