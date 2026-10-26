@@ -6,14 +6,6 @@ jest.mock('@/entities/user', () => ({
   roleApi: { list: jest.fn(), remove: jest.fn() },
 }));
 
-jest.mock('../ui/RoleFormModal', () => {
-  const React = require('react');
-  return {
-    // 実体は開いたときだけ mount される。mock はマーカーだけ出す。
-    RoleFormModal: () => React.createElement('div', null, 'ロールモーダル表示中'),
-  };
-});
-
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
@@ -37,7 +29,7 @@ describe('ロール一覧ページ', () => {
     ]);
   });
 
-  // 一覧は権限個数までの要約で描画する（権限コードの列挙は編集モーダルが個別取得する）
+  // 一覧は権限個数までの要約で描画する（権限コードの列挙は編集画面が個別取得する）
   it('権限数は一覧応答の permission_count をそのまま表示すること', async () => {
     render(<RolesPage />);
     await screen.findByText('店長');
@@ -46,14 +38,19 @@ describe('ロール一覧ページ', () => {
     expect(screen.getByText('1 件')).toBeInTheDocument();
   });
 
-  it('モーダルは開くまで mount しないこと（権限目録の先読みを防ぐ）', async () => {
+  it('追加と編集は独立した画面へのリンクであること', async () => {
     render(<RolesPage />);
     await screen.findByText('店長');
 
-    expect(screen.queryByText('ロールモーダル表示中')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'ロールを追加' }));
-    expect(screen.getByText('ロールモーダル表示中')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ロールを追加' })).toHaveAttribute(
+      'href',
+      '/admin/roles/create'
+    );
+    const editLinks = screen.getAllByRole('link', { name: '編集' });
+    expect(editLinks.map(link => link.getAttribute('href'))).toEqual([
+      '/admin/roles/1/edit',
+      '/admin/roles/2/edit',
+    ]);
   });
 
   // ロールは全量取得のため絞り込みは取得済み配列に対して行う。再取得は走らない。

@@ -1,6 +1,6 @@
 import { apiClient, PageResult, fromSpringPage, toSpringPageParams } from '@/shared/api';
 import {
-  PermissionResponse,
+  PermissionGroupResponse,
   StaffCreateRequest,
   StaffResponse,
   StaffUpdateRequest,
@@ -82,7 +82,7 @@ export const roleApi = {
   remove: async (id: number): Promise<void> => {
     await apiClient.delete(`/roles/${id}`);
   },
-  permissions: async (): Promise<PermissionResponse[]> => {
+  permissions: async (): Promise<PermissionGroupResponse[]> => {
     const response = await apiClient.get('/permissions');
     return response.data;
   },

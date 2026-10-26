@@ -2,6 +2,6 @@ package com.kizuna.user.api.dto;
 
 /**
  * ロール一覧 1 件の要約応答。権限は個数（permission_count）のみで、権限コードの列挙と楽観ロック用 version は詳細（GET /roles/{id}）が持つ。system
- * は既定ロール（変更・削除不可）。
+ * は既定ロール（改名・削除不可、権限は編集可）。
  */
 public record RoleSummaryResponse(Long id, String name, boolean system, long permissionCount) {}
