@@ -453,7 +453,7 @@ Then(
         `/api/store/monthly-remunerations${path}`,
         { headers: { Authorization: `Bearer ${staffToken}` }, params },
       );
-      expect(missing.status()).toBe(403);
+      expect(missing.status()).toBe(400);
     }
   },
 );

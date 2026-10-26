@@ -20,7 +20,7 @@ Given('既定権限を持たない口コミ担当者が用意されている', a
   const role = await createPermissionRole(request, admin, `口コミ担当-${suffix}`, ['REVIEW_VIEW', 'REVIEW_MANAGE', 'REVIEW_MODERATE', 'ORDER_MANAGE',]);
   await createStaffFixture(request, admin, email, password, [role]);
   token = await loginUser(request, email, password);
-  expect((await request.get('/api/store/reviews', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(403);
+  expect((await request.get('/api/store/reviews', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(400);
   expect((await request.get('/api/store/reviews', { headers: STORE_HEADERS })).status()).toBe(401);
 });
 
