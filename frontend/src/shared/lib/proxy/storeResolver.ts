@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { backendUrl } from '../backend-url';
 
 export interface StoreData {
   isValid: boolean;
@@ -52,8 +53,7 @@ export async function resolveStore(request: NextRequest): Promise<{
   }
 
   // Cookie に店舗情報がない場合、バックエンド API を呼び出す（バックエンドにキャッシュあり）
-  const validationApiUrl = process.env.STORE_LOOKUP_API_URL || 'http://backend:8080/stores/lookup';
-  const url = validationApiUrl + `?domain=${encodeURIComponent(hostname)}`;
+  const url = `${backendUrl()}/stores/lookup?domain=${encodeURIComponent(hostname)}`;
 
   try {
     const res = await fetch(url);
@@ -102,10 +102,8 @@ export async function resolveStore(request: NextRequest): Promise<{
 // 認証トークン不要・キャッシュ無しで、X-Store-ID ヘッダのみで動作する公開エンドポイント。
 // 取得失敗・欠落時は 'default' を返し、決して throw しない。
 async function fetchTemplateKey(storeId: string): Promise<string> {
-  const configApiUrl = process.env.STORE_CONFIG_API_URL || 'http://backend:8080/config/public';
-
   try {
-    const res = await fetch(configApiUrl, {
+    const res = await fetch(`${backendUrl()}/config/public`, {
       headers: {
         'X-Store-ID': storeId,
       },

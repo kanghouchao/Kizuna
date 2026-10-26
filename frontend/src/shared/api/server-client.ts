@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { backendUrl } from '../lib/backend-url';
 
 /**
  * サーバーサイド専用のAPIクライアント
@@ -35,12 +36,9 @@ export const serverClient = {
    * APIの完全なURLを解決します
    */
   resolveUrl(path: string): string {
-    const backendUrl =
-      process.env.STORE_LOOKUP_API_URL?.replace('/stores/lookup', '') || 'http://backend:8080';
-
     // pathがスラッシュで始まっていない場合の補正
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${backendUrl}${normalizedPath}`;
+    return `${backendUrl()}${normalizedPath}`;
   },
 
   /**
