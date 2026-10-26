@@ -271,6 +271,7 @@ databaseChangeLog:
                 (entry_type = 'BENEFIT_GRANT') = (benefit_rule_id IS NOT NULL))
         # 付与日は受注 ID の無い特典付与の収束鍵。欠けると下の部分一意索引が NULL 同士を別値と見て決して
         # 衝突せず、同日の並行ログインが二件とも通る。受注条件の特典に載ると意味の無い日付が残る。双方向で縛る。
+        # 受注条件の特典が order 外部キーの SET NULL で受注を失う状態には到達しない（上の order_required と同じ理由）。
         - sql:
             sql: >-
               ALTER TABLE t_point_entries

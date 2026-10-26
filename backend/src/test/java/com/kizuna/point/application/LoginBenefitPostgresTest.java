@@ -37,6 +37,7 @@ import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.support.TransactionTemplate;
 
 // 明示指定した専用の使い捨て DB だけで、同日の並行ログインが部分一意索引で高々 1 件に収束することを二接続から検証する。
 @EnabledIfEnvironmentVariable(named = "KIZUNA_POINTS_TEST_JDBC_URL", matches = ".+")
@@ -130,6 +131,19 @@ class LoginBenefitPostgresTest {
       jdbc.execute("drop trigger issue1062_pause_grant on t_point_entries");
       jdbc.execute("drop function issue1062_pause_grant()");
     }
+    assertThat(grants()).isEqualTo(1);
+  }
+
+  /** 本番の呼び元（AuthService.login）は読み取り専用の取引の中から呼ぶ。付与はその取引に参加せず独立に commit されること。 */
+  @Test
+  void grantCommitsIndependentlyOfTheCallersReadOnlyTransaction() {
+    rule("ONCE_PER_DAY");
+    var outer = new TransactionTemplate(first.getBean(PlatformTransactionManager.class));
+    outer.setReadOnly(true);
+
+    outer.executeWithoutResult(
+        status -> first.getBean(BenefitGrantService.class).grantLoginBenefits(userId));
+
     assertThat(grants()).isEqualTo(1);
   }
 

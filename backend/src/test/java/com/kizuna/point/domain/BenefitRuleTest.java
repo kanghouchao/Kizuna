@@ -141,6 +141,26 @@ class BenefitRuleTest {
   }
 
   @Test
+  @DisplayName("ログイン規則の再定義でも毎回は拒まれること（更新経路の 400）")
+  void loginRuleCannotBeRedefinedToEveryTime() {
+    BenefitRule rule =
+        BenefitRule.define(
+            BenefitRuleType.LOGIN,
+            definition().repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_DAY).points(100).build());
+
+    assertThatThrownBy(
+            () ->
+                rule.redefine(
+                    definition()
+                        .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
+                        .points(100)
+                        .build()))
+        .isInstanceOf(InvalidBenefitRuleException.class)
+        .hasMessageContaining("ログイン規則は毎回");
+    assertThat(rule.getRepeatPolicy()).isEqualTo(BenefitRuleRepeatPolicy.ONCE_PER_DAY);
+  }
+
+  @Test
   @DisplayName("ログイン規則は一人一回限りと一日一回を取れること")
   void loginRuleAcceptsOncePerMemberAndOncePerDay() {
     assertThat(
