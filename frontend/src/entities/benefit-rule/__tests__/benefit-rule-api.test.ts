@@ -1,6 +1,7 @@
 import {
   benefitRuleApi,
   benefitRuleRepeatPolicyLabel,
+  benefitRuleRepeatPolicyOptionsFor,
   benefitRuleTypeLabel,
 } from '@/entities/benefit-rule';
 import { apiClient } from '@/shared/api';
@@ -104,7 +105,24 @@ describe('特典規則の訳語', () => {
     expect(benefitRuleTypeLabel('LOGIN')).toBe('ログイン');
     expect(benefitRuleTypeLabel('VISIT')).toBe('来店');
     expect(benefitRuleRepeatPolicyLabel('ONCE_PER_MEMBER')).toBe('一人一回限り');
+    expect(benefitRuleRepeatPolicyLabel('ONCE_PER_DAY')).toBe('一日一回');
     expect(benefitRuleRepeatPolicyLabel('EVERY_TIME')).toBe('毎回');
+  });
+
+  it('重複可否の選択肢は種別が取れる値に絞り、先頭がその種別の既定値になる', () => {
+    expect(benefitRuleRepeatPolicyOptionsFor('LOGIN').map(o => o.value)).toEqual([
+      'ONCE_PER_DAY',
+      'ONCE_PER_MEMBER',
+    ]);
+    expect(benefitRuleRepeatPolicyOptionsFor('REFERRAL').map(o => o.value)).toEqual(['EVERY_TIME']);
+    expect(benefitRuleRepeatPolicyOptionsFor('VISIT').map(o => o.value)).toEqual([
+      'EVERY_TIME',
+      'ONCE_PER_MEMBER',
+    ]);
+    expect(benefitRuleRepeatPolicyOptionsFor('LOGIN').map(o => o.label)).toEqual([
+      '一日一回',
+      '一人一回限り',
+    ]);
   });
 
   it('未知の値はコードのまま出す（サーバが種別を増やした日に空欄へ落とさない）', () => {

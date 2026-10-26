@@ -4,5 +4,5 @@ export {
   benefitRuleTypeLabel,
   benefitRuleRepeatPolicyLabel,
   BENEFIT_RULE_TYPE_OPTIONS,
-  BENEFIT_RULE_REPEAT_POLICY_OPTIONS,
+  benefitRuleRepeatPolicyOptionsFor,
 } from './model/labels';

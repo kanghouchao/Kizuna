@@ -28,6 +28,7 @@ import lombok.NoArgsConstructor;
  *   <li>増減 0 の仕訳は作れない。取りうる向きは種別が決める（{@link PointEntryType}）。有効期限を持てるのは新しいロットになる加算だけ。
  *   <li>引き当ては減算と利用取消だけが持ち、その合計は増減の絶対値に一致する。これにより加算ロットの消費済み量が引き当ての合計だけで求まる。
  *   <li>付与と利用は受注 ID、取消と利用取消は元の仕訳 ID、手動調整は理由と冪等キー、特典付与は産地の規則 ID を必ず持つ。
+ *   <li>受注を条件としない特典付与（ログイン）は付与日を持つ。一日一回の収束鍵で、受注 ID の無い特典付与だけが持つ。
  * </ol>
  */
 @Entity
@@ -80,6 +81,13 @@ public class PointEntry extends BaseEntity {
   /** 失効の実行試行と会員の識別子。手動調整の外部指定キーと名前空間を分ける。 */
   @Column(name = "expiry_key", updatable = false, length = 64)
   private String expiryKey;
+
+  /**
+   * 受注を条件としない特典付与（ログイン）の付与日。業務時間帯の暦日で、(規則, 会員, 付与日) の部分一意索引が 同日の並行ログインを高々 1 件へ収束させる鍵になる。
+   * 受注を条件とする特典は受注 ID が発火事象を識別するので持たない。
+   */
+  @Column(name = "granted_on", updatable = false)
+  private LocalDate grantedOn;
 
   /**
    * 誤帰属の訂正で、どの帰属記録を訂正したか（ADR 0012）。訂正の手動調整だけが持ち、顧客経路の通常の調整は null。
@@ -241,11 +249,10 @@ public class PointEntry extends BaseEntity {
   }
 
   /**
-   * 特典規則が産んだ付与。有効期限は規則の「付与ポイント有効期間」から呼出側が算出して渡す（無期限なら null）。
+   * 受注を条件とする特典規則が産んだ付与。有効期限は規則の「付与ポイント有効期間」から呼出側が算出して渡す（無期限なら null）。
    *
-   * <p>受注 ID を必須にするのは、投産済みの種別が受注を条件とするものだけだからである。受注を名乗らなければ、
-   * 受注から辿る巻き戻しがこの行を永久に見つけられない。ログイン条件の特典を投産するときは、この要求と {@code PointEntryTypeTest}
-   * の枚挙を同時に見直すこと（枚挙が先に赤くなる）。
+   * <p>受注 ID を必須にするのは、受注を名乗らなければ受注から辿る巻き戻しがこの行を永久に見つけられないため。 受注を条件としない特典は {@link #grantForLogin}
+   * が別の生成口として受ける。
    */
   public static PointEntry grantForBenefit(
       Long memberId,
@@ -275,6 +282,37 @@ public class PointEntry extends BaseEntity {
         null,
         null,
         List.of());
+  }
+
+  /**
+   * ログイン特典の付与。受注も発生店舗も操作者も持たず（認証は店舗での事象ではなく、操作者も居ない）、受注から辿る 巻き戻しには乗らない —
+   * ログイン付与に取消は無い。付与日は一日一回の収束鍵なので必須。
+   */
+  public static PointEntry grantForLogin(
+      Long memberId, int amount, LocalDate expiresOn, Long benefitRuleId, LocalDate grantedOn) {
+    if (amount <= 0) {
+      throw new InvalidPointEntryException("特典の付与ポイントは 1 以上で指定してください");
+    }
+    if (grantedOn == null) {
+      throw new InvalidPointEntryException("ログイン特典の付与日は必須です");
+    }
+    var entry =
+        new PointEntry(
+            PointEntryType.BENEFIT_GRANT,
+            memberId,
+            amount,
+            expiresOn,
+            null,
+            null,
+            benefitRuleId,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of());
+    entry.grantedOn = grantedOn;
+    return entry;
   }
 
   /** 受注会計でのポイント利用。{@code points} は正の消費量で、引き当ての合計と一致していなければならない。 */

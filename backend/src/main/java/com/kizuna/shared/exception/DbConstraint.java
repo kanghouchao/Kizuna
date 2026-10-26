@@ -77,6 +77,9 @@ public enum DbConstraint {
   /** t_point_rollbacks.order_id の一意制約。同時に走った 2 つ目の巻き戻しをここで撥ねる。 */
   UQ_T_POINT_ROLLBACKS_ORDER("uq_t_point_rollbacks_order"),
 
+  /** ログイン特典の (規則, 会員, 付与日) 部分一意索引。同日の並行ログインの敗者を「二回目」として静かに終える。 */
+  UQ_T_POINT_ENTRIES_LOGIN_BENEFIT_DAY("uq_t_point_entries_login_benefit_day"),
+
   /** t_customer_member_links の「店舗ごと会員 1 人につき有効な関連は高々 1 本」の部分一意索引。 */
   UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_MEMBER("uq_t_customer_member_links_active_member"),
 

@@ -61,6 +61,7 @@ class LineAuthServiceTest {
   @Mock private UserRepository userRepository;
   @Mock private MemberRegistrationService memberRegistrationService;
   @Mock private AuthService authService;
+  @Mock private LoginBenefitTrigger loginBenefitTrigger;
   @Mock private JwtIssuer jwtIssuer;
 
   @InjectMocks private LineAuthService lineAuthService;
@@ -131,6 +132,8 @@ class LineAuthServiceTest {
     assertThat(response.token()).isEqualTo("issued-token");
     assertThat(response.expiresAt()).isEqualTo(1_700_000_000_000L);
     assertThat(response.registrationTicket()).isNull();
+    // 認証方式を問わず同一の発火事象。パスワードログインと同じ契機で同じ引き金を引く。
+    verify(loginBenefitTrigger).onAuthenticated(user);
   }
 
   @Test
@@ -147,6 +150,7 @@ class LineAuthServiceTest {
     assertThat(response.displayName()).isEqualTo("LINE太郎");
     assertThat(response.token()).isNull();
     verify(authService, never()).issueTokenFor(any());
+    verifyNoInteractions(loginBenefitTrigger);
   }
 
   @Test
@@ -195,6 +199,8 @@ class LineAuthServiceTest {
 
     assertThat(lineAuthService.register(registrationRequest())).isEqualTo(TOKEN);
     verify(ticketStore).consume("ticket-1");
+    // 登録直後の自動ログインは認証成功ではなく登録の一部。発火事象に数えない。
+    verifyNoInteractions(loginBenefitTrigger);
   }
 
   @Test
@@ -304,14 +310,16 @@ class LineAuthServiceTest {
             mock(PasswordEncoder.class),
             jwtIssuer,
             mock(AuthenticationManager.class),
-            mock(CredentialOperations.class));
+            mock(CredentialOperations.class),
+            loginBenefitTrigger);
     return new LineAuthService(
         channelResolver,
         lineApiClient,
         ticketStore,
         userRepository,
         memberRegistrationService,
-        realAuthService);
+        realAuthService,
+        loginBenefitTrigger);
   }
 
   @Test
