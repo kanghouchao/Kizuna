@@ -24,8 +24,7 @@ describe('storeResolver', () => {
     jest.resetModules();
     process.env = { ...originalEnv };
     process.env.APP_DOMAIN = 'kizuna.test';
-    delete process.env.STORE_LOOKUP_API_URL;
-    delete process.env.STORE_CONFIG_API_URL;
+    delete process.env.BACKEND_URL;
   });
 
   afterEach(() => {
@@ -187,6 +186,30 @@ describe('storeResolver', () => {
       expect.objectContaining({
         headers: { 'X-Store-ID': 't1' },
       })
+    );
+  });
+
+  it('builds both backend paths on BACKEND_URL, which carries only the host', async () => {
+    process.env.BACKEND_URL = 'http://other-backend:9000';
+    global.fetch = jest.fn().mockImplementation((url: string) =>
+      Promise.resolve({
+        json: () =>
+          Promise.resolve(
+            String(url).includes('config/public')
+              ? { template_key: 'modern' }
+              : { id: 't1', name: 'Store 1', domain: 'store.test' }
+          ),
+      })
+    );
+
+    await resolveStore(createRequest('store.test'));
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://other-backend:9000/stores/lookup?domain=store.test'
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://other-backend:9000/config/public',
+      expect.anything()
     );
   });
 

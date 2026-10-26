@@ -14,11 +14,11 @@ global.fetch = jest.fn();
 describe('serverClient', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.STORE_LOOKUP_API_URL = 'http://test-backend/stores/lookup';
+    process.env.BACKEND_URL = 'http://test-backend';
   });
 
   describe('resolveUrl', () => {
-    it('店舗照会 URL から導いたバックエンドURLをパスの先頭に付与すること', () => {
+    it('BACKEND_URL をパスの先頭に付与すること', () => {
       expect(serverClient.resolveUrl('/test')).toBe('http://test-backend/test');
     });
 
@@ -26,8 +26,8 @@ describe('serverClient', () => {
       expect(serverClient.resolveUrl('test')).toBe('http://test-backend/test');
     });
 
-    it('環境変数が未設定の場合にlocalhostへフォールバックすること', () => {
-      delete process.env.STORE_LOOKUP_API_URL;
+    it('BACKEND_URL が未設定なら http://backend:8080 を使うこと', () => {
+      delete process.env.BACKEND_URL;
       expect(serverClient.resolveUrl('/test')).toBe('http://backend:8080/test');
     });
   });
