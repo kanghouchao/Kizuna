@@ -8,17 +8,23 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
+import com.kizuna.customer.application.CustomerMemberLinkDirectory;
 import com.kizuna.customer.application.CustomerMemberLinkService;
 import com.kizuna.customer.application.CustomerMemberLinkWithdrawal;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.member.api.dto.MemberRegistrationRequest;
+import com.kizuna.member.application.MemberDirectoryService;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberRegistrationService;
+import com.kizuna.member.application.MemberStatusFilter;
 import com.kizuna.member.application.MemberWithdrawal;
 import com.kizuna.member.domain.MemberAlreadyWithdrawnException;
 import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.memberconsole.api.dto.MemberDetailResponse;
+import com.kizuna.memberconsole.application.MemberConsoleService;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.withdrawal.MemberWithdrawalApplications;
+import com.kizuna.point.application.MemberLedgerQueryService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
@@ -26,6 +32,8 @@ import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.UserRepository;
@@ -51,6 +59,7 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -345,6 +354,106 @@ class MemberWithdrawalPostgresTest {
     assertThat(users.findByEmail(member.email)).isPresent();
   }
 
+  @Test
+  void staffWithdrawalRecordsStaffAsActorAndConsoleShowsWithdrawalFacts() {
+    var member = member();
+    credit(member.memberId, 300, null);
+    String customer = customer(store);
+    String link = link(store, customer, member);
+    String otherLink = link(otherStore, customer(otherStore), member);
+    String pending = application(member, "PENDING");
+
+    service.withdrawByStaff(member.memberId, staff, "本人からの電話依頼");
+
+    assertThat(
+            jdbc.queryForMap(
+                "select withdrawal_reason, withdrawn_by from t_members where id=?",
+                member.memberId))
+        .containsEntry("withdrawal_reason", "本人からの電話依頼")
+        .containsEntry("withdrawn_by", staff);
+    assertThat(
+            jdbc.queryForMap(
+                "select enabled, withdrawn_at is not null as withdrawn, credential_version from t_users where id=?",
+                member.userId))
+        .containsEntry("enabled", false)
+        .containsEntry("withdrawn", true)
+        .containsEntry("credential_version", 1L);
+    assertThat(
+            jdbc.queryForMap(
+                "select amount, actor_user_id from t_point_entries where member_id=? and entry_type='WITHDRAWAL_CLEAR'",
+                member.memberId))
+        .containsEntry("amount", -300)
+        .containsEntry("actor_user_id", staff);
+    assertThat(
+            jdbc.queryForList(
+                "select status, released_by from t_customer_member_links where id in (?,?)",
+                link,
+                otherLink))
+        .allSatisfy(
+            row ->
+                assertThat(row)
+                    .containsEntry("status", "RELEASED")
+                    .containsEntry("released_by", staff));
+    assertThat(
+            jdbc.queryForObject(
+                "select status from t_order_applications where id=?", String.class, pending))
+        .isEqualTo("WITHDRAWN");
+    assertThatThrownBy(() -> service.withdrawByStaff(member.memberId, staff, "二度目"))
+        .isInstanceOf(MemberAlreadyWithdrawnException.class);
+    assertThatThrownBy(() -> service.withdrawByStaff(-1L, staff, "居ない"))
+        .isInstanceOf(NotFoundException.class);
+
+    // 退会済みでも当時の電子メールで引け、既定の有効一覧には出ない。
+    var directory = context.getBean(MemberDirectoryService.class);
+    assertThat(directory.search(MemberStatusFilter.ACTIVE, member.email, PageRequest.of(0, 10)))
+        .isEmpty();
+    assertThat(directory.search(MemberStatusFilter.WITHDRAWN, member.email, PageRequest.of(0, 10)))
+        .extracting(MemberDirectoryService.MemberSummary::memberCode)
+        .containsExactly(member.memberCode);
+    assertThat(
+            directory.search(
+                MemberStatusFilter.ALL, member.memberCode.substring(2, 8), PageRequest.of(0, 10)))
+        .extracting(MemberDirectoryService.MemberSummary::id)
+        .contains(member.memberId);
+    assertThat(
+            directory
+                .search(MemberStatusFilter.ALL, "検証会員", PageRequest.of(0, 10))
+                .getTotalElements())
+        .isGreaterThanOrEqualTo(1);
+    assertThat(directory.search(MemberStatusFilter.ALL, "100%_no_match!", PageRequest.of(0, 10)))
+        .isEmpty();
+
+    // 詳細: 退会情報は職員の表示名で、関連は閲覧者の店舗集合内だけ展開し集合外は件数のみ、明細は WITHDRAWAL_CLEAR を含む。
+    var console = context.getBean(MemberConsoleService.class);
+    MemberDetailResponse detail =
+        console.detail(member.memberId, new StoreScope(false, java.util.Set.of(store)));
+    assertThat(detail.email()).isEqualTo(member.email);
+    assertThat(detail.withdrawal().reason()).isEqualTo("本人からの電話依頼");
+    assertThat(detail.withdrawal().bySelf()).isFalse();
+    assertThat(detail.withdrawal().withdrawnByName()).isEqualTo("検証職員");
+    assertThat(detail.balance()).isZero();
+    assertThat(detail.balances()).isEmpty();
+    assertThat(detail.links())
+        .singleElement()
+        .satisfies(
+            l -> {
+              assertThat(l.storeId()).isEqualTo(store);
+              assertThat(l.storeName()).isEqualTo("検証店舗");
+              assertThat(l.customerName()).isEqualTo("検証顧客");
+              assertThat(l.status()).isEqualTo("RELEASED");
+              assertThat(l.releaseReason()).isEqualTo("会員退会");
+            });
+    assertThat(detail.otherStoreLinkCount()).isEqualTo(1);
+    assertThat(console.detail(member.memberId, new StoreScope(true, java.util.Set.of())).links())
+        .hasSize(2);
+    var entries = console.entries(member.memberId, null, 20);
+    assertThat(entries.content())
+        .extracting(e -> e.entryType(), e -> e.amount(), e -> e.actorName())
+        .containsExactly(
+            tuple("WITHDRAWAL_CLEAR", -300, "検証職員"), tuple("MANUAL_ADJUST", 300, "検証職員"));
+    assertThat(entries.content().getFirst().reason()).isEqualTo("会員退会");
+  }
+
   private record MemberFixture(long memberId, long userId, String email, String memberCode) {}
 
   private MemberFixture member() {
@@ -468,6 +577,10 @@ class MemberWithdrawalPostgresTest {
     CustomerMemberLinkWithdrawal.class,
     CustomerMemberLinkService.class,
     MemberWithdrawalApplications.class,
+    MemberDirectoryService.class,
+    MemberLedgerQueryService.class,
+    CustomerMemberLinkDirectory.class,
+    MemberConsoleService.class,
     BusinessAudit.class,
     AuditWriter.class
   })

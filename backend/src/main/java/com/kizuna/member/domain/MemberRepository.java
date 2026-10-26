@@ -2,6 +2,8 @@ package com.kizuna.member.domain;
 
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -61,4 +63,45 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select m.id from com.kizuna.member.domain.Member m where m.id = :id")
   Optional<Long> lockIdForUpdate(@Param("id") Long id);
+
+  // 職員の会員検索。退会済みの行も対象にするので識別子で単一結果を前提にしない（ADR 0029）。
+  // 利用者は FQCN で参照する（HQL の予約語衝突を避ける既存規約）。検索語は呼出側が '!' で
+  // エスケープ済みの LIKE パターンとして渡し、空検索は '%' で全件に当てる。
+  String SEARCH_SELECT =
+      """
+      select m.id as id, m.memberCode as memberCode, m.rank as rank,
+             m.withdrawnAt as withdrawnAt, m.createdAt as createdAt,
+             u.email as email, u.displayName as displayName
+      from com.kizuna.member.domain.Member m
+        join com.kizuna.user.domain.User u on u.id = m.userId
+      """;
+
+  String SEARCH_COUNT =
+      """
+      select count(m) from com.kizuna.member.domain.Member m
+        join com.kizuna.user.domain.User u on u.id = m.userId
+      """;
+
+  String SEARCH_MATCH =
+      " (lower(m.memberCode) like :pattern escape '!'"
+          + " or lower(u.email) like :pattern escape '!'"
+          + " or lower(u.displayName) like :pattern escape '!')";
+
+  // 登録の新しい順。createdAt の同値は id で決定的に解く。
+  String SEARCH_ORDER = " order by m.createdAt desc, m.id desc";
+
+  @Query(
+      value = SEARCH_SELECT + " where m.withdrawnAt is null and" + SEARCH_MATCH + SEARCH_ORDER,
+      countQuery = SEARCH_COUNT + " where m.withdrawnAt is null and" + SEARCH_MATCH)
+  Page<MemberSearchView> searchActive(@Param("pattern") String pattern, Pageable pageable);
+
+  @Query(
+      value = SEARCH_SELECT + " where m.withdrawnAt is not null and" + SEARCH_MATCH + SEARCH_ORDER,
+      countQuery = SEARCH_COUNT + " where m.withdrawnAt is not null and" + SEARCH_MATCH)
+  Page<MemberSearchView> searchWithdrawn(@Param("pattern") String pattern, Pageable pageable);
+
+  @Query(
+      value = SEARCH_SELECT + " where" + SEARCH_MATCH + SEARCH_ORDER,
+      countQuery = SEARCH_COUNT + " where" + SEARCH_MATCH)
+  Page<MemberSearchView> searchAll(@Param("pattern") String pattern, Pageable pageable);
 }

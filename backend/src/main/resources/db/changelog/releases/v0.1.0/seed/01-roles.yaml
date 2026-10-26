@@ -150,6 +150,14 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
+              - column: { name: code, value: MEMBER_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: MEMBER_WITHDRAW }
+        - insert:
+            tableName: t_permissions
+            columns:
               - column: { name: code, value: STORE_VIEW }
         - insert:
             tableName: t_permissions
@@ -240,7 +248,7 @@ databaseChangeLog:
               - column: { name: name, value: "店舗スタッフ" }
               - column: { name: is_system, valueBoolean: true }
 
-        # グループ管理者: 初期授与 20 権限
+        # グループ管理者: 初期授与 22 権限
         - insert:
             tableName: t_role_permissions
             columns:
@@ -316,6 +324,16 @@ databaseChangeLog:
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'BENEFIT_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'MEMBER_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'MEMBER_WITHDRAW')" }
         - insert:
             tableName: t_role_permissions
             columns:

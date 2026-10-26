@@ -61,6 +61,8 @@ export type PermissionCode =
   | 'BONUS_AWARD'
   | 'REMUNERATION_CORRECT'
   | 'CAST_PERSON_VIEW'
+  | 'MEMBER_VIEW'
+  | 'MEMBER_WITHDRAW'
   | 'CAST_MANAGE'
   | 'CAST_INVITE'
   | 'CAST_FIELD_DEF_VIEW'

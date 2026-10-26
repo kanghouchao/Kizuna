@@ -99,4 +99,39 @@ public interface CustomerMemberLinkRepository extends StoreScopedRepository<Cust
       @Param("cursorLinkedAt") OffsetDateTime cursorLinkedAt,
       @Param("cursorId") String cursorId,
       Limit limit);
+
+  // 会員起点の関連一覧（職員の会員コンソール）。境界は会員 id と閲覧者の店舗集合 — 集合内の区間だけを展開し、集合外は
+  // 件数しか返さないので顧客台帳の行へ店舗集合を跨いでは到達しない。Store / Customer は表示名のためだけに left join する。
+  String DIRECTORY_SELECT =
+      """
+      select l.id as id, l.storeId as storeId, st.name as storeName,
+             l.customerId as customerId, c.name as customerName,
+             l.status as status, l.reason as reason,
+             l.linkedAt as linkedAt, l.releasedAt as releasedAt, l.releaseReason as releaseReason
+      from com.kizuna.customer.domain.CustomerMemberLink l
+        left join com.kizuna.store.domain.Store st on st.id = l.storeId
+        left join com.kizuna.customer.domain.Customer c
+          on c.id = l.customerId and c.storeId = l.storeId
+      """;
+
+  String DIRECTORY_ORDER = " order by l.linkedAt desc, l.id desc";
+
+  /** 全店舗の作用域を持つ閲覧者向け。 */
+  @Query(DIRECTORY_SELECT + " where l.memberId = :memberId" + DIRECTORY_ORDER)
+  List<MemberLinkDirectoryView> findDirectoryByMemberId(@Param("memberId") Long memberId);
+
+  /** 個別授権の閲覧者向け。授権店舗の区間だけを展開する。 */
+  @Query(
+      DIRECTORY_SELECT
+          + " where l.memberId = :memberId and l.storeId in :storeIds"
+          + DIRECTORY_ORDER)
+  List<MemberLinkDirectoryView> findDirectoryByMemberIdAndStoreIdIn(
+      @Param("memberId") Long memberId, @Param("storeIds") Collection<Long> storeIds);
+
+  /** 個別授権の閲覧者には見せない、授権外店舗の区間の件数。 */
+  @Query(
+      "select count(l) from com.kizuna.customer.domain.CustomerMemberLink l"
+          + " where l.memberId = :memberId and l.storeId not in :storeIds")
+  long countByMemberIdAndStoreIdNotIn(
+      @Param("memberId") Long memberId, @Param("storeIds") Collection<Long> storeIds);
 }
