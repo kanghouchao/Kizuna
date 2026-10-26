@@ -1,7 +1,6 @@
 package com.kizuna.shift.application;
 
 import com.kizuna.settings.application.BusinessDateService;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.AbsenceResponse;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
@@ -45,7 +44,6 @@ public class AbsenceService {
    * <p><b>2 つの述語は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。既定の READ COMMITTED では文ごとに
    * 断面を取り直すので、シフトを読んだ後・実績を読む前に「確定を取り消して実績も取り消す」が commit されると、 変更前にも変更後にも存在しない欠勤を報告する。
    */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public List<AbsenceResponse> list(Long storeId, LocalDate businessDate) {
     if (!businessDateService.hasEnded(businessDate)) {

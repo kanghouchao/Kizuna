@@ -14,7 +14,6 @@ import com.kizuna.service.application.SpecialServiceRejectionHandler;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
@@ -38,13 +37,11 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   private final StoreRepository stores;
   private final ActorIdentityService actors;
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void lock(Long storeId) {
     stores.lockCastFields(storeId);
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public List<SpecialServiceSnapshot> select(
       Long storeId, Order original, String cast, List<String> ids, boolean confirmedInput) {
@@ -77,7 +74,6 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
         .toList();
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public List<SpecialServiceSnapshot> historical(Long storeId, Order order, List<String> ids) {
     if (ids == null) return order.getSpecialServices();
@@ -127,14 +123,12 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
         t.consentVersion());
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void requireProgress(Long storeId, Order order) {
     if (!events.unresolved(storeId, order.getId()).isEmpty())
       throw new OrderConfirmationConflict("special_services", "拒否された特殊サービスを編集画面で修復してください");
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public List<OrderSpecialServiceResponse> describe(Long storeId, Order order) {
     var unresolved =
@@ -158,7 +152,6 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
         .toList();
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void resolve(
       Long storeId,
@@ -212,7 +205,6 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   }
 
   @Override
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void applyRejection(SpecialServiceRejection event) {
     for (var order :
@@ -232,7 +224,6 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
     }
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<OrderSpecialServiceEventResponse> history(
       Long storeId, String orderId, String cursor, int size) {

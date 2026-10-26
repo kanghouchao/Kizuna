@@ -8,7 +8,6 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
@@ -65,7 +64,6 @@ public class AttendanceService {
   private final BusinessAudit audit;
 
   /** （キャスト・店舗・営業日）での照会。取消済みは常に除外される。 */
-  @StoreScoped
   @Transactional(readOnly = true)
   public List<AttendanceResponse> list(Long storeId, LocalDate businessDate, String castId) {
     List<Attendance> rows =
@@ -79,7 +77,6 @@ public class AttendanceService {
     return rows.stream().map(attendanceMapper::toResponse).toList();
   }
 
-  @StoreScoped
   @Transactional
   public AttendanceResponse record(
       Long storeId, AttendanceCreateRequest request, String actorEmail) {
@@ -114,7 +111,6 @@ public class AttendanceService {
   }
 
   /** 記入の誤りを訂正し、同一トランザクションで編集前の姿を訂正履歴へ残す。 */
-  @StoreScoped
   @Transactional
   public AttendanceResponse correct(
       Long storeId, String id, AttendanceCorrectionRequest request, String actorEmail) {
@@ -147,7 +143,6 @@ public class AttendanceService {
   }
 
   /** 誤建の実績に取消標記を付ける。行は残り、導出・照会から外れるだけである。 */
-  @StoreScoped
   @Transactional
   public void cancel(
       Long storeId, String id, AttendanceCancellationRequest request, String actorEmail) {

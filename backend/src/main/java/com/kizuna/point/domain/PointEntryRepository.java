@@ -185,7 +185,7 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
         left join com.kizuna.store.domain.Store st on st.id = e.originatingStoreId
       """;
 
-  // 台帳は店舗で分割しない（ADR 0006）ため storeFilter は働かない。本人の会員 ID の一致が唯一の隔離境界で、
+  // 台帳は店舗で分割しない（ADR 0006）。本人の会員 ID の一致が唯一の隔離境界で、
   // 先頭と続きの問い合わせが同じ条件を共有する。
   String MEMBER_ENTRY_WHERE = " where e.memberId = :memberId ";
 

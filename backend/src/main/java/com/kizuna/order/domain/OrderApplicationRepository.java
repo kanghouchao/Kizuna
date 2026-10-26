@@ -88,7 +88,7 @@ public interface OrderApplicationRepository extends StoreScopedRepository<OrderA
           on k.enrollmentId = ce.id and k.storeId = a.storeId
       """;
 
-  // 本人は店舗文脈を確立できず storeFilter は働かないため、申請者の一致が唯一の隔離境界である。先頭と続きの
+  // 本人の申請を店舗を跨いで返すため、申請者の一致が唯一の隔離境界である。先頭と続きの
   // 問い合わせが同じ条件を共有する。
   String MEMBER_VIEW_WHERE = " where a.requesterMemberId = :memberId ";
 

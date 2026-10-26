@@ -6,7 +6,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.store.domain.StoreRepository;
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +22,7 @@ import org.springframework.stereotype.Component;
  * <p>共有するのは引き当てだけで、見つからないときに何を投げるかは呼び出し側が決める — 会員向けは列挙を防ぐ {@code
  * NotFoundException}、店舗スタッフ向けは理由と対処の分かる {@code ServiceException} であり、ここで投げ分けまで畳むと 会員側の防列挙が黙って壊れる。
  *
- * <p>店舗の一致を述語に置くのは、キャストの読み取りに掛かる絞り込みへ暗黙に頼らないため。当日の確定シフトの有無は確定時だけが見る —
+ * <p>店舗の一致は引き当ての述語自体に置く — 店舗を絞るのはクエリの条件だけである。当日の確定シフトの有無は確定時だけが見る —
  * 先の日付の申請は編集時点でシフトが確定していないのが通常で、編集で要求すると指名を差し替える手段が事実上無くなる。
  *
  * <p>同じ層の他の bean と違い {@code @Service} ではなく {@code @Component} なのは、これがユースケースでも取引境界でもなく、
@@ -32,9 +31,6 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 class NominatableCastLookup {
-
-  private static final String EXPLICIT_STORE_PREDICATE =
-      "キャスト読み取りの暗黙の絞り込みに頼らず、店舗の一致を引き当ての述語に明示することが境界";
 
   /** 指名を成立させる在籍状態。 */
   private static final CastEnrollmentStatus ENROLLED_STATUS = CastEnrollmentStatus.ENROLLED;
@@ -47,7 +43,6 @@ class NominatableCastLookup {
   private final CastProfileRepository profileRepository;
 
   /** 店舗・在籍の順でロックし、指名を書き込む取引が終わるまで停止・退店との排他を保つ。 */
-  @StoreScopeExempt(reason = EXPLICIT_STORE_PREDICATE)
   Optional<CastEnrollment> findForUpdate(Long storeId, String castId) {
     storeRepository.lockAgainstDeletion(storeId);
     return castRepository
@@ -61,7 +56,6 @@ class NominatableCastLookup {
    *
    * <p>検索語なし（null・空白のみ）は絞り込みなしと同じに扱う。コンボボックスは開いた時点で語なしに一度取りに行くため、 ここで空を返すと候補が何も出ないまま打ち始めることになる。
    */
-  @StoreScopeExempt(reason = EXPLICIT_STORE_PREDICATE)
   List<CastProfile> searchCandidates(Long storeId, String keyword) {
     String name = keyword == null ? "" : keyword.trim();
     return profileRepository.findCandidates(storeId, CastService.pattern(name), CANDIDATE_LIMIT);

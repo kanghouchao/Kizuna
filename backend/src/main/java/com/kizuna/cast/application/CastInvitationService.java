@@ -10,8 +10,6 @@ import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
@@ -51,7 +49,6 @@ public class CastInvitationService {
    * INVALIDATED へ巻き戻さない。 ②失効 UPDATE は受諾側の行ロック解放 （＝受諾トランザクションのコミット）を待って完了するため、その後に档案の紐づけを DB
    * 再読込で再確認し、 並行受諾が档案を紐づけていれば新規発行を中止する（連携済み档案に有効トークンが残る矛盾を塞ぐ）。
    */
-  @StoreScoped
   @Transactional
   public CastInvitationResponse issue(Long storeId, String castId) {
     // 招待行を書く前に店舗行・档案行を押さえる（ADR 0016）。招待を先に押さえると、同じ档案を
@@ -99,7 +96,6 @@ public class CastInvitationService {
   }
 
   /** ページ内の档案について招待状態を一括導出する。 */
-  @StoreScopeExempt(reason = "呼出元のトランザクション内でのみ使う内部一括導出で、境界は呼出元が渡す店舗 id")
   public Map<String, CastInvitationStatus> deriveStatuses(
       Long storeId, List<CastEnrollment> casts) {
     if (casts.isEmpty()) {

@@ -1,7 +1,6 @@
 package com.kizuna.survey.application;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.survey.api.dto.SurveyActorResponse;
@@ -51,7 +50,6 @@ public class SurveyReadService {
   private final SurveyHistoryRepository history;
   private final SurveyActors actors;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Page<SurveySummaryResponse> list(
       Long storeId,
@@ -109,7 +107,6 @@ public class SurveyReadService {
     return result.map(row -> summary(row, latest.get(row.getLatestRevisionId()), current));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public SurveyResponse detail(Long storeId, String email, String id) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
@@ -135,7 +132,6 @@ public class SurveyReadService {
         "NOT_CONFIGURED");
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Page<SurveyRevisionSummaryResponse> revisions(
       Long storeId, String email, String sid, int page, int size) {
@@ -160,7 +156,6 @@ public class SurveyReadService {
         .map(SurveyRevisionSummaryResponse::of);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Page<SurveyAnswerSummaryResponse> answers(
       Long storeId,
@@ -195,7 +190,6 @@ public class SurveyReadService {
         .map(SurveyAnswerSummaryResponse::of);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<SurveyRevisionHistoryResponse> revisionHistory(
       Long storeId, String email, String sid, String rid, String cursor, int size) {
@@ -204,7 +198,6 @@ public class SurveyReadService {
     return history(storeId, "revisionId", rid, cursor, size).map(SurveyRevisionHistoryResponse::of);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<SurveyAnswerHistoryResponse> answerHistory(
       Long storeId, String email, String aid, String cursor, int size) {

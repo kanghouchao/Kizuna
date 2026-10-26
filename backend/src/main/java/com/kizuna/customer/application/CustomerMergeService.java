@@ -22,7 +22,6 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
@@ -60,7 +59,6 @@ public class CustomerMergeService {
   private final UserRepository userRepository;
 
   /** 墓標は別の顧客へ読み替えず拒否する。確認した二行と原資料の一致が不可逆な統合の前提になる。 */
-  @StoreScoped
   @Transactional
   public CustomerMergeResponse merge(
       Long storeId, String survivingCustomerId, CustomerMergeRequest request, String actorEmail) {
@@ -148,7 +146,6 @@ public class CustomerMergeService {
         preview.movedContactCount());
   }
 
-  @StoreScoped
   @Transactional
   public CustomerMergePreviewResponse preview(
       Long storeId, String survivingId, CustomerMergePreviewRequest input) {
@@ -169,7 +166,6 @@ public class CustomerMergeService {
    * @param cursor 続きの位置。null なら先頭から
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<CustomerMergeHistoryResponse> history(
       Long storeId, String customerId, String cursor, int requestedSize) {
@@ -187,7 +183,6 @@ public class CustomerMergeService {
         .map(view -> toHistoryResponse(customerId, view));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CustomerMergeAuditResponse audit(Long storeId, String customerId, String mergeId) {
     var merge =

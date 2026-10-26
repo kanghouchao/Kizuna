@@ -13,12 +13,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 @Entity
 @Table(name = "t_survey_operations")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @Builder(access = AccessLevel.PRIVATE)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)

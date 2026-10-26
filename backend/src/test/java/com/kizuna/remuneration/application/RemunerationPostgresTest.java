@@ -30,7 +30,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.remuneration.AttendanceFacts;
@@ -69,7 +68,6 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
@@ -463,8 +461,10 @@ class RemunerationPostgresTest {
 
   private String enrollment(CastEnrollmentStatus status) {
     var enrollment = CastEnrollment.builder().castId(personId).status(status).build();
+    enrollment.setStoreId(storeId);
     em.persist(enrollment);
     var profile = CastProfile.builder().enrollmentId(enrollment.getId()).name("保存された源氏名").build();
+    profile.setStoreId(storeId);
     em.persist(profile);
     return enrollment.getId();
   }
@@ -491,13 +491,13 @@ class RemunerationPostgresTest {
             .completionInvalidated(invalidated)
             .completedAt(OffsetDateTime.parse("2026-10-01T01:00:00+09:00"))
             .build();
+    order.setStoreId(storeId);
     em.persist(order);
     return order.getId();
   }
 
   @Configuration
   @EnableTransactionManagement
-  @EnableAspectJAutoProxy
   @Import({
     RemunerationManagementService.class,
     RemunerationStatementService.class,
@@ -507,7 +507,6 @@ class RemunerationPostgresTest {
     BusinessDateService.class,
     ActorIdentityService.class,
     StoreScopeStampListener.class,
-    StoreFilterEnable.class,
     StoreScopeHolder.class
   })
   static class Config {

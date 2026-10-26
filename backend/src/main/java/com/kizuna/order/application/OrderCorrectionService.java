@@ -18,7 +18,6 @@ import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManager;
@@ -50,7 +49,6 @@ public class OrderCorrectionService {
   private final OrderSpecialServices specialServices;
 
   /** 訂正前の快照と更新を同じトランザクションに保存する。受注行をロックしてから要求の版を照合し、 同時訂正による上書きを防ぐ。快照は管理下の集約を書き換える前に作成する。 */
-  @StoreScoped
   @Transactional
   public OrderCorrectionResponse correct(
       Long storeId, String id, OrderCorrectionRequest request, String actorEmail) {
@@ -167,7 +165,6 @@ public class OrderCorrectionService {
         order.getAccruedRemuneration());
   }
 
-  @StoreScoped
   @Transactional
   public OrderCorrectionResult invalidateCompletion(
       Long storeId, String id, OrderCompletionInvalidationRequest request, String actorEmail) {
@@ -214,7 +211,6 @@ public class OrderCorrectionService {
     return OrderCorrectionHistory.result(correction);
   }
 
-  @StoreScoped
   @Transactional
   public OrderPreviewResponse preview(Long storeId, String id, OrderCorrectionRequest request) {
     specialServices.lock(storeId);

@@ -10,7 +10,6 @@ import java.time.OffsetDateTime;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 /**
  * 会員と店舗顧客台帳の紐づけ。1 行が 1 区間（ACTIVE → RELEASED）を表す追加型の台帳で、解除・変更でも行は削除せず履歴として残す。
@@ -24,8 +23,6 @@ import org.hibernate.annotations.Filter;
  */
 @Entity
 @Table(name = "t_customer_member_links")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 public class CustomerMemberLink extends StoreScopedEntity {

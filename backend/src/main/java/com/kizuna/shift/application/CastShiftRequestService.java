@@ -6,7 +6,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
@@ -38,8 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 本人（キャスト）の出勤希望ユースケース（新規希望・変更申請の提出、履歴）。
  *
  * <p>提出は StoreContext が確立していない {@code /me} 配下のため、対象店舗への所属は「当該店舗に本人の未退店の在籍が存在すること」で判定し、{@link
- * ShiftRequest} の store_id を明示設定する（{@code @StoreScoped} を経由しないため StoreScopeStampListener
- * の自動採番に頼れない）。
+ * ShiftRequest} の store_id を明示設定する。
  */
 @Service
 @RequiredArgsConstructor
@@ -55,7 +53,6 @@ public class CastShiftRequestService {
   private final StoreRepository storeRepository;
   private final BusinessAudit audit;
 
-  @StoreScopeExempt(reason = "所属判定は「指定店舗に本人の未退店の在籍が存在すること」で行い、store_id はその判定に通った店舗を明示設定する")
   @Transactional
   public ShiftRequestResponse submit(String email, ShiftRequestCreateRequest request) {
     validateRequestedSlot(request.getWorkDate(), request.getStartTime(), request.getEndTime());
@@ -96,7 +93,6 @@ public class CastShiftRequestService {
    * 確定シフトへの変更申請を提出する。対象シフトは本人の cast 行に属し（cast_id 自限がそのまま店舗自限として機能する）、かつ CONFIRMED
    * であることを要求する。店舗はシフトから導出し、シフト自体はこの時点では変更しない（店舗の承認で更新される）。
    */
-  @StoreScopeExempt(reason = "対象シフトを本人の cast_id 集合に属するものだけへ絞ることが境界で、store_id はそのシフトから導出する")
   @Transactional
   public ShiftRequestResponse submitChange(String email, ShiftChangeRequestCreateRequest request) {
     validateRequestedSlot(request.getWorkDate(), request.getStartTime(), request.getEndTime());
@@ -155,7 +151,6 @@ public class CastShiftRequestService {
    * @param cursor 続きの位置。null なら先頭から
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
-  @StoreScopeExempt(reason = "本人の cast_id 集合の一致を問い合わせ自体に載せることが唯一の境界（cast 自限が店舗自限としても働く）")
   @Transactional(readOnly = true)
   public CursorPage<CastShiftRequestResponse> history(
       String email, String cursor, int requestedSize) {

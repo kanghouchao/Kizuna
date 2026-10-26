@@ -13,7 +13,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 /**
  * 排班の事実の唯一の正本。系列は双起点一主幹で、キャストの出勤希望の承認から生まれる行と店舗が直接作成する行の どちらもこの表に合流する。
@@ -22,8 +21,6 @@ import org.hibernate.annotations.Filter;
  */
 @Entity
 @Table(name = "t_shifts")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

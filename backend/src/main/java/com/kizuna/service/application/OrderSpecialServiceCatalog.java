@@ -11,7 +11,6 @@ import com.kizuna.service.domain.ServiceRevision;
 import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import java.time.OffsetDateTime;
@@ -31,7 +30,6 @@ public class OrderSpecialServiceCatalog {
   private final ServiceConsentEventRepository events;
   private final CastEnrollmentRepository enrollments;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public SpecialServiceTerms current(Long storeId, String enrollment, String serviceId) {
     requireEnrollment(storeId, enrollment);
@@ -59,7 +57,6 @@ public class OrderSpecialServiceCatalog {
   }
 
   /** 在籍資格・候補・総数を同じ断面で判定する。 */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<SpecialServiceTerms> candidates(
       Long storeId, String enrollment, String search, int page, int size) {
@@ -69,7 +66,6 @@ public class OrderSpecialServiceCatalog {
         storeId, enrollment, search == null ? "" : search, PageRequest.of(page, size));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public SpecialServiceTerms historical(Long storeId, String id) {
     return terms(
@@ -81,7 +77,6 @@ public class OrderSpecialServiceCatalog {
   }
 
   /** 歴史版本と各項目の現在の削除状態を同じ断面から返す。 */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<SpecialServiceTerms> history(
       Long storeId, String search, String cursor, int size) {
@@ -108,7 +103,6 @@ public class OrderSpecialServiceCatalog {
         .map(r -> terms(storeId, r, null));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public String status(Long storeId, String enrollment, String serviceId) {
     if (enrollment == null

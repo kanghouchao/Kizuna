@@ -13,7 +13,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 /**
  * 出勤希望集約。キャストが所属店舗を指定して提出する勤務希望（新規希望・確定シフトへの変更申請の両種別）。
@@ -22,8 +21,6 @@ import org.hibernate.annotations.Filter;
  */
 @Entity
 @Table(name = "t_shift_requests")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

@@ -18,7 +18,6 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
@@ -48,7 +47,6 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
@@ -134,8 +132,10 @@ class DailyRemunerationPostgresTest {
 
   private String enrollment(CastEnrollmentStatus status) {
     var enrollment = CastEnrollment.builder().castId(personId).status(status).build();
+    enrollment.setStoreId(storeId);
     em.persist(enrollment);
     var profile = CastProfile.builder().enrollmentId(enrollment.getId()).name("保存された源氏名").build();
+    profile.setStoreId(storeId);
     em.persist(profile);
     return enrollment.getId();
   }
@@ -162,6 +162,7 @@ class DailyRemunerationPostgresTest {
             .completionInvalidated(invalidated)
             .completedAt(OffsetDateTime.parse("2026-10-01T01:00:00+09:00"))
             .build();
+    order.setStoreId(storeId);
     em.persist(order);
     return order.getId();
   }
@@ -287,13 +288,11 @@ class DailyRemunerationPostgresTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableAspectJAutoProxy
   @Import({
     DailyRemunerationService.class,
     SelfMonthlyRemunerationQuery.class,
     ActorIdentityService.class,
-    StoreScopeStampListener.class,
-    StoreFilterEnable.class
+    StoreScopeStampListener.class
   })
   static class Config {
     @Bean

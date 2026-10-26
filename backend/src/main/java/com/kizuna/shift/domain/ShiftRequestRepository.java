@@ -68,9 +68,8 @@ public interface ShiftRequestRepository extends StoreScopedRepository<ShiftReque
       @Param("cursorId") String cursorId,
       Limit limit);
 
-  // 本人（cast_id 集合、跨店）の出勤希望履歴を店名埋め込みで返す。where 句に店舗の絞りは書かない —
-  // cast_id は当人が所属する店にしか存在しないため、cast_id 自限がそのまま店舗自限として機能する
-  // （storeFilter は経由しない）。
+  // 本人（cast_id 集合、店舗を跨ぐ）の出勤希望履歴を店名込みで返す。where 句に店舗の絞りは書かない —
+  // cast_id は当人が所属する店にしか存在しないため、cast_id で本人に限ればそのまま店舗も限られる。
   String HISTORY_SELECT =
       """
       select r.id as id, r.workDate as workDate, r.startTime as startTime, r.endTime as endTime,

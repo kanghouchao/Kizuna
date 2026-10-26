@@ -11,7 +11,6 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>申領できないトークンは理由を区別せず<b>同形のエラー</b>で返す。不在・期限切れ・使用済み・巻き戻し済みを撃ち分けると、応答の違いから
  * 受注の存在と完了状態を辿れてしまう。並行申領の敗者も同じ形へ落ちる（{@link OrderReceiptTokenRepository#findByTokenDigest} の行ロック）。
  *
- * <p>会員は店舗を授権されないため店舗文脈（{@code @StoreScoped}）を確立できず storeFilter も働かない。トークンのダイジェスト一致が
- * 申領を成立させる唯一の材料であり、受注は店舗を跨いで引く（トークンは グループ帰属で、店舗で絞ると照合そのものが成立しない）。
+ * <p>会員は店舗を授権されないため店舗文脈を持たない。トークンのダイジェスト一致が 申領を成立させる唯一の材料であり、受注は店舗を跨いで引く（トークンは
+ * グループ帰属で、店舗で絞ると照合そのものが成立しない）。
  */
 @Service
 @RequiredArgsConstructor
@@ -48,7 +47,6 @@ public class MemberReceiptClaimService {
   private final AttributionMaterializer materializer;
 
   /** 伝票トークンを申領し、その来店を本人の記録として確定する。 */
-  @StoreScopeExempt(reason = "トークンの鍵付きダイジェスト一致だけが申領を成立させる材料で、受注は店舗を跨いで引く（店舗で絞ると照合が成立しない）")
   @Transactional
   public MemberReceiptClaimResponse claim(String email, String rawToken) {
     Long userId = actorIdentityService.requireUserId(email);

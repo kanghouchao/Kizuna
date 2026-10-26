@@ -1,7 +1,6 @@
 package com.kizuna.storeprofile.application;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
 import com.kizuna.storeprofile.api.dto.StoreProfileResponse;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
@@ -18,7 +17,6 @@ public class StoreProfileService {
   private final StoreProfileRepository storeProfileRepository;
   private final StoreProfileMapper storeProfileMapper;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public StoreProfileResponse get(Long storeId) {
     StoreProfile config =
@@ -28,7 +26,6 @@ public class StoreProfileService {
     return storeProfileMapper.toResponse(config);
   }
 
-  @StoreScoped
   @Transactional
   public StoreProfileResponse update(Long storeId, StoreProfileUpdateRequest request) {
     StoreProfile config =

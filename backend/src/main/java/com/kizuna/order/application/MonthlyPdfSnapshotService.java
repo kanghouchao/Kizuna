@@ -5,8 +5,6 @@ import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.StoreNames;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -29,7 +27,6 @@ public class MonthlyPdfSnapshotService {
   private final CastRepository people;
   private final Clock clock;
 
-  @StoreScoped
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
@@ -48,7 +45,6 @@ public class MonthlyPdfSnapshotService {
         budget);
   }
 
-  @StoreScopeExempt(reason = "本人の歴史在籍を既存サービスで検証し、認証主体の本人と店舗だけを全件取得する")
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,

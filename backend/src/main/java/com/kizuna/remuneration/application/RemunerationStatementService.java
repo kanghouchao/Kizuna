@@ -10,8 +10,6 @@ import com.kizuna.remuneration.domain.DailyGuarantee;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.RemunerationAmounts;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
-import com.kizuna.shared.storescope.StoreScopeExempt;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
@@ -33,14 +31,13 @@ public class RemunerationStatementService {
   private final AttendanceFacts attendances;
   private final ActorIdentityService actors;
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public RemunerationStatementResponse store(
       Long storeId, Long person, String month, int orderPage, int bonusPage, int size) {
     return read(storeId, person, month, orderPage, bonusPage, size);
   }
 
-  @StoreScopeExempt(reason = "認証主体の本人と店舗の歴史在籍を照合し、全照会を明示した本人・店舗に限定する")
+  /** 本人の明細。認証主体の本人と店舗の在籍の歴史を照合し（無ければ 404）、全照会を明示した本人・店舗に限る。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public RemunerationStatementResponse self(
       String actor, Long store, String month, int orderPage, int bonusPage, int size) {

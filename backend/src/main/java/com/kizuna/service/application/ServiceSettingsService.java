@@ -14,7 +14,6 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
@@ -44,7 +43,6 @@ public class ServiceSettingsService {
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
-  @StoreScoped
   public Page<ServiceSummary> list(
       Long storeId, ServiceKind kind, boolean deleted, int page, int size) {
     if (page < 0 || size < 1 || size > CursorPage.MAX_SIZE)
@@ -60,13 +58,11 @@ public class ServiceSettingsService {
   }
 
   @Transactional(readOnly = true)
-  @StoreScoped
   public ServiceResponse get(Long storeId, String id) {
     return mapper.response(require(storeId, id));
   }
 
   @Transactional
-  @StoreScoped
   public String create(Long storeId, ServiceCreateRequest request, String actor) {
     stores.lockCastFields(storeId);
     var actorId = actors.requireUserId(actor);
@@ -96,7 +92,6 @@ public class ServiceSettingsService {
   }
 
   @Transactional
-  @StoreScoped
   public ServiceResponse update(
       Long storeId, String id, ServiceUpdateRequest request, String actor) {
     stores.lockCastFields(storeId);
@@ -132,7 +127,6 @@ public class ServiceSettingsService {
   }
 
   @Transactional
-  @StoreScoped
   public void delete(Long storeId, String id, long expectedVersion, String actor) {
     if (expectedVersion < 1) throw new ServiceException("版本は 1 以上で指定してください");
     stores.lockCastFields(storeId);
@@ -156,7 +150,6 @@ public class ServiceSettingsService {
   }
 
   @Transactional(readOnly = true)
-  @StoreScoped
   public CursorPage<ServiceRevisionResponse> history(
       Long storeId, String id, String cursor, int requestedSize) {
     require(storeId, id);

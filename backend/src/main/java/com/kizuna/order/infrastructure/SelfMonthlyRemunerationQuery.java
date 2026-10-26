@@ -43,6 +43,7 @@ public class SelfMonthlyRemunerationQuery {
     return new PageImpl<>(content, page, count);
   }
 
+  /** 本人に在籍の歴史が無い店舗は 404。本人向けの集計はこれで店舗を確かめてから、本人・店舗を明示して引く。 */
   public String storeName(Long personId, Long storeId) {
     return entityManager
         .createQuery("select s.name " + STORES + " and s.id = :storeId", String.class)

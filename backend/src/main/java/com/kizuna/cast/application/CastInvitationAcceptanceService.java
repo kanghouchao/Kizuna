@@ -16,7 +16,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -38,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 招待受諾ユースケース（公開照会・新規登録受諾・既存アカウント受諾）。
  *
- * <p>token は店舗横断で一意なため {@code @StoreScoped} は付けない（グローバル検索）。 受諾は身分作成・档案紐づけ・招待状態遷移を単一トランザクションで確定する。
+ * <p>招待は店舗横断で一意な token で引き、それ以降の照会はその招待の店舗に限る。受諾は本人アカウントの作成・プロフィールへの紐づけ・招待の状態遷移を 単一トランザクションで確定する。
  */
 @Service
 @RequiredArgsConstructor
@@ -46,9 +45,6 @@ public class CastInvitationAcceptanceService {
 
   private static final String DUPLICATE_EMAIL_MESSAGE =
       "このメールアドレスは既に登録されています。既存アカウントでログインして受諾してください";
-
-  private static final String TOKEN_IS_THE_BOUNDARY =
-      "招待 token は店舗横断で一意かつ推測不能で、辿れる档案・店舗は token が指す 1 件に限られる";
 
   private final CastInvitationRepository castInvitationRepository;
   private final CastEnrollmentRepository castRepository;
@@ -59,7 +55,6 @@ public class CastInvitationAcceptanceService {
   private final PasswordEncoder passwordEncoder;
 
   /** 招待を照会する。受諾可否のビュー状態と店舗名・档案名を返す。 */
-  @StoreScopeExempt(reason = TOKEN_IS_THE_BOUNDARY)
   @Transactional(readOnly = true)
   public CastInvitationDetailResponse view(String token) {
     CastInvitation invitation = findByToken(token);
@@ -75,7 +70,6 @@ public class CastInvitationAcceptanceService {
   }
 
   /** 新規登録で受諾する。CAST・SPECIFIC_STORES{招待店舗} の身分を作成し、档案へ紐づけて招待を受諾済みにする。 */
-  @StoreScopeExempt(reason = TOKEN_IS_THE_BOUNDARY)
   @Transactional
   public CastAcceptanceResponse acceptAsNewUser(String token, CastInvitationAcceptRequest request) {
     CastInvitation invitation = findByToken(token);
@@ -105,7 +99,6 @@ public class CastInvitationAcceptanceService {
    * 既存の CAST アカウントで受諾する。SPECIFIC_STORES は所属店舗集合に招待店舗を冪等 union し、ALL_STORES
    * は全店アクセス権をそのまま保持する（降格しない）。 いずれも档案へ紐づけて招待を受諾済みにする。
    */
-  @StoreScopeExempt(reason = TOKEN_IS_THE_BOUNDARY)
   @Transactional
   public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
     CastInvitation invitation = findByToken(token);

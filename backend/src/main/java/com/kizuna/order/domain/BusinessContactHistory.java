@@ -10,14 +10,11 @@ import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "t_order_business_contact_history")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 public class BusinessContactHistory extends StoreScopedEntity {

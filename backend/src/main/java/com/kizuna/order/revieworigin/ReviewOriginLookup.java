@@ -1,7 +1,6 @@
 package com.kizuna.order.revieworigin;
 
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.shared.storescope.StoreScoped;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -13,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReviewOriginLookup {
   private final OrderRepository orders;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Optional<ReviewOriginFacts> find(Long storeId, String orderId) {
     if (storeId == null) throw new AccessDeniedException("受注の店舗指定を確認してください");

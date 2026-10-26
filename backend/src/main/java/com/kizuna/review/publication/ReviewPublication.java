@@ -5,7 +5,6 @@ import com.kizuna.review.domain.ReviewRepository;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreScoped;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -20,7 +19,6 @@ public class ReviewPublication {
   private final ReviewRepository reviews;
   private final StoreContext context;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Map<String, ApprovedReviewProjection> current(Long storeId, Set<String> reviewIds) {
     if (storeId == null || !storeId.equals(context.getStoreId()))

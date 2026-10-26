@@ -1,7 +1,6 @@
 package com.kizuna.order.reporting;
 
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreScoped;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,7 +18,6 @@ public class AdvertisingOrderReader {
 
   public record Order(String mediaName, boolean zeroAmount) {}
 
-  @StoreScoped
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
   public List<Order> read(Long storeId, LocalDate from, LocalDate to, int limit) {

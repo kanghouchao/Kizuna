@@ -54,7 +54,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 従業員管理ユースケース。対象は本人種別 STAFF の全アカウントで、CAST / MEMBER は権限モデルの外なので在否も出さない。
  *
  * <p>行使者の店舗集合は要求ごとに解決された作用域（{@link StoreScopeHolder}）から、権限並集は本人の行から取る。User は StoreScopedEntity
- * ではないため storeFilter の機構は乗らず、店舗境界は本クラスの明示検証が唯一の担保である。
+ * ではないため、店舗境界は本クラスの明示検証が唯一の担保である。
  *
  * <p>委譲の守衛は 2 条のみ — 付与するロールの権限並集 ⊆ 行使者の権限並集、対象の店舗集合 ⊆ 行使者の店舗集合。編集・停止・再開・再設定の対象も 同じ 2 条（{@link
  * #editableBy}）で判定する。同格の相互保護のような硬い規則は置かず、既定ロールの編集で運用が決める。

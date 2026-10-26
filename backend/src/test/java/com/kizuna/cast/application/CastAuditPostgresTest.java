@@ -17,7 +17,6 @@ import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -50,7 +49,6 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -124,20 +122,24 @@ class CastAuditPostgresTest {
     transactions.executeWithoutResult(
         status -> {
           var definitions = context.getBean(CastFieldDefinitionRepository.class);
-          definitions.save(
+          var privateField =
               CastFieldDefinition.builder()
                   .key("private-key")
                   .label("秘密の内部項目")
                   .displayOrder(0)
                   .isPublic(false)
-                  .build());
-          definitions.save(
+                  .build();
+          privateField.setStoreId(storeId);
+          definitions.save(privateField);
+          var publicField =
               CastFieldDefinition.builder()
                   .key("public-key")
                   .label("秘密の公開項目")
                   .displayOrder(1)
                   .isPublic(true)
-                  .build());
+                  .build();
+          publicField.setStoreId(storeId);
+          definitions.save(publicField);
         });
     context.getBean(StoreContext.class).clear();
   }
@@ -487,7 +489,6 @@ class CastAuditPostgresTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableAspectJAutoProxy
   @EnableJpaRepositories(
       basePackageClasses = {
         AuditEventRepository.class,
@@ -498,7 +499,6 @@ class CastAuditPostgresTest {
     AuditWriter.class,
     BusinessAudit.class,
     StoreScopeStampListener.class,
-    StoreFilterEnable.class,
     CastService.class,
     CastEnrollmentService.class,
     CastInvitationService.class

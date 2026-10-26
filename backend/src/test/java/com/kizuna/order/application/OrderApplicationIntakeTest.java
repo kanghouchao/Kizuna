@@ -109,7 +109,7 @@ class OrderApplicationIntakeTest {
   @Test
   @DisplayName("指名の判定は申請先の店舗で行うこと")
   void checksTheNominationAgainstTheRequestedStore() {
-    // 申請者は店舗を授権されず storeFilter も働かないため、店舗の一致は問い合わせ自体に載せるしかない
+    // 申請者は店舗を授権されないため、店舗の一致は問い合わせ自体に載せるしかない
     when(nominatableCast.findForUpdate(OTHER_STORE_ID, "cast-1")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> intake.validateRequestedVisit(OTHER_STORE_ID, today(), "cast-1"))

@@ -12,13 +12,10 @@ import jakarta.persistence.Table;
 import java.util.Objects;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.Type;
 
 @Entity
 @Table(name = "t_applicants")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 public class Applicant extends StoreScopedEntity {

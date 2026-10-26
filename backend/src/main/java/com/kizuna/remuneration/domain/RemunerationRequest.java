@@ -9,12 +9,9 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 @Entity
 @Table(name = "t_remuneration_requests")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RemunerationRequest extends StoreScopedEntity {

@@ -6,7 +6,6 @@ import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
-import com.kizuna.shared.storescope.StoreScoped;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import lombok.RequiredArgsConstructor;
@@ -32,13 +31,11 @@ public class AdvertisingOrderCostService {
       OffsetDateTime generatedAt,
       AdvertisingOrderCostReport report) {}
 
-  @StoreScoped
   public Snapshot view(Long storeId, String month) {
     return AdvertisingFailures.run(
         () -> read(storeId, month, new DocumentBudget(properties.getAdvertisingCost())));
   }
 
-  @StoreScoped
   public Snapshot snapshot(Long storeId, String month, DocumentBudget budget) {
     return read(storeId, month, budget);
   }

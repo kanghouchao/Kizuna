@@ -15,7 +15,6 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import java.util.ArrayList;
@@ -39,7 +38,6 @@ public class MergePreparation {
   public record Prepared(CustomerMergePreviewResponse response, List<String> movedOrderIds) {}
 
   /** 呼出元が両顧客をロックし、受注の状態変更も快照取得から確定まで直列化する。 */
-  @StoreScoped
   public Prepared prepare(Long storeId, String survivingId, CustomerMergePreviewRequest input) {
     var orders = merges.lockOrders(storeId, List.of(survivingId, input.mergedCustomerId()));
     var surviving = snapshot(storeId, survivingId);
@@ -129,7 +127,6 @@ public class MergePreparation {
         movedIds);
   }
 
-  @StoreScoped
   public MergeSnapshot snapshot(Long storeId, String id) {
     var rows = contacts.findByStoreIdAndCustomerIdOrderByIdAsc(storeId, id);
     var contactStates =

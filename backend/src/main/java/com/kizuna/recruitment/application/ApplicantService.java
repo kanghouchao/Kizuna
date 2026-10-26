@@ -18,7 +18,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
@@ -46,7 +45,6 @@ public class ApplicantService {
   private final ApplicantMapper mapper;
   private final BusinessAudit audit;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Page<ApplicantSummaryResponse> list(
       Long storeId, String search, ApplicantStatus status, Pageable pageable) {
@@ -78,13 +76,11 @@ public class ApplicantService {
         .map(mapper::toSummary);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public ApplicantResponse get(Long storeId, String id) {
     return mapper.toResponse(require(storeId, id));
   }
 
-  @StoreScoped
   @Transactional
   public ApplicantResponse create(Long storeId, ApplicantIntakeRequest request, String actorEmail) {
     Long actorId = actorId(actorEmail);
@@ -96,7 +92,6 @@ public class ApplicantService {
     return mapper.toResponse(applicant);
   }
 
-  @StoreScoped
   @Transactional
   public ApplicantResponse update(
       Long storeId, String id, ApplicantUpdateRequest request, String actorEmail) {
@@ -109,7 +104,6 @@ public class ApplicantService {
     return mapper.toResponse(applicant);
   }
 
-  @StoreScoped
   @Transactional
   public ApplicantResponse interview(
       Long storeId, String id, ApplicantInterviewRequest request, String actorEmail) {
@@ -122,7 +116,6 @@ public class ApplicantService {
     return mapper.toResponse(applicant);
   }
 
-  @StoreScoped
   @Transactional
   public ApplicantResponse transition(
       Long storeId, String id, ApplicantTransitionRequest request, String actorEmail) {
@@ -138,7 +131,6 @@ public class ApplicantService {
     return mapper.toResponse(applicant);
   }
 
-  @StoreScoped
   @Transactional
   public ApplicantResponse decide(Long storeId, String id, ApplicantTransitionRequest request) {
     locked(storeId, id, request.version());
@@ -147,7 +139,6 @@ public class ApplicantService {
     throw new ConflictException("選考の最終責任者が未設定のため、採否を確定できません");
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<ApplicantHistoryResponse> history(
       Long storeId, String id, String cursor, int requestedSize) {

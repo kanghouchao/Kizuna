@@ -13,7 +13,6 @@ import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
@@ -46,7 +45,6 @@ public class CustomerMemberLinkService {
   private final UserRepository userRepository;
   private final BusinessAudit audit;
 
-  @StoreScoped
   @Transactional
   public CustomerMemberLinkResponse link(
       Long storeId,
@@ -127,7 +125,6 @@ public class CustomerMemberLinkService {
         saved.getId(), true, saved.getMemberCode(), saved.getLinkedAt());
   }
 
-  @StoreScoped
   @Transactional
   public void unlink(
       Long storeId,
@@ -174,7 +171,6 @@ public class CustomerMemberLinkService {
   /**
    * 顧客に現に有効な紐づけ。無ければ 404 — 「紐づいていない」を 200 で表すと、呼出側が本体を読んでから もう一度分岐することになり、操作の可否を状態の有無だけで決められなくなる。
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public CustomerMemberLinkResponse current(Long storeId, String customerId) {
     requireCustomer(storeId, customerId);
@@ -192,7 +188,6 @@ public class CustomerMemberLinkService {
    *
    * <p>履歴は解除・再紐づけのたびに増え続けるので、上限の無い一覧では返さない。
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<CustomerMemberLinkHistoryResponse> history(
       Long storeId, String customerId, String cursor, int requestedSize) {

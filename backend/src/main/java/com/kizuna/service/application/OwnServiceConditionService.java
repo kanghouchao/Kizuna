@@ -16,7 +16,6 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
@@ -46,7 +45,6 @@ public class OwnServiceConditionService {
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
-  @StoreScoped
   public Page<OwnServiceConditionSummary> list(
       Long storeId, String actor, ServiceKind kind, int page, int size) {
     String enrollment = requireEnrollment(storeId, actors.requireUserId(actor));
@@ -68,7 +66,6 @@ public class OwnServiceConditionService {
   }
 
   @Transactional
-  @StoreScoped
   public OwnServiceConditionSummary decide(
       Long storeId, String actor, String id, OwnConsentRequest request) {
     stores.lockCastFields(storeId);

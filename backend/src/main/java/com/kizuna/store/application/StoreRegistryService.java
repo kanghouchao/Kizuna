@@ -6,7 +6,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreStatusVO;
 import com.kizuna.store.api.dto.StoreUpdateDTO;
@@ -36,9 +35,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class StoreRegistryService {
 
-  /** 店舗台帳（Store）は店舗スコープ表ではない。StoreProfile を触るのは {@code create} だけで、他の方法は素通しにならない。 */
-  private static final String REGISTRY_ONLY = "店舗スコープ表（StoreProfile）を読まず、店舗台帳（Store）だけを扱う HQ 管理面";
-
   private final StoreRepository storeRepository;
   private final StoreProfileRepository storeProfileRepository;
   private final CompletedOrderCheck completedOrderCheck;
@@ -61,7 +57,6 @@ public class StoreRegistryService {
           DbConstraint.FK_T_BONUS_AWARDS_STORE,
           () -> new ServiceException("ボーナスの記録が存在する店舗は削除できません"));
 
-  @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional(readOnly = true)
   public Page<StoreVO> list(String search, Pageable pageable) {
     // 派生クエリの Containing は null を渡せないため、絞り込み無し（null）は空パターンで表す。
@@ -71,13 +66,11 @@ public class StoreRegistryService {
         .map(this::toDto);
   }
 
-  @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional(readOnly = true)
   public StoreVO getById(String id) {
     return storeRepository.findById(parseId(id)).map(this::toDto).orElseThrow(() -> notFound(id));
   }
 
-  @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional(readOnly = true)
   // Optional は unwrap されるため未登録ドメインは null。cache-null-values=false の Redis に
   // null を書くと IllegalArgumentException → 500 になるのでキャッシュ対象外にする
@@ -92,7 +85,6 @@ public class StoreRegistryService {
    *
    * <p>ドメインの重複は、制約違反を捕まえるのではなく事前に照会して判定する — 一意制約はここを擦り抜けた競合を受け止める 最後の一枚（409）であり、業務上の重複判定を委ねる先ではない。
    */
-  @StoreScopeExempt(reason = "HQ の店舗登録で既定 StoreProfile を起こす書き込みで、store_id は今作った店舗の id を明示設定する")
   @Transactional
   public Long create(StoreCreateDTO req) {
     if (storeRepository.findByDomain(req.getDomain()).isPresent()) {
@@ -109,7 +101,6 @@ public class StoreRegistryService {
 
   // storeByDomain のキーは domain。だが注釈の式から見えるのは引数の id と戻り値（void）だけで、
   // domain はメソッド本体のローカルにしか現れずキーとして書けない。delete と同じ全件失効に揃える。
-  @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional
   @CacheEvict(value = "storeByDomain", allEntries = true)
   public void update(String id, StoreUpdateDTO req) {
@@ -130,7 +121,6 @@ public class StoreRegistryService {
    * <p>当日実績は別の理由で止める。実績と訂正履歴は法定保存（労基法 109 条）の対象で、店舗削除の連鎖に巻き込んで 消してよい行ではない（ADR
    * 0014）。断りの文言を分けるのは、次の一手が「記録が読めなくなる」側と違うためである。
    */
-  @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional
   @CacheEvict(value = "storeByDomain", allEntries = true)
   public void delete(String id) {
@@ -156,7 +146,6 @@ public class StoreRegistryService {
     }
   }
 
-  @StoreScopeExempt(reason = REGISTRY_ONLY)
   @Transactional(readOnly = true)
   public StoreStatusVO stats() {
     return new StoreStatusVO(storeRepository.count());

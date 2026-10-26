@@ -29,7 +29,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
@@ -66,7 +65,6 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -183,10 +181,9 @@ class ServiceAuditPostgresTest {
               var person =
                   repo.findByUserId(castId)
                       .orElseGet(() -> repo.saveAndFlush(Cast.builder().userId(castId).build()));
-              return context
-                  .getBean(CastEnrollmentRepository.class)
-                  .saveAndFlush(CastEnrollment.builder().castId(person.getId()).build())
-                  .getId();
+              var row = CastEnrollment.builder().castId(person.getId()).build();
+              row.setStoreId(storeId);
+              return context.getBean(CastEnrollmentRepository.class).saveAndFlush(row).getId();
             });
   }
 
@@ -258,6 +255,8 @@ class ServiceAuditPostgresTest {
                   .status(OrderStatus.CONFIRMED)
                   .castId(enrollment)
                   .build();
+          // 子の明細は採用時に受注の店舗を写すので、店舗は採用より先に置く。
+          order.setStoreId(currentStore());
           order.adoptServices(
               new OrderCourse(
                   "course",
@@ -612,7 +611,6 @@ class ServiceAuditPostgresTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableAspectJAutoProxy
   @EnableJpaRepositories(
       basePackageClasses = {
         AuditEventRepository.class,
@@ -625,7 +623,6 @@ class ServiceAuditPostgresTest {
     AuditWriter.class,
     BusinessAudit.class,
     StoreScopeStampListener.class,
-    StoreFilterEnable.class,
     ServiceSettingsService.class,
     OwnServiceConditionService.class,
     ActorIdentityService.class,

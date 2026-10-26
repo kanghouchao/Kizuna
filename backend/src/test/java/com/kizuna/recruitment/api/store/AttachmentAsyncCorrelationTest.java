@@ -17,7 +17,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreScopeExecutor;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.RequestCorrelationFilter;
 import java.nio.file.Path;
@@ -47,9 +46,7 @@ class AttachmentAsyncCorrelationTest {
     var admission = mock(AttachmentBodyReceiver.Admission.class);
     var store = new StoreContext();
     var holder = new StoreScopeHolder();
-    var scope = new StoreScopeExecutor(store, holder, id -> true);
-    var controller =
-        new AttachmentController(service, receiver, scope, holder, new AppProperties());
+    var controller = new AttachmentController(service, receiver, new AppProperties());
     var filter = new RequestCorrelationFilter(store, holder);
     var receivedId = new AtomicReference<String>();
     var storedId = new AtomicReference<String>();
@@ -76,7 +73,7 @@ class AttachmentAsyncCorrelationTest {
     try (var worker = Executors.newSingleThreadExecutor()) {
       for (int attempt = 0; attempt < 2; attempt++) {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
-        // 要求スレッドで解決済みの作用域。作業スレッドへ運ばれなければ runInStore が fail-closed に拒む。
+        // 要求スレッドの作用域。要求後に filter が掃除し、作業スレッドへ漏れないことを確かめる。
         holder.install(() -> new StoreScope(false, Set.of(1L)));
         var task = new AtomicReference<WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>>>();
         var request = new MockHttpServletRequest();

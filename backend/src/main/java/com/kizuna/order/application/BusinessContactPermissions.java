@@ -13,8 +13,6 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
@@ -47,7 +45,6 @@ public class BusinessContactPermissions {
     };
   }
 
-  @StoreScopeExempt(reason = "要求の値だけを検証し、店舗のデータを読み書きしない")
   public void validate(ContactSnapshot snapshot, List<BusinessContactPermissionRequest> input) {
     requests(snapshot, input);
   }
@@ -73,7 +70,6 @@ public class BusinessContactPermissions {
     return result;
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void record(
       Order order,
@@ -110,7 +106,6 @@ public class BusinessContactPermissions {
     }
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
   public List<BusinessContactPermissionResponse> describe(Order order) {
     var result = new ArrayList<BusinessContactPermissionResponse>();
@@ -139,7 +134,6 @@ public class BusinessContactPermissions {
     return result;
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<BusinessContactHistoryResponse> history(
       Long storeId, String orderId, String cursor, int requestedSize) {

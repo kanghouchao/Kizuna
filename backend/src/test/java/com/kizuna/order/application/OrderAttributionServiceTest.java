@@ -134,14 +134,14 @@ class OrderAttributionServiceTest {
   }
 
   @Test
-  @DisplayName("他店舗の受注（storeFilter で引けない）は帰属記録に触れる前に 404 になること")
+  @DisplayName("他店舗の受注（店舗条件で引けない）は帰属記録に触れる前に 404 になること")
   void getRejectsAnOrderOutsideTheStore() {
     Mockito.when(orderRepository.findByIdAndStoreId(ORDER_ID, STORE_ID))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.currentAttribution(STORE_ID, ORDER_ID))
         .isInstanceOf(NotFoundException.class);
-    // 帰属記録は グループ帰属で店舗行分離機構に載らない。受注を引けない時点で終えないと他店舗の会員コードが漏れる
+    // 帰属記録は グループ帰属で店舗列を持たない。受注を引けない時点で終えないと他店舗の会員コードが漏れる
     Mockito.verifyNoInteractions(orderAttributionRepository);
   }
 

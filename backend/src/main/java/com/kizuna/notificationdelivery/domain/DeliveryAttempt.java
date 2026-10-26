@@ -11,12 +11,9 @@ import java.time.OffsetDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 @Entity
 @Table(name = "t_notification_attempts")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DeliveryAttempt extends StoreScopedEntity {

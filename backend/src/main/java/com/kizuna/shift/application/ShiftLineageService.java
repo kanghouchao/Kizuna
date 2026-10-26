@@ -1,7 +1,6 @@
 package com.kizuna.shift.application;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.api.dto.ActorResponse;
@@ -50,7 +49,6 @@ public class ShiftLineageService {
    * 本の正本として見せるという読み口の目的が崩れる。 断面を固定して根を断つのは {@code CustomerService} / {@code OrderService}
    * の群読み口と同じ選択である。
    */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public ShiftDetailResponse detail(Long storeId, String id) {
     Shift shift =
@@ -124,7 +122,6 @@ public class ShiftLineageService {
    * 有界でない変更申請はカーソルで辿り、高々 1 本の出生 NEW だけを詳細へ残す（backend/AGENTS.md の Pagination）。
    * 履歴と実行主体を別々に取得するため、途中の承認で同じ応答内の状態が食い違わないよう断面を固定する。
    */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<ShiftRequestLineageResponse> changeRequests(
       Long storeId, String shiftId, String cursor, int requestedSize) {

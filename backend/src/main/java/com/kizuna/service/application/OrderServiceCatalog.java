@@ -5,7 +5,6 @@ import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import java.time.OffsetDateTime;
@@ -26,7 +25,6 @@ public class OrderServiceCatalog {
   private final ServiceItemRepository items;
   private final ServiceRevisionRepository revisions;
 
-  @StoreScoped
   @Transactional
   public OrderServiceTerms current(Long storeId, String id, SelectionKind kind) {
     var item =
@@ -40,7 +38,6 @@ public class OrderServiceCatalog {
         .orElseThrow(() -> new NotFoundException("サービスの版本が見つかりません"));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public OrderServiceTerms historical(Long storeId, String revisionId, SelectionKind kind) {
     return revisions
@@ -48,7 +45,6 @@ public class OrderServiceCatalog {
         .orElseThrow(() -> new NotFoundException("サービスの歴史版本が見つかりません"));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Page<OrderServiceTerms> candidates(
       Long storeId, SelectionKind kind, String search, int page, int size) {
@@ -60,7 +56,6 @@ public class OrderServiceCatalog {
         PageRequest.of(page, size));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<OrderServiceTerms> history(
       Long storeId, SelectionKind kind, String search, String cursor, int size) {

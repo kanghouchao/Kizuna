@@ -12,15 +12,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 /**
  * キャスト招待集約。1 档案につき有効な招待は最新の 1 枚のみ（再発行で旧 PENDING は失効する）。 リンク発行後の受諾で {@link Cast} にグループ共通アカウントを紐づける。
  */
 @Entity
 @Table(name = "t_cast_invitations")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

@@ -10,7 +10,6 @@ import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.order.contact.BusinessContactDecision;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreScoped;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +33,6 @@ public class DeliveryAttempts {
 
   private record Locked(NotificationDelivery delivery, DeliveryAttempt attempt) {}
 
-  @StoreScoped
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public boolean claim(DeliveryDispatch event) {
     var locked = lock(event);
@@ -51,7 +49,6 @@ public class DeliveryAttempts {
     return true;
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public Envelope prepare(DeliveryDispatch event) {
     var locked = lock(event);
@@ -66,7 +63,6 @@ public class DeliveryAttempts {
         decision.value(), locked.delivery().getSubject(), locked.delivery().getBody());
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void complete(DeliveryDispatch event, EmailTransport.Result result) {
     var locked = lock(event);

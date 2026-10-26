@@ -19,7 +19,6 @@ import com.kizuna.remuneration.domain.RemunerationRequest;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -45,7 +44,6 @@ public class RemunerationManagementService {
   private final BusinessAudit audit;
   private final ObjectMapper json;
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public GuaranteeListResponse guarantees(Long storeId, Long personId, int page, int size) {
     requirePerson(storeId, personId);
@@ -56,7 +54,6 @@ public class RemunerationManagementService {
             .map(GuaranteeResponse::of));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<BonusResponse> bonuses(
       Long storeId, Long personId, String month, int page, int size) {
@@ -72,7 +69,6 @@ public class RemunerationManagementService {
         .map(BonusResponse::of);
   }
 
-  @StoreScoped
   @Transactional
   public GuaranteeMutationResponse createGuarantee(
       Long storeId, GuaranteeCreateRequest request, String actor) {
@@ -119,7 +115,6 @@ public class RemunerationManagementService {
         });
   }
 
-  @StoreScoped
   @Transactional
   public GuaranteeMutationResponse correctGuarantee(
       Long storeId, String id, GuaranteeCorrectionRequest request, String actor) {
@@ -163,7 +158,6 @@ public class RemunerationManagementService {
         });
   }
 
-  @StoreScoped
   @Transactional
   public GuaranteeMutationResponse cancelGuarantee(
       Long storeId, String id, CancellationRequest request, String actor) {
@@ -199,7 +193,6 @@ public class RemunerationManagementService {
         });
   }
 
-  @StoreScoped
   @Transactional
   public BonusMutationResponse createBonus(Long storeId, BonusCreateRequest request, String actor) {
     requirePerson(storeId, request.personId());
@@ -237,7 +230,6 @@ public class RemunerationManagementService {
         });
   }
 
-  @StoreScoped
   @Transactional
   public BonusMutationResponse correctBonus(
       Long storeId, String id, BonusCorrectionRequest request, String actor) {
@@ -272,7 +264,6 @@ public class RemunerationManagementService {
         });
   }
 
-  @StoreScoped
   @Transactional
   public BonusMutationResponse cancelBonus(
       Long storeId, String id, CancellationRequest request, String actor) {
@@ -307,7 +298,6 @@ public class RemunerationManagementService {
         });
   }
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<RemunerationChangeResponse> guaranteeChanges(
       Long storeId, String id, String cursor, int size) {
@@ -315,7 +305,6 @@ public class RemunerationManagementService {
     return history(storeId, "GUARANTEE", id, cursor, size);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<RemunerationChangeResponse> bonusChanges(
       Long storeId, String id, String cursor, int size) {

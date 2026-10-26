@@ -4,8 +4,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.shared.storescope.StoreSetScoped;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import java.time.Clock;
@@ -26,7 +24,6 @@ public class OperationalReportReader {
   private final AppProperties properties;
   private final Clock clock;
 
-  @StoreScoped
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
@@ -35,7 +32,6 @@ public class OperationalReportReader {
     return read(new StoreScope(false, Set.of(storeId)), storeId, from, to);
   }
 
-  @StoreSetScoped
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
@@ -51,7 +47,7 @@ public class OperationalReportReader {
     int maxStores = settings.getMaxStores();
     if (maxOrders < 1 || maxOrders > 100_000 || maxStores < 1 || maxStores > 10_000)
       throw new ServiceUnavailableException("帳票件数の設定が範囲外です。管理者へお問い合わせください");
-    // Store は行フィルタの対象外なので、無注文店を含む一覧にも授権集合を明示する。
+    // 無注文店を含む一覧のため店舗台帳から引き、授権集合は s.id の条件に明示する。
     String storesFrom = "from com.kizuna.store.domain.Store s where 1 = 1";
     if (storeId != null) storesFrom += " and s.id = :storeId";
     else if (!scope.allStores()) storesFrom += " and s.id in :storeIds";

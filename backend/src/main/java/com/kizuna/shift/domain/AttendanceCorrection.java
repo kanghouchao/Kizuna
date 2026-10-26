@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 /**
  * 当日実績が 1 回訂正された事実。編集前の行の姿・訂正者・時刻を持つ、法定保存対象の全史である（ADR 0014）。
@@ -20,8 +19,6 @@ import org.hibernate.annotations.Filter;
  */
 @Entity
 @Table(name = "t_attendance_corrections")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 public class AttendanceCorrection extends StoreScopedEntity {

@@ -4,7 +4,6 @@ import com.kizuna.order.api.dto.MonthlyRemunerationCastSummary;
 import com.kizuna.order.api.dto.MonthlyRemunerationResponse;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
@@ -20,14 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class MonthlyRemunerationService {
   private final RemunerationQuery query;
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<MonthlyRemunerationCastSummary> casts(
       Long storeId, String search, int page, int size) {
     return query.casts(storeId, search, page(page, size));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public MonthlyRemunerationResponse monthly(
       Long storeId, Long personId, String month, int page, int size) {

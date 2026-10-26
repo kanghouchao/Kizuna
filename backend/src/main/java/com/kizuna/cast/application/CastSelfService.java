@@ -3,7 +3,6 @@ package com.kizuna.cast.application;
 import com.kizuna.cast.api.dto.CastStoreResponse;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +22,6 @@ public class CastSelfService {
   private final UserRepository userRepository;
   private final CastEnrollmentRepository castRepository;
 
-  @StoreScopeExempt(reason = "認証済み email から逆引きした本人の user_id が唯一の境界で、所属店舗の跨店解決自体が業務要件")
   @Transactional(readOnly = true)
   public List<CastStoreResponse> myStores(String email) {
     Long userId =

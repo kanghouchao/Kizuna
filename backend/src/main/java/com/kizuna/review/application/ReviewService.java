@@ -25,7 +25,6 @@ import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
@@ -53,7 +52,6 @@ public class ReviewService {
   private final BusinessAudit audit;
   private final Clock clock;
 
-  @StoreScoped
   @Transactional
   public ReviewWriteResponse create(Long storeId, String email, ReviewInput input, String key) {
     var actor = intakeActor(storeId, email, input);
@@ -86,7 +84,6 @@ public class ReviewService {
     return ReviewWriteResponse.of(response(storeId, row), operation, false);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public ReviewWriteResponse replayCreate(
       Long storeId, String email, ReviewInput input, String key) {
@@ -98,7 +95,6 @@ public class ReviewService {
     return replay(storeId, operation, ReviewFingerprint.receipt(input));
   }
 
-  @StoreScoped
   @Transactional
   public ReviewWriteResponse change(Long storeId, String email, ReviewChange change) {
     var actor = changeActor(storeId, email, change);
@@ -189,7 +185,6 @@ public class ReviewService {
     return ReviewWriteResponse.of(response(storeId, row), operation, false);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public ReviewWriteResponse replayChange(Long storeId, String email, ReviewChange change) {
     var actor = changeActor(storeId, email, change);
@@ -200,7 +195,6 @@ public class ReviewService {
     return replay(storeId, operation, change.fingerprint());
   }
 
-  @StoreScoped
   @Transactional
   public ReviewWriteResponse correct(Long storeId, String email, ReviewCorrection correction) {
     var actor = intakeActor(storeId, email, correction.input());
@@ -298,7 +292,6 @@ public class ReviewService {
     return ReviewWriteResponse.of(response(storeId, row), operation, false);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public ReviewWriteResponse replayCorrection(
       Long storeId, String email, ReviewCorrection correction) {
@@ -310,14 +303,12 @@ public class ReviewService {
     return replay(storeId, operation, correction.fingerprint());
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public ReviewResponse detail(Long storeId, String email, String id) {
     actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
     return response(storeId, find(storeId, id));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<ReviewHistoryResponse> history(
       Long storeId, String email, String id, String cursor, int size) {
@@ -345,7 +336,6 @@ public class ReviewService {
         .map(ReviewHistoryResponse::of);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Page<ReviewSummaryResponse> list(Long storeId, String email, ReviewSearch search) {
     actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
