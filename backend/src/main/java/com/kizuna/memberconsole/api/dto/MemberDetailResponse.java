@@ -10,8 +10,8 @@ import java.util.List;
  * @param withdrawal 退会情報。未退会なら null で応答から消える
  * @param balances 期限別の利用可能残高（合計は {@code balance}）
  * @param rankHistory 昇格の履歴（古い順。3 段のランクなので高々 2 件）
- * @param links 閲覧者の店舗集合内の関連（新しい順、解除済みを含む）
- * @param otherStoreLinkCount 店舗集合外の関連の件数
+ * @param links 閲覧者の店舗集合内の店舗ごとの最新の関連（新しい順、解除済みを含む。全区間の履歴は顧客側の紐づけ履歴）
+ * @param otherStoreLinkCount 店舗集合外で関連を持つ店舗の数
  */
 public record MemberDetailResponse(
     long id,

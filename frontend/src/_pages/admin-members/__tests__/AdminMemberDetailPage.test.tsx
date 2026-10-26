@@ -84,7 +84,7 @@ it('身分・期限別残高・ランク履歴・店舗集合内の関連と集�
   expect(screen.getByText('ブロンズ → シルバー')).toBeInTheDocument();
   expect(screen.getByText('本店')).toBeInTheDocument();
   expect(screen.getByText('山田')).toBeInTheDocument();
-  expect(screen.getByText('担当外の店舗に 2 件の関連があります。')).toBeInTheDocument();
+  expect(screen.getByText('担当外の 2 店舗に関連があります。')).toBeInTheDocument();
   expect(await screen.findByText('退会消去')).toBeInTheDocument();
   expect(screen.getByText('-300')).toBeInTheDocument();
   expect(screen.getByText('職員 太郎')).toBeInTheDocument();

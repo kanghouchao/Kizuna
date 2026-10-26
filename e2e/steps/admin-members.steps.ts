@@ -76,7 +76,7 @@ Then("会員詳細に残高 120 pt と店舗1の関連が表示される", async
   await expect(page.getByText(memberEmail)).toBeVisible();
   // 店舗1の関連（顧客名）。管理者は全店舗の作用域なので担当外の注記は出ない
   await expect(page.getByText(/E2Eコンソール顧客-/)).toBeVisible();
-  await expect(page.getByText(/担当外の店舗に/)).toHaveCount(0);
+  await expect(page.getByText(/担当外の/)).toHaveCount(0);
 });
 
 When(

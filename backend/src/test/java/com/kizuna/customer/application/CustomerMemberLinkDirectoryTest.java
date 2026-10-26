@@ -95,9 +95,9 @@ class CustomerMemberLinkDirectoryTest {
   }
 
   @Test
-  @DisplayName("全店舗の閲覧者は全区間を展開し、集合外の件数は 0 で数えもしない")
+  @DisplayName("全店舗の閲覧者は全店舗の最新区間を展開し、集合外の店舗数は 0 で数えもしない")
   void allStoresExpandsEverything() {
-    when(repository.findDirectoryByMemberId(7L))
+    when(repository.findLatestDirectoryByMemberId(7L))
         .thenReturn(
             List.of(
                 new View(
@@ -128,13 +128,13 @@ class CustomerMemberLinkDirectoryTest {
     assertThat(links.segments()).extracting(s -> s.storeName()).containsExactly("支店", "本店");
     assertThat(links.segments().getFirst().releaseReason()).isEqualTo("会員退会");
     assertThat(links.otherStoreCount()).isZero();
-    verify(repository, never()).countByMemberIdAndStoreIdNotIn(anyLong(), any());
+    verify(repository, never()).countStoresByMemberIdAndStoreIdNotIn(anyLong(), any());
   }
 
   @Test
-  @DisplayName("個別授権の閲覧者は授権店舗の区間だけを展開し、授権外は件数だけを返す")
+  @DisplayName("個別授権の閲覧者は授権店舗の最新区間だけを展開し、授権外は店舗数だけを返す")
   void specificStoresExpandsOnlyAuthorizedAndCountsTheRest() {
-    when(repository.findDirectoryByMemberIdAndStoreIdIn(7L, Set.of(1L)))
+    when(repository.findLatestDirectoryByMemberIdAndStoreIdIn(7L, Set.of(1L)))
         .thenReturn(
             List.of(
                 new View(
@@ -148,7 +148,7 @@ class CustomerMemberLinkDirectoryTest {
                     AT,
                     null,
                     null)));
-    when(repository.countByMemberIdAndStoreIdNotIn(7L, Set.of(1L))).thenReturn(2L);
+    when(repository.countStoresByMemberIdAndStoreIdNotIn(7L, Set.of(1L))).thenReturn(2L);
 
     var links = directory.findByMember(7L, new StoreScope(false, Set.of(1L)));
 
@@ -156,6 +156,6 @@ class CustomerMemberLinkDirectoryTest {
         .singleElement()
         .satisfies(s -> assertThat(s.customerName()).isEqualTo("山田"));
     assertThat(links.otherStoreCount()).isEqualTo(2);
-    verify(repository, never()).findDirectoryByMemberId(anyLong());
+    verify(repository, never()).findLatestDirectoryByMemberId(anyLong());
   }
 }
