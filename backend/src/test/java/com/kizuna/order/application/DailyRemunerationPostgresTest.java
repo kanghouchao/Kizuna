@@ -16,6 +16,8 @@ import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
+import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
@@ -199,6 +201,8 @@ class DailyRemunerationPostgresTest {
                     JsonMapper.builder()
                         .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                         .build()))
+            .setCustomArgumentResolvers(
+                new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
             .build();
     try (var executor = Executors.newSingleThreadExecutor()) {
       var reading =
@@ -207,6 +211,7 @@ class DailyRemunerationPostgresTest {
                   http.perform(
                           get(self ? "/me/daily-remunerations" : "/store/daily-remunerations")
                               .principal(() -> email)
+                              .header("X-Store-ID", storeId.toString())
                               .param("person_id", personId.toString())
                               .param("store_id", storeId.toString())
                               .param("business_date", DAY.toString()))
