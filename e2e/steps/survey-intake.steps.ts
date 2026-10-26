@@ -75,7 +75,7 @@ Given(
           headers: { Authorization: `Bearer ${token}` },
         })
       ).status(),
-    ).toBe(403);
+    ).toBe(400);
   },
 );
 When(

@@ -1,20 +1,13 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { loginAsStoreAdmin, STORE_HEADERS } from './store-api';
+import { loginAsStoreAdmin, SAMPLE_PNG as image, uploadStoreImage } from './store-api';
 
 const { When, Then } = createBdd();
-const image = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==',
-  'base64'
-);
 let publicUrl: string;
 
 When('店長が画像ファイルをアップロードする', async ({ request }) => {
   const token = await loginAsStoreAdmin(request);
-  const response = await request.post('/api/files', {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
-    multipart: { file: { name: 'storage-probe.png', mimeType: 'image/png', buffer: image } },
-  });
+  const response = await uploadStoreImage(request, token);
   expect(response.status()).toBe(201);
   const body = await response.json();
   expect(body.size).toBe(image.length);

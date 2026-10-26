@@ -7,8 +7,8 @@ import {
 } from "@playwright/test";
 import { APP_URL } from "../base-url";
 
-// store1 は initial-setup プロジェクトが最初に登録する店舗（store_id=1）。store API は Host に加えて
-// X-Store-ID ヘッダで店舗文脈を確定する。
+// store1 は initial-setup プロジェクトが最初に登録する店舗（store_id=1）。店舗を要する store API は
+// 店舗を X-Store-ID ヘッダだけから受け取る。
 export const STORE1_ID = "1";
 export const STORE_HEADERS = { "X-Store-ID": STORE1_ID };
 export const ADMIN_EMAIL = "tanaka.hanako@kizuna.test";
@@ -399,7 +399,7 @@ export async function issueCastInvitation(
  * キャスト招待を新規登録で受諾し、CAST 用のグループ共通アカウントを作成する
  * （POST /api/admin/cast-invitations/acceptance, PermitAll）。
  * トークンはパスではなく本文で送る（パスはアクセスログに残るため）。
- * X-Store-ID は不要（/admin 配下は StoreIdInterceptor を通らない）。
+ * X-Store-ID は付けない（店舗を X-Store-ID から受け取るのは @CurrentStore を宣言する handler だけで、この端点は宣言しない）。
  */
 export async function acceptCastInvitation(
   request: APIRequestContext,
@@ -1578,4 +1578,23 @@ export async function findCastUserId(
   });
   expect(detail.status()).toBe(200);
   return (await detail.json()).user_id;
+}
+
+/** 1×1 の PNG。保存と取得で同じバイト列が返ることを比べる基準にする。 */
+export const SAMPLE_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/** 店舗 1 の領域へ SAMPLE_PNG をアップロードする（POST /api/files, isAuthenticated()）。 */
+export function uploadStoreImage(
+  request: APIRequestContext,
+  token: string,
+): Promise<APIResponse> {
+  return request.post("/api/files", {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    multipart: {
+      file: { name: "storage-probe.png", mimeType: "image/png", buffer: SAMPLE_PNG },
+    },
+  });
 }
