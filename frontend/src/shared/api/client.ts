@@ -36,21 +36,20 @@ apiClient.interceptors.request.use(
     if (csrfToken) {
       (config.headers as AxiosHeaders).set('X-XSRF-TOKEN', csrfToken);
     }
-    // 店舗文脈は X-Store-ID だけで名乗る。管理画面の店舗級ページ（/store 配下）からの店舗級端点にだけ、
-    // StoreContext が確定させた現在店舗（current-store-id cookie）を付ける。/admin 配下の画面は現在店舗を
-    // 持たない（/files は全店共有領域への保存）。/admin の横断一覧が行の店舗を名指す呼び出しは自ら
-    // X-Store-ID を渡し、/admin 画面ではここで何も付けないのでそのまま届く。キャスト・会員の portal は cookie が残っていても
-    // 付けない。公開店舗サイトでは proxy が焼いた x-mw-store-id を付ける。受否はバックエンドが授権店舗集合で判定する。
+    // 店舗文脈は X-Store-ID だけで名乗る。従業員の店舗級画面（/store 配下）からの要求には宛先を問わず現在店舗
+    // （current-store-id cookie）を付け、現在店舗を受けない端点はこれを読まない。/admin 配下の画面は何も付けず、
+    // /files は全店共有領域へ保存され、横断一覧が行の店舗を名指す X-Store-ID はそのまま届く。キャスト・会員の
+    // portal は cookie が残っていても付けない。公開店舗サイトでは proxy が焼いた x-mw-store-id を付ける。
+    // 受け入れの可否はバックエンドが授権店舗集合で判定する。
     try {
       const sessionKind = getSessionKind();
       if (sessionKind) {
         const storeId = getCurrentStoreId();
-        const url = config.url || '';
+        const pathname = window.location.pathname;
         if (
           sessionKind === 'admin' &&
           storeId &&
-          window.location.pathname.startsWith('/store') &&
-          (url.startsWith('/store') || url.startsWith('/files'))
+          (pathname === '/store' || pathname.startsWith('/store/'))
         ) {
           (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
         }

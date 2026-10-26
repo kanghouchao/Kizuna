@@ -118,18 +118,18 @@ export interface Operation {
   request_id: string;
   mutation: Mutation;
 }
-const base = '/store/advertising-costs';
-const months = '/store/advertising-cost-months';
+const base = '/advertising-costs';
+const months = '/advertising-cost-months';
 export const advertisingApi = {
   orderCosts: async (month: string, page = 0) =>
     (
-      await apiClient.get<OrderCostReport>('/store/advertising-order-costs', {
+      await apiClient.get<OrderCostReport>('/advertising-order-costs', {
         params: { month, page, size: 20 },
       })
     ).data,
   media: async (month: string, page = 0) =>
     (
-      await apiClient.get<MediaReport>('/store/advertising-media-summaries', {
+      await apiClient.get<MediaReport>('/advertising-media-summaries', {
         params: { month, page, size: 20 },
       })
     ).data,
@@ -182,14 +182,11 @@ export const advertisingApi = {
     kind: ExportKind = 'costs'
   ) {
     try {
-      const response = await apiClient.get<Blob>(
-        '/store/' + advertisingExports[kind].resource + '/exports',
-        {
-          params: { month, format },
-          responseType: 'blob',
-          signal,
-        }
-      );
+      const response = await apiClient.get<Blob>(`/${advertisingExports[kind].resource}/exports`, {
+        params: { month, format },
+        responseType: 'blob',
+        signal,
+      });
       const type =
         format === 'csv'
           ? 'text/csv'

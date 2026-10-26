@@ -52,8 +52,7 @@ export async function resolveStore(request: NextRequest): Promise<{
   }
 
   // Cookie に店舗情報がない場合、バックエンド API を呼び出す（バックエンドにキャッシュあり）
-  const validationApiUrl =
-    process.env.STORE_LOOKUP_API_URL || 'http://backend:8080/admin/stores/lookup';
+  const validationApiUrl = process.env.STORE_LOOKUP_API_URL || 'http://backend:8080/stores/lookup';
   const url = validationApiUrl + `?domain=${encodeURIComponent(hostname)}`;
 
   try {
@@ -66,7 +65,7 @@ export async function resolveStore(request: NextRequest): Promise<{
       const isValid = Boolean(storeId || storeName || data.domain);
 
       // lookup 応答（StoreVO）は template_key を返さないため、含まれていれば採用し、
-      // 無ければ店舗側の /store/config/public を追撃取得する（キャッシュ無しで鮮度が高い）。
+      // 無ければ店舗側の /config/public を追加で取得する（キャッシュ無しで鮮度が高い）。
       let templateKey = 'default';
       if (data.template_key) {
         templateKey = String(data.template_key);
@@ -101,10 +100,9 @@ export async function resolveStore(request: NextRequest): Promise<{
 
 // 店舗側の StoreProfile から template_key を取得する。
 // 認証トークン不要・キャッシュ無しで、X-Store-ID ヘッダのみで動作する公開エンドポイント。
-// 取得失敗・欠落時は 'default' に回落し、決して throw しない。
+// 取得失敗・欠落時は 'default' を返し、決して throw しない。
 async function fetchTemplateKey(storeId: string): Promise<string> {
-  const configApiUrl =
-    process.env.STORE_CONFIG_API_URL || 'http://backend:8080/store/config/public';
+  const configApiUrl = process.env.STORE_CONFIG_API_URL || 'http://backend:8080/config/public';
 
   try {
     const res = await fetch(configApiUrl, {

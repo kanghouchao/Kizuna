@@ -14,9 +14,9 @@ import {
 const { Given, Then } = createBdd();
 
 const ENDPOINTS: Record<string, string> = {
-  キャスト一覧: '/api/store/casts',
-  公開店舗設定: '/api/store/config/public',
-  予約申請の連絡同意文面: '/api/store/order-applications/public/contact-consent',
+  キャスト一覧: '/api/casts',
+  公開店舗設定: '/api/config/public',
+  予約申請の連絡同意文面: '/api/order-applications/public/contact-consent',
 };
 let specificToken = '';
 let allStoresToken = '';

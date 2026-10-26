@@ -15,34 +15,34 @@ export const adminStoreApi = {
     size: number;
     search?: string;
   }): Promise<PageResult<Store>> => {
-    const response = await apiClient.get('/admin/stores', {
+    const response = await apiClient.get('/stores', {
       params: { ...toSpringPageParams(params.page, params.size), search: params.search },
     });
     return fromSpringPage(response.data);
   },
   /** ドメインから店舗を引く（公開・匿名）。ブラウザから渡されたドメインをサーバ側の正本に突き合わせる用途。 */
   lookupByDomain: async (domain: string): Promise<Store> => {
-    const response = await apiClient.get('/admin/stores/lookup', { params: { domain } });
+    const response = await apiClient.get('/stores/lookup', { params: { domain } });
     return response.data;
   },
   getById: async (id: string | undefined): Promise<Store> => {
-    const response = await apiClient.get(`/admin/stores/${requireId(id, '店舗')}`);
+    const response = await apiClient.get(`/stores/${requireId(id, '店舗')}`);
     return response.data;
   },
   /** 端点は 201 Created。body には作成された店舗の id だけが載る。 */
   create: async (data: CreateStoreRequest): Promise<CreateStoreResponse> => {
-    const response = await apiClient.post('/admin/stores', data);
+    const response = await apiClient.post('/stores', data);
     return response.data;
   },
   /** 端点は 204 No Content。body は返らない。 */
   update: async (id: string | undefined, data: UpdateStoreRequest): Promise<void> => {
-    await apiClient.put(`/admin/stores/${requireId(id, '店舗')}`, data);
+    await apiClient.put(`/stores/${requireId(id, '店舗')}`, data);
   },
   delete: async (id: string | undefined): Promise<void> => {
-    await apiClient.delete(`/admin/stores/${requireId(id, '店舗')}`);
+    await apiClient.delete(`/stores/${requireId(id, '店舗')}`);
   },
   getStats: async (): Promise<StoreStats> => {
-    const response = await apiClient.get('/admin/stores/stats');
+    const response = await apiClient.get('/stores/stats');
     return response.data;
   },
 };

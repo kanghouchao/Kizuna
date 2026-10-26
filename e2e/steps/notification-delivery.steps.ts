@@ -16,7 +16,7 @@ const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${operator}` }
 Given('業務通知の担当者とサービス主体と同意済みゲスト申請がある', async ({ request, page }) => {
   storeId = await loginViaUiAndEnterStore(page);
   const admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
-  expect((await request.get('/api/store/notification-deliveries', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${admin}` } })).status()).toBe(403);
+  expect((await request.get('/api/notification-deliveries', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${admin}` } })).status()).toBe(403);
   const suffix = Date.now().toString();
   email = 'notification-' + suffix + '@kizuna.test';
   password = 'Notification-' + suffix + '-fixture';
@@ -25,12 +25,12 @@ Given('業務通知の担当者とサービス主体と同意済みゲスト申�
   operator = await loginUser(request, email, password);
   const executionRole = await createPermissionRole(request, admin, '通知実行-' + suffix, ['TASK_EXECUTE', 'NOTIFICATION_DELIVER']);
   serviceName = '通知サービス-' + suffix;
-  const service = await request.post('/api/admin/service-identities', {
+  const service = await request.post('/api/service-identities', {
     headers: { Authorization: `Bearer ${admin}` },
     data: { display_name: serviceName, role_ids: [executionRole], store_scope_type: 'ALL_STORES', store_ids: [] },
   });
   expect(service.status(), await service.text()).toBe(201);
-  const stores = await request.get('/api/admin/task-executions/stores', { headers: { Authorization: `Bearer ${operator}` }, params: { size: 100 } });
+  const stores = await request.get('/api/task-executions/stores', { headers: { Authorization: `Bearer ${operator}` }, params: { size: 100 } });
   expect(stores.status()).toBe(200);
   storeName = (await stores.json()).content.find((row: { id: string }) => row.id === storeId).name;
   applicationId = await createConsentingGuestApplication(request, 'notification-' + suffix + '@example.invalid');
@@ -77,7 +77,7 @@ When('担当者が通知を作成して内容を確認し送信待ちにする',
   await expect(detail.getByRole('button', { name: '確認して送信待ちにする' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(detail.getByText('送信待ち', { exact: true })).toBeVisible();
-  expect((await request.post(`/api/store/notification-deliveries/${deliveryId}/queue`, { headers: headers(), data: { version: row.version, reason: '同一操作' } })).status()).toBe(409);
+  expect((await request.post(`/api/notification-deliveries/${deliveryId}/queue`, { headers: headers(), data: { version: row.version, reason: '同一操作' } })).status()).toBe(409);
   await expect(page.getByText('通知を送信待ちに登録しました', { exact: true })).toBeHidden({ timeout: 10000 });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await detail.evaluate(element => element.scrollWidth <= element.clientWidth)).toBeTruthy();
@@ -107,7 +107,7 @@ When('管理画面で店舗の業務通知を実行する', async ({ page }) => 
 
 Then('未設定の通知を成功扱いせず履歴から明示的に再試行できる', async ({ page, request, $testInfo }) => {
   await expect.poll(async () => {
-    const response = await request.get(`/api/store/notification-deliveries/${deliveryId}`, { headers: headers() });
+    const response = await request.get(`/api/notification-deliveries/${deliveryId}`, { headers: headers() });
     expect(response.status()).toBe(200);
     return (await response.json()).status;
   }).toBe('FAILED');
@@ -119,7 +119,7 @@ Then('未設定の通知を成功扱いせず履歴から明示的に再試行�
   await detail.getByLabel('内容を確認した理由・再試行の理由').fill('未送信の結果を確認して再試行');
   await detail.getByRole('button', { name: '明示的に再試行する' }).click();
   await expect(detail.getByText('送信待ち', { exact: true })).toBeVisible();
-  const history = await request.get(`/api/store/notification-deliveries/${deliveryId}/attempts`, { headers: headers() });
+  const history = await request.get(`/api/notification-deliveries/${deliveryId}/attempts`, { headers: headers() });
   expect(history.status()).toBe(200);
   const attempts = (await history.json()).content;
   expect(attempts).toHaveLength(1);
@@ -128,10 +128,10 @@ Then('未設定の通知を成功扱いせず履歴から明示的に再試行�
   await detail.press('Escape');
   await executeNotifications(page);
   await expect.poll(async () => {
-    const response = await request.get(`/api/store/notification-deliveries/${deliveryId}`, { headers: headers() });
+    const response = await request.get(`/api/notification-deliveries/${deliveryId}`, { headers: headers() });
     return (await response.json()).status;
   }).toBe('FAILED');
-  const retried = await request.get(`/api/store/notification-deliveries/${deliveryId}/attempts`, { headers: headers() });
+  const retried = await request.get(`/api/notification-deliveries/${deliveryId}/attempts`, { headers: headers() });
   const retryHistory = (await retried.json()).content;
   expect(retryHistory).toHaveLength(2);
   expect(retryHistory[0].attempt_number).toBe(2);

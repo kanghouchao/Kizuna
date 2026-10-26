@@ -175,16 +175,16 @@ When(
       const beforeDenials = await auditIds(request);
       const mutations = [
         {
-          path: "/api/store/casts/fields",
+          path: "/api/casts/fields",
           method: "POST",
           data: { key: `denied_${suffix}`, label: secret, is_public: false },
         },
         {
-          path: `/api/store/casts/fields/${internal}`,
+          path: `/api/casts/fields/${internal}`,
           method: "PUT",
           data: { label: "拒否される変更" },
         },
-        { path: `/api/store/casts/fields/${internal}`, method: "DELETE" },
+        { path: `/api/casts/fields/${internal}`, method: "DELETE" },
       ];
       for (const mutation of mutations) {
         const denied = await request.fetch(mutation.path, {
@@ -200,13 +200,13 @@ When(
         });
         expect(denied.status(), await denied.text()).toBe(404);
       }
-      const duplicate = await request.post("/api/store/casts/fields", {
+      const duplicate = await request.post("/api/casts/fields", {
         headers: headers(actor.token),
         data: { key: privateKey, label: secret },
       });
       expect(duplicate.status(), await duplicate.text()).toBe(400);
       const visibility = await request.put(
-        `/api/store/casts/fields/${internal}`,
+        `/api/casts/fields/${internal}`,
         { headers: headers(actor.token), data: { is_public: true } },
       );
       expect(visibility.status(), await visibility.text()).toBe(400);
@@ -236,7 +236,7 @@ When(
       expect(await getCastCustomFields(request, actor.token, id)).toEqual({});
       const beforeRepeated = await auditIds(request);
       const repeated = await request.delete(
-        `/api/store/casts/fields/${internal}`,
+        `/api/casts/fields/${internal}`,
         { headers: headers(actor.token) },
       );
       expect(repeated.status(), await repeated.text()).toBe(404);
@@ -271,7 +271,7 @@ When(
         ),
       );
     const beforeCapacity = await auditIds(request);
-    const excess = await request.post("/api/store/casts/fields", {
+    const excess = await request.post("/api/casts/fields", {
       headers: headers(ordinary),
       data: {
         key: `excess_${randomUUID().replaceAll("-", "")}`,

@@ -6,10 +6,10 @@ import type {
   ApplicantAttachmentPolicy,
   ApplicantAttachmentOperation,
 } from '../model/types';
-const resource = (id: string) => `/store/applicants/${requireId(id, '応募者')}`;
+const resource = (id: string) => `/applicants/${requireId(id, '応募者')}`;
 export const applicantAttachmentApi = {
   policy: async (): Promise<ApplicantAttachmentPolicy> =>
-    (await apiClient.get('/store/applicants/attachment-policy')).data,
+    (await apiClient.get('/applicants/attachment-policy')).data,
   list: async (id: string, cursor?: string): Promise<CursorPageResult<ApplicantAttachment>> =>
     fromCursorPage(
       (await apiClient.get(`${resource(id)}/attachments`, { params: { cursor, size: 20 } })).data

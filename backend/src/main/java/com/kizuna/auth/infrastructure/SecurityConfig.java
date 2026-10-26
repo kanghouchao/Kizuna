@@ -37,18 +37,17 @@ public class SecurityConfig {
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/files"),
     // 匿名 POST の招待照会と新規登録受諾（Bearer なしのため Bearer 免除に該当しない）。既存受諾(/existing)は Bearer 付きで既存免除に該当する。
     // 照会はトークンをパスに載せないため POST であり、読み取りでも CSRF 免除が要る。
-    PathPatternRequestMatcher.withDefaults().matcher("/admin/cast-invitations/view"),
-    PathPatternRequestMatcher.withDefaults().matcher("/admin/cast-invitations/acceptance"),
+    PathPatternRequestMatcher.withDefaults().matcher("/cast-invitations/view"),
+    PathPatternRequestMatcher.withDefaults().matcher("/cast-invitations/acceptance"),
     // 匿名 POST の会員自助登録（同上: Bearer なしのため Bearer 免除に該当しない）。
-    PathPatternRequestMatcher.withDefaults().matcher("/admin/members"),
+    PathPatternRequestMatcher.withDefaults().matcher("/members"),
     // 匿名 POST の LINE ログインと LINE 登録確定（同上）。連携(/me/line)は Bearer 付きで既存免除に該当する。
     PathPatternRequestMatcher.withDefaults().matcher("/auth/line/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/auth/line/register"),
-    // 公開サイトからの匿名 POST（ゲスト予約申請）。/store 配下で唯一の匿名の書き込みで、店舗は
-    // X-Store-ID で名乗る（@CurrentStore）。同一パス上に他のメソッドの handler を作らないよう
+    // 公開サイトからの匿名 POST（ゲスト予約申請）。@CurrentStore を宣言する handler で唯一の匿名の書き込みで、
+    // 店舗は X-Store-ID で名乗る。同一パス上に他のメソッドの handler を作らないよう
     // メソッドまで指定する。
-    PathPatternRequestMatcher.withDefaults()
-        .matcher(HttpMethod.POST, "/store/order-applications/public"),
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/order-applications/public"),
     // 匿名 POST の初期設定（最初の管理者の登録）。Bearer を持たない要求は末尾の Bearer ヘッダ免除に該当しない。
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/initial-setup"),
     request -> {

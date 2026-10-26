@@ -29,7 +29,7 @@ export const authApi = {
     return response.data;
   },
   stores: async (): Promise<AuthorizedStore[]> => {
-    const response = await apiClient.get('/admin/stores/me');
+    const response = await apiClient.get('/stores/me');
     return response.data;
   },
   changePassword: async (data: PasswordChangeRequest): Promise<void> => {

@@ -22,7 +22,7 @@ const mockedGet = apiClient.get as jest.Mock;
 const mockedPost = apiClient.post as jest.Mock;
 
 describe('orderApi', () => {
-  it('list は /store/orders を GET し、Spring Page を PageResult へ正規化する', async () => {
+  it('list は /orders を GET し、Spring Page を PageResult へ正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
         content: [{ id: 'o1' }],
@@ -39,40 +39,57 @@ describe('orderApi', () => {
       pageCount: 3,
       total: 25,
     });
-    expect(mockedGet).toHaveBeenCalledWith('/store/orders', { params: { page: 1, size: 10 } });
+    expect(mockedGet).toHaveBeenCalledWith('/orders', { params: { page: 1, size: 10 } });
   });
-  it('create は /store/orders を POST する', async () => {
-    expect(await orderApi.create({} as never)).toEqual({ ok: true, url: '/store/orders' });
+  it('create は /orders を POST する', async () => {
+    expect(await orderApi.create({} as never)).toEqual({ ok: true, url: '/orders' });
   });
-  it('listReceptionists は /store/orders/receptionists を GET する', async () => {
+  it('listReceptionists は /orders/receptionists を GET する', async () => {
     expect(await orderApi.listReceptionists()).toEqual({
       ok: true,
-      url: '/store/orders/receptionists',
+      url: '/orders/receptionists',
     });
   });
   it('listCastCandidates は受注側の指名候補の読み口を GET する', async () => {
-    // キャスト管理一覧（/store/casts）を流用すると受注権限だけでは 403 になり、在籍停止も混ざる
+    // キャスト管理一覧（/casts）を流用すると受注権限だけでは 403 になり、在籍停止も混ざる
     expect(await orderApi.listCastCandidates({ search: '花' })).toEqual({
       ok: true,
-      url: '/store/orders/cast-candidates',
+      url: '/orders/cast-candidates',
     });
-    expect(mockedGet).toHaveBeenCalledWith('/store/orders/cast-candidates', {
+    expect(mockedGet).toHaveBeenCalledWith('/orders/cast-candidates', {
       params: { search: '花' },
     });
   });
   it('get は受注 1 件を GET する', async () => {
-    expect(await orderApi.get('o1')).toEqual({ ok: true, url: '/store/orders/o1' });
+    expect(await orderApi.get('o1')).toEqual({ ok: true, url: '/orders/o1' });
+  });
+  it('adminList は全店横断の受注一覧 /orders/cross-store を GET する', async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [], total_pages: 0, total_elements: 0, size: 20, number: 0 },
+    });
+    await orderApi.adminList(0);
+    expect(mockedGet).toHaveBeenCalledWith('/orders/cross-store', {
+      params: { page: 0, size: 20, sort: 'createdAt,desc' },
+    });
+  });
+  it('correctionHistory は横断一覧の行の店舗を X-Store-ID で名指す', async () => {
+    mockedGet.mockResolvedValueOnce({ data: { content: [], next_cursor: null } });
+    await orderApi.correctionHistory('o1', undefined, 2);
+    expect(mockedGet).toHaveBeenCalledWith('/orders/o1/corrections', {
+      params: { cursor: undefined, size: 20 },
+      headers: { 'X-Store-ID': '2' },
+    });
   });
   it('update は受注を PUT する', async () => {
     expect(await orderApi.update('o1', { expected_version: 0, pax: 3 })).toEqual({
       ok: true,
-      url: '/store/orders/o1',
+      url: '/orders/o1',
     });
   });
   it('cancel は取消の子リソースを POST し、本体を返さない', async () => {
     // 応答は 204。呼出側は行を消すだけで結果を読まない
     await expect(orderApi.cancel('o1', { reason: '客都合' })).resolves.toBeUndefined();
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/orders/o1/cancellation', {
+    expect(mockedPost).toHaveBeenLastCalledWith('/orders/o1/cancellation', {
       reason: '客都合',
     });
   });
@@ -91,7 +108,7 @@ describe('orderApi', () => {
         size: 20,
       })
     ).resolves.toEqual({ rows: [{ id: 'o1' }], nextCursor: 'abc' });
-    expect(mockedGet).toHaveBeenCalledWith('/store/orders/work-queue', {
+    expect(mockedGet).toHaveBeenCalledWith('/orders/work-queue', {
       params: {
         statuses: 'CONFIRMED,COMPLETED',
         sort_key: 'PAX',
@@ -112,7 +129,7 @@ describe('orderApi', () => {
     });
 
     // 空欄を送ると「絞り込んでいない」ことが要求から読めなくなる
-    expect(mockedGet).toHaveBeenCalledWith('/store/orders/work-queue', {
+    expect(mockedGet).toHaveBeenCalledWith('/orders/work-queue', {
       params: { statuses: 'CONFIRMED', size: 20 },
     });
   });
@@ -124,14 +141,14 @@ describe('orderApi', () => {
     await expect(
       orderApi.listArchive({ statuses: ['COMPLETED'], page: 1, size: 5 })
     ).resolves.toEqual({ rows: [{ id: 'o1' }], page: 1, pageCount: 2, total: 7 });
-    expect(mockedGet).toHaveBeenCalledWith('/store/orders/archive', {
+    expect(mockedGet).toHaveBeenCalledWith('/orders/archive', {
       params: { statuses: 'COMPLETED', page: 1, size: 5 },
     });
   });
   it('attribution は受注の帰属の現況を GET する', async () => {
     expect(await orderApi.attribution('o1')).toEqual({
       ok: true,
-      url: '/store/orders/o1/attribution',
+      url: '/orders/o1/attribution',
     });
   });
   it('invalidateAttribution は理由を添えて無効化の子リソースを POST する', async () => {
@@ -140,9 +157,9 @@ describe('orderApi', () => {
       await orderApi.invalidateAttribution('o1', { attribution_id: 501, reason: '取り違え' })
     ).toEqual({
       ok: true,
-      url: '/store/orders/o1/attribution/invalidation',
+      url: '/orders/o1/attribution/invalidation',
     });
-    expect(apiClient.post).toHaveBeenCalledWith('/store/orders/o1/attribution/invalidation', {
+    expect(apiClient.post).toHaveBeenCalledWith('/orders/o1/attribution/invalidation', {
       attribution_id: 501,
       reason: '取り違え',
     });
@@ -150,7 +167,7 @@ describe('orderApi', () => {
   it('reissueReceiptToken は伝票トークンの子リソースを POST する', async () => {
     expect(await orderApi.reissueReceiptToken('o1')).toEqual({
       ok: true,
-      url: '/store/orders/o1/receipt-token',
+      url: '/orders/o1/receipt-token',
     });
   });
 });
@@ -164,7 +181,7 @@ describe('orderApplicationApi', () => {
     await expect(
       orderApplicationApi.list({ statuses: ['PENDING'], cursor: 'c0', size: 20 })
     ).resolves.toEqual({ rows: [{ id: 'a1' }], nextCursor: 'abc' });
-    expect(mockedGet).toHaveBeenCalledWith('/store/order-applications', {
+    expect(mockedGet).toHaveBeenCalledWith('/order-applications', {
       params: { statuses: 'PENDING', cursor: 'c0', size: 20 },
     });
   });
@@ -177,9 +194,9 @@ describe('orderApplicationApi', () => {
       })
     ).toEqual({
       ok: true,
-      url: '/store/order-applications/a1/confirmation',
+      url: '/order-applications/a1/confirmation',
     });
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/order-applications/a1/confirmation', {
+    expect(mockedPost).toHaveBeenLastCalledWith('/order-applications/a1/confirmation', {
       course_id: 'course-1',
       business_date: '2026-08-20',
       pax: 2,
@@ -188,7 +205,7 @@ describe('orderApplicationApi', () => {
   it('decline は謝絶の子リソースへ理由を POST し、本体を返さない', async () => {
     // 理由は謝絶の唯一の根拠。省略できる形にすると、後から経緯を辿れなくなる
     await expect(orderApplicationApi.decline('a1', { reason: '満席' })).resolves.toBeUndefined();
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/order-applications/a1/refusal', {
+    expect(mockedPost).toHaveBeenLastCalledWith('/order-applications/a1/refusal', {
       reason: '満席',
     });
   });

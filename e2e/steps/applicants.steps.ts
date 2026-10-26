@@ -36,7 +36,7 @@ const headers = () => ({
   "X-Store-ID": storeId,
   Authorization: `Bearer ${token}`,
 });
-const path = () => `/api/store/applicants/${applicantId}`;
+const path = () => `/api/applicants/${applicantId}`;
 async function current(request: APIRequestContext) {
   const result = await request.get(path(), { headers: headers() });
   expect(result.status()).toBe(200);
@@ -68,7 +68,7 @@ Given(
     );
     const email = `recruitment-${suffix}@example.invalid`;
     const password = randomUUID();
-    const created = await request.post("/api/admin/staff", {
+    const created = await request.post("/api/staff", {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` },
       data: {
         email,
@@ -130,7 +130,7 @@ When("応募者の受付と面接を画面で登録する", async ({ page }) => 
 Then(
   "応募者の一覧と詳細は公開範囲を区別し両テーマと狭幅で操作できる",
   async ({ page, request, $testInfo }) => {
-    const result = await request.get("/api/store/applicants", {
+    const result = await request.get("/api/applicants", {
       headers: headers(),
       params: { search: applicantName },
     });
@@ -278,7 +278,7 @@ Then(
 Then(
   "応募者APIは店舗外アクセスと通常キャスト権限を拒否する",
   async ({ request }) => {
-    const created = await request.post("/api/store/applicants", {
+    const created = await request.post("/api/applicants", {
       headers: headers(),
       data: intake(),
     });
@@ -294,7 +294,7 @@ Then(
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` },
     });
     expect(denied.status()).toBe(403);
-    const outsideStore = await request.get("/api/admin/stores/me", {
+    const outsideStore = await request.get("/api/stores/me", {
       headers: { Authorization: `Bearer ${managerToken}` },
     });
     expect(outsideStore.status()).toBe(200);
@@ -318,14 +318,14 @@ Then(
       for (const suffix of ["", "/history"])
         expect(
           (
-            await request.get(`/api/store/applicants/${foreignId}${suffix}`, {
+            await request.get(`/api/applicants/${foreignId}${suffix}`, {
               headers: headers(),
             })
           ).status(),
         ).toBe(404);
       expect(
         (
-          await request.put(`/api/store/applicants/${foreignId}`, {
+          await request.put(`/api/applicants/${foreignId}`, {
             headers: headers(),
             data: { version: 0, intake: intake() },
           })
@@ -416,7 +416,7 @@ Then(
       await db.query(
         "CREATE TRIGGER recruitment_test_failure BEFORE INSERT ON t_applicant_status_histories FOR EACH ROW EXECUTE FUNCTION recruitment_test_failure()",
       );
-      const failure = await request.post("/api/store/applicants", {
+      const failure = await request.post("/api/applicants", {
         headers: headers(),
         data: { ...intake(), name },
       });
@@ -504,7 +504,7 @@ Then(
       await db.query(
         "CREATE TRIGGER recruitment_audit_failure BEFORE INSERT ON t_audit_events FOR EACH ROW EXECUTE FUNCTION recruitment_audit_failure()",
       );
-      const create = await request.post("/api/store/applicants", {
+      const create = await request.post("/api/applicants", {
         headers: headers(),
         data: { ...intake(), name },
       });

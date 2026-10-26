@@ -12,17 +12,17 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('attendanceApi', () => {
-  it('list は /store/attendances を営業日で GET する', async () => {
+  it('list は /attendances を営業日で GET する', async () => {
     expect(await attendanceApi.list({ business_date: '2026-08-19' })).toEqual({
       ok: true,
-      url: '/store/attendances',
+      url: '/attendances',
     });
-    expect(apiClient.get).toHaveBeenCalledWith('/store/attendances', {
+    expect(apiClient.get).toHaveBeenCalledWith('/attendances', {
       params: { business_date: '2026-08-19' },
     });
   });
 
-  it('record は /store/attendances を POST する', async () => {
+  it('record は /attendances を POST する', async () => {
     expect(
       await attendanceApi.record({
         cast_id: 'c1',
@@ -31,10 +31,10 @@ describe('attendanceApi', () => {
         actual_end_at: null,
         waiting_place: null,
       })
-    ).toEqual({ ok: true, url: '/store/attendances' });
+    ).toEqual({ ok: true, url: '/attendances' });
   });
 
-  it('correct は /store/attendances/:id を PUT する', async () => {
+  it('correct は /attendances/:id を PUT する', async () => {
     expect(
       await attendanceApi.correct('a1', {
         business_date: '2026-08-19',
@@ -42,21 +42,21 @@ describe('attendanceApi', () => {
         actual_end_at: '2026-08-19T23:10',
         waiting_place: '控室',
       })
-    ).toEqual({ ok: true, url: '/store/attendances/a1' });
+    ).toEqual({ ok: true, url: '/attendances/a1' });
   });
 
-  it('cancel は /store/attendances/:id/cancellation へ理由を載せて POST する', async () => {
+  it('cancel は /attendances/:id/cancellation へ理由を載せて POST する', async () => {
     // 理由は取消の経緯を辿れる唯一の根拠なので、口の側でも落とさない
     await attendanceApi.cancel('a1', '二重記録');
-    expect(apiClient.post).toHaveBeenCalledWith('/store/attendances/a1/cancellation', {
+    expect(apiClient.post).toHaveBeenCalledWith('/attendances/a1/cancellation', {
       reason: '二重記録',
     });
   });
 
-  it('listAbsences は /store/absences を営業日で GET する', async () => {
+  it('listAbsences は /absences を営業日で GET する', async () => {
     expect(await attendanceApi.listAbsences({ business_date: '2026-08-19' })).toEqual({
       ok: true,
-      url: '/store/absences',
+      url: '/absences',
     });
   });
 });

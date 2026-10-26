@@ -27,9 +27,9 @@ beforeEach(() => {
 });
 test('受付と面接と状態変更は明示した版を送る', async () => {
   await applicantApi.create(intake);
-  expect(apiClient.post).toHaveBeenCalledWith('/store/applicants', intake);
+  expect(apiClient.post).toHaveBeenCalledWith('/applicants', intake);
   await applicantApi.update('a', 4, intake);
-  expect(apiClient.put).toHaveBeenCalledWith('/store/applicants/a', { version: 4, intake });
+  expect(apiClient.put).toHaveBeenCalledWith('/applicants/a', { version: 4, intake });
   const interview = {
     interview_at: '2026-10-01T00:00:00Z',
     interviewer: '担当',
@@ -37,12 +37,12 @@ test('受付と面接と状態変更は明示した版を送る', async () => {
     checklist: { 希望確認: true },
   };
   await applicantApi.interview('a', 5, interview);
-  expect(apiClient.put).toHaveBeenCalledWith('/store/applicants/a/interview', {
+  expect(apiClient.put).toHaveBeenCalledWith('/applicants/a/interview', {
     version: 5,
     ...interview,
   });
   await applicantApi.transition('a', 6, 'WITHDRAWN', '本人の辞退');
-  expect(apiClient.post).toHaveBeenCalledWith('/store/applicants/a/transitions', {
+  expect(apiClient.post).toHaveBeenCalledWith('/applicants/a/transitions', {
     version: 6,
     status: 'WITHDRAWN',
     reason: '本人の辞退',
@@ -50,16 +50,16 @@ test('受付と面接と状態変更は明示した版を送る', async () => {
 });
 test('一覧条件と履歴cursorを保持する', async () => {
   await applicantApi.list({ page: 2, size: 20, search: '応募者', status: 'SCREENING' });
-  expect(apiClient.get).toHaveBeenCalledWith('/store/applicants', {
+  expect(apiClient.get).toHaveBeenCalledWith('/applicants', {
     params: { page: 2, size: 20, search: '応募者', status: 'SCREENING' },
   });
   await applicantApi.history('a', 'cursor');
-  expect(apiClient.get).toHaveBeenCalledWith('/store/applicants/a/history', {
+  expect(apiClient.get).toHaveBeenCalledWith('/applicants/a/history', {
     params: { cursor: 'cursor', size: 20 },
   });
   await applicantApi.get('a');
   await applicantApi.policy();
-  expect(apiClient.get).toHaveBeenCalledWith('/store/applicants/policy');
+  expect(apiClient.get).toHaveBeenCalledWith('/applicants/policy');
 });
 test('通常操作は採否に遷移せず終了済みを再開しない', () => {
   expect(allowedApplicantTransitions('RECEIVED')).toEqual(['SCREENING', 'WITHDRAWN']);

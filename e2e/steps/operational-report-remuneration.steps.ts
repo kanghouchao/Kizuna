@@ -13,7 +13,7 @@ import {
 } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
-const base = '/api/admin/operational-reports';
+const base = '/api/operational-reports/cross-store';
 let manager = '', reader = '', legacy = '', foreign = '', course = '', order = '';
 let bonus = { id: '', version: 0 }, movedBonus = { id: '', version: 0 };
 let person = 0, year = '', privateName = '', privateReason = '', readerEmail = '', readerPassword = '';
@@ -78,12 +78,12 @@ Given('帳票用の歴史在籍に日跨ぎ出勤と受注のない保証日と�
       cast_id: second, actual_start_at: `${year}-${day}T10:00:00`, actual_end_at: null,
     });
   }
-  const candidates = await request.get('/api/store/monthly-remunerations/casts', {
+  const candidates = await request.get('/api/monthly-remunerations/casts', {
     headers: storeHeaders(), params: { search: privateName },
   });
   expect(candidates.status(), await candidates.text()).toBe(200);
   person = (await candidates.json()).content[0].person_id;
-  const guarantee = await request.post('/api/store/remuneration-guarantees', {
+  const guarantee = await request.post('/api/remuneration-guarantees', {
     headers: storeHeaders(), data: {
       person_id: person, effective_from: `${year}-08-31`, state: 'ACTIVE', daily_amount: 10000,
       reason: privateReason, expected_version: 0, request_id: randomUUID(),
@@ -132,13 +132,13 @@ Then('報酬込み帳票は未確定と既知小計を区別し期間外の未�
     expect(grouped.rows.content).toHaveLength(group_by === 'month' ? 2 : 1);
     expect(grouped.rows.content.reduce((sum: number, row: { remuneration: { total: number } }) => sum + row.remuneration.total, 0)).toBe(22000);
   }
-  const store = await request.get('/api/store/operational-reports', { headers: storeHeaders(), params: parameters() });
+  const store = await request.get('/api/operational-reports', { headers: storeHeaders(), params: parameters() });
   expect(store.status(), await store.text()).toBe(200);
   expect((await store.json()).remuneration).toEqual(data.remuneration);
 });
 
 Then('旧帳票の権限と形式を保ち報酬額の追加参照を守る', async ({ request }) => {
-  for (const endpoint of [base, '/api/store/operational-reports']) {
+  for (const endpoint of [base, '/api/operational-reports']) {
     const endpointHeaders = endpoint === base ? headers(legacy) : { ...STORE_HEADERS, ...headers(legacy) };
     const denied = await request.get(endpoint, { headers: endpointHeaders, params: parameters() });
     expect(denied.status(), await denied.text()).toBe(403);
@@ -161,7 +161,7 @@ Then('旧帳票の権限と形式を保ち報酬額の追加参照を守る', as
     expect(text).not.toContain('remuneration_day');
     expect(text).not.toContain(bonus.id);
   }
-  expect((await request.get('/api/store/operational-reports', {
+  expect((await request.get('/api/operational-reports', {
     headers: { ...storeHeaders(), 'X-Store-ID': foreign }, params: parameters(),
   })).status()).toBe(403);
 });
@@ -239,7 +239,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
   const readGate = new Promise<void>(resolve => { releaseRead = resolve; });
   const fetched = new Promise<void>(resolve => { readFetched = resolve; });
   const finished = new Promise<void>(resolve => { readFinished = resolve; });
-  await page.route('**/api/admin/operational-reports?*', async route => {
+  await page.route('**/api/operational-reports/cross-store?*', async route => {
     const url = new URL(route.request().url());
     if (url.searchParams.get('from') !== `${year}-08-31` || url.searchParams.get('to') !== `${year}-08-31`) {
       await route.continue();
@@ -263,7 +263,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
     await expect(total).toHaveText('500');
   } finally {
     releaseRead();
-    await page.unroute('**/api/admin/operational-reports?*');
+    await page.unroute('**/api/operational-reports/cross-store?*');
   }
   await submit.click();
   await expect(total).toHaveText('500');
@@ -277,7 +277,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
   const finishedExport = new Promise<void>(resolve => { exportFinished = resolve; });
   const onDownload = () => { downloads++; };
   page.on('download', onDownload);
-  await page.route('**/api/admin/operational-reports/exports?*', async route => {
+  await page.route('**/api/operational-reports/cross-store/exports?*', async route => {
     exportCount++;
     expect(new URL(route.request().url()).searchParams.get('include_remuneration')).toBe('true');
     const response = await route.fetch();
@@ -302,7 +302,7 @@ Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱�
     expect(downloads).toBe(0);
   } finally {
     releaseExport();
-    await page.unroute('**/api/admin/operational-reports/exports?*');
+    await page.unroute('**/api/operational-reports/cross-store/exports?*');
     page.off('download', onDownload);
   }
   await toggle.check();
@@ -353,7 +353,7 @@ When('受注と付与を訂正して無効化する', async ({ request }) => {
   await invalidateOrder(request, manager, order, privateReason);
   expect(await report(request, '08-31', '09-02')).toMatchObject({ total_remuneration: 0,
     remuneration: { guarantee_total: 20000, bonus_total: 2000, total: 22000 } });
-  const correction = await request.post(`/api/store/bonus-awards/${bonus.id}/corrections`, {
+  const correction = await request.post(`/api/bonus-awards/${bonus.id}/corrections`, {
     headers: storeHeaders(), data: {
       award_date: `${year}-09-01`, amount: 2500, reason: privateReason, correction_reason: privateReason,
       expected_version: bonus.version, request_id: randomUUID(),
@@ -363,7 +363,7 @@ When('受注と付与を訂正して無効化する', async ({ request }) => {
   bonus = (await correction.json()).bonus;
   expect((await report(request, '08-31', '09-02')).remuneration.total).toBe(23000);
   await cancelBonusAward(request, reader, bonus.id, bonus.version, privateReason);
-  const move = await request.post(`/api/store/bonus-awards/${movedBonus.id}/corrections`, {
+  const move = await request.post(`/api/bonus-awards/${movedBonus.id}/corrections`, {
     headers: storeHeaders(), data: {
       award_date: `${year}-10-01`, amount: 500, reason: privateReason, correction_reason: privateReason,
       expected_version: movedBonus.version, request_id: randomUUID(),

@@ -16,7 +16,7 @@ describe('memberPointApi', () => {
   });
 
   it('balance は本人向けの残高の読み口を GET する', async () => {
-    // 店舗側の照会（/store/customers/{id}/member-point-balance）は顧客管理権限が要る別の口。
+    // 店舗側の照会（/customers/{id}/member-point-balance）は顧客管理権限が要る別の口。
     expect(await memberPointApi.balance()).toEqual({
       ok: true,
       url: '/me/points/balance',

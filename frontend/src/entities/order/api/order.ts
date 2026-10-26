@@ -76,14 +76,14 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 export const orderApi = {
   businessContactHistory: async (id: string, cursor?: string) => {
     const response = await apiClient.get(
-      `/store/orders/${requireId(id, '受注')}/business-contact-permission-history`,
+      `/orders/${requireId(id, '受注')}/business-contact-permission-history`,
       { params: { cursor, size: 20 } }
     );
     return fromCursorPage<BusinessContactHistory>(response.data);
   },
 
   customerCandidates: async (search: string, cursor?: string) => {
-    const response = await apiClient.get('/store/orders/customer-candidates', {
+    const response = await apiClient.get('/orders/customer-candidates', {
       params: { search, cursor, size: 20 },
     });
     return fromCursorPage<OrderCustomerCandidate>(response.data);
@@ -93,27 +93,27 @@ export const orderApi = {
     request: { expected_version: number; reason: string }
   ): Promise<OrderCorrectionHistoryEntry> => {
     const response = await apiClient.post(
-      `/store/orders/${requireId(id, '受注')}/completion-invalidation`,
+      `/orders/${requireId(id, '受注')}/completion-invalidation`,
       request
     );
     return response.data;
   },
   adminList: async (page: number) => {
-    const response = await apiClient.get('/admin/orders', {
+    const response = await apiClient.get('/orders/cross-store', {
       params: { page, size: 20, sort: 'createdAt,desc' },
     });
     return fromSpringPage<AdminOrder>(response.data);
   },
   /** storeId は横断一覧の行の店舗を名指すときだけ渡す。省略時は現在店舗（cookie）が注入される。 */
   correctionHistory: async (id: string, cursor?: string, storeId?: number) => {
-    const response = await apiClient.get(`/store/orders/${requireId(id, '受注')}/corrections`, {
+    const response = await apiClient.get(`/orders/${requireId(id, '受注')}/corrections`, {
       params: { cursor, size: 20 },
       ...(storeId === undefined ? {} : { headers: { 'X-Store-ID': String(storeId) } }),
     });
     return fromCursorPage<OrderCorrectionHistoryEntry>(response.data);
   },
   surchargeCandidates: async (search: string, page: number) => {
-    const response = await apiClient.get('/store/orders/surcharge-candidates', {
+    const response = await apiClient.get('/orders/surcharge-candidates', {
       params: { search, page, size: 20 },
     });
     return fromSpringPage<SurchargeCandidate>(response.data);
@@ -124,40 +124,40 @@ export const orderApi = {
     cursor?: string
   ): Promise<{ content: SurchargeCandidate[]; next_cursor?: string }> =>
     (
-      await apiClient.get(`/store/orders/${requireId(id, '受注')}/surcharge-revisions`, {
+      await apiClient.get(`/orders/${requireId(id, '受注')}/surcharge-revisions`, {
         params: { search, cursor, size: 20 },
       })
     ).data,
 
   specialServiceCandidates: async (castId: string, search: string, page: number) => {
-    const response = await apiClient.get('/store/orders/special-service-candidates', {
+    const response = await apiClient.get('/orders/special-service-candidates', {
       params: { cast_id: castId, search, page, size: 20 },
     });
     return fromSpringPage<SpecialServiceCandidate>(response.data);
   },
   specialServiceRevisions: async (id: string, search: string, cursor?: string) => {
     const response = await apiClient.get(
-      `/store/orders/${requireId(id, '受注')}/special-service-revisions`,
+      `/orders/${requireId(id, '受注')}/special-service-revisions`,
       { params: { search, cursor, size: 20 } }
     );
     return fromCursorPage<SpecialServiceRevision>(response.data);
   },
   specialServiceEvents: async (id: string, cursor?: string) => {
     const response = await apiClient.get(
-      `/store/orders/${requireId(id, '受注')}/special-service-events`,
+      `/orders/${requireId(id, '受注')}/special-service-events`,
       { params: { cursor, size: 20 } }
     );
     return fromCursorPage<OrderSpecialServiceEvent>(response.data);
   },
   start: async (id: string, expectedVersion: number, reason: string): Promise<Order> => {
-    const response = await apiClient.post(`/store/orders/${requireId(id, '受注')}/start`, {
+    const response = await apiClient.post(`/orders/${requireId(id, '受注')}/start`, {
       expected_version: expectedVersion,
       reason,
     });
     return response.data;
   },
   courseCandidates: async (search: string, page: number) => {
-    const response = await apiClient.get('/store/orders/course-candidates', {
+    const response = await apiClient.get('/orders/course-candidates', {
       params: { search, page, size: 20 },
     });
     return fromSpringPage<CourseCandidate>(response.data);
@@ -168,34 +168,34 @@ export const orderApi = {
     cursor?: string
   ): Promise<{ content: CourseCandidate[]; next_cursor?: string }> => {
     return (
-      await apiClient.get(`/store/orders/${requireId(id, '受注')}/course-revisions`, {
+      await apiClient.get(`/orders/${requireId(id, '受注')}/course-revisions`, {
         params: { search, cursor, size: 20 },
       })
     ).data;
   },
   previewCreate: async (data: OrderCreateRequest): Promise<OrderPreview> =>
-    (await apiClient.post('/store/orders/preview', data)).data,
+    (await apiClient.post('/orders/preview', data)).data,
   previewUpdate: async (id: string | undefined, data: OrderUpdateRequest): Promise<OrderPreview> =>
-    (await apiClient.post(`/store/orders/${requireId(id, '受注')}/preview`, data)).data,
+    (await apiClient.post(`/orders/${requireId(id, '受注')}/preview`, data)).data,
   previewCorrection: async (
     id: string | undefined,
     data: OrderCorrectionRequest
   ): Promise<OrderPreview> =>
-    (await apiClient.post(`/store/orders/${requireId(id, '受注')}/correction-preview`, data)).data,
+    (await apiClient.post(`/orders/${requireId(id, '受注')}/correction-preview`, data)).data,
 
   list: async (
     params?: PaginationParams & { customer_id?: string }
   ): Promise<PageResult<OrderSummaryRow>> => {
-    const response = await apiClient.get('/store/orders', { params });
+    const response = await apiClient.get('/orders', { params });
     return fromSpringPage(response.data);
   },
   /** 受注 1 件。編集ページは開くたびにここから読み直す（一覧の行を種にすると陳腐化した値で上書きする）。 */
   get: async (id: string | undefined): Promise<Order> => {
-    const response = await apiClient.get(`/store/orders/${requireId(id, '受注')}`);
+    const response = await apiClient.get(`/orders/${requireId(id, '受注')}`);
     return response.data;
   },
   create: async (data: OrderCreateRequest): Promise<Order> => {
-    const response = await apiClient.post('/store/orders', data);
+    const response = await apiClient.post('/orders', data);
     return response.data;
   },
   /**
@@ -208,7 +208,7 @@ export const orderApi = {
    * 区別できないため 400 になる。
    */
   update: async (id: string | undefined, data: OrderUpdateRequest): Promise<Order> => {
-    const response = await apiClient.put(`/store/orders/${requireId(id, '受注')}`, data);
+    const response = await apiClient.put(`/orders/${requireId(id, '受注')}`, data);
     return response.data;
   },
   /**
@@ -218,7 +218,7 @@ export const orderApi = {
    * 呼出側は行を消すか一覧を取り直す。
    */
   cancel: async (id: string | undefined, data: OrderCancellationRequest): Promise<void> => {
-    await apiClient.post(`/store/orders/${requireId(id, '受注')}/cancellation`, data);
+    await apiClient.post(`/orders/${requireId(id, '受注')}/cancellation`, data);
   },
   /**
    * 完了受注の明細・実績時刻・コース・特殊サービスを理由付きで訂正する。
@@ -229,10 +229,7 @@ export const orderApi = {
     id: string | undefined,
     data: OrderCorrectionRequest
   ): Promise<OrderCorrectionResult> => {
-    const response = await apiClient.post(
-      `/store/orders/${requireId(id, '受注')}/corrections`,
-      data
-    );
+    const response = await apiClient.post(`/orders/${requireId(id, '受注')}/corrections`, data);
     return response.data;
   },
   /**
@@ -243,7 +240,7 @@ export const orderApi = {
   listWorkQueue: async (
     params: OrderQueryParams & CursorParams
   ): Promise<CursorPageResult<OrderWorkQueueRow>> => {
-    const response = await apiClient.get('/store/orders/work-queue', {
+    const response = await apiClient.get('/orders/work-queue', {
       params: toQuery(params),
     });
     return fromCursorPage(response.data);
@@ -256,13 +253,13 @@ export const orderApi = {
   listArchive: async (
     params: OrderQueryParams & PaginationParams
   ): Promise<PageResult<OrderArchiveRow>> => {
-    const response = await apiClient.get('/store/orders/archive', {
+    const response = await apiClient.get('/orders/archive', {
       params: toQuery(params),
     });
     return fromSpringPage(response.data);
   },
   listReceptionists: async (): Promise<OrderReceptionist[]> => {
-    const response = await apiClient.get('/store/orders/receptionists');
+    const response = await apiClient.get('/orders/receptionists');
     return response.data;
   },
   /**
@@ -272,7 +269,7 @@ export const orderApi = {
    * 両方がここでしか成り立たないため。
    */
   listCastCandidates: async (params?: { search?: string }): Promise<OrderCastCandidate[]> => {
-    const response = await apiClient.get('/store/orders/cast-candidates', { params });
+    const response = await apiClient.get('/orders/cast-candidates', { params });
     return response.data;
   },
   /**
@@ -284,10 +281,7 @@ export const orderApi = {
     id: string | undefined,
     data: OrderCompletionRequest
   ): Promise<OrderCompletionResult> => {
-    const response = await apiClient.post(
-      `/store/orders/${requireId(id, '受注')}/completion`,
-      data
-    );
+    const response = await apiClient.post(`/orders/${requireId(id, '受注')}/completion`, data);
     return response.data;
   },
   /**
@@ -299,14 +293,14 @@ export const orderApi = {
     data: OrderCompletionRequest
   ): Promise<OrderPreview> => {
     const response = await apiClient.post(
-      `/store/orders/${requireId(id, '受注')}/completion-preview`,
+      `/orders/${requireId(id, '受注')}/completion-preview`,
       data
     );
     return response.data;
   },
   /** 受注 1 件の帰属の現況。無効化と再発行のどちらを提示するかはこの読み口で決まる。 */
   attribution: async (id: string | undefined): Promise<OrderAttribution> => {
-    const response = await apiClient.get(`/store/orders/${requireId(id, '受注')}/attribution`);
+    const response = await apiClient.get(`/orders/${requireId(id, '受注')}/attribution`);
     return response.data;
   },
   /**
@@ -319,7 +313,7 @@ export const orderApi = {
     data: OrderAttributionInvalidationRequest
   ): Promise<OrderAttribution> => {
     const response = await apiClient.post(
-      `/store/orders/${requireId(id, '受注')}/attribution/invalidation`,
+      `/orders/${requireId(id, '受注')}/attribution/invalidation`,
       data
     );
     return response.data;
@@ -330,7 +324,7 @@ export const orderApi = {
    * 生値はこの応答にしか現れない（保存されるのはダイジェストだけ）。
    */
   reissueReceiptToken: async (id: string | undefined): Promise<OrderReceiptTokenIssue> => {
-    const response = await apiClient.post(`/store/orders/${requireId(id, '受注')}/receipt-token`);
+    const response = await apiClient.post(`/orders/${requireId(id, '受注')}/receipt-token`);
     return response.data;
   },
   /** 誤帰属の訂正の進み具合。差し引く既定値（付与の全額）と引き残しはここから取る。 */
@@ -339,7 +333,7 @@ export const orderApi = {
     attributionId: number
   ): Promise<OrderAttributionCorrection> => {
     const response = await apiClient.get(
-      `/store/orders/${requireId(id, '受注')}/attribution/correction`,
+      `/orders/${requireId(id, '受注')}/attribution/correction`,
       {
         params: { attribution_id: attributionId },
       }
@@ -348,9 +342,7 @@ export const orderApi = {
   },
   /** ポイント巻き戻しの下見。実行前に動く量を示すためだけの読み口で、台帳へは何も書かない。 */
   pointRollbackPreview: async (id: string | undefined): Promise<OrderPointRollbackPreview> => {
-    const response = await apiClient.get(
-      `/store/orders/${requireId(id, '受注')}/point-rollback-preview`
-    );
+    const response = await apiClient.get(`/orders/${requireId(id, '受注')}/point-rollback-preview`);
     return response.data;
   },
   /**
@@ -363,10 +355,7 @@ export const orderApi = {
     id: string | undefined,
     data: OrderPointRollbackRequest
   ): Promise<OrderPointRollbackResult> => {
-    const response = await apiClient.post(
-      `/store/orders/${requireId(id, '受注')}/point-rollback`,
-      data
-    );
+    const response = await apiClient.post(`/orders/${requireId(id, '受注')}/point-rollback`, data);
     return response.data;
   },
   /**
@@ -380,7 +369,7 @@ export const orderApi = {
     data: OrderAttributionCorrectionRequest
   ): Promise<OrderAttributionCorrection> => {
     const response = await apiClient.post(
-      `/store/orders/${requireId(id, '受注')}/attribution/correction`,
+      `/orders/${requireId(id, '受注')}/attribution/correction`,
       data
     );
     return response.data;
@@ -390,14 +379,14 @@ export const orderApi = {
 /** 店舗の予約受付箱 API。申請（OrderApplication）の一覧・確定・謝絶を受け持つ。 */
 export const orderApplicationApi = {
   detail: async (id: string): Promise<OrderApplicationDetail> =>
-    (await apiClient.get(`/store/order-applications/${requireId(id, '予約申請')}`)).data,
+    (await apiClient.get(`/order-applications/${requireId(id, '予約申請')}`)).data,
   previewConfirmation: async (
     id: string | undefined,
     data: OrderApplicationConfirmationRequest
   ): Promise<OrderPreview> =>
     (
       await apiClient.post(
-        `/store/order-applications/${requireId(id, '予約申請')}/confirmation-preview`,
+        `/order-applications/${requireId(id, '予約申請')}/confirmation-preview`,
         data
       )
     ).data,
@@ -411,7 +400,7 @@ export const orderApplicationApi = {
     params: { statuses: OrderApplicationStatus[] } & CursorParams
   ): Promise<CursorPageResult<OrderApplicationRow>> => {
     const { statuses, ...rest } = params;
-    const response = await apiClient.get('/store/order-applications', {
+    const response = await apiClient.get('/order-applications', {
       params: { ...rest, statuses: statuses.join(',') },
     });
     return fromCursorPage(response.data);
@@ -425,14 +414,14 @@ export const orderApplicationApi = {
     data: OrderApplicationConfirmationRequest
   ): Promise<Order> => {
     const response = await apiClient.post(
-      `/store/order-applications/${requireId(id, '予約申請')}/confirmation`,
+      `/order-applications/${requireId(id, '予約申請')}/confirmation`,
       data
     );
     return response.data;
   },
   /** 予約申請を理由付きで謝絶する。応答は 204（本体なし）で、呼出側は行を消す。 */
   decline: async (id: string | undefined, data: OrderApplicationDeclineRequest): Promise<void> => {
-    await apiClient.post(`/store/order-applications/${requireId(id, '予約申請')}/refusal`, data);
+    await apiClient.post(`/order-applications/${requireId(id, '予約申請')}/refusal`, data);
   },
 };
 
@@ -442,11 +431,11 @@ export const orderApplicationApi = {
  */
 export const guestOrderApplicationApi = {
   consent: async (): Promise<GuestContactConsentText> =>
-    (await apiClient.get('/store/order-applications/public/contact-consent')).data,
+    (await apiClient.get('/order-applications/public/contact-consent')).data,
   request: async (
     data: GuestOrderApplicationCreateRequest
   ): Promise<GuestOrderApplicationResponse> => {
-    const response = await apiClient.post('/store/order-applications/public', data);
+    const response = await apiClient.post('/order-applications/public', data);
     return response.data;
   },
 };

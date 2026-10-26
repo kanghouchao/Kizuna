@@ -244,7 +244,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     const beforeDenials = await auditIds(request);
     expect(
       (
-        await request.put(`/api/store/services/${id}`, {
+        await request.put(`/api/services/${id}`, {
           headers: headers(actor.token),
           data: original,
         })
@@ -252,7 +252,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     ).toBe(409);
     expect(
       (
-        await request.delete(`/api/store/services/${id}`, {
+        await request.delete(`/api/services/${id}`, {
           headers: headers(actor.token),
           params: { expected_version: 1 },
         })
@@ -260,7 +260,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     ).toBe(409);
     expect(
       (
-        await request.put(`/api/store/services/${id}`, {
+        await request.put(`/api/services/${id}`, {
           headers: headers(actor.token),
           data: { ...changed, price: 1, expected_version: 3 },
         })
@@ -268,7 +268,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     ).toBe(400);
     expect(
       (
-        await request.put(`/api/store/services/${id}`, {
+        await request.put(`/api/services/${id}`, {
           headers: headers(limited),
           data: { ...changed, expected_version: 3 },
         })
@@ -276,7 +276,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     ).toBe(403);
     expect(
       (
-        await request.delete(`/api/store/services/${id}`, {
+        await request.delete(`/api/services/${id}`, {
           headers: headers(limited),
           params: { expected_version: 3 },
         })
@@ -284,7 +284,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     ).toBe(403);
     expect(
       (
-        await request.post("/api/store/services", {
+        await request.post("/api/services", {
           headers: headers(limited),
           data: {
             kind: "SPECIAL_SERVICE",
@@ -298,7 +298,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     ).toBe(403);
     expect(
       (
-        await request.put(`/api/store/services/${id}`, {
+        await request.put(`/api/services/${id}`, {
           headers: headers(ordinary, otherStore),
           data: { ...changed, expected_version: 3 },
         })
@@ -306,7 +306,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     ).toBe(404);
     expect(
       (
-        await request.delete(`/api/store/services/${id}`, {
+        await request.delete(`/api/services/${id}`, {
           headers: headers(ordinary, otherStore),
           params: { expected_version: 3 },
         })
@@ -403,7 +403,7 @@ When("設定と本人選択を変更し同値と拒否条件を確認する", as
     const deleted = await auditIds(request);
     expect(
       (
-        await request.delete(`/api/store/services/${id}`, {
+        await request.delete(`/api/services/${id}`, {
           headers: headers(actor.token),
           params: { expected_version: 4 },
         })

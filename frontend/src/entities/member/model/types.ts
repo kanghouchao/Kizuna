@@ -1,4 +1,4 @@
-/** 会員登録リクエスト（POST /admin/members）。member/api/dto/MemberRegistrationRequest.java に対応。 */
+/** 会員登録リクエスト（POST /members）。member/api/dto/MemberRegistrationRequest.java に対応。 */
 export interface MemberRegisterRequest {
   email: string;
   password: string;

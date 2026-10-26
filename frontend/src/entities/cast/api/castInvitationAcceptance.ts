@@ -6,7 +6,7 @@ import {
 } from '../model/types';
 
 /**
- * 招待受諾の公開 API（/admin/cast-invitations 配下、StoreIdInterceptor を通らない）。
+ * 招待受諾の公開 API（/cast-invitations 配下、現在店舗を受けない）。
  *
  * トークンはパスではなく本文で送る。パスも問い合わせ文字列もリクエストターゲットとして送られ、
  * リバースプロキシとアプリのアクセスログに 72 時間有効の生値がそのまま残るため、招待が読まれる
@@ -16,7 +16,7 @@ import {
 export const castInvitationAcceptanceApi = {
   /** 招待を照会する */
   view: async (token: string): Promise<CastInvitationDetailResponse> => {
-    const response = await apiClient.post('/admin/cast-invitations/view', { token });
+    const response = await apiClient.post('/cast-invitations/view', { token });
     return response.data;
   },
   /** 新規登録して招待を受諾する */
@@ -24,7 +24,7 @@ export const castInvitationAcceptanceApi = {
     token: string,
     data: CastInvitationAcceptRequest
   ): Promise<CastAcceptanceResponse> => {
-    const response = await apiClient.post('/admin/cast-invitations/acceptance', {
+    const response = await apiClient.post('/cast-invitations/acceptance', {
       ...data,
       token,
     });
@@ -32,7 +32,7 @@ export const castInvitationAcceptanceApi = {
   },
   /** 既存アカウント（CAST ロール限定）で招待を受諾する */
   acceptAsExistingUser: async (token: string): Promise<CastAcceptanceResponse> => {
-    const response = await apiClient.post('/admin/cast-invitations/acceptance/existing', {
+    const response = await apiClient.post('/cast-invitations/acceptance/existing', {
       token,
     });
     return response.data;

@@ -12,8 +12,8 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.survey.api.store.SurveyController;
-import com.kizuna.survey.api.store.SurveyResponseController;
+import com.kizuna.survey.api.SurveyController;
+import com.kizuna.survey.api.SurveyResponseController;
 import com.kizuna.survey.application.SurveyReadService;
 import com.kizuna.survey.application.SurveyService;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -81,7 +81,7 @@ class SurveyInputPrivacyTest {
               valid.substring(0, valid.lastIndexOf('}')))) {
         var response =
             mvc.perform(
-                    post("/store/surveys")
+                    post("/surveys")
                         .with(csrf())
                         .header("X-Store-ID", "1")
                         .with(
@@ -98,7 +98,7 @@ class SurveyInputPrivacyTest {
       }
       var actionResponse =
           mvc.perform(
-                  post("/store/surveys/1/revisions/2/openings")
+                  post("/surveys/1/revisions/2/openings")
                       .with(csrf())
                       .header("X-Store-ID", "1")
                       .with(
@@ -113,8 +113,7 @@ class SurveyInputPrivacyTest {
               .getResponse();
       assertThat(actionResponse.getContentAsString()).doesNotContain(secret, "非公開設問文");
       for (String endpoint :
-          List.of(
-              "/store/surveys/1/revisions/2/responses", "/store/survey-responses/3/corrections")) {
+          List.of("/surveys/1/revisions/2/responses", "/survey-responses/3/corrections")) {
         for (String timestamp :
             List.of(
                 "1767225600",

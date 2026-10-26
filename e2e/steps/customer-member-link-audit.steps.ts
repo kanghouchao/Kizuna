@@ -120,7 +120,7 @@ When(
             secret,
           ),
         );
-      const path = `/api/store/customers/${customer}/member-link`;
+      const path = `/api/customers/${customer}/member-link`;
       await linkMemberToCustomer(request, token, customer, codes[0]);
       const first = (await currentCustomerMemberLink(request, token, customer))
         .id;

@@ -53,7 +53,7 @@ it('成功した画像Blobとキャンセル用signalを保持する', async () 
   const signal = new AbortController().signal;
   get.mockResolvedValue({ data: blob });
   expect(await applicantAttachmentApi.download('a', 'image', signal)).toBe(blob);
-  expect(get).toHaveBeenCalledWith('/store/applicants/a/attachments/image/content', {
+  expect(get).toHaveBeenCalledWith('/applicants/a/attachments/image/content', {
     responseType: 'blob',
     signal,
     timeout: 60_000,
@@ -70,7 +70,7 @@ test('操作結果の照会はWRITE専用資源を使い404を成功に置き換
     idempotency_key: key,
     status: 'READY',
   });
-  expect(apiClient.get).toHaveBeenCalledWith(`/store/applicants/a/attachment-operations/${key}`);
+  expect(apiClient.get).toHaveBeenCalledWith(`/applicants/a/attachment-operations/${key}`);
   const missing = { response: { status: 404 } };
   (apiClient.get as jest.Mock).mockRejectedValueOnce(missing);
   await expect(applicantAttachmentApi.operation('a', key)).rejects.toBe(missing);

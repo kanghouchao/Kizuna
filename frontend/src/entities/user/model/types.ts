@@ -132,7 +132,7 @@ export interface RoleSummaryResponse {
   permission_count: number;
 }
 
-// ロール詳細（GET /admin/roles/{id} と作成・更新の応答）
+// ロール詳細（GET /roles/{id} と作成・更新の応答）
 export interface RoleResponse {
   id?: number;
   name?: string;

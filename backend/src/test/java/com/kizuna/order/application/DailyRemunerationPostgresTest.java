@@ -9,8 +9,8 @@ import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastRepository;
+import com.kizuna.order.api.DailyRemunerationController;
 import com.kizuna.order.api.me.SelfDailyRemunerationController;
-import com.kizuna.order.api.store.DailyRemunerationController;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
@@ -209,7 +209,7 @@ class DailyRemunerationPostgresTest {
           executor.submit(
               () ->
                   http.perform(
-                          get(self ? "/me/daily-remunerations" : "/store/daily-remunerations")
+                          get(self ? "/me/daily-remunerations" : "/daily-remunerations")
                               .principal(() -> email)
                               .header("X-Store-ID", storeId.toString())
                               .param("person_id", personId.toString())

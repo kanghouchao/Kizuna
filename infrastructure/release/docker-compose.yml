@@ -140,8 +140,8 @@ services:
     networks:
       - network
     environment:
-      - STORE_LOOKUP_API_URL=${STORE_LOOKUP_API_URL:-http://backend:8080/admin/stores/lookup}
-      - STORE_CONFIG_API_URL=${STORE_CONFIG_API_URL:-http://backend:8080/store/config/public}
+      - STORE_LOOKUP_API_URL=${STORE_LOOKUP_API_URL:-http://backend:8080/stores/lookup}
+      - STORE_CONFIG_API_URL=${STORE_CONFIG_API_URL:-http://backend:8080/config/public}
       - NODE_ENV
       - APP_DOMAIN
     depends_on:

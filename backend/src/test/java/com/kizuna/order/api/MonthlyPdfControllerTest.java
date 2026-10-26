@@ -15,7 +15,6 @@ import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
 import com.kizuna.order.api.me.SelfMonthlyPdfController;
-import com.kizuna.order.api.store.StoreMonthlyPdfController;
 import com.kizuna.order.application.MonthlyPdfService;
 import com.kizuna.order.application.MonthlyPdfSnapshotService;
 import com.kizuna.order.application.MonthlyRemunerationService;
@@ -62,7 +61,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@WebMvcTest({StoreMonthlyPdfController.class, SelfMonthlyPdfController.class})
+@WebMvcTest({MonthlyPdfController.class, SelfMonthlyPdfController.class})
 @Import({
   MonthlyPdfControllerTest.Config.class,
   MonthlyPdfService.class,
@@ -146,7 +145,7 @@ class MonthlyPdfControllerTest {
   }
 
   private MockHttpServletRequestBuilder request(String scope) {
-    String path = scope.equals("self") ? "/me" : "/store";
+    String prefix = scope.equals("self") ? "/me" : "";
     String authority =
         switch (scope) {
           case "store" -> "PERM_ORDER_MANAGE";
@@ -154,7 +153,7 @@ class MonthlyPdfControllerTest {
           default -> "ROLE_CAST";
         };
     var request =
-        get(path + "/monthly-remunerations/pdf")
+        get(prefix + "/monthly-remunerations/pdf")
             .with(
                 jwt()
                     .jwt(j -> j.subject("actor"))

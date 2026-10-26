@@ -17,7 +17,7 @@ import {
 export const shiftApi = {
   /** 期間内のシフト一覧を取得する（from==to で単日、月初〜月末で月間） */
   list: async (params: { from: string; to: string }): Promise<ShiftResponse[]> => {
-    const response = await apiClient.get('/store/shifts', { params });
+    const response = await apiClient.get('/shifts', { params });
     return response.data;
   },
   /** 指定店舗・指定日の確定シフトに入っているキャストを取得する（会員の指名候補）。 */
@@ -25,7 +25,7 @@ export const shiftApi = {
     store_id: number;
     date: string;
   }): Promise<ConfirmedShiftCast[]> => {
-    const response = await apiClient.get('/admin/shifts/casts', { params });
+    const response = await apiClient.get('/shifts/casts', { params });
     return response.data;
   },
   /** 本人（キャスト）の週間確定シフトを跨店で取得する（cast_id 単層自限）。 */
@@ -35,24 +35,24 @@ export const shiftApi = {
   },
   /** シフトを新規作成する */
   create: async (data: ShiftCreateRequest): Promise<ShiftResponse> => {
-    const response = await apiClient.post('/store/shifts', data);
+    const response = await apiClient.post('/shifts', data);
     return response.data;
   },
   /** シフトを更新する */
   update: async (id: string | undefined, data: ShiftUpdateRequest): Promise<ShiftResponse> => {
-    const response = await apiClient.put(`/store/shifts/${requireId(id, 'シフト')}`, data);
+    const response = await apiClient.put(`/shifts/${requireId(id, 'シフト')}`, data);
     return response.data;
   },
   /** シフトの公開可否を切り替える（承認とは独立の軸 — ADR 0015）。望む状態を明示して送る。 */
   changePublication: async (id: string | undefined, published: boolean): Promise<ShiftResponse> => {
-    const response = await apiClient.put(`/store/shifts/${requireId(id, 'シフト')}/publication`, {
+    const response = await apiClient.put(`/shifts/${requireId(id, 'シフト')}/publication`, {
       published,
     });
     return response.data;
   },
   /** シフトを削除する */
   delete: async (id: string | undefined): Promise<void> => {
-    await apiClient.delete(`/store/shifts/${requireId(id, 'シフト')}`);
+    await apiClient.delete(`/shifts/${requireId(id, 'シフト')}`);
   },
   /** 出勤希望を提出する（本人・cast）。 */
   submitShiftRequest: async (data: ShiftRequestCreateRequest): Promise<ShiftRequestResponse> => {
@@ -85,7 +85,7 @@ export const shiftApi = {
   },
   /** 店舗側 inbox の出勤希望一覧を取得する（status 省略で全件）。 */
   listShiftRequests: async (params?: { status?: string }): Promise<StoreShiftRequestItem[]> => {
-    const response = await apiClient.get('/store/shift-requests', { params });
+    const response = await apiClient.get('/shift-requests', { params });
     return response.data;
   },
   /**
@@ -99,16 +99,14 @@ export const shiftApi = {
     published?: boolean
   ): Promise<StoreShiftRequestItem> => {
     const response = await apiClient.post(
-      `/store/shift-requests/${requireId(id, '出勤希望')}/approval`,
+      `/shift-requests/${requireId(id, '出勤希望')}/approval`,
       published === undefined ? undefined : { published }
     );
     return response.data;
   },
   /** 出勤希望を却下する。 */
   declineShiftRequest: async (id: string | undefined): Promise<StoreShiftRequestItem> => {
-    const response = await apiClient.post(
-      `/store/shift-requests/${requireId(id, '出勤希望')}/rejection`
-    );
+    const response = await apiClient.post(`/shift-requests/${requireId(id, '出勤希望')}/rejection`);
     return response.data;
   },
 };

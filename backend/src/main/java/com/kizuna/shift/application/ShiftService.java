@@ -59,7 +59,7 @@ public class ShiftService {
 
   /**
    * 公開出勤表用に「現在の営業日」の露出可能（CONFIRMED ∧ 公開可）なシフトを start_time 昇順で返す。 公開条件（PUBLISHED ∧
-   * ENROLLED）を満たさないキャストのシフトは公開一覧 ({@code /store/casts/public}) に整合させて除外する。cast 表示情報は公開されている
+   * ENROLLED）を満たさないキャストのシフトは公開一覧 ({@code /casts/public}) に整合させて除外する。cast 表示情報は公開されている
    * cast.domain（{@code CastProfile}）を 直接参照して結合する（cast.api.dto は公開面ではないため）。t_cast_enrollments の参照は
    * {@code findPublished} の店舗条件で現店舗に絞られる。
    */

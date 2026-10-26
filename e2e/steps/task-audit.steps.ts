@@ -20,8 +20,8 @@ const menuPaths = (menus: MenuNode[]): (string | null)[] => menus.flatMap(menu =
 Given('専用の処理実行者とサービスIDが用意されている', async ({ request, $testInfo }) => {
   $testInfo.setTimeout(120000);
   admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
-  expect((await request.get('/api/admin/task-executions', { headers: headers(admin) })).status()).toBe(200);
-  expect((await request.get('/api/admin/audit-events', { headers: headers(admin) })).status()).toBe(200);
+  expect((await request.get('/api/task-executions', { headers: headers(admin) })).status()).toBe(200);
+  expect((await request.get('/api/audit-events', { headers: headers(admin) })).status()).toBe(200);
   const suffix = Date.now().toString();
   password = 'Audit-' + suffix + '-fixture';
   email = 'audit-' + suffix + '@kizuna.test';
@@ -33,14 +33,14 @@ Given('専用の処理実行者とサービスIDが用意されている', async
   restricted = await loginUser(request, limitedEmail, password);
   serviceRoleId = await createPermissionRole(request, admin, '実行確認-' + suffix, ['TASK_EXECUTE']);
   serviceName = '履歴に残るサービス-' + suffix;
-  const service = await request.post('/api/admin/service-identities', { headers: headers(admin), data: { display_name: serviceName, role_ids: [serviceRoleId], store_scope_type: 'ALL_STORES', store_ids: [] } });
+  const service = await request.post('/api/service-identities', { headers: headers(admin), data: { display_name: serviceName, role_ids: [serviceRoleId], store_scope_type: 'ALL_STORES', store_ids: [] } });
   expect(service.status(), await service.text()).toBe(201);
   serviceId = (await service.json()).id;
 });
 
 When('処理を再送し主体の権限と対象範囲を検証する', async ({ request, browser }) => {
   for (const [token, visible] of [[operator, true], [restricted, false], [admin, true]] as const) {
-    const menus = await request.get('/api/admin/menus/me', { headers: headers(token) });
+    const menus = await request.get('/api/menus/me', { headers: headers(token) });
     expect(menus.status()).toBe(200);
     const paths = menuPaths(await menus.json());
     expect(paths.includes('/admin/task-executions')).toBe(visible);
@@ -60,58 +60,58 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
     await restrictedPage.close();
   }
   const body = { task_name: 'SERVICE_IDENTITY_CHECK', logical_key: crypto.randomUUID(), service_user_id: serviceId, store_id: null, period_start: '2026-10-07', period_end: '2026-10-07' };
-  expect((await request.get('/api/admin/task-executions', { headers: headers(restricted) })).status()).toBe(403);
-  expect((await request.get('/api/admin/audit-events', { headers: headers(restricted) })).status()).toBe(403);
-  const initial = await request.post('/api/admin/task-executions', { headers: headers(operator), data: body });
+  expect((await request.get('/api/task-executions', { headers: headers(restricted) })).status()).toBe(403);
+  expect((await request.get('/api/audit-events', { headers: headers(restricted) })).status()).toBe(403);
+  const initial = await request.post('/api/task-executions', { headers: headers(operator), data: body });
   expect(initial.status(), await initial.text()).toBe(201);
   const execution = (await initial.json()).execution;
   expect(execution.status).toBe('SUCCEEDED');
   expect(execution.processed_count).toBe(0);
-  const replay = await request.post('/api/admin/task-executions', { headers: headers(operator), data: body });
+  const replay = await request.post('/api/task-executions', { headers: headers(operator), data: body });
   expect(replay.status()).toBe(200);
   expect((await replay.json()).execution.id).toBe(execution.id);
-  expect((await request.post('/api/admin/task-executions', { headers: headers(operator), data: { ...body, period_end: '2026-10-08' } })).status()).toBe(409);
-  expect((await request.post(`/api/admin/task-executions/${execution.id}/retries`, { headers: headers(operator), data: { reason: '完了済みの再試行' } })).status()).toBe(409);
-  expect((await request.post('/api/admin/task-executions', { headers: headers(operator), data: { ...body, task_name: 'UNREGISTERED' } })).status()).toBe(400);
-  expect((await request.post(`/api/admin/service-identities/${serviceId}/suspension`, { headers: headers(admin) })).status()).toBe(204);
-  const replayAfterSuspension = await request.post('/api/admin/task-executions', { headers: headers(operator), data: body });
+  expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, period_end: '2026-10-08' } })).status()).toBe(409);
+  expect((await request.post(`/api/task-executions/${execution.id}/retries`, { headers: headers(operator), data: { reason: '完了済みの再試行' } })).status()).toBe(409);
+  expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, task_name: 'UNREGISTERED' } })).status()).toBe(400);
+  expect((await request.post(`/api/service-identities/${serviceId}/suspension`, { headers: headers(admin) })).status()).toBe(204);
+  const replayAfterSuspension = await request.post('/api/task-executions', { headers: headers(operator), data: body });
   expect(replayAfterSuspension.status(), await replayAfterSuspension.text()).toBe(200);
   expect((await replayAfterSuspension.json()).execution.id).toBe(execution.id);
-  expect((await request.post('/api/admin/task-executions', { headers: headers(operator), data: { ...body, period_end: '2026-10-08' } })).status()).toBe(409);
-  const adminReplay = await request.post('/api/admin/task-executions', { headers: headers(admin), data: body });
+  expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, period_end: '2026-10-08' } })).status()).toBe(409);
+  const adminReplay = await request.post('/api/task-executions', { headers: headers(admin), data: body });
   expect(adminReplay.status()).toBe(200);
   expect((await adminReplay.json()).execution.id).toBe(execution.id);
-  expect((await request.post('/api/admin/task-executions', { headers: headers(restricted), data: body })).status()).toBe(403);
-  expect((await request.post('/api/admin/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
-  expect((await request.post(`/api/admin/service-identities/${serviceId}/resumption`, { headers: headers(admin) })).status()).toBe(204);
+  expect((await request.post('/api/task-executions', { headers: headers(restricted), data: body })).status()).toBe(403);
+  expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
+  expect((await request.post(`/api/service-identities/${serviceId}/resumption`, { headers: headers(admin) })).status()).toBe(204);
   for (const [id, replacement, callerRevoked] of [
     [serviceRoleId, ['STORE_VIEW'], false],
     [roleId, ['AUDIT_VIEW'], true],
   ] as const) {
-    const current = await request.get(`/api/admin/roles/${id}`, { headers: headers(admin) });
+    const current = await request.get(`/api/roles/${id}`, { headers: headers(admin) });
     expect(current.status()).toBe(200);
     const original = await current.json();
-    const changed = await request.put(`/api/admin/roles/${id}`, { headers: headers(admin), data: { name: original.name, permissions: replacement, version: original.version } });
+    const changed = await request.put(`/api/roles/${id}`, { headers: headers(admin), data: { name: original.name, permissions: replacement, version: original.version } });
     expect(changed.status(), await changed.text()).toBe(200);
-    const replayWithRevocation = await request.post('/api/admin/task-executions', { headers: headers(operator), data: body });
+    const replayWithRevocation = await request.post('/api/task-executions', { headers: headers(operator), data: body });
     expect(replayWithRevocation.status()).toBe(callerRevoked ? 403 : 200);
     if (!callerRevoked) {
       expect((await replayWithRevocation.json()).execution.id).toBe(execution.id);
-      expect((await request.post('/api/admin/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
+      expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
     }
-    const restored = await request.put(`/api/admin/roles/${id}`, { headers: headers(admin), data: { name: original.name, permissions: original.permissions, version: (await changed.json()).version } });
+    const restored = await request.put(`/api/roles/${id}`, { headers: headers(admin), data: { name: original.name, permissions: original.permissions, version: (await changed.json()).version } });
     expect(restored.status(), await restored.text()).toBe(200);
   }
-  const audit = await request.get('/api/admin/audit-events', { headers: headers(operator), params: { action: 'SERVICE_ID_SUSPENDED' } });
+  const audit = await request.get('/api/audit-events', { headers: headers(operator), params: { action: 'SERVICE_ID_SUSPENDED' } });
   expect(audit.status()).toBe(200);
   const event = (await audit.json()).content.find((row: { target_id: string }) => row.target_id === String(serviceId));
   expect(event).toBeTruthy();
-  const detail = await request.get(`/api/admin/audit-events/${event.id}`, { headers: headers(operator) });
+  const detail = await request.get(`/api/audit-events/${event.id}`, { headers: headers(operator) });
   const snapshot = await detail.json();
   expect(snapshot.before_values.enabled).toBe('true');
   expect(snapshot.after_values.enabled).toBe('false');
   expect(JSON.stringify(snapshot)).not.toContain(password);
-  expect((await request.put(`/api/admin/audit-events/${event.id}`, { headers: headers(operator), data: snapshot })).status()).toBe(405);
+  expect((await request.put(`/api/audit-events/${event.id}`, { headers: headers(operator), data: snapshot })).status()).toBe(405);
 });
 
 Then('実行履歴と変更前後の監査を画面で確認できる', async ({ page, request, $testInfo }) => {
@@ -128,7 +128,7 @@ Then('実行履歴と変更前後の監査を画面で確認できる', async ({
   await page.getByLabel('対象日', { exact: true }).fill('2026-10-07');
   let lostExecutionId: number | undefined;
   let originalRequest: unknown;
-  await page.route('**/api/admin/task-executions', async route => {
+  await page.route('**/api/task-executions', async route => {
     if (route.request().method() === 'POST' && lostExecutionId === undefined) {
       originalRequest = route.request().postDataJSON();
       const committed = await route.fetch();
@@ -143,13 +143,13 @@ Then('実行履歴と変更前後の監査を画面で確認できる', async ({
   await page.getByRole('button', { name: '実行確認を記録', exact: true }).click();
   await expect(page.getByText('実行に失敗しました', { exact: true })).toBeVisible();
   expect(lostExecutionId).toBeDefined();
-  expect((await request.post(`/api/admin/service-identities/${serviceId}/suspension`, { headers: headers(admin) })).status()).toBe(204);
-  const replayResponse = page.waitForResponse(response => response.url().endsWith('/api/admin/task-executions') && response.request().method() === 'POST');
+  expect((await request.post(`/api/service-identities/${serviceId}/suspension`, { headers: headers(admin) })).status()).toBe(204);
+  const replayResponse = page.waitForResponse(response => response.url().endsWith('/api/task-executions') && response.request().method() === 'POST');
   await page.getByRole('button', { name: '実行確認を記録', exact: true }).click();
   const recovered = await replayResponse;
   expect(recovered.status()).toBe(200);
   expect((await recovered.json()).execution.id).toBe(lostExecutionId);
-  await page.unroute('**/api/admin/task-executions');
+  await page.unroute('**/api/task-executions');
   const execution = page.getByRole('dialog', { name: '実行の詳細' });
   await expect(execution.getByText('成功', { exact: true })).toBeVisible();
   await execution.press('Escape');

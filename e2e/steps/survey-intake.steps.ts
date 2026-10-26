@@ -24,7 +24,7 @@ let email = "",
   answerId = "";
 const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${token}` });
 const revisionPath = () =>
-  `/api/store/surveys/${surveyId}/revisions/${revisionId}`;
+  `/api/surveys/${surveyId}/revisions/${revisionId}`;
 async function confirm(page: Page) {
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
@@ -42,7 +42,7 @@ Given(
     );
     expect(
       (
-        await request.get("/api/store/surveys", {
+        await request.get("/api/surveys", {
           headers: { ...STORE_HEADERS, Authorization: `Bearer ${owner}` },
         })
       ).status(),
@@ -66,12 +66,12 @@ Given(
     token = await loginUser(request, email, secret);
     expect(
       (
-        await request.get("/api/store/surveys", { headers: STORE_HEADERS })
+        await request.get("/api/surveys", { headers: STORE_HEADERS })
       ).status(),
     ).toBe(401);
     expect(
       (
-        await request.get("/api/store/surveys", {
+        await request.get("/api/surveys", {
           headers: { Authorization: `Bearer ${token}` },
         })
       ).status(),
@@ -127,7 +127,7 @@ When(
     await page.setViewportSize({ width: 1280, height: 900 });
     let intercepted = false;
     let original: unknown;
-    await page.route("**/api/store/surveys", async (route) => {
+    await page.route("**/api/surveys", async (route) => {
       if (route.request().method() !== "POST" || intercepted) {
         await route.continue();
         return;
@@ -155,7 +155,7 @@ When(
     const [replayed] = await Promise.all([
       page.waitForResponse(
         (r) =>
-          r.url().endsWith("/store/surveys") && r.request().method() === "POST",
+          r.url().endsWith("/api/surveys") && r.request().method() === "POST",
       ),
       editor
         .getByRole("button", { name: "同じ要求で結果を確認", exact: true })
@@ -167,7 +167,7 @@ When(
     expect(result.operation.replayed).toBe(true);
     surveyId = result.revision.survey_id;
     revisionId = result.revision.id;
-    await page.unroute("**/api/store/surveys");
+    await page.unroute("**/api/surveys");
     await expect(editor).toBeHidden();
     await page.getByRole("button", { name: "受付を開始", exact: true }).click();
     const opening = page.getByRole("dialog", {
@@ -277,7 +277,7 @@ Then(
     await confirm(page);
     await expect(page.getByText("訂正した回答", { exact: true })).toBeVisible();
     const old = await (
-      await request.get(`/api/store/survey-responses/${answerId}`, {
+      await request.get(`/api/survey-responses/${answerId}`, {
         headers: headers(),
       })
     ).json();
@@ -296,7 +296,7 @@ Then(
       withdrawn_records: 1,
     });
     const history = await (
-      await request.get(`/api/store/survey-responses/${answerId}/history`, {
+      await request.get(`/api/survey-responses/${answerId}/history`, {
         headers: headers(),
         params: { size: 1 },
       })

@@ -65,11 +65,11 @@ Then('顧客一覧を狭幅と両テーマでキーボード操作でき取得�
       await page.screenshot({ path: `test-results/customer-list-values-${theme}-${width}.png` });
     }
   }
-  await page.route('**/api/store/customers?**', route => route.fulfill({ status: 500, json: { error: '一覧取得失敗' } }));
+  await page.route('**/api/customers?**', route => route.fulfill({ status: 500, json: { error: '一覧取得失敗' } }));
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: '顧客一覧の取得に失敗しました' })).toBeVisible();
   await expect(page.locator('tbody tr')).toHaveCount(0);
-  await page.unroute('**/api/store/customers?**');
+  await page.unroute('**/api/customers?**');
   await page.getByRole('button', { name: '再試行' }).click();
   await expect(page.locator('tbody tr')).toHaveCount(3);
 });
@@ -86,14 +86,14 @@ When('顧客の長い目印を編集して保存する', async ({ page }) => {
       await page.keyboard.press('Tab');
     }
   }
-  await page.route(`**/api/store/customers/${customerId}`, async route => {
+  await page.route(`**/api/customers/${customerId}`, async route => {
     if (route.request().method() === 'PUT') await route.fulfill({ status: 500, json: { error: '保存失敗' } });
     else await route.continue();
   });
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page.getByText('顧客情報の更新に失敗しました', { exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: '目印', exact: true })).toHaveValue(longLandmark);
-  await page.unroute(`**/api/store/customers/${customerId}`);
+  await page.unroute(`**/api/customers/${customerId}`);
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page).toHaveURL(/\/customers$/);
 });

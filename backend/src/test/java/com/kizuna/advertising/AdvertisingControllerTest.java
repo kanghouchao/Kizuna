@@ -17,10 +17,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.advertising.api.AdvertisingCostController;
+import com.kizuna.advertising.api.AdvertisingMediaController;
+import com.kizuna.advertising.api.AdvertisingOrderCostController;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
-import com.kizuna.advertising.api.store.AdvertisingCostController;
-import com.kizuna.advertising.api.store.AdvertisingMediaController;
-import com.kizuna.advertising.api.store.AdvertisingOrderCostController;
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingOrderCostService;
@@ -124,7 +124,7 @@ class AdvertisingControllerTest {
                 at));
     var result =
         mvc.perform(
-                post("/store/advertising-costs")
+                post("/advertising-costs")
                     .header("X-Store-ID", "1")
                     .with(permissions("VIEW", "MANAGE"))
                     .with(csrf())
@@ -155,8 +155,7 @@ class AdvertisingControllerTest {
                 0,
                 at,
                 at));
-    mvc.perform(
-            get("/store/advertising-costs/c").header("X-Store-ID", "7").with(permissions("VIEW")))
+    mvc.perform(get("/advertising-costs/c").header("X-Store-ID", "7").with(permissions("VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.store_id").value(7));
     verify(service).get(7L, "c");
@@ -165,7 +164,7 @@ class AdvertisingControllerTest {
   @Test
   void writePassesTheNamedStoreToTheService() throws Exception {
     mvc.perform(
-            post("/store/advertising-costs")
+            post("/advertising-costs")
                 .header("X-Store-ID", "7")
                 .with(permissions("VIEW", "MANAGE"))
                 .with(csrf())
@@ -179,7 +178,7 @@ class AdvertisingControllerTest {
   void exportReadsAndNamesTheFileAfterTheNamedStore() throws Exception {
     when(exports.export(7L, "2026-09", "csv")).thenReturn(new byte[] {1});
     mvc.perform(
-            get("/store/advertising-costs/exports")
+            get("/advertising-costs/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
                 .header("X-Store-ID", "7")
@@ -196,7 +195,7 @@ class AdvertisingControllerTest {
   @Test
   void independentPermissionChecksRejectDirectMutationsAndExport() throws Exception {
     mvc.perform(
-            post("/store/advertising-costs")
+            post("/advertising-costs")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW"))
                 .with(csrf())
@@ -204,7 +203,7 @@ class AdvertisingControllerTest {
                 .content(body()))
         .andExpect(status().isForbidden());
     mvc.perform(
-            post("/store/advertising-costs")
+            post("/advertising-costs")
                 .header("X-Store-ID", "1")
                 .with(permissions("MANAGE"))
                 .with(csrf())
@@ -212,7 +211,7 @@ class AdvertisingControllerTest {
                 .content(body()))
         .andExpect(status().isForbidden());
     mvc.perform(
-            get("/store/advertising-costs/exports")
+            get("/advertising-costs/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
                 .header("X-Store-ID", "1")
@@ -225,7 +224,7 @@ class AdvertisingControllerTest {
   void rejectsFractionalStringOverflowAndMissingReplacementKeys() throws Exception {
     for (String amount : List.of("1.5", "\"1\"", "2147483648", "-1"))
       mvc.perform(
-              post("/store/advertising-costs")
+              post("/advertising-costs")
                   .header("X-Store-ID", "1")
                   .with(permissions("VIEW", "MANAGE"))
                   .with(csrf())
@@ -233,7 +232,7 @@ class AdvertisingControllerTest {
                   .content(body().replace("\"amount\":0", "\"amount\":" + amount)))
           .andExpect(status().isBadRequest());
     mvc.perform(
-            put("/store/advertising-costs/c")
+            put("/advertising-costs/c")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW", "MANAGE"))
                 .with(csrf())
@@ -257,7 +256,7 @@ class AdvertisingControllerTest {
                     new AdvertisingMediaReport.Entry(AdvertisingCategory.SALES, "媒体", 0, null))));
     when(media.view(1L, "2026-09")).thenReturn(snapshot);
     var query =
-        get("/store/advertising-media-summaries")
+        get("/advertising-media-summaries")
             .param("month", "2026-09")
             .header("X-Store-ID", "1")
             .with(permissions("VIEW"));
@@ -278,7 +277,7 @@ class AdvertisingControllerTest {
         List.of("page=-1", "page=0.1", "size=0", "size=", "sort=amount", "month=2026-09")) {
       var pair = invalid.split("=", -1);
       mvc.perform(
-              get("/store/advertising-media-summaries")
+              get("/advertising-media-summaries")
                   .param("month", "2026-09")
                   .param(pair[0], pair[1])
                   .header("X-Store-ID", "1")
@@ -286,9 +285,7 @@ class AdvertisingControllerTest {
           .andExpect(status().isBadRequest());
     }
     mvc.perform(
-            get("/store/advertising-media-summaries")
-                .header("X-Store-ID", "1")
-                .with(permissions("VIEW")))
+            get("/advertising-media-summaries").header("X-Store-ID", "1").with(permissions("VIEW")))
         .andExpect(status().isBadRequest());
   }
 
@@ -300,7 +297,7 @@ class AdvertisingControllerTest {
             new String[] {"EXPORT"},
             new String[] {"SET_VIEW", "SET_EXPORT"})) {
       mvc.perform(
-              get("/store/advertising-media-summaries/exports")
+              get("/advertising-media-summaries/exports")
                   .param("month", "2026-09")
                   .param("format", "csv")
                   .header("X-Store-ID", "1")
@@ -308,7 +305,7 @@ class AdvertisingControllerTest {
           .andExpect(status().isForbidden());
     }
     mvc.perform(
-            get("/store/advertising-media-summaries/exports")
+            get("/advertising-media-summaries/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
                 .param("page", "0")
@@ -316,9 +313,7 @@ class AdvertisingControllerTest {
                 .with(permissions("VIEW", "EXPORT")))
         .andExpect(status().isBadRequest());
     mvc.perform(
-            get("/store/advertising-media-summaries")
-                .param("month", "2026-09")
-                .with(permissions("VIEW")))
+            get("/advertising-media-summaries").param("month", "2026-09").with(permissions("VIEW")))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(exports, media);
   }
@@ -326,7 +321,7 @@ class AdvertisingControllerTest {
   @Test
   void deleteHasNoResponseBody() throws Exception {
     mvc.perform(
-            delete("/store/advertising-costs/c")
+            delete("/advertising-costs/c")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW", "MANAGE"))
                 .with(csrf())
@@ -353,7 +348,7 @@ class AdvertisingControllerTest {
                 1, "2026-09", 0, OffsetDateTime.now(), report));
     var result =
         mvc.perform(
-                get("/store/advertising-order-costs")
+                get("/advertising-order-costs")
                     .param("month", "2026-09")
                     .header("X-Store-ID", "1")
                     .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
@@ -365,7 +360,7 @@ class AdvertisingControllerTest {
         .contains("\"recorded_sales_amount\":null", "\"cost_per_order\":null");
     assertThat(result.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
     mvc.perform(
-            get("/store/advertising-order-costs")
+            get("/advertising-order-costs")
                 .param("month", "2026-09")
                 .param("page", "2147483647")
                 .param("size", "1000")
@@ -379,7 +374,7 @@ class AdvertisingControllerTest {
             "page=-1", "page=0.1", "size=0", "page=2147483648", "sort=amount", "month=2026-09")) {
       var pair = invalid.split("=", -1);
       mvc.perform(
-              get("/store/advertising-order-costs")
+              get("/advertising-order-costs")
                   .param("month", "2026-09")
                   .param(pair[0], pair[1])
                   .header("X-Store-ID", "1")
@@ -395,8 +390,7 @@ class AdvertisingControllerTest {
             new String[] {"ADVERTISING_COST_VIEW"},
             new String[] {"ORDER_MANAGE"},
             new String[] {"ADVERTISING_COST_VIEW", "ADVERTISING_COST_EXPORT"})) {
-      for (var path :
-          List.of("/store/advertising-order-costs", "/store/advertising-order-costs/exports")) {
+      for (var path : List.of("/advertising-order-costs", "/advertising-order-costs/exports")) {
         mvc.perform(
                 get(path)
                     .param("month", "2026-09")
@@ -407,7 +401,7 @@ class AdvertisingControllerTest {
       }
     }
     mvc.perform(
-            get("/store/advertising-order-costs/exports")
+            get("/advertising-order-costs/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
                 .header("X-Store-ID", "1")
@@ -415,7 +409,7 @@ class AdvertisingControllerTest {
         .andExpect(status().isForbidden());
     when(exports.exportOrderCost(1L, "2026-09", "csv")).thenReturn(new byte[] {1});
     mvc.perform(
-            get("/store/advertising-order-costs/exports")
+            get("/advertising-order-costs/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
                 .header("X-Store-ID", "1")
@@ -424,7 +418,7 @@ class AdvertisingControllerTest {
                         "ADVERTISING_COST_VIEW", "ORDER_MANAGE", "ADVERTISING_COST_EXPORT")))
         .andExpect(status().isOk());
     mvc.perform(
-            get("/store/advertising-order-costs/exports")
+            get("/advertising-order-costs/exports")
                 .param("month", "2026-09")
                 .param("format", "csv")
                 .param("page", "0")

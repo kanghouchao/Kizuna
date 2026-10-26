@@ -8,7 +8,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.notificationdelivery.api.store.NotificationDeliveryController;
+import com.kizuna.notificationdelivery.api.NotificationDeliveryController;
 import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
@@ -78,7 +78,7 @@ class NotificationInputPrivacyTest {
               valid.substring(0, valid.lastIndexOf('}')))) {
         var response =
             mvc.perform(
-                    post("/store/notification-deliveries")
+                    post("/notification-deliveries")
                         .with(csrf())
                         .header("X-Store-ID", "1")
                         .with(
@@ -95,7 +95,7 @@ class NotificationInputPrivacyTest {
       }
       var actionResponse =
           mvc.perform(
-                  post("/store/notification-deliveries/1/queue")
+                  post("/notification-deliveries/1/queue")
                       .with(csrf())
                       .header("X-Store-ID", "1")
                       .with(

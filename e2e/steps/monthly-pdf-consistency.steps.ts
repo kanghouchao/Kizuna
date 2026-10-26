@@ -58,7 +58,7 @@ Given('月次PDFの本人に二千件を超える完了受注がある', async (
   month = String(order.business_date).slice(0, 7);
   correction = { expected_version: order.version, reason: '印刷禁止の内部訂正理由',
     fee_lines: [{ kind: 'EXTENSION', name: '追加延長', duration_minutes: 30, amount: 4000, remuneration: 2000 }] };
-  const preview = await request.post(`/api/store/orders/${orderId}/correction-preview`, {
+  const preview = await request.post(`/api/orders/${orderId}/correction-preview`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${manager}` }, data: correction });
   expect(preview.status()).toBe(200);
   correction.confirmation_token = (await preview.json()).confirmation_token;
@@ -99,7 +99,7 @@ When('本人の月次PDF取得中に店舗が受注を訂正する', async ({ re
         AND wait_event_type = 'Lock' AND query LIKE '%t_cast_profiles%'`);
       return result.rows[0].n;
     }, { timeout: 5000 }).toBeGreaterThan(0);
-    const changed = await request.post(`/api/store/orders/${orderId}/corrections`, {
+    const changed = await request.post(`/api/orders/${orderId}/corrections`, {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${manager}` }, data: correction });
     expect(changed.status(), await changed.text()).toBe(201);
     await lock.query('COMMIT');

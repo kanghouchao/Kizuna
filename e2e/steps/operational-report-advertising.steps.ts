@@ -14,7 +14,7 @@ import {
 } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
-const admin = '/api/admin/operational-reports', store = '/api/store/operational-reports';
+const admin = '/api/operational-reports/cross-store', store = '/api/operational-reports';
 let manager = '', full = '', restricted = '', storeOnly = '', adminOnly = '', viewOnly = '', exportOnly = '', legacy = '', noRemuneration = '';
 let year = '', foreign = '', email = '', password = '', course = '', order = '', attendance = '', person = 0;
 let sales = { id: '', version: 0 }, recruitment = { id: '', version: 0 }, bonus = { id: '', version: 0 };
@@ -317,7 +317,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
   const gate = new Promise<void>(resolve => { release = resolve; });
   const received = new Promise<void>(resolve => { fetched = resolve; });
   const completed = new Promise<void>(resolve => { finished = resolve; });
-  await page.route('**/api/admin/operational-reports?*', async route => {
+  await page.route('**/api/operational-reports/cross-store?*', async route => {
     if (new URL(route.request().url()).searchParams.get('from') !== `${year}-02-01`) return route.continue();
     const response = await route.fetch();
     fetched();
@@ -336,7 +336,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
     await expect(total).toHaveText('200');
   } finally {
     release();
-    await page.unroute('**/api/admin/operational-reports?*');
+    await page.unroute('**/api/operational-reports/cross-store?*');
   }
   await submit.click();
   await expect(total).toHaveText('200');
@@ -348,7 +348,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
   const exportCompleted = new Promise<void>(resolve => { finishedExport = resolve; });
   const onDownload = () => { downloads++; };
   page.on('download', onDownload);
-  await page.route('**/api/admin/operational-reports/exports?*', async route => {
+  await page.route('**/api/operational-reports/cross-store/exports?*', async route => {
     count++;
     const url = new URL(route.request().url());
     expect(url.searchParams.get('include_advertising')).toBe('true');
@@ -375,7 +375,7 @@ Then('広告費帳票の画面は条件切替と連打と遅延応答を安全�
     expect(downloads).toBe(0);
   } finally {
     releaseExport();
-    await page.unroute('**/api/admin/operational-reports/exports?*');
+    await page.unroute('**/api/operational-reports/cross-store/exports?*');
     page.off('download', onDownload);
   }
   await advertising.check();

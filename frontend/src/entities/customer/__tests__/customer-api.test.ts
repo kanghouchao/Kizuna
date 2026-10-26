@@ -23,7 +23,7 @@ const mockedGet = apiClient.get as jest.Mock;
 const mockedPost = apiClient.post as jest.Mock;
 
 describe('customerApi', () => {
-  it('list は /store/customers を GET し、Spring Page を PageResult へ正規化する', async () => {
+  it('list は /customers を GET し、Spring Page を PageResult へ正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
         content: [{ id: 'c1' }],
@@ -40,14 +40,14 @@ describe('customerApi', () => {
       pageCount: 2,
       total: 21,
     });
-    expect(mockedGet).toHaveBeenCalledWith('/store/customers', {
+    expect(mockedGet).toHaveBeenCalledWith('/customers', {
       params: { page: 0, size: 20, search: '山田' },
     });
   });
-  it('get は /store/customers/:id を GET する', async () => {
-    expect(await customerApi.get('c1')).toEqual({ ok: true, url: '/store/customers/c1' });
+  it('get は /customers/:id を GET する', async () => {
+    expect(await customerApi.get('c1')).toEqual({ ok: true, url: '/customers/c1' });
   });
-  it('duplicates は /store/customers/duplicates を GET し、カーソルページを正規化する', async () => {
+  it('duplicates は /customers/duplicates を GET し、カーソルページを正規化する', async () => {
     // 字面セグメント。/{id} と同じパス空間に住むので、綴りが変わると詳細取得へ吸われる
     mockedGet.mockResolvedValueOnce({
       data: { content: [{ phone_number: '090-1111-2222', customers: [] }], next_cursor: 'abc' },
@@ -57,7 +57,7 @@ describe('customerApi', () => {
       rows: [{ phone_number: '090-1111-2222', customers: [] }],
       nextCursor: 'abc',
     });
-    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/duplicates', {
+    expect(mockedGet).toHaveBeenLastCalledWith('/customers/duplicates', {
       params: { cursor: 'x' },
     });
   });
@@ -66,11 +66,11 @@ describe('customerApi', () => {
     // 綴りが変わると読み口は常に 400 を返す
     await customerApi.mergeComparison('c1', 'c2');
 
-    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/merge-comparison?ids=c1&ids=c2');
+    expect(mockedGet).toHaveBeenLastCalledWith('/customers/merge-comparison?ids=c1&ids=c2');
   });
   it('merge は確認済み資料と理由を送信する', async () => {
     await customerApi.merge('c1', mergeInput);
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/customers/c1/merges', mergeInput);
+    expect(mockedPost).toHaveBeenLastCalledWith('/customers/c1/merges', mergeInput);
   });
   it('mergeHistory は同じ merges を GET し、カーソルページを正規化する', async () => {
     // 実行（POST）と読み（GET）が同じパスに載る。GET は両方向の統合を返すので、
@@ -83,28 +83,28 @@ describe('customerApi', () => {
       rows: [{ id: 'm1', direction: 'SURVIVING' }],
       nextCursor: 'abc',
     });
-    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/merges', {
+    expect(mockedGet).toHaveBeenLastCalledWith('/customers/c1/merges', {
       params: { cursor: 'x' },
     });
   });
-  it('create は /store/customers を POST する', async () => {
+  it('create は /customers を POST する', async () => {
     expect(await customerApi.create({ name: 'A' })).toEqual({
       ok: true,
-      url: '/store/customers',
+      url: '/customers',
     });
   });
-  it('update は /store/customers/:id を PUT する', async () => {
-    expect(await customerApi.update('c1', {})).toEqual({ ok: true, url: '/store/customers/c1' });
+  it('update は /customers/:id を PUT する', async () => {
+    expect(await customerApi.update('c1', {})).toEqual({ ok: true, url: '/customers/c1' });
   });
-  it('delete は /store/customers/:id を DELETE する', async () => {
+  it('delete は /customers/:id を DELETE する', async () => {
     await expect(customerApi.delete('c1')).resolves.toBeUndefined();
   });
   it('linkMember は member-link を snake_case の本文で POST する', async () => {
     expect(await customerApi.linkMember('c1', { member_code: '123456789012' })).toEqual({
       ok: true,
-      url: '/store/customers/c1/member-link',
+      url: '/customers/c1/member-link',
     });
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/customers/c1/member-link', {
+    expect(mockedPost).toHaveBeenLastCalledWith('/customers/c1/member-link', {
       member_code: '123456789012',
     });
   });
@@ -120,7 +120,7 @@ describe('customerApi', () => {
       linked: true,
       member_code: '123456789012',
     });
-    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/member-link');
+    expect(mockedGet).toHaveBeenLastCalledWith('/customers/c1/member-link');
   });
   it('memberLinkHistory は member-link/history を GET し、カーソルページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
@@ -131,7 +131,7 @@ describe('customerApi', () => {
       rows: [{ id: 'l1', status: 'ACTIVE' }],
       nextCursor: 'abc',
     });
-    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/member-link/history', {
+    expect(mockedGet).toHaveBeenLastCalledWith('/customers/c1/member-link/history', {
       params: { cursor: 'x' },
     });
   });
@@ -142,7 +142,7 @@ describe('customerApi', () => {
       linked: true,
       balance: 120,
     });
-    expect(mockedGet).toHaveBeenLastCalledWith('/store/customers/c1/member-point-balance');
+    expect(mockedGet).toHaveBeenLastCalledWith('/customers/c1/member-point-balance');
   });
   it('adjustPoints は point-adjustments を snake_case の本文で POST する', async () => {
     mockedPost.mockResolvedValueOnce({ data: { linked: true, balance: 220 } });
@@ -155,7 +155,7 @@ describe('customerApi', () => {
         idempotency_key: 'idem-1',
       })
     ).resolves.toEqual({ linked: true, balance: 220 });
-    expect(mockedPost).toHaveBeenLastCalledWith('/store/customers/c1/point-adjustments', {
+    expect(mockedPost).toHaveBeenLastCalledWith('/customers/c1/point-adjustments', {
       delta: 100,
       reason: '手動付与',
       expires_on: '2026-12-31',

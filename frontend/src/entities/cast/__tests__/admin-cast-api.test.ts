@@ -18,7 +18,7 @@ it('本人検索の Spring Page を正規化する', async () => {
     pageCount: 2,
     total: 21,
   });
-  expect(apiClient.get).toHaveBeenLastCalledWith('/admin/casts', {
+  expect(apiClient.get).toHaveBeenLastCalledWith('/cast-persons', {
     params: { page: 1, size: 20, search: '花' },
   });
 });
@@ -33,7 +33,7 @@ it('本人詳細を取得する', async () => {
   };
   jest.mocked(apiClient.get).mockResolvedValueOnce({ data: person });
   expect(await adminCastApi.get(1)).toEqual(person);
-  expect(apiClient.get).toHaveBeenLastCalledWith('/admin/casts/1');
+  expect(apiClient.get).toHaveBeenLastCalledWith('/cast-persons/1');
 });
 
 it('在籍の次ページを取得する', async () => {
@@ -46,7 +46,7 @@ it('在籍の次ページを取得する', async () => {
     pageCount: 0,
     total: 0,
   });
-  expect(apiClient.get).toHaveBeenLastCalledWith('/admin/casts/1/enrollments', {
+  expect(apiClient.get).toHaveBeenLastCalledWith('/cast-persons/1/enrollments', {
     params: { page: 0, size: 20 },
   });
 });

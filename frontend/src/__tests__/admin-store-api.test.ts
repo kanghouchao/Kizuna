@@ -28,14 +28,14 @@ describe('admin store api wrappers', () => {
     });
     const list = await adminStoreApi.getList({ page: 1, size: 10 });
     expect(list).toEqual({ rows: [{ id: '1' }], page: 1, pageCount: 4, total: 35 });
-    expect(mockGet).toHaveBeenCalledWith('/admin/stores', {
+    expect(mockGet).toHaveBeenCalledWith('/stores', {
       params: { page: 1, size: 10, search: undefined },
     });
 
     mockGet.mockResolvedValueOnce({ data: { id: '2' } });
     const byId = await adminStoreApi.getById('2');
     expect(byId).toEqual({ id: '2' });
-    expect(mockGet).toHaveBeenCalledWith('/admin/stores/2');
+    expect(mockGet).toHaveBeenCalledWith('/stores/2');
 
     // 作成の端点は 201 Created。body には作成された店舗の id だけが載る。
     mockPost.mockResolvedValueOnce({ data: { id: 1 } });
@@ -45,7 +45,7 @@ describe('admin store api wrappers', () => {
       email: 't@example.com',
     });
     expect(created).toEqual({ id: 1 });
-    expect(mockPost).toHaveBeenCalledWith('/admin/stores', {
+    expect(mockPost).toHaveBeenCalledWith('/stores', {
       name: 't',
       domain: 't.example.com',
       email: 't@example.com',
@@ -55,19 +55,19 @@ describe('admin store api wrappers', () => {
     mockPut.mockResolvedValueOnce();
     const updated = await adminStoreApi.update('3', { name: 'u', email: 'u@example.com' });
     expect(updated).toBeUndefined();
-    expect(mockPut).toHaveBeenCalledWith('/admin/stores/3', {
+    expect(mockPut).toHaveBeenCalledWith('/stores/3', {
       name: 'u',
       email: 'u@example.com',
     });
 
     mockDelete.mockResolvedValueOnce();
     await adminStoreApi.delete('3');
-    expect(mockDelete).toHaveBeenCalledWith('/admin/stores/3');
+    expect(mockDelete).toHaveBeenCalledWith('/stores/3');
 
     mockGet.mockResolvedValueOnce({ data: { total: 1 } });
     const stats = await adminStoreApi.getStats();
     expect(stats).toEqual({ total: 1 });
-    expect(mockGet).toHaveBeenCalledWith('/admin/stores/stats');
+    expect(mockGet).toHaveBeenCalledWith('/stores/stats');
   });
 });
 

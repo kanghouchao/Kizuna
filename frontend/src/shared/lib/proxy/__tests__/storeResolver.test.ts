@@ -24,6 +24,8 @@ describe('storeResolver', () => {
     jest.resetModules();
     process.env = { ...originalEnv };
     process.env.APP_DOMAIN = 'kizuna.test';
+    delete process.env.STORE_LOOKUP_API_URL;
+    delete process.env.STORE_CONFIG_API_URL;
   });
 
   afterEach(() => {
@@ -52,7 +54,9 @@ describe('storeResolver', () => {
     const req = createRequest('store.test');
     const result = await resolveStore(req);
 
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('domain=store.test'));
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://backend:8080/stores/lookup?domain=store.test'
+    );
     expect(result.role).toBe('store');
     expect(result.storeData?.isValid).toBe(true);
     expect(result.storeData?.storeId).toBe('t1');
@@ -154,7 +158,7 @@ describe('storeResolver', () => {
     expect(result.storeData?.storeId).toBe('api-store-id');
   });
 
-  it('fetches template_key from store config when the admin lookup response lacks it', async () => {
+  it('fetches template_key from store config when the lookup response lacks it', async () => {
     // 現実のバックエンド応答（StoreVO）は template_key を返さない
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('config/public')) {
@@ -177,9 +181,9 @@ describe('storeResolver', () => {
     const result = await resolveStore(req);
 
     expect(result.storeData?.templateKey).toBe('modern');
-    // 追撃 fetch は X-Store-ID ヘッダだけで行う
+    // 追加の fetch は X-Store-ID ヘッダだけで行う
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('config/public'),
+      'http://backend:8080/config/public',
       expect.objectContaining({
         headers: { 'X-Store-ID': 't1' },
       })

@@ -13,7 +13,7 @@ import lombok.Data;
 /**
  * 予約申請の確定内容。確定は申請内容を予填した<b>受注の作成操作</b>で、店舗が補完・調整した値がそのまま受注になる（申請原文は動かない）。
  *
- * <p>ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新（{@code PUT /store/orders/{id}}）で整える — 確定は来店の約束に要る項目だけを決める。
+ * <p>ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新（{@code PUT /orders/{id}}）で整える — 確定は来店の約束に要る項目だけを決める。
  */
 @Data
 public class OrderApplicationConfirmationRequest {

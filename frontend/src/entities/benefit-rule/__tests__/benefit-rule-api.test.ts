@@ -40,7 +40,7 @@ describe('benefitRuleApi', () => {
       pageCount: 1,
       total: 1,
     });
-    expect(mockedGet).toHaveBeenCalledWith('/admin/benefit-rules', {
+    expect(mockedGet).toHaveBeenCalledWith('/benefit-rules', {
       params: { page: 0, size: 10 },
     });
   });
@@ -49,7 +49,7 @@ describe('benefitRuleApi', () => {
     mockedGet.mockResolvedValueOnce({ data: { id: 7, store_ids: [3, 5] } });
 
     await expect(benefitRuleApi.get(7)).resolves.toEqual({ id: 7, store_ids: [3, 5] });
-    expect(mockedGet).toHaveBeenCalledWith('/admin/benefit-rules/7');
+    expect(mockedGet).toHaveBeenCalledWith('/benefit-rules/7');
   });
 
   it('create は種別を含む本体を POST する', async () => {
@@ -61,7 +61,7 @@ describe('benefitRuleApi', () => {
       points: 500,
     });
 
-    expect(mockedPost).toHaveBeenCalledWith('/admin/benefit-rules', {
+    expect(mockedPost).toHaveBeenCalledWith('/benefit-rules', {
       name: '来店ボーナス',
       type: 'VISIT',
       store_scope_type: 'ALL_STORES',
@@ -79,7 +79,7 @@ describe('benefitRuleApi', () => {
       version: 3,
     });
 
-    expect(mockedPut).toHaveBeenCalledWith('/admin/benefit-rules/7', {
+    expect(mockedPut).toHaveBeenCalledWith('/benefit-rules/7', {
       name: '来店ボーナス',
       store_scope_type: 'ALL_STORES',
       repeat_policy: 'EVERY_TIME',
@@ -91,7 +91,7 @@ describe('benefitRuleApi', () => {
   it('停用は名詞化した子リソースへの POST で確認した版を運び、削除の口は持たない', async () => {
     await benefitRuleApi.deactivate(7, 3);
 
-    expect(mockedPost).toHaveBeenCalledWith('/admin/benefit-rules/7/deactivation', {
+    expect(mockedPost).toHaveBeenCalledWith('/benefit-rules/7/deactivation', {
       version: 3,
     });
     expect(benefitRuleApi).not.toHaveProperty('remove');

@@ -15,13 +15,13 @@ jest.mock('@/shared/api/client', () => ({
 const mockedGet = apiClient.get as jest.Mock;
 
 describe('shiftApi', () => {
-  it('list は /store/shifts を GET する', async () => {
+  it('list は /shifts を GET する', async () => {
     expect(await shiftApi.list({ from: '2026-07-01', to: '2026-07-31' })).toEqual({
       ok: true,
-      url: '/store/shifts',
+      url: '/shifts',
     });
   });
-  it('create は /store/shifts を POST する', async () => {
+  it('create は /shifts を POST する', async () => {
     expect(
       await shiftApi.create({
         cast_id: 'c1',
@@ -29,31 +29,31 @@ describe('shiftApi', () => {
         start_time: '18:00:00',
         end_time: '23:00:00',
       })
-    ).toEqual({ ok: true, url: '/store/shifts' });
+    ).toEqual({ ok: true, url: '/shifts' });
   });
-  it('update は /store/shifts/:id を PUT する', async () => {
+  it('update は /shifts/:id を PUT する', async () => {
     expect(await shiftApi.update('s1', { status: 'CONFIRMED' })).toEqual({
       ok: true,
-      url: '/store/shifts/s1',
+      url: '/shifts/s1',
     });
   });
-  it('changePublication は /store/shifts/:id/publication へ望む状態を明示して PUT する', async () => {
+  it('changePublication は /shifts/:id/publication へ望む状態を明示して PUT する', async () => {
     // 相対的な反転で送ると、逐行の一括操作が取りこぼした行を裏返してしまう
     expect(await shiftApi.changePublication('s1', false)).toEqual({
       ok: true,
-      url: '/store/shifts/s1/publication',
+      url: '/shifts/s1/publication',
     });
-    expect(apiClient.put).toHaveBeenCalledWith('/store/shifts/s1/publication', {
+    expect(apiClient.put).toHaveBeenCalledWith('/shifts/s1/publication', {
       published: false,
     });
   });
-  it('delete は /store/shifts/:id を DELETE する', async () => {
+  it('delete は /shifts/:id を DELETE する', async () => {
     await expect(shiftApi.delete('s1')).resolves.toBeUndefined();
   });
-  it('confirmedCasts は /admin/shifts/casts を GET する', async () => {
+  it('confirmedCasts は /shifts/casts を GET する', async () => {
     expect(await shiftApi.confirmedCasts({ store_id: 1, date: '2026-08-10' })).toEqual({
       ok: true,
-      url: '/admin/shifts/casts',
+      url: '/shifts/casts',
     });
   });
   it('mySchedule は /me/schedule を GET する', async () => {
@@ -98,31 +98,31 @@ describe('shiftApi', () => {
   it('myStores は /me/stores を GET する', async () => {
     expect(await shiftApi.myStores()).toEqual({ ok: true, url: '/me/stores' });
   });
-  it('listShiftRequests は /store/shift-requests を GET する', async () => {
+  it('listShiftRequests は /shift-requests を GET する', async () => {
     expect(await shiftApi.listShiftRequests({ status: 'PENDING' })).toEqual({
       ok: true,
-      url: '/store/shift-requests',
+      url: '/shift-requests',
     });
   });
-  it('approveShiftRequest は /store/shift-requests/:id/approval を POST する', async () => {
+  it('approveShiftRequest は /shift-requests/:id/approval を POST する', async () => {
     expect(await shiftApi.approveShiftRequest('sr1')).toEqual({
       ok: true,
-      url: '/store/shift-requests/sr1/approval',
+      url: '/shift-requests/sr1/approval',
     });
     // 本体を付けないことが「既定の公開可で生まれる」の表明。空オブジェクトを送ると
     // 変更申請の承認で後端の拒否条件に触れる
-    expect(apiClient.post).toHaveBeenCalledWith('/store/shift-requests/sr1/approval', undefined);
+    expect(apiClient.post).toHaveBeenCalledWith('/shift-requests/sr1/approval', undefined);
   });
   it('approveShiftRequest は公開可否を渡すと本体に載せる', async () => {
     await shiftApi.approveShiftRequest('sr1', false);
-    expect(apiClient.post).toHaveBeenCalledWith('/store/shift-requests/sr1/approval', {
+    expect(apiClient.post).toHaveBeenCalledWith('/shift-requests/sr1/approval', {
       published: false,
     });
   });
-  it('declineShiftRequest は /store/shift-requests/:id/rejection を POST する', async () => {
+  it('declineShiftRequest は /shift-requests/:id/rejection を POST する', async () => {
     expect(await shiftApi.declineShiftRequest('sr1')).toEqual({
       ok: true,
-      url: '/store/shift-requests/sr1/rejection',
+      url: '/shift-requests/sr1/rejection',
     });
   });
 });

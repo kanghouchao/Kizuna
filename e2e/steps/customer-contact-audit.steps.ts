@@ -97,7 +97,7 @@ When(
         { type: "EMAIL", value: privateValue },
       ]);
       const listing = await request.get(
-        `/api/store/customers/${customer}/contacts`,
+        `/api/customers/${customer}/contacts`,
         { headers: headers(token) },
       );
       expect(listing.status()).toBe(200);
@@ -161,7 +161,7 @@ When(
         "switch",
       );
       await preferCustomerContact(request, token, customer, "EMAIL", duplicate);
-      const path = `/api/store/customers/${customer}/contacts/${source}`;
+      const path = `/api/customers/${customer}/contacts/${source}`;
       expect(
         (await request.delete(path, { headers: headers(auditor) })).status(),
       ).toBe(403);
@@ -245,13 +245,13 @@ When(
       expect(
         (
           await request.delete(
-            `/api/store/customers/${customer}/contacts/${duplicate}`,
+            `/api/customers/${customer}/contacts/${duplicate}`,
             { headers: headers(token) },
           )
         ).status(),
       ).toBe(404);
       const history = await request.get(
-        `/api/store/customers/${customer}/contact-history`,
+        `/api/customers/${customer}/contact-history`,
         { headers: headers(token), params: { size: 100 } },
       );
       expect(history.status()).toBe(200);

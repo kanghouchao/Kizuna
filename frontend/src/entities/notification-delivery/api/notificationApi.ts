@@ -1,6 +1,6 @@
 import { apiClient, fromCursorPage, CursorPageResult } from '@/shared/api';
 import { Delivery, DeliveryInput, DeliverySummary, DeliveryAttempt } from '../model/types';
-const path = '/store/notification-deliveries';
+const path = '/notification-deliveries';
 export const notificationApi = {
   list: async (cursor?: string): Promise<CursorPageResult<DeliverySummary>> =>
     fromCursorPage((await apiClient.get(path, { params: { cursor } })).data),

@@ -28,7 +28,7 @@ export default function RolesPage() {
     refetch,
   } = useManagedList<RoleSummaryResponse>(() => roleApi.list());
   const [searchTerm, setSearchTerm] = useState('');
-  // ロールは定義数が限られ、GET /admin/roles も全量を返す（付与 UI のロール目録が同じ端点を
+  // ロールは定義数が限られ、GET /roles も全量を返す（付与 UI のロール目録が同じ端点を
   // 使うため分頁できない）。絞り込みは取得済みの配列に対して行い、送信で確定させる。
   const [appliedSearch, setAppliedSearch] = useState('');
   const roles = appliedSearch

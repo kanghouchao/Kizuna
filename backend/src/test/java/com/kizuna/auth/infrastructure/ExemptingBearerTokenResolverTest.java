@@ -23,16 +23,16 @@ class ExemptingBearerTokenResolverTest {
   @ValueSource(
       strings = {
         "/auth/login",
-        "/admin/cast-invitations/view",
-        "/admin/cast-invitations/acceptance",
-        "/admin/members",
+        "/cast-invitations/view",
+        "/cast-invitations/acceptance",
+        "/members",
         "/auth/line/config",
         "/auth/line/login",
         "/auth/line/register",
-        "/admin/stores/lookup",
-        "/store/config/public",
-        "/store/casts/public",
-        "/store/shifts/public"
+        "/stores/lookup",
+        "/config/public",
+        "/casts/public",
+        "/shifts/public"
       })
   @DisplayName("免除対象の公開端点では壊れた Bearer があっても null を返すこと")
   void resolvesNullForExemptPublicEndpoints(String uri) {
@@ -45,7 +45,7 @@ class ExemptingBearerTokenResolverTest {
   @DisplayName("ゲスト予約申請の POST は免除対象で、壊れた Bearer があっても null を返すこと")
   void resolvesNullForGuestOrderApplicationPost() {
     // 公開店面を見ている来訪者は会員・キャストの陳腐な token cookie を持ちうる。免除しないと申請が 401 になる
-    MockHttpServletRequest request = requestWithBearer("POST", "/store/order-applications/public");
+    MockHttpServletRequest request = requestWithBearer("POST", "/order-applications/public");
 
     assertThat(resolver.resolve(request)).isNull();
   }
@@ -55,7 +55,7 @@ class ExemptingBearerTokenResolverTest {
   void doesNotExemptOtherMethodsOnTheGuestOrderApplicationPath() {
     // パスだけで免除すると、同一パスに認証必須の handler を足した日にその Bearer まで捨てられ、
     // その端点は誰にも通せない恒久的な 401/403 になる
-    MockHttpServletRequest request = requestWithBearer("GET", "/store/order-applications/public");
+    MockHttpServletRequest request = requestWithBearer("GET", "/order-applications/public");
 
     assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
   }
@@ -80,7 +80,7 @@ class ExemptingBearerTokenResolverTest {
   @DisplayName("既存ユーザーの招待受諾(/acceptance/existing)は免除対象でなく Bearer を解決すること")
   void resolvesTokenForAcceptAsExistingUser() {
     MockHttpServletRequest request =
-        requestWithBearer("POST", "/admin/cast-invitations/acceptance/existing");
+        requestWithBearer("POST", "/cast-invitations/acceptance/existing");
 
     assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
   }
@@ -88,9 +88,9 @@ class ExemptingBearerTokenResolverTest {
   @Test
   @DisplayName("招待の免除は view/acceptance の 2 端点限定で、トークンを載せたパスには及ばないこと")
   void doesNotExemptArbitraryCastInvitationPath() {
-    // 免除はかつて /admin/cast-invitations/* だった。トークンをパスから本文へ移した今、
-    // 招待トークンらしき 1 セグメントが免除に当たってはならない（当たればパス運搬が復活しても気付けない）。
-    MockHttpServletRequest request = requestWithBearer("GET", "/admin/cast-invitations/abc123");
+    // 招待トークンはパスでなく本文で運ぶ。トークンらしき 1 セグメントが免除に当たると、
+    // トークンをパスに載せる handler が紛れ込んでも気付けない。
+    MockHttpServletRequest request = requestWithBearer("GET", "/cast-invitations/abc123");
 
     assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
   }
