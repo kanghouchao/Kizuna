@@ -112,9 +112,17 @@ export interface AuthorizedStore {
   status?: StoreStatus;
 }
 
-// 権限目録の1件（ロール編集 UI の選択肢）
+// 権限目録の1件（ロール編集 UI の選択肢）。label は画面に出す日本語名。
 export interface PermissionResponse {
   code?: PermissionCode;
+  label?: string;
+}
+
+// 権限目録の業務領域ごとの束。組の順序と見出しはサーバが決める。
+export interface PermissionGroupResponse {
+  group?: string;
+  label?: string;
+  permissions?: PermissionResponse[];
 }
 
 // ロールへの参照（スタッフ応答の埋め込み）。
@@ -128,7 +136,7 @@ export interface RoleRef {
 export interface RoleSummaryResponse {
   id?: number;
   name?: string;
-  // 既定ロール。改名・権限変更・削除がいずれも拒否される。
+  // 既定ロール。改名・削除は拒否される（権限は編集できる）。
   // system と permission_count は Java 側が primitive のため、キーは必ず応答に含まれる。
   system: boolean;
   permission_count: number;
@@ -138,7 +146,7 @@ export interface RoleSummaryResponse {
 export interface RoleResponse {
   id?: number;
   name?: string;
-  // 既定ロール。改名・権限変更・削除がいずれも拒否される。
+  // 既定ロール。改名・削除は拒否される（権限は編集できる）。
   // system と version は Java 側が primitive のため、キーは必ず応答に含まれる。
   system: boolean;
   permissions?: PermissionCode[];

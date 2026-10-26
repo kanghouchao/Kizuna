@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.shared.security.Authorities;
 import java.util.Arrays;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -32,5 +33,21 @@ class PermissionCodeTest {
     assertThat(PermissionCode.TASK_EXECUTE.getDefaultRoles()).isEmpty();
     assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getDefaultRoles))
         .doesNotContainNull();
+  }
+
+  @Test
+  @DisplayName("全権限が日本語名と業務領域を持ち、日本語名は重複しない")
+  void everyPermissionHasUniqueLabelAndGroup() {
+    assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getLabel))
+        .doesNotContainNull()
+        .allSatisfy(label -> assertThat(label).isNotBlank())
+        .doesNotHaveDuplicates();
+    assertThat(Arrays.stream(PermissionCode.values()).map(PermissionCode::getGroup))
+        .doesNotContainNull();
+    assertThat(
+            Arrays.stream(PermissionGroup.values())
+                .map(PermissionGroup::getLabel)
+                .collect(Collectors.toSet()))
+        .hasSize(PermissionGroup.values().length);
   }
 }

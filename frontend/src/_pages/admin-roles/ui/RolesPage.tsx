@@ -1,6 +1,7 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { RoleSummaryResponse, roleApi } from '@/entities/user';
 import { useDeleteAction, useManagedList } from '@/shared/lib';
@@ -17,9 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
-import { RoleFormModal } from './RoleFormModal';
 
-/** ロール一覧ページ。一覧内モーダルで新規作成・編集を行う。 */
+/** ロール一覧ページ。新規作成・編集は独立した画面（/admin/roles/create、/admin/roles/{id}/edit）で行う。 */
 export default function RolesPage() {
   const {
     items: allRoles,
@@ -34,9 +34,6 @@ export default function RolesPage() {
   const roles = appliedSearch
     ? allRoles.filter(role => (role.name ?? '').toLowerCase().includes(appliedSearch.toLowerCase()))
     : allRoles;
-  // フォームは 1 つだけ開く（閉じている / 新規 / 既存 id の編集）。一覧は権限個数までの要約しか
-  // 持たないため、編集フォームの中身（権限コードと version）はモーダル側が id で個別取得する。
-  const [formTarget, setFormTarget] = useState<'closed' | 'create' | number>('closed');
   // 授与中のロール削除は 409、既定ロールは 400。文言はサーバ側が持つ。
   const deletion = useDeleteAction<RoleSummaryResponse>({
     remove: role => roleApi.remove(role.id ?? 0),
@@ -53,7 +50,7 @@ export default function RolesPage() {
         // 付与操作の直後に画面が変わらない理由になるので、一覧の手前で断っておく。
         description="ロールと、それが束ねる権限を定義します。アカウントへの付与は従業員管理から行います。権限の変更は、対象アカウントが次にログインしたときからメニューと画面に反映されます。"
         actions={
-          <Button onClick={() => setFormTarget('create')}>
+          <Button render={<Link href="/admin/roles/create" />}>
             <PlusIcon />
             ロールを追加
           </Button>
@@ -130,14 +127,18 @@ export default function RolesPage() {
                   )}
                 </TableCell>
                 <TableCell className="space-x-2 text-right">
-                  {/* 既定ロールは権限を編集できる（改名は編集モーダルが塞ぎ、削除はサーバ側で拒否されるため導線を無効化する） */}
+                  {/* 既定ロールは権限を編集できる（改名は編集画面が塞ぎ、削除はサーバ側で拒否されるため導線を無効化する） */}
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
-                    // id が無ければ編集対象を特定できず、押しても何も起きない状態になるため無効化する
+                    // id が無ければ編集対象を特定できないため、リンクにせず無効化する
                     disabled={role.id === undefined}
-                    onClick={() => role.id !== undefined && setFormTarget(role.id)}
+                    render={
+                      role.id !== undefined ? (
+                        <Link href={`/admin/roles/${role.id}/edit`} />
+                      ) : undefined
+                    }
                   >
                     編集
                   </Button>
@@ -157,15 +158,6 @@ export default function RolesPage() {
         </Table>
       </ListPage>
 
-      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
-          開くまで mount しないことで、権限目録とロール詳細の取得を必要になった時点まで遅延させる */}
-      {formTarget !== 'closed' && (
-        <RoleFormModal
-          editingId={typeof formTarget === 'number' ? formTarget : null}
-          onClose={() => setFormTarget('closed')}
-          onSaved={refetch}
-        />
-      )}
       <ConfirmDialog
         open={deletion.open}
         title={`${deletion.target?.name ?? ''} を削除しますか？`}

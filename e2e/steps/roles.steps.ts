@@ -13,22 +13,21 @@ let createdRoleName = '';
 
 When('ロール管理画面を開く', async ({ page }) => {
   await page.goto(ROLES_URL, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('button', { name: 'ロールを追加', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'ロールを追加', exact: true })).toBeVisible();
 });
 
 When(
   '名称 {string}・権限 {string} でロールを追加する',
-  async ({ page }, baseName: string, permissionCode: string) => {
+  async ({ page }, baseName: string, permissionLabel: string) => {
     createdRoleName = `${baseName}-${Date.now()}`;
-    await page.getByRole('button', { name: 'ロールを追加', exact: true }).click();
+    await page.getByRole('link', { name: 'ロールを追加', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/roles\/create\/?$/);
 
-    const dialog = page.getByRole('dialog', { name: 'ロールを追加', exact: true });
-    await dialog.getByLabel('ロール名', { exact: true }).fill(createdRoleName);
-    // 権限ラベルはバックエンドの権限コードをそのまま表示する（日本語名は持たない）。
-    await dialog.getByRole('checkbox', { name: permissionCode, exact: true }).check();
-    await dialog.getByRole('button', { name: '保存する', exact: true }).click();
-    // 成功時のみモーダルが閉じる（失敗時はエラートーストのまま開いたまま）。
-    await expect(dialog).toBeHidden({ timeout: 15000 });
+    await page.getByLabel('ロール名', { exact: true }).fill(createdRoleName);
+    await page.getByRole('checkbox', { name: permissionLabel, exact: true }).check();
+    await page.getByRole('button', { name: '保存する', exact: true }).click();
+    // 成功時のみ一覧へ戻る（失敗時はエラートーストのまま画面に留まる）。
+    await expect(page).toHaveURL(/\/admin\/roles\/?$/, { timeout: 15000 });
   }
 );
 
@@ -69,17 +68,17 @@ Then('ロール一覧から {string} が消える', async ({ page }, _label: str
 });
 
 Then(
-  '{string} の削除ボタンは無効で、編集モーダルでは名称だけが固定されている',
+  '{string} の削除ボタンは無効で、編集画面では名称だけが固定されている',
   async ({ page }, systemRoleName: string) => {
     // 既定ロールは権限を編集できる。改名と削除はサーバ側で拒否されるため、導線の側で塞いである。
     const row = page.getByRole('row', { name: new RegExp(systemRoleName) });
     await expect(row).toBeVisible({ timeout: 15000 });
     await expect(row.getByRole('button', { name: '削除', exact: true })).toBeDisabled();
-    await row.getByRole('button', { name: '編集', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: `${systemRoleName} を編集` });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByLabel('ロール名', { exact: true })).toBeDisabled();
-    await dialog.getByRole('button', { name: 'キャンセル', exact: true }).click();
-    await expect(dialog).toBeHidden();
+    await row.getByRole('link', { name: '編集', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/roles\/\d+\/edit\/?$/);
+    await expect(page.getByRole('heading', { name: `${systemRoleName} を編集` })).toBeVisible();
+    await expect(page.getByLabel('ロール名', { exact: true })).toBeDisabled();
+    await page.getByRole('link', { name: 'キャンセル', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/roles\/?$/);
   }
 );
