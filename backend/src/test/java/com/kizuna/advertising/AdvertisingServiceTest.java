@@ -89,8 +89,8 @@ class AdvertisingServiceTest {
     var persisted = ArgumentCaptor.forClass(Object.class);
     verify(records, times(3)).persist(persisted.capture());
     assertThat(persisted.getAllValues())
-        .extracting(Object::getClass)
-        .containsExactly(AdvertisingCost.class, AdvertisingChange.class, AdvertisingRequest.class);
+        .hasExactlyElementsOfTypes(
+            AdvertisingCost.class, AdvertisingChange.class, AdvertisingRequest.class);
     assertThat(persisted.getAllValues())
         .allSatisfy(row -> assertThat(((StoreScopedEntity) row).getStoreId()).isEqualTo(STORE_ID));
     verify(audit)

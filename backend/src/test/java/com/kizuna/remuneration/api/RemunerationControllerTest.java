@@ -178,8 +178,8 @@ class RemunerationControllerTest {
     var persisted = ArgumentCaptor.forClass(Object.class);
     verify(records, times(3)).persist(persisted.capture());
     assertThat(persisted.getAllValues())
-        .extracting(Object::getClass)
-        .containsExactly(BonusAward.class, RemunerationChange.class, RemunerationRequest.class);
+        .hasExactlyElementsOfTypes(
+            BonusAward.class, RemunerationChange.class, RemunerationRequest.class);
     assertThat(persisted.getAllValues())
         .allSatisfy(row -> assertThat(((StoreScopedEntity) row).getStoreId()).isEqualTo(7L));
   }
