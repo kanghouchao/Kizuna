@@ -3,7 +3,9 @@ package com.kizuna.point.domain;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 加算ロットの集まりから残高と消費計画を導く計算器。永続化も日時取得も持たず、基準日は呼出側が渡す。
@@ -23,6 +25,23 @@ public final class PointLedger {
   /** 基準日時点で利用できるポイントの合計。1 ロットの量は int でも、ロットを跨いだ合計は int を超えうるため long で持つ。 */
   public long balance() {
     return lots.stream().filter(this::usable).mapToLong(PointLedger::remaining).sum();
+  }
+
+  /**
+   * 利用可能残高を期限ごとに畳んだ内訳。{@link #balance} と同じ「利用できる」判定を使うので、内訳の合計は残高に一致する。
+   * 期限の早い順に並び、期限なしは末尾。残りの無い期限は現れない。
+   */
+  public List<ExpiryBalance> balanceByExpiry() {
+    Map<LocalDate, Long> totals = new LinkedHashMap<>();
+    for (PointLot lot : consumptionOrder()) {
+      int rest = remaining(lot);
+      if (rest > 0) {
+        totals.merge(lot.expiresOn(), (long) rest, Long::sum);
+      }
+    }
+    return totals.entrySet().stream()
+        .map(entry -> new ExpiryBalance(entry.getKey(), entry.getValue()))
+        .toList();
   }
 
   /**

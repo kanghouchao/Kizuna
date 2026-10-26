@@ -21,9 +21,9 @@ class PermissionCodeTest {
 
   // 目録の増減は wire 契約（frontend の union・基線 seed）に波及する製品判断なので、字面の個数で止める。
   @Test
-  @DisplayName("権限目録は 53 個")
+  @DisplayName("権限目録は 55 個")
   void catalogIsComplete() {
-    assertThat(PermissionCode.values()).hasSize(53);
+    assertThat(PermissionCode.values()).hasSize(55);
   }
 
   @Test

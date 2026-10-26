@@ -2,6 +2,7 @@ package com.kizuna.member.application;
 
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.User;
@@ -47,6 +48,24 @@ public class MemberWithdrawal {
             .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
     OffsetDateTime now = OffsetDateTime.now();
     member.withdraw(reason, user.getId(), now);
+    credentialOperations.withdraw(user, now);
+    memberRepository.save(member);
+    userRepository.save(user);
+    return new WithdrawnMember(member.getId(), user.getId(), now);
+  }
+
+  /** 職員による代行退会。対象は会員 ID で名指しし、操作者は職員の利用者 ID で記録する。効果と直列化は本人退会と同じで、 存在しない会員は 404、退会済みは 409。 */
+  public WithdrawnMember withdrawByStaff(long memberId, long actorUserId, String reason) {
+    Member member =
+        memberRepository
+            .findByIdForUpdate(memberId)
+            .orElseThrow(() -> new NotFoundException("会員が見つかりません"));
+    User user =
+        userRepository
+            .findById(member.getUserId())
+            .orElseThrow(() -> new NotFoundException("会員の利用者が見つかりません"));
+    OffsetDateTime now = OffsetDateTime.now();
+    member.withdraw(reason, actorUserId, now);
     credentialOperations.withdraw(user, now);
     memberRepository.save(member);
     userRepository.save(user);

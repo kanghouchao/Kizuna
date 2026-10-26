@@ -204,4 +204,24 @@ class PointLedgerTest {
         .containsExactly(tuple(2L, 50), tuple(3L, 70));
     assertThat(ledger(new PointLot(1L, 100, null, 100)).planClearance()).isEmpty();
   }
+
+  @Test
+  @DisplayName("期限別内訳は期限内ロットの残りを期限ごとに畳み、期限の早い順・期限なしは末尾で、合計は残高に一致すること")
+  void balanceByExpiryGroupsLiveRemaindersByExpiry() {
+    PointLedger ledger =
+        ledger(
+            new PointLot(1L, 100, null, 30),
+            new PointLot(2L, 50, LocalDate.of(2026, 12, 31), 0),
+            new PointLot(3L, 80, LocalDate.of(2026, 12, 31), 80),
+            new PointLot(4L, 40, LocalDate.of(2026, 9, 1), 10),
+            new PointLot(5L, 60, TODAY.minusDays(1), 0));
+
+    assertThat(ledger.balanceByExpiry())
+        .containsExactly(
+            new ExpiryBalance(LocalDate.of(2026, 9, 1), 30),
+            new ExpiryBalance(LocalDate.of(2026, 12, 31), 50),
+            new ExpiryBalance(null, 70));
+    assertThat(ledger.balanceByExpiry().stream().mapToLong(ExpiryBalance::points).sum())
+        .isEqualTo(ledger.balance());
+  }
 }

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberAlreadyWithdrawnException;
 import com.kizuna.member.domain.MemberRepository;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.StoreScopeType;
@@ -101,5 +102,40 @@ class MemberWithdrawalTest {
     when(memberRepository.findByUserIdForUpdate(10L)).thenReturn(Optional.empty());
     assertThatThrownBy(() -> withdrawal.withdrawSelf(10L, "理由"))
         .isInstanceOf(StaleSessionException.class);
+  }
+
+  @Test
+  @DisplayName("代行退会は会員 ID でロック付きに引き、操作者を職員の利用者 ID で記録し、本人と同じく利用者を停止する")
+  void withdrawByStaffLocksMemberByIdAndRecordsStaffActor() {
+    User user = memberUser();
+    Member member = member();
+    when(memberRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(member));
+    when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+
+    var withdrawn = withdrawal.withdrawByStaff(77L, 42L, "電話依頼");
+
+    assertThat(withdrawn.memberId()).isEqualTo(77L);
+    assertThat(withdrawn.userId()).isEqualTo(10L);
+    assertThat(member.getWithdrawnBy()).isEqualTo(42L);
+    assertThat(member.getWithdrawalReason()).isEqualTo("電話依頼");
+    verify(credentialOperations).withdraw(user, withdrawn.withdrawnAt());
+    verify(memberRepository).save(member);
+    verify(userRepository).save(user);
+  }
+
+  @Test
+  @DisplayName("代行退会の対象が無ければ 404、退会済みなら 409 で、利用者には触れない")
+  void withdrawByStaffMissingOrAlreadyWithdrawn() {
+    when(memberRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+    assertThatThrownBy(() -> withdrawal.withdrawByStaff(99L, 42L, "理由"))
+        .isInstanceOf(NotFoundException.class);
+
+    Member member = member();
+    member.withdraw("一度目", 10L, OffsetDateTime.now());
+    when(memberRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(member));
+    when(userRepository.findById(10L)).thenReturn(Optional.of(memberUser()));
+    assertThatThrownBy(() -> withdrawal.withdrawByStaff(77L, 42L, "二度目"))
+        .isInstanceOf(MemberAlreadyWithdrawnException.class);
+    verify(credentialOperations, never()).withdraw(any(), any());
   }
 }

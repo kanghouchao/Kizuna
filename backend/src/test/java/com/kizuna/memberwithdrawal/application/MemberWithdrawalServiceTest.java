@@ -68,4 +68,20 @@ class MemberWithdrawalServiceTest {
         .as("全段が一つの取引で確定・巻き戻しされる")
         .isTrue();
   }
+
+  @Test
+  @DisplayName("代行退会は会員 ID で終端化し、消去仕訳・関連解除・申請取り下げの操作者を職員の利用者 ID にする")
+  void staffWithdrawalRecordsStaffAsActorEverywhere() {
+    when(memberWithdrawal.withdrawByStaff(77L, 42L, "電話依頼"))
+        .thenReturn(new WithdrawnMember(77L, 10L, AT));
+
+    service.withdrawByStaff(77L, 42L, "電話依頼");
+
+    var order =
+        inOrder(memberWithdrawal, pointLedgerService, linkWithdrawal, applicationWithdrawal);
+    order.verify(memberWithdrawal).withdrawByStaff(77L, 42L, "電話依頼");
+    order.verify(pointLedgerService).clearForWithdrawal(77L, 42L, "会員退会");
+    order.verify(linkWithdrawal).releaseAll(77L, 42L, AT);
+    order.verify(applicationWithdrawal).withdrawPending(77L, 42L, AT);
+  }
 }

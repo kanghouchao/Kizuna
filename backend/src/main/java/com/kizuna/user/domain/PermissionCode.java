@@ -123,6 +123,19 @@ public enum PermissionCode {
    */
   SERVICE_ID_MANAGE(SystemRole.HQ_ADMIN),
 
+  /**
+   * 会員の検索・照会（MemberConsoleController）。退会済みを含む全会員と、そのランク・残高・明細・関連を読む。
+   *
+   * <p>関連の展開は閲覧者の店舗集合に収まる分に限り、集合外は件数だけを見せる。店舗の顧客台帳の行へは店舗集合を跨いで到達させない。
+   */
+  MEMBER_VIEW(SystemRole.HQ_ADMIN),
+
+  /**
+   * 職員による会員の代行退会（MemberConsoleController）。本人の退会と同じ効果を操作者 = 職員で起こす不可逆の操作で、 {@link #MEMBER_VIEW}
+   * を<b>前提とする</b> — 対象を探す一覧と確認する詳細は閲覧権限の側にある（機構では強制しない付与時の約束）。
+   */
+  MEMBER_WITHDRAW(SystemRole.HQ_ADMIN),
+
   /** 授権店舗一覧の閲覧（StoreController）。 */
   STORE_VIEW(SystemRole.HQ_ADMIN, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
 

@@ -32,9 +32,20 @@ public class MemberWithdrawalService {
   @Transactional
   public void withdrawSelf(long userId, String reason) {
     WithdrawnMember withdrawn = memberWithdrawal.withdrawSelf(userId, reason);
-    pointLedgerService.clearForWithdrawal(withdrawn.memberId(), withdrawn.userId(), CLEAR_REASON);
-    linkWithdrawal.releaseAll(withdrawn.memberId(), withdrawn.userId(), withdrawn.withdrawnAt());
+    completeWithdrawal(withdrawn, withdrawn.userId());
+  }
+
+  /** 職員による代行退会。効果は本人退会と同じで、消去仕訳・関連解除・申請取り下げの操作者を職員の利用者 ID で記録する。 */
+  @Transactional
+  public void withdrawByStaff(long memberId, long actorUserId, String reason) {
+    WithdrawnMember withdrawn = memberWithdrawal.withdrawByStaff(memberId, actorUserId, reason);
+    completeWithdrawal(withdrawn, actorUserId);
+  }
+
+  private void completeWithdrawal(WithdrawnMember withdrawn, long actorUserId) {
+    pointLedgerService.clearForWithdrawal(withdrawn.memberId(), actorUserId, CLEAR_REASON);
+    linkWithdrawal.releaseAll(withdrawn.memberId(), actorUserId, withdrawn.withdrawnAt());
     applicationWithdrawal.withdrawPending(
-        withdrawn.memberId(), withdrawn.userId(), withdrawn.withdrawnAt());
+        withdrawn.memberId(), actorUserId, withdrawn.withdrawnAt());
   }
 }

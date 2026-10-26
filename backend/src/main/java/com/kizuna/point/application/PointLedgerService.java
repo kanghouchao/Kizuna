@@ -96,6 +96,17 @@ public class PointLedgerService {
     return ledgerOf(pointEntryRepository.findCredits(memberId)).balance();
   }
 
+  /** 期限ごとの利用可能残高。期限なしは {@code expiresOn} が null で末尾。 */
+  public record ExpiryBalance(LocalDate expiresOn, long points) {}
+
+  /** 会員の利用可能残高の期限別内訳。合計は {@link #balance} に一致する。 */
+  @Transactional(readOnly = true)
+  public List<ExpiryBalance> balanceByExpiry(long memberId) {
+    return ledgerOf(pointEntryRepository.findCredits(memberId)).balanceByExpiry().stream()
+        .map(b -> new ExpiryBalance(b.expiresOn(), b.points()))
+        .toList();
+  }
+
   /**
    * 会員の受注付与の累計純額（取消仕訳の控除後）。会員ランクの昇格指標であり、取消で減りうる。
    *

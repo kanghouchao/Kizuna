@@ -226,4 +226,35 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
       @Param("cursorId") Long cursorId,
       Limit limit);
+
+  // 職員が見る明細。本人向け（MEMBER_ENTRY_SELECT）と違い理由と実行者の表示名まで出す — 退会消去・取消・
+  // 手動調整の「なぜ」は運用側の照会にこそ要る。実行者は消えうるので left join。
+  String LEDGER_ENTRY_SELECT =
+      """
+      select e.id as id, e.createdAt as createdAt, e.entryType as entryType,
+             e.amount as amount, e.expiresOn as expiresOn, e.reason as reason,
+             st.name as storeName, au.displayName as actorName
+      from com.kizuna.point.domain.PointEntry e
+        left join com.kizuna.store.domain.Store st on st.id = e.originatingStoreId
+        left join com.kizuna.user.domain.User au on au.id = e.actorUserId
+      """;
+
+  /** 職員が見る会員 1 人の明細（全種別・全店舗）の先頭。並びと境界は本人向けと同じ。 */
+  @Query(LEDGER_ENTRY_SELECT + MEMBER_ENTRY_WHERE + MEMBER_ENTRY_ORDER)
+  List<MemberLedgerEntryView> findLedgerEntryViews(@Param("memberId") Long memberId, Limit limit);
+
+  /** 職員が見る明細の続き。 */
+  @Query(
+      LEDGER_ENTRY_SELECT
+          + MEMBER_ENTRY_WHERE
+          + """
+            and (e.createdAt < :cursorCreatedAt
+                 or (e.createdAt = :cursorCreatedAt and e.id < :cursorId))
+            """
+          + MEMBER_ENTRY_ORDER)
+  List<MemberLedgerEntryView> findLedgerEntryViewsAfter(
+      @Param("memberId") Long memberId,
+      @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
+      @Param("cursorId") Long cursorId,
+      Limit limit);
 }

@@ -75,6 +75,16 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
+              - column: { name: id, value: platform-members }
+              - column: { name: parent_id, value: platform-main }
+              - column: { name: label, value: 会員 }
+              - column: { name: path, value: /admin/members }
+              - column: { name: icon, value: SmileIcon }
+              - column: { name: permission, value: MEMBER_VIEW }
+              - column: { name: sort_order, valueNumeric: 5 }
+        - insert:
+            tableName: t_menus
+            columns:
               - column: { name: id, value: platform-benefit-rules }
               - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: 特典規則 }
