@@ -98,7 +98,7 @@ public enum PermissionCode {
   /** 共通設定の閲覧・更新（AdminConfigController）。 */
   SYSTEM_CONFIG_MANAGE(SystemRole.HQ_ADMIN),
 
-  /** 全店共有領域への資産アップロード（登録・出力 — FileUploadController の店舗文脈を持たない保存経路）。 */
+  /** 全店共有領域への資産アップロード（登録・出力 — FileUploadController の店舗を名乗らない保存経路）。 */
   ASSET_MANAGE(SystemRole.HQ_ADMIN),
 
   /**

@@ -6,7 +6,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.domain.ExecutionStatus;
@@ -27,7 +26,6 @@ public class TaskExecutor {
   private final TaskRegistry registry;
   private final ServiceExecutionIdentityService identities;
   private final TaskLifecycle lifecycle;
-  private final StoreContext storeContext;
   private final Clock clock;
   private final TransactionTemplate work;
 
@@ -37,14 +35,12 @@ public class TaskExecutor {
       TaskRegistry registry,
       ServiceExecutionIdentityService identities,
       TaskLifecycle lifecycle,
-      StoreContext storeContext,
       Clock clock,
       PlatformTransactionManager transactions,
       AppProperties properties) {
     this.registry = registry;
     this.identities = identities;
     this.lifecycle = lifecycle;
-    this.storeContext = storeContext;
     this.clock = clock;
     if (properties.getTasks().getTimeoutSeconds() < 1
         || properties.getTasks().getInterruptionMinimumAgeSeconds() < 1) {
@@ -111,23 +107,18 @@ public class TaskExecutor {
             }
             var handler = registry.require(request.command());
             var service = requireService(request.command(), handler);
-            if (request.getStoreId() != null) storeContext.setStoreId(request.getStoreId());
-            try {
-              long count =
-                  handler.execute(
-                      new TaskContext(
-                          id,
-                          service.id(),
-                          request.getStoreId(),
-                          request.getPeriodStart(),
-                          request.getPeriodEnd()));
-              attempt.succeed(count, OffsetDateTime.now(clock));
-              lifecycle.auditState(
-                  request, attempt, service, "TASK_SUCCEEDED", Map.of("status", "RUNNING"));
-              return TaskLifecycle.result(request, attempt);
-            } finally {
-              storeContext.clear();
-            }
+            long count =
+                handler.execute(
+                    new TaskContext(
+                        id,
+                        service.id(),
+                        request.getStoreId(),
+                        request.getPeriodStart(),
+                        request.getPeriodEnd()));
+            attempt.succeed(count, OffsetDateTime.now(clock));
+            lifecycle.auditState(
+                request, attempt, service, "TASK_SUCCEEDED", Map.of("status", "RUNNING"));
+            return TaskLifecycle.result(request, attempt);
           });
     } catch (RuntimeException failure) {
       return lifecycle.fail(
@@ -155,9 +146,8 @@ public class TaskExecutor {
   }
 
   private void requireCleanBoundary() {
-    if (TransactionSynchronizationManager.isActualTransactionActive()
-        || storeContext.hasStoreId()) {
-      throw new ServiceException("処理実行は既存の取引・店舗コンテキストの外から開始してください");
+    if (TransactionSynchronizationManager.isActualTransactionActive()) {
+      throw new ServiceException("処理実行は既存の取引の外から開始してください");
     }
   }
 }

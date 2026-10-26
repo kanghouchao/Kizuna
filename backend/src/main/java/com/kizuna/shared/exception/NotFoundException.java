@@ -12,7 +12,7 @@ package com.kizuna.shared.exception;
  *   <li><b>店舗を指名した</b>（{@code X-Store-ID}）場合は 403。店舗は公開ドメインを持ち存在自体が秘匿対象ではないため、 授権の有無をそのまま答えてよい。
  * </ul>
  *
- * <p>授権判定の一部として店舗の実在性を確かめる経路（store モジュールの {@code StoreExistenceInterceptor}）は本例外を使わない。 そこで 404
+ * <p>授権判定の一部として店舗の実在性を確かめる経路（{@code CurrentStoreArgumentResolver}）は本例外を使わない。 そこで 404
  * を返すと、403（授権なし）との対比で「どの店舗 id が実在するか」が判別可能になるため。
  */
 public class NotFoundException extends RuntimeException {

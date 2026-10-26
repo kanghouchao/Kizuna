@@ -13,7 +13,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
 import com.kizuna.customer.application.CustomerPointService;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -40,11 +39,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * <p>残高の照会は顧客台帳の読みとして CUSTOMER_MANAGE で足りるが、手動調整は残高を人手で動かす確定操作なので 別権限で仕切られていることを固定する。
  */
 @WebMvcTest(CustomerPointController.class)
-@Import({
-  CustomerPointControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({CustomerPointControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class CustomerPointControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -58,7 +53,7 @@ class CustomerPointControllerTest {
 
   @MockitoBean private CustomerPointService customerPointService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

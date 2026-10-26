@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
@@ -27,11 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** 指名候補の出勤参照が会員本人にだけ開いていることの単体テスト。 */
 @WebMvcTest(AdminShiftController.class)
-@Import({
-  AdminShiftControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({AdminShiftControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class AdminShiftControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -45,7 +40,7 @@ class AdminShiftControllerTest {
 
   @MockitoBean private ConfirmedShiftLookupService confirmedShiftLookupService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

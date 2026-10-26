@@ -29,7 +29,6 @@ import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -58,11 +57,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
   AdvertisingMediaController.class,
   AdvertisingOrderCostController.class
 })
-@Import({
-  AdvertisingControllerTest.MethodSecurity.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({AdvertisingControllerTest.MethodSecurity.class, StoreScopeHolder.class})
 class AdvertisingControllerTest {
   @TestConfiguration
   @EnableMethodSecurity
@@ -324,7 +319,7 @@ class AdvertisingControllerTest {
             get("/store/advertising-media-summaries")
                 .param("month", "2026-09")
                 .with(permissions("VIEW")))
-        .andExpect(status().isForbidden());
+        .andExpect(status().isBadRequest());
     verifyNoInteractions(exports, media);
   }
 

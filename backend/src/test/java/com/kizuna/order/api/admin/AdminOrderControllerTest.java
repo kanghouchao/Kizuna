@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.order.api.dto.AdminOrderResponse;
 import com.kizuna.order.application.AdminOrderService;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -40,11 +39,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** 横断一覧が要求ごとに解決した授権店舗集合を service へ渡すことと、offset ページングの並びの安定性の単体テスト。 */
 @WebMvcTest(AdminOrderController.class)
-@Import({
-  AdminOrderControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({AdminOrderControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class AdminOrderControllerTest {
 
   /** メソッドセキュリティ（@PreAuthorize）を有効化し、jwt() の認証主体をそのまま通す設定 */
@@ -62,7 +57,7 @@ class AdminOrderControllerTest {
 
   @MockitoBean private AdminOrderService adminOrderService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

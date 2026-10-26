@@ -16,7 +16,6 @@ import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
@@ -100,7 +99,6 @@ class DailyRemunerationPostgresTest {
           var store = new Store("日別検証店", UUID.randomUUID() + ".example.test", null);
           em.persist(store);
           storeId = store.getId();
-          context.getBean(StoreContext.class).setStoreId(storeId);
           email = UUID.randomUUID() + "@example.test";
           var actor =
               User.builder()
@@ -205,21 +203,15 @@ class DailyRemunerationPostgresTest {
     try (var executor = Executors.newSingleThreadExecutor()) {
       var reading =
           executor.submit(
-              () -> {
-                context.getBean(StoreContext.class).setStoreId(storeId);
-                try {
-                  return http.perform(
+              () ->
+                  http.perform(
                           get(self ? "/me/daily-remunerations" : "/store/daily-remunerations")
                               .principal(() -> email)
                               .param("person_id", personId.toString())
                               .param("store_id", storeId.toString())
                               .param("business_date", DAY.toString()))
                       .andReturn()
-                      .getResponse();
-                } finally {
-                  context.getBean(StoreContext.class).clear();
-                }
-              });
+                      .getResponse());
       try {
         assertThat(probe.reached.await(10, TimeUnit.SECONDS)).isTrue();
         transactions.executeWithoutResult(
@@ -330,11 +322,6 @@ class DailyRemunerationPostgresTest {
     @Bean
     PlatformTransactionManager transactionManager(EntityManagerFactory f) {
       return new JpaTransactionManager(f);
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

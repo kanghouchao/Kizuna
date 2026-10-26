@@ -32,7 +32,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.remuneration.AttendanceFacts;
@@ -73,7 +72,6 @@ import org.springframework.transaction.PlatformTransactionManager;
   RemunerationControllerTest.Security.class,
   RemunerationStatementService.class,
   RemunerationManagementService.class,
-  StoreContext.class,
   StoreScopeHolder.class
 })
 @WithMockUser(

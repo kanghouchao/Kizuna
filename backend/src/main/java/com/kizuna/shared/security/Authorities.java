@@ -2,7 +2,7 @@ package com.kizuna.shared.security;
 
 /**
  * SecurityContext に載せる authority 文字列の符号化規約。 消費側（{@code PermissionCode}・{@code
- * MenuTreeAssembler}・{@code StoreIdInterceptor} 等）はここを経由し、接頭辞を文字列リテラルで再現しないこと。
+ * MenuTreeAssembler}・{@code PermissionHolderGuard} 等）はここを経由し、接頭辞を文字列リテラルで再現しないこと。
  */
 public final class Authorities {
 

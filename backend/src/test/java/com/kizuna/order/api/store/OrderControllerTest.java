@@ -38,7 +38,6 @@ import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
@@ -64,11 +63,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** 呼出側の {@code ?sort=} 上書きで一意な副キー id が消えないことの単体テスト（offset ページングの安定性）。 */
 @WebMvcTest(OrderController.class)
-@Import({
-  OrderControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({OrderControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class OrderControllerTest {
 
   @Test
@@ -110,7 +105,7 @@ class OrderControllerTest {
   @MockitoBean private OrderCorrectionService orderCorrectionService;
   @MockitoBean private OrderPointRollbackService orderPointRollbackService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

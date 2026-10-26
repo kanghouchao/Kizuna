@@ -4,7 +4,6 @@ import com.kizuna.review.domain.ReviewInput;
 import com.kizuna.review.domain.ReviewRepository;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
-import com.kizuna.shared.storescope.StoreContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -17,12 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReviewPublication {
   private final ReviewRepository reviews;
-  private final StoreContext context;
 
   @Transactional(readOnly = true)
   public Map<String, ApprovedReviewProjection> current(Long storeId, Set<String> reviewIds) {
-    if (storeId == null || !storeId.equals(context.getStoreId()))
-      throw new AccessDeniedException("口コミの店舗指定を確認してください");
+    if (storeId == null) throw new AccessDeniedException("口コミの店舗指定を確認してください");
     if (reviewIds == null || reviewIds.size() > 100)
       throw new IllegalArgumentException("口コミの取得件数は100件以内で指定してください");
     reviewIds.forEach(ReviewInput::id);

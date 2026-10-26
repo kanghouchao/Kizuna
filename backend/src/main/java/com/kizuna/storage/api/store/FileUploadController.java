@@ -1,8 +1,7 @@
 package com.kizuna.storage.api.store;
 
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreOptional;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.user.domain.PermissionCode;
@@ -25,16 +24,15 @@ import org.springframework.web.multipart.MultipartFile;
 public class FileUploadController {
 
   private final FileStorageService fileStorageService;
-  private final StoreContext storeContext;
   private final AppProperties appProperties;
 
   @PostMapping
   @PreAuthorize("isAuthenticated()")
-  @StoreOptional
   public ResponseEntity<FileUploadResponse> upload(
+      @CurrentStore(required = false) Long storeId,
       @RequestParam("file") MultipartFile file,
       @RequestParam(value = "bucket", defaultValue = "public") String bucket) {
-    String prefix = resolveStoragePrefix();
+    String prefix = resolveStoragePrefix(storeId);
     String relativePath = fileStorageService.store(prefix, bucket, file);
 
     FileUploadResponse response =
@@ -48,14 +46,14 @@ public class FileUploadController {
   }
 
   /**
-   * 保存先プレフィクスを決める。店舗文脈があればその店舗配下、無ければプラットフォーム共有領域（platform）へ保存する。
+   * 保存先プレフィクスを決める。店舗を名乗ればその店舗配下、名乗らなければプラットフォーム共有領域（platform）へ保存する。
    *
-   * <p>プラットフォーム共有領域への保存はプラットフォーム資産管理能力（{@code PERM_ASSET_MANAGE}）の保持者のみ許可する。店舗文脈を解決できない 店舗系・キャスト等は
-   * {@code @StoreOptional} の許可経路に乗るため、資産をプラットフォーム共有領域へ誤って保存しないよう fail-closed で 403 拒否する。
+   * <p>共有領域への保存はプラットフォーム資産管理能力（{@code PERM_ASSET_MANAGE}）の保持者のみ許可する。店舗を名乗らない要求は
+   * 店舗の検証を経ないため、資産を共有領域へ誤って保存しないよう fail-closed で 403 拒否する。
    */
-  private String resolveStoragePrefix() {
-    if (storeContext.hasStoreId()) {
-      return String.valueOf(storeContext.getStoreId());
+  private String resolveStoragePrefix(Long storeId) {
+    if (storeId != null) {
+      return String.valueOf(storeId);
     }
     if (!hasAssetManage()) {
       throw new AccessDeniedException("プラットフォーム共有領域へのアップロードはプラットフォーム資産管理能力の保持者のみ許可されています");

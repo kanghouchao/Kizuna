@@ -27,7 +27,6 @@ import com.kizuna.order.infrastructure.StoreNames;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -71,7 +70,6 @@ import org.springframework.transaction.PlatformTransactionManager;
   MonthlyPdfRenderer.class,
   MonthlyRemunerationService.class,
   SelfMonthlyRemunerationService.class,
-  StoreContext.class,
   StoreScopeHolder.class
 })
 class MonthlyPdfControllerTest {

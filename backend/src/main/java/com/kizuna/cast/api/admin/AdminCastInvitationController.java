@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 招待受諾の公開コントローラ。StoreIdInterceptor を通らない /admin 配下に置く。 */
+/** 招待の閲覧と受諾を受け持つ公開コントローラ。 */
 @RestController
 @RequestMapping("/admin/cast-invitations")
 @RequiredArgsConstructor

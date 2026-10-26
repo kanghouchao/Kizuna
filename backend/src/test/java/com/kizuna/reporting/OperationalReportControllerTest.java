@@ -28,7 +28,6 @@ import com.kizuna.reporting.application.ReportSnapshot;
 import com.kizuna.reporting.infrastructure.ReportRenderer;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -62,7 +61,6 @@ import org.springframework.transaction.PlatformTransactionManager;
   OperationalReportService.class,
   ReportSnapshot.class,
   ReportRenderer.class,
-  StoreContext.class,
   StoreScopeHolder.class
 })
 class OperationalReportControllerTest {

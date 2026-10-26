@@ -4,10 +4,8 @@ import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.api.dto.OwnServiceConditionSummary;
 import com.kizuna.service.application.OwnServiceConditionService;
 import com.kizuna.service.domain.ServiceKind;
-import com.kizuna.shared.storescope.StoreContext;
 import jakarta.validation.Valid;
 import java.security.Principal;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,12 +17,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** CAST は権限（PERM_）を持たず {@code @CurrentStore} で店舗を名乗れないため、store_id を受け、本人の現行在籍をサービス内で検証する。 */
 @RestController
 @RequestMapping("/me/service-conditions")
 @RequiredArgsConstructor
 public class OwnServiceConditionController {
   private final OwnServiceConditionService service;
-  private final StoreContext context;
 
   @GetMapping
   @PreAuthorize("hasAuthority('ROLE_CAST')")
@@ -34,7 +32,7 @@ public class OwnServiceConditionController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       Principal principal) {
-    return inStore(storeId, () -> service.list(storeId, principal.getName(), kind, page, size));
+    return service.list(storeId, principal.getName(), kind, page, size);
   }
 
   @PutMapping("/{id}/consent")
@@ -44,16 +42,6 @@ public class OwnServiceConditionController {
       @RequestParam("store_id") Long storeId,
       @Valid @RequestBody OwnConsentRequest request,
       Principal principal) {
-    return inStore(storeId, () -> service.decide(storeId, principal.getName(), id, request));
-  }
-
-  // 本人の現行在籍をサービス内で検証する。JWT の店舗集合では退店・再入店の即時性を保証できない。
-  private <T> T inStore(Long storeId, Supplier<T> action) {
-    try {
-      context.setStoreId(storeId);
-      return action.get();
-    } finally {
-      context.clear();
-    }
+    return service.decide(storeId, principal.getName(), id, request);
   }
 }

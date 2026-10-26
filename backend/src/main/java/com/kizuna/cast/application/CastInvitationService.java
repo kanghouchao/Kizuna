@@ -36,23 +36,23 @@ public class CastInvitationService {
   private final StoreRepository storeRepository;
 
   /**
-   * 招待を発行する。紐づき済みの档案は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 档案は店舗条件付きで引くため他店舗の档案は
-   * NotFoundException となる（越権はインターセプタが先に 403）。
+   * 招待を発行する。紐づき済みの在籍は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 在籍は店舗条件付きで引くため他店舗の在籍は
+   * NotFoundException となる（授権外の店舗は {@code @CurrentStore} の解決が先に 403）。
    *
-   * <p>档案あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE
+   * <p>在籍あたりの有効な招待は最大 1 枚であることを部分ユニークインデックス {@code uq_t_cast_invitations_pending_cast}（{@code WHERE
    * status = 'PENDING'}）が DB レベルで保証する。 これにより店長の二重クリック等で issue() が並行しても、複数の有効トークンが同時に発行される事態を塞ぐ
    * （token 一意制約だけでは異なるトークンの二重 PENDING を防げないため）。
    *
-   * <p>並行する受諾（{@link CastInvitationAcceptanceService}）とは、まず档案行のロックで直列化する（ADR 0016）。 以下の 2
+   * <p>並行する受諾（{@link CastInvitationAcceptanceService}）とは、まず在籍行のロックで直列化する（ADR 0016）。 以下の 2
    * 段はロックの取得時期に依存しない保証として残す。 ①旧 PENDING の失効を、管理エンティティの {@code invalidate()} ではなく条件付き一括
    * UPDATE（{@code WHERE status = PENDING}）で行う。これにより受諾が先に ACCEPTED へ遷移させた行は対象外となり、受諾確定済みの招待を
-   * INVALIDATED へ巻き戻さない。 ②失効 UPDATE は受諾側の行ロック解放 （＝受諾トランザクションのコミット）を待って完了するため、その後に档案の紐づけを DB
-   * 再読込で再確認し、 並行受諾が档案を紐づけていれば新規発行を中止する（連携済み档案に有効トークンが残る矛盾を塞ぐ）。
+   * INVALIDATED へ巻き戻さない。 ②失効 UPDATE は受諾側の行ロック解放 （＝受諾トランザクションのコミット）を待って完了するため、その後に在籍の紐づけを DB
+   * 再読込で再確認し、 並行受諾が在籍を紐づけていれば新規発行を中止する（連携済み在籍に有効トークンが残る矛盾を塞ぐ）。
    */
   @Transactional
   public CastInvitationResponse issue(Long storeId, String castId) {
-    // 招待行を書く前に店舗行・档案行を押さえる（ADR 0016）。招待を先に押さえると、同じ档案を
-    // 「店舗 → 档案 → 招待」の順で辿る受諾と逆順になって環になる。
+    // 招待行を書く前に店舗行・在籍行を押さえる（ADR 0016）。招待を先に押さえると、同じ在籍を
+    // 「店舗 → 在籍 → 招待」の順で辿る受諾と逆順になって環になる。
     storeRepository.lockAgainstDeletion(storeId);
     CastEnrollment cast =
         castRepository
@@ -72,8 +72,8 @@ public class CastInvitationService {
         castId, storeId, CastInvitation.Status.PENDING, CastInvitation.Status.INVALIDATED);
 
     // 失効 UPDATE は受諾側の行ロック解放（＝受諾トランザクションのコミット）を待って完了するため、この時点で
-    // 並行受諾は確定済み。档案が紐づいていないかを DB から再読込（スカラ投影で一次キャッシュを回避）して再確認し、
-    // 紐づき済みなら新規発行を中止する。これで連携済み档案に有効トークンが残る矛盾を塞ぐ。
+    // 並行受諾は確定済み。在籍が紐づいていないかを DB から再読込（スカラ投影で一次キャッシュを回避）して再確認し、
+    // 紐づき済みなら新規発行を中止する。これで連携済み在籍に有効トークンが残る矛盾を塞ぐ。
     if (castRepository.findCastIdByIdAndStoreId(castId, storeId).isPresent()) {
       throw new CastInvitationStateException(ALREADY_LINKED_MESSAGE);
     }

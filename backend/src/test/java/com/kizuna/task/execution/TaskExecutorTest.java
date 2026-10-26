@@ -19,7 +19,6 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.application.TaskLifecycle;
@@ -56,7 +55,6 @@ class TaskExecutorTest {
       mock(ServiceExecutionIdentityService.class);
   private final TaskHandler handler = mock(TaskHandler.class);
   private final StoreRepository stores = mock(StoreRepository.class);
-  private final StoreContext scope = new StoreContext();
   private final Clock clock = Clock.fixed(Instant.parse("2026-10-07T01:00:00Z"), ZoneOffset.UTC);
   private final AuditActor service = new AuditActor(10L, "SERVICE", "実行主体");
   private final AuditActor operator = new AuditActor(20L, "STAFF", "操作担当");
@@ -121,7 +119,6 @@ class TaskExecutorTest {
             new TaskRegistry(List.of(handler)),
             identities,
             lifecycle,
-            scope,
             clock,
             transactions,
             new AppProperties());
@@ -269,7 +266,7 @@ class TaskExecutorTest {
   }
 
   @Test
-  void storeExecutionEstablishesAndClearsScopeAndSnapshotsName() {
+  void storeExecutionPassesTheStoreToTheHandlerAndSnapshotsName() {
     when(handler.groupWide()).thenReturn(false);
     var store = new Store();
     store.setId(3L);
@@ -278,7 +275,7 @@ class TaskExecutorTest {
     when(handler.execute(any()))
         .thenAnswer(
             call -> {
-              assertThat(scope.getStoreId()).isEqualTo(3L);
+              assertThat(call.<TaskContext>getArgument(0).storeId()).isEqualTo(3L);
               throw new IllegalStateException("failure");
             });
     var result =
@@ -294,15 +291,10 @@ class TaskExecutorTest {
             .execution();
     assertThat(result.storeName()).isEqualTo("対象店舗");
     assertThat(result.status()).isEqualTo("FAILED");
-    assertThat(scope.hasStoreId()).isFalse();
   }
 
   @Test
-  void existingTransactionStoreContextAndUnknownTaskAreRefused() {
-    scope.setStoreId(1L);
-    assertThatThrownBy(() -> executor.executeScheduled(command("nested")))
-        .isInstanceOf(ServiceException.class);
-    scope.clear();
+  void existingTransactionAndUnknownTaskAreRefused() {
     TransactionSynchronizationManager.setActualTransactionActive(true);
     try {
       assertThatThrownBy(() -> executor.executeScheduled(command("nested")))

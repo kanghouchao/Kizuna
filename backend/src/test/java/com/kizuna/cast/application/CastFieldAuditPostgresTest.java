@@ -16,7 +16,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -82,6 +81,7 @@ class CastFieldAuditPostgresTest {
   private CastEnrollmentService lifecycle;
   private TransactionTemplate transactions;
   private Long storeId;
+  private Long actingStore;
   private Long ordinaryId;
   private Long secondId;
   private static final String ORDINARY = "ordinary@example.test";
@@ -157,11 +157,11 @@ class CastFieldAuditPostgresTest {
   }
 
   private Long currentStore() {
-    return context.getBean(StoreContext.class).getStoreId();
+    return actingStore;
   }
 
   private void authenticate(Long store, String email) {
-    context.getBean(StoreContext.class).setStoreId(store);
+    actingStore = store;
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(email, null, List.of()));
   }
@@ -169,7 +169,6 @@ class CastFieldAuditPostgresTest {
   @AfterEach
   void clear() {
     SecurityContextHolder.clearContext();
-    context.getBean(StoreContext.class).clear();
   }
 
   @AfterAll
@@ -673,11 +672,6 @@ class CastFieldAuditPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

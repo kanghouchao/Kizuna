@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.survey.api.store.SurveyController;
@@ -38,7 +37,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest({SurveyController.class, SurveyResponseController.class})
-@Import({SurveyInputPrivacyTest.MethodSecurity.class, StoreContext.class, StoreScopeHolder.class})
+@Import({SurveyInputPrivacyTest.MethodSecurity.class, StoreScopeHolder.class})
 class SurveyInputPrivacyTest {
   @TestConfiguration
   @EnableMethodSecurity

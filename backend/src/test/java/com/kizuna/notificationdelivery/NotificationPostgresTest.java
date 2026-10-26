@@ -47,7 +47,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.task.application.ServiceIdentityCheckTask;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
@@ -66,7 +65,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,7 +95,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 class NotificationPostgresTest {
   private ConfigurableApplicationContext context;
   private JdbcTemplate jdbc;
-  private StoreContext store;
   private NotificationService notifications;
   private TransactionTemplate tx;
   private FakeTransport transport;
@@ -134,7 +131,6 @@ class NotificationPostgresTest {
                     Map.entry("logging.level.root", "WARN")))
             .run();
     jdbc = context.getBean(JdbcTemplate.class);
-    store = context.getBean(StoreContext.class);
     notifications = context.getBean(NotificationService.class);
     tx = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
     transport = context.getBean(FakeTransport.class);
@@ -198,38 +194,23 @@ class NotificationPostgresTest {
         serviceRole);
   }
 
-  private <T> T inStore(Long id, Supplier<T> work) {
-    store.setStoreId(id);
-    try {
-      return work.get();
-    } finally {
-      store.clear();
-    }
-  }
-
   private String guest() {
-    return inStore(
-        storeId,
-        () ->
-            tx.execute(
-                status -> {
-                  var row =
-                      OrderApplication.builder()
-                          .status(OrderApplicationStatus.PENDING)
-                          .businessDate(LocalDate.now())
-                          .contactEmail("permitted@example.invalid")
-                          .consentContact(
-                              new ContactSnapshot(null, null, "permitted@example.invalid", null))
-                          .contactConsent(
-                              new GuestContactConsent(
-                                  "v1", "業務連絡に同意", "販促同意", true, false, OffsetDateTime.now()))
-                          .build();
-                  row.setStoreId(storeId);
-                  return context
-                      .getBean(OrderApplicationRepository.class)
-                      .saveAndFlush(row)
-                      .getId();
-                }));
+    return tx.execute(
+        status -> {
+          var row =
+              OrderApplication.builder()
+                  .status(OrderApplicationStatus.PENDING)
+                  .businessDate(LocalDate.now())
+                  .contactEmail("permitted@example.invalid")
+                  .consentContact(
+                      new ContactSnapshot(null, null, "permitted@example.invalid", null))
+                  .contactConsent(
+                      new GuestContactConsent(
+                          "v1", "業務連絡に同意", "販促同意", true, false, OffsetDateTime.now()))
+                  .build();
+          row.setStoreId(storeId);
+          return context.getBean(OrderApplicationRepository.class).saveAndFlush(row).getId();
+        });
   }
 
   private DeliveryContent content(String source) {
@@ -246,13 +227,11 @@ class NotificationPostgresTest {
 
   private DeliveryResponse draft() {
     var source = guest();
-    return inStore(storeId, () -> notifications.create(storeId, email, content(source)).delivery());
+    return notifications.create(storeId, email, content(source)).delivery();
   }
 
   private DeliveryResponse queue(DeliveryResponse row) {
-    return inStore(
-        storeId,
-        () -> notifications.queue(storeId, email, row.id(), row.version(), "内容確認済み", false));
+    return notifications.queue(storeId, email, row.id(), row.version(), "内容確認済み", false);
   }
 
   private void submitTask() {
@@ -278,7 +257,7 @@ class NotificationPostgresTest {
   }
 
   private DeliveryResponse get(String id) {
-    return inStore(storeId, () -> notifications.get(storeId, email, id));
+    return notifications.get(storeId, email, id);
   }
 
   private DeliveryResponse await(String id, String status) throws Exception {
@@ -299,7 +278,7 @@ class NotificationPostgresTest {
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).containsExactly("permitted@example.invalid");
-    var history = inStore(storeId, () -> notifications.history(storeId, email, row.id(), null, 10));
+    var history = notifications.history(storeId, email, row.id(), null, 10);
     assertThat(history.content()).hasSize(1);
     assertThat(history.content().getFirst().status()).isEqualTo("SENT");
     assertThat(
@@ -318,11 +297,7 @@ class NotificationPostgresTest {
                 "select display_name from t_users where id=?", String.class, serviceId));
     var sent = get(row.id());
     assertThatThrownBy(
-            () ->
-                inStore(
-                    storeId,
-                    () ->
-                        notifications.queue(storeId, email, row.id(), sent.version(), "再送", true)))
+            () -> notifications.queue(storeId, email, row.id(), sent.version(), "再送", true))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -330,41 +305,26 @@ class NotificationPostgresTest {
   void storeDenialAfterQueueBlocksAndExplicitRetryRechecks() throws Exception {
     var row = queue(draft());
     var contact =
-        inStore(
-            storeId,
-            () ->
-                tx.execute(
-                    status -> {
-                      var newCustomer = Customer.builder().name("検証顧客").build();
-                      newCustomer.setStoreId(storeId);
-                      var customer =
-                          context.getBean(CustomerRepository.class).saveAndFlush(newCustomer);
-                      var c =
-                          CustomerContact.create(
-                              storeId,
-                              customer.getId(),
-                              ContactType.EMAIL,
-                              "permitted@example.invalid");
-                      c.changePermission(ContactPurpose.BUSINESS, ContactPermissionStatus.DENIED);
-                      return context
-                          .getBean(CustomerContactRepository.class)
-                          .saveAndFlush(c)
-                          .getId();
-                    }));
+        tx.execute(
+            status -> {
+              var newCustomer = Customer.builder().name("検証顧客").build();
+              newCustomer.setStoreId(storeId);
+              var customer = context.getBean(CustomerRepository.class).saveAndFlush(newCustomer);
+              var c =
+                  CustomerContact.create(
+                      storeId, customer.getId(), ContactType.EMAIL, "permitted@example.invalid");
+              c.changePermission(ContactPurpose.BUSINESS, ContactPermissionStatus.DENIED);
+              return context.getBean(CustomerContactRepository.class).saveAndFlush(c).getId();
+            });
     runTask();
     var blocked = await(row.id(), "BLOCKED");
     assertThat(transport.results).isEmpty();
     jdbc.update("update t_customer_contacts set business_status='ALLOWED' where id=?", contact);
-    inStore(
-        storeId,
-        () -> notifications.queue(storeId, email, row.id(), blocked.version(), "同意再確認", true));
+    notifications.queue(storeId, email, row.id(), blocked.version(), "同意再確認", true);
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).hasSize(1);
-    assertThat(
-            inStore(storeId, () -> notifications.history(storeId, email, row.id(), null, 10))
-                .content())
-        .hasSize(2);
+    assertThat(notifications.history(storeId, email, row.id(), null, 10).content()).hasSize(2);
   }
 
   @Test
@@ -374,7 +334,8 @@ class NotificationPostgresTest {
     runTask();
     await(row.id(), "FAILED");
     assertThat(
-            inStore(storeId, () -> notifications.history(storeId, email, row.id(), null, 10))
+            notifications
+                .history(storeId, email, row.id(), null, 10)
                 .content()
                 .getFirst()
                 .failureCode())
@@ -384,12 +345,7 @@ class NotificationPostgresTest {
     runTask();
     var unknown = await(next.id(), "UNKNOWN");
     assertThatThrownBy(
-            () ->
-                inStore(
-                    storeId,
-                    () ->
-                        notifications.queue(
-                            storeId, email, next.id(), unknown.version(), "再送", true)))
+            () -> notifications.queue(storeId, email, next.id(), unknown.version(), "再送", true))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -432,12 +388,7 @@ class NotificationPostgresTest {
         .containsExactly("送信前SERVICE");
     var sent = get(first.id());
     assertThatThrownBy(
-            () ->
-                inStore(
-                    storeId,
-                    () ->
-                        notifications.queue(
-                            storeId, email, first.id(), sent.version(), "再送", true)))
+            () -> notifications.queue(storeId, email, first.id(), sent.version(), "再送", true))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -460,27 +411,21 @@ class NotificationPostgresTest {
     var unknown = await(row.id(), "UNKNOWN");
     assertThat(transport.results).hasSize(1);
     assertThatThrownBy(
-            () ->
-                inStore(
-                    storeId,
-                    () ->
-                        notifications.queue(
-                            storeId, email, row.id(), unknown.version(), "結果を再確認", true)))
+            () -> notifications.queue(storeId, email, row.id(), unknown.version(), "結果を再確認", true))
         .isInstanceOf(ConflictException.class);
   }
 
   @Test
   void otherStoreAndDuplicateActionsAreRejected() {
     var row = draft();
-    assertThatThrownBy(
-            () -> inStore(otherStore, () -> notifications.get(otherStore, email, row.id())))
+    assertThatThrownBy(() -> notifications.get(otherStore, email, row.id()))
         .isInstanceOf(NotFoundException.class);
     queue(row);
     assertThatThrownBy(() -> queue(row)).isInstanceOf(ConflictException.class);
     String source = guest();
     var input = content(source);
-    var a = inStore(storeId, () -> notifications.create(storeId, email, input));
-    var b = inStore(storeId, () -> notifications.create(storeId, email, input));
+    var a = notifications.create(storeId, email, input);
+    var b = notifications.create(storeId, email, input);
     assertThat(a.delivery().id()).isEqualTo(b.delivery().id());
     assertThat(b.created()).isFalse();
   }
@@ -489,16 +434,12 @@ class NotificationPostgresTest {
   void rolledBackDispatchPublishesNoVisibleEventOrAttempt() {
     var row = queue(draft());
     long before = jdbc.queryForObject("select count(*) from event_publication", Long.class);
-    inStore(
-        storeId,
-        () ->
-            tx.execute(
-                status -> {
-                  context.publishEvent(
-                      new DeliveryDispatch(row.id(), "123", serviceId, storeId, 1L));
-                  status.setRollbackOnly();
-                  return null;
-                }));
+    tx.execute(
+        status -> {
+          context.publishEvent(new DeliveryDispatch(row.id(), "123", serviceId, storeId, 1L));
+          status.setRollbackOnly();
+          return null;
+        });
     assertThat(jdbc.queryForObject("select count(*) from event_publication", Long.class))
         .isEqualTo(before);
     assertThat(get(row.id()).status()).isEqualTo("QUEUED");
@@ -516,7 +457,8 @@ class NotificationPostgresTest {
     await(row.id(), "BLOCKED");
     assertThat(transport.results).isEmpty();
     assertThat(
-            inStore(storeId, () -> notifications.history(storeId, email, row.id(), null, 10))
+            notifications
+                .history(storeId, email, row.id(), null, 10)
                 .content()
                 .getFirst()
                 .failureCode())
@@ -534,9 +476,9 @@ class NotificationPostgresTest {
                 new DeliveryDispatch(row.id(), rs.getString(1), serviceId, storeId, rs.getLong(2)),
             row.id());
     var attempts = context.getBean(DeliveryAttempts.class);
-    assertThat(inStore(storeId, () -> attempts.claim(event))).isTrue();
+    assertThat(attempts.claim(event)).isTrue();
     jdbc.update("update t_users set enabled=false where id=?", serviceId);
-    assertThat(inStore(storeId, () -> attempts.prepare(event))).isNull();
+    assertThat(attempts.prepare(event)).isNull();
     drain();
     await(row.id(), "BLOCKED");
     assertThat(transport.results).isEmpty();
@@ -570,7 +512,7 @@ class NotificationPostgresTest {
             c.body(),
             OffsetDateTime.now().plusDays(1),
             c.dedupeKey());
-    var row = inStore(storeId, () -> notifications.create(storeId, email, future).delivery());
+    var row = notifications.create(storeId, email, future).delivery();
     queue(row);
     runTask();
     assertThat(get(row.id()).status()).isEqualTo("QUEUED");
@@ -578,59 +520,55 @@ class NotificationPostgresTest {
   }
 
   private String order() {
-    return inStore(
-        storeId,
-        () ->
-            tx.execute(
-                status -> {
-                  var item =
-                      context
-                          .getBean(ServiceItemRepository.class)
-                          .saveAndFlush(
-                              ServiceItem.create(
-                                  storeId,
-                                  new ServiceTerms(
-                                      ServiceKind.COURSE, "検証コース", 60, null, 1000, 500)));
-                  var revision =
-                      context
-                          .getBean(ServiceRevisionRepository.class)
-                          .saveAndFlush(ServiceRevision.record(item, null, operatorId));
-                  var row =
-                      Order.builder()
-                          .status(OrderStatus.CONFIRMED)
-                          .businessDate(LocalDate.now())
-                          .contactEmail("order@example.invalid")
-                          .course(
-                              new OrderCourse(
-                                  item.getId(),
-                                  revision.getId(),
-                                  1,
-                                  "検証コース",
-                                  60,
-                                  1000,
-                                  500,
-                                  "CURRENT_SETTING",
-                                  OffsetDateTime.now()))
-                          .build();
-                  row.setStoreId(storeId);
-                  var saved = context.getBean(OrderRepository.class).saveAndFlush(row);
-                  context
-                      .getBean(BusinessContactHistoryRepository.class)
-                      .saveAndFlush(
-                          BusinessContactHistory.record(
-                              storeId,
-                              saved.getId(),
-                              ContactType.EMAIL,
-                              "RECORDED",
-                              null,
-                              new BusinessContactState(
-                                  "order@example.invalid",
-                                  ContactPermissionStatus.ALLOWED,
-                                  "受付",
-                                  "業務連絡への同意"),
-                              operatorId));
-                  return saved.getId();
-                }));
+    return tx.execute(
+        status -> {
+          var item =
+              context
+                  .getBean(ServiceItemRepository.class)
+                  .saveAndFlush(
+                      ServiceItem.create(
+                          storeId,
+                          new ServiceTerms(ServiceKind.COURSE, "検証コース", 60, null, 1000, 500)));
+          var revision =
+              context
+                  .getBean(ServiceRevisionRepository.class)
+                  .saveAndFlush(ServiceRevision.record(item, null, operatorId));
+          var row =
+              Order.builder()
+                  .status(OrderStatus.CONFIRMED)
+                  .businessDate(LocalDate.now())
+                  .contactEmail("order@example.invalid")
+                  .course(
+                      new OrderCourse(
+                          item.getId(),
+                          revision.getId(),
+                          1,
+                          "検証コース",
+                          60,
+                          1000,
+                          500,
+                          "CURRENT_SETTING",
+                          OffsetDateTime.now()))
+                  .build();
+          row.setStoreId(storeId);
+          var saved = context.getBean(OrderRepository.class).saveAndFlush(row);
+          context
+              .getBean(BusinessContactHistoryRepository.class)
+              .saveAndFlush(
+                  BusinessContactHistory.record(
+                      storeId,
+                      saved.getId(),
+                      ContactType.EMAIL,
+                      "RECORDED",
+                      null,
+                      new BusinessContactState(
+                          "order@example.invalid",
+                          ContactPermissionStatus.ALLOWED,
+                          "受付",
+                          "業務連絡への同意"),
+                      operatorId));
+          return saved.getId();
+        });
   }
 
   @Test
@@ -646,28 +584,25 @@ class NotificationPostgresTest {
             "本文",
             OffsetDateTime.now().minusMinutes(1),
             UUID.randomUUID().toString());
-    var row = inStore(storeId, () -> notifications.create(storeId, email, input).delivery());
+    var row = notifications.create(storeId, email, input).delivery();
     queue(row);
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).containsExactly("order@example.invalid");
     jdbc.update("update t_orders set contact_email='changed@example.invalid' where id=?", source);
-    inStore(
-        storeId,
-        () ->
-            tx.execute(
-                status ->
-                    context
-                        .getBean(BusinessContactHistoryRepository.class)
-                        .saveAndFlush(
-                            BusinessContactHistory.record(
-                                storeId,
-                                source,
-                                ContactType.EMAIL,
-                                "CONTACT_CHANGED",
-                                null,
-                                BusinessContactState.unknown("changed@example.invalid"),
-                                operatorId))));
+    tx.execute(
+        status ->
+            context
+                .getBean(BusinessContactHistoryRepository.class)
+                .saveAndFlush(
+                    BusinessContactHistory.record(
+                        storeId,
+                        source,
+                        ContactType.EMAIL,
+                        "CONTACT_CHANGED",
+                        null,
+                        BusinessContactState.unknown("changed@example.invalid"),
+                        operatorId)));
     var nextInput =
         new DeliveryContent(
             input.sourceType(),
@@ -678,7 +613,7 @@ class NotificationPostgresTest {
             "本文",
             OffsetDateTime.now().minusMinutes(1),
             UUID.randomUUID().toString());
-    var next = inStore(storeId, () -> notifications.create(storeId, email, nextInput).delivery());
+    var next = notifications.create(storeId, email, nextInput).delivery();
     queue(next);
     runTask();
     await(next.id(), "BLOCKED");
@@ -757,7 +692,6 @@ class NotificationPostgresTest {
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackageClasses = NotificationService.class)
   @Import({
-    StoreContext.class,
     AuditWriter.class,
     TaskExecutor.class,
     TaskLifecycle.class,

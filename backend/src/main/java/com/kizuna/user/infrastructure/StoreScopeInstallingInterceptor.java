@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * 認証済み要求に店舗作用域の解決器を {@link StoreScopeHolder} へ差し込む。全パスで {@code StoreIdInterceptor} より先に動き、
+ * 認証済み要求に店舗作用域の解決器を {@link StoreScopeHolder} へ差し込む。全パスで他の interceptor より先に動き、
  * 解決は保持器が最初に読まれた時まで遅延する（作用域を見ない要求では DB を読まない）。afterCompletion で必ず消す。
  */
 @Component

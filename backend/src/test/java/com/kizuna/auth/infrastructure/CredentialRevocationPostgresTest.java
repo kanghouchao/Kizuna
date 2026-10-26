@@ -10,7 +10,6 @@ import com.kizuna.auth.application.AuthService;
 import com.kizuna.auth.application.AuthSessionService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.config.RedisConfig;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -315,11 +314,6 @@ class CredentialRevocationPostgresTest {
     LettuceConnectionFactory redisConnectionFactory() {
       return new LettuceConnectionFactory(
           "127.0.0.1", Integer.parseInt(System.getenv("KIZUNA_AUTH_TEST_REDIS_PORT")));
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

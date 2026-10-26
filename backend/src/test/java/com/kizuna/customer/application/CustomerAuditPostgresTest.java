@@ -8,7 +8,6 @@ import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.storescope.StoreContext;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -46,7 +45,6 @@ class CustomerAuditPostgresTest {
 
   @BeforeEach
   void authenticate() {
-    context.getBean(StoreContext.class).setStoreId(STORE_ID);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
@@ -55,7 +53,6 @@ class CustomerAuditPostgresTest {
   @AfterEach
   void clear() {
     SecurityContextHolder.clearContext();
-    context.getBean(StoreContext.class).clear();
   }
 
   @AfterAll

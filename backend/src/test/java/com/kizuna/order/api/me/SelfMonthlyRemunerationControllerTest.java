@@ -18,7 +18,6 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.ActorIdentityService;
@@ -50,7 +49,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import({
   SelfMonthlyRemunerationControllerTest.MethodSecurityConfig.class,
   SelfMonthlyRemunerationService.class,
-  StoreContext.class,
   StoreScopeHolder.class
 })
 @WithMockUser(username = "cast@example.test", roles = "CAST")

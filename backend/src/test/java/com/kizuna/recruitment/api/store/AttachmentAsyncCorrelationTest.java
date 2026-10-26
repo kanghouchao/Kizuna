@@ -15,7 +15,7 @@ import com.kizuna.recruitment.application.AttachmentTransactions;
 import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.RequestCorrelationFilter;
@@ -44,10 +44,9 @@ class AttachmentAsyncCorrelationTest {
     var service = mock(AttachmentService.class);
     var receiver = mock(AttachmentBodyReceiver.class);
     var admission = mock(AttachmentBodyReceiver.Admission.class);
-    var store = new StoreContext();
     var holder = new StoreScopeHolder();
     var controller = new AttachmentController(service, receiver, new AppProperties());
-    var filter = new RequestCorrelationFilter(store, holder);
+    var filter = new RequestCorrelationFilter(holder);
     var receivedId = new AtomicReference<String>();
     var storedId = new AtomicReference<String>();
     when(service.preflight(eq(1L), anyString(), nullable(String.class), anyString()))
@@ -82,7 +81,7 @@ class AttachmentAsyncCorrelationTest {
             request,
             response,
             (input, output) -> {
-              store.setStoreId(1L);
+              ThreadContext.put(CurrentStoreArgumentResolver.MDC_STORE_ID, "1");
               task.set(
                   recovery
                       ? controller.recover(1L, "a", "image", "key", request, () -> "actor")
@@ -106,8 +105,7 @@ class AttachmentAsyncCorrelationTest {
         assertThat(receivedId.get()).isEqualTo(expected);
         assertThat(storedId.get()).isEqualTo(expected);
         assertThat(worker.submit(() -> ThreadContext.getImmutableContext()).get())
-            .doesNotContainKeys("requestId", "storeId");
-        assertThat(worker.submit(store::hasStoreId).get()).isFalse();
+            .doesNotContainKeys("requestId", CurrentStoreArgumentResolver.MDC_STORE_ID);
         assertThat(worker.submit(holder::current).get()).as("作業スレッドの作用域は作業後に消えていること").isNull();
         assertThat(
                 worker.submit(() -> SecurityContextHolder.getContext().getAuthentication()).get())
@@ -117,7 +115,6 @@ class AttachmentAsyncCorrelationTest {
     } finally {
       SecurityContextHolder.clearContext();
       ThreadContext.clearAll();
-      store.clear();
       holder.clear();
     }
   }

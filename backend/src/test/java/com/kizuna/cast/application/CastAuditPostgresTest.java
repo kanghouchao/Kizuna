@@ -15,7 +15,6 @@ import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -117,7 +116,6 @@ class CastAuditPostgresTest {
         "alter table t_cast_enrollments add constraint fk_test_enrollment_store foreign key(store_id) references t_stores(id)");
     jdbc.execute(
         "alter table t_audit_events add constraint fk_test_audit_actor foreign key(actor_id) references t_users(id)");
-    context.getBean(StoreContext.class).setStoreId(storeId);
     transactions.executeWithoutResult(
         status -> {
           var definitions = context.getBean(CastFieldDefinitionRepository.class);
@@ -140,7 +138,6 @@ class CastAuditPostgresTest {
           publicField.setStoreId(storeId);
           definitions.save(publicField);
         });
-    context.getBean(StoreContext.class).clear();
   }
 
   private Long actor(String email) {
@@ -163,7 +160,6 @@ class CastAuditPostgresTest {
 
   @BeforeEach
   void authenticate() {
-    context.getBean(StoreContext.class).setStoreId(storeId);
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(ORDINARY, null, List.of()));
   }
@@ -171,7 +167,6 @@ class CastAuditPostgresTest {
   @AfterEach
   void clear() {
     SecurityContextHolder.clearContext();
-    context.getBean(StoreContext.class).clear();
   }
 
   @AfterAll
@@ -419,7 +414,6 @@ class CastAuditPostgresTest {
 
   private boolean concurrentSuspend(String id, CountDownLatch ready, CountDownLatch start)
       throws InterruptedException {
-    context.getBean(StoreContext.class).setStoreId(storeId);
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(ORDINARY, null, List.of()));
     try {
@@ -434,7 +428,6 @@ class CastAuditPostgresTest {
       }
     } finally {
       SecurityContextHolder.clearContext();
-      context.getBean(StoreContext.class).clear();
     }
   }
 
@@ -544,11 +537,6 @@ class CastAuditPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

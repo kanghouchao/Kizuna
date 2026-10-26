@@ -179,7 +179,7 @@ public class CommonExceptionHandler {
 
   @ExceptionHandler(AccessDeniedException.class)
   public ResponseEntity<Map<String, Object>> handle(AccessDeniedException ex) {
-    // 方法認可の匿名拒否だけを認証要求へ写す。公開 API の店舗文脈欠落など、認証と無関係な拒否は 403 を保つ。
+    // メソッド認可の匿名拒否だけを認証要求へ写す。本人の店舗集合の外の店舗を名乗った拒否など、メソッド認可以外の拒否は 403 を保つ。
     if (ex instanceof AuthorizationDeniedException
         && !new AuthenticationTrustResolverImpl()
             .isAuthenticated(SecurityContextHolder.getContext().getAuthentication())) {

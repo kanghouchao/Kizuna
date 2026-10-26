@@ -9,7 +9,6 @@ import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.order.contact.BusinessContactDecision;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,6 @@ public class DeliveryAttempts {
   private final DeliveryAuthorization authorization;
   private final DeliveryContact contacts;
   private final DeliveryAudit audit;
-  private final StoreContext store;
   private final Clock clock;
 
   public record Envelope(String recipient, String subject, String body) {}
@@ -95,8 +93,6 @@ public class DeliveryAttempts {
   }
 
   private Locked lock(DeliveryDispatch event) {
-    if (!store.hasStoreId() || !store.getStoreId().equals(event.storeId()))
-      throw new AccessDeniedException("店舗文脈が不正です");
     var row =
         deliveries
             .findByIdAndStoreIdForUpdate(event.deliveryId(), event.storeId())
