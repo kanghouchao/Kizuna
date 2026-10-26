@@ -23,7 +23,6 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
@@ -787,7 +786,6 @@ class ReviewPostgresTest {
   @ComponentScan(basePackageClasses = ReviewService.class)
   @Import({
     StoreContext.class,
-    StoreScopeStampListener.class,
     AuditWriter.class,
     BusinessAudit.class,
     ReviewController.class,

@@ -28,7 +28,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.domain.Attendance;
@@ -506,7 +505,6 @@ class RemunerationPostgresTest {
     AttendanceFacts.class,
     BusinessDateService.class,
     ActorIdentityService.class,
-    StoreScopeStampListener.class,
     StoreScopeHolder.class
   })
   static class Config {

@@ -30,7 +30,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -568,8 +567,7 @@ class AdvertisingPostgresTest {
   @Import({
     AdvertisingService.class,
     AdvertisingOrderCostService.class,
-    AdvertisingOrderReader.class,
-    StoreScopeStampListener.class
+    AdvertisingOrderReader.class
   })
   static class Config {
     @Bean
