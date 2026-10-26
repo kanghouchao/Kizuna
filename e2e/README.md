@@ -138,5 +138,5 @@ npm install
 npx playwright install chromium
 npm run typecheck && npx bddgen                 # 型検査 → .feature の変換
 npx playwright test --project=initial-setup     # DB を作り直した後に 1 回だけ（アカウント作成）
-npx playwright test --project=chromium --no-deps  # 反復はこちら
+npx playwright test --project=chromium --no-deps --grep order-lifecycle  # 反復は関係する feature に絞る
 ```
