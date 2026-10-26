@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
@@ -572,12 +571,7 @@ class SurveyPostgresTest {
   @EntityScan("com.kizuna")
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackages = {"com.kizuna.survey.application", "com.kizuna.survey.api.store"})
-  @Import({
-    StoreContext.class,
-    StoreScopeStampListener.class,
-    AuditWriter.class,
-    BusinessAudit.class
-  })
+  @Import({StoreContext.class, AuditWriter.class, BusinessAudit.class})
   static class Config {
     @Bean
     Clock clock() {

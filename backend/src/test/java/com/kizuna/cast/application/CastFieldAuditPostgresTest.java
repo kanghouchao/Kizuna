@@ -16,7 +16,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -626,7 +625,6 @@ class CastFieldAuditPostgresTest {
   @Import({
     AuditWriter.class,
     BusinessAudit.class,
-    StoreScopeStampListener.class,
     CastService.class,
     CastEnrollmentService.class,
     CastInvitationService.class,

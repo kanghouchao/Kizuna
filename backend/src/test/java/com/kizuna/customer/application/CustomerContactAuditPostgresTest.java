@@ -26,7 +26,6 @@ import com.kizuna.customer.domain.CustomerListRepository;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerRepository;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -377,12 +376,7 @@ class CustomerContactAuditPostgresTest {
   @Configuration
   @EnableTransactionManagement
   @EnableJpaRepositories(basePackageClasses = AuditEventRepository.class)
-  @Import({
-    AuditWriter.class,
-    BusinessAudit.class,
-    StoreScopeStampListener.class,
-    CustomerContactService.class
-  })
+  @Import({AuditWriter.class, BusinessAudit.class, CustomerContactService.class})
   static class Config {
     @Bean
     DataSource dataSource() {

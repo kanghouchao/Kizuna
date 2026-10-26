@@ -1,13 +1,11 @@
 package com.kizuna.shared.persistence;
 
 import jakarta.persistence.PrePersist;
-import org.springframework.stereotype.Component;
 
 /**
  * store-scoped エンティティの永続化直前に store_id の設定を検証する JPA エンティティリスナ。値は補わない — 生成箇所が店舗 id
  * を明示的に設定しなければならず、未設定は {@link IllegalStateException} で拒否する。
  */
-@Component
 public class StoreScopeStampListener {
 
   @PrePersist

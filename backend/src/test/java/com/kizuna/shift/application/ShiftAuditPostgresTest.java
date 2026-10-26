@@ -16,7 +16,6 @@ import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
@@ -517,7 +516,6 @@ class ShiftAuditPostgresTest {
   @Import({
     AuditWriter.class,
     BusinessAudit.class,
-    StoreScopeStampListener.class,
     ShiftService.class,
     ShiftRequestService.class,
     CastShiftRequestService.class,

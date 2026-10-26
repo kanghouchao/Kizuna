@@ -16,7 +16,6 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -181,7 +180,7 @@ class OrderAuditPostgresTest {
   @Configuration
   @EnableTransactionManagement
   @EnableJpaRepositories(basePackageClasses = AuditEventRepository.class)
-  @Import({AuditWriter.class, BusinessAudit.class, StoreScopeStampListener.class})
+  @Import({AuditWriter.class, BusinessAudit.class})
   static class Config {
     @Bean
     DataSource dataSource() {

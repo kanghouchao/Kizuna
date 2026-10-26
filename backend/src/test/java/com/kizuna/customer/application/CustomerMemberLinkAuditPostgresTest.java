@@ -16,7 +16,6 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.domain.MemberIdentityView;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -408,7 +407,6 @@ class CustomerMemberLinkAuditPostgresTest {
   @Import({
     AuditWriter.class,
     BusinessAudit.class,
-    StoreScopeStampListener.class,
     CustomerMemberLinkService.class,
     MemberLookupService.class
   })

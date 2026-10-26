@@ -27,7 +27,6 @@ import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -622,7 +621,6 @@ class ServiceAuditPostgresTest {
   @Import({
     AuditWriter.class,
     BusinessAudit.class,
-    StoreScopeStampListener.class,
     ServiceSettingsService.class,
     OwnServiceConditionService.class,
     ActorIdentityService.class,

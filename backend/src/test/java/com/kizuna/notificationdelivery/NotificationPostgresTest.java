@@ -47,7 +47,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.task.application.ServiceIdentityCheckTask;
 import com.kizuna.task.application.TaskLifecycle;
@@ -759,7 +758,6 @@ class NotificationPostgresTest {
   @ComponentScan(basePackageClasses = NotificationService.class)
   @Import({
     StoreContext.class,
-    StoreScopeStampListener.class,
     AuditWriter.class,
     TaskExecutor.class,
     TaskLifecycle.class,

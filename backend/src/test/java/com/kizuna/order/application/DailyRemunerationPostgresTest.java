@@ -16,7 +16,6 @@ import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
-import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
@@ -291,8 +290,7 @@ class DailyRemunerationPostgresTest {
   @Import({
     DailyRemunerationService.class,
     SelfMonthlyRemunerationQuery.class,
-    ActorIdentityService.class,
-    StoreScopeStampListener.class
+    ActorIdentityService.class
   })
   static class Config {
     @Bean
