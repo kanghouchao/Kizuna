@@ -249,7 +249,7 @@ export interface Order {
 }
 
 /**
- * 作業キューの 1 行（GET /store/orders/work-queue）。対応の要否を判断し、その場で処理するのに
+ * 作業キューの 1 行（GET /orders/work-queue）。対応の要否を判断し、その場で処理するのに
  * 要る項目だけを持つ。行を書き戻す操作（更新）の応答も同じ形で返るため、受け取ったものを
  * そのまま 1 行の差し替えに使える。
  */
@@ -285,7 +285,7 @@ export interface OrderWorkQueueRow {
 }
 
 /**
- * アーカイブの 1 行（GET /store/orders/archive）。終端状態の受注を振り返るための会計・ポイントと
+ * アーカイブの 1 行（GET /orders/archive）。終端状態の受注を振り返るための会計・ポイントと
  * 取消の記録を持つ。指名・受付担当・備考は対応中にしか使わないので載らない。
  */
 export interface OrderArchiveRow {
@@ -315,7 +315,7 @@ export interface OrderArchiveRow {
 }
 
 /**
- * 顧客詳細の注文履歴 1 行（GET /store/orders?customer_id=）。顧客は画面の文脈が持っているので載らない。
+ * 顧客詳細の注文履歴 1 行（GET /orders?customer_id=）。顧客は画面の文脈が持っているので載らない。
  */
 export interface OrderSummaryRow {
   completion_invalidated: boolean;
@@ -333,7 +333,7 @@ export interface OrderSummaryRow {
 }
 
 /**
- * 完了処理の応答（POST /store/orders/{id}/completion）。伝票トークンの生値だけを持つ。
+ * 完了処理の応答（POST /orders/{id}/completion）。伝票トークンの生値だけを持つ。
  *
  * 会員へ帰属した完了ではキーごと消える。サーバはダイジェストしか保存しないので、この応答を
  * 逃すと生値は二度と取得できない。
@@ -343,7 +343,7 @@ export interface OrderCompletionResult {
 }
 
 /**
- * 受注一覧の並び替えの鍵（GET /store/orders/work-queue・/archive の sort_key）。
+ * 受注一覧の並び替えの鍵（GET /orders/work-queue・/archive の sort_key）。
  *
  * 鍵は受注自身の列に限る — join 先の顧客名・キャスト名を鍵にすると、並びが他の集約の書き換えで動く。
  * どの鍵も未設定を最大として並べる（昇順で末尾、降順で先頭）。
@@ -380,7 +380,7 @@ export interface OrderQueryParams {
 export type OrderListCriteria = Omit<OrderQueryParams, 'statuses'>;
 
 /**
- * 受注の部分更新（PUT /store/orders/{id}）。null ではなく「送らない」が変更しないの意。
+ * 受注の部分更新（PUT /orders/{id}）。null ではなく「送らない」が変更しないの意。
  * 文字列の項目は空文字を送れば空にできる（日付・時刻・数値にその形は無い）。
  *
  * 状態は収めない — 完了・取消・確定・謝絶はいずれも専用の操作が独占する（ADR 0013）。終端状態
@@ -419,7 +419,7 @@ export interface OrderUpdateRequest {
   customer_selection?: CustomerSelection;
 }
 
-/** 未完了（CONFIRMED / IN_SERVICE）の受注の取消（POST /store/orders/{id}/cancellation）。理由は必須（500 文字以内）。 */
+/** 未完了（CONFIRMED / IN_SERVICE）の受注の取消（POST /orders/{id}/cancellation）。理由は必須（500 文字以内）。 */
 export interface OrderCancellationRequest {
   reason: string;
 }
@@ -522,7 +522,7 @@ export interface OrderCreateRequest {
 }
 
 /**
- * 店舗の予約受付箱の 1 行（GET /store/order-applications）。申請原文（希望内容）と処理に要る項目だけを持つ。
+ * 店舗の予約受付箱の 1 行（GET /order-applications）。申請原文（希望内容）と処理に要る項目だけを持つ。
  *
  * 確定済みの行は order_id で生成された受注と対照できる。
  */
@@ -549,7 +549,7 @@ export interface OrderApplicationRow {
 }
 
 /**
- * 予約申請の確定内容（POST /store/order-applications/{id}/confirmation）。確定は申請内容を予填した
+ * 予約申請の確定内容（POST /order-applications/{id}/confirmation）。確定は申請内容を予填した
  * 受注の作成操作で、送った内容がそのまま受注になる（申請原文は動かない）。
  *
  * ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新で整える。
@@ -575,7 +575,7 @@ export interface OrderApplicationConfirmationRequest {
 }
 
 /**
- * 公開店面からのゲスト予約申請（POST /store/order-applications/public・匿名）。
+ * 公開サイトからのゲスト予約申請（POST /order-applications/public・匿名）。
  * 店舗は訪問された域名から解決されるため、この本体では名乗らない。
  */
 export interface GuestOrderApplicationCreateRequest {
@@ -593,13 +593,13 @@ export interface GuestOrderApplicationResponse {
   id: string;
 }
 
-/** 予約申請の謝絶（POST /store/order-applications/{id}/refusal）。理由は必須（500 文字以内）。 */
+/** 予約申請の謝絶（POST /order-applications/{id}/refusal）。理由は必須（500 文字以内）。 */
 export interface OrderApplicationDeclineRequest {
   reason: string;
 }
 
 /**
- * 受注完了（会計）の内容（POST /store/orders/{id}/completion）。
+ * 受注完了（会計）の内容（POST /orders/{id}/completion）。
  *
  * 会計金額は送らない — 合計は明細の総和として導出される。会計の場で確定した内訳をここで送り、
  * サーバが差し替えてから完了する。内訳は省略できない（未指定を「内訳なし」として通すと合計 0 の完了になる）。
@@ -636,7 +636,7 @@ export interface OrderPointsPreview {
 export type OrderAttributionSource = 'COMPLETION' | 'RECEIPT_TOKEN';
 
 /**
- * 受注 1 件の帰属の現況（GET /store/orders/{id}/attribution）。
+ * 受注 1 件の帰属の現況（GET /orders/{id}/attribution）。
  *
  * 返るのは直近の記録 1 件で、会員側の情報は会員コードだけ（表示名・メールは店舗へ渡らない）。
  * attributed 以外は Java 側が可空のため、記録の無い受注ではキーごと消える。
@@ -662,7 +662,7 @@ export interface OrderAttribution {
   pending_correction_member_code?: string;
 }
 
-// 帰属記録の無効化（POST /store/orders/{id}/attribution/invalidation）。理由は必須（500 文字以内）。
+// 帰属記録の無効化（POST /orders/{id}/attribution/invalidation）。理由は必須（500 文字以内）。
 // 対象は受注から導かず、画面が読み口で得た帰属記録の ID を名指す（開いたまま別の操作者が訂正を
 // 一巡させると、有効な記録が別人の新しい帰属に入れ替わっているため）。
 export interface OrderAttributionInvalidationRequest {
@@ -671,7 +671,7 @@ export interface OrderAttributionInvalidationRequest {
 }
 
 /**
- * 誤帰属の訂正の進み具合（GET/POST /store/orders/{id}/attribution/correction）。
+ * 誤帰属の訂正の進み具合（GET/POST /orders/{id}/attribution/correction）。
  *
  * 会員の残高は載らない。この口が届く会員は自店舗の顧客と紐づいているとは限らないため、
  * 店舗へ渡すのは訂正の進み具合だけに閉じてある。
@@ -683,7 +683,7 @@ export interface OrderAttributionCorrection {
   corrected_points: number;
 }
 
-// 誤帰属で付いたポイントの差し引き（POST /store/orders/{id}/attribution/correction）。
+// 誤帰属で付いたポイントの差し引き（POST /orders/{id}/attribution/correction）。
 // 宛先は名指した帰属記録が持つ会員で、顧客に現在紐づく会員ではない。points は引く量を正で渡す
 // （この口は与える方向を持たない — 授権が「その付与が誤りだった」ことにだけ由来するため）。
 /** ポイント巻き戻しの下見。store/orders/{id}/point-rollback-preview に対応。 */
@@ -729,7 +729,7 @@ export interface OrderAttributionCorrectionRequest {
   idempotency_key: string;
 }
 
-// 再発行された伝票トークン（POST /store/orders/{id}/receipt-token）。生値はこの応答にしか現れない。
+// 再発行された伝票トークン（POST /orders/{id}/receipt-token）。生値はこの応答にしか現れない。
 export interface OrderReceiptTokenIssue {
   receipt_token: string;
 }

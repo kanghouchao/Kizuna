@@ -5,12 +5,12 @@ import { ADMIN_PASSWORD, STORE_HEADERS, getMe, loginAsStoreAdmin, loginUser, upl
 const { Given, When, Then, After } = createBdd();
 
 const GROUP_ADMIN_EMAIL = 'admin@kizuna.test';
-const PUBLIC_CONFIG = '/api/store/config/public';
+const PUBLIC_CONFIG = '/api/config/public';
 
 // 設定の更新はキャッシュを消してから応答するため、次の要求から新しい値で判定される。
 async function setMaintenanceMode(request: APIRequestContext, enabled: boolean): Promise<void> {
   const token = await loginUser(request, GROUP_ADMIN_EMAIL, ADMIN_PASSWORD);
-  const response = await request.put('/api/admin/configs/maintenance_mode', {
+  const response = await request.put('/api/system-configs/maintenance_mode', {
     headers: { Authorization: `Bearer ${token}` },
     data: { config_value: String(enabled) },
   });
@@ -38,12 +38,12 @@ Then(
   async ({ request }) => {
     const admin = await loginUser(request, GROUP_ADMIN_EMAIL, ADMIN_PASSWORD);
     expect((await getMe(request, admin)).email).toBe(GROUP_ADMIN_EMAIL);
-    const configs = await request.get('/api/admin/configs', { headers: { Authorization: `Bearer ${admin}` } });
+    const configs = await request.get('/api/system-configs', { headers: { Authorization: `Bearer ${admin}` } });
     expect(configs.status(), await configs.text()).toBe(200);
     const maintenance = ((await configs.json()) as { config_key: string; config_value: string }[])
       .find((config) => config.config_key === 'maintenance_mode');
     expect(maintenance?.config_value).toBe('true');
-    const consent = await request.get('/api/store/order-applications/public/contact-consent', { headers: STORE_HEADERS });
+    const consent = await request.get('/api/order-applications/public/contact-consent', { headers: STORE_HEADERS });
     expect(consent.status(), await consent.text()).toBe(200);
     const upload = await uploadStoreImage(request, await loginAsStoreAdmin(request));
     expect(upload.status(), await upload.text()).toBe(201);

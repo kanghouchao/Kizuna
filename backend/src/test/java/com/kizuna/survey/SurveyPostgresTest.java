@@ -11,6 +11,8 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.survey.api.SurveyController;
+import com.kizuna.survey.api.SurveyResponseController;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
@@ -90,7 +92,8 @@ class SurveyPostgresTest {
     jdbc = context.getBean(JdbcTemplate.class);
     mvc =
         MockMvcBuilders.standaloneSetup(
-                context.getBean("surveyController"), context.getBean("surveyResponseController"))
+                context.getBean(SurveyController.class),
+                context.getBean(SurveyResponseController.class))
             .setCustomArgumentResolvers(
                 new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
             .defaultRequest(
@@ -165,9 +168,9 @@ class SurveyPostgresTest {
 
   @Test
   void staffCreatesOpensAndRecordsOneAnswerAgainstFrozenQuestions() throws Exception {
-    var draft = send("/store/surveys", DEFINITION, 201).get("revision");
+    var draft = send("/surveys", DEFINITION, 201).get("revision");
     String base =
-        "/store/surveys/"
+        "/surveys/"
             + draft.get("survey_id").asString()
             + "/revisions/"
             + draft.get("id").asString();
@@ -181,7 +184,7 @@ class SurveyPostgresTest {
         {"revision_version":1,"received_via":"PAPER","received_at":"2026-01-01T00:00:00Z","answers":[{"question_key":"q1","text":"  原回答  "}],"dedupe_key":"answer"}
         """,
             201);
-    var answer = read("/store/survey-responses/" + receipt.get("answer").get("id").asString(), 200);
+    var answer = read("/survey-responses/" + receipt.get("answer").get("id").asString(), 200);
     assertThat(answer.get("answers").get(0).get("text").asString()).isEqualTo("  原回答  ");
     assertThat(read(base + "/response-counts", 200).get("active_records").asLong()).isEqualTo(1);
     assertThat(read(base, 200).get("questions").get(0).get("prompt").asString())
@@ -190,26 +193,24 @@ class SurveyPostgresTest {
 
   @Test
   void catalogueAndAnswerListsKeepSensitiveTextInDetailOnly() throws Exception {
-    var draft = send("/store/surveys", DEFINITION, 201).get("revision");
+    var draft = send("/surveys", DEFINITION, 201).get("revision");
     String sid = draft.get("survey_id").asString(), rid = draft.get("id").asString();
-    var catalogue = read("/store/surveys", 200).get("content");
+    var catalogue = read("/surveys", 200).get("content");
     assertThat(catalogue.size()).isEqualTo(1);
     assertThat(catalogue.get(0).get("latest_title").asString()).isEqualTo("店舗入力の問票");
     assertThat(catalogue.toString()).doesNotContain("担当者が入力した設問");
-    assertThat(read("/store/surveys/" + sid, 200).get("draft_revision_id").asString())
-        .isEqualTo(rid);
-    String base = "/store/surveys/" + sid + "/revisions/" + rid;
-    assertThat(read("/store/surveys/" + sid + "/revisions", 200).get("content").size())
-        .isEqualTo(1);
+    assertThat(read("/surveys/" + sid, 200).get("draft_revision_id").asString()).isEqualTo(rid);
+    String base = "/surveys/" + sid + "/revisions/" + rid;
+    assertThat(read("/surveys/" + sid + "/revisions", 200).get("content").size()).isEqualTo(1);
     assertThat(read(base + "/history", 200).get("content").get(0).get("type").asString())
         .isEqualTo("DRAFT_CREATED");
     assertThat(read(base + "/responses", 200).get("content").isEmpty()).isTrue();
   }
 
   private String openedRevision() throws Exception {
-    var draft = send("/store/surveys", DEFINITION, 201).get("revision");
+    var draft = send("/surveys", DEFINITION, 201).get("revision");
     String base =
-        "/store/surveys/"
+        "/surveys/"
             + draft.get("survey_id").asString()
             + "/revisions/"
             + draft.get("id").asString();
@@ -236,14 +237,14 @@ class SurveyPostgresTest {
   void closedRevisionKeepsImmutableAnswersAndCorrectionChainWithHonestCounts() throws Exception {
     String base = openedRevision();
     var original = send(base + "/responses", receipt("receipt"), 201);
-    String first = "/store/survey-responses/" + original.get("answer").get("id").asString();
+    String first = "/survey-responses/" + original.get("answer").get("id").asString();
     send(base + "/closures", action(1, "close"), 200);
     send(
         base + "/responses",
         receipt("new-after-close").replace("\"revision_version\":1", "\"revision_version\":2"),
         409);
     var corrected = send(first + "/corrections", correction(0, "correct"), 201);
-    String next = "/store/survey-responses/" + corrected.get("answer").get("id").asString();
+    String next = "/survey-responses/" + corrected.get("answer").get("id").asString();
     assertThat(read(first, 200).get("status").asString()).isEqualTo("WITHDRAWN");
     assertThat(read(first, 200).get("answers").get(0).get("text").asString()).isEqualTo("機密の原回答");
     var counts = read(base + "/response-counts", 200);
@@ -272,9 +273,9 @@ class SurveyPostgresTest {
 
   @Test
   void revisionReplacementAndExplicitSwitchPreserveOldQuestions() throws Exception {
-    var draft = send("/store/surveys", DEFINITION, 201).get("revision");
+    var draft = send("/surveys", DEFINITION, 201).get("revision");
     String sid = draft.get("survey_id").asString(), rid = draft.get("id").asString();
-    String series = "/store/surveys/" + sid, base = series + "/revisions/" + rid;
+    String series = "/surveys/" + sid, base = series + "/revisions/" + rid;
     String replacement =
         DEFINITION
             .replace("{\"title\"", "{\"version\":0,\"title\"")
@@ -325,8 +326,7 @@ class SurveyPostgresTest {
             DEFINITION.replace("\"TEXT\"", "1"),
             DEFINITION.replace("\"title\":\" 店舗入力の問票 \"", "\"title\":42"),
             DEFINITION.replace("\"questions\"", "\"customer_id\":\"1\",\"questions\""),
-            DEFINITION.replace("\"options\":[]", "\"options\":null")))
-      send("/store/surveys", body, 400);
+            DEFINITION.replace("\"options\":[]", "\"options\":null"))) send("/surveys", body, 400);
     String base = openedRevision();
     for (String body :
         List.of(
@@ -338,7 +338,7 @@ class SurveyPostgresTest {
             receipt("bad").replace("\"answers\"", "\"member_id\":\"1\",\"answers\"")))
       send(base + "/responses", body, 400);
     assertThat(read(base + "/response-counts", 200).get("total_records").asLong()).isZero();
-    read("/store/surveys?size=101", 400);
+    read("/surveys?size=101", 400);
     read(base + "/history?cursor=bad", 400);
     read(base + "/responses?sort=WRONG", 400);
   }
@@ -346,14 +346,12 @@ class SurveyPostgresTest {
   @Test
   void sameKeyRacesReplayOneResultAndCloseRacesNeverAdmitAfterClose() throws Exception {
     var created =
-        race(
-            () -> send("/store/surveys", DEFINITION, 0),
-            () -> send("/store/surveys", DEFINITION, 0));
+        race(() -> send("/surveys", DEFINITION, 0), () -> send("/surveys", DEFINITION, 0));
     assertThat(created.get(0).get("operation").get("id"))
         .isEqualTo(created.get(1).get("operation").get("id"));
     var draft = created.get(0).get("revision");
     String base =
-        "/store/surveys/"
+        "/surveys/"
             + draft.get("survey_id").asString()
             + "/revisions/"
             + draft.get("id").asString();
@@ -373,12 +371,12 @@ class SurveyPostgresTest {
   void currentAuthorizationAndStoreIsolationApplyToEveryReadWriteAndReplay() throws Exception {
     String base = openedRevision();
     var receipt = send(base + "/responses", receipt("first"), 201);
-    String answer = "/store/survey-responses/" + receipt.get("answer").get("id").asString();
+    String answer = "/survey-responses/" + receipt.get("answer").get("id").asString();
     currentStore = otherStore;
     for (String path : List.of(base, answer, base + "/response-counts", answer + "/history"))
       read(path, 404);
     send(answer + "/withdrawals", action(0, "foreign"), 404);
-    assertThat(read("/store/surveys", 200).get("content").isEmpty()).isTrue();
+    assertThat(read("/surveys", 200).get("content").isEmpty()).isTrue();
     currentStore = storeId;
     jdbc.update(
         "delete from t_role_permissions where role_id=? and permission_id=(select id from t_permissions where code='SURVEY_RECORD')",
@@ -387,7 +385,7 @@ class SurveyPostgresTest {
     read(answer, 200);
     jdbc.update("update t_users set enabled=false where id=?", actorId);
     for (String path :
-        List.of("/store/surveys", base, answer, base + "/response-counts", answer + "/history"))
+        List.of("/surveys", base, answer, base + "/response-counts", answer + "/history"))
       read(path, 403);
     jdbc.update("update t_users set enabled=true,user_type='SERVICE' where id=?", actorId);
     read(answer, 403);
@@ -397,7 +395,7 @@ class SurveyPostgresTest {
   void auditFailureRollsBackCorrectionAndCountsQueryDoesNotLoadFreeText() throws Exception {
     String base = openedRevision();
     var receipt = send(base + "/responses", receipt("first"), 201);
-    String answer = "/store/survey-responses/" + receipt.get("answer").get("id").asString();
+    String answer = "/survey-responses/" + receipt.get("answer").get("id").asString();
     jdbc.execute(
         "create function fail_survey_audit() returns trigger language plpgsql as $$ begin if NEW.action='SURVEY_CORRECTION_RECEIVED' then raise exception '検証用の監査失敗'; end if; return NEW; end $$");
     jdbc.execute(
@@ -435,9 +433,9 @@ class SurveyPostgresTest {
         """
         {"title":"任意と選択","questions":[{"question_key":"q1","type":"TEXT","prompt":"自由文","required":false,"options":[]},{"question_key":"q2","type":"SINGLE_CHOICE","prompt":"選択","required":true,"options":[{"option_key":"a","label":"一つ目"},{"option_key":"b","label":"二つ目"}]}],"dedupe_key":"definition"}
         """;
-    var revision = send("/store/surveys", definition, 201).get("revision");
+    var revision = send("/surveys", definition, 201).get("revision");
     String base =
-        "/store/surveys/"
+        "/surveys/"
             + revision.get("survey_id").asString()
             + "/revisions/"
             + revision.get("id").asString();
@@ -474,7 +472,7 @@ class SurveyPostgresTest {
             .replace("typed-answer", "duplicate-question"),
         400);
     send(
-        "/store/surveys",
+        "/surveys",
         definition
             .replace("\"label\":\"二つ目\"", "\"label\":\" 一つ目 \"")
             .replace("\"definition\"", "\"duplicate-option\""),
@@ -496,10 +494,10 @@ class SurveyPostgresTest {
             .replace("\"create\"", "\"revision-a\"");
     var drafts =
         race(
-            () -> send("/store/surveys/" + sid + "/revisions", body, -1),
+            () -> send("/surveys/" + sid + "/revisions", body, -1),
             () ->
                 send(
-                    "/store/surveys/" + sid + "/revisions",
+                    "/surveys/" + sid + "/revisions",
                     body.replace("revision-a", "revision-b"),
                     -1));
     assertThat(drafts.stream().filter(n -> n.has("operation")).count()).isEqualTo(1);
@@ -507,16 +505,9 @@ class SurveyPostgresTest {
     String aid = answer.get("id").asString();
     var corrected =
         race(
+            () -> send("/survey-responses/" + aid + "/corrections", correction(0, "correct-a"), -1),
             () ->
-                send(
-                    "/store/survey-responses/" + aid + "/corrections",
-                    correction(0, "correct-a"),
-                    -1),
-            () ->
-                send(
-                    "/store/survey-responses/" + aid + "/corrections",
-                    correction(0, "correct-b"),
-                    -1));
+                send("/survey-responses/" + aid + "/corrections", correction(0, "correct-b"), -1));
     assertThat(corrected.stream().filter(n -> n.has("operation")).count()).isEqualTo(1);
     var counts = read(base + "/response-counts", 200);
     assertThat(counts.get("total_records").asLong()).isEqualTo(2);
@@ -576,8 +567,13 @@ class SurveyPostgresTest {
   @EnableMethodSecurity
   @EntityScan("com.kizuna")
   @EnableJpaRepositories("com.kizuna")
-  @ComponentScan(basePackages = {"com.kizuna.survey.application", "com.kizuna.survey.api.store"})
-  @Import({AuditWriter.class, BusinessAudit.class})
+  @ComponentScan(basePackages = "com.kizuna.survey.application")
+  @Import({
+    AuditWriter.class,
+    BusinessAudit.class,
+    SurveyController.class,
+    SurveyResponseController.class
+  })
   static class Config {
     @Bean
     Clock clock() {

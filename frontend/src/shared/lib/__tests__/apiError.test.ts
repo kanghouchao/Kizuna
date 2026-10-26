@@ -47,7 +47,7 @@ describe('isConflict / isNotFound', () => {
 
 describe('requireId', () => {
   it('識別子が無いときは要求を組ませずに失敗させる', () => {
-    // `?? ''` で素通しすると、単数の操作が一覧の URI へ飛ぶ（DELETE /store/shifts/）。
+    // `?? ''` で素通しすると、単数の操作が一覧の URI へ飛ぶ（DELETE /shifts/）。
     // 届いた先の 404/405 は「保存に失敗しました」と見分けが付かない
     expect(() => requireId(undefined, 'シフト')).toThrow(ClientDataError);
     expect(() => requireId('', 'シフト')).toThrow(ClientDataError);

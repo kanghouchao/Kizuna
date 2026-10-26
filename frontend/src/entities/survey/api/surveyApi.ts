@@ -19,8 +19,8 @@ import {
   SurveyCommand,
   WriteResponse,
 } from '../model/types';
-const surveys = '/store/surveys';
-const responses = '/store/survey-responses';
+const surveys = '/surveys';
+const responses = '/survey-responses';
 const revisionPath = (sid: string, rid: string) => `${surveys}/${sid}/revisions/${rid}`;
 export const surveyApi = {
   list: async (page: number, search: SurveySearch): Promise<PageResult<SurveySummary>> =>

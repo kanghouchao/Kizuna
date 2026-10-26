@@ -21,12 +21,12 @@ import org.springframework.web.util.pattern.PathPatternParser;
 public class AttachmentCacheFilter extends OncePerRequestFilter {
   private static final List<PathPattern> ROUTES =
       Stream.of(
-              "/store/applicants/attachment-policy",
-              "/store/applicants/{id}/attachments",
-              "/store/applicants/{id}/attachments/{attachmentId}/content",
-              "/store/applicants/{id}/attachment-uploads",
-              "/store/applicants/{id}/attachment-operations/{key}",
-              "/store/applicants/{id}/attachment-uploads/{uploadId}/content")
+              "/applicants/attachment-policy",
+              "/applicants/{id}/attachments",
+              "/applicants/{id}/attachments/{attachmentId}/content",
+              "/applicants/{id}/attachment-uploads",
+              "/applicants/{id}/attachment-operations/{key}",
+              "/applicants/{id}/attachment-uploads/{uploadId}/content")
           .map(PathPatternParser.defaultInstance::parse)
           .toList();
 

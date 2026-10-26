@@ -62,7 +62,7 @@ async function registerPhoneOrder(page: Page, chooseCustomer?: () => Promise<voi
   const [response] = await Promise.all([
     page.waitForResponse(
       resp =>
-        resp.url().endsWith('/api/store/orders') && resp.request().method() === 'POST',
+        resp.url().endsWith('/api/orders') && resp.request().method() === 'POST',
       { timeout: 15000 }
     ),
     page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
@@ -91,7 +91,7 @@ When('受注の編集ページを開き人数を {string} に直して保存す�
   await Promise.all([
     page.waitForResponse(
       resp =>
-        resp.url().includes(`/api/store/orders/${createdOrderId}`) &&
+        resp.url().includes(`/api/orders/${createdOrderId}`) &&
         resp.request().method() === 'PUT',
       { timeout: 15000 }
     ),
@@ -186,7 +186,7 @@ Then('完了アーカイブに請求 {string} の行が現れる', async ({ page
 
 When('設定コースを改定して受注へ適用する', async ({ page, request }) => {
   const token = await loginAsStoreAdmin(request);
-  const updated = await request.put(`/api/store/services/${courseId}`, {
+  const updated = await request.put(`/api/services/${courseId}`, {
     headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { name: courseName, duration_minutes: 90, price: 18000, remuneration: 11000, expected_version: courseVersion },
   });
@@ -205,7 +205,7 @@ When('設定コースを改定して受注へ適用する', async ({ page, reque
 
 When('設定を削除して過去のコースへ理由付きで訂正する', async ({ page, request }) => {
   const token = await loginAsStoreAdmin(request);
-  const deleted = await request.delete(`/api/store/services/${courseId}?expected_version=${courseVersion}`, {
+  const deleted = await request.delete(`/api/services/${courseId}?expected_version=${courseVersion}`, {
     headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
   });
   expect(deleted.status()).toBe(204);
@@ -273,7 +273,7 @@ Then('グループ級から同じ訂正の費用と報酬を照会できる', as
 After(async ({ request }) => {
   const token = await loginAsStoreAdmin(request);
   if (courseId) {
-    const deleted = await request.delete(`/api/store/services/${courseId}?expected_version=${courseVersion}`, {
+    const deleted = await request.delete(`/api/services/${courseId}?expected_version=${courseVersion}`, {
       headers: { ...STORE_HEADERS, 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     });
     expect(deleted.status()).toBe(204);
@@ -297,7 +297,7 @@ After(async ({ request }) => {
 When('有料と無料の延長・設定加算・固定割引を追加する', async ({ page, request }) => {
   const token = await loginAsStoreAdmin(request);
   const surchargeName = `受注加算-${Date.now()}`;
-  const response = await request.post(`${APP_URL}/api/store/services`, {
+  const response = await request.post(`${APP_URL}/api/services`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { kind: 'SURCHARGE', name: surchargeName, price: 1000, remuneration: 500 },
   });
@@ -361,16 +361,16 @@ Given('3000ポイントを利用した請求7000円の完了受注がある', as
   await adjustCustomerPoints(request, token, customerId, 3000, '利用取消の原資', storeId);
   const input = { customer_selection: { mode: 'EXISTING', customer_id: customerId }, cast_id: createdCastId, course_id: courseId,
     business_date: todayInTokyo(), pax: 1, fee_lines: [{ kind: 'DISCOUNT', name: '割引', amount: 2000 }] };
-  const preview = await request.post('/api/store/orders/preview', { headers, data: input });
+  const preview = await request.post('/api/orders/preview', { headers, data: input });
   expect(preview.status()).toBe(200);
-  const created = await request.post('/api/store/orders', { headers, data: { ...input, confirmation_token: (await preview.json()).confirmation_token } });
+  const created = await request.post('/api/orders', { headers, data: { ...input, confirmation_token: (await preview.json()).confirmation_token } });
   expect(created.status()).toBe(201);
   createdOrderId = (await created.json()).id;
   const order = await getOrder(request, token, storeId, createdOrderId);
   const completion = { expected_version: order.version, fee_lines: [{ kind: 'DISCOUNT', name: '割引', amount: 2000 }], use_points: 3000 };
-  const completionPreview = await request.post(`/api/store/orders/${createdOrderId}/completion-preview`, { headers, data: completion });
+  const completionPreview = await request.post(`/api/orders/${createdOrderId}/completion-preview`, { headers, data: completion });
   expect(completionPreview.status()).toBe(200);
-  const completed = await request.post(`/api/store/orders/${createdOrderId}/completion`, { headers, data: { ...completion, confirmation_token: (await completionPreview.json()).confirmation_token } });
+  const completed = await request.post(`/api/orders/${createdOrderId}/completion`, { headers, data: { ...completion, confirmation_token: (await completionPreview.json()).confirmation_token } });
   expect(completed.status()).toBe(200);
 });
 
@@ -452,7 +452,7 @@ Then('原記録と零の請求報酬が残り新受注へ再提供を記録で�
   await page.getByRole('option', { name: new RegExp(courseName) }).click();
   await page.getByRole('button', { name: '登録する', exact: true }).click();
   const [saved] = await Promise.all([
-    page.waitForResponse(r => r.url().endsWith('/api/store/orders') && r.request().method() === 'POST'),
+    page.waitForResponse(r => r.url().endsWith('/api/orders') && r.request().method() === 'POST'),
     page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
   ]);
   expect(saved.status()).toBe(201);
@@ -517,14 +517,14 @@ Then('顧客の選択を保ったまま受付時連絡先だけを編集でき�
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   }
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.route(`**/api/store/orders/${createdOrderId}/preview`, route => route.abort('failed'), { times: 1 });
+  await page.route(`**/api/orders/${createdOrderId}/preview`, route => route.abort('failed'), { times: 1 });
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('試算できませんでした');
   await page.getByRole('button', { name: '入力に戻る', exact: true }).click();
   await expect(page.getByLabel('メール', { exact: true })).toHaveValue('edited@example.com');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await Promise.all([
-    page.waitForResponse(resp => resp.url().endsWith(`/api/store/orders/${createdOrderId}`) && resp.request().method() === 'PUT'),
+    page.waitForResponse(resp => resp.url().endsWith(`/api/orders/${createdOrderId}`) && resp.request().method() === 'PUT'),
     page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
   ]);
   await expect(page).toHaveURL(/\/store\/orders\/?$/);
@@ -600,7 +600,7 @@ Then('受付箱で連絡先を補正して顧客未設定で確定でき原文�
   expect(order.contact_snapshot.email).toBe('corrected@example.com');
   expect(order.contact_snapshot.line_id).toBe('guest-line');
   const token = await loginAsStoreAdmin(request);
-  const applications = await request.get('/api/store/order-applications?statuses=CONFIRMED&size=2000', {
+  const applications = await request.get('/api/order-applications?statuses=CONFIRMED&size=2000', {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   expect(applications.status()).toBe(200);
@@ -662,7 +662,7 @@ Then('許可の保存に失敗しても入力を保持して再試行できる',
   await page.keyboard.press('Tab');
   await expect(page.getByLabel('メールの根拠',{exact:true})).toBeFocused();
   await page.getByLabel('メールの根拠',{exact:true}).fill('連絡を希望しないとの申出');
-  const path = `**/api/store/orders/${createdOrderId}`;
+  const path = `**/api/orders/${createdOrderId}`;
   await page.route(path, route => route.request().method() === 'PUT' ? route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'一時的な障害です。再試行してください'})}) : route.continue());
   await page.getByRole('button',{name:'保存',exact:true}).click();
   await page.getByRole('button',{name:'この内容を確認して保存',exact:true}).click();
@@ -722,12 +722,12 @@ Then('店舗で販促同意を明示取り込みし失敗後も入力を保っ�
   createdOrderId = order.id;
   const token = await loginAsStoreAdmin(request);
   const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
-  const contacts = await request.get(`/api/store/customers/${order.customer_id}/contacts`, { headers });
+  const contacts = await request.get(`/api/customers/${order.customer_id}/contacts`, { headers });
   expect(contacts.status()).toBe(200);
   const contact = (await contacts.json()).content[0];
   expect(contact.business_status).toBe('UNKNOWN');
   expect(contact.marketing_status).toBe('ALLOWED');
-  const detail = await request.get(`/api/store/order-applications/${guestApplicationId}`, { headers });
+  const detail = await request.get(`/api/order-applications/${guestApplicationId}`, { headers });
   expect(detail.status()).toBe(200);
   const application = await detail.json();
   expect(application.contact_imports[0].contact_id).toBe(contact.id);

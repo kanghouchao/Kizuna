@@ -12,14 +12,14 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('storeProfileApi', () => {
-  it('get は /store/config を GET する', async () => {
-    expect(await storeProfileApi.get()).toEqual({ ok: true, url: '/store/config' });
+  it('get は /config を GET する', async () => {
+    expect(await storeProfileApi.get()).toEqual({ ok: true, url: '/config' });
   });
-  it('update は /store/config を PUT する', async () => {
-    expect(await storeProfileApi.update({})).toEqual({ ok: true, url: '/store/config' });
+  it('update は /config を PUT する', async () => {
+    expect(await storeProfileApi.update({})).toEqual({ ok: true, url: '/config' });
   });
-  it('activate は /store/config/activation を本文無しで POST する', async () => {
+  it('activate は /config/activation を本文無しで POST する', async () => {
     await expect(storeProfileApi.activate()).resolves.toBeUndefined();
-    expect(apiClient.post).toHaveBeenCalledWith('/store/config/activation');
+    expect(apiClient.post).toHaveBeenCalledWith('/config/activation');
   });
 });

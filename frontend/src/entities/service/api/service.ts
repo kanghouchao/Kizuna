@@ -20,26 +20,26 @@ export const serviceApi = {
     kind?: ServiceKind;
     deleted: boolean;
   }): Promise<PageResult<ServiceSummary>> {
-    return fromSpringPage((await apiClient.get('/store/services', { params })).data);
+    return fromSpringPage((await apiClient.get('/services', { params })).data);
   },
   async get(id: string): Promise<ServiceResponse> {
-    return (await apiClient.get(`/store/services/${encodeURIComponent(id)}`)).data;
+    return (await apiClient.get(`/services/${encodeURIComponent(id)}`)).data;
   },
   async create(body: ServiceCreateRequest): Promise<{ id: string }> {
-    return (await apiClient.post('/store/services', body)).data;
+    return (await apiClient.post('/services', body)).data;
   },
   async update(id: string, body: ServiceUpdateRequest): Promise<ServiceResponse> {
-    return (await apiClient.put(`/store/services/${encodeURIComponent(id)}`, body)).data;
+    return (await apiClient.put(`/services/${encodeURIComponent(id)}`, body)).data;
   },
   async remove(id: string, expectedVersion: number): Promise<void> {
-    await apiClient.delete(`/store/services/${encodeURIComponent(id)}`, {
+    await apiClient.delete(`/services/${encodeURIComponent(id)}`, {
       params: { expected_version: expectedVersion },
     });
   },
   async history(id: string, cursor?: string): Promise<CursorPageResult<ServiceRevisionResponse>> {
     return fromCursorPage(
       (
-        await apiClient.get(`/store/services/${encodeURIComponent(id)}/revisions`, {
+        await apiClient.get(`/services/${encodeURIComponent(id)}/revisions`, {
           params: { cursor, size: 20 },
         })
       ).data

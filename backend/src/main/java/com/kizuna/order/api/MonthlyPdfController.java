@@ -1,0 +1,30 @@
+package com.kizuna.order.api;
+
+import com.kizuna.order.application.MonthlyPdfService;
+import com.kizuna.order.application.MonthlyPdfSnapshotService;
+import com.kizuna.shared.storescope.CurrentStore;
+import java.io.IOException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequiredArgsConstructor
+public class MonthlyPdfController {
+  private final MonthlyPdfService pdf;
+  private final MonthlyPdfSnapshotService snapshots;
+
+  @GetMapping("/monthly-remunerations/pdf")
+  @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
+  public ResponseEntity<byte[]> pdf(
+      @CurrentStore Long storeId,
+      @RequestParam(name = "person_id") Long personId,
+      @RequestParam String month)
+      throws IOException {
+    return MonthlyPdfResponse.create(
+        month, pdf.generate(budget -> snapshots.store(storeId, personId, month, budget)));
+  }
+}

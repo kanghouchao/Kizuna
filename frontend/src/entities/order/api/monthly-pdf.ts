@@ -9,7 +9,7 @@ export async function fetchMonthlyPdf(
   signal: AbortSignal
 ): Promise<Blob> {
   const path = {
-    store: '/store/monthly-remunerations/pdf',
+    store: '/monthly-remunerations/pdf',
     self: '/me/monthly-remunerations/pdf',
   }[criteria.scope];
   try {

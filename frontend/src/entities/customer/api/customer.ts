@@ -44,28 +44,27 @@ export type CustomerListParams = PaginationParams & {
 
 export const customerApi = {
   mergePreview: async (id: string, request: MergePreviewRequest): Promise<MergePreview> =>
-    (await apiClient.post(`/store/customers/${requireId(id, '顧客')}/merge-preview`, request)).data,
+    (await apiClient.post(`/customers/${requireId(id, '顧客')}/merge-preview`, request)).data,
   mergeAudit: async (id: string, mergeId: string): Promise<MergeAudit> =>
     (
       await apiClient.get(
-        `/store/customers/${requireId(id, '顧客')}/merges/${requireId(mergeId, '統合')}`
+        `/customers/${requireId(id, '顧客')}/merges/${requireId(mergeId, '統合')}`
       )
     ).data,
 
   contacts: async (id: string, params?: CursorParams): Promise<CursorPageResult<ContactResponse>> =>
     fromCursorPage(
-      (await apiClient.get(`/store/customers/${requireId(id, '顧客')}/contacts`, { params })).data
+      (await apiClient.get(`/customers/${requireId(id, '顧客')}/contacts`, { params })).data
     ),
   contactHistory: async (
     id: string,
     params?: CursorParams
   ): Promise<CursorPageResult<ContactHistoryResponse>> =>
     fromCursorPage(
-      (await apiClient.get(`/store/customers/${requireId(id, '顧客')}/contact-history`, { params }))
-        .data
+      (await apiClient.get(`/customers/${requireId(id, '顧客')}/contact-history`, { params })).data
     ),
   addContact: async (id: string, data: ContactInput): Promise<ContactResponse> =>
-    (await apiClient.post(`/store/customers/${requireId(id, '顧客')}/contacts`, data)).data,
+    (await apiClient.post(`/customers/${requireId(id, '顧客')}/contacts`, data)).data,
   updateContact: async (
     id: string,
     contactId: string,
@@ -73,7 +72,7 @@ export const customerApi = {
   ): Promise<ContactResponse> =>
     (
       await apiClient.put(
-        `/store/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}`,
+        `/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}`,
         data
       )
     ).data,
@@ -85,13 +84,13 @@ export const customerApi = {
   ): Promise<ContactResponse> =>
     (
       await apiClient.put(
-        `/store/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}/permissions/${purpose}`,
+        `/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}/permissions/${purpose}`,
         data
       )
     ).data,
   deleteContact: async (id: string, contactId: string): Promise<void> => {
     await apiClient.delete(
-      `/store/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}`
+      `/customers/${requireId(id, '顧客')}/contacts/${requireId(contactId, '連絡先')}`
     );
   },
   setContactPreference: async (
@@ -99,13 +98,13 @@ export const customerApi = {
     type: ContactType,
     contactId: string | null
   ): Promise<void> => {
-    await apiClient.put(`/store/customers/${requireId(id, '顧客')}/contact-preferences/${type}`, {
+    await apiClient.put(`/customers/${requireId(id, '顧客')}/contact-preferences/${type}`, {
       contact_id: contactId,
     });
   },
   /** 顧客一覧を取得する */
   list: async (params?: CustomerListParams): Promise<PageResult<CustomerSummaryResponse>> => {
-    const response = await apiClient.get('/store/customers', { params });
+    const response = await apiClient.get('/customers', { params });
     return fromSpringPage(response.data);
   },
   /**
@@ -116,13 +115,13 @@ export const customerApi = {
   duplicates: async (
     params?: CursorParams & { search?: string; type?: ContactType }
   ): Promise<CursorPageResult<CustomerDuplicateGroupResponse>> => {
-    const response = await apiClient.get('/store/customers/duplicates', { params });
+    const response = await apiClient.get('/customers/duplicates', { params });
     return fromCursorPage(response.data);
   },
   duplicateCustomers: async (
     params: CursorParams & { type: ContactType; value: string }
   ): Promise<CursorPageResult<CustomerMergeComparisonResponse>> =>
-    fromCursorPage((await apiClient.get('/store/customers/duplicates/customers', { params })).data),
+    fromCursorPage((await apiClient.get('/customers/duplicates/customers', { params })).data),
   /**
    * 統合の前に見比べる 2 行を取得する。重複候補に出てこない行どうしでも引ける。
    * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
@@ -137,17 +136,17 @@ export const customerApi = {
     const query = [firstId, secondId]
       .map(id => `ids=${encodeURIComponent(requireId(id, '顧客'))}`)
       .join('&');
-    const response = await apiClient.get(`/store/customers/merge-comparison?${query}`);
+    const response = await apiClient.get(`/customers/merge-comparison?${query}`);
     return response.data;
   },
   /** 顧客詳細を取得する */
   get: async (id: string | undefined): Promise<CustomerResponse> => {
-    const response = await apiClient.get(`/store/customers/${requireId(id, '顧客')}`);
+    const response = await apiClient.get(`/customers/${requireId(id, '顧客')}`);
     return response.data;
   },
   /** 顧客を新規作成する */
   create: async (data: CustomerCreateRequest): Promise<CustomerResponse> => {
-    const response = await apiClient.post('/store/customers', data);
+    const response = await apiClient.post('/customers', data);
     return response.data;
   },
   /** 顧客情報を更新する */
@@ -155,12 +154,12 @@ export const customerApi = {
     id: string | undefined,
     data: CustomerUpdateRequest
   ): Promise<CustomerResponse> => {
-    const response = await apiClient.put(`/store/customers/${requireId(id, '顧客')}`, data);
+    const response = await apiClient.put(`/customers/${requireId(id, '顧客')}`, data);
     return response.data;
   },
   /** 顧客を削除する */
   delete: async (id: string | undefined): Promise<void> => {
-    await apiClient.delete(`/store/customers/${requireId(id, '顧客')}`);
+    await apiClient.delete(`/customers/${requireId(id, '顧客')}`);
   },
   /**
    * 重複した 2 行を 1 つへまとめる。パスが名指すのが存続行で、本文が被統合行を指す。
@@ -171,7 +170,7 @@ export const customerApi = {
     request: MergeRequest
   ): Promise<CustomerMergeResponse> => {
     const response = await apiClient.post(
-      `/store/customers/${requireId(survivingCustomerId, '顧客')}/merges`,
+      `/customers/${requireId(survivingCustomerId, '顧客')}/merges`,
       { ...request, merged_customer_id: requireId(request.merged_customer_id, '顧客') }
     );
     return response.data;
@@ -185,7 +184,7 @@ export const customerApi = {
     id: string | undefined,
     params?: CursorParams
   ): Promise<CursorPageResult<CustomerMergeHistoryResponse>> => {
-    const response = await apiClient.get(`/store/customers/${requireId(id, '顧客')}/merges`, {
+    const response = await apiClient.get(`/customers/${requireId(id, '顧客')}/merges`, {
       params,
     });
     return fromCursorPage(response.data);
@@ -196,7 +195,7 @@ export const customerApi = {
     request: CustomerMemberLinkRequest
   ): Promise<CustomerMemberLinkResponse> => {
     const response = await apiClient.post(
-      `/store/customers/${requireId(id, '顧客')}/member-link`,
+      `/customers/${requireId(id, '顧客')}/member-link`,
       request
     );
     return response.data;
@@ -206,14 +205,14 @@ export const customerApi = {
     id: string | undefined,
     request: CustomerMemberLinkReleaseRequest
   ): Promise<void> => {
-    await apiClient.post(`/store/customers/${requireId(id, '顧客')}/member-link/releases`, request);
+    await apiClient.post(`/customers/${requireId(id, '顧客')}/member-link/releases`, request);
   },
   /**
    * 現に有効な会員紐づけを取得する。紐づいていない顧客では 404 で返る — 「紐づいていない」を
    * 本体で表すと、呼出側が読んでからもう一度分岐することになる。
    */
   memberLink: async (id: string | undefined): Promise<CustomerMemberLinkResponse> => {
-    const response = await apiClient.get(`/store/customers/${requireId(id, '顧客')}/member-link`);
+    const response = await apiClient.get(`/customers/${requireId(id, '顧客')}/member-link`);
     return response.data;
   },
   /** 会員紐づけの履歴を新しい順に取得する。続きは応答の nextCursor をそのまま cursor に渡して取る。 */
@@ -222,7 +221,7 @@ export const customerApi = {
     params?: CursorParams
   ): Promise<CursorPageResult<CustomerMemberLinkHistoryResponse>> => {
     const response = await apiClient.get(
-      `/store/customers/${requireId(id, '顧客')}/member-link/history`,
+      `/customers/${requireId(id, '顧客')}/member-link/history`,
       { params }
     );
     return fromCursorPage(response.data);
@@ -230,7 +229,7 @@ export const customerApi = {
   /** 紐づく会員のポイント残高を取得する（残高は顧客ではなく会員の台帳が持つ） */
   memberPointBalance: async (id: string | undefined): Promise<CustomerPointBalanceResponse> => {
     const response = await apiClient.get(
-      `/store/customers/${requireId(id, '顧客')}/member-point-balance`
+      `/customers/${requireId(id, '顧客')}/member-point-balance`
     );
     return response.data;
   },
@@ -240,7 +239,7 @@ export const customerApi = {
     data: CustomerPointAdjustmentRequest
   ): Promise<CustomerPointBalanceResponse> => {
     const response = await apiClient.post(
-      `/store/customers/${requireId(id, '顧客')}/point-adjustments`,
+      `/customers/${requireId(id, '顧客')}/point-adjustments`,
       data
     );
     return response.data;

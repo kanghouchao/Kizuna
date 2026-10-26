@@ -28,9 +28,9 @@ describe('auth api', () => {
     const res = await authApi.updateMe({ display_name: 'A' });
     expect(res).toEqual({ ok: true, url: '/me' });
   });
-  it('stores calls /admin/stores/me', async () => {
+  it('stores calls /stores/me', async () => {
     const res = await authApi.stores();
-    expect(res).toEqual({ ok: true, url: '/admin/stores/me' });
+    expect(res).toEqual({ ok: true, url: '/stores/me' });
   });
   it('changePassword PUTs /me/password', async () => {
     const client = jest.requireMock('@/shared/api/client').default;

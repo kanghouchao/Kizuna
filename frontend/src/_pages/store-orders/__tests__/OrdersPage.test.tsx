@@ -265,7 +265,7 @@ describe('作業キューの描画', () => {
   });
 
   it('識別子の無い申請の謝絶は要求を組まず、理由を名乗ること', async () => {
-    // `?? ''` で素通しすると POST /store/order-applications//refusal が飛び、届いた先の 404 が
+    // `?? ''` で素通しすると POST /order-applications//refusal が飛び、届いた先の 404 が
     // 「謝絶に失敗しました」と見分けが付かなくなる
     stubInbox(pendingApplication({ id: undefined }));
     render(<OrderListPage />);

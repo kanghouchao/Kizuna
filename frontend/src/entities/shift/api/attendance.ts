@@ -16,12 +16,12 @@ import {
 export const attendanceApi = {
   /** 指定営業日の実績を取得する（取消済みは常に除外される）。 */
   list: async (params: { business_date: string }): Promise<AttendanceResponse[]> => {
-    const response = await apiClient.get('/store/attendances', { params });
+    const response = await apiClient.get('/attendances', { params });
     return response.data;
   },
   /** 実績を記録する。shift_id を省くと飛び込み出勤になる。 */
   record: async (data: AttendanceCreateRequest): Promise<AttendanceResponse> => {
-    const response = await apiClient.post('/store/attendances', data);
+    const response = await apiClient.post('/attendances', data);
     return response.data;
   },
   /** 実績を訂正する。訂正できる項目の全量を送る。 */
@@ -29,12 +29,12 @@ export const attendanceApi = {
     id: string | undefined,
     data: AttendanceCorrectionRequest
   ): Promise<AttendanceResponse> => {
-    const response = await apiClient.put(`/store/attendances/${requireId(id, '当日実績')}`, data);
+    const response = await apiClient.put(`/attendances/${requireId(id, '当日実績')}`, data);
     return response.data;
   },
   /** 実績に取消標記を付ける。理由は必須で、経緯を辿れる根拠はここにしか残らない。 */
   cancel: async (id: string | undefined, reason: string): Promise<void> => {
-    await apiClient.post(`/store/attendances/${requireId(id, '当日実績')}/cancellation`, {
+    await apiClient.post(`/attendances/${requireId(id, '当日実績')}/cancellation`, {
       reason,
     });
   },
@@ -43,7 +43,7 @@ export const attendanceApi = {
    * 経過を待たない間は空で返る（ADR 0014）— 空を「誰も欠勤していない」と読んではならない。
    */
   listAbsences: async (params: { business_date: string }): Promise<AbsenceResponse[]> => {
-    const response = await apiClient.get('/store/absences', { params });
+    const response = await apiClient.get('/absences', { params });
     return response.data;
   },
 };

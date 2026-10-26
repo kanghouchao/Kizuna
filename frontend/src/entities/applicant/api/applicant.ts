@@ -15,7 +15,7 @@ import type {
   ApplicantSummary,
   RecruitmentPolicy,
 } from '../model/types';
-const resource = (id: string) => `/store/applicants/${requireId(id, '応募者')}`;
+const resource = (id: string) => `/applicants/${requireId(id, '応募者')}`;
 export const applicantApi = {
   list: async (params: {
     page: number;
@@ -23,10 +23,10 @@ export const applicantApi = {
     search?: string;
     status?: ApplicantStatus;
   }): Promise<PageResult<ApplicantSummary>> =>
-    fromSpringPage((await apiClient.get('/store/applicants', { params })).data),
+    fromSpringPage((await apiClient.get('/applicants', { params })).data),
   get: async (id: string): Promise<ApplicantDetail> => (await apiClient.get(resource(id))).data,
   create: async (data: ApplicantIntake): Promise<ApplicantDetail> =>
-    (await apiClient.post('/store/applicants', data)).data,
+    (await apiClient.post('/applicants', data)).data,
   update: async (id: string, version: number, intake: ApplicantIntake): Promise<ApplicantDetail> =>
     (await apiClient.put(resource(id), { version, intake })).data,
   interview: async (
@@ -46,6 +46,5 @@ export const applicantApi = {
     fromCursorPage(
       (await apiClient.get(`${resource(id)}/history`, { params: { cursor, size: 20 } })).data
     ),
-  policy: async (): Promise<RecruitmentPolicy> =>
-    (await apiClient.get('/store/applicants/policy')).data,
+  policy: async (): Promise<RecruitmentPolicy> => (await apiClient.get('/applicants/policy')).data,
 };

@@ -95,7 +95,7 @@ When(
         );
       const customer = await createCustomer(request, token, secret);
       created(customer);
-      const path = `/api/store/customers/${customer}`;
+      const path = `/api/customers/${customer}`;
       const patch = {
         name: `${secret}-編集`,
         address: secret,
@@ -145,7 +145,7 @@ When(
       ).toBe(403);
       expect(
         (
-          await request.post("/api/store/customers", {
+          await request.post("/api/customers", {
             headers: headers(auditor),
             data: { name: secret },
           })
@@ -153,7 +153,7 @@ When(
       ).toBe(403);
       expect(
         (
-          await request.post("/api/store/customers", {
+          await request.post("/api/customers", {
             headers: headers(token),
             data: { name: "" },
           })
@@ -203,7 +203,7 @@ When(
       nestedCustomers.push(contactParent);
       expect(
         (
-          await request.delete(`/api/store/customers/${contactParent}`, {
+          await request.delete(`/api/customers/${contactParent}`, {
             headers: headers(token),
           })
         ).status(),
@@ -214,8 +214,8 @@ When(
       await submitConfirmedStoreRequest(
         request,
         token,
-        "/api/store/orders/preview",
-        "/api/store/orders",
+        "/api/orders/preview",
+        "/api/orders",
         {
           cast_id: cast,
           receptionist_id: receptionist,
@@ -228,7 +228,7 @@ When(
       );
       expect(
         (
-          await request.delete(`/api/store/customers/${ordered}`, {
+          await request.delete(`/api/customers/${ordered}`, {
             headers: headers(token),
           })
         ).status(),
@@ -247,7 +247,7 @@ When(
       );
       expect(
         (
-          await request.put(`/api/store/customers/${merged}`, {
+          await request.put(`/api/customers/${merged}`, {
             headers: headers(token),
             data: { name: secret },
           })
@@ -256,7 +256,7 @@ When(
       for (const id of [surviving, merged])
         expect(
           (
-            await request.delete(`/api/store/customers/${id}`, {
+            await request.delete(`/api/customers/${id}`, {
               headers: headers(token),
             })
           ).status(),

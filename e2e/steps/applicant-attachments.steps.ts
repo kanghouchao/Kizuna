@@ -15,7 +15,7 @@ let recoveryId = "";
 let key = "";
 let recoveryKey = "";
 let image = Buffer.alloc(0);
-const path = () => `/api/store/applicants/${applicantId}`;
+const path = () => `/api/applicants/${applicantId}`;
 const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${token}` });
 const uploadHeaders = (operation: string) => ({ ...headers(), "Content-Type": "image/png", "Idempotency-Key": operation });
 async function database() { const client = new Client(); await client.connect(); return client; }
@@ -34,12 +34,12 @@ Given("添付検証専用の担当者と応募者が存在する", async ({ page
   const role = await createPermissionRole(request, owner, `添付検証-${suffix}`, ["RECRUITMENT_VIEW", "RECRUITMENT_MANAGE", "RECRUITMENT_ATTACHMENT_VIEW", "RECRUITMENT_ATTACHMENT_MANAGE", "STORE_VIEW",]);
   email = `attachment-${suffix}@example.invalid`;
   const password = randomUUID();
-  const staff = await request.post("/api/admin/staff", { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, data: { email, password, display_name: "添付検証担当", role_ids: [role], store_scope_type: "SPECIFIC_STORES", store_ids: [Number(STORE1_ID)] } });
+  const staff = await request.post("/api/staff", { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, data: { email, password, display_name: "添付検証担当", role_ids: [role], store_scope_type: "SPECIFIC_STORES", store_ids: [Number(STORE1_ID)] } });
   expect(staff.status(), await staff.text()).toBe(201);
   const login = await request.post("/api/auth/login", { data: { email, password } });
   expect(login.status()).toBe(200);
   token = (await login.json()).token;
-  const applicant = await request.post("/api/store/applicants", { headers: headers(), data: { name: `画像検証-${suffix}`, channel: "WEB", source_type: "DIRECT" } });
+  const applicant = await request.post("/api/applicants", { headers: headers(), data: { name: `画像検証-${suffix}`, channel: "WEB", source_type: "DIRECT" } });
   expect(applicant.status(), await applicant.text()).toBe(201);
   applicantId = (await applicant.json()).id;
   await page.goto(`${APP_URL}/auth/login`);
@@ -48,7 +48,7 @@ Given("添付検証専用の担当者と応募者が存在する", async ({ page
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard\/?$/, { timeout: 20000 });
   image = Buffer.from(await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 8; canvas.height = 8; return canvas.toDataURL('image/png').split(',')[1]; }), 'base64');
-  const policy = await request.get('/api/store/applicants/attachment-policy', { headers: headers() });
+  const policy = await request.get('/api/applicants/attachment-policy', { headers: headers() });
   expect(policy.status()).toBe(200);
   expect((await policy.json()).configured).toBe(true);
 });
@@ -185,7 +185,7 @@ Then("添付は認証取得だけに公開され店外と権限不足を拒否�
     expect((await request.get(operationPath, { headers: { ...headers(), 'X-Store-ID': String(other) } })).status()).toBe(403);
     const hidden = `outside-${randomUUID()}`;
     await client.query('INSERT INTO t_applicants (id,store_id,name,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence) SELECT $1,$2,$3,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence FROM t_applicants WHERE id=$4', [hidden,other,'別店舗応募者',applicantId]);
-    try { expect((await request.get(`/api/store/applicants/${hidden}/attachment-operations/${key}`, { headers: headers() })).status()).toBe(404); }
+    try { expect((await request.get(`/api/applicants/${hidden}/attachment-operations/${key}`, { headers: headers() })).status()).toBe(404); }
     finally { await client.query('delete from t_applicants where id=$1',[hidden]); }
 
   } finally { await client.end(); }

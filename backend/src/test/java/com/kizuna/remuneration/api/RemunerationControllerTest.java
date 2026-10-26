@@ -17,9 +17,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.cast.remuneration.RemunerationPersonLookup;
 import com.kizuna.order.remuneration.OrderRemunerationFacts;
 import com.kizuna.remuneration.api.me.SelfRemunerationStatementController;
-import com.kizuna.remuneration.api.store.BonusController;
-import com.kizuna.remuneration.api.store.GuaranteeController;
-import com.kizuna.remuneration.api.store.RemunerationStatementController;
 import com.kizuna.remuneration.application.RemunerationManagementService;
 import com.kizuna.remuneration.application.RemunerationStatementService;
 import com.kizuna.remuneration.domain.BonusAward;
@@ -128,7 +125,7 @@ class RemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"/store/remuneration-statements", "/me/remuneration-statements"})
+  @ValueSource(strings = {"/remuneration-statements", "/me/remuneration-statements"})
   void safeStatementUsesDailyTopUpAndAuthenticatedPerson(String path) throws Exception {
     mvc.perform(
             get(path)
@@ -150,10 +147,7 @@ class RemunerationControllerTest {
     when(people.require(7L, 34L)).thenReturn(new RemunerationPersonLookup.Person(34L, "本人", "七号店"));
     when(records.timeline(7L, 34L)).thenReturn(Optional.empty());
     when(records.terms(eq(7L), eq(34L), any())).thenReturn(new PageImpl<>(List.of()));
-    mvc.perform(
-            get("/store/remuneration-guarantees")
-                .header("X-Store-ID", "7")
-                .param("person_id", "34"))
+    mvc.perform(get("/remuneration-guarantees").header("X-Store-ID", "7").param("person_id", "34"))
         .andExpect(status().isOk());
     verify(people).require(7L, 34L);
     verify(records).terms(eq(7L), eq(34L), any());
@@ -171,7 +165,7 @@ class RemunerationControllerTest {
         .when(records)
         .persist(any());
     mvc.perform(
-            post("/store/bonus-awards")
+            post("/bonus-awards")
                 .principal(() -> "person@example.test")
                 .with(csrf())
                 .header("X-Store-ID", "7")
@@ -203,12 +197,7 @@ class RemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "/store/remuneration-statements",
-        "/store/remuneration-guarantees",
-        "/store/bonus-awards"
-      })
+  @ValueSource(strings = {"/remuneration-statements", "/remuneration-guarantees", "/bonus-awards"})
   void allPersonReadsCheckHistoricalStoreRelation(String path) throws Exception {
     mvc.perform(
             get(path)
@@ -225,7 +214,7 @@ class RemunerationControllerTest {
     var term = new GuaranteeTerm(999L, DAY, GuaranteeState.ACTIVE, 10000L, "日額");
     when(records.bonus(1L, "b")).thenReturn(bonus);
     when(records.term(1L, "g")).thenReturn(term);
-    for (String base : List.of("/store/bonus-awards/b", "/store/remuneration-guarantees/g")) {
+    for (String base : List.of("/bonus-awards/b", "/remuneration-guarantees/g")) {
       mvc.perform(get(base + "/changes").header("X-Store-ID", "1"))
           .andExpect(status().isNotFound());
       String correction =
@@ -259,7 +248,7 @@ class RemunerationControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void orderPermissionDoesNotGrantNewMoneyReads() throws Exception {
     mvc.perform(
-            get("/store/remuneration-statements")
+            get("/remuneration-statements")
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09"))
@@ -270,7 +259,7 @@ class RemunerationControllerTest {
   @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_REMUNERATION_VIEW"})
   void readingDoesNotGrantBonusWrite() throws Exception {
     mvc.perform(
-            post("/store/bonus-awards")
+            post("/bonus-awards")
                 .with(csrf())
                 .header("X-Store-ID", "1")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -283,7 +272,7 @@ class RemunerationControllerTest {
   @WithMockUser(authorities = {"PERM_ORDER_SET_VIEW", "PERM_REMUNERATION_VIEW"})
   void crossStoreViewerReadsCurrentStoreStatement() throws Exception {
     mvc.perform(
-            get("/store/remuneration-statements")
+            get("/remuneration-statements")
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09"))
@@ -292,7 +281,7 @@ class RemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"/store/remuneration-guarantees", "/store/bonus-awards"})
+  @ValueSource(strings = {"/remuneration-guarantees", "/bonus-awards"})
   @WithMockUser(authorities = {"PERM_ORDER_SET_VIEW", "PERM_REMUNERATION_VIEW"})
   void crossStoreViewerDoesNotReachStoreOnlyReads(String path) throws Exception {
     mvc.perform(
@@ -304,7 +293,7 @@ class RemunerationControllerTest {
   @ValueSource(strings = {"0", "101", "-1"})
   void pageLimitsAreValidated(String size) throws Exception {
     mvc.perform(
-            get("/store/remuneration-statements")
+            get("/remuneration-statements")
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09")

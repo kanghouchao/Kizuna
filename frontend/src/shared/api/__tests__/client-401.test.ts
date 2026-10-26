@@ -94,7 +94,7 @@ describe('apiClient 401/403 interceptor', () => {
     sessionKindValue = 'STORE_MANAGER';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(403, () => apiClient.get('/store/orders'));
+    await withRejectingAdapter(403, () => apiClient.get('/orders'));
 
     expect(removeSpy).toHaveBeenCalledWith('token');
     expect(clearSessionMock).toHaveBeenCalled();
@@ -108,7 +108,7 @@ describe('apiClient 401/403 interceptor', () => {
       sessionKindValue = value;
       const removeSpy = jest.spyOn(Cookies, 'remove');
 
-      await withRejectingAdapter(403, () => apiClient.get('/store/orders'));
+      await withRejectingAdapter(403, () => apiClient.get('/orders'));
 
       expect(removeSpy).toHaveBeenCalledWith('token');
       expect(clearSessionMock).toHaveBeenCalled();
@@ -119,7 +119,7 @@ describe('apiClient 401/403 interceptor', () => {
     sessionKindValue = 'admin';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(403, () => apiClient.get('/admin/stores'));
+    await withRejectingAdapter(403, () => apiClient.get('/stores'));
 
     expect(removeSpy).not.toHaveBeenCalledWith('token');
     expect(clearSessionMock).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ describe('apiClient 401/403 interceptor', () => {
     sessionKindValue = 'member';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
-    await withRejectingAdapter(403, () => apiClient.get('/admin/staff'));
+    await withRejectingAdapter(403, () => apiClient.get('/staff'));
 
     expect(removeSpy).not.toHaveBeenCalledWith('token');
     expect(clearSessionMock).not.toHaveBeenCalled();

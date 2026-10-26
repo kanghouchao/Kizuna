@@ -45,7 +45,7 @@ let createdOrderId = "";
 
 /**
  * 未処理の予約申請のうち、このシナリオの会員が出したものの id を引く
- * （GET /api/store/order-applications の受付箱）。UI から出した申請は応答を取り損ねると id が
+ * （GET /api/order-applications の受付箱）。UI から出した申請は応答を取り損ねると id が
  * 手元に無いため、後片付けはこの引き直しを拠り所にする。
  */
 async function findPendingApplicationIds(
@@ -53,7 +53,7 @@ async function findPendingApplicationIds(
   token: string,
   code: string,
 ): Promise<string[]> {
-  const res = await request.get("/api/store/order-applications", {
+  const res = await request.get("/api/order-applications", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     params: { statuses: "PENDING", size: 100 },
   });

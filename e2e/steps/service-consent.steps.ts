@@ -149,7 +149,7 @@ When(
     const [response] = await Promise.all([
       managerPage.waitForResponse(
         (resp) =>
-          resp.url().endsWith("/api/store/orders") &&
+          resp.url().endsWith("/api/orders") &&
           resp.request().method() === "POST",
       ),
       managerPage
@@ -176,7 +176,7 @@ Then("店長が一覧の要対応から特殊サービスを修復し開始す�
   const [updated] = await Promise.all([
     page.waitForResponse(
       (resp) =>
-        resp.url().endsWith(`/api/store/orders/${specialOrderId}`) &&
+        resp.url().endsWith(`/api/orders/${specialOrderId}`) &&
         resp.request().method() === "PUT",
     ),
     page

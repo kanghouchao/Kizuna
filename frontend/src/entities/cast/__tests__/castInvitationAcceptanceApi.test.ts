@@ -19,25 +19,25 @@ describe('castInvitationAcceptanceApi', () => {
     mockedPost.mockClear();
   });
 
-  it('view は /admin/cast-invitations/view へトークンを本文で POST する', async () => {
+  it('view は /cast-invitations/view へトークンを本文で POST する', async () => {
     await castInvitationAcceptanceApi.view(TOKEN);
 
-    expect(mockedPost).toHaveBeenCalledWith('/admin/cast-invitations/view', { token: TOKEN });
+    expect(mockedPost).toHaveBeenCalledWith('/cast-invitations/view', { token: TOKEN });
   });
 
-  it('acceptAsNewUser は /admin/cast-invitations/acceptance へ登録内容とトークンを本文で POST する', async () => {
+  it('acceptAsNewUser は /cast-invitations/acceptance へ登録内容とトークンを本文で POST する', async () => {
     await castInvitationAcceptanceApi.acceptAsNewUser(TOKEN, PAYLOAD);
 
-    expect(mockedPost).toHaveBeenCalledWith('/admin/cast-invitations/acceptance', {
+    expect(mockedPost).toHaveBeenCalledWith('/cast-invitations/acceptance', {
       ...PAYLOAD,
       token: TOKEN,
     });
   });
 
-  it('acceptAsExistingUser は /admin/cast-invitations/acceptance/existing へトークンを本文で POST する', async () => {
+  it('acceptAsExistingUser は /cast-invitations/acceptance/existing へトークンを本文で POST する', async () => {
     await castInvitationAcceptanceApi.acceptAsExistingUser(TOKEN);
 
-    expect(mockedPost).toHaveBeenCalledWith('/admin/cast-invitations/acceptance/existing', {
+    expect(mockedPost).toHaveBeenCalledWith('/cast-invitations/acceptance/existing', {
       token: TOKEN,
     });
   });

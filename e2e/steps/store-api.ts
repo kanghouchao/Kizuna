@@ -7,7 +7,7 @@ import {
 } from "@playwright/test";
 import { APP_URL } from "../base-url";
 
-// store1 は initial-setup プロジェクトが最初に登録する店舗（store_id=1）。店舗を要する store API は
+// store1 は initial-setup プロジェクトが最初に登録する店舗（store_id=1）。店舗を要する API は
 // 店舗を X-Store-ID ヘッダだけから受け取る。
 export const STORE1_ID = "1";
 export const STORE_HEADERS = { "X-Store-ID": STORE1_ID };
@@ -17,7 +17,7 @@ export const ADMIN_PASSWORD = "pass1234";
 /**
  * 店長（store1/store2 双方に授権。initial-setup プロジェクトが作成する）でログインし
  * JWT を返す。返却トークンは STORE_HEADERS（X-Store-ID）と併用することで
- * /store/** に店舗文脈を確立できる。/auth/login は CSRF 免除。
+ * 店舗を要する API に店舗文脈を確立できる。/auth/login は CSRF 免除。
  */
 export async function loginAsStoreAdmin(
   request: APIRequestContext,
@@ -71,7 +71,7 @@ export async function switchStoreInHeader(page: Page, storeName: string): Promis
 }
 
 /**
- * template_key を変更する（PUT /store/config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。
+ * template_key を変更する（PUT /config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。
  * backend は Jackson SNAKE_CASE 設定のため JSON キーは template_key。
  * Bearer トークン付きリクエストは CSRF 免除。
  */
@@ -80,7 +80,7 @@ export async function setTemplateKey(
   token: string,
   templateKey: string,
 ): Promise<void> {
-  const res = await request.put("/api/store/config", {
+  const res = await request.put("/api/config", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { template_key: templateKey },
   });
@@ -91,11 +91,11 @@ export async function setTemplateKey(
   }
 }
 
-/** 公開設定から現在の template_key を取得する（GET /store/config/public）。 */
+/** 公開設定から現在の template_key を取得する（GET /config/public）。 */
 export async function getPublicTemplateKey(
   request: APIRequestContext,
 ): Promise<string> {
-  const res = await request.get("/api/store/config/public", {
+  const res = await request.get("/api/config/public", {
     headers: STORE_HEADERS,
   });
   if (!res.ok()) {
@@ -107,12 +107,12 @@ export async function getPublicTemplateKey(
   return body.template_key as string;
 }
 
-/** 管理画面向けの店舗設定を取得する（GET /store/config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。 */
+/** 管理画面向けの店舗設定を取得する（GET /config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。 */
 export async function getStoreConfig(
   request: APIRequestContext,
   token: string,
 ): Promise<Record<string, unknown>> {
-  const res = await request.get("/api/store/config", {
+  const res = await request.get("/api/config", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
@@ -124,7 +124,7 @@ export async function getStoreConfig(
 }
 
 /**
- * custom_texts のみ更新する（PUT /store/config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。
+ * custom_texts のみ更新する（PUT /config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。
  * MapStruct が NullValuePropertyMappingStrategy.IGNORE のため、他フィールドは送らず不変のまま。
  */
 export async function setCustomTexts(
@@ -132,7 +132,7 @@ export async function setCustomTexts(
   token: string,
   customTexts: Record<string, string>,
 ): Promise<void> {
-  const res = await request.put("/api/store/config", {
+  const res = await request.put("/api/config", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { custom_texts: customTexts },
   });
@@ -143,14 +143,14 @@ export async function setCustomTexts(
   }
 }
 
-/** キャストを作成し id を返す（POST /api/store/casts, hasAuthority('CAST_MANAGE')）。 */
+/** キャストを作成し id を返す（POST /api/casts, hasAuthority('CAST_MANAGE')）。 */
 export async function createUnpublishedCast(
   request: APIRequestContext,
   token: string,
   name: string,
   storeId: string = STORE1_ID,
 ): Promise<string> {
-  const response = await request.post("/api/store/casts", {
+  const response = await request.post("/api/casts", {
     headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
     data: { name },
   });
@@ -165,7 +165,7 @@ export async function setCastPublication(
   publicationStatus: "PUBLISHED" | "UNPUBLISHED",
   storeId: string = STORE1_ID,
 ): Promise<void> {
-  const response = await request.patch(`/api/store/casts/${id}/publication`, {
+  const response = await request.patch(`/api/casts/${id}/publication`, {
     headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
     data: { publication_status: publicationStatus },
   });
@@ -184,35 +184,35 @@ export async function createCast(
 }
 
 export async function renameCast(request: APIRequestContext, token: string, id: string, name: string): Promise<void> {
-  const response = await request.put(`/api/store/casts/${id}`, {
+  const response = await request.put(`/api/casts/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { name },
   });
   expect(response.status(), await response.text()).toBe(200);
 }
 
 export async function resumeCast(request: APIRequestContext, token: string, id: string): Promise<void> {
-  const response = await request.post(`/api/store/casts/${id}/resumption`, {
+  const response = await request.post(`/api/casts/${id}/resumption`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   expect(response.status(), await response.text()).toBe(200);
 }
 
 export async function castStatusHistory(request: APIRequestContext, token: string, id: string): Promise<{ content: { id: string; actor_id: number; new_status: string }[] }> {
-  const response = await request.get(`/api/store/casts/${id}/status-histories`, {
+  const response = await request.get(`/api/casts/${id}/status-histories`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   expect(response.status(), await response.text()).toBe(200);
   return response.json();
 }
 
-/** キャストを削除する（DELETE /api/store/casts/{id}, hasAuthority('CAST_MANAGE')）。 */
+/** キャストを削除する（DELETE /api/casts/{id}, hasAuthority('CAST_MANAGE')）。 */
 export async function deleteCast(
   request: APIRequestContext,
   token: string,
   id: string,
   storeId: string = STORE1_ID,
 ): Promise<void> {
-  const res = await request.delete(`/api/store/casts/${id}`, {
+  const res = await request.delete(`/api/casts/${id}`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -237,7 +237,7 @@ export async function createCastFieldDefinition(
   token: string,
   params: CreateCastFieldDefinitionParams,
 ): Promise<string> {
-  const res = await request.post("/api/store/casts/fields", {
+  const res = await request.post("/api/casts/fields", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { key: params.key, label: params.label, is_public: params.isPublic },
   });
@@ -251,7 +251,7 @@ export async function deleteCastFieldDefinition(
   token: string,
   id: string,
 ): Promise<void> {
-  const res = await request.delete(`/api/store/casts/fields/${id}`, {
+  const res = await request.delete(`/api/casts/fields/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   expect(res.status(), await res.text()).toBe(204);
@@ -270,7 +270,7 @@ export async function listCastFieldDefinitions(
   token: string,
   storeId: string = STORE1_ID,
 ): Promise<CastFieldDefinition[]> {
-  const response = await request.get("/api/store/casts/fields", {
+  const response = await request.get("/api/casts/fields", {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -282,7 +282,7 @@ export async function listCastFieldDefinitions(
 }
 
 export async function updateCastFieldDefinition(request: APIRequestContext, token: string, id: string, data: { label?: string; display_order?: number; is_public?: boolean }): Promise<CastFieldDefinition> {
-  const response = await request.put(`/api/store/casts/fields/${id}`, {
+  const response = await request.put(`/api/casts/fields/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data,
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -290,14 +290,14 @@ export async function updateCastFieldDefinition(request: APIRequestContext, toke
 }
 
 export async function setCastCustomFields(request: APIRequestContext, token: string, id: string, values: Record<string, string>): Promise<void> {
-  const response = await request.put(`/api/store/casts/${id}`, {
+  const response = await request.put(`/api/casts/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data: { custom_fields: values },
   });
   expect(response.status(), await response.text()).toBe(200);
 }
 
 export async function getCastCustomFields(request: APIRequestContext, token: string, id: string): Promise<Record<string, string>> {
-  const response = await request.get(`/api/store/casts/${id}`, {
+  const response = await request.get(`/api/casts/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -305,7 +305,7 @@ export async function getCastCustomFields(request: APIRequestContext, token: str
 }
 
 export async function castFieldSnapshots(request: APIRequestContext, token: string, id: string): Promise<{content: {id: string; actor_id: number; custom_fields: Record<string, string>}[]}> {
-  const response = await request.get(`/api/store/casts/${id}/snapshots`, {
+  const response = await request.get(`/api/casts/${id}/snapshots`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -327,7 +327,7 @@ export async function listShifts(
   from: string,
   to: string,
 ): Promise<{ id: string }[]> {
-  const response = await request.get("/api/store/shifts", {
+  const response = await request.get("/api/shifts", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     params: { from, to },
   });
@@ -335,13 +335,13 @@ export async function listShifts(
   return response.json();
 }
 
-/** シフトを作成し id を返す（POST /api/store/shifts, hasAuthority('PERM_SHIFT_MANAGE')）。 */
+/** シフトを作成し id を返す（POST /api/shifts, hasAuthority('PERM_SHIFT_MANAGE')）。 */
 export async function createShift(
   request: APIRequestContext,
   token: string,
   params: CreateShiftParams,
 ): Promise<string> {
-  const res = await request.post("/api/store/shifts", {
+  const res = await request.post("/api/shifts", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: {
       cast_id: params.castId,
@@ -358,13 +358,13 @@ export async function createShift(
   return body.id as string;
 }
 
-/** シフトを削除する（DELETE /api/store/shifts/{id}, hasAuthority('PERM_SHIFT_MANAGE')）。 */
+/** シフトを削除する（DELETE /api/shifts/{id}, hasAuthority('PERM_SHIFT_MANAGE')）。 */
 export async function deleteShift(
   request: APIRequestContext,
   token: string,
   id: string,
 ): Promise<void> {
-  const res = await request.delete(`/api/store/shifts/${id}`, {
+  const res = await request.delete(`/api/shifts/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
@@ -372,14 +372,14 @@ export async function deleteShift(
   }
 }
 
-/** キャスト招待を発行し token を返す（POST /api/store/casts/{id}/invitation, hasAuthority('PERM_CAST_INVITE')）。 */
+/** キャスト招待を発行し token を返す（POST /api/casts/{id}/invitation, hasAuthority('PERM_CAST_INVITE')）。 */
 export async function issueCastInvitation(
   request: APIRequestContext,
   token: string,
   castId: string,
   storeId: string = STORE1_ID,
 ): Promise<string> {
-  const res = await request.post(`/api/store/casts/${castId}/invitation`, {
+  const res = await request.post(`/api/casts/${castId}/invitation`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -397,7 +397,7 @@ export async function issueCastInvitation(
 
 /**
  * キャスト招待を新規登録で受諾し、CAST 用のグループ共通アカウントを作成する
- * （POST /api/admin/cast-invitations/acceptance, PermitAll）。
+ * （POST /api/cast-invitations/acceptance, PermitAll）。
  * トークンはパスではなく本文で送る（パスはアクセスログに残るため）。
  * X-Store-ID は付けない（店舗を X-Store-ID から受け取るのは @CurrentStore を宣言する handler だけで、この端点は宣言しない）。
  */
@@ -408,7 +408,7 @@ export async function acceptCastInvitation(
   password: string,
   displayName: string,
 ): Promise<void> {
-  const res = await request.post("/api/admin/cast-invitations/acceptance", {
+  const res = await request.post("/api/cast-invitations/acceptance", {
     data: {
       token: invitationToken,
       email,
@@ -423,14 +423,14 @@ export async function acceptCastInvitation(
   }
 }
 
-/** 出勤希望を承認する（POST /api/store/shift-requests/{id}/approval, hasAuthority('PERM_SHIFT_MANAGE')）。 */
+/** 出勤希望を承認する（POST /api/shift-requests/{id}/approval, hasAuthority('PERM_SHIFT_MANAGE')）。 */
 export async function approveShiftRequest(
   request: APIRequestContext,
   token: string,
   id: string,
   published?: boolean,
 ): Promise<{ shift_id: string }> {
-  const res = await request.post(`/api/store/shift-requests/${id}/approval`, {
+  const res = await request.post(`/api/shift-requests/${id}/approval`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     ...(published === undefined ? {} : { data: { published } }),
   });
@@ -438,14 +438,14 @@ export async function approveShiftRequest(
   return res.json();
 }
 
-/** 会員を自助登録し会員コードを返す（POST /api/admin/members, 匿名・CSRF 免除）。 */
+/** 会員を自助登録し会員コードを返す（POST /api/members, 匿名・CSRF 免除）。 */
 export async function registerMember(
   request: APIRequestContext,
   email: string,
   password: string,
   displayName: string,
 ): Promise<string> {
-  const res = await request.post("/api/admin/members", {
+  const res = await request.post("/api/members", {
     data: { email, password, display_name: displayName },
   });
   if (!res.ok()) {
@@ -457,14 +457,14 @@ export async function registerMember(
   return body.member_code as string;
 }
 
-/** 顧客を作成し id を返す（POST /api/store/customers, hasAuthority('CUSTOMER_MANAGE')）。 */
+/** 顧客を作成し id を返す（POST /api/customers, hasAuthority('CUSTOMER_MANAGE')）。 */
 export async function createCustomer(
   request: APIRequestContext,
   token: string,
   name: string,
   contacts: { type: "PHONE" | "EMAIL" | "LINE"; value: string }[] = [],
 ): Promise<string> {
-  const res = await request.post("/api/store/customers", {
+  const res = await request.post("/api/customers", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { name, contacts },
   });
@@ -486,7 +486,7 @@ export async function adjustCustomerPoints(
   storeId: string = STORE1_ID,
 ): Promise<void> {
   const response = await request.post(
-    `/api/store/customers/${customerId}/point-adjustments`,
+    `/api/customers/${customerId}/point-adjustments`,
     {
       headers: {
         ...STORE_HEADERS,
@@ -515,7 +515,7 @@ export async function updateCustomer(
     ng_content?: string;
   },
 ): Promise<void> {
-  const response = await request.put(`/api/store/customers/${id}`, {
+  const response = await request.put(`/api/customers/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data,
   });
@@ -533,7 +533,7 @@ export async function addCustomerContact(
   type: "PHONE" | "EMAIL" | "LINE",
   value: string,
 ): Promise<string> {
-  const response = await request.post(`/api/store/customers/${id}/contacts`, {
+  const response = await request.post(`/api/customers/${id}/contacts`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { type, value },
   });
@@ -552,7 +552,7 @@ export async function preferCustomerContact(
   contactId: string | null,
 ): Promise<void> {
   const response = await request.put(
-    `/api/store/customers/${customerId}/contact-preferences/${type}`,
+    `/api/customers/${customerId}/contact-preferences/${type}`,
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
       data: { contact_id: contactId },
@@ -564,13 +564,13 @@ export async function preferCustomerContact(
     );
 }
 
-/** 顧客を削除する（DELETE /api/store/customers/{id}, hasAuthority('CUSTOMER_MANAGE')）。 */
+/** 顧客を削除する（DELETE /api/customers/{id}, hasAuthority('CUSTOMER_MANAGE')）。 */
 export async function deleteCustomer(
   request: APIRequestContext,
   token: string,
   id: string,
 ): Promise<void> {
-  const res = await request.delete(`/api/store/customers/${id}`, {
+  const res = await request.delete(`/api/customers/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
@@ -580,7 +580,7 @@ export async function deleteCustomer(
   }
 }
 
-/** 会員コードを顧客台帳へ紐づける（POST /api/store/customers/{id}/member-link）。 */
+/** 会員コードを顧客台帳へ紐づける（POST /api/customers/{id}/member-link）。 */
 export async function linkMemberToCustomer(
   request: APIRequestContext,
   token: string,
@@ -589,7 +589,7 @@ export async function linkMemberToCustomer(
   operation?: { expected_link_id: string; operation_reason: string },
 ): Promise<void> {
   const res = await request.post(
-    `/api/store/customers/${customerId}/member-link`,
+    `/api/customers/${customerId}/member-link`,
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
       data: { member_code: memberCode, ...operation },
@@ -601,7 +601,7 @@ export async function linkMemberToCustomer(
 }
 
 /**
- * 予約申請を理由付きで謝絶する（POST /api/store/order-applications/{id}/refusal,
+ * 予約申請を理由付きで謝絶する（POST /api/order-applications/{id}/refusal,
  * hasAuthority('ORDER_MANAGE')）。申請行は終端（DECLINED）で残り続けるが、受付箱からは外れる。
  */
 export async function declineApplication(
@@ -611,7 +611,7 @@ export async function declineApplication(
   reason: string,
 ): Promise<void> {
   const res = await request.post(
-    `/api/store/order-applications/${id}/refusal`,
+    `/api/order-applications/${id}/refusal`,
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
       data: { reason },
@@ -645,7 +645,7 @@ export async function getOrder(
   accrued_remuneration: number;
   fee_lines: { kind: string; amount: number; system_owned: boolean }[];
 }> {
-  const response = await request.get(`${APP_URL}/api/store/orders/${id}`, {
+  const response = await request.get(`${APP_URL}/api/orders/${id}`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -657,7 +657,7 @@ export async function getOrder(
 }
 
 /**
- * 確定済みの受注を理由付きで取消す（POST /api/store/orders/{id}/cancellation,
+ * 確定済みの受注を理由付きで取消す（POST /api/orders/{id}/cancellation,
  * hasAuthority('ORDER_MANAGE')）。
  *
  * 受注を消す口は無い（ADR 0013 — 誤登録も行を消さず取消として残す）ので、後片付けはこれが終端になる。
@@ -670,7 +670,7 @@ export async function cancelOrder(
   reason: string,
   storeId: string = STORE1_ID,
 ): Promise<void> {
-  const res = await request.post(`/api/store/orders/${id}/cancellation`, {
+  const res = await request.post(`/api/orders/${id}/cancellation`, {
     headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
     data: { reason },
   });
@@ -695,7 +695,7 @@ export async function getAuthorizedStores(
   request: APIRequestContext,
   token: string,
 ): Promise<{ id: number; name: string }[]> {
-  const response = await request.get("/api/admin/stores/me", {
+  const response = await request.get("/api/stores/me", {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(response.ok()).toBeTruthy();
@@ -708,7 +708,7 @@ export async function acceptExistingCastInvitation(
   invitation: string,
 ): Promise<void> {
   const response = await request.post(
-    "/api/admin/cast-invitations/acceptance/existing",
+    "/api/cast-invitations/acceptance/existing",
     {
       headers: { Authorization: `Bearer ${token}` },
       data: { token: invitation },
@@ -723,7 +723,7 @@ export async function withdrawCast(
   castId: string,
   storeId: string = STORE1_ID,
 ): Promise<void> {
-  const response = await request.post(`/api/store/casts/${castId}/withdrawal`, {
+  const response = await request.post(`/api/casts/${castId}/withdrawal`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -739,7 +739,7 @@ export async function suspendCast(
   castId: string,
   storeId: string = STORE1_ID,
 ): Promise<void> {
-  const response = await request.post(`/api/store/casts/${castId}/suspension`, {
+  const response = await request.post(`/api/casts/${castId}/suspension`, {
     headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
   });
   expect(response.status()).toBe(200);
@@ -759,9 +759,9 @@ export async function correctOrderExtension(
     reason,
     fee_lines: [{ kind: "EXTENSION", name: "追加延長", duration_minutes: 30, amount: 4000, remuneration: 2000 }],
   };
-  const preview = await request.post(`/api/store/orders/${orderId}/correction-preview`, { headers, data });
+  const preview = await request.post(`/api/orders/${orderId}/correction-preview`, { headers, data });
   expect(preview.status(), await preview.text()).toBe(200);
-  const response = await request.post(`/api/store/orders/${orderId}/corrections`, {
+  const response = await request.post(`/api/orders/${orderId}/corrections`, {
     headers,
     data: { ...data, confirmation_token: (await preview.json()).confirmation_token },
   });
@@ -774,7 +774,7 @@ export async function createSpecialService(
   name: string,
   storeId: string = STORE1_ID,
 ): Promise<string> {
-  const response = await request.post("/api/store/services", {
+  const response = await request.post("/api/services", {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -798,7 +798,7 @@ export async function reviseSpecialService(
   id: string,
   name: string,
 ): Promise<void> {
-  const response = await request.put(`/api/store/services/${id}`, {
+  const response = await request.put(`/api/services/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: {
       name,
@@ -817,7 +817,7 @@ export async function createCourse(
   name: string,
   storeId: string = STORE1_ID,
 ): Promise<string> {
-  const response = await request.post("/api/store/services", {
+  const response = await request.post("/api/services", {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -866,7 +866,7 @@ export async function getOrderReceptionists(
   request: APIRequestContext,
   token: string,
 ): Promise<{ id: number }[]> {
-  const response = await request.get("/api/store/orders/receptionists", {
+  const response = await request.get("/api/orders/receptionists", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   expect(response.status()).toBe(200);
@@ -895,8 +895,8 @@ export async function createAgreedOrder(
   const result = await submitConfirmedStoreRequest(
     request,
     token,
-    "/api/store/orders/preview",
-    "/api/store/orders",
+    "/api/orders/preview",
+    "/api/orders",
     data,
     "post",
     options.storeId,
@@ -916,8 +916,8 @@ export async function completeAgreedOrder(
   await submitConfirmedStoreRequest(
     request,
     token,
-    `/api/store/orders/${id}/completion-preview`,
-    `/api/store/orders/${id}/completion`,
+    `/api/orders/${id}/completion-preview`,
+    `/api/orders/${id}/completion`,
     data,
     "post",
     storeId,
@@ -934,7 +934,7 @@ export async function invalidateOrder(
   const headers = { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` };
   const order = await getOrder(request, token, storeId, id);
   const result = await request.post(
-    `/api/store/orders/${id}/completion-invalidation`,
+    `/api/orders/${id}/completion-invalidation`,
     { headers, data: { expected_version: order.version, reason } },
   );
   expect(result.status()).toBe(201);
@@ -947,7 +947,7 @@ export async function currentCustomerMemberLink(
   customerId: string,
 ) {
   const response = await request.get(
-    `/api/store/customers/${customerId}/member-link`,
+    `/api/customers/${customerId}/member-link`,
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     },
@@ -965,7 +965,7 @@ export async function releaseCustomerMemberLink(
   expectedLinkId: string,
   reason: string,
 ): Promise<void> {
-  const response = await request.post(`/api/store/customers/${customerId}/member-link/releases`, {
+  const response = await request.post(`/api/customers/${customerId}/member-link/releases`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { expected_link_id: expectedLinkId, operation_reason: reason },
   });
@@ -979,7 +979,7 @@ export async function customerMemberLinkHistory(
   customerId: string,
 ) {
   const response = await request.get(
-    `/api/store/customers/${customerId}/member-link/history`,
+    `/api/customers/${customerId}/member-link/history`,
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     },
@@ -991,49 +991,49 @@ export async function customerMemberLinkHistory(
 
 /** 使い捨てスタックで、既定ロールを変更せず検証用の権限集合を作る。 */
 export async function createPermissionRole(request: APIRequestContext, token: string, name: string, permissions: string[]): Promise<number> {
-  const response = await request.post('/api/admin/roles', { headers: { Authorization: `Bearer ${token}` }, data: { name, permissions } });
+  const response = await request.post('/api/roles', { headers: { Authorization: `Bearer ${token}` }, data: { name, permissions } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
 
 /** 検証専用スタッフを作り、既存アカウントの授権に影響を与えない。 */
 export async function createStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds?: number[]): Promise<number> {
-  const response = await request.post('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: storeIds ? 'SPECIFIC_STORES' : 'ALL_STORES', store_ids: storeIds ?? [] } });
+  const response = await request.post('/api/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: storeIds ? 'SPECIFIC_STORES' : 'ALL_STORES', store_ids: storeIds ?? [] } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
 
 export async function createStoreStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds: number[], storeId: string = STORE1_ID): Promise<number> {
-  const response = await request.post('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
+  const response = await request.post('/api/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
 
-/** 表示名を指定し、個別店舗に授権した従業員を作る（POST /admin/staff, PERM_STAFF_MANAGE）。 */
+/** 表示名を指定し、個別店舗に授権した従業員を作る（POST /staff, PERM_STAFF_MANAGE）。 */
 export async function createStaffAccount(request: APIRequestContext, token: string, staff: { email: string; password: string; displayName: string; roleIds: number[]; storeIds: number[] }): Promise<number> {
-  const response = await request.post('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email: staff.email, password: staff.password, display_name: staff.displayName, role_ids: staff.roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: staff.storeIds } });
+  const response = await request.post('/api/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email: staff.email, password: staff.password, display_name: staff.displayName, role_ids: staff.roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: staff.storeIds } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }
 
-/** 店舗を登録する（POST /admin/stores, PERM_STORE_MANAGE）。 */
+/** 店舗を登録する（POST /stores, PERM_STORE_MANAGE）。 */
 export async function createStore(request: APIRequestContext, token: string, store: { name: string; domain: string; email: string }): Promise<void> {
-  const response = await request.post('/api/admin/stores', { headers: { Authorization: `Bearer ${token}` }, data: store });
+  const response = await request.post('/api/stores', { headers: { Authorization: `Bearer ${token}` }, data: store });
   expect(response.status(), await response.text()).toBe(201);
 }
 
-/** ロール名から id を引く（GET /admin/roles, PERM_ROLE_MANAGE）。 */
+/** ロール名から id を引く（GET /roles, PERM_ROLE_MANAGE）。 */
 export async function findRoleIdByName(request: APIRequestContext, token: string, name: string): Promise<number> {
-  const response = await request.get('/api/admin/roles', { headers: { Authorization: `Bearer ${token}` } });
+  const response = await request.get('/api/roles', { headers: { Authorization: `Bearer ${token}` } });
   expect(response.status()).toBe(200);
   const role = ((await response.json()) as { id: number; name: string }[]).find((row) => row.name === name);
   expect(role, `ロール ${name} がありません`).toBeDefined();
   return role!.id;
 }
 
-/** 店舗ドメインから id を引く（GET /admin/stores, PERM_STORE_MANAGE）。検索は部分一致のため、ドメインの完全一致で選び直す。 */
+/** 店舗ドメインから id を引く（GET /stores, PERM_STORE_MANAGE）。検索は部分一致のため、ドメインの完全一致で選び直す。 */
 export async function findStoreIdByDomain(request: APIRequestContext, token: string, domain: string): Promise<string> {
-  const response = await request.get('/api/admin/stores', { headers: { Authorization: `Bearer ${token}` }, params: { search: domain } });
+  const response = await request.get('/api/stores', { headers: { Authorization: `Bearer ${token}` }, params: { search: domain } });
   expect(response.status()).toBe(200);
   const store = ((await response.json()).content as { id: string; domain: string }[]).find((row) => row.domain === domain);
   expect(store, `店舗 ${domain} がありません`).toBeDefined();
@@ -1045,9 +1045,9 @@ export async function createConsentingGuestApplication(
   request: APIRequestContext,
   email: string,
 ): Promise<string> {
-  const consent = await request.get('/api/store/order-applications/public/contact-consent', { headers: STORE_HEADERS });
+  const consent = await request.get('/api/order-applications/public/contact-consent', { headers: STORE_HEADERS });
   expect(consent.status()).toBe(200);
-  const response = await request.post('/api/store/order-applications/public', {
+  const response = await request.post('/api/order-applications/public', {
     headers: STORE_HEADERS,
     data: {
       business_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
@@ -1069,7 +1069,7 @@ export async function updateCustomerContact(
   value: string,
 ): Promise<void> {
   const response = await request.put(
-    `/api/store/customers/${customerId}/contacts/${contactId}`,
+    `/api/customers/${customerId}/contacts/${contactId}`,
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
       data: { type, value },
@@ -1089,7 +1089,7 @@ export async function changeCustomerContactPermission(
   reason: string,
 ): Promise<void> {
   const response = await request.put(
-    `/api/store/customers/${customerId}/contacts/${contactId}/permissions/${purpose}`,
+    `/api/customers/${customerId}/contacts/${contactId}/permissions/${purpose}`,
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
       data: { status, source, reason },
@@ -1105,7 +1105,7 @@ export async function deleteCustomerContact(
   contactId: string,
 ): Promise<void> {
   const response = await request.delete(
-    `/api/store/customers/${customerId}/contacts/${contactId}`,
+    `/api/customers/${customerId}/contacts/${contactId}`,
     { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` } },
   );
   expect(response.status()).toBe(204);
@@ -1128,7 +1128,7 @@ export async function listAuditEvents(
   token: string,
   action: string,
 ): Promise<{ content: AuditEventSummary[]; next_cursor?: string | null }> {
-  const response = await request.get("/api/admin/audit-events", {
+  const response = await request.get("/api/audit-events", {
     headers: { Authorization: `Bearer ${token}` },
     params: { action, size: 100 },
   });
@@ -1145,7 +1145,7 @@ export async function getAuditEvent(
   before_values: Record<string, string>;
   after_values: Record<string, string>;
 }> {
-  const response = await request.get(`/api/admin/audit-events/${id}`, {
+  const response = await request.get(`/api/audit-events/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(response.status()).toBe(200);
@@ -1161,13 +1161,13 @@ export async function mergeCustomers(
 ): Promise<void> {
   const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
   const preview = await request.post(
-    `/api/store/customers/${survivingId}/merge-preview`,
+    `/api/customers/${survivingId}/merge-preview`,
     { headers, data: { merged_customer_id: mergedId } },
   );
   expect(preview.status()).toBe(200);
   const selected = await preview.json();
   const response = await request.post(
-    `/api/store/customers/${survivingId}/merges`,
+    `/api/customers/${survivingId}/merges`,
     {
       headers,
       data: {
@@ -1226,7 +1226,7 @@ export async function declineShiftRequest(
   token: string,
   id: string,
 ): Promise<void> {
-  const res = await request.post(`/api/store/shift-requests/${id}/rejection`, {
+  const res = await request.post(`/api/shift-requests/${id}/rejection`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
   expect(res.status(), await res.text()).toBe(200);
@@ -1244,7 +1244,7 @@ export async function updateShift(
     status?: string;
   },
 ): Promise<void> {
-  const res = await request.put(`/api/store/shifts/${id}`, {
+  const res = await request.put(`/api/shifts/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data,
   });
@@ -1257,7 +1257,7 @@ export async function changeShiftPublication(
   id: string,
   published: boolean,
 ): Promise<void> {
-  const res = await request.put(`/api/store/shifts/${id}/publication`, {
+  const res = await request.put(`/api/shifts/${id}/publication`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { published },
   });
@@ -1275,7 +1275,7 @@ export async function recordAttendance(
     waiting_place?: string | null;
   },
 ): Promise<{ id: string }> {
-  const res = await request.post("/api/store/attendances", {
+  const res = await request.post("/api/attendances", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data,
   });
@@ -1294,7 +1294,7 @@ export async function correctAttendance(
     waiting_place?: string | null;
   },
 ): Promise<void> {
-  const res = await request.put(`/api/store/attendances/${id}`, {
+  const res = await request.put(`/api/attendances/${id}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data,
   });
@@ -1307,7 +1307,7 @@ export async function cancelAttendance(
   id: string,
   reason: string,
 ): Promise<void> {
-  const res = await request.post(`/api/store/attendances/${id}/cancellation`, {
+  const res = await request.post(`/api/attendances/${id}/cancellation`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     data: { reason },
   });
@@ -1328,7 +1328,7 @@ export async function deleteService(
   expectedVersion: number,
   storeId: string = STORE1_ID,
 ): Promise<void> {
-  const response = await request.delete(`/api/store/services/${id}`, {
+  const response = await request.delete(`/api/services/${id}`, {
     headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
     params: { expected_version: expectedVersion },
   });
@@ -1345,7 +1345,7 @@ export async function createBonusAward(
   storeId: string = STORE1_ID,
   requestId: string = crypto.randomUUID(),
 ): Promise<{ id: string; version: number }> {
-  const response = await request.post('/api/store/bonus-awards', {
+  const response = await request.post('/api/bonus-awards', {
     headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { person_id: personId, award_date: awardDate, amount, reason, request_id: requestId },
   });
@@ -1362,7 +1362,7 @@ export async function cancelBonusAward(
   storeId: string = STORE1_ID,
   requestId: string = crypto.randomUUID(),
 ): Promise<void> {
-  const response = await request.post(`/api/store/bonus-awards/${id}/cancellation`, {
+  const response = await request.post(`/api/bonus-awards/${id}/cancellation`, {
     headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { expected_version: expectedVersion, reason, request_id: requestId },
   });
@@ -1382,7 +1382,7 @@ export async function createAdvertisingCost(
   request: APIRequestContext, token: string, month: string, values: AdvertisingCostValues,
   storeId = STORE1_ID,
 ): Promise<{ id: string; version: number }> {
-  const response = await request.post('/api/store/advertising-costs', {
+  const response = await request.post('/api/advertising-costs', {
     headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { ...values, month, request_id: crypto.randomUUID() },
   });
@@ -1394,7 +1394,7 @@ export async function updateAdvertisingCost(
   request: APIRequestContext, token: string, cost: { id: string; version: number },
   values: AdvertisingCostValues, reason: string, storeId = STORE1_ID,
 ): Promise<{ id: string; version: number }> {
-  const response = await request.put(`/api/store/advertising-costs/${cost.id}`, {
+  const response = await request.put(`/api/advertising-costs/${cost.id}`, {
     headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { ...values, version: cost.version, reason, request_id: crypto.randomUUID() },
   });
@@ -1406,7 +1406,7 @@ export async function deleteAdvertisingCost(
   request: APIRequestContext, token: string, cost: { id: string; version: number },
   reason: string, storeId = STORE1_ID,
 ): Promise<void> {
-  const response = await request.delete(`/api/store/advertising-costs/${cost.id}`, {
+  const response = await request.delete(`/api/advertising-costs/${cost.id}`, {
     headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { version: cost.version, reason, request_id: crypto.randomUUID() },
   });
@@ -1416,7 +1416,7 @@ export async function deleteAdvertisingCost(
 export async function getRemunerationCandidates(
   request: APIRequestContext, token: string, search: string, storeId = STORE1_ID,
 ): Promise<{ content: { person_id: number }[] }> {
-  const response = await request.get('/api/store/monthly-remunerations/casts', {
+  const response = await request.get('/api/monthly-remunerations/casts', {
     headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     params: { search },
   });
@@ -1429,7 +1429,7 @@ export async function createRemunerationGuarantee(
   data: { person_id: number; effective_from: string; state: 'ACTIVE'; daily_amount: number; reason: string; expected_version: number },
   storeId = STORE1_ID,
 ): Promise<void> {
-  const response = await request.post('/api/store/remuneration-guarantees', {
+  const response = await request.post('/api/remuneration-guarantees', {
     headers: { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` },
     data: { ...data, request_id: crypto.randomUUID() },
   });
@@ -1451,7 +1451,7 @@ export async function getServiceSetting(
   id: string,
   storeId: string = STORE1_ID,
 ): Promise<{ id: string; version: number; deleted: boolean }> {
-  const response = await request.get(`/api/store/services/${id}`, {
+  const response = await request.get(`/api/services/${id}`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -1469,7 +1469,7 @@ export async function updateServiceSetting(
   data: ServiceSettingChange,
   storeId: string = STORE1_ID,
 ): Promise<{ id: string; version: number }> {
-  const response = await request.put(`/api/store/services/${id}`, {
+  const response = await request.put(`/api/services/${id}`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -1488,7 +1488,7 @@ export async function deleteServiceSetting(
   expectedVersion: number,
   storeId: string = STORE1_ID,
 ): Promise<void> {
-  const response = await request.delete(`/api/store/services/${id}`, {
+  const response = await request.delete(`/api/services/${id}`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -1545,7 +1545,7 @@ export async function listServiceRevisions(
   id: string,
   storeId: string = STORE1_ID,
 ): Promise<{ content: { id: string; version: number }[] }> {
-  const response = await request.get(`/api/store/services/${id}/revisions`, {
+  const response = await request.get(`/api/services/${id}/revisions`, {
     headers: {
       ...STORE_HEADERS,
       "X-Store-ID": storeId,
@@ -1562,7 +1562,7 @@ export async function findCastUserId(
   displayName: string,
 ): Promise<number> {
   const headers = { Authorization: `Bearer ${token}` };
-  const found = await request.get("/api/admin/casts", {
+  const found = await request.get("/api/cast-persons", {
     headers,
     params: { search: displayName },
   });
@@ -1573,7 +1573,7 @@ export async function findCastUserId(
   }[];
   const matching = rows.filter((row) => row.display_name === displayName);
   expect(matching).toHaveLength(1);
-  const detail = await request.get(`/api/admin/casts/${matching[0].id}`, {
+  const detail = await request.get(`/api/cast-persons/${matching[0].id}`, {
     headers,
   });
   expect(detail.status()).toBe(200);

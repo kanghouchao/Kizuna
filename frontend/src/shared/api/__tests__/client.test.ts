@@ -43,7 +43,7 @@ describe('apiClient request interceptor', () => {
       config,
     })) as AxiosAdapter;
 
-    const res = await apiClient.get('/store/me');
+    const res = await apiClient.get('/me');
     expect(res.config.headers.get('X-Store-ID')).toBe('42');
     expect(res.config.headers.get('X-XSRF-TOKEN')).toBeUndefined();
 

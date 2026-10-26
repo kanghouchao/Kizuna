@@ -14,11 +14,11 @@ global.fetch = jest.fn();
 describe('serverClient', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.STORE_LOOKUP_API_URL = 'http://test-backend';
+    process.env.STORE_LOOKUP_API_URL = 'http://test-backend/stores/lookup';
   });
 
   describe('resolveUrl', () => {
-    it('バックエンドURLをパスの先頭に付与すること', () => {
+    it('店舗照会 URL から導いたバックエンドURLをパスの先頭に付与すること', () => {
       expect(serverClient.resolveUrl('/test')).toBe('http://test-backend/test');
     });
 

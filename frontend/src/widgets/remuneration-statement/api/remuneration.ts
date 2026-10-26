@@ -9,8 +9,8 @@ import type {
   BonusInput,
   CancellationInput,
 } from '../model/types';
-const guaranteeBase = '/store/remuneration-guarantees';
-const bonusBase = '/store/bonus-awards';
+const guaranteeBase = '/remuneration-guarantees';
+const bonusBase = '/bonus-awards';
 export const remunerationApi = {
   async statement(
     scope: StatementScope,
@@ -19,7 +19,7 @@ export const remunerationApi = {
     bonusPage: number
   ): Promise<Statement> {
     const path =
-      scope.scope === 'store' ? '/store/remuneration-statements' : '/me/remuneration-statements';
+      scope.scope === 'store' ? '/remuneration-statements' : '/me/remuneration-statements';
     return (
       await apiClient.get<Statement>(path, {
         params: {

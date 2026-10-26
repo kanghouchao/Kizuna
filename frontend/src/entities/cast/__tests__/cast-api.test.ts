@@ -15,7 +15,7 @@ jest.mock('@/shared/api/client', () => ({
 const mockedGet = apiClient.get as jest.Mock;
 
 describe('castApi', () => {
-  it('list は /store/casts を GET し、Spring Page を PageResult へ正規化する', async () => {
+  it('list は /casts を GET し、Spring Page を PageResult へ正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
         content: [{ id: 'c1' }],
@@ -32,51 +32,51 @@ describe('castApi', () => {
       pageCount: 5,
       total: 100,
     });
-    expect(mockedGet).toHaveBeenCalledWith('/store/casts', { params: { page: 2, size: 20 } });
+    expect(mockedGet).toHaveBeenCalledWith('/casts', { params: { page: 2, size: 20 } });
   });
-  it('get は /store/casts/:id を GET する', async () => {
-    expect(await castApi.get('c1')).toEqual({ ok: true, url: '/store/casts/c1' });
+  it('get は /casts/:id を GET する', async () => {
+    expect(await castApi.get('c1')).toEqual({ ok: true, url: '/casts/c1' });
   });
-  it('create は /store/casts を POST する', async () => {
-    expect(await castApi.create({ name: 'A' })).toEqual({ ok: true, url: '/store/casts' });
+  it('create は /casts を POST する', async () => {
+    expect(await castApi.create({ name: 'A' })).toEqual({ ok: true, url: '/casts' });
   });
-  it('update は /store/casts/:id を PUT する', async () => {
-    expect(await castApi.update('c1', {})).toEqual({ ok: true, url: '/store/casts/c1' });
+  it('update は /casts/:id を PUT する', async () => {
+    expect(await castApi.update('c1', {})).toEqual({ ok: true, url: '/casts/c1' });
   });
-  it('delete は /store/casts/:id を DELETE する', async () => {
+  it('delete は /casts/:id を DELETE する', async () => {
     await expect(castApi.delete('c1')).resolves.toBeUndefined();
   });
-  it('listPublic は /store/casts/public を GET する', async () => {
-    expect(await castApi.listPublic()).toEqual({ ok: true, url: '/store/casts/public' });
+  it('listPublic は /casts/public を GET する', async () => {
+    expect(await castApi.listPublic()).toEqual({ ok: true, url: '/casts/public' });
   });
-  it('issueInvitation は /store/casts/:id/invitation を POST する', async () => {
+  it('issueInvitation は /casts/:id/invitation を POST する', async () => {
     expect(await castApi.issueInvitation('c1')).toEqual({
       ok: true,
-      url: '/store/casts/c1/invitation',
+      url: '/casts/c1/invitation',
     });
   });
 });
 
 describe('castFieldDefinitionApi', () => {
-  it('list は /store/casts/fields を GET する', async () => {
+  it('list は /casts/fields を GET する', async () => {
     expect(await castFieldDefinitionApi.list()).toEqual({
       ok: true,
-      url: '/store/casts/fields',
+      url: '/casts/fields',
     });
   });
-  it('create は /store/casts/fields を POST する', async () => {
+  it('create は /casts/fields を POST する', async () => {
     expect(await castFieldDefinitionApi.create({ key: 'blood_type', label: '血液型' })).toEqual({
       ok: true,
-      url: '/store/casts/fields',
+      url: '/casts/fields',
     });
   });
-  it('update は /store/casts/fields/:id を PUT する', async () => {
+  it('update は /casts/fields/:id を PUT する', async () => {
     expect(await castFieldDefinitionApi.update('f1', {})).toEqual({
       ok: true,
-      url: '/store/casts/fields/f1',
+      url: '/casts/fields/f1',
     });
   });
-  it('delete は /store/casts/fields/:id を DELETE する', async () => {
+  it('delete は /casts/fields/:id を DELETE する', async () => {
     await expect(castFieldDefinitionApi.delete('f1')).resolves.toBeUndefined();
   });
 });
@@ -118,7 +118,7 @@ it.each([
   ['withdraw', 'withdrawal'],
 ] as const)('%s は専用状態操作を POST する', async (method, path) => {
   await castApi[method]('c1');
-  expect(apiClient.post).toHaveBeenLastCalledWith(`/store/casts/c1/${path}`);
+  expect(apiClient.post).toHaveBeenLastCalledWith(`/casts/c1/${path}`);
 });
 
 it.each([
@@ -130,7 +130,7 @@ it.each([
     rows: [{ id: 'h1' }],
     nextCursor: 'next',
   });
-  expect(mockedGet).toHaveBeenLastCalledWith(`/store/casts/c1/${path}`, {
+  expect(mockedGet).toHaveBeenLastCalledWith(`/casts/c1/${path}`, {
     params: { cursor: 'before', size: 20 },
   });
 });

@@ -85,7 +85,7 @@ Then('候補を狭幅と両テーマでキーボード操作できる', async ({
 });
 
 Then('候補取得の失敗から再試行できる', async ({ page }) => {
-  const route = '**/api/store/customers/duplicates?*';
+  const route = '**/api/customers/duplicates?*';
   await page.route(route, r => r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: '取得に失敗しました' }) }));
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('重複候補の取得に失敗しました');

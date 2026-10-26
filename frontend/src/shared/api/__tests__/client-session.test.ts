@@ -43,7 +43,7 @@ describe('apiClient session branch', () => {
       return undefined;
     });
 
-  it.each(['/store/me', '/files'])(
+  it.each(['/orders', '/files'])(
     'injects X-Store-ID from the current-store cookie for %s requests from a store page',
     async url => {
       window.history.pushState({}, '', '/store/orders');
@@ -53,7 +53,24 @@ describe('apiClient session branch', () => {
     }
   );
 
-  it.each(['/store/me', '/files'])(
+  it.each(['/me', '/stores/me', '/menus/me'])(
+    'injects X-Store-ID for the group-level URL %s from a store page (the URL does not decide)',
+    async url => {
+      window.history.pushState({}, '', '/store/orders');
+      session('2');
+      const headers = await requestTo(url);
+      expect(headers['X-Store-ID']).toBe('2');
+    }
+  );
+
+  it('injects X-Store-ID on the /store page itself', async () => {
+    window.history.pushState({}, '', '/store');
+    session('2');
+    const headers = await requestTo('/orders');
+    expect(headers['X-Store-ID']).toBe('2');
+  });
+
+  it.each(['/orders', '/stores/me', '/files'])(
     'does not inject X-Store-ID for %s requests from a /admin page (group-wide assets stay in the shared area)',
     async url => {
       window.history.pushState({}, '', '/admin/settings');
@@ -63,12 +80,22 @@ describe('apiClient session branch', () => {
     }
   );
 
+  it.each(['/', '/stores', '/storefront/orders'])(
+    'does not inject X-Store-ID from %s, which is not under /store',
+    async pathname => {
+      window.history.pushState({}, '', pathname);
+      session('2');
+      const headers = await requestTo('/orders');
+      expect(headers['X-Store-ID']).toBeUndefined();
+    }
+  );
+
   it.each(['cast', 'member'])(
     'does not inject a stale current-store cookie for a %s session',
     async kind => {
       window.history.pushState({}, '', '/store/orders');
       session('2', kind);
-      const headers = await requestTo('/store/me');
+      const headers = await requestTo('/me');
       expect(headers['X-Store-ID']).toBeUndefined();
     }
   );
@@ -76,34 +103,28 @@ describe('apiClient session branch', () => {
   it('keeps the store a cross-store list names explicitly from a /admin page', async () => {
     window.history.pushState({}, '', '/admin/orders');
     session('2');
-    const headers = await requestTo('/store/orders/o1/corrections', { 'X-Store-ID': '5' });
+    const headers = await requestTo('/orders/o1/corrections', { 'X-Store-ID': '5' });
     expect(headers['X-Store-ID']).toBe('5');
-  });
-
-  it('does not inject X-Store-ID for /admin requests', async () => {
-    session('2');
-    const headers = await requestTo('/admin/configs');
-    expect(headers['X-Store-ID']).toBeUndefined();
   });
 
   it('does not inject X-Store-ID while no current store is resolved', async () => {
     window.history.pushState({}, '', '/store/orders');
     session(undefined);
-    const headers = await requestTo('/store/me');
+    const headers = await requestTo('/orders');
     expect(headers['X-Store-ID']).toBeUndefined();
   });
 
   it('ignores the store id in a legacy URL: the cookie, not the path, is the store context', async () => {
     window.history.pushState({}, '', '/store/9/orders');
     session('2');
-    const headers = await requestTo('/store/me');
+    const headers = await requestTo('/orders');
     expect(headers['X-Store-ID']).toBe('2');
   });
 
   it('does not write the current-store cookie from a response', async () => {
     window.history.pushState({}, '', '/store/orders');
     session('2');
-    await requestTo('/store/me');
+    await requestTo('/stores/me');
     expect(Cookies.set).not.toHaveBeenCalled();
   });
 
@@ -115,7 +136,7 @@ describe('apiClient session branch', () => {
       if (key === 'current-store-id') return '2';
       return undefined;
     });
-    const headers = await requestTo('/store/me');
+    const headers = await requestTo('/casts/public');
     expect(headers['X-Store-ID']).toBe('7');
   });
 });

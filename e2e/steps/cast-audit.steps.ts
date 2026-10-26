@@ -144,20 +144,20 @@ When(
       await renameCast(request, token, id, secret);
       await setCastPublication(request, token, id, "UNPUBLISHED");
       const mutations = [
-        { path: "/api/store/casts", method: "POST", data: { name: secret } },
+        { path: "/api/casts", method: "POST", data: { name: secret } },
         {
-          path: `/api/store/casts/${id}`,
+          path: `/api/casts/${id}`,
           method: "PUT",
           data: { name: secret },
         },
         {
-          path: `/api/store/casts/${id}/publication`,
+          path: `/api/casts/${id}/publication`,
           method: "PATCH",
           data: { publication_status: "PUBLISHED" },
         },
-        { path: `/api/store/casts/${id}/suspension`, method: "POST" },
-        { path: `/api/store/casts/${id}/resumption`, method: "POST" },
-        { path: `/api/store/casts/${id}/withdrawal`, method: "POST" },
+        { path: `/api/casts/${id}/suspension`, method: "POST" },
+        { path: `/api/casts/${id}/resumption`, method: "POST" },
+        { path: `/api/casts/${id}/withdrawal`, method: "POST" },
       ];
       for (const mutation of mutations) {
         const denied = await request.fetch(mutation.path, {
@@ -180,19 +180,19 @@ When(
       await setCastPublication(request, token, id, "PUBLISHED");
       await suspendCast(request, token, id);
       const repeatedSuspend = await request.post(
-        `/api/store/casts/${id}/suspension`,
+        `/api/casts/${id}/suspension`,
         { headers: headers(token) },
       );
       expect(repeatedSuspend.status()).toBe(400);
       await resumeCast(request, token, id);
       const repeatedResume = await request.post(
-        `/api/store/casts/${id}/resumption`,
+        `/api/casts/${id}/resumption`,
         { headers: headers(token) },
       );
       expect(repeatedResume.status()).toBe(400);
       await withdrawCast(request, token, id);
       const repeatedWithdrawal = await request.post(
-        `/api/store/casts/${id}/withdrawal`,
+        `/api/casts/${id}/withdrawal`,
         { headers: headers(token) },
       );
       expect(repeatedWithdrawal.status()).toBe(400);

@@ -2,7 +2,7 @@ import { SystemConfigResponse, SystemConfigUpdateRequest } from '../model/types'
 import { apiClient } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 
-const BASE_URL = '/admin/configs';
+const BASE_URL = '/system-configs';
 
 export const systemConfigService = {
   // 設定一覧の取得 (Client Component用)

@@ -4,7 +4,7 @@ import { createBdd } from 'playwright-bdd';
 const { Then, When } = createBdd();
 
 // シェルが自分で取るもの。/admin と /store を跨いでも再取得されないことを要求回数で見る。
-const SHELL_REQUESTS = ['/api/admin/stores/me', '/api/me', '/api/admin/menus/me'];
+const SHELL_REQUESTS = ['/api/stores/me', '/api/me', '/api/menus/me'];
 let shellRequests: string[] = [];
 
 // このシナリオが使う他ステップ（ログイン・従業員追加・サイドバー遷移）は playwright-bdd が
@@ -12,10 +12,10 @@ let shellRequests: string[] = [];
 
 Then('受注一覧が権限エラーなく表示される', async ({ page }) => {
   // 正当な 403 はページ遷移を起こさないため、URL 断言だけでは権限エラーを検出できない。
-  // 受注一覧を再取得し、X-Store-ID が注入された GET /store/orders 応答が 200 であることを直接確認する。
+  // 受注一覧を再取得し、X-Store-ID が注入された GET /api/orders 応答が 200 であることを直接確認する。
   const [response] = await Promise.all([
     page.waitForResponse(
-      resp => resp.url().includes('/store/orders') && resp.request().method() === 'GET',
+      resp => new URL(resp.url()).pathname === '/api/orders' && resp.request().method() === 'GET',
       { timeout: 15000 }
     ),
     page.reload({ waitUntil: 'domcontentloaded' }),

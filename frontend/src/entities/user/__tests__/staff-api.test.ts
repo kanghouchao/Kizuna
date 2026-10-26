@@ -13,7 +13,7 @@ jest.mock('@/shared/api/client', () => ({
 
 describe('staffApi', () => {
   // 一覧は他一覧と同形の Spring Page 形（0 起点）
-  it('list は /admin/staff を page/size/search 付きで GET し正規化ページを返す', async () => {
+  it('list は /staff を page/size/search 付きで GET し正規化ページを返す', async () => {
     (apiClient.get as jest.Mock).mockResolvedValueOnce({
       data: { content: [{ id: 1 }], total_pages: 3, total_elements: 21, size: 10, number: 1 },
     });
@@ -21,7 +21,7 @@ describe('staffApi', () => {
     const res = await staffApi.list({ page: 1, size: 10, search: '山田' });
 
     expect(res).toEqual({ rows: [{ id: 1 }], page: 1, pageCount: 3, total: 21 });
-    expect(apiClient.get).toHaveBeenCalledWith('/admin/staff', {
+    expect(apiClient.get).toHaveBeenCalledWith('/staff', {
       params: { page: 1, size: 10, search: '山田', storeId: undefined },
     });
   });
@@ -33,15 +33,15 @@ describe('staffApi', () => {
 
     await staffApi.list({ page: 0, size: 10, storeId: 9 });
 
-    expect(apiClient.get).toHaveBeenCalledWith('/admin/staff', {
+    expect(apiClient.get).toHaveBeenCalledWith('/staff', {
       params: { page: 0, size: 10, search: undefined, storeId: 9 },
     });
   });
-  it('get は /admin/staff/{id} を GET する', async () => {
+  it('get は /staff/{id} を GET する', async () => {
     const res = await staffApi.get(7);
-    expect(res).toEqual({ ok: true, url: '/admin/staff/7' });
+    expect(res).toEqual({ ok: true, url: '/staff/7' });
   });
-  it('create は /admin/staff を POST する', async () => {
+  it('create は /staff を POST する', async () => {
     const res = await staffApi.create({
       email: 'staff@example.com',
       password: 'pass1234',
@@ -50,42 +50,39 @@ describe('staffApi', () => {
       store_scope_type: 'SPECIFIC_STORES',
       store_ids: [1],
     });
-    expect(res).toEqual({ ok: true, url: '/admin/staff' });
+    expect(res).toEqual({ ok: true, url: '/staff' });
     // 授権はロール id の配列で送る（応答側の roles: {id,name}[] とは非対称）
     expect(apiClient.post).toHaveBeenCalledWith(
-      '/admin/staff',
+      '/staff',
       expect.objectContaining({ role_ids: [2] })
     );
   });
-  it('update は /admin/staff/:id を PUT し version を往復する', async () => {
+  it('update は /staff/:id を PUT し version を往復する', async () => {
     const res = await staffApi.update(1, {
       role_ids: [1, 2],
       store_scope_type: 'ALL_STORES',
       store_ids: [],
       version: 7,
     });
-    expect(res).toEqual({ ok: true, url: '/admin/staff/1' });
+    expect(res).toEqual({ ok: true, url: '/staff/1' });
     // 楽観ロックの往復契約: 更新ボディに version が含まれること
-    expect(apiClient.put).toHaveBeenCalledWith(
-      '/admin/staff/1',
-      expect.objectContaining({ version: 7 })
-    );
+    expect(apiClient.put).toHaveBeenCalledWith('/staff/1', expect.objectContaining({ version: 7 }));
   });
-  it('grantableRoles は /admin/staff/grantable-roles を GET する', async () => {
+  it('grantableRoles は /staff/grantable-roles を GET する', async () => {
     const res = await staffApi.grantableRoles();
-    expect(res).toEqual({ ok: true, url: '/admin/staff/grantable-roles' });
+    expect(res).toEqual({ ok: true, url: '/staff/grantable-roles' });
   });
   // 停止・再開は本体を持たない専用端点（版の往復も無い）
-  it('suspend は /admin/staff/{id}/suspension を POST する', async () => {
+  it('suspend は /staff/{id}/suspension を POST する', async () => {
     await staffApi.suspend(7);
-    expect(apiClient.post).toHaveBeenCalledWith('/admin/staff/7/suspension');
+    expect(apiClient.post).toHaveBeenCalledWith('/staff/7/suspension');
   });
-  it('resume は /admin/staff/{id}/resumption を POST する', async () => {
+  it('resume は /staff/{id}/resumption を POST する', async () => {
     await staffApi.resume(7);
-    expect(apiClient.post).toHaveBeenCalledWith('/admin/staff/7/resumption');
+    expect(apiClient.post).toHaveBeenCalledWith('/staff/7/resumption');
   });
   // 仮パスワードの生値はこの応答にしか現れないので、本体をそのまま返す
-  it('resetPassword は /admin/staff/{id}/password-reset を POST し応答本体を返す', async () => {
+  it('resetPassword は /staff/{id}/password-reset を POST し応答本体を返す', async () => {
     (apiClient.post as jest.Mock).mockResolvedValueOnce({
       data: { temporary_password: 'test-temporary-password' },
     });
@@ -93,49 +90,46 @@ describe('staffApi', () => {
     const res = await staffApi.resetPassword(7);
 
     expect(res).toEqual({ temporary_password: 'test-temporary-password' });
-    expect(apiClient.post).toHaveBeenCalledWith('/admin/staff/7/password-reset');
+    expect(apiClient.post).toHaveBeenCalledWith('/staff/7/password-reset');
   });
 });
 
 describe('roleApi', () => {
-  it('list は /admin/roles を GET する', async () => {
+  it('list は /roles を GET する', async () => {
     const res = await roleApi.list();
-    expect(res).toEqual({ ok: true, url: '/admin/roles' });
+    expect(res).toEqual({ ok: true, url: '/roles' });
   });
-  it('get は /admin/roles/{id} を GET する', async () => {
+  it('get は /roles/{id} を GET する', async () => {
     const res = await roleApi.get(5);
-    expect(res).toEqual({ ok: true, url: '/admin/roles/5' });
+    expect(res).toEqual({ ok: true, url: '/roles/5' });
   });
-  it('create は /admin/roles を POST する', async () => {
+  it('create は /roles を POST する', async () => {
     const res = await roleApi.create({
       name: '受付担当',
       permissions: ['ORDER_MANAGE'],
     });
-    expect(res).toEqual({ ok: true, url: '/admin/roles' });
+    expect(res).toEqual({ ok: true, url: '/roles' });
     // 権限コードは接頭辞なしの素の enum 名で送る（PERM_ は JWT authorities 内部だけの形式）
-    expect(apiClient.post).toHaveBeenCalledWith('/admin/roles', {
+    expect(apiClient.post).toHaveBeenCalledWith('/roles', {
       name: '受付担当',
       permissions: ['ORDER_MANAGE'],
     });
   });
-  it('update は /admin/roles/:id を PUT し version を往復する', async () => {
+  it('update は /roles/:id を PUT し version を往復する', async () => {
     const res = await roleApi.update(5, {
       name: '受付担当',
       permissions: ['ORDER_MANAGE', 'CUSTOMER_MANAGE'],
       version: 3,
     });
-    expect(res).toEqual({ ok: true, url: '/admin/roles/5' });
-    expect(apiClient.put).toHaveBeenCalledWith(
-      '/admin/roles/5',
-      expect.objectContaining({ version: 3 })
-    );
+    expect(res).toEqual({ ok: true, url: '/roles/5' });
+    expect(apiClient.put).toHaveBeenCalledWith('/roles/5', expect.objectContaining({ version: 3 }));
   });
-  it('remove は /admin/roles/:id を DELETE する', async () => {
+  it('remove は /roles/:id を DELETE する', async () => {
     await roleApi.remove(5);
-    expect(apiClient.delete).toHaveBeenCalledWith('/admin/roles/5');
+    expect(apiClient.delete).toHaveBeenCalledWith('/roles/5');
   });
-  it('permissions は /admin/permissions を GET する', async () => {
+  it('permissions は /permissions を GET する', async () => {
     const res = await roleApi.permissions();
-    expect(res).toEqual({ ok: true, url: '/admin/permissions' });
+    expect(res).toEqual({ ok: true, url: '/permissions' });
   });
 });

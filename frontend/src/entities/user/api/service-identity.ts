@@ -18,7 +18,7 @@ export const serviceIdentityApi = {
     size: number;
     search?: string;
   }): Promise<PageResult<ServiceIdentitySummaryResponse>> => {
-    const response = await apiClient.get('/admin/service-identities', {
+    const response = await apiClient.get('/service-identities', {
       params: {
         ...toSpringPageParams(params.page, params.size),
         search: params.search,
@@ -28,29 +28,29 @@ export const serviceIdentityApi = {
   },
   /** 1 件取得（version を持つ詳細）。授権編集の開始時と、競合後の最新版の取り直しに使う。 */
   get: async (id: number): Promise<ServiceIdentityResponse> => {
-    const response = await apiClient.get(`/admin/service-identities/${id}`);
+    const response = await apiClient.get(`/service-identities/${id}`);
     return response.data;
   },
   create: async (data: ServiceIdentityCreateRequest): Promise<ServiceIdentityResponse> => {
-    const response = await apiClient.post('/admin/service-identities', data);
+    const response = await apiClient.post('/service-identities', data);
     return response.data;
   },
   update: async (
     id: number,
     data: ServiceIdentityUpdateRequest
   ): Promise<ServiceIdentityResponse> => {
-    const response = await apiClient.put(`/admin/service-identities/${id}`, data);
+    const response = await apiClient.put(`/service-identities/${id}`, data);
     return response.data;
   },
   suspend: async (id: number): Promise<void> => {
-    await apiClient.post(`/admin/service-identities/${id}/suspension`);
+    await apiClient.post(`/service-identities/${id}/suspension`);
   },
   resume: async (id: number): Promise<void> => {
-    await apiClient.post(`/admin/service-identities/${id}/resumption`);
+    await apiClient.post(`/service-identities/${id}/resumption`);
   },
   /** 付与できるロール（自作ロールのみ）。付与可否の述語はサーバ側の単源で、前端では濾さない。 */
   grantableRoles: async (): Promise<RoleSummaryResponse[]> => {
-    const response = await apiClient.get('/admin/service-identities/grantable-roles');
+    const response = await apiClient.get('/service-identities/grantable-roles');
     return response.data;
   },
 };

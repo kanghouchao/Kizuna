@@ -105,7 +105,7 @@ export interface CastStoreItem {
   store_name?: string;
 }
 
-// 店舗側 inbox の出勤希望1件（GET /store/shift-requests）。
+// 店舗側 inbox の出勤希望1件（GET /shift-requests）。
 // 変更申請（type=CHANGE）は対象シフトの現行日時（current_*）を内联する（NEW では null）。
 // 承認可否（approvable）は両種別に付く。
 export interface StoreShiftRequestItem {
@@ -124,7 +124,7 @@ export interface StoreShiftRequestItem {
   approvable?: boolean;
 }
 
-// 会員の指名候補となる確定シフトのキャスト1件（GET /admin/shifts/casts）。
+// 会員の指名候補となる確定シフトのキャスト1件（GET /shifts/casts）。
 export interface ConfirmedShiftCast {
   cast_id?: string;
   cast_name?: string;

@@ -84,17 +84,17 @@ When('電話を編集して削除する', async ({ page }) => {
 
 Then('連絡先の履歴が残り顧客の削除が拒否される', async ({ page, request }) => {
   await expect(page.getByText('変更後: 電話: +818012345678／指定なし／削除済み', { exact: false })).toBeVisible();
-  const response = await request.delete(`/api/store/customers/${customerId}`, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` } });
+  const response = await request.delete(`/api/customers/${customerId}`, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` } });
   expect(response.status()).toBe(409);
   expect((await response.json()).error).toContain('履歴');
 });
 
 When('別の担当者が削除したメールを削除しようとする', async ({ page, request }) => {
   const headers = { ...STORE_HEADERS, Authorization: `Bearer ${token}` };
-  const response = await request.get(`/api/store/customers/${customerId}/contacts`, { headers });
+  const response = await request.get(`/api/customers/${customerId}/contacts`, { headers });
   expect(response.ok()).toBeTruthy();
   const contact = (await response.json()).content.find((row: { type: string }) => row.type === 'EMAIL');
-  const deleted = await request.delete(`/api/store/customers/${customerId}/contacts/${contact.id}`, { headers });
+  const deleted = await request.delete(`/api/customers/${customerId}/contacts/${contact.id}`, { headers });
   expect(deleted.status()).toBe(204);
   await page.getByRole('button', { name: '削除', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: '削除する' }).click();

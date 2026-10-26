@@ -12,7 +12,7 @@ import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.revieworigin.ReviewOriginLookup;
-import com.kizuna.review.api.store.ReviewController;
+import com.kizuna.review.api.ReviewController;
 import com.kizuna.review.application.ReviewService;
 import com.kizuna.review.publication.ReviewPublication;
 import com.kizuna.service.domain.ServiceItem;
@@ -183,7 +183,7 @@ class ReviewPostgresTest {
   void staffRecordsImmutableIntakeWithoutClaimingCustomerVerification() throws Exception {
     var result =
         mvc.perform(
-                post("/store/reviews")
+                post("/reviews")
                     .principal(auth)
                     .contentType("application/json")
                     .content(
@@ -214,10 +214,7 @@ class ReviewPostgresTest {
     var first =
         json.readTree(
             mvc.perform(
-                    post("/store/reviews")
-                        .principal(auth)
-                        .contentType("application/json")
-                        .content(input))
+                    post("/reviews").principal(auth).contentType("application/json").content(input))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -225,7 +222,7 @@ class ReviewPostgresTest {
     var replay =
         json.readTree(
             mvc.perform(
-                    post("/store/reviews")
+                    post("/reviews")
                         .principal(auth)
                         .contentType("application/json")
                         .content(input.replace("表示名", "  表示名  ")))
@@ -237,7 +234,7 @@ class ReviewPostgresTest {
     assertThat(replay.get("operation").get("id")).isEqualTo(first.get("operation").get("id"));
     assertThat(replay.get("operation").get("replayed").asBoolean()).isTrue();
     mvc.perform(
-            post("/store/reviews")
+            post("/reviews")
                 .principal(auth)
                 .contentType("application/json")
                 .content(input.replace("原文", "異なる原文")))
@@ -486,7 +483,7 @@ class ReviewPostgresTest {
     String secondId = two.get("review").get("id").asString();
     var searched =
         json.readTree(
-            mvc.perform(get("/store/reviews").principal(auth).param("q", "%_"))
+            mvc.perform(get("/reviews").principal(auth).param("q", "%_"))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -752,7 +749,7 @@ class ReviewPostgresTest {
 
   private JsonNode read(String path, int expected) throws Exception {
     return json.readTree(
-        mvc.perform(get("/store/reviews" + path).principal(auth))
+        mvc.perform(get("/reviews" + path).principal(auth))
             .andExpect(status().is(expected))
             .andReturn()
             .getResponse()
@@ -762,7 +759,7 @@ class ReviewPostgresTest {
   private JsonNode send(String path, String body, int expected) throws Exception {
     var response =
         mvc.perform(
-                post("/store/reviews" + path)
+                post("/reviews" + path)
                     .principal(auth)
                     .contentType("application/json")
                     .content(body))

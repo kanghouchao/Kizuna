@@ -9,7 +9,7 @@ import { createCast, createCourse, createAgreedOrder, completeAgreedOrder, corre
   STORE1_ID, STORE_HEADERS } from './store-api';
 
 const { Given, When, Then } = createBdd();
-const base = '/api/admin/operational-reports';
+const base = '/api/operational-reports/cross-store';
 const params = { from: '1999-09-01', to: '1999-10-31', group_by: 'month' };
 let manager = '', writer = '', viewer = '', secondReader = '', orderId = '', foreign = '', email = '', password = '', prefix = '';
 const headers = (token: string) => ({ Authorization: 'Bearer ' + token });
@@ -42,10 +42,10 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
   for (let index = 0; index < 3; index++) {
     const permissions = ['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_VIEW'];
     if (index !== 1) permissions.push('OPERATIONAL_REPORT_EXPORT');
-    const role = await request.post('/api/admin/roles', { headers: headers(admin), data: { name: prefix + index, permissions } });
+    const role = await request.post('/api/roles', { headers: headers(admin), data: { name: prefix + index, permissions } });
     expect(role.status(), await role.text()).toBe(201);
     const address = prefix + index + '@kizuna.test'; if (index === 0) email = address;
-    const staff = await request.post('/api/admin/staff', { headers: headers(admin), data: {
+    const staff = await request.post('/api/staff', { headers: headers(admin), data: {
       email: address, password, display_name: '帳票担当', role_ids: [(await role.json()).id],
       store_scope_type: 'SPECIFIC_STORES', store_ids: [Number(index === 2 ? foreign : STORE1_ID)],
     } });
@@ -118,10 +118,10 @@ Then('運営帳票は全件同一時点で授権内だけを出力する', async
   expect((await request.get(base, { headers: headers(parts.join('.')), params })).status()).toBe(401);
 
   expect((await request.get(base + '/exports', { headers: headers(viewer), params: { ...params, format: 'csv' } })).status()).toBe(403);
-  expect((await request.get('/api/store/operational-reports', { headers: { ...headers(writer), 'X-Store-ID': foreign }, params })).status()).toBe(403);
+  expect((await request.get('/api/operational-reports', { headers: { ...headers(writer), 'X-Store-ID': foreign }, params })).status()).toBe(403);
   expect((await request.get(base, { headers: headers(manager), params })).status()).toBe(200);
   // 横断照会者は現在店舗の集計も読む（店舗は X-Store-ID が本人の店舗集合から名乗る）。
-  expect((await request.get('/api/store/operational-reports', { headers: { ...STORE_HEADERS, ...headers(writer) }, params })).status()).toBe(200);
+  expect((await request.get('/api/operational-reports', { headers: { ...STORE_HEADERS, ...headers(writer) }, params })).status()).toBe(200);
   const other = await request.get(base, { headers: headers(secondReader), params });
   expect(await other.json()).toMatchObject({ total_order_count: 1, total_fee: 12000, stores: [{ store_id: Number(foreign) }] });
   const empty = await request.get(base, { headers: headers(writer), params: { from: '1998-01-01', to: '1998-01-31' } });
@@ -167,7 +167,7 @@ Then('横断照会だけの担当者は運営帳票画面から現在店舗の�
   await expect(page).toHaveURL(/\/store\/operational-reports$/);
   await page.getByLabel('開始営業日').fill(params.from); await page.getByLabel('終了営業日').fill(params.to);
   const [response] = await Promise.all([
-    page.waitForResponse(r => new URL(r.url()).pathname === '/api/store/operational-reports'),
+    page.waitForResponse(r => new URL(r.url()).pathname === '/api/operational-reports'),
     page.getByRole('button', { name: '照会', exact: true }).click(),
   ]);
   expect(response.status()).toBe(200);

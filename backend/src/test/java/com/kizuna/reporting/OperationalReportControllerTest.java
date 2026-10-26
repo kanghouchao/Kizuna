@@ -21,8 +21,8 @@ import com.kizuna.order.reporting.OperationalFacts;
 import com.kizuna.order.reporting.OperationalReportReader;
 import com.kizuna.remuneration.reporting.RemunerationReportFacts;
 import com.kizuna.remuneration.reporting.RemunerationReportReader;
-import com.kizuna.reporting.api.admin.AdminOperationalReportController;
-import com.kizuna.reporting.api.store.StoreOperationalReportController;
+import com.kizuna.reporting.api.CrossStoreOperationalReportController;
+import com.kizuna.reporting.api.OperationalReportController;
 import com.kizuna.reporting.application.OperationalReportService;
 import com.kizuna.reporting.application.ReportSnapshot;
 import com.kizuna.reporting.infrastructure.ReportRenderer;
@@ -55,7 +55,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@WebMvcTest({StoreOperationalReportController.class, AdminOperationalReportController.class})
+@WebMvcTest({OperationalReportController.class, CrossStoreOperationalReportController.class})
 @Import({
   OperationalReportControllerTest.Config.class,
   OperationalReportService.class,
@@ -110,12 +110,13 @@ class OperationalReportControllerTest {
   }
 
   /**
-   * scope は store（店舗の担当者）・crossStore（横断照会者が /store を現在店舗で読む）・admin（集合全体）。 crossStore と admin
-   * は横断照会の権限族（ORDER_SET_VIEW / ADVERTISING_COST_SET_*）を使う。
+   * scope は store（店舗の担当者）・crossStore（横断照会者が /operational-reports を現在店舗で読む）・admin（集合全体を
+   * /operational-reports/cross-store で読む）。crossStore と admin は横断照会の権限族（ORDER_SET_VIEW /
+   * ADVERTISING_COST_SET_*）を使う。
    */
   MockHttpServletRequestBuilder request(String scope, String path, String... permissions) {
     var request =
-        get((scope.equals("admin") ? "/admin" : "/store") + "/operational-reports" + path)
+        get("/operational-reports" + (scope.equals("admin") ? "/cross-store" : "") + path)
             .param("from", "2026-09-01")
             .param("to", "2026-09-30")
             .with(
@@ -133,7 +134,7 @@ class OperationalReportControllerTest {
   void storeReportReadsEverySourceForTheNamedStore() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(7L)));
     mvc.perform(
-            get("/store/operational-reports")
+            get("/operational-reports")
                 .param("from", "2026-09-01")
                 .param("to", "2026-09-30")
                 .param("group_by", "month")

@@ -43,7 +43,7 @@ class MaintenanceModeInterceptorTest {
 
   private boolean preHandle(Object handler) throws Exception {
     return interceptor.preHandle(
-        new MockHttpServletRequest("GET", "/store/orders"), new MockHttpServletResponse(), handler);
+        new MockHttpServletRequest("GET", "/orders"), new MockHttpServletResponse(), handler);
   }
 
   private void maintenance(Optional<String> value) {

@@ -12,7 +12,7 @@ import { cookies } from 'next/headers';
 export const serverClient = {
   /**
    * GETリクエストを実行します
-   * @param path APIパス (例: '/store/casts/public')
+   * @param path APIパス (例: '/casts/public')
    * @param options fetchオプション
    */
   async get<T>(path: string, options?: RequestInit): Promise<T> {
@@ -36,8 +36,7 @@ export const serverClient = {
    */
   resolveUrl(path: string): string {
     const backendUrl =
-      process.env.STORE_LOOKUP_API_URL?.replace('/admin/stores/lookup', '') ||
-      'http://backend:8080';
+      process.env.STORE_LOOKUP_API_URL?.replace('/stores/lookup', '') || 'http://backend:8080';
 
     // pathがスラッシュで始まっていない場合の補正
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;

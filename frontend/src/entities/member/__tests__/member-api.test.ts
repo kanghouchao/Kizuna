@@ -9,13 +9,13 @@ jest.mock('@/shared/api/client', () => ({
 }));
 
 describe('member api', () => {
-  it('register POSTs /admin/members', async () => {
+  it('register POSTs /members', async () => {
     const res = await memberApi.register({
       email: 'member@example.com',
       password: 'password1234',
       display_name: '会員花子',
     });
-    expect(res).toEqual({ ok: true, url: '/admin/members' });
+    expect(res).toEqual({ ok: true, url: '/members' });
   });
 
   it('home GETs /me/member', async () => {

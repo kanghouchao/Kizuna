@@ -28,7 +28,7 @@ export interface CastResponse {
 }
 
 /**
- * キャスト一覧の 1 行（GET /store/casts）。名簿として見分け、招待の進み具合を判断するのに
+ * キャスト一覧の 1 行（GET /casts）。名簿として見分け、招待の進み具合を判断するのに
  * 要る項目だけを持つ。紹介文・カスタム項目・作成更新時刻は詳細の読み口が返す。
  */
 export interface CastSummaryResponse {
@@ -53,7 +53,7 @@ export interface CastCustomFieldView {
   value?: string;
 }
 
-// 公開キャスト詳細レスポンス（GET /store/casts/public）。管理用 CastResponse と異なり
+// 公開キャスト詳細レスポンス（GET /casts/public）。管理用 CastResponse と異なり
 // invitation_status を持たず、custom_fields は公開・生存・値ありの定義のみを表示順に整形した配列。
 export interface CastPublicResponse {
   id?: string;

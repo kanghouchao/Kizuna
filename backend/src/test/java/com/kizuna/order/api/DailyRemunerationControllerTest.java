@@ -13,7 +13,6 @@ import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
 import com.kizuna.order.api.me.SelfDailyRemunerationController;
-import com.kizuna.order.api.store.DailyRemunerationController;
 import com.kizuna.order.application.DailyRemunerationService;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
@@ -88,7 +87,7 @@ class DailyRemunerationControllerTest {
   }
 
   private MockHttpServletRequestBuilder request(String scope, String date) {
-    return get(scope.equals("store") ? "/store/daily-remunerations" : "/me/daily-remunerations")
+    return get(scope.equals("store") ? "/daily-remunerations" : "/me/daily-remunerations")
         .principal(() -> "cast@example.test")
         .header("X-Store-ID", "1")
         .param("person_id", "34")
@@ -119,7 +118,7 @@ class DailyRemunerationControllerTest {
         .thenAnswer(call -> new PageImpl<>(List.of(), call.getArgument(3), 0));
 
     mvc.perform(
-            get("/store/daily-remunerations")
+            get("/daily-remunerations")
                 .header("X-Store-ID", "7")
                 .param("person_id", "34")
                 .param("business_date", "2026-09-30"))
@@ -151,7 +150,7 @@ class DailyRemunerationControllerTest {
   @ValueSource(strings = {"0", "-1"})
   void invalidIdsAre400(String id) throws Exception {
     mvc.perform(
-            get("/store/daily-remunerations")
+            get("/daily-remunerations")
                 .header("X-Store-ID", "1")
                 .param("person_id", id)
                 .param("business_date", "2026-09-30"))

@@ -151,7 +151,7 @@ When(
       });
       expect(
         (
-          await request.post(`/api/store/shift-requests/${proposed}/approval`, {
+          await request.post(`/api/shift-requests/${proposed}/approval`, {
             headers: headers(token),
           })
         ).status(),
@@ -183,7 +183,7 @@ When(
       expect(
         (
           await request.post(
-            `/api/store/shift-requests/${declined}/rejection`,
+            `/api/shift-requests/${declined}/rejection`,
             { headers: headers(token) },
           )
         ).status(),
@@ -213,7 +213,7 @@ When(
       });
       expect(
         (
-          await request.put(`/api/store/shifts/${directId}`, {
+          await request.put(`/api/shifts/${directId}`, {
             headers: headers(auditor),
             data: { start_time: "13:00" },
           })
@@ -221,7 +221,7 @@ When(
       ).toBe(403);
       expect(
         (
-          await request.put(`/api/store/shifts/${directId}`, {
+          await request.put(`/api/shifts/${directId}`, {
             headers: { ...headers(staff), "X-Store-ID": otherStore },
             data: { start_time: "13:00" },
           })
@@ -229,7 +229,7 @@ When(
       ).toBe(404);
       expect(
         (
-          await request.put(`/api/store/shifts/${directId}`, {
+          await request.put(`/api/shifts/${directId}`, {
             headers: headers(token),
             data: { start_time: "18:00" },
           })
@@ -269,7 +269,7 @@ When(
       expect(
         (
           await request.post(
-            `/api/store/shift-requests/${pending.id}/approval`,
+            `/api/shift-requests/${pending.id}/approval`,
             { headers: headers(token) },
           )
         ).status(),
@@ -291,7 +291,7 @@ When(
       });
       expect(
         (
-          await request.post("/api/store/attendances", {
+          await request.post("/api/attendances", {
             headers: headers(token),
             data: attendance,
           })
@@ -320,21 +320,21 @@ When(
       expect(
         (
           await request.post(
-            `/api/store/attendances/${actualId}/cancellation`,
+            `/api/attendances/${actualId}/cancellation`,
             { headers: headers(token), data: { reason: secret } },
           )
         ).status(),
       ).toBe(400);
       expect(
         (
-          await request.delete(`/api/store/shifts/${shift}`, {
+          await request.delete(`/api/shifts/${shift}`, {
             headers: headers(token),
           })
         ).status(),
       ).toBe(409);
       expect(
         (
-          await request.get(`/api/store/shift-requests`, {
+          await request.get(`/api/shift-requests`, {
             headers: headers(token),
           })
         ).status(),

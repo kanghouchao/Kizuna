@@ -54,7 +54,7 @@ Given("月次明細の本人に完了受注と未完了受注がある", async (
   await completeAgreedOrder(request, token, completedId);
   await createAgreedOrder(request, token, cast, course, "未完了顧客");
   const candidates = await request.get(
-    "/api/store/monthly-remunerations/casts",
+    "/api/monthly-remunerations/casts",
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
       params: { search: name },
@@ -110,7 +110,7 @@ let statementPages: {
 }[] = [];
 
 async function monthly(request: APIRequestContext, page = 0, size = 20) {
-  const response = await request.get("/api/store/monthly-remunerations", {
+  const response = await request.get("/api/monthly-remunerations", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` },
     params: { person_id: personId, month: originalMonth, page, size },
   });
@@ -241,7 +241,7 @@ Given(
     await completeAgreedOrder(request, managerToken, otherOrder, otherStoreId);
     await withdrawCast(request, managerToken, second);
     const candidates = await request.get(
-      "/api/store/monthly-remunerations/casts",
+      "/api/monthly-remunerations/casts",
       {
         headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` },
         params: { search: `${name}-旧名` },
@@ -379,7 +379,7 @@ Given("店舗スタッフと別店舗だけに在籍する本人がいる", asyn
   );
   castToken = await loginUser(request, email, password);
   const candidates = await request.get(
-    "/api/store/monthly-remunerations/casts",
+    "/api/monthly-remunerations/casts",
     {
       headers: {
         ...STORE_HEADERS,
@@ -404,7 +404,7 @@ Given("店舗スタッフと別店舗だけに在籍する本人がいる", asyn
     "店舗スタッフ対象本人",
   );
   const ownCandidates = await request.get(
-    "/api/store/monthly-remunerations/casts",
+    "/api/monthly-remunerations/casts",
     {
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` },
       params: { search: `月次店舗スタッフ対象-${suffix}` },
@@ -417,12 +417,12 @@ Given("店舗スタッフと別店舗だけに在籍する本人がいる", asyn
 Then("店舗スタッフは自店の月次給与明細を照会できる", async ({ request }) => {
   const headers = { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` };
   const candidates = await request.get(
-    "/api/store/monthly-remunerations/casts",
+    "/api/monthly-remunerations/casts",
     { headers },
   );
   expect(candidates.status()).toBe(200);
   const id = staffPersonId;
-  const response = await request.get("/api/store/monthly-remunerations", {
+  const response = await request.get("/api/monthly-remunerations", {
     headers,
     params: { person_id: id, month: "2000-01" },
   });
@@ -438,19 +438,19 @@ Then(
   async ({ request }) => {
     const params = { person_id: foreignPersonId, month: "2026-09" };
     const headers = { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` };
-    const foreign = await request.get("/api/store/monthly-remunerations", {
+    const foreign = await request.get("/api/monthly-remunerations", {
       headers,
       params,
     });
     expect(foreign.status()).toBe(404);
     for (const path of ["", "/casts", "/pdf"]) {
       const forged = await request.get(
-        `/api/store/monthly-remunerations${path}`,
+        `/api/monthly-remunerations${path}`,
         { headers: { ...headers, "X-Store-ID": otherStoreId }, params },
       );
       expect(forged.status()).toBe(403);
       const missing = await request.get(
-        `/api/store/monthly-remunerations${path}`,
+        `/api/monthly-remunerations${path}`,
         { headers: { Authorization: `Bearer ${staffToken}` }, params },
       );
       expect(missing.status()).toBe(400);
@@ -464,12 +464,12 @@ Then(
     for (const path of ["", "/casts", "/pdf"]) {
       const params = { person_id: foreignPersonId, month: "2026-09" };
       const anonymous = await request.get(
-        `/api/store/monthly-remunerations${path}`,
+        `/api/monthly-remunerations${path}`,
         { headers: STORE_HEADERS, params },
       );
       expect(anonymous.status()).toBe(401);
       const denied = await request.get(
-        `/api/store/monthly-remunerations${path}`,
+        `/api/monthly-remunerations${path}`,
         {
           headers: {
             ...STORE_HEADERS,
@@ -487,7 +487,7 @@ Then(
       "0000-01",
       "not-a-month",
     ]) {
-      const response = await request.get("/api/store/monthly-remunerations", {
+      const response = await request.get("/api/monthly-remunerations", {
         headers: { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` },
         params: { person_id: foreignPersonId, month: invalidMonth },
       });
@@ -523,7 +523,7 @@ Then(
       Authorization: `Bearer ${managerToken}`,
     };
     const daily = async (index = 0) => {
-      const response = await request.get("/api/store/daily-remunerations", {
+      const response = await request.get("/api/daily-remunerations", {
         headers,
         params: {
           person_id: personId,
@@ -562,7 +562,7 @@ Then(
       originalOrderId,
       "日別の未提供を無効化",
     );
-    const invalidated = await request.get("/api/store/daily-remunerations", {
+    const invalidated = await request.get("/api/daily-remunerations", {
       headers,
       params: { person_id: personId, business_date: originalDate, size: 2000 },
     });
@@ -614,7 +614,7 @@ Then(
 Then(
   "日別照会は店舗越権と他人照会と不正入力を拒否する",
   async ({ request }) => {
-    const path = "/api/store/daily-remunerations";
+    const path = "/api/daily-remunerations";
     const params = { person_id: staffPersonId, business_date: "2026-09-30" };
     const headers = { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` };
     expect((await request.get(path, { headers, params })).status()).toBe(200);

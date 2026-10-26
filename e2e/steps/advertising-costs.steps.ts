@@ -23,8 +23,8 @@ import {
   switchStoreInHeader,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
-const base = "/api/store/advertising-costs",
-  months = "/api/store/advertising-cost-months";
+const base = "/api/advertising-costs",
+  months = "/api/advertising-cost-months";
 let storeId = "",
   token = "",
   reader = "",
@@ -346,7 +346,7 @@ Then(
     expect((await summary(request)).recorded_total_amount).toBe(200100);
     for (const format of ["csv", "xlsx"]) {
       const response = await request.get(
-        "/api/store/advertising-media-summaries/exports",
+        "/api/advertising-media-summaries/exports",
         { headers: h(), params: { month, format } },
       );
       expect(response.status(), await response.text()).toBe(200);
@@ -387,7 +387,7 @@ When(
     await page.getByLabel("金額（円）").fill("100");
     let count = 0;
     const requests: string[] = [];
-    await page.route("**/api/store/advertising-costs", async (route) => {
+    await page.route("**/api/advertising-costs", async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       count++;
       requests.push(route.request().postData()!);
@@ -401,7 +401,7 @@ When(
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     expect(count).toBe(1);
     expect((await summary(request)).entry_count).toBe(1);
-    await page.unroute("**/api/store/advertising-costs");
+    await page.unroute("**/api/advertising-costs");
     await page.reload();
     await selectMonth(page, month);
     await expect(
@@ -410,7 +410,7 @@ When(
     page.on("request", (req) => {
       if (
         req.method() === "POST" &&
-        req.url().endsWith("/api/store/advertising-costs")
+        req.url().endsWith("/api/advertising-costs")
       )
         requests.push(req.postData()!);
     });
@@ -439,7 +439,7 @@ Then(
     const pendingSave = new Promise<void>((r) => {
       finish = r;
     });
-    await page.route("**/api/store/advertising-costs", async (route) => {
+    await page.route("**/api/advertising-costs", async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       await pendingSave;
       const response = await route.fetch();
@@ -464,12 +464,12 @@ Then(
     await expect(page.getByLabel("登録額合計", { exact: true })).toHaveText(
       "300円",
     );
-    await page.unroute("**/api/store/advertising-costs");
+    await page.unroute("**/api/advertising-costs");
     let release!: () => void;
     const gate = new Promise<void>((r) => {
       release = r;
     });
-    await page.route("**/api/store/advertising-costs?**", async (route) => {
+    await page.route("**/api/advertising-costs?**", async (route) => {
       const u = new URL(route.request().url());
       if (u.searchParams.get("month") === month) {
         const response = await route.fetch();
@@ -486,7 +486,7 @@ Then(
       page.getByText("この月の広告費は登録されていません"),
     ).toBeVisible();
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
-    await page.unroute("**/api/store/advertising-costs?**");
+    await page.unroute("**/api/advertising-costs?**");
     await switchStoreInHeader(page, foreignName);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
@@ -546,7 +546,7 @@ Then(
   },
 );
 
-const mediaBase = "/api/store/advertising-media-summaries";
+const mediaBase = "/api/advertising-media-summaries";
 When(
   "同名媒体の費用と問い合わせ人数の入力状態を用意する",
   async ({ request }) => {
@@ -708,7 +708,7 @@ Then(
       page.getByRole("row", { name: /営業広告 既知零/ }),
     ).toContainText("0人");
     await page.route(
-      "**/api/store/advertising-media-summaries?**",
+      "**/api/advertising-media-summaries?**",
       async (route) => {
         if (new URL(route.request().url()).searchParams.get("page") === "1")
           return route.abort("failed");
@@ -727,7 +727,7 @@ Then(
     await expect(
       page.getByRole("navigation", { name: "ページネーション" }),
     ).toHaveCount(0);
-    await page.unroute("**/api/store/advertising-media-summaries?**");
+    await page.unroute("**/api/advertising-media-summaries?**");
     await page
       .getByRole("alert")
       .filter({ hasText: "媒体別集計を取得できませんでした。" })
@@ -744,7 +744,7 @@ Then(
       enterPage = r;
     });
     await page.route(
-      "**/api/store/advertising-media-summaries?**",
+      "**/api/advertising-media-summaries?**",
       async (route) => {
         if (new URL(route.request().url()).searchParams.get("page") !== "1")
           return route.continue();
@@ -765,7 +765,7 @@ Then(
       page.getByRole("row", { name: /営業広告 同名/ }),
     ).toBeVisible();
     releasePage();
-    await page.unroute("**/api/store/advertising-media-summaries?**");
+    await page.unroute("**/api/advertising-media-summaries?**");
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "CSV 全件出力" }).click();
     expect((await downloadPromise).suggestedFilename()).toBe(
@@ -789,7 +789,7 @@ Then(
       lateDownloads++;
     });
     await page.route(
-      "**/api/store/advertising-media-summaries/exports?**",
+      "**/api/advertising-media-summaries/exports?**",
       async (route) => {
         exportRequests++;
         const result = await route.fetch();
@@ -810,7 +810,7 @@ Then(
     await exportFinished;
     expect(exportRequests).toBe(1);
     expect(lateDownloads).toBe(0);
-    await page.unroute("**/api/store/advertising-media-summaries/exports?**");
+    await page.unroute("**/api/advertising-media-summaries/exports?**");
     for (const theme of ["light", "dark"]) {
       await page
         .getByRole("button", { name: "表示モード", exact: true })
@@ -851,7 +851,7 @@ Then(
       release = resolve;
     });
     await page.route(
-      "**/api/store/advertising-media-summaries?**",
+      "**/api/advertising-media-summaries?**",
       async (route) => {
         const result = await route.fetch();
         entered();
@@ -862,7 +862,7 @@ Then(
     await page.getByRole("tab", { name: "費用記録", exact: true }).click();
     await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
     await arrived;
-    await page.unroute("**/api/store/advertising-media-summaries?**");
+    await page.unroute("**/api/advertising-media-summaries?**");
     const next = month.replace("-09", "-10");
     await page.getByLabel("対象月", { exact: true }).fill(next);
     await page.getByRole("button", { name: "表示", exact: true }).click();
@@ -885,7 +885,7 @@ Then(
   },
 );
 
-const orderCostBase = "/api/store/advertising-order-costs";
+const orderCostBase = "/api/advertising-order-costs";
 let orderCostWriter = "",
   orderCostInvalidation = "",
   orderCostSeed = "";
@@ -912,8 +912,8 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
     const response = await submitConfirmedStoreRequest(
       request,
       orderCostWriter,
-      "/api/store/orders/preview",
-      "/api/store/orders",
+      "/api/orders/preview",
+      "/api/orders",
       {
         cast_id: cast,
         course_id: course,
@@ -935,8 +935,8 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
         await submitConfirmedStoreRequest(
           request,
           orderCostWriter,
-          `/api/store/orders/${id}/completion-preview`,
-          `/api/store/orders/${id}/completion`,
+          `/api/orders/${id}/completion-preview`,
+          `/api/orders/${id}/completion`,
           {
             expected_version: current.version,
             fee_lines: [{ kind: "DISCOUNT", name: "全額割引", amount: 12000 }],
@@ -1149,7 +1149,7 @@ Then(
       lateDownloads++;
     });
     await page.route(
-      "**/api/store/advertising-order-costs/exports?**",
+      "**/api/advertising-order-costs/exports?**",
       async (route) => {
         requests++;
         const result = await route.fetch();
@@ -1172,7 +1172,7 @@ Then(
     await done;
     expect(requests).toBe(1);
     expect(lateDownloads).toBe(0);
-    await page.unroute("**/api/store/advertising-order-costs/exports?**");
+    await page.unroute("**/api/advertising-order-costs/exports?**");
 
     let releaseRead!: () => void, enterRead!: () => void;
     const readGate = new Promise<void>((r) => {
@@ -1182,7 +1182,7 @@ Then(
       enterRead = r;
     });
     await page.route(
-      "**/api/store/advertising-order-costs?**",
+      "**/api/advertising-order-costs?**",
       async (route) => {
         const result = await route.fetch();
         enterRead();
@@ -1195,7 +1195,7 @@ Then(
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
       .click();
     await readArrived;
-    await page.unroute("**/api/store/advertising-order-costs?**");
+    await page.unroute("**/api/advertising-order-costs?**");
     await page
       .getByLabel("対象月", { exact: true })
       .fill(month.replace("-09", "-11"));
@@ -1226,7 +1226,7 @@ Then(
       finishStore = r;
     });
     await page.route(
-      "**/api/store/advertising-order-costs?**",
+      "**/api/advertising-order-costs?**",
       async (route) => {
         const result = await route.fetch();
         enterStore();
@@ -1240,7 +1240,7 @@ Then(
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
       .click();
     await storeArrived;
-    await page.unroute("**/api/store/advertising-order-costs?**");
+    await page.unroute("**/api/advertising-order-costs?**");
     await switchStoreInHeader(page, foreignName);
     await selectMonth(page, month);
     await page
@@ -1312,7 +1312,7 @@ Then(
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
       .click();
     await page.route(
-      "**/api/store/advertising-order-costs?**",
+      "**/api/advertising-order-costs?**",
       async (route) => {
         if (new URL(route.request().url()).searchParams.get("page") === "1")
           return route.abort("failed");
@@ -1328,7 +1328,7 @@ Then(
       .filter({ hasText: "受注あたり記録広告費を取得できませんでした。" });
     await expect(alert).toBeVisible();
     await expect(page.getByLabel("受注比較の月合計")).toHaveCount(0);
-    await page.unroute("**/api/store/advertising-order-costs?**");
+    await page.unroute("**/api/advertising-order-costs?**");
     await alert.getByRole("button").click();
     await expect(
       page.getByRole("cell", { name: "=検証媒体0001", exact: true }),

@@ -30,7 +30,7 @@ Given('失効処理用の主体と権限不足の主体が用意されている'
   const incomplete = await createPermissionRole(request, admin, '実行のみ-' + suffix, ['TASK_EXECUTE']);
   serviceName = '日次失効サービス-' + suffix;
   for (const [roleId, name] of [[complete, serviceName], [incomplete, '権限不足-' + suffix]] as const) {
-    const response = await request.post('/api/admin/service-identities', { headers: headers(admin), data: { display_name: name, role_ids: [roleId], store_scope_type: 'ALL_STORES', store_ids: [] } });
+    const response = await request.post('/api/service-identities', { headers: headers(admin), data: { display_name: name, role_ids: [roleId], store_scope_type: 'ALL_STORES', store_ids: [] } });
     expect(response.status(), await response.text()).toBe(201);
     const id = (await response.json()).id;
     if (roleId === complete) serviceId = id;
@@ -40,28 +40,28 @@ Given('失効処理用の主体と権限不足の主体が用意されている'
 });
 
 When('失効処理の候補と再送と未来日の拒否を確認する', async ({ request }) => {
-  const candidates = await request.get('/api/admin/task-executions/service-identities', { headers: headers(operator), params: { task_name: 'POINT_EXPIRY', size: 100 } });
+  const candidates = await request.get('/api/task-executions/service-identities', { headers: headers(operator), params: { task_name: 'POINT_EXPIRY', size: 100 } });
   expect(candidates.status()).toBe(200);
   const ids = (await candidates.json()).content.map((row: { id: number }) => row.id);
   expect(ids).toContain(serviceId);
   expect(ids).not.toContain(incompleteId);
-  expect((await request.get('/api/admin/task-executions/service-identities', { headers: headers(operator), params: { task_name: 'UNREGISTERED' } })).status()).toBe(400);
+  expect((await request.get('/api/task-executions/service-identities', { headers: headers(operator), params: { task_name: 'UNREGISTERED' } })).status()).toBe(400);
   const body = { task_name: 'POINT_EXPIRY', logical_key: crypto.randomUUID(), service_user_id: serviceId, store_id: null, period_start: asOf, period_end: asOf };
-  expect((await request.post('/api/admin/task-executions', { headers: headers(operator), data: { ...body, service_user_id: incompleteId } })).status()).toBe(403);
-  expect((await request.post('/api/admin/task-executions', { headers: headers(viewer), data: body })).status()).toBe(403);
-  const first = await request.post('/api/admin/task-executions', { headers: headers(operator), data: body });
+  expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, service_user_id: incompleteId } })).status()).toBe(403);
+  expect((await request.post('/api/task-executions', { headers: headers(viewer), data: body })).status()).toBe(403);
+  const first = await request.post('/api/task-executions', { headers: headers(operator), data: body });
   expect(first.status(), await first.text()).toBe(201);
   const run = (await first.json()).execution;
   expect(run.status).toBe('SUCCEEDED');
-  const replay = await request.post('/api/admin/task-executions', { headers: headers(viewer), data: body });
+  const replay = await request.post('/api/task-executions', { headers: headers(viewer), data: body });
   expect(replay.status()).toBe(200);
   expect((await replay.json()).execution.id).toBe(run.id);
   const futureDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-  const future = await request.post('/api/admin/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID(), period_start: futureDate, period_end: futureDate } });
+  const future = await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID(), period_start: futureDate, period_end: futureDate } });
   expect(future.status()).toBe(201);
   const failed = (await future.json()).execution;
   expect(failed.status).toBe('FAILED');
-  expect((await request.post(`/api/admin/task-executions/${failed.id}/retries`, { headers: headers(viewer), data: { reason: '権限境界の検証' } })).status()).toBe(403);
+  expect((await request.post(`/api/task-executions/${failed.id}/retries`, { headers: headers(viewer), data: { reason: '権限境界の検証' } })).status()).toBe(403);
 });
 
 Then('失効処理を画面から選択して結果を確認できる', async ({ page, $testInfo }) => {

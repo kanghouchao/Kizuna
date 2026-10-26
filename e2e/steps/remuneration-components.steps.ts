@@ -44,7 +44,7 @@ const headers = (auth = token, storeId = STORE1_ID) => ({
   Authorization: `Bearer ${auth}`,
 });
 async function statement(request: APIRequestContext, targetMonth = month) {
-  const response = await request.get("/api/store/remuneration-statements", {
+  const response = await request.get("/api/remuneration-statements", {
     headers: headers(),
     params: { person_id: personId, month: targetMonth },
   });
@@ -144,7 +144,7 @@ Given(
       actual_end_at: nextDate + "T02:00:00",
     });
     const candidates = await request.get(
-      "/api/store/monthly-remunerations/casts",
+      "/api/monthly-remunerations/casts",
       { headers: headers(), params: { search: name } },
     );
     expect(candidates.status()).toBe(200);
@@ -185,7 +185,7 @@ When(
     await dialog.getByLabel("適用開始日").fill(date);
     await dialog.getByLabel("日額（円）").fill("10000");
     await dialog.getByLabel("理由・説明").fill("日額契約");
-    const competing = await request.post("/api/store/remuneration-guarantees", {
+    const competing = await request.post("/api/remuneration-guarantees", {
       headers: headers(),
       data: {
         person_id: personId,
@@ -369,7 +369,7 @@ Then(
   },
 );
 When("担当が翌月から保証を停止して未終了実績を残す", async ({ request }) => {
-  const first = await request.post("/api/store/remuneration-guarantees", {
+  const first = await request.post("/api/remuneration-guarantees", {
     headers: headers(),
     data: {
       person_id: personId,
@@ -382,7 +382,7 @@ When("担当が翌月から保証を停止して未終了実績を残す", async
     },
   });
   expect(first.status(), await first.text()).toBe(201);
-  const stopped = await request.post("/api/store/remuneration-guarantees", {
+  const stopped = await request.post("/api/remuneration-guarantees", {
     headers: headers(),
     data: {
       person_id: personId,
@@ -419,7 +419,7 @@ Then(
       request_id: randomUUID(),
     };
     const create = () =>
-      request.post("/api/store/bonus-awards", {
+      request.post("/api/bonus-awards", {
         headers: headers(),
         data: body,
       });
@@ -428,7 +428,7 @@ Then(
     expect(b.status(), await b.text()).toBe(201);
     expect(await a.json()).toEqual(await b.json());
     expect((await statement(request)).bonus_total).toBe(1234);
-    const conflict = await request.post("/api/store/bonus-awards", {
+    const conflict = await request.post("/api/bonus-awards", {
       headers: headers(),
       data: { ...body, amount: 1235 },
     });
@@ -436,13 +436,13 @@ Then(
   },
 );
 Then("授権外店舗と無権限の内訳操作は拒否される", async ({ request }) => {
-  const denied = await request.get("/api/store/remuneration-statements", {
+  const denied = await request.get("/api/remuneration-statements", {
     headers: headers(token, otherStore),
     params: { person_id: personId, month },
   });
   expect(denied.status()).toBe(403);
   // 店長は既定授与で REMUNERATION_VIEW を持つ。
-  const managed = await request.get("/api/store/remuneration-statements", {
+  const managed = await request.get("/api/remuneration-statements", {
     headers: headers(manager, STORE1_ID),
     params: { person_id: personId, month },
   });
@@ -453,12 +453,12 @@ Then("授権外店舗と無権限の内訳操作は拒否される", async ({ re
     "yamada.jiro@kizuna.test",
     ADMIN_PASSWORD,
   );
-  const unprivileged = await request.get("/api/store/remuneration-statements", {
+  const unprivileged = await request.get("/api/remuneration-statements", {
     headers: headers(staff, STORE1_ID),
     params: { person_id: personId, month },
   });
   expect(unprivileged.status()).toBe(403);
-  const noPerson = await request.post("/api/store/bonus-awards", {
+  const noPerson = await request.post("/api/bonus-awards", {
     headers: headers(),
     data: {
       person_id: 999999999,
@@ -501,7 +501,7 @@ When("ボーナスが保存された直後に応答を失う", async ({ page, re
   await dialog.getByLabel("付与額（円）").fill("1500");
   await dialog.getByLabel("理由・説明").fill("応答喪失の検証");
   lostRequests = [];
-  await page.route("**/api/store/bonus-awards", async (route) => {
+  await page.route("**/api/bonus-awards", async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;
@@ -526,7 +526,7 @@ When("ボーナスが保存された直後に応答を失う", async ({ page, re
   const data = await statement(request);
   expect(data.bonus_total).toBe(1500);
   expect(data.bonus_awards.content).toHaveLength(1);
-  await page.unroute("**/api/store/bonus-awards");
+  await page.unroute("**/api/bonus-awards");
 });
 let lostRequests: Record<string, unknown>[] = [];
 async function selectPerson(page: Page, personName: string) {
@@ -618,7 +618,7 @@ Then(
     const [replayed] = await Promise.all([
       page.waitForRequest(
         (req) =>
-          req.url().endsWith("/api/store/bonus-awards") &&
+          req.url().endsWith("/api/bonus-awards") &&
           req.method() === "POST",
       ),
       dialog.getByRole("button", { name: "元の内容で結果を確認" }).click(),
@@ -640,7 +640,7 @@ Then(
     const [fresh] = await Promise.all([
       page.waitForRequest(
         (req) =>
-          req.url().endsWith("/api/store/bonus-awards") &&
+          req.url().endsWith("/api/bonus-awards") &&
           req.method() === "POST",
       ),
       dialog.getByRole("button", { name: "保存する" }).click(),

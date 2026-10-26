@@ -47,9 +47,13 @@ export interface OperationalReport extends ReportCriteria {
   rows: Page<ReportRow>;
 }
 export type ReportScope = 'store' | 'admin';
+const reportPath = {
+  store: '/operational-reports',
+  admin: '/operational-reports/cross-store',
+} satisfies Record<ReportScope, string>;
 export async function fetchReport(scope: ReportScope, criteria: ReportCriteria, page: number) {
   return (
-    await apiClient.get<OperationalReport>(`/${scope}/operational-reports`, {
+    await apiClient.get<OperationalReport>(reportPath[scope], {
       params: { ...criteria, page, size: 20 },
     })
   ).data;
@@ -61,7 +65,7 @@ export async function downloadReport(
   signal: AbortSignal
 ): Promise<Blob> {
   try {
-    const response = await apiClient.get<Blob>(`/${scope}/operational-reports/exports`, {
+    const response = await apiClient.get<Blob>(`${reportPath[scope]}/exports`, {
       params: { ...criteria, format },
       responseType: 'blob',
       signal,

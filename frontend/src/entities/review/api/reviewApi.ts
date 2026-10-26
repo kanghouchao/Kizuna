@@ -13,7 +13,7 @@ import {
   ReviewCommand,
   ReviewWriteResponse,
 } from '../model/types';
-const path = '/store/reviews';
+const path = '/reviews';
 const children = {
   CORRECT: 'corrections',
   DECIDE: 'decisions',

@@ -105,8 +105,8 @@ async function createOrder(request: APIRequestContext, token: string) {
     await submitConfirmedStoreRequest(
       request,
       token,
-      "/api/store/orders/preview",
-      "/api/store/orders",
+      "/api/orders/preview",
+      "/api/orders",
       data,
     )
   ).json();
@@ -150,8 +150,8 @@ When(
       await submitConfirmedStoreRequest(
         request,
         token,
-        `/api/store/orders/${created.id}/preview`,
-        `/api/store/orders/${created.id}`,
+        `/api/orders/${created.id}/preview`,
+        `/api/orders/${created.id}`,
         update,
         "put",
       );
@@ -161,14 +161,14 @@ When(
         before: "CONFIRMED",
         after: "CONFIRMED",
       });
-      const stale = await request.put(`/api/store/orders/${created.id}`, {
+      const stale = await request.put(`/api/orders/${created.id}`, {
         headers: storeHeaders(token),
         data: update,
       });
       expect(stale.status(), await stale.text()).toBe(409);
       const updated = await getOrder(request, token, STORE1_ID, created.id);
       const start = await request.post(
-        `/api/store/orders/${created.id}/start`,
+        `/api/orders/${created.id}/start`,
         {
           headers: storeHeaders(token),
           data: { expected_version: updated.version, reason: privateText },
@@ -186,8 +186,8 @@ When(
         await submitConfirmedStoreRequest(
           request,
           token,
-          `/api/store/orders/${created.id}/completion-preview`,
-          `/api/store/orders/${created.id}/completion`,
+          `/api/orders/${created.id}/completion-preview`,
+          `/api/orders/${created.id}/completion`,
           { expected_version: started.version, fee_lines: [] },
         )
       ).json();
@@ -199,19 +199,19 @@ When(
         after: "COMPLETED",
       });
       const refused = await request.post(
-        `/api/store/orders/${created.id}/cancellation`,
+        `/api/orders/${created.id}/cancellation`,
         { headers: storeHeaders(token), data: { reason: privateText } },
       );
       expect(refused.status()).toBe(400);
 
       const cancelled = await createOrder(request, token);
       const forbidden = await request.post(
-        `/api/store/orders/${cancelled.id}/cancellation`,
+        `/api/orders/${cancelled.id}/cancellation`,
         { headers: storeHeaders(auditor), data: { reason: privateText } },
       );
       expect(forbidden.status()).toBe(403);
       const crossStore = await request.post(
-        `/api/store/orders/${cancelled.id}/cancellation`,
+        `/api/orders/${cancelled.id}/cancellation`,
         {
           headers: { ...storeHeaders(token), "X-Store-ID": otherStoreId },
           data: { reason: privateText },
@@ -219,7 +219,7 @@ When(
       );
       expect(crossStore.status()).toBe(404);
       const cancellation = await request.post(
-        `/api/store/orders/${cancelled.id}/cancellation`,
+        `/api/orders/${cancelled.id}/cancellation`,
         { headers: storeHeaders(token), data: { reason: privateText } },
       );
       expect(cancellation.status()).toBe(204);
@@ -235,8 +235,8 @@ When(
         await submitConfirmedStoreRequest(
           request,
           token,
-          `/api/store/order-applications/${application}/confirmation-preview`,
-          `/api/store/order-applications/${application}/confirmation`,
+          `/api/order-applications/${application}/confirmation-preview`,
+          `/api/order-applications/${application}/confirmation`,
           {
             course_id: courseId,
             business_date: today(),
@@ -260,7 +260,7 @@ When(
       });
       const declinedId = await createApplication(request);
       const declined = await request.post(
-        `/api/store/order-applications/${declinedId}/refusal`,
+        `/api/order-applications/${declinedId}/refusal`,
         { headers: storeHeaders(token), data: { reason: privateText } },
       );
       expect(declined.status()).toBe(204);

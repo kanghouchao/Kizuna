@@ -30,22 +30,35 @@ test('query preserves null, zero and known subtotal without client recalculation
   };
   get.mockResolvedValueOnce({ data: response });
   expect(await fetchReport('admin', criteria, 2)).toBe(response);
-  expect(get).toHaveBeenCalledWith('/admin/operational-reports', {
+  expect(get).toHaveBeenCalledWith('/operational-reports/cross-store', {
     params: { ...criteria, page: 2, size: 20 },
   });
 });
 
+test('store scope queries the current-store report', async () => {
+  get.mockResolvedValueOnce({ data: {} });
+  await fetchReport('store', criteria, 0);
+  expect(get).toHaveBeenCalledWith('/operational-reports', {
+    params: { ...criteria, page: 0, size: 20 },
+  });
+});
+
 test.each([
-  ['csv', 'text/csv'],
-  ['xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['csv', 'text/csv', 'store', '/operational-reports/exports'],
+  [
+    'xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'admin',
+    '/operational-reports/cross-store/exports',
+  ],
 ] as const)(
   '%s exports pass the same complete criteria and cancellation signal',
-  async (format, type) => {
+  async (format, type, scope, path) => {
     const blob = new Blob(['report'], { type });
     get.mockResolvedValueOnce({ data: blob });
     const signal = new AbortController().signal;
-    expect(await downloadReport('store', criteria, format, signal)).toBe(blob);
-    expect(get).toHaveBeenCalledWith('/store/operational-reports/exports', {
+    expect(await downloadReport(scope, criteria, format, signal)).toBe(blob);
+    expect(get).toHaveBeenCalledWith(path, {
       params: { ...criteria, format },
       responseType: 'blob',
       signal,

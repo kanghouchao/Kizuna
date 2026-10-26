@@ -8,7 +8,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.review.api.store.ReviewController;
+import com.kizuna.review.api.ReviewController;
 import com.kizuna.review.application.ReviewService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
@@ -78,7 +78,7 @@ class ReviewInputPrivacyTest {
               valid.substring(0, valid.lastIndexOf('}')))) {
         var response =
             mvc.perform(
-                    post("/store/reviews")
+                    post("/reviews")
                         .with(csrf())
                         .header("X-Store-ID", "1")
                         .with(
@@ -95,7 +95,7 @@ class ReviewInputPrivacyTest {
       }
       var actionResponse =
           mvc.perform(
-                  post("/store/reviews/1/permissions")
+                  post("/reviews/1/permissions")
                       .with(csrf())
                       .header("X-Store-ID", "1")
                       .with(

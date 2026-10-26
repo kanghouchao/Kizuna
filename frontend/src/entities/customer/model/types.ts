@@ -22,7 +22,7 @@ export interface CustomerResponse {
 }
 
 /**
- * 顧客一覧の 1 行（GET /store/customers）。目当ての顧客を絞り込んで選ぶのに要る項目だけを持つ。
+ * 顧客一覧の 1 行（GET /customers）。目当ての顧客を絞り込んで選ぶのに要る項目だけを持つ。
  *
  * 住所・NG の内容・利用エリアは詳細の読み口が返す。会員コードも持たない — 一覧で要るのは
  * 紐づけの有無だけである。
@@ -41,8 +41,8 @@ export interface CustomerSummaryResponse {
 }
 
 /**
- * 統合の前に見比べる 1 行（GET /store/customers/duplicates のグループの中身、
- * および GET /store/customers/merge-comparison）。
+ * 統合の前に見比べる 1 行（GET /customers/duplicates のグループの中身、
+ * および GET /customers/merge-comparison）。
  * customer/api/dto/CustomerMergeComparisonResponse.java に対応。
  *
  * 一覧の型より項目が多いのは、この読み口の用途が「絞り込んで選ぶ」ではなく「別人を誤って
@@ -103,7 +103,7 @@ export interface CustomerMergeResponse {
 export type CustomerMergeDirection = 'SURVIVING' | 'MERGED';
 
 /**
- * 統合履歴 1 件（GET /store/customers/{id}/merges）。
+ * 統合履歴 1 件（GET /customers/{id}/merges）。
  * customer/api/dto/CustomerMergeHistoryResponse.java に対応。
  *
  * 統合に取消は無く、誤統合の修復は「誰が・いつ・どの行をどの行へ・何を移したか」を根拠と
