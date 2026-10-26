@@ -5,10 +5,11 @@ import { roleApi } from '@/entities/user';
 import RoleEditPage from '../RoleEditPage';
 
 const mockPush = jest.fn();
+let mockRouteId = '5';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
-  useParams: () => ({ id: '5' }),
+  useParams: () => ({ id: mockRouteId }),
 }));
 
 jest.mock('@/entities/user', () => ({
@@ -34,6 +35,7 @@ const role = (override: Partial<RoleResponse> = {}): RoleResponse => ({
 describe('ロール編集ページ', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRouteId = '5';
     mockedRoleApi.permissions.mockResolvedValue([
       {
         group: 'BUSINESS',
@@ -79,6 +81,15 @@ describe('ロール編集ページ', () => {
       '/admin/roles'
     );
     expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+  });
+
+  it('数字でない id は取りに行かず、見つからないとして一覧への導線だけを出す', async () => {
+    mockRouteId = 'abc';
+    render(<RoleEditPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('このロールは見つかりませんでした')).toBeInTheDocument();
+    expect(mockedRoleApi.get).not.toHaveBeenCalled();
   });
 
   it('取得に失敗したら再試行で回復できる', async () => {

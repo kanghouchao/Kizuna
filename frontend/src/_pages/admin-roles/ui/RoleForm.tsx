@@ -64,6 +64,7 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
           name="name"
           rules={{
             required: 'ロール名を入力してください',
+            maxLength: { value: 100, message: 'ロール名は 100 文字以内で入力してください' },
             validate: value => value.trim().length > 0 || 'ロール名を入力してください',
           }}
           render={({ field }) => (
@@ -71,7 +72,7 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
               <FormLabel>ロール名</FormLabel>
               <FormControl>
                 {/* 既定ロールの名称は播種の自然キーなので改名させない（権限だけ編集できる） */}
-                <Input type="text" maxLength={100} {...field} disabled={initial?.system === true} />
+                <Input type="text" {...field} disabled={initial?.system === true} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -117,7 +118,7 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
                     ) : (
                       groups.map(group => (
                         <div key={group.group} className="space-y-1">
-                          <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
+                          <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
                           {(group.permissions ?? []).map(entry => {
                             const code = entry.code;
                             if (code === undefined) return null;

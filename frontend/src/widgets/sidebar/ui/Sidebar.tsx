@@ -65,7 +65,7 @@ interface NavigationSection {
   name?: string;
   // 自身が path を持つ根は見出しではなく単独のリンクとして描く。
   href?: string;
-  icon?: LucideIcon;
+  icon: LucideIcon;
   items: NavigationItem[];
 }
 
@@ -142,7 +142,7 @@ export function Sidebar() {
             section.href ? (
               <NavLink
                 key={section.name}
-                item={{ name: section.name, href: section.href, icon: section.icon ?? HouseIcon }}
+                item={{ name: section.name, href: section.href, icon: section.icon }}
                 isActive={pathname === section.href}
               />
             ) : (
