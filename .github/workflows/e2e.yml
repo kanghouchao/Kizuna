@@ -9,8 +9,9 @@ on:
   workflow_dispatch:
 
 # 合併が続いたら古い実行は捨て、最新の master だけを検証する（最新は先行する合併を全て含む）。
+# ref ごとに分けるので、別ブランチの手動実行が master の検証を取り消すことはない。
 concurrency:
-  group: e2e-master
+  group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -161,8 +162,9 @@ jobs:
           exit 1
 
       # 赤い master を誰かが見るための唯一の経路。未解決の issue があれば同じ issue に追記し、増やさない。
+      # 別ブランチの手動実行の失敗は master の状態ではないので報告しない。
       - name: Report failure as an issue
-        if: failure()
+        if: failure() && github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
