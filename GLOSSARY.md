@@ -13,7 +13,7 @@
 避ける表現・設計: Branch、テナント
 
 **授権の二軸**:
-後台の判定は直交する二つの軸だけで行う — 「何ができるか」は権限（ロールは権限の束）、「どの店舗に対してか」は本人の店舗集合 ∩ 現在店舗（X-Store-ID）。グループ級データ（店舗・ロール・従業員・会員・ポイント・設定・全群統計）は権限のみ、店舗級データ（受注・顧客・在籍・シフト・報酬）は店舗軸も見る。平台 / 店舗という「側」や「コンソール」は存在せず、URL 前綴 `/admin/**` `/me/**` `/auth/**` `/store/**` と `api/admin` `api/me` `api/auth` `api/store` は掛載ディレクトリであって授権上の意味を持たない。単店舗のグループでは店舗切替を隠して自動選択する。
+授権の判定は直交する二つの軸だけで行う — 「何ができるか」は権限（ロールは権限の束）、「どの店舗に対してか」は本人の店舗集合 ∩ 現在店舗（X-Store-ID）。グループ級データ（店舗・ロール・従業員・会員・ポイント・設定・全群統計）は権限のみ、店舗級データ（受注・顧客・在籍・シフト・報酬）は店舗軸も見る。プラットフォーム / 店舗という「側」や「コンソール」は存在しない。API の URL 接頭辞は本人の `/me/**` と認証の `/auth/**` だけで、端点が店舗を要するかは handler が現在店舗を受け取るかで決まり、パスにもパッケージにも授権上の意味は無い。単店舗のグループでは店舗切替を隠して自動選択する。
 避ける表現・設計: Platform / Store コンソール、Central、HQ 側 / 店舗側ロール、平台従業員 / 店舗従業員の区別、コンソール資格（storeBridge）
 
 ### アカウント
@@ -43,7 +43,7 @@ Permission は機能権限の目録で、PermissionCode から播種する。Rol
 避ける表現・設計: Capability、ロールへの店舗紐付け、権限の「側」分類（Console）、標識権限、is_owner
 
 **店舗コンテキスト（Store Context）**:
-現在店舗・授権店舗・切替の共通境界。管理画面は一つのシェルで `/admin/**` と `/store/**` を描き、StoreContextProvider が授権店舗一覧（GET /admin/stores/me）を 1 回取得して現在店舗（前回選択 cookie、無ければ先頭）を確定してから店舗級ページを描く。店舗級ページは URL に店舗 id を持たず、API 呼び出しの X-Store-ID は現在店舗から注入する。店舗級の照会（月次報酬・報酬明細・訂正履歴・運営集計など）は /store の一端点だけで、受注の担当者（ORDER_MANAGE）と店舗集合を跨ぐ照会者（ORDER_SET_VIEW）が同じ端点を読む。現在店舗を持たない読み（店舗集合を跨ぐ一覧・集計）だけが /admin に残る。本人資料は別の MeProvider が共有する。ログイン後の着地は全員ダッシュボード。実装上の使い分けは [frontend/AGENTS.md](frontend/AGENTS.md)。
+現在店舗・授権店舗・切替の共通境界。管理画面は一つのシェルで `/admin/**` と `/store/**` を描き、StoreContextProvider が授権店舗一覧（GET /stores/me）を 1 回取得して現在店舗（前回選択 cookie、無ければ先頭）を確定してから店舗級ページを描く。店舗級ページは URL に店舗 id を持たず、API 呼び出しの X-Store-ID は現在店舗から注入する。店舗級の照会（月次報酬・報酬明細・訂正履歴・運営集計など）は現在店舗を受け取る一端点だけで、受注の担当者（ORDER_MANAGE）と店舗集合を跨ぐ照会者（ORDER_SET_VIEW）が同じ端点を読む。現在店舗を持たない読み（店舗集合を跨ぐ一覧・集計）は本人の店舗集合で絞る別の端点で、単店の端点と同じパスになる場合は `cross-store` を付ける（GET /orders/cross-store など）。本人資料は別の MeProvider が共有する。ログイン後の着地は全員ダッシュボード。実装上の使い分けは [frontend/AGENTS.md](frontend/AGENTS.md)。
 避ける表現・設計: 消費者ごとの me()/stores() 再取得、店舗パスの手組み、URL の店舗 id
 
 ### 店舗運営
@@ -181,7 +181,7 @@ Permission は機能権限の目録で、PermissionCode から播種する。Rol
 **予約申請（OrderApplication）**:
 会員または公開店面のゲストが提出する来店希望で、Order とは別の記録。PENDING → CONFIRMED / DECLINED / WITHDRAWN。確定は補完済み内容から CONFIRMED の Order を作成して order_id を申請へ記録し、申請原文は保存する。謝絶は理由必須。希望営業日を過ぎた PENDING は失効表示を導出し、確定・謝絶を拒否する（本人の取り下げは可能）。
 
-会員申請の名乗りは顧客作成に使い、グループ共通プロフィールの表示名・メールは店舗に渡さない。顧客解決は確定時の関連に基づく。ゲスト申請は公開入口の検証とレート制限を受ける。ADR 0017 と [申請入口](backend/src/main/java/com/kizuna/order/api/store/OrderApplicationController.java)を参照。
+会員申請の名乗りは顧客作成に使い、グループ共通プロフィールの表示名・メールは店舗に渡さない。顧客解決は確定時の関連に基づく。ゲスト申請は公開入口の検証とレート制限を受ける。ADR 0017 と [申請入口](backend/src/main/java/com/kizuna/order/api/OrderApplicationController.java)を参照。
 避ける表現・設計: Order の CREATED 状態、申請原文の上書き、失効バッチ、集約名 Request
 
 **受注帰属記録（Order Attribution）**:
@@ -229,7 +229,7 @@ Order に紐づく 1 名のキャストが**指名**（参照先は店舗在籍 
 避ける表現・設計: 支払済みの証明、独立した給与台帳、精算確認、給与締め・承認・保存版本、実際の入出金管理
 
 **稼働状態（StoreStatus）**:
-店舗は準備中（PREPARING）で登録され、店長が店舗設定から明示的に稼働中（ACTIVE）へ移す（POST /store/config/activation、STORE_PROFILE_MANAGE）。遷移は一方向で、繰り返しは 400。準備中の間だけ店舗を削除できる。
+店舗は準備中（PREPARING）で登録され、店長が店舗設定から明示的に稼働中（ACTIVE）へ移す（POST /config/activation、STORE_PROFILE_MANAGE）。遷移は一方向で、繰り返しは 400。準備中の間だけ店舗を削除できる。
 避ける表現・設計: 着地の副作用としての自動開店、稼働中から準備中への差し戻し
 
 **StoreProfile（店舗サイト設定）**:
