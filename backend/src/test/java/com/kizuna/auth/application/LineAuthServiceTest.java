@@ -46,6 +46,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 
 /** {@link LineAuthService} の単体テスト。 */
 @ExtendWith(MockitoExtension.class)
@@ -134,6 +135,17 @@ class LineAuthServiceTest {
     assertThat(response.registrationTicket()).isNull();
     // 認証方式を問わず同一の発火事象。パスワードログインと同じ契機で同じ引き金を引く。
     verify(loginBenefitTrigger).onAuthenticated(user);
+  }
+
+  @Test
+  @DisplayName("ログインは取引の外で走ること（特典の評価は認証の接続を返却してから）")
+  void loginRunsOutsideATransaction() throws Exception {
+    assertThat(
+            LineAuthService.class
+                .getMethod("login", LineAuthorizationRequest.class)
+                .getAnnotation(Transactional.class))
+        .isNull();
+    assertThat(LineAuthService.class.getAnnotation(Transactional.class)).isNull();
   }
 
   @Test

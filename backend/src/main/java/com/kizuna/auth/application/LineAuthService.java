@@ -58,8 +58,10 @@ public class LineAuthService {
         .orElseGet(() -> new LineConfigResponse(false, null));
   }
 
-  /** LINE ログイン。連携済みならトークンを、未登録なら 1 度きりの登録チケットを返す。 */
-  @Transactional(readOnly = true)
+  /**
+   * LINE ログイン。連携済みならトークンを、未登録なら 1 度きりの登録チケットを返す。取引を張らないのはパスワードログインと同じ理由 （特典の評価は認証の接続を返却してから。LINE
+   * との往復中に接続を握らない利点もある）。
+   */
   public LineLoginResponse login(LineAuthorizationRequest request) {
     LineIdentity identity = verify(request);
     return userRepository

@@ -83,8 +83,8 @@ public class BenefitGrantService {
   /**
    * MEMBER 利用者の認証成功 1 回を発火事象として、適用されるログイン規則ごとに特典を記帳する。会員身分を持たない利用者は何もしない。
    *
-   * <p>呼び元（認証）の取引には参加しない。規則ごとの判定と記帳はそれぞれ独立の取引で、一意索引以外の失敗はそのまま投げる —
-   * 記録して認証を通すのは呼び元の責務で、ここで吞むと台帳の失敗が誰にも見えない。
+   * <p>呼び元は取引の外から呼ぶこと（認証の接続を握ったまま呼ぶと、接続枯渇時に認証済みの要求同士で待ち合う）。規則ごとの判定と記帳は それぞれ独立の取引で、一意索引以外の失敗はそのまま投げる
+   * — 記録して認証を通すのは呼び元の責務で、ここで吞むと台帳の失敗が誰にも見えない。
    */
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public void grantLoginBenefits(long userId) {
@@ -108,7 +108,12 @@ public class BenefitGrantService {
     }
   }
 
+  /**
+   * 会員行の FOR UPDATE で同じ会員の判定と挿入を直列化する。部分一意索引は同日の並行しか収束させず、業務時間帯の午前 0 時を
+   * 跨いだ一人一回限りの初回ログインが二行とも通るため。ロックは仕訳の挿入（会員へ KEY SHARE）より前に取る。
+   */
   private void grantLogin(BenefitRule rule, long memberId, LocalDate today) {
+    memberLookupService.lockForLedgerWrite(memberId);
     if (alreadyBenefited(rule, memberId, null, today)) {
       return;
     }
