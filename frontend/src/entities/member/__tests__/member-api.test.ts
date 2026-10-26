@@ -22,4 +22,10 @@ describe('member api', () => {
     const res = await memberApi.home();
     expect(res).toEqual({ ok: true, url: '/me/member' });
   });
+
+  it('withdraw POSTs /me/member/withdrawal with the reason and returns nothing', async () => {
+    const client = jest.requireMock('@/shared/api/client').default;
+    await expect(memberApi.withdraw({ reason: '引っ越し' })).resolves.toBeUndefined();
+    expect(client.post).toHaveBeenCalledWith('/me/member/withdrawal', { reason: '引っ越し' });
+  });
 });

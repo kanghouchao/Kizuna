@@ -52,6 +52,11 @@ public class MemberOrderApplicationService {
   public MemberOrderApplicationResponse request(
       String email, MemberOrderApplicationCreateRequest request) {
     MemberLookup member = resolveMember(email);
+    // 退会と並行する申請が退会の commit 後に PENDING のまま成立しないよう、退会と同じ会員行を押さえてから退会状態を見る。
+    memberLookupService.lockForBalanceConfirmation(member.memberId());
+    if (memberLookupService.isWithdrawn(member.memberId())) {
+      throw new StaleSessionException("会員情報が存在しません");
+    }
     Long storeId = request.getStoreId();
     if (!storeExistenceCheck.exists(storeId)) {
       throw new ServiceException("店舗が見つかりません");

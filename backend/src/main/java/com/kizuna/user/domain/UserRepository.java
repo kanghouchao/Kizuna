@@ -10,14 +10,26 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * 電子メール・LINE ユーザー ID で引く問い合わせはすべて未退会の行だけを対象にする（ADR 0029）。退会した行は識別子を保持したまま残り、
+ * 同じ識別子の新しい身分と並ぶので、条件を落とすと非一意になる。{@code UserRepositoryWithdrawnPredicateTests}
+ * が全問い合わせに条件があることを固定する。
+ */
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
-  Optional<User> findByEmail(String email);
+  String ACTIVE_BY_EMAIL = " where u.email = :email and u.withdrawnAt is null";
+
+  @Query("select u from User u" + ACTIVE_BY_EMAIL)
+  Optional<User> findByEmail(@Param("email") String email);
 
   /** 連携済み LINE ユーザー ID で身分を引く。LINE ログインが同一性の根拠にする唯一の経路。 */
-  Optional<User> findByLineUserId(String lineUserId);
+  @Query("select u from User u where u.lineUserId = :lineUserId and u.withdrawnAt is null")
+  Optional<User> findByLineUserId(@Param("lineUserId") String lineUserId);
 
   /** 指定 LINE ユーザー ID が既に別の身分へ連携済みか（連携要求の事前検証）。 */
-  boolean existsByLineUserId(String lineUserId);
+  @Query(
+      "select count(u) > 0 from User u where u.lineUserId = :lineUserId"
+          + " and u.withdrawnAt is null")
+  boolean existsByLineUserId(@Param("lineUserId") String lineUserId);
 
   /** 指定した本人種別の行が 1 件でもあるか（停止中の行も数える）。 */
   boolean existsByUserType(UserType userType);
@@ -46,7 +58,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
    * とは異なり、呼び出し前に同一エンティティを読み込んでいない前提で新鮮な行を返す。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select u from User u where u.email = :email")
+  @Query("select u from User u" + ACTIVE_BY_EMAIL)
   Optional<User> findByEmailForUpdate(@Param("email") String email);
 
   /**
@@ -91,9 +103,11 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   /**
    * 資格情報の版だけをスカラー投影で返す（JWT 受理前の正本照合用）。実体を読まないのは、認証フィルタの毎要求経路で
    * ElementCollection（ロール・店舗集合）まで読み込む無駄を避けるため。
+   *
+   * <p>鍵は利用者 ID。電子メールは退会で解放されて別人が引き継ぎうるため、版の照合に使うと退会前のトークンが後継の身分に通る。
    */
-  @Query("select u.credentialVersion from User u where u.email = :email")
-  Optional<Long> findCredentialVersionByEmail(@Param("email") String email);
+  @Query("select u.credentialVersion from User u where u.id = :id")
+  Optional<Long> findCredentialVersionById(@Param("id") Long id);
 
   /** 指定ロールを授与されたユーザーが 1 人でも存在するか（ロール削除の事前検証）。 */
   @Query(

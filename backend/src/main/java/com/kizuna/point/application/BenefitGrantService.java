@@ -114,7 +114,9 @@ public class BenefitGrantService {
    */
   private void grantLogin(BenefitRule rule, long memberId, LocalDate today) {
     memberLookupService.lockForLedgerWrite(memberId);
-    if (alreadyBenefited(rule, memberId, null, today)) {
+    // 認証成功から記帳までの間に退会が確定しうる。退会済み会員の残高は常に零（ADR 0030）なので、同じ会員行のロック下で判じて飛ばす。
+    if (memberLookupService.isWithdrawn(memberId)
+        || alreadyBenefited(rule, memberId, null, today)) {
       return;
     }
     pointEntryRepository.saveAndFlush(

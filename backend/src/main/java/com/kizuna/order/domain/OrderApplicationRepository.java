@@ -2,6 +2,7 @@ package com.kizuna.order.domain;
 
 import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 public interface OrderApplicationRepository extends StoreScopedRepository<OrderApplication> {
@@ -20,6 +22,20 @@ public interface OrderApplicationRepository extends StoreScopedRepository<OrderA
 
   /** 店舗を跨ぐ照会。境界は申請者の会員 id（requester_member_id）。 */
   Optional<OrderApplication> findByIdAndRequesterMemberId(String id, Long requesterMemberId);
+
+  /**
+   * 店舗を跨ぐ照会。境界は申請者の会員 id — 会員退会が全店舗の PENDING 申請を取り下げる入口。
+   *
+   * <p>待たずに押さえる（{@code FOR UPDATE NOWAIT}）。退会は会員行を先に握っており、確定処理は申請行 → 関連の挿入（会員行へ KEY
+   * SHARE）の順なので、申請行を待つと互いに待ち合って死錠する。取れなければ呼出側が競合として撥ね、利用者がやり直す。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "0"))
+  @Query(
+      "select a from OrderApplication a where a.requesterMemberId = :memberId"
+          + " and a.status = com.kizuna.order.domain.OrderApplicationStatus.PENDING order by a.id")
+  List<OrderApplication> lockPendingByRequesterMemberIdWithoutWaiting(
+      @Param("memberId") Long memberId);
 
   // キャストの表示名は ID 参照のため JPQL join で取得する。
   String VIEW_SELECT =

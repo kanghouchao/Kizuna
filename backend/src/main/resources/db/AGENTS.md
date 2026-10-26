@@ -36,6 +36,7 @@ the container's own env because `.env` may override the compose defaults:
 task build service=backend   # changesets are baked into the image at build time
 docker stop backend
 docker exec database sh -c 'psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE $POSTGRES_DB" -c "CREATE DATABASE $POSTGRES_DB OWNER $POSTGRES_USER"'
+docker exec redis redis-cli FLUSHALL   # credential-version keys are keyed by user id and would outlive the recreated rows
 task up
 ```
 

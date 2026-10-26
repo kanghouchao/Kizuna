@@ -226,7 +226,7 @@ class PointEntryTest {
     PointEntry expired =
         PointEntry.expire(7L, 200, List.of(PointAllocation.of(11L, 200)), "fixture");
     PointEntry cleared =
-        PointEntry.withdrawalClear(7L, 200, List.of(PointAllocation.of(11L, 200)), 9L);
+        PointEntry.withdrawalClear(7L, 200, List.of(PointAllocation.of(11L, 200)), 9L, "会員退会");
 
     assertThat(expired.getEntryType()).isEqualTo(PointEntryType.EXPIRE);
     assertThat(expired.getAmount()).isEqualTo(-200);
@@ -244,7 +244,7 @@ class PointEntryTest {
     assertThatThrownBy(() -> PointEntry.expire(7L, 200, allocations, "fixture"))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("引き当ての合計");
-    assertThatThrownBy(() -> PointEntry.withdrawalClear(7L, 200, allocations, 9L))
+    assertThatThrownBy(() -> PointEntry.withdrawalClear(7L, 200, allocations, 9L, "会員退会"))
         .isInstanceOf(InvalidPointEntryException.class)
         .hasMessageContaining("引き当ての合計");
   }
@@ -358,5 +358,18 @@ class PointEntryTest {
     PointEntry entry = PointEntry.grantForOrder(7L, "o1", 3L, amount, 9L);
     entry.setId(id);
     return entry;
+  }
+
+  @Test
+  @DisplayName("退会消去は理由と 1 以上の量を必ず持つこと（退会時と再消去を明細で区別するため）")
+  void withdrawalClearRequiresReasonAndPositiveAmount() {
+    List<PointAllocation> allocations = List.of(PointAllocation.of(11L, 200));
+
+    assertThat(PointEntry.withdrawalClear(7L, 200, allocations, 9L, "会員退会").getReason())
+        .isEqualTo("会員退会");
+    assertThatThrownBy(() -> PointEntry.withdrawalClear(7L, 200, allocations, 9L, " "))
+        .isInstanceOf(InvalidPointEntryException.class);
+    assertThatThrownBy(() -> PointEntry.withdrawalClear(7L, 0, List.of(), 9L, "会員退会"))
+        .isInstanceOf(InvalidPointEntryException.class);
   }
 }

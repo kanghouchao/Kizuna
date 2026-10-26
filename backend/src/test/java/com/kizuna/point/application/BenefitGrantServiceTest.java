@@ -250,6 +250,21 @@ class BenefitGrantServiceTest {
   }
 
   @Test
+  @DisplayName("退会済みの会員には、会員行を握った後の判定でログイン特典を記帳しないこと")
+  void aLoginRuleIsSkippedForAWithdrawnMember() {
+    givenMember();
+    givenLogin(loginRule(BenefitRuleRepeatPolicy.ONCE_PER_DAY, 30));
+    when(memberLookupService.isWithdrawn(MEMBER_ID)).thenReturn(true);
+
+    benefitGrantService.grantLoginBenefits(USER_ID);
+
+    InOrder inOrder = inOrder(memberLookupService);
+    inOrder.verify(memberLookupService).lockForLedgerWrite(MEMBER_ID);
+    inOrder.verify(memberLookupService).isWithdrawn(MEMBER_ID);
+    verify(pointEntryRepository, never()).saveAndFlush(any());
+  }
+
+  @Test
   @DisplayName("一日一回の規則は、同じ暦日に既に受益した会員へ二件目を記帳しないこと")
   void aOncePerDayRuleDoesNotFireTwiceOnTheSameDay() {
     givenMember();

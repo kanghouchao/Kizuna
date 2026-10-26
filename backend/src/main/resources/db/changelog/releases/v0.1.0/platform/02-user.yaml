@@ -23,13 +23,10 @@ databaseChangeLog:
               - column:
                   # 資格情報の 2 列が NULL 可なのは本人種別 SERVICE のため。列に値が無いことが
                   # 「サービスIDは対話ログインしない」の構造上の根拠で、種別ごとの要否は
-                  # User の不変条件が守る。一意制約は複数の NULL を許すので保つ。
+                  # User の不変条件が守る。一意性は下の部分一意索引（未退会の行だけ）が担う。
                   name: email
                   type: VARCHAR(255)
-                  constraints:
-                    unique: true
-                    uniqueConstraintName: uq_t_users_email
-                  remarks: ログイン ID を兼ねるメールアドレス（SERVICE は NULL）
+                  remarks: ログイン ID を兼ねるメールアドレス（SERVICE は NULL。未退会の行で一意）
               - column:
                   name: password
                   type: VARCHAR(255)
@@ -69,13 +66,17 @@ databaseChangeLog:
                     nullable: false
                   remarks: 授権店舗範囲種別（ALL_STORES / SPECIFIC_STORES）
               - column:
-                  # 1 つの LINE アカウントが複数の身分に結び付くと、なりすまし経路になるため一意。
+                  # 1 つの LINE アカウントが複数の身分に結び付くと、なりすまし経路になるため一意
+                  # （未退会の行の間で。下の部分一意索引）。
                   name: line_user_id
                   type: VARCHAR(64)
-                  constraints:
-                    unique: true
-                    uniqueConstraintName: uq_t_users_line_user_id
-                  remarks: 連携済み LINE ユーザー ID（未連携は NULL。値を持つ行は一意）
+                  remarks: 連携済み LINE ユーザー ID（未連携は NULL。未退会の行で一意）
+              - column:
+                  # 会員退会の終端状態（ADR 0029）。退会した行は電子メール・LINE ID を保持したまま残り、
+                  # 認証・重複確認・LINE 連携の候補から外れる。停止（enabled）とは別の状態。
+                  name: withdrawn_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 退会日時（未退会は NULL）
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -95,6 +96,17 @@ databaseChangeLog:
                   constraints:
                     nullable: false
                   remarks: 楽観ロック用バージョン
+        # 一意性は未退会の行だけに掛ける（ADR 0029）。退会した行が識別子を占有し続けると同じ電子メールで
+        # 再登録できない。Liquibase OSS は述語付き一意索引を宣言できないため素の SQL で作る。
+        # 索引名は DbConstraint が業務例外へ写像する字面なので変えない。
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_users_email
+              ON t_users (email) WHERE withdrawn_at IS NULL
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_users_line_user_id
+              ON t_users (line_user_id) WHERE withdrawn_at IS NULL
         - createTable:
             tableName: t_user_stores
             remarks: 授権店舗集合（store_scope_type=SPECIFIC_STORES 時のみ行を持つ）

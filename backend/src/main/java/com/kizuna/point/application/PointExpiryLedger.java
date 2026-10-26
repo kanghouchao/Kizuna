@@ -1,5 +1,6 @@
 package com.kizuna.point.application;
 
+import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.point.domain.PointAllocation;
 import com.kizuna.point.domain.PointAllocationRepository;
 import com.kizuna.point.domain.PointConsumption;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PointExpiryLedger {
   private final PointEntryRepository entries;
   private final PointAllocationRepository allocations;
+  private final MemberLookupService members;
 
   public record ExpiryEntry(Long id, Long memberId, int amount) {}
 
@@ -42,7 +44,9 @@ public class PointExpiryLedger {
     }
     if (ids.isEmpty()) return List.of();
 
+    // 会員行 → ロットの順で押さえる（退会・帰属の物化と同じ順序。逆だと失効仕訳の外部キー検査が会員行を待って死錠する）。
     // 消費・取消と同じロットを同じ順序でロックし、待機中に確定した引当も取得後に数える。
+    entries.findMemberIdsOf(ids).stream().sorted().forEach(members::lockForBalanceConfirmation);
     var credits = entries.lockExpiryCandidates(ids);
     Map<Long, Integer> consumed =
         allocations.findConsumedBySourceEntryIds(ids).stream()

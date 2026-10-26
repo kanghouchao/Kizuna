@@ -1,5 +1,10 @@
 import { apiClient } from '@/shared/api';
-import { MemberHomeResponse, MemberRegisterRequest, MemberRegisterResponse } from '../model/types';
+import {
+  MemberHomeResponse,
+  MemberRegisterRequest,
+  MemberRegisterResponse,
+  MemberWithdrawalRequest,
+} from '../model/types';
 
 export const memberApi = {
   /** 会員を自助登録する（公開・匿名）。 */
@@ -11,5 +16,9 @@ export const memberApi = {
   home: async (): Promise<MemberHomeResponse> => {
     const response = await apiClient.get('/me/member');
     return response.data;
+  },
+  /** 本人が退会する（204）。成功後は旧トークンが失効しているので呼び出し側がログアウトする。 */
+  withdraw: async (data: MemberWithdrawalRequest): Promise<void> => {
+    await apiClient.post('/me/member/withdrawal', data);
   },
 };

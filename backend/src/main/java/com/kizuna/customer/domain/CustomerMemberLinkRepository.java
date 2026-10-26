@@ -52,6 +52,9 @@ public interface CustomerMemberLinkRepository extends StoreScopedRepository<Cust
   Optional<CustomerMemberLink> findByStoreIdAndMemberIdAndStatus(
       Long storeId, Long memberId, LinkStatus status);
 
+  /** 店舗を跨ぐ照会。境界は会員 id — 会員退会が全店舗の ACTIVE 関連を解除するための入口で、店舗条件を持たない。 */
+  List<CustomerMemberLink> findByMemberIdAndStatusOrderByIdAsc(Long memberId, LinkStatus status);
+
   // 実行者の表示名は ID 参照のため JPQL join で取得する。User は FQCN で参照する
   // （HQL の予約語衝突を避ける既存規約）。実行者が削除されると linked_by / released_by は
   // NULL になるため join は left。

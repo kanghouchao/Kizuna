@@ -46,6 +46,20 @@ databaseChangeLog:
                     nullable: false
                   remarks: 会員ランク（BRONZE/SILVER/GOLD。跨店舗の累計実績で昇格し降格は無い）
               - column:
+                  # 会員退会（終端状態）。退会日時・理由・操作者を同一取引で記録する。退会済みの行は
+                  # 残高が常に零で、付与・ランク更新の帰属物化を受けない（ADR 0030）。
+                  name: withdrawn_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 退会日時（未退会は NULL）
+              - column:
+                  name: withdrawal_reason
+                  type: VARCHAR(500)
+                  remarks: 退会理由（退会済みの行では必須）
+              - column:
+                  name: withdrawn_by
+                  type: BIGINT
+                  remarks: 退会を起こした利用者（本人または職員）
+              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   defaultValueComputed: CURRENT_TIMESTAMP
@@ -71,3 +85,11 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: CASCADE
+        - addForeignKeyConstraint:
+            # 退会の記録は操作者の行が消えても残す監査系の参照なので SET NULL。
+            constraintName: fk_t_members_withdrawn_by
+            baseTableName: t_members
+            baseColumnNames: withdrawn_by
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: SET NULL

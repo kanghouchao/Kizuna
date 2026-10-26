@@ -15,6 +15,20 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
   Optional<Member> findByUserId(Long userId);
 
+  /**
+   * 退会のために会員行を悲観排他ロック付きで引く。退会は「退会済みか読み、未退会なら書く」の読み書きで、二重の退会と、 同じ会員への並行する帰属の物化（{@link
+   * #lockIdForUpdate} を先に取る）を直列化する。取引内で最初の読み込みであること（ロックの昇格は版の照合を伴う）。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select m from com.kizuna.member.domain.Member m where m.userId = :userId")
+  Optional<Member> findByUserIdForUpdate(@Param("userId") Long userId);
+
+  /** 退会済みか。帰属の物化と巻き戻しの再消去が、会員行を読み込まずに分岐するための述語。 */
+  @Query(
+      "select count(m) > 0 from com.kizuna.member.domain.Member m"
+          + " where m.id = :id and m.withdrawnAt is not null")
+  boolean isWithdrawn(@Param("id") Long id);
+
   Optional<Member> findByMemberCode(String memberCode);
 
   boolean existsByMemberCode(String memberCode);

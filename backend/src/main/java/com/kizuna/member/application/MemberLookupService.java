@@ -33,7 +33,16 @@ public class MemberLookupService {
     return memberRepository.findIdentityByUserId(userId).map(MemberLookupService::toLookup);
   }
 
-  /** 顧客統合の残高確認から確定まで、新規仕訳の挿入と会員削除を直列化する。 */
+  /** 会員が退会済みか。退会済み会員の残高は常に零（ADR 0030）で、台帳へ加算を生む操作と帰属の物化はこの述語で分岐する。 会員行の実体は返さない。 */
+  @Transactional(readOnly = true)
+  public boolean isWithdrawn(long memberId) {
+    return memberRepository.isWithdrawn(memberId);
+  }
+
+  /**
+   * 会員行を押さえる（FOR UPDATE）。残高確認〜確定、関連の成立、手動の加算を、退会（同じ行を先に押さえる）や新規仕訳の挿入と 直列化する。顧客行を押さえる経路は顧客 →
+   * 会員の順で取ること（退会は会員だけを押さえるので環にならない）。
+   */
   @Transactional
   public void lockForBalanceConfirmation(long memberId) {
     lockMember(memberId);

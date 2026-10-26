@@ -1,6 +1,7 @@
 package com.kizuna.auth.infrastructure;
 
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,12 @@ public class CredentialVersionService {
   /** トークン claim 名。発行（AuthService）と検証（CredentialVersionValidator）の単一の合意点。 */
   public static final String CLAIM = "credentialVersion";
 
+  /**
+   * 版の鍵となる利用者 ID の claim 名。subject の電子メールで鍵を取らないのは、退会で解放された電子メールを後継の身分が引き継ぐと、
+   * 退会前のトークンの版が後継の版と一致しうるため（ADR 0029）。
+   */
+  public static final String USER_ID_CLAIM = JwtClaims.USER_ID;
+
   private static final String KEY_PREFIX = "credential-version:";
 
   /** 既存値以上のときだけ書く（単調書込み）。書き込みの到着順に依らず最大の版へ収束することを Redis 側の原子性で保証する。 */
@@ -35,18 +42,18 @@ public class CredentialVersionService {
   private final UserRepository userRepository;
 
   /** claim が運ぶ版を確定済みの版と照合する。主体不在は拒否し、キャッシュの遅れだけを単調書込みで埋め戻す。 */
-  public boolean isCurrent(String email, long claimedVersion) {
-    Object cached = redisTemplate.opsForValue().get(KEY_PREFIX + email);
+  public boolean isCurrent(long userId, long claimedVersion) {
+    Object cached = redisTemplate.opsForValue().get(KEY_PREFIX + userId);
     Long cachedVersion = cached == null ? null : Long.parseLong(cached.toString());
     if (cachedVersion != null && claimedVersion < cachedVersion) {
       return false;
     }
     return userRepository
-        .findCredentialVersionByEmail(email)
+        .findCredentialVersionById(userId)
         .map(
             current -> {
               if (cachedVersion == null || cachedVersion < current) {
-                reflect(email, current);
+                reflect(userId, current);
               }
               return claimedVersion == current;
             })
@@ -54,10 +61,10 @@ public class CredentialVersionService {
   }
 
   /** 確定済みの版をキャッシュへ単調に反映する（増分の commit 後と miss の埋め戻しが共用する唯一の書き込み口）。 */
-  public void reflect(String email, long version) {
+  public void reflect(long userId, long version) {
     redisTemplate.execute(
         MONOTONIC_SET,
-        List.of(KEY_PREFIX + email),
+        List.of(KEY_PREFIX + userId),
         String.valueOf(version),
         String.valueOf(appProperties.getJwtExpiration()));
   }

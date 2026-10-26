@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditWriter;
+import com.kizuna.member.application.MemberLookupService;
+import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.point.domain.PointAllocation;
 import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
@@ -189,6 +191,9 @@ class PointExpiryPostgresTest {
                       .execute(
                           status -> {
                             first
+                                .getBean(MemberLookupService.class)
+                                .lockForBalanceConfirmation(memberId);
+                            first
                                 .getBean(PointEntryRepository.class)
                                 .findCreditsForUpdate(memberId);
                             locked.countDown();
@@ -229,6 +234,9 @@ class PointExpiryPostgresTest {
                       .execute(
                           status -> {
                             first
+                                .getBean(MemberLookupService.class)
+                                .lockForBalanceConfirmation(memberId);
+                            first
                                 .getBean(PointEntryRepository.class)
                                 .findCreditsForUpdate(memberId);
                             locked.countDown();
@@ -251,6 +259,7 @@ class PointExpiryPostgresTest {
         .executeWithoutResult(
             status -> {
               var repository = first.getBean(PointEntryRepository.class);
+              first.getBean(MemberLookupService.class).lockForBalanceConfirmation(memberId);
               repository.findCreditsForUpdate(memberId);
               var use = repository.findUsesByOrderId(order.id()).getFirst();
               repository.saveAndFlush(PointEntry.reverseUse(use, "利用取消", serviceId));
@@ -696,7 +705,7 @@ class PointExpiryPostgresTest {
           second
               .getBean(JdbcTemplate.class)
               .queryForObject(
-                  "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like '%t_point_entries%'",
+                  "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and (query like '%t_point_entries%' or query like '%t_members%')",
                   Long.class);
       if (blocked > 0) return;
       Thread.sleep(20);
@@ -721,12 +730,14 @@ class PointExpiryPostgresTest {
         ExecutionRequestRepository.class,
         AuditEventRepository.class,
         UserRepository.class,
-        StoreRepository.class
+        StoreRepository.class,
+        MemberRepository.class
       })
   @Import({
     PointExpiryTask.class,
     PointExpiryLedger.class,
     PointLedgerService.class,
+    MemberLookupService.class,
     TaskExecutor.class,
     TaskLifecycle.class,
     TaskRegistry.class,

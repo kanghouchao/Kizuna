@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.MeResponse;
 import com.kizuna.auth.api.dto.Token;
+import com.kizuna.auth.infrastructure.CredentialVersionService;
 import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.ServiceException;
@@ -94,6 +95,12 @@ class AuthServiceTest {
   }
 
   private User hqAdmin() {
+    User user = hqAdminWithoutId();
+    user.setId(1L);
+    return user;
+  }
+
+  private User hqAdminWithoutId() {
     return User.builder()
         .email("admin@kizuna.test")
         .password("stored-hash")
@@ -161,6 +168,8 @@ class AuthServiceTest {
     assertThat(claims).doesNotContainKeys("storeBridge", "storeScopeType", "storeIds");
     // 発行時点の資格情報の版が claim に載る（ADR 0022 — 検証側が相等比較する前提値）。
     assertThat(claims.get("credentialVersion")).isEqualTo(0L);
+    // 版の鍵は利用者 ID。subject の電子メールは退会で解放されて別人へ移りうる（ADR 0029）。
+    assertThat(claims).containsKey(CredentialVersionService.USER_ID_CLAIM);
   }
 
   @Test

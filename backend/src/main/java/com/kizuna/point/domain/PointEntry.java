@@ -216,6 +216,9 @@ public class PointEntry extends BaseEntity {
         && (reason == null || reason.isBlank())) {
       throw new InvalidPointEntryException("取消の理由は必須です");
     }
+    if (entryType == PointEntryType.WITHDRAWAL_CLEAR && (reason == null || reason.isBlank())) {
+      throw new InvalidPointEntryException("退会消去の理由は必須です");
+    }
     if (entryType == PointEntryType.MANUAL_ADJUST
         && (idempotencyKey == null || idempotencyKey.isBlank())) {
       throw new InvalidPointEntryException("手動調整の冪等キーは必須です");
@@ -505,9 +508,20 @@ public class PointEntry extends BaseEntity {
     return entry;
   }
 
-  /** 退会に伴う残高消去。 */
+  /**
+   * 退会に伴う残高消去。会員ごと一つの仕訳で全未消費残を元ロットへ引き当てる。
+   *
+   * <p>理由は必須。退会時の消去と、退会後に加算が生じた取引内での再消去（ADR 0030）が同じ種別に並ぶため、明細の読み手は 理由でしか両者を区別できない。
+   */
   public static PointEntry withdrawalClear(
-      Long memberId, int points, List<PointAllocation> allocations, Long actorUserId) {
+      Long memberId,
+      int points,
+      List<PointAllocation> allocations,
+      Long actorUserId,
+      String reason) {
+    if (points <= 0) {
+      throw new InvalidPointEntryException("退会消去のポイントは 1 以上で指定してください");
+    }
     return new PointEntry(
         PointEntryType.WITHDRAWAL_CLEAR,
         memberId,
@@ -518,7 +532,7 @@ public class PointEntry extends BaseEntity {
         null,
         null,
         actorUserId,
-        null,
+        reason,
         null,
         null,
         allocations);

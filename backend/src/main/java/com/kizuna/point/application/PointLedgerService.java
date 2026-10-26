@@ -1,5 +1,6 @@
 package com.kizuna.point.application;
 
+import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.point.domain.OrderGrantTotalView;
 import com.kizuna.point.domain.PlannedAllocation;
 import com.kizuna.point.domain.PointAllocation;
@@ -46,7 +47,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PointLedgerService {
 
+  /** 巻き戻しが退会済み会員へ戻した残高を同じ取引で再び消去するときの固定文言（ADR 0030）。 */
+  public static final String WITHDRAWN_RECLEAR_REASON = "退会済み会員のため消去";
+
   private final BusinessAudit businessAudit;
+  private final MemberLookupService memberLookupService;
   private final PointEntryRepository pointEntryRepository;
   private final PointAllocationRepository pointAllocationRepository;
   private final PointRollbackRepository pointRollbackRepository;
@@ -206,6 +211,12 @@ public class PointLedgerService {
       throw new ServiceException("増減は 0 以外で指定してください");
     }
     if (delta > 0) {
+      // 退会済み会員の残高は常に零（ADR 0030）。関連の解除で顧客経路からは到達しないが、守衛は台帳側にも置く。
+      // 会員行を押さえてから判定する — 押さえないと並行する退会の消去の後にこの加算が確定する。
+      memberLookupService.lockForBalanceConfirmation(memberId);
+      if (memberLookupService.isWithdrawn(memberId)) {
+        throw new ServiceException("退会済みの会員にはポイントを付与できません");
+      }
       // 期限当日はまだ使えるため撥ねるのは本日より前だけ。過去の期限を通すと、記帳は成功したのに
       // その加算が一度も残高に現れない仕訳が積まれる。
       if (expiresOn != null && expiresOn.isBefore(businessToday())) {
@@ -372,7 +383,7 @@ public class PointLedgerService {
         pointEntryRepository
             .findById(entryId)
             .orElseThrow(() -> new NotFoundException("ポイント仕訳が見つかりません"));
-    pointEntryRepository.findCreditsForUpdate(original.getMemberId());
+    lockedLedgerOf(original.getMemberId());
     int available = original.getAmount() - consumedBy(List.of(entryId)).getOrDefault(entryId, 0);
     pointEntryRepository.save(PointEntry.cancel(original, available, reason, actorUserId));
   }
@@ -442,7 +453,47 @@ public class PointLedgerService {
     PointRollback rollback =
         PointRollback.of(orderId, reason, actorUserId, cancelled, restored, beforeTotalFee);
     pointRollbackRepository.saveAndFlush(rollback);
+    // 利用の逆転は退会済み会員の残高を零から動かしうる。戻った分は同じ取引で再び消去する（ADR 0030）。
+    pointEntryRepository.flush();
+    uses.stream()
+        .map(PointEntry::getMemberId)
+        .distinct()
+        .filter(memberLookupService::isWithdrawn)
+        .forEach(memberId -> clearForWithdrawal(memberId, actorUserId, WITHDRAWN_RECLEAR_REASON));
     return new PointRollbackResult(cancelled, restored);
+  }
+
+  /**
+   * 退会消去。会員の全ロットの未消費残を、期限の有無に依らず WITHDRAWAL_CLEAR 仕訳へ元ロット充当付きで記帳する。残量が無ければ何も書かない。
+   *
+   * <p>仕訳は会員ごと一つが既定だが、1 件の量は int なので、ロットを跨いだ合計が int を超えるときだけ上限で区切って複数件にする。
+   *
+   * <p>消費と同じ行ロックの下で数える。呼出側は会員行を先に押さえていること — 仕訳の外部キー検査が置く KEY SHARE の後から 会員行の FOR UPDATE を求めると死錠する。
+   *
+   * @return 消去したポイント。ロットを跨いだ合計は int を超えうる
+   */
+  public long clearForWithdrawal(long memberId, Long actorUserId, String reason) {
+    long total = 0;
+    List<PlannedAllocation> chunk = new ArrayList<>();
+    int chunkTotal = 0;
+    for (PlannedAllocation allocation : lockedLedgerOf(memberId).planClearance()) {
+      if (chunkTotal > Integer.MAX_VALUE - allocation.amount()) {
+        pointEntryRepository.save(
+            PointEntry.withdrawalClear(
+                memberId, chunkTotal, allocationsOf(chunk), actorUserId, reason));
+        chunk = new ArrayList<>();
+        chunkTotal = 0;
+      }
+      chunk.add(allocation);
+      chunkTotal += allocation.amount();
+      total += allocation.amount();
+    }
+    if (chunkTotal > 0) {
+      pointEntryRepository.save(
+          PointEntry.withdrawalClear(
+              memberId, chunkTotal, allocationsOf(chunk), actorUserId, reason));
+    }
+    return total;
   }
 
   @Transactional(readOnly = true)
@@ -543,11 +594,15 @@ public class PointLedgerService {
         .map(PointEntry::getMemberId)
         .distinct()
         .sorted()
-        .forEach(pointEntryRepository::findCreditsForUpdate);
+        .forEach(this::lockedLedgerOf);
   }
 
-  /** 消費のために加算ロットを行ロック付きで読み直した台帳。 */
+  /**
+   * 消費のために加算ロットを行ロック付きで読み直した台帳。ロットより先に会員行を押さえる — 仕訳の外部キー検査は会員行へ KEY SHARE を置くため、会員行 →
+   * ロットの順を守らない書き手は、会員行を先に押さえる退会・帰属の物化と死錠する。
+   */
   private PointLedger lockedLedgerOf(long memberId) {
+    memberLookupService.lockForBalanceConfirmation(memberId);
     return ledgerOf(pointEntryRepository.findCreditsForUpdate(memberId));
   }
 
