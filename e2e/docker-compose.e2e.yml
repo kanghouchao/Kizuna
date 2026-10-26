@@ -119,7 +119,9 @@ services:
     healthcheck:
       # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
       test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
-      start_period: 15s
+      # 空の DB へ Liquibase を全量適用してから起動するため、CI の共有 runner では 15 秒では足りない。
+      # start_period 中の失敗は数えないだけなので、起動の速い手元では待ち時間は増えない。
+      start_period: 90s
       interval: 5s
       timeout: 3s
       retries: 3
@@ -194,6 +196,11 @@ services:
       PGDATABASE: kizuna
       PGUSER: kizuna
       PGPASSWORD: ${POSTGRES_PASSWORD:-password}
+      # 分割（例 1/4）と本体シナリオの絞り込み（正規表現）。root の `task e2e` が渡し、playwright.config.ts が読む。
+      E2E_SHARD: ${E2E_SHARD:-}
+      E2E_GREP: ${E2E_GREP:-}
+      # GitHub Actions が true にする。立っているとレポーターが blob になる。
+      CI: ${CI:-}
     # gateway の healthcheck は traefik の ping しか見ず、ルーティング設定の読込失敗でも healthy になる。
     # 実際に router を通る経路で疎通を確かめ、到達しないなら原因を名指しして落ちる
     # （全シナリオが理由不明で赤くなるのを避ける）。
