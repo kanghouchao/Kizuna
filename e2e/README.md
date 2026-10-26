@@ -42,8 +42,8 @@ task e2e grep=order-lifecycle
 ### 増分と全量
 
 PR を出す前は、変更に関係する feature だけを `task e2e grep=...` で実行し、選んだ feature と理由を PR に書きます
-（レビューで選択の妥当性を確認するため）。`steps/store-api.ts`・`playwright.config.ts`・E2E のスタック・認証・店舗スコープの
-ように多くのシナリオが共有する部分に触れたときは、ローカルで全量を実行します。
+（レビューで選択の妥当性を確認するため）。ローカルでは全量を実行しません。`steps/store-api.ts`・`playwright.config.ts`・
+E2E のスタック・認証・店舗スコープのように多くのシナリオが共有する部分に触れたときは、その部分を通る feature まで選択を広げます。
 
 全量は master へ入った後に [E2E ワークフロー](../.github/workflows/e2e.yml)が実行します。Actions の画面から任意のブランチで手動実行もでき、その失敗は issue になりません。イメージを一度だけ
 ビルドし、4 つの shard がそれぞれ自分の使い捨てスタックで `task e2e:run shard=i/4` を実行し、最後の `E2E` job が
