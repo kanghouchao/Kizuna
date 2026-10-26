@@ -46,6 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -142,6 +143,20 @@ class MemberOrderApplicationServiceTest {
     assertThat(saved.getRequesterDeclaredName())
         .as("店舗へ名乗る名前が申請に残ること（確定時の自動整備が台帳行の氏名に使う）")
         .isEqualTo(DECLARED_NAME);
+  }
+
+  @Test
+  @DisplayName("退会済みの会員からの申請は会員行を押さえた上でセッション無効として拒み、行を起こさないこと")
+  void requestRejectsWithdrawnMember() {
+    when(memberLookupService.isWithdrawn(MEMBER_ID)).thenReturn(true);
+
+    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), null)))
+        .isInstanceOf(StaleSessionException.class);
+
+    InOrder order = Mockito.inOrder(memberLookupService);
+    order.verify(memberLookupService).lockForBalanceConfirmation(MEMBER_ID);
+    order.verify(memberLookupService).isWithdrawn(MEMBER_ID);
+    verify(orderApplicationRepository, never()).save(any());
   }
 
   @Test

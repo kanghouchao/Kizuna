@@ -188,4 +188,20 @@ class PointLedgerTest {
   private static PointLedger ledger(PointLot... lots) {
     return new PointLedger(List.of(lots), TODAY);
   }
+
+  @Test
+  @DisplayName("退会消去は期限切れの残りも含めて全ロットの未消費量を仕訳 ID 昇順で引き当てること")
+  void planClearanceTakesEveryRemainderRegardlessOfExpiry() {
+    PointLedger ledger =
+        ledger(
+            new PointLot(3L, 100, LocalDate.of(2026, 1, 1), 30),
+            new PointLot(1L, 100, null, 100),
+            new PointLot(2L, 50, LocalDate.of(2099, 1, 1), 0));
+
+    assertThat(ledger.balance()).as("期限切れは残高に入らない").isEqualTo(50);
+    assertThat(ledger.planClearance())
+        .extracting(PlannedAllocation::sourceEntryId, PlannedAllocation::amount)
+        .containsExactly(tuple(2L, 50), tuple(3L, 70));
+    assertThat(ledger(new PointLot(1L, 100, null, 100)).planClearance()).isEmpty();
+  }
 }

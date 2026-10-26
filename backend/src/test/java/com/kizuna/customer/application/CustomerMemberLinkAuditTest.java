@@ -3,6 +3,7 @@ package com.kizuna.customer.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -62,6 +63,9 @@ class CustomerMemberLinkAuditTest {
     when(users.findById(9L)).thenReturn(Optional.of(actor));
     when(customers.findByIdAndStoreIdForUpdate("customer", STORE_ID))
         .thenReturn(Optional.of(Customer.builder().build()));
+    // 紐づけは会員行を押さえてから退会状態を見る。模擬の会員は常に実在し未退会。
+    when(members.lockIdForBalanceConfirmation(anyLong()))
+        .thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
     when(members.findIdentityByMemberCode("秘密の会員コード"))
         .thenReturn(
             Optional.of(

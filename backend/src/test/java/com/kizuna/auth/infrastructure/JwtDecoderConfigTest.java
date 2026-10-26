@@ -51,7 +51,7 @@ class JwtDecoderConfigTest {
     tokenBlacklistService = mock(TokenBlacklistService.class);
     lenient().when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(false);
     credentialVersionService = mock(CredentialVersionService.class);
-    lenient().when(credentialVersionService.isCurrent(anyString(), anyLong())).thenReturn(true);
+    lenient().when(credentialVersionService.isCurrent(anyLong(), anyLong())).thenReturn(true);
 
     decoder =
         new JwtDecoderConfig()
@@ -81,6 +81,7 @@ class JwtDecoderConfigTest {
     if (withCredentialVersion) {
       claims.claim(CredentialVersionService.CLAIM, 0L);
     }
+    claims.claim(CredentialVersionService.USER_ID_CLAIM, 42L);
     JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
     return encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
   }
@@ -93,13 +94,13 @@ class JwtDecoderConfigTest {
     Jwt jwt = decoder.decode(token);
 
     assertThat(jwt.getSubject()).isEqualTo("user@kizuna.test");
-    verify(credentialVersionService).isCurrent("user@kizuna.test", 0L);
+    verify(credentialVersionService).isCurrent(42L, 0L);
   }
 
   @Test
   @DisplayName("有効な token でも資格情報の正本を照合できなければ検証を失敗させる")
   void credentialValidationFailurePropagates() {
-    when(credentialVersionService.isCurrent("user@kizuna.test", 0L))
+    when(credentialVersionService.isCurrent(42L, 0L))
         .thenThrow(new IllegalStateException("正本を照合できません"));
     String token = issueToken(JwtIssuer.ISSUER, 3_600_000L);
 
@@ -137,7 +138,7 @@ class JwtDecoderConfigTest {
   @Test
   @DisplayName("資格情報の版が現在と不一致の token は拒否されること")
   void rejectsStaleCredentialVersionToken() {
-    when(credentialVersionService.isCurrent("user@kizuna.test", 0L)).thenReturn(false);
+    when(credentialVersionService.isCurrent(42L, 0L)).thenReturn(false);
     String token = issueToken(JwtIssuer.ISSUER, 3_600_000L);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);

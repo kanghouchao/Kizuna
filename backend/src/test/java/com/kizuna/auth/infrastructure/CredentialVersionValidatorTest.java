@@ -19,18 +19,33 @@ class CredentialVersionValidatorTest {
       new CredentialVersionValidator(credentialVersionService);
 
   private Jwt jwt(Object credentialVersionClaim) {
+    return jwt(credentialVersionClaim, 42L);
+  }
+
+  private Jwt jwt(Object credentialVersionClaim, Object userIdClaim) {
     Jwt.Builder builder =
         Jwt.withTokenValue("token").header("alg", "HS256").subject("user@example.com");
     if (credentialVersionClaim != null) {
       builder.claim(CredentialVersionService.CLAIM, credentialVersionClaim);
     }
+    if (userIdClaim != null) {
+      builder.claim(CredentialVersionService.USER_ID_CLAIM, userIdClaim);
+    }
     return builder.build();
+  }
+
+  @Test
+  @DisplayName("利用者 ID の claim が欠落・数値でなければ照合せずに失敗（subject の電子メールへは退行しない）")
+  void failsWhenUserIdClaimIsMissingOrNotANumber() {
+    assertThat(validator.validate(jwt(2L, null)).hasErrors()).isTrue();
+    assertThat(validator.validate(jwt(2L, "42")).hasErrors()).isTrue();
+    verifyNoInteractions(credentialVersionService);
   }
 
   @Test
   @DisplayName("claim の版が現在と一致すれば成功")
   void succeedsWhenVersionIsCurrent() {
-    when(credentialVersionService.isCurrent("user@example.com", 2L)).thenReturn(true);
+    when(credentialVersionService.isCurrent(42L, 2L)).thenReturn(true);
 
     OAuth2TokenValidatorResult result = validator.validate(jwt(2L));
 
@@ -40,7 +55,7 @@ class CredentialVersionValidatorTest {
   @Test
   @DisplayName("claim の版が現在と不一致なら失敗")
   void failsWhenVersionIsStale() {
-    when(credentialVersionService.isCurrent("user@example.com", 1L)).thenReturn(false);
+    when(credentialVersionService.isCurrent(42L, 1L)).thenReturn(false);
 
     OAuth2TokenValidatorResult result = validator.validate(jwt(1L));
 

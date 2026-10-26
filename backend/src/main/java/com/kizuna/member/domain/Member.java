@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.time.OffsetDateTime;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -37,6 +38,16 @@ public class Member extends BaseEntity {
   @Column(name = "rank", nullable = false, length = 20)
   private MemberRank rank;
 
+  /** 会員退会の終端状態（GLOSSARY「会員退会」）。再入会は無く、同じ電子メールでの再登録は別の会員になる。 */
+  @Column(name = "withdrawn_at")
+  private OffsetDateTime withdrawnAt;
+
+  @Column(name = "withdrawal_reason", length = 500)
+  private String withdrawalReason;
+
+  @Column(name = "withdrawn_by")
+  private Long withdrawnBy;
+
   @Builder
   public Member(String memberCode, Long userId) {
     if (memberCode == null || memberCode.isBlank()) {
@@ -48,6 +59,33 @@ public class Member extends BaseEntity {
     this.memberCode = memberCode;
     this.userId = userId;
     this.rank = MemberRank.BRONZE;
+  }
+
+  /**
+   * 退会する。理由は必須で、二度目は 409（{@link MemberAlreadyWithdrawnException}）。退会済みの会員は残高が常に零で、
+   * 付与・来店特典・ランク更新の帰属物化を受けない（ADR 0030）。
+   */
+  public void withdraw(String reason, Long withdrawnBy, OffsetDateTime at) {
+    if (withdrawnAt != null) {
+      throw new MemberAlreadyWithdrawnException();
+    }
+    if (reason == null || reason.isBlank()) {
+      throw new InvalidMemberException("退会理由は必須です");
+    }
+    String normalized = reason.strip();
+    if (normalized.length() > 500) {
+      throw new InvalidMemberException("退会理由は500文字以内で入力してください");
+    }
+    if (withdrawnBy == null || at == null) {
+      throw new InvalidMemberException("退会の操作者と日時は必須です");
+    }
+    this.withdrawnAt = at;
+    this.withdrawalReason = normalized;
+    this.withdrawnBy = withdrawnBy;
+  }
+
+  public boolean isWithdrawn() {
+    return withdrawnAt != null;
   }
 
   /** 上位のランクへ昇格する。降格も同格への書き換えも受け付けない — ランクの単調性は集約自身が守る不変条件である。 */

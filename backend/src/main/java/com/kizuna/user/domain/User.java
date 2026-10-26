@@ -1,5 +1,7 @@
 package com.kizuna.user.domain;
 
+import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.BaseEntity;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -10,6 +12,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -42,8 +45,8 @@ import org.hibernate.annotations.BatchSize;
 @NoArgsConstructor
 public class User extends BaseEntity {
 
-  /** ログイン ID を兼ねるメールアドレス。SERVICE のみ null（資格情報を持たないことの構造上の表現）。 */
-  @Column(unique = true, length = 255)
+  /** ログイン ID を兼ねるメールアドレス。SERVICE のみ null（資格情報を持たないことの構造上の表現）。一意なのは未退会の行の間だけ（ADR 0029）。 */
+  @Column(length = 255)
   private String email;
 
   /** bcrypt ハッシュ。SERVICE のみ null。 */
@@ -68,6 +71,13 @@ public class User extends BaseEntity {
 
   @Column(nullable = false)
   private Boolean enabled = true;
+
+  /**
+   * 会員退会の終端状態（ADR 0029）。退会した行は email・LINE ID を保持したまま認証・重複確認の候補から外れ、 同じ識別子で新しい身分を作れる。停止（{@link
+   * #enabled}）とは別の状態で、不可逆。
+   */
+  @Column(name = "withdrawn_at")
+  private OffsetDateTime withdrawnAt;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "user_type", nullable = false, length = 20)
@@ -149,6 +159,21 @@ public class User extends BaseEntity {
   /** 再開する（enabled=true）。 */
   public void resume() {
     this.enabled = true;
+  }
+
+  /** 退会済みにする。識別子の一意性から外れるので、停止と同じく {@code CredentialOperations} だけが呼ぶ。二度目は不変条件違反。 */
+  public void markWithdrawn(OffsetDateTime at) {
+    if (this.withdrawnAt != null) {
+      throw new ConflictException("この利用者は既に退会しています");
+    }
+    if (at == null) {
+      throw new ServiceException("退会日時は必須です");
+    }
+    this.withdrawnAt = at;
+  }
+
+  public boolean isWithdrawn() {
+    return withdrawnAt != null;
   }
 
   /** 発行済みセッションを失効させる（版を 1 つ進める）。本人属性も授権も変えない、失効そのものが目的の操作に使う。 */

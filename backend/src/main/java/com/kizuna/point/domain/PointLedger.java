@@ -53,6 +53,18 @@ public final class PointLedger {
     return plan;
   }
 
+  /**
+   * 全ロットの未消費量を期限の有無に依らず引き当てる（退会消去）。期限切れの残りも含めるのは、退会後の失効批が 退会済み会員へ別の仕訳を積まないようにするため —
+   * 退会消去の後、その会員の台帳に残量は無い。
+   */
+  public List<PlannedAllocation> planClearance() {
+    return lots.stream()
+        .filter(lot -> remaining(lot) > 0)
+        .sorted(Comparator.comparing(PointLot::entryId))
+        .map(lot -> new PlannedAllocation(lot.entryId(), remaining(lot)))
+        .toList();
+  }
+
   /** 期限切れロットの未消費量だけを記帳し、利用可能残高には触れない。 */
   public List<PlannedAllocation> planExpiry() {
     return lots.stream()

@@ -8,6 +8,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserType;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -31,8 +32,8 @@ class CredentialOperationsTest {
     assertThat(user.getCredentialVersion()).isEqualTo(1L);
     assertThat(events)
         .containsExactly(
-            new UserCredentialsChanged(user.getEmail(), 1L),
-            new UserCredentialsChanged(user.getEmail(), 1L));
+            new UserCredentialsChanged(user.getId(), 1L),
+            new UserCredentialsChanged(user.getId(), 1L));
   }
 
   @Test
@@ -54,8 +55,8 @@ class CredentialOperationsTest {
     assertThat(user.getCredentialVersion()).isEqualTo(2L);
     assertThat(events)
         .containsExactly(
-            new UserCredentialsChanged(user.getEmail(), 1L),
-            new UserCredentialsChanged(user.getEmail(), 2L));
+            new UserCredentialsChanged(user.getId(), 1L),
+            new UserCredentialsChanged(user.getId(), 2L));
   }
 
   @Test
@@ -67,15 +68,29 @@ class CredentialOperationsTest {
     assertThat(events).isEmpty();
   }
 
+  @Test
+  void withdrawStopsMarksWithdrawnAndNotifiesTheAdvancedVersion() {
+    User user = user(UserType.MEMBER);
+    var at = OffsetDateTime.parse("2026-10-26T10:00:00+09:00");
+    operations.withdraw(user, at);
+    assertThat(user.getEnabled()).isFalse();
+    assertThat(user.getWithdrawnAt()).isEqualTo(at);
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+    assertThat(events).containsExactly(new UserCredentialsChanged(user.getId(), 1L));
+  }
+
   private User user(UserType type) {
-    return User.builder()
-        .userType(type)
-        .email(type == UserType.SERVICE ? null : "credential@kizuna.test")
-        .password(type == UserType.SERVICE ? null : "hash")
-        .enabled(true)
-        .roleIds(type.holdsRoles() ? Set.of(1L) : Set.of())
-        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-        .storeIds(Set.of(1L))
-        .build();
+    User user =
+        User.builder()
+            .userType(type)
+            .email(type == UserType.SERVICE ? null : "credential@kizuna.test")
+            .password(type == UserType.SERVICE ? null : "hash")
+            .enabled(true)
+            .roleIds(type.holdsRoles() ? Set.of(1L) : Set.of())
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    user.setId(42L);
+    return user;
   }
 }

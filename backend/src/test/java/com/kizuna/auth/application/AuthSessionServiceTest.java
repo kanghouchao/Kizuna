@@ -25,7 +25,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @ExtendWith(MockitoExtension.class)
 class AuthSessionServiceTest {
 
-  private static final String EMAIL = "target@kizuna.test";
+  private static final long USER_ID = 42L;
 
   @Mock private TokenBlacklistService tokenBlacklistService;
 
@@ -36,11 +36,11 @@ class AuthSessionServiceTest {
   @Test
   void committedReflectionFailurePropagates() {
     var failure = new IllegalStateException("Redis 書込み失敗");
-    doThrow(failure).when(credentialVersionService).reflect(EMAIL, 3L);
+    doThrow(failure).when(credentialVersionService).reflect(USER_ID, 3L);
     TransactionSynchronizationManager.initSynchronization();
     try {
-      service.onCredentialsChanged(new UserCredentialsChanged(EMAIL, 3L));
-      verify(credentialVersionService, never()).reflect(anyString(), anyLong());
+      service.onCredentialsChanged(new UserCredentialsChanged(USER_ID, 3L));
+      verify(credentialVersionService, never()).reflect(anyLong(), anyLong());
       assertThatThrownBy(
               () ->
                   TransactionSynchronizationManager.getSynchronizations()
@@ -102,9 +102,9 @@ class AuthSessionServiceTest {
   @Test
   @DisplayName("資格情報変更イベント: イベントが運ぶ確定値をそのまま版キャッシュへ反映する")
   void onCredentialsChanged_reflectsCarriedVersion() {
-    service.onCredentialsChanged(new UserCredentialsChanged(EMAIL, 3L));
+    service.onCredentialsChanged(new UserCredentialsChanged(USER_ID, 3L));
 
-    verify(credentialVersionService).reflect(EMAIL, 3L);
+    verify(credentialVersionService).reflect(USER_ID, 3L);
   }
 
   @Test
@@ -112,15 +112,15 @@ class AuthSessionServiceTest {
   void onCredentialsChanged_withinTransaction_defersUntilAfterCommit() {
     TransactionSynchronizationManager.initSynchronization();
     try {
-      service.onCredentialsChanged(new UserCredentialsChanged(EMAIL, 3L));
+      service.onCredentialsChanged(new UserCredentialsChanged(USER_ID, 3L));
 
       // commit 前に書くと「Redis 成功・commit 失敗」で増えていない版が残り、正当なトークンが誤拒否される
-      verify(credentialVersionService, never()).reflect(anyString(), anyLong());
+      verify(credentialVersionService, never()).reflect(anyLong(), anyLong());
 
       TransactionSynchronizationManager.getSynchronizations()
           .forEach(TransactionSynchronization::afterCommit);
 
-      verify(credentialVersionService).reflect(EMAIL, 3L);
+      verify(credentialVersionService).reflect(USER_ID, 3L);
     } finally {
       TransactionSynchronizationManager.clearSynchronization();
     }
@@ -131,12 +131,12 @@ class AuthSessionServiceTest {
   void onCredentialsChanged_rollbackDoesNotReflect() {
     TransactionSynchronizationManager.initSynchronization();
     try {
-      service.onCredentialsChanged(new UserCredentialsChanged(EMAIL, 3L));
+      service.onCredentialsChanged(new UserCredentialsChanged(USER_ID, 3L));
       // rollback: afterCommit は発火しないまま同期が破棄される
     } finally {
       TransactionSynchronizationManager.clearSynchronization();
     }
 
-    verify(credentialVersionService, never()).reflect(anyString(), anyLong());
+    verify(credentialVersionService, never()).reflect(anyLong(), anyLong());
   }
 }

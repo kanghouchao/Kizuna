@@ -3,6 +3,9 @@ package com.kizuna.user.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.ServiceException;
+import java.time.OffsetDateTime;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -424,5 +427,21 @@ class UserTest {
                     .password(null)
                     .build())
         .isInstanceOf(InvalidCredentialAssignmentException.class);
+  }
+
+  @Test
+  @DisplayName("退会済みにするのは一度だけで、二度目と日時無しは不変条件違反")
+  void markWithdrawnIsTerminalAndRequiresTime() {
+    User user = staffBuilder().build();
+    assertThat(user.isWithdrawn()).isFalse();
+
+    user.markWithdrawn(OffsetDateTime.parse("2026-10-26T10:00:00+09:00"));
+
+    assertThat(user.isWithdrawn()).isTrue();
+    assertThat(user.getWithdrawnAt()).isNotNull();
+    assertThatThrownBy(() -> user.markWithdrawn(OffsetDateTime.now()))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> staffBuilder().build().markWithdrawn(null))
+        .isInstanceOf(ServiceException.class);
   }
 }

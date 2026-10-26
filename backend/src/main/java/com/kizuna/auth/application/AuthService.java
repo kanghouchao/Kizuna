@@ -2,6 +2,7 @@ package com.kizuna.auth.application;
 
 import com.kizuna.auth.api.dto.MeResponse;
 import com.kizuna.auth.api.dto.Token;
+import com.kizuna.auth.infrastructure.CredentialVersionService;
 import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.ServiceException;
@@ -94,7 +95,9 @@ public class AuthService {
     claims.put("userType", user.getUserType().name());
     // 発行時点の資格情報の版。検証時に現在の版と相等比較され、パスワード変更・再設定・停止で
     // 即時に不一致となる（ADR 0022）。
-    claims.put("credentialVersion", user.getCredentialVersion());
+    claims.put(CredentialVersionService.CLAIM, user.getCredentialVersion());
+    // 版の照合の鍵。subject の電子メールは退会で解放されて別人が引き継ぎうる（ADR 0029）。
+    claims.put(CredentialVersionService.USER_ID_CLAIM, user.getId());
     return claims;
   }
 

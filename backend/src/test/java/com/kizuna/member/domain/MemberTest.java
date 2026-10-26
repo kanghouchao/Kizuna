@@ -3,6 +3,7 @@ package com.kizuna.member.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.OffsetDateTime;
 import java.util.Random;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,5 +63,47 @@ class MemberTest {
     for (int i = 0; i < 100; i++) {
       assertThat(MemberCodes.generate(random)).matches("\\d{12}");
     }
+  }
+
+  @Test
+  @DisplayName("退会は理由・操作者・日時を記録し、理由は前後の空白を落として 500 文字以内")
+  void withdrawRecordsReasonActorAndTime() {
+    Member member = Member.builder().memberCode("123456789012").userId(7L).build();
+    var at = OffsetDateTime.parse("2026-10-26T10:00:00+09:00");
+
+    member.withdraw("  引っ越しのため  ", 7L, at);
+
+    assertThat(member.isWithdrawn()).isTrue();
+    assertThat(member.getWithdrawnAt()).isEqualTo(at);
+    assertThat(member.getWithdrawalReason()).isEqualTo("引っ越しのため");
+    assertThat(member.getWithdrawnBy()).isEqualTo(7L);
+  }
+
+  @Test
+  @DisplayName("理由が空・長すぎ・操作者や日時が無い退会は 400 系の不変条件違反")
+  void withdrawRejectsMissingReasonActorOrTime() {
+    var at = OffsetDateTime.now();
+    assertThatThrownBy(() -> fresh().withdraw(" ", 7L, at))
+        .isInstanceOf(InvalidMemberException.class);
+    assertThatThrownBy(() -> fresh().withdraw("x".repeat(501), 7L, at))
+        .isInstanceOf(InvalidMemberException.class);
+    assertThatThrownBy(() -> fresh().withdraw("理由", null, at))
+        .isInstanceOf(InvalidMemberException.class);
+    assertThatThrownBy(() -> fresh().withdraw("理由", 7L, null))
+        .isInstanceOf(InvalidMemberException.class);
+  }
+
+  @Test
+  @DisplayName("退会済みの再退会は 409（終端状態の繰り返し）")
+  void withdrawTwiceConflicts() {
+    Member member = fresh();
+    member.withdraw("理由", 7L, OffsetDateTime.now());
+
+    assertThatThrownBy(() -> member.withdraw("再度", 7L, OffsetDateTime.now()))
+        .isInstanceOf(MemberAlreadyWithdrawnException.class);
+  }
+
+  private static Member fresh() {
+    return Member.builder().memberCode("123456789012").userId(7L).build();
   }
 }

@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.kizuna.auth.api.auth.AuthController;
 import com.kizuna.auth.application.AuthService;
 import com.kizuna.auth.application.AuthSessionService;
+import com.kizuna.auth.application.LoginBenefitTrigger;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.config.RedisConfig;
 import com.kizuna.user.application.CredentialOperations;
@@ -18,6 +19,7 @@ import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManagerFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +91,14 @@ class CredentialRevocationPostgresTest {
     credentials = context.getBean(CredentialOperations.class);
     versions = context.getBean(CredentialVersionService.class);
     redis = context.getBean(RedisTemplate.class);
+    // 版の鍵は利用者 ID で、この試験は毎回新しいスキーマに ID 1 から採番する。前回の run が残した版が
+    // 新しい行の版 0 を「旧い」と見なさないよう、専用 Redis の中身を空にしてから始める。
+    redis.execute(
+        (RedisCallback<Object>)
+            connection -> {
+              connection.serverCommands().flushDb();
+              return null;
+            });
     transaction = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
     decoder = context.getBean(JwtDecoder.class);
     jdbc = new JdbcTemplate(context.getBean(DataSource.class));
@@ -134,7 +144,7 @@ class CredentialRevocationPostgresTest {
     assertThat(redis.opsForValue().get(key(user))).isEqualTo("1");
 
     mutate(user, User::resume);
-    versions.reflect(user.getEmail(), 0);
+    versions.reflect(user.getId(), 0);
     assertThat(redis.opsForValue().get(key(user))).isEqualTo("1");
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtValidationException.class);
     assertThat(decoder.decode(token(user, 1)).getSubject()).isEqualTo(user.getEmail());
@@ -169,17 +179,39 @@ class CredentialRevocationPostgresTest {
           status.setRollbackOnly();
         });
 
-    assertThat(users.findCredentialVersionByEmail(user.getEmail())).contains(0L);
+    assertThat(users.findCredentialVersionById(user.getId())).contains(0L);
     assertThat(redis.opsForValue().get(key(user))).isEqualTo("0");
     assertThat(decoder.decode(token).getSubject()).isEqualTo(user.getEmail());
   }
 
+  @Test
+  void withdrawnMembersOldJwtStaysRejectedAfterTheSameEmailIsReused() throws Exception {
+    var withdrawn = createUser(UserType.MEMBER);
+    var oldToken = token(withdrawn, 0);
+    assertThat(meStatus(oldToken)).isEqualTo(200);
+
+    mutate(withdrawn, current -> credentials.withdraw(current, OffsetDateTime.now()));
+    assertThat(meStatus(oldToken)).isEqualTo(401);
+
+    // 退会で解放された電子メールを後継の身分が引き継ぐ（部分一意索引）。版は 0 から始まる。
+    var successor = createUser(UserType.MEMBER, withdrawn.getEmail());
+    assertThat(successor.getCredentialVersion()).isZero();
+    assertThat(meStatus(token(successor, 0))).as("後継の新しいトークンは通る").isEqualTo(200);
+    assertThat(meStatus(oldToken)).as("退会者の旧トークンは後継として通らない").isEqualTo(401);
+    assertThat(users.findByEmail(withdrawn.getEmail()).map(User::getId))
+        .contains(successor.getId());
+  }
+
   private User createUser(UserType type) {
+    return createUser(type, UUID.randomUUID() + "@revocation.test");
+  }
+
+  private User createUser(UserType type, String email) {
     return transaction.execute(
         status ->
             users.saveAndFlush(
                 User.builder()
-                    .email(UUID.randomUUID() + "@revocation.test")
+                    .email(email)
                     .password(UUID.randomUUID().toString())
                     .displayName("失効検証")
                     .enabled(true)
@@ -200,7 +232,13 @@ class CredentialRevocationPostgresTest {
         .getBean(JwtIssuer.class)
         .issue(
             user.getEmail(),
-            Map.of(CredentialVersionService.CLAIM, version, "authorities", List.of("PERM_TEST")))
+            Map.of(
+                CredentialVersionService.CLAIM,
+                version,
+                CredentialVersionService.USER_ID_CLAIM,
+                user.getId(),
+                "authorities",
+                List.of("PERM_TEST")))
         .token();
   }
 
@@ -229,7 +267,7 @@ class CredentialRevocationPostgresTest {
   }
 
   private String key(User user) {
-    return "credential-version:" + user.getEmail();
+    return "credential-version:" + user.getId();
   }
 
   private void failReflection(Runnable mutation) {
@@ -324,6 +362,12 @@ class CredentialRevocationPostgresTest {
     @Bean
     PasswordEncoder passwordEncoder() {
       return new BCryptPasswordEncoder();
+    }
+
+    /** ログイン特典の発火は認証の外側の関心で、この試験の対象ではない。 */
+    @Bean
+    LoginBenefitTrigger loginBenefitTrigger() {
+      return mock(LoginBenefitTrigger.class);
     }
 
     @Bean

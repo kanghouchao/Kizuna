@@ -55,6 +55,10 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
           + " order by e.memberId, e.id")
   List<PointEntry> lockExpiryCandidates(@Param("ids") Collection<Long> ids);
 
+  /** 与えた仕訳の会員 ID（重複なし）。ロットを押さえる前に会員行を押さえる順序のために読む。 */
+  @Query("select distinct e.memberId from com.kizuna.point.domain.PointEntry e where e.id in :ids")
+  List<Long> findMemberIdsOf(@Param("ids") Collection<Long> ids);
+
   /** 受注を根拠とする加算ロット。受注からその付与を辿って取り消す経路の入口。 */
   @Query(
       "select e from com.kizuna.point.domain.PointEntry e where e.orderId = :orderId"

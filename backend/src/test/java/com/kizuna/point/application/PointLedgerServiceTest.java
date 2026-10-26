@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.point.domain.InsufficientPointBalanceException;
 import com.kizuna.point.domain.PointAllocation;
 import com.kizuna.point.domain.PointAllocationRepository;
@@ -54,6 +55,7 @@ class PointLedgerServiceTest {
   private static final String TIMEZONE = "Asia/Tokyo";
 
   @Mock private BusinessAudit businessAudit;
+  @Mock private MemberLookupService memberLookupService;
   @Mock private PointEntryRepository pointEntryRepository;
   @Mock private PointAllocationRepository pointAllocationRepository;
   @Mock private PointRollbackRepository pointRollbackRepository;
@@ -598,6 +600,122 @@ class PointLedgerServiceTest {
     assertThat(pointLedgerService.previewRollbackForOrder("o1"))
         .isEqualTo(new PointLedgerService.PointRollbackPreview(false, 300, 300));
     verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("退会消去は全ロットの未消費残（期限切れ含む）を会員ごと一つの仕訳へ元ロット充当付きで積むこと")
+  void clearForWithdrawalClearsEveryRemainderInOneEntry() {
+    when(pointEntryRepository.findCreditsForUpdate(MEMBER_ID))
+        .thenReturn(
+            List.of(
+                credit(1L, 500, null),
+                credit(2L, 300, LocalDate.of(2020, 1, 1)),
+                credit(3L, 100, FAR_FUTURE)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L, 2L, 3L)))
+        .thenReturn(List.of(consumption(1L, 500), consumption(2L, 50)));
+
+    assertThat(pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会")).isEqualTo(350);
+
+    verify(pointEntryRepository).save(savedEntry.capture());
+    PointEntry entry = savedEntry.getValue();
+    assertThat(entry.getEntryType()).isEqualTo(PointEntryType.WITHDRAWAL_CLEAR);
+    assertThat(entry.getAmount()).isEqualTo(-350);
+    assertThat(entry.getReason()).isEqualTo("会員退会");
+    assertThat(entry.getActorUserId()).isEqualTo(ACTOR_ID);
+    assertThat(entry.getAllocations())
+        .extracting(PointAllocation::getSourceEntryId, PointAllocation::getAmount)
+        .containsExactly(tuple(2L, 250), tuple(3L, 100));
+  }
+
+  @Test
+  @DisplayName("未消費残の合計が int を超えるときだけ、上限で区切った複数の退会消去仕訳に分けること")
+  void clearForWithdrawalSplitsOnlyWhenTheTotalExceedsInt() {
+    when(pointEntryRepository.findCreditsForUpdate(MEMBER_ID))
+        .thenReturn(
+            List.of(
+                credit(1L, Integer.MAX_VALUE, null),
+                credit(2L, 10, null),
+                credit(3L, Integer.MAX_VALUE, null)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L, 2L, 3L)))
+        .thenReturn(List.of());
+
+    assertThat(pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会"))
+        .isEqualTo(2L * Integer.MAX_VALUE + 10);
+
+    verify(pointEntryRepository, times(3)).save(savedEntry.capture());
+    assertThat(savedEntry.getAllValues())
+        .extracting(PointEntry::getAmount)
+        .containsExactly(-Integer.MAX_VALUE, -10, -Integer.MAX_VALUE);
+  }
+
+  @Test
+  @DisplayName("残高零（未消費残なし）の会員では退会消去の仕訳を作らないこと")
+  void clearForWithdrawalWritesNothingWhenNothingRemains() {
+    when(pointEntryRepository.findCreditsForUpdate(MEMBER_ID))
+        .thenReturn(List.of(credit(1L, 500, null)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L)))
+        .thenReturn(List.of(consumption(1L, 500)));
+
+    assertThat(pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会")).isZero();
+
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("退会済み会員の受注を巻き戻すと、利用取消で戻った分を同じ取引で同額の退会消去が再び消すこと")
+  void rollbackReclearsWhatItReturnsToAWithdrawnMember() {
+    when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
+    when(memberLookupService.isWithdrawn(MEMBER_ID)).thenReturn(true);
+    // 退会消去済みの台帳: 元ロット 500 は 300 の利用と 200 の退会消去で尽きていた。逆転で 300 が戻る。
+    when(pointEntryRepository.findCreditsForUpdate(MEMBER_ID))
+        .thenReturn(List.of(credit(1L, 500, null)));
+    // 逆転の flush 後に数え直すので、引き当て合計は利用取消で 300 戻った後の 200 が見える。
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L)))
+        .thenReturn(List.of(consumption(1L, 200)));
+
+    assertThat(pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0))
+        .isEqualTo(new PointLedgerService.PointRollbackResult(0, 300));
+
+    verify(pointEntryRepository, times(2)).save(savedEntry.capture());
+    assertThat(savedEntry.getAllValues())
+        .extracting(PointEntry::getEntryType, PointEntry::getAmount, PointEntry::getReason)
+        .containsExactly(
+            tuple(PointEntryType.USE_CANCEL, 300, "誤完了"),
+            tuple(
+                PointEntryType.WITHDRAWAL_CLEAR,
+                -300,
+                PointLedgerService.WITHDRAWN_RECLEAR_REASON));
+    assertThat(savedEntry.getAllValues().get(1).getAllocations())
+        .extracting(PointAllocation::getSourceEntryId, PointAllocation::getAmount)
+        .containsExactly(tuple(1L, 300));
+  }
+
+  @Test
+  @DisplayName("未退会の会員の巻き戻しは再消去を積まないこと")
+  void rollbackLeavesActiveMembersAlone() {
+    when(pointEntryRepository.findUsesByOrderId("o1")).thenReturn(List.of(use(21L, "o1", 300, 1L)));
+    when(memberLookupService.isWithdrawn(MEMBER_ID)).thenReturn(false);
+
+    pointLedgerService.rollbackForOrder("o1", "誤完了", ACTOR_ID, 0);
+
+    verify(pointEntryRepository).save(savedEntry.capture());
+    assertThat(savedEntry.getValue().getEntryType()).isEqualTo(PointEntryType.USE_CANCEL);
+  }
+
+  @Test
+  @DisplayName("退会済み会員への手動の加算は拒むこと（残高は常に零）")
+  void adjustRejectsCreditToWithdrawnMember() {
+    when(memberLookupService.isWithdrawn(MEMBER_ID)).thenReturn(true);
+
+    assertThatThrownBy(
+            () ->
+                pointLedgerService.adjust(MEMBER_ID, STORE_ID, 500, "お詫び", null, ACTOR_ID, "key-1"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("退会済み");
+    verify(pointEntryRepository, never()).save(any());
+    InOrder order = inOrder(memberLookupService);
+    order.verify(memberLookupService).lockForBalanceConfirmation(MEMBER_ID);
+    order.verify(memberLookupService).isWithdrawn(MEMBER_ID);
   }
 
   private static PointEntry use(long id, String orderId, int points, long sourceEntryId) {

@@ -69,5 +69,9 @@ describe('MemberHomePage', () => {
       'href',
       '/member/visits'
     );
+    expect(screen.getByRole('link', { name: '退会する' })).toHaveAttribute(
+      'href',
+      '/member/withdrawal'
+    );
   });
 });

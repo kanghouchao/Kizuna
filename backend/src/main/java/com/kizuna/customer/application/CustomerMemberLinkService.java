@@ -65,6 +65,12 @@ public class CustomerMemberLinkService {
         memberLookupService
             .findByMemberCode(memberCode)
             .orElseThrow(() -> new NotFoundException("会員コードに該当する会員が見つかりません"));
+    // 退会済み会員へは紐づけない（残高零・帰属物化なしの不変量 — ADR 0030）。判定は会員行を押さえてから —
+    // 押さえないと、並行する退会が全関連を解除した後にこの挿入が確定し、退会済み会員に ACTIVE 関連が残る。
+    memberLookupService.lockForBalanceConfirmation(member.memberId());
+    if (memberLookupService.isWithdrawn(member.memberId())) {
+      throw new ConflictException("退会済みの会員は紐づけできません");
+    }
     String normalizedReason =
         CustomerMemberLink.normalizeOperationReason(operationReason, current != null);
     OffsetDateTime operatedAt = OffsetDateTime.now();
@@ -156,16 +162,7 @@ public class CustomerMemberLinkService {
   }
 
   private static Map<String, String> snapshot(CustomerMemberLink link) {
-    return Map.of(
-        "customer_id", link.getCustomerId(),
-        "member_id", Objects.toString(link.getMemberId(), ""),
-        "status", link.getStatus().name(),
-        "reason", link.getReason().name(),
-        "version", Objects.toString(link.getVersion(), ""),
-        "linked_by", Objects.toString(link.getLinkedBy(), ""),
-        "linked_at", Objects.toString(link.getLinkedAt(), ""),
-        "released_by", Objects.toString(link.getReleasedBy(), ""),
-        "released_at", Objects.toString(link.getReleasedAt(), ""));
+    return CustomerMemberLinkAudit.snapshot(link);
   }
 
   /**

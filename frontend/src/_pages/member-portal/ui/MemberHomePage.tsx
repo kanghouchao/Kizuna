@@ -69,6 +69,14 @@ export function MemberHomePage() {
       <Button type="button" variant="outline" onClick={() => logout()} className="mt-6 w-full">
         ログアウト
       </Button>
+      <p className="mt-6 text-center text-sm">
+        <Link
+          href="/member/withdrawal/"
+          className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          退会する
+        </Link>
+      </p>
     </div>
   );
 }

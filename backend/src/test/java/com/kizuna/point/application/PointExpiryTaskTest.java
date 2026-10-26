@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditChange;
 import com.kizuna.audit.recording.AuditWriter;
+import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.point.domain.PointAllocationRepository;
 import com.kizuna.point.domain.PointConsumption;
 import com.kizuna.point.domain.PointEntry;
@@ -39,6 +40,7 @@ import org.springframework.security.access.AccessDeniedException;
 class PointExpiryTaskTest {
   private final PointEntryRepository entries = mock(PointEntryRepository.class);
   private final PointAllocationRepository allocations = mock(PointAllocationRepository.class);
+  private final MemberLookupService members = mock(MemberLookupService.class);
   private final ServiceExecutionIdentityService identities =
       mock(ServiceExecutionIdentityService.class);
   private final AuditWriter audit = mock(AuditWriter.class);
@@ -49,7 +51,11 @@ class PointExpiryTaskTest {
   private final TaskContext context = new TaskContext(4L, 8L, null, today, today);
   private final PointExpiryTask task =
       new PointExpiryTask(
-          new PointExpiryLedger(entries, allocations), identities, audit, properties, clock);
+          new PointExpiryLedger(entries, allocations, members),
+          identities,
+          audit,
+          properties,
+          clock);
 
   @BeforeEach
   void authorize() {

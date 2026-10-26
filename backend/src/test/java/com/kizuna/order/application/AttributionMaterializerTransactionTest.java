@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberRankService;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -35,18 +36,19 @@ class AttributionMaterializerTransactionTest {
     var ledger = mock(PointLedgerService.class);
     var benefits = mock(BenefitGrantService.class);
     var ranks = mock(MemberRankService.class);
+    var members = mock(MemberLookupService.class);
     try (var context = new AnnotationConfigApplicationContext()) {
       context.register(TransactionConfig.class);
       context.registerBean(TestTransactionManager.class);
       context.registerBean(
           AttributionMaterializer.class,
-          () -> new AttributionMaterializer(attributions, ledger, benefits, ranks));
+          () -> new AttributionMaterializer(attributions, ledger, benefits, ranks, members));
       context.refresh();
       var proxy = context.getBean(AttributionMaterializer.class);
       assertThat(AopUtils.isCglibProxy(proxy)).isTrue();
       assertThatThrownBy(() -> materialize(proxy))
           .isInstanceOf(IllegalTransactionStateException.class);
-      verifyNoInteractions(attributions, ledger, benefits, ranks);
+      verifyNoInteractions(attributions, ledger, benefits, ranks, members);
 
       when(attributions.save(any()))
           .thenAnswer(

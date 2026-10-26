@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberRankService;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -19,6 +20,7 @@ import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.exception.StaleSessionException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.DisplayName;
@@ -40,6 +42,7 @@ class AttributionMaterializerTest {
   @Mock private PointLedgerService ledger;
   @Mock private BenefitGrantService benefits;
   @Mock private MemberRankService ranks;
+  @Mock private MemberLookupService members;
   @InjectMocks private AttributionMaterializer materializer;
 
   @Test
@@ -183,5 +186,72 @@ class AttributionMaterializerTest {
   void readsTheNetOrderGrantsFromTheLedger() {
     when(ledger.netGrantedPointsFor(7L)).thenReturn(4200L);
     assertThat(materializer.netGrantedPoints(7L)).isEqualTo(4200L);
+  }
+
+  @Test
+  @DisplayName("退会済み会員の帰属は付与・特典・昇格・帰属記録のすべてを飛ばし、零の結果を返すこと")
+  void withdrawnMemberSkipsMaterialization() {
+    when(members.isWithdrawn(7L)).thenReturn(true);
+
+    var result =
+        materializer.materialize(
+            7L,
+            "123456789012",
+            "o1",
+            3L,
+            BUSINESS_DATE,
+            OCCURRED_AT,
+            10L,
+            new AttributionMaterializer.Completion(12000, 0));
+
+    assertThat(result).isEqualTo(new AttributionMaterializer.Result(0, 0L));
+    verify(ranks).lockForPromotion(7L);
+    verify(attributions, never()).save(any());
+    verify(ledger, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());
+    verify(benefits, never()).grantVisitBenefits(anyLong(), any(), any(), any(), any());
+    verify(ranks, never()).syncOnAttribution(anyLong(), any(), anyLong(), any());
+  }
+
+  @Test
+  @DisplayName("退会済み会員の伝票申領は成功扱いにせず拒むこと（伝票だけが消費されるのを防ぐ）")
+  void withdrawnMemberCannotClaimAReceipt() {
+    when(members.isWithdrawn(7L)).thenReturn(true);
+
+    assertThatThrownBy(
+            () ->
+                materializer.materialize(
+                    7L,
+                    "123456789012",
+                    "o1",
+                    3L,
+                    BUSINESS_DATE,
+                    OCCURRED_AT,
+                    10L,
+                    new AttributionMaterializer.ReceiptClaim(90)))
+        .isInstanceOf(StaleSessionException.class);
+    verify(attributions, never()).save(any());
+    verify(ledger, never()).grantPlannedForOrder(anyLong(), any(), any(), anyInt(), any());
+  }
+
+  @Test
+  @DisplayName("退会済み会員のポイント利用は飛ばさず競合として拒むこと（割引だけが残る会計を作らない）")
+  void withdrawnMemberCannotUsePoints() {
+    when(members.isWithdrawn(7L)).thenReturn(true);
+
+    assertThatThrownBy(
+            () ->
+                materializer.materialize(
+                    7L,
+                    "123456789012",
+                    "o1",
+                    3L,
+                    BUSINESS_DATE,
+                    OCCURRED_AT,
+                    10L,
+                    new AttributionMaterializer.Completion(12000, 300)))
+        .isInstanceOfSatisfying(
+            OrderConfirmationConflict.class,
+            ex -> assertThat(ex.details()).containsKey("use_points"));
+    verify(ledger, never()).useForOrder(anyLong(), any(), any(), anyInt(), any());
   }
 }

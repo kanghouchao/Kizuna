@@ -44,7 +44,7 @@ public class AuthSessionService {
    */
   @EventListener
   public void onCredentialsChanged(UserCredentialsChanged event) {
-    afterCommit(() -> credentialVersionService.reflect(event.email(), event.credentialVersion()));
+    afterCommit(() -> credentialVersionService.reflect(event.userId(), event.credentialVersion()));
   }
 
   /**

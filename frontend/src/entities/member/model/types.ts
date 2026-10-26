@@ -15,3 +15,8 @@ export interface MemberHomeResponse {
   member_code?: string;
   display_name?: string;
 }
+
+/** 本人による退会の要求（POST /me/member/withdrawal）。memberwithdrawal/api/dto/MemberWithdrawalRequest.java に対応。 */
+export interface MemberWithdrawalRequest {
+  reason: string;
+}

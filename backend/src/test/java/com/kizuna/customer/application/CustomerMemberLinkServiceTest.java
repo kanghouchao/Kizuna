@@ -133,6 +133,29 @@ class CustomerMemberLinkServiceTest {
   }
 
   @Test
+  @DisplayName("退会済みの会員コードへの紐づけは会員行を押さえた上で 409 とし、区間を作らないこと")
+  void linkRejectsWithdrawnMember() {
+    givenActor();
+    givenCustomerLocked();
+    givenMember(MEMBER_CODE, 7L);
+    Mockito.when(
+            customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+                STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+    Mockito.when(memberLookupService.isWithdrawn(7L)).thenReturn(true);
+
+    assertThatThrownBy(
+            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
+        .isInstanceOf(ConflictException.class)
+        .hasMessageContaining("退会済み");
+
+    InOrder order = Mockito.inOrder(memberLookupService);
+    order.verify(memberLookupService).lockForBalanceConfirmation(7L);
+    order.verify(memberLookupService).isWithdrawn(7L);
+    Mockito.verify(customerMemberLinkRepository, Mockito.never()).saveAndFlush(any());
+  }
+
+  @Test
   @DisplayName("解決できない顧客への紐づけは 404 で、区間を作らないこと（他店舗の顧客も同じ経路で 404 になる）")
   void linkFailsWhenCustomerMissing() {
     givenActor();

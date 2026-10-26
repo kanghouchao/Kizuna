@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +34,31 @@ class PointEntryTypeTest {
 
   private static final Set<PointEntryType> OTHER_CREDITS =
       Set.of(PointEntryType.MANUAL_ADJUST, PointEntryType.USE_CANCEL);
+
+  /**
+   * 加算になりうる種別ごとの、退会済み会員への守衛（ADR 0030 — 退会済み会員の残高は常に零）。
+   *
+   * <p>加算になりうる種別を足した者はここにも行を足し、その加算が退会済み会員の残高を作らないことをどこで守るかを 明記する。守衛の実体は各サービスのテストが固定する。
+   */
+  private static final Map<PointEntryType, String> WITHDRAWN_GUARDS =
+      Map.of(
+          PointEntryType.ORDER_GRANT,
+          "AttributionMaterializer が退会済みなら物化を飛ばす",
+          PointEntryType.BENEFIT_GRANT,
+          "来店は AttributionMaterializer、ログインは BenefitGrantService.grantLogin が退会済みなら飛ばす",
+          PointEntryType.MANUAL_ADJUST,
+          "PointLedgerService.adjust が退会済みへの加算を拒む",
+          PointEntryType.USE_CANCEL,
+          "PointLedgerService.rollbackForOrder が同じ取引で再消去する");
+
+  @Test
+  @DisplayName("加算になりうる種別はすべて退会済み会員への守衛を名乗ること（増やしたらここにも足す）")
+  void everyCreditableTypeNamesItsWithdrawnGuard() {
+    List<PointEntryType> creditable =
+        Arrays.stream(PointEntryType.values()).filter(PointEntryType::creditable).toList();
+
+    assertThat(WITHDRAWN_GUARDS.keySet()).containsExactlyInAnyOrderElementsOf(creditable);
+  }
 
   @Test
   @DisplayName("加算になりうる種別は枚挙どおりであること（増やしたら巻き戻しの収集述語を見直す）")
