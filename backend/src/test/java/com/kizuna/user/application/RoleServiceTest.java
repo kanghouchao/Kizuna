@@ -250,7 +250,7 @@ class RoleServiceTest {
 
   @Test
   void update_systemRole_renameIsRejected() {
-    Role existing = role(1L, "グループ管理者", true, Set.of(ORDER_MANAGE_ID));
+    Role existing = role(1L, "統括", true, Set.of(ORDER_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
     when(roleRepository.findById(1L)).thenReturn(Optional.of(existing));
@@ -264,17 +264,17 @@ class RoleServiceTest {
   // 既定ロールの権限は管理者が編集できる。初期授与は播種の出発点でしかなく、運用の正本は DB 側にある。
   @Test
   void update_systemRole_permissionsCanBeEdited() {
-    Role existing = role(1L, "グループ管理者", true, Set.of(ORDER_MANAGE_ID));
+    Role existing = role(1L, "統括", true, Set.of(ORDER_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
     when(roleRepository.findById(1L)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of());
     when(roleRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    service.update(1L, updateRequest("グループ管理者", Set.of("CUSTOMER_MANAGE"), 0L));
+    service.update(1L, updateRequest("統括", Set.of("CUSTOMER_MANAGE"), 0L));
 
     assertThat(existing.getPermissionIds()).containsExactly(CUSTOMER_MANAGE_ID);
-    assertThat(existing.getName()).isEqualTo("グループ管理者");
+    assertThat(existing.getName()).isEqualTo("統括");
   }
 
   @Test

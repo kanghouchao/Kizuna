@@ -97,7 +97,7 @@ When(
 Then("会員詳細に退会情報（理由と操作者）が読み取り専用で表示される", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "退会情報" })).toBeVisible();
   await expect(page.getByText("本人からの電話依頼")).toBeVisible();
-  // 操作者はグループ管理者（初期設定で登録した表示名ではなく、本人ではないことを確かめる）
+  // 操作者は統括（初期設定で登録した表示名ではなく、本人ではないことを確かめる）
   await expect(page.getByText("本人", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "退会させる" })).toHaveCount(0);
 });

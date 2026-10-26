@@ -11,7 +11,7 @@ databaseChangeLog:
       changes:
         - createTable:
             tableName: t_roles
-            remarks: ロール（権限の束。平台既定ロールは is_system=true で改廃不可）
+            remarks: ロール（権限の束。平台既定ロールは is_system=true で改名・削除不可、権限は編集可）
             columns:
               - column:
                   name: id
