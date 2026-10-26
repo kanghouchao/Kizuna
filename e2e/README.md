@@ -45,7 +45,7 @@ PR を出す前は、変更に関係する feature だけを `task e2e grep=...`
 （レビューで選択の妥当性を確認するため）。`steps/store-api.ts`・`playwright.config.ts`・E2E のスタック・認証・店舗スコープの
 ように多くのシナリオが共有する部分に触れたときは、ローカルで全量を実行します。
 
-全量は master へ入った後に [E2E ワークフロー](../.github/workflows/e2e.yml)が実行します（手動実行も可）。イメージを一度だけ
+全量は master へ入った後に [E2E ワークフロー](../.github/workflows/e2e.yml)が実行します。Actions の画面から任意のブランチで手動実行もでき、その失敗は issue になりません。イメージを一度だけ
 ビルドし、4 つの shard がそれぞれ自分の使い捨てスタックで `task e2e:run shard=i/4` を実行し、最後の `E2E` job が
 blob レポートを一つの HTML にまとめます。合併が続いたときは最新の master だけを検証します。統合済みの HTML レポートは
 artifact `e2e-html-report`、失敗した shard の trace は `e2e-test-results-<shard>` に残ります。
