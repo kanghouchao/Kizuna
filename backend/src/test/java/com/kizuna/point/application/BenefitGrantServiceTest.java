@@ -3,6 +3,8 @@ package com.kizuna.point.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -237,6 +240,13 @@ class BenefitGrantServiceTest {
     assertThat(posted.getOrderId()).isNull();
     assertThat(posted.getOriginatingStoreId()).isNull();
     assertThat(posted.getExpiresOn()).isEqualTo(TODAY.plusDays(29));
+    // 判定の前に会員行を握る。索引が収束させない日跨ぎの並行はこの直列化だけが止める。
+    InOrder inOrder = inOrder(memberLookupService, pointEntryRepository);
+    inOrder.verify(memberLookupService).lockForLedgerWrite(MEMBER_ID);
+    inOrder
+        .verify(pointEntryRepository)
+        .existsByBenefitRuleIdAndMemberIdAndGrantedOn(any(), any(), any());
+    inOrder.verify(pointEntryRepository).saveAndFlush(any());
   }
 
   @Test
@@ -293,6 +303,7 @@ class BenefitGrantServiceTest {
 
     verify(benefitRuleRepository, never()).findByTypeAndEnabledTrue(any());
     verify(pointEntryRepository, never()).saveAndFlush(any());
+    verify(memberLookupService, never()).lockForLedgerWrite(anyLong());
   }
 
   @Test

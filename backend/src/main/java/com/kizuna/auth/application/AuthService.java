@@ -53,7 +53,10 @@ public class AuthService {
   private final CredentialOperations credentialOperations;
   private final LoginBenefitTrigger loginBenefitTrigger;
 
-  @Transactional(readOnly = true)
+  /**
+   * 取引を張らない — 認証も発行も EAGER に載った利用者を読むだけで、ログイン特典の評価は認証の接続を返却してから走らせる必要がある
+   * （接続を握ったまま別取引を開くと、接続枯渇時に認証済みの要求同士で待ち合う）。
+   */
   public Token login(String email, String password) {
     // User は email を小文字へ正規化して保存するため、照合前に同じ正規化をする。
     String normalizedEmail = email.toLowerCase(Locale.ROOT);

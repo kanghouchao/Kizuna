@@ -48,6 +48,7 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -201,6 +202,17 @@ class AuthServiceTest {
     InOrder inOrder = inOrder(jwtIssuer, loginBenefitTrigger);
     inOrder.verify(jwtIssuer).issue(eq("member@kizuna.test"), any());
     inOrder.verify(loginBenefitTrigger).onAuthenticated(member);
+  }
+
+  /** 配線の固定: 取引を張ると認証の接続を握ったまま特典の別取引を開き、接続枯渇時に認証済みの要求同士で待ち合う。 */
+  @Test
+  void login_runsOutsideATransaction() throws Exception {
+    assertThat(
+            AuthService.class
+                .getMethod("login", String.class, String.class)
+                .getAnnotation(Transactional.class))
+        .isNull();
+    assertThat(AuthService.class.getAnnotation(Transactional.class)).isNull();
   }
 
   @Test

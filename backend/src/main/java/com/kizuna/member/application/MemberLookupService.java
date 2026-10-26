@@ -36,6 +36,16 @@ public class MemberLookupService {
   /** 顧客統合の残高確認から確定まで、新規仕訳の挿入と会員削除を直列化する。 */
   @Transactional
   public void lockForBalanceConfirmation(long memberId) {
+    lockMember(memberId);
+  }
+
+  /** 同じ会員への「既に受益したか」の判定と新規仕訳の挿入を直列化する（ログイン特典の一回性）。 */
+  @Transactional
+  public void lockForLedgerWrite(long memberId) {
+    lockMember(memberId);
+  }
+
+  private void lockMember(long memberId) {
     memberRepository
         .lockIdForBalanceConfirmation(memberId)
         .orElseThrow(() -> new NotFoundException("会員が見つかりません"));

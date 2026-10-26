@@ -100,8 +100,8 @@ class LoginBenefitPostgresTest {
   }
 
   /**
-   * 二本とも事前判定（その日の受益なし）を通り抜けた後に挿入へ進む並行を、挿入直前で止める advisory lock で再現する。
-   * 解放後は先に通った側が記帳し、後の側は索引違反を「二回目」として静かに終える。
+   * 先の側を挿入直前で止める advisory lock で、同日の並行を再現する。後の側は会員行のロック待ちで止まり、解放後に先の commit を
+   * 読んで二件目を記帳しない（直列化を外すと索引違反を「二回目」として静かに終える経路に落ちる）。
    */
   @Test
   void concurrentLoginsOnTheSameDayConvergeToOneGrantWithoutFailing() throws Exception {
@@ -121,7 +121,7 @@ class LoginBenefitPostgresTest {
       var b =
           pool.submit(() -> second.getBean(BenefitGrantService.class).grantLoginBenefits(userId));
       try {
-        awaitBlockedInserts(2);
+        awaitLockWaiters(2);
       } finally {
         connection.commit();
       }
@@ -134,7 +134,48 @@ class LoginBenefitPostgresTest {
     assertThat(grants()).isEqualTo(1);
   }
 
-  /** 本番の呼び元（AuthService.login）は読み取り専用の取引の中から呼ぶ。付与はその取引に参加せず独立に commit されること。 */
+  /**
+   * 一人一回限りの初回ログインが業務時間帯の午前 0 時を跨いで並行すると、付与日が異なるので部分一意索引は二行を許す。 会員行の FOR UPDATE で判定と挿入を直列化し、後の側が先の
+   * commit を読んで二件目を記帳しないこと。
+   */
+  @Test
+  void concurrentFirstLoginsAcrossMidnightStillPostOnce() throws Exception {
+    rule("ONCE_PER_MEMBER");
+    BenefitGrantService nextDay =
+        new BenefitGrantService(
+            second.getBean(BenefitRuleRepository.class),
+            second.getBean(PointEntryRepository.class),
+            second.getBean(MemberLookupService.class),
+            Clock.fixed(TODAY.plusDays(1).atTime(0, 5).atZone(ZONE).toInstant(), ZONE),
+            second.getBean(PlatformTransactionManager.class));
+    jdbc.execute(
+        "create function issue1062_pause_grant() returns trigger language plpgsql as $$ begin perform pg_advisory_xact_lock(1062); return NEW; end $$");
+    jdbc.execute(
+        "create trigger issue1062_pause_grant before insert on t_point_entries for each row execute function issue1062_pause_grant()");
+    try (var connection = second.getBean(DataSource.class).getConnection();
+        var pool = Executors.newFixedThreadPool(2)) {
+      connection.setAutoCommit(false);
+      try (var statement = connection.createStatement()) {
+        statement.execute("select pg_advisory_xact_lock(1062)");
+      }
+      var a =
+          pool.submit(() -> first.getBean(BenefitGrantService.class).grantLoginBenefits(userId));
+      var b = pool.submit(() -> nextDay.grantLoginBenefits(userId));
+      try {
+        awaitLockWaiters(2);
+      } finally {
+        connection.commit();
+      }
+      a.get(20, TimeUnit.SECONDS);
+      b.get(20, TimeUnit.SECONDS);
+    } finally {
+      jdbc.execute("drop trigger issue1062_pause_grant on t_point_entries");
+      jdbc.execute("drop function issue1062_pause_grant()");
+    }
+    assertThat(grants()).isEqualTo(1);
+  }
+
+  /** 呼び元が取引を張っていても（本番は張らない）、付与はその取引に参加せず独立に commit されること。 */
   @Test
   void grantCommitsIndependentlyOfTheCallersReadOnlyTransaction() {
     rule("ONCE_PER_DAY");
@@ -170,17 +211,18 @@ class LoginBenefitPostgresTest {
         memberId);
   }
 
-  private void awaitBlockedInserts(int expected) throws InterruptedException {
+  /** 片方は挿入直前の advisory lock、もう片方は会員行のロックで待つ。両方が止まるまで待つ。 */
+  private void awaitLockWaiters(int expected) throws InterruptedException {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
       long blocked =
           jdbc.queryForObject(
-              "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like 'insert into t_point_entries%'",
+              "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock'",
               Long.class);
       if (blocked >= expected) return;
       Thread.sleep(20);
     }
-    throw new AssertionError("並行ログインが挿入直前で止まっていません");
+    throw new AssertionError("並行ログインがロック待ちで止まっていません");
   }
 
   @Configuration
