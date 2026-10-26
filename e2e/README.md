@@ -15,7 +15,7 @@ Playwright テストへ変換して実行します。
 task e2e
 ```
 
-`task e2e` は自己完結で、以下を順に行います。
+`task e2e` は自己完結で、以下を順に行います（1 は `task e2e:build`、2〜4 は `task e2e:run` として単独でも実行できます）。
 
 1. frontend / backend の Docker イメージを worktree 固有のタグ（`e2e-<worktree 名>`）でビルド
 2. 同じ E2E プロジェクトの残存コンテナと匿名ボリュームを回収し、ネットワークを破棄
@@ -27,6 +27,25 @@ task e2e
 `screenshot` が `e2e/test-results/`、HTML レポートが `e2e/playwright-report/` に
 残ります（いずれも Git 管理外）。
 
+### 対象の絞り込みと分割
+
+変更に関係するシナリオだけを回すときは、本体シナリオに対する正規表現を `grep` で渡します。
+正規表現はプロジェクト名・ファイル名・シナリオ名をつないだ文字列に当たるので、feature ファイル名でも絞れます。
+`initial-setup` は絞り込みの対象外で、常に先に実行されます。
+
+```bash
+task e2e grep=order-lifecycle
+```
+
+`shard=1/4` のように渡すと、全体を分割したうちの一つだけを実行します（CI が使う形）。
+
+### CI での実行
+
+master 向け PR では [E2E ワークフロー](../.github/workflows/e2e.yml)が全量を実行します。イメージを一度だけビルドし、
+4 つの shard がそれぞれ自分の使い捨てスタックで `task e2e:run shard=i/4` を実行し、最後の `E2E` チェックが
+blob レポートを一つの HTML にまとめます。draft の間は実行せず、同じ PR への新しい push は実行中のものを取り消します。
+統合済みの HTML レポートは artifact `e2e-html-report`、失敗した shard の trace は `e2e-test-results-<shard>` に残ります。
+
 ### 型検査
 
 `task lint service=e2e` は、前端と同じ固定NodeイメージでE2E自身の依存とTypeScriptを使い、
@@ -34,7 +53,7 @@ task e2e
 生成済みの`.features-gen`と実行成果物は検査対象外です。Playwrightの変換・実行だけでは型の整合性は保証されません。
 
 標準`task lint`とCIのRepo Lintにこの検査を含め、フルE2Eのランナーもシナリオ生成前に実行します。
-CIでフルスタックのE2Eを実行しない運用は維持します。ホストでの高速な反復は`e2e/`で
+ホストでの高速な反復は`e2e/`で
 `npm install`の後に`npm run typecheck`を実行できます。
 
 ### 開発スタックとの関係

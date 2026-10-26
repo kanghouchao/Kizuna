@@ -3,3 +3,4 @@ test-results/
 playwright-report/
 .features-gen/
 package-lock.json
+blob-report/

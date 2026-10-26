@@ -67,19 +67,34 @@ tasks:
         fi
 
   e2e:
-    desc: E2E（playwright-bdd）を専用の使い捨てスタックで実行（build → 実行 → 破棄）
+    desc: E2E（playwright-bdd）を専用の使い捨てスタックで実行（build → 実行 → 破棄。shard=1/4・grep=正規表現 で対象を限定可）
+    cmds:
+      - task: e2e:build
+      - task: e2e:run
+
+  e2e:build:
+    desc: E2E 用の前後端イメージを worktree 固有のタグでビルド
+    vars:
+      STACK_ID:
+        sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
+    cmds:
+      - echo "🏗️  E2E 用にイメージをビルド（tag=e2e-{{.STACK_ID}}）..."
+      - task -d backend build DOCKER_TAG=e2e-{{.STACK_ID}}
+      - task -d frontend build DOCKER_TAG=e2e-{{.STACK_ID}}
+
+  e2e:run:
+    desc: ビルド済みの E2E イメージでスタックを立てて実行し、破棄する（shard=1/4・grep=正規表現 で対象を限定可）
     vars:
       STACK_ID:
         sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
     env:
       COMPOSE_PROJECT_NAME: kizuna-e2e-{{.STACK_ID}}
       E2E_IMAGE_TAG: e2e-{{.STACK_ID}}
+      E2E_SHARD: '{{.shard}}'
+      E2E_GREP: '{{.grep}}'
     cmds:
       - |
         command -v jq >/dev/null 2>&1 || { echo "❌ jq が必要です（e2e の Playwright 版数抽出に使用）"; exit 1; }
-      - echo "🏗️  E2E 用にイメージをビルド（tag=e2e-{{.STACK_ID}}）..."
-      - task -d backend build DOCKER_TAG=e2e-{{.STACK_ID}}
-      - task -d frontend build DOCKER_TAG=e2e-{{.STACK_ID}}
       # 中断時の残留コンテナが次回に再利用されないよう、実行前後に匿名ボリュームごと回収する。
       # docker rm -fv は名前付きボリュームを削除せず、開発 DB のデータを保持する。
       - docker compose -f e2e/docker-compose.e2e.yml ps -aq | xargs -r docker rm -fv
