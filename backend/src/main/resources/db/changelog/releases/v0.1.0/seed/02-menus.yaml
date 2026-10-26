@@ -4,126 +4,31 @@ databaseChangeLog:
       author: kanghouchao
       # 統合メニューの正典（2 階層厳守）。見出し節は permission を持たず、子に見えるものがあれば出る。
       # 葉は permission で可視性を決め、permission の無い葉（ダッシュボード）は全員に見える。
+      # 節は業務領域で分け、節内は日常操作 → 照会・履歴 → 設定の順に並べる。
       # 親→子の順で挿入し自己参照 FK（fk_t_menus_parent）を満たす。
       preConditions:
         - dbms:
             type: postgresql
       changes:
-        # --- 全群級の節 ---
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-main }
-              - column: { name: label, value: メイン }
-              - column: { name: sort_order, valueNumeric: 10 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: platform-dashboard }
-              - column: { name: parent_id, value: platform-main }
               - column: { name: label, value: ダッシュボード }
               - column: { name: path, value: /admin/dashboard }
               - column: { name: icon, value: HouseIcon }
-              - column: { name: sort_order, valueNumeric: 1 }
+              - column: { name: sort_order, valueNumeric: 10 }
         - insert:
             tableName: t_menus
             columns:
-              - column: { name: id, value: platform-stores }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: 店舗一覧 }
-              - column: { name: path, value: /admin/stores }
-              - column: { name: icon, value: BuildingIcon }
-              - column: { name: permission, value: STORE_MANAGE }
-              - column: { name: sort_order, valueNumeric: 2 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-staff }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: 従業員管理 }
-              - column: { name: path, value: /admin/staff }
-              - column: { name: icon, value: UsersIcon }
-              - column: { name: permission, value: STAFF_MANAGE }
-              - column: { name: sort_order, valueNumeric: 3 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-roles }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: ロール管理 }
-              - column: { name: path, value: /admin/roles }
-              - column: { name: icon, value: KeyRoundIcon }
-              - column: { name: permission, value: ROLE_MANAGE }
-              - column: { name: sort_order, valueNumeric: 4 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-cast-group }
-              - column: { name: label, value: キャスト }
-              - column: { name: permission, value: CAST_PERSON_VIEW }
-              - column: { name: sort_order, valueNumeric: 15 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-casts }
-              - column: { name: parent_id, value: platform-cast-group }
-              - column: { name: label, value: キャスト在籍照会 }
-              - column: { name: path, value: /admin/casts }
-              - column: { name: icon, value: UsersIcon }
-              - column: { name: permission, value: CAST_PERSON_VIEW }
-              - column: { name: sort_order, valueNumeric: 9 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-members }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: 会員 }
-              - column: { name: path, value: /admin/members }
-              - column: { name: icon, value: SmileIcon }
-              - column: { name: permission, value: MEMBER_VIEW }
-              - column: { name: sort_order, valueNumeric: 5 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-benefit-rules }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: 特典規則 }
-              - column: { name: path, value: /admin/benefit-rules }
-              - column: { name: icon, value: MegaphoneIcon }
-              - column: { name: permission, value: BENEFIT_MANAGE }
-              - column: { name: sort_order, valueNumeric: 6 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-service-identities }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: サービスID管理 }
-              - column: { name: path, value: /admin/service-identities }
-              - column: { name: icon, value: BotIcon }
-              - column: { name: permission, value: SERVICE_ID_MANAGE }
-              - column: { name: sort_order, valueNumeric: 8 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-orders }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: 受注照会 }
-              - column: { name: path, value: /admin/orders }
-              - column: { name: icon, value: ClipboardListIcon }
-              - column: { name: permission, value: ORDER_SET_VIEW }
-              - column: { name: sort_order, valueNumeric: 9 }
-        # --- 店舗級の節（現在店舗のデータに対する操作） ---
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: store-ops }
-              - column: { name: label, value: 業務管理 }
-              - column: { name: sort_order, valueNumeric: 120 }
+              - column: { name: id, value: section-business }
+              - column: { name: label, value: 業務 }
+              - column: { name: sort_order, valueNumeric: 20 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: store-orders }
-              - column: { name: parent_id, value: store-ops }
+              - column: { name: parent_id, value: section-business }
               - column: { name: label, value: 予約・案件管理 }
               - column: { name: path, value: /store/orders }
               - column: { name: icon, value: ClipboardListIcon }
@@ -132,14 +37,44 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
-              - column: { name: id, value: store-hrm }
-              - column: { name: label, value: HRM }
-              - column: { name: sort_order, valueNumeric: 130 }
+              - column: { name: id, value: store-advertising-costs }
+              - column: { name: parent_id, value: section-business }
+              - column: { name: label, value: 広告費管理 }
+              - column: { name: path, value: /store/advertising-costs }
+              - column: { name: icon, value: MegaphoneIcon }
+              - column: { name: permission, value: ADVERTISING_COST_VIEW }
+              - column: { name: sort_order, valueNumeric: 2 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-orders }
+              - column: { name: parent_id, value: section-business }
+              - column: { name: label, value: 受注照会 }
+              - column: { name: path, value: /admin/orders }
+              - column: { name: icon, value: ClipboardListIcon }
+              - column: { name: permission, value: ORDER_SET_VIEW }
+              - column: { name: sort_order, valueNumeric: 3 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-services }
+              - column: { name: parent_id, value: section-business }
+              - column: { name: label, value: サービス設定 }
+              - column: { name: path, value: /store/services }
+              - column: { name: icon, value: SettingsIcon }
+              - column: { name: permission, value: SERVICE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 4 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: section-cast }
+              - column: { name: label, value: キャスト }
+              - column: { name: sort_order, valueNumeric: 30 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: store-casts }
-              - column: { name: parent_id, value: store-hrm }
+              - column: { name: parent_id, value: section-cast }
               - column: { name: label, value: キャスト管理 }
               - column: { name: path, value: /store/casts }
               - column: { name: icon, value: SmileIcon }
@@ -149,7 +84,7 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: store-shifts }
-              - column: { name: parent_id, value: store-hrm }
+              - column: { name: parent_id, value: section-cast }
               - column: { name: label, value: 出勤管理 }
               - column: { name: path, value: /store/shifts }
               - column: { name: icon, value: ClockIcon }
@@ -158,14 +93,34 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
-              - column: { name: id, value: store-crm }
-              - column: { name: label, value: CRM }
-              - column: { name: sort_order, valueNumeric: 140 }
+              - column: { name: id, value: store-applicants }
+              - column: { name: parent_id, value: section-cast }
+              - column: { name: label, value: 採用管理 }
+              - column: { name: path, value: /store/applicants }
+              - column: { name: icon, value: UsersIcon }
+              - column: { name: permission, value: RECRUITMENT_VIEW }
+              - column: { name: sort_order, valueNumeric: 3 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-casts }
+              - column: { name: parent_id, value: section-cast }
+              - column: { name: label, value: キャスト在籍照会 }
+              - column: { name: path, value: /admin/casts }
+              - column: { name: icon, value: UsersIcon }
+              - column: { name: permission, value: CAST_PERSON_VIEW }
+              - column: { name: sort_order, valueNumeric: 4 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: section-customer }
+              - column: { name: label, value: 顧客 }
+              - column: { name: sort_order, valueNumeric: 40 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: store-customers }
-              - column: { name: parent_id, value: store-crm }
+              - column: { name: parent_id, value: section-customer }
               - column: { name: label, value: 顧客一覧 }
               - column: { name: path, value: /store/customers }
               - column: { name: icon, value: UsersRoundIcon }
@@ -174,91 +129,18 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
-              - column: { name: id, value: store-settings }
-              - column: { name: label, value: 設定 }
-              - column: { name: sort_order, valueNumeric: 150 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: store-profile }
-              - column: { name: parent_id, value: store-settings }
-              - column: { name: label, value: 店舗情報 }
-              - column: { name: path, value: /store/settings/profile }
-              - column: { name: icon, value: StoreIcon }
-              - column: { name: permission, value: STORE_PROFILE_MANAGE }
-              - column: { name: sort_order, valueNumeric: 1 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-config }
-              - column: { name: parent_id, value: store-settings }
-              - column: { name: label, value: システム設定 }
-              - column: { name: path, value: /admin/settings }
-              - column: { name: icon, value: SettingsIcon }
-              - column: { name: permission, value: SYSTEM_CONFIG_MANAGE }
-              - column: { name: sort_order, valueNumeric: 2 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: store-service-settings }
-              - column: { name: label, value: サービス }
-              - column: { name: permission, value: SERVICE_MANAGE }
-              - column: { name: sort_order, valueNumeric: 145 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: store-services }
-              - column: { name: parent_id, value: store-service-settings }
-              - column: { name: label, value: サービス設定 }
-              - column: { name: path, value: /store/services }
-              - column: { name: icon, value: SettingsIcon }
-              - column: { name: permission, value: SERVICE_MANAGE }
-              - column: { name: sort_order, valueNumeric: 1 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-task-executions }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: 処理の実行履歴 }
-              - column: { name: path, value: /admin/task-executions }
-              - column: { name: icon, value: ClockIcon }
-              - column: { name: permission, value: TASK_MANAGE }
-              - column: { name: sort_order, valueNumeric: 11 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: platform-audit-events }
-              - column: { name: parent_id, value: platform-main }
-              - column: { name: label, value: 監査履歴 }
-              - column: { name: path, value: /admin/audit-events }
-              - column: { name: icon, value: ShieldAlertIcon }
-              - column: { name: permission, value: AUDIT_VIEW }
-              - column: { name: sort_order, valueNumeric: 12 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: store-applicants }
-              - column: { name: parent_id, value: store-hrm }
-              - column: { name: label, value: 採用管理 }
-              - column: { name: path, value: /store/applicants }
-              - column: { name: icon, value: UsersIcon }
-              - column: { name: permission, value: RECRUITMENT_VIEW }
-              - column: { name: sort_order, valueNumeric: 4 }
-        - insert:
-            tableName: t_menus
-            columns:
-              - column: { name: id, value: store-notification-deliveries }
-              - column: { name: parent_id, value: store-crm }
-              - column: { name: label, value: 業務通知 }
-              - column: { name: path, value: /store/notification-deliveries }
-              - column: { name: icon, value: MegaphoneIcon }
-              - column: { name: permission, value: NOTIFICATION_VIEW }
+              - column: { name: id, value: platform-members }
+              - column: { name: parent_id, value: section-customer }
+              - column: { name: label, value: 会員 }
+              - column: { name: path, value: /admin/members }
+              - column: { name: icon, value: SmileIcon }
+              - column: { name: permission, value: MEMBER_VIEW }
               - column: { name: sort_order, valueNumeric: 2 }
         - insert:
             tableName: t_menus
             columns:
               - column: { name: id, value: store-reviews }
-              - column: { name: parent_id, value: store-crm }
+              - column: { name: parent_id, value: section-customer }
               - column: { name: label, value: 口コミ管理 }
               - column: { name: path, value: /store/reviews }
               - column: { name: icon, value: ClipboardListIcon }
@@ -268,7 +150,7 @@ databaseChangeLog:
             tableName: t_menus
             columns:
               - column: { name: id, value: store-surveys }
-              - column: { name: parent_id, value: store-crm }
+              - column: { name: parent_id, value: section-customer }
               - column: { name: label, value: アンケート管理 }
               - column: { name: path, value: /store/surveys }
               - column: { name: icon, value: ClipboardListIcon }
@@ -277,10 +159,112 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
-              - column: { name: id, value: store-advertising-costs }
-              - column: { name: parent_id, value: store-crm }
-              - column: { name: label, value: 広告費管理 }
-              - column: { name: path, value: /store/advertising-costs }
+              - column: { name: id, value: store-notification-deliveries }
+              - column: { name: parent_id, value: section-customer }
+              - column: { name: label, value: 業務通知 }
+              - column: { name: path, value: /store/notification-deliveries }
               - column: { name: icon, value: MegaphoneIcon }
-              - column: { name: permission, value: ADVERTISING_COST_VIEW }
+              - column: { name: permission, value: NOTIFICATION_VIEW }
               - column: { name: sort_order, valueNumeric: 5 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-benefit-rules }
+              - column: { name: parent_id, value: section-customer }
+              - column: { name: label, value: 特典規則 }
+              - column: { name: path, value: /admin/benefit-rules }
+              - column: { name: icon, value: MegaphoneIcon }
+              - column: { name: permission, value: BENEFIT_MANAGE }
+              - column: { name: sort_order, valueNumeric: 6 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: section-organization }
+              - column: { name: label, value: 組織 }
+              - column: { name: sort_order, valueNumeric: 50 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-stores }
+              - column: { name: parent_id, value: section-organization }
+              - column: { name: label, value: 店舗一覧 }
+              - column: { name: path, value: /admin/stores }
+              - column: { name: icon, value: BuildingIcon }
+              - column: { name: permission, value: STORE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-staff }
+              - column: { name: parent_id, value: section-organization }
+              - column: { name: label, value: 従業員管理 }
+              - column: { name: path, value: /admin/staff }
+              - column: { name: icon, value: UsersIcon }
+              - column: { name: permission, value: STAFF_MANAGE }
+              - column: { name: sort_order, valueNumeric: 2 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-roles }
+              - column: { name: parent_id, value: section-organization }
+              - column: { name: label, value: ロール管理 }
+              - column: { name: path, value: /admin/roles }
+              - column: { name: icon, value: KeyRoundIcon }
+              - column: { name: permission, value: ROLE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 3 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-service-identities }
+              - column: { name: parent_id, value: section-organization }
+              - column: { name: label, value: サービスID管理 }
+              - column: { name: path, value: /admin/service-identities }
+              - column: { name: icon, value: BotIcon }
+              - column: { name: permission, value: SERVICE_ID_MANAGE }
+              - column: { name: sort_order, valueNumeric: 4 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: section-operation }
+              - column: { name: label, value: 運用 }
+              - column: { name: sort_order, valueNumeric: 60 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-task-executions }
+              - column: { name: parent_id, value: section-operation }
+              - column: { name: label, value: 処理の実行履歴 }
+              - column: { name: path, value: /admin/task-executions }
+              - column: { name: icon, value: ClockIcon }
+              - column: { name: permission, value: TASK_MANAGE }
+              - column: { name: sort_order, valueNumeric: 1 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-audit-events }
+              - column: { name: parent_id, value: section-operation }
+              - column: { name: label, value: 監査履歴 }
+              - column: { name: path, value: /admin/audit-events }
+              - column: { name: icon, value: ShieldAlertIcon }
+              - column: { name: permission, value: AUDIT_VIEW }
+              - column: { name: sort_order, valueNumeric: 2 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: store-profile }
+              - column: { name: parent_id, value: section-operation }
+              - column: { name: label, value: 店舗情報 }
+              - column: { name: path, value: /store/settings/profile }
+              - column: { name: icon, value: StoreIcon }
+              - column: { name: permission, value: STORE_PROFILE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 3 }
+        - insert:
+            tableName: t_menus
+            columns:
+              - column: { name: id, value: platform-config }
+              - column: { name: parent_id, value: section-operation }
+              - column: { name: label, value: システム設定 }
+              - column: { name: path, value: /admin/settings }
+              - column: { name: icon, value: SettingsIcon }
+              - column: { name: permission, value: SYSTEM_CONFIG_MANAGE }
+              - column: { name: sort_order, valueNumeric: 4 }

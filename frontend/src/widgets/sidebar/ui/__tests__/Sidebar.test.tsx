@@ -57,6 +57,22 @@ describe('Sidebar', () => {
       'href',
       '/admin/dashboard'
     );
+    expect(screen.queryByRole('heading')).toBeNull();
+  });
+
+  it('自身が path を持つ根は見出しではなく単独のリンクとして描く', async () => {
+    mockedGetMenus.mockResolvedValue([
+      { name: 'ダッシュボード', path: '/admin/dashboard', icon: 'HouseIcon', items: [] },
+      { name: '業務', items: [{ name: '受注一覧', path: '/store/orders', icon: 'HouseIcon' }] },
+    ]);
+
+    render(<Sidebar />);
+
+    expect(await screen.findByRole('link', { name: 'ダッシュボード' })).toHaveAttribute(
+      'href',
+      '/admin/dashboard'
+    );
+    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['業務']);
   });
 
   // 現在地の項目だけが他と異なる見えを持つ、という関係だけを見る。
