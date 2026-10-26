@@ -54,7 +54,7 @@ public class AuthService {
 
   @Transactional(readOnly = true)
   public Token login(String email, String password) {
-    // ユーザーの email は小文字で保存されるため（保存済みシードは全て小文字）、照合前に正規化する。
+    // User は email を小文字へ正規化して保存するため、照合前に同じ正規化をする。
     String normalizedEmail = email.toLowerCase(Locale.ROOT);
     Authentication authentication =
         authenticationManager.authenticate(

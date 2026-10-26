@@ -7,7 +7,7 @@ import {
 } from "@playwright/test";
 import { APP_URL } from "../base-url";
 
-// store1 は seed 済み（store_id=1）。store API は Host に加えて
+// store1 は initial-setup プロジェクトが最初に登録する店舗（store_id=1）。store API は Host に加えて
 // X-Store-ID ヘッダで店舗文脈を確定する。
 export const STORE1_ID = "1";
 export const STORE_HEADERS = { "X-Store-ID": STORE1_ID };
@@ -1014,6 +1014,12 @@ export async function createStaffAccount(request: APIRequestContext, token: stri
   const response = await request.post('/api/admin/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email: staff.email, password: staff.password, display_name: staff.displayName, role_ids: staff.roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: staff.storeIds } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
+}
+
+/** 店舗を登録する（POST /admin/stores, PERM_STORE_MANAGE）。 */
+export async function createStore(request: APIRequestContext, token: string, store: { name: string; domain: string; email: string }): Promise<void> {
+  const response = await request.post('/api/admin/stores', { headers: { Authorization: `Bearer ${token}` }, data: store });
+  expect(response.status(), await response.text()).toBe(201);
 }
 
 /** ロール名から id を引く（GET /admin/roles, PERM_ROLE_MANAGE）。 */
