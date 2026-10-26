@@ -361,6 +361,16 @@ class MemberWithdrawalPostgresTest {
     String customer = customer(store);
     String link = link(store, customer, member);
     String otherLink = link(otherStore, customer(otherStore), member);
+    // 同じ店舗の古い解除済み区間。詳細は店舗ごとの最新だけを出す。
+    jdbc.update(
+        "insert into t_customer_member_links(id,store_id,customer_id,member_id,member_code,status,reason,linked_by,linked_at,released_by,released_at,release_reason) values (?,?,?,?,?,'RELEASED','MEMBER_CODE',?,current_timestamp - interval '1 day',?,current_timestamp - interval '12 hours','やり直し')",
+        UUID.randomUUID().toString(),
+        store,
+        customer,
+        member.memberId,
+        member.memberCode,
+        staff,
+        staff);
     String pending = application(member, "PENDING");
 
     service.withdrawByStaff(member.memberId, staff, "本人からの電話依頼");
@@ -444,6 +454,12 @@ class MemberWithdrawalPostgresTest {
               assertThat(l.releaseReason()).isEqualTo("会員退会");
             });
     assertThat(detail.otherStoreLinkCount()).isEqualTo(1);
+    assertThat(
+            console
+                .detail(member.memberId, new StoreScope(false, java.util.Set.of(otherStore)))
+                .otherStoreLinkCount())
+        .as("集合外は区間ではなく店舗を数える")
+        .isEqualTo(1);
     assertThat(console.detail(member.memberId, new StoreScope(true, java.util.Set.of())).links())
         .hasSize(2);
     var entries = console.entries(member.memberId, null, 20);

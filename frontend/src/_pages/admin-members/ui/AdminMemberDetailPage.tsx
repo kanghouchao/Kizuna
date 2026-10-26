@@ -315,6 +315,10 @@ function Links({ data }: { data: AdminMemberDetail }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* 店舗ごとに最新の区間だけ。紐づけ直しの全履歴は店舗側の顧客詳細が持つ */}
+        <p className="text-sm text-muted-foreground">
+          店舗ごとの最新の関連です。紐づけの履歴は各店舗の顧客詳細で確認できます。
+        </p>
         {data.links.length === 0 ? (
           <p className="text-sm text-muted-foreground">担当店舗での関連はありません。</p>
         ) : (
@@ -336,10 +340,10 @@ function Links({ data }: { data: AdminMemberDetail }) {
             </TableBody>
           </Table>
         )}
-        {/* 閲覧者の店舗集合の外は展開しない。件数だけで「他にもある」事実を伝える */}
+        {/* 閲覧者の店舗集合の外は展開しない。店舗数だけで「他にもある」事実を伝える */}
         {data.other_store_link_count > 0 && (
           <p className="text-sm text-muted-foreground">
-            担当外の店舗に {data.other_store_link_count} 件の関連があります。
+            担当外の {data.other_store_link_count} 店舗に関連があります。
           </p>
         )}
       </CardContent>

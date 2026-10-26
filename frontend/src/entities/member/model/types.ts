@@ -68,7 +68,7 @@ export interface AdminMemberRankTransition {
   promoted_at?: string;
 }
 
-/** 閲覧者の店舗集合内の関連 1 区間。 */
+/** 閲覧者の店舗集合内の、店舗ごとの最新の関連 1 区間。 */
 export interface AdminMemberLink {
   id?: string;
   store_id: number;
@@ -97,6 +97,7 @@ export interface AdminMemberDetail {
   balances: AdminMemberExpiryBalance[];
   rank_history: AdminMemberRankTransition[];
   links: AdminMemberLink[];
+  /** 店舗集合外で関連を持つ店舗の数。 */
   other_store_link_count: number;
 }
 

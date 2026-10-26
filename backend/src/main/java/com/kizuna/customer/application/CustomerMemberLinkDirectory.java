@@ -20,7 +20,7 @@ public class CustomerMemberLinkDirectory {
 
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
 
-  /** 展開した関連 1 区間。顧客名は顧客行が消えていれば null。 */
+  /** 展開した店舗ごとの最新の区間。顧客名は顧客行が消えていれば null。 */
   public record LinkSegment(
       String id,
       long storeId,
@@ -36,8 +36,8 @@ public class CustomerMemberLinkDirectory {
   /**
    * 会員の関連。
    *
-   * @param segments 閲覧者の店舗集合内の区間（新しい順、解除済みを含む）
-   * @param otherStoreCount 集合外の区間の件数
+   * @param segments 閲覧者の店舗集合内の店舗ごとの最新の区間（新しい順、解除済みを含む）
+   * @param otherStoreCount 集合外で関連を持つ店舗の数
    */
   public record MemberLinks(List<LinkSegment> segments, long otherStoreCount) {}
 
@@ -45,13 +45,14 @@ public class CustomerMemberLinkDirectory {
   public MemberLinks findByMember(long memberId, StoreScope scope) {
     if (scope.allStores()) {
       return new MemberLinks(
-          toSegments(customerMemberLinkRepository.findDirectoryByMemberId(memberId)), 0);
+          toSegments(customerMemberLinkRepository.findLatestDirectoryByMemberId(memberId)), 0);
     }
     return new MemberLinks(
         toSegments(
-            customerMemberLinkRepository.findDirectoryByMemberIdAndStoreIdIn(
+            customerMemberLinkRepository.findLatestDirectoryByMemberIdAndStoreIdIn(
                 memberId, scope.storeIds())),
-        customerMemberLinkRepository.countByMemberIdAndStoreIdNotIn(memberId, scope.storeIds()));
+        customerMemberLinkRepository.countStoresByMemberIdAndStoreIdNotIn(
+            memberId, scope.storeIds()));
   }
 
   private static List<LinkSegment> toSegments(List<MemberLinkDirectoryView> views) {
