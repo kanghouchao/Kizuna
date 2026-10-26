@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 会員の自助登録の公開コントローラ。StoreIdInterceptor を通らない /admin 配下に置く。
+ * 会員の自助登録の公開コントローラ。
  *
  * <p>匿名 POST のため SecurityConfig の CSRF 免除対象（Bearer なしのため Bearer 免除に該当しない）。
  */

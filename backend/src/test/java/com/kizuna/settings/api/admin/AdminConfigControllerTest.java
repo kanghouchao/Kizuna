@@ -14,7 +14,6 @@ import com.kizuna.settings.api.dto.SystemConfigResponse;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -33,11 +32,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AdminConfigController.class)
-@Import({
-  AdminConfigControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({AdminConfigControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class AdminConfigControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -49,8 +44,8 @@ class AdminConfigControllerTest {
 
   @MockitoBean private SystemConfigService systemConfigService;
 
-  // StoreExistenceInterceptor（HandlerInterceptor）の依存。@WebMvcTest は HandlerInterceptor を
-  // 取り込むため、MaintenanceModeInterceptor の SystemConfigService と同様にポートのモックを用意する。
+  // CurrentStoreArgumentResolver（引数解決器）の依存。@WebMvcTest は引数解決器を取り込むため、
+  // MaintenanceModeInterceptor の SystemConfigService と同様にポートのモックを用意する。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 

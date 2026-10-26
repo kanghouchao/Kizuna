@@ -15,7 +15,6 @@ import com.kizuna.auth.infrastructure.JwtAuthoritiesConverter;
 import com.kizuna.auth.infrastructure.SecurityConfig;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.api.dto.InitialSetupRequest;
@@ -44,7 +43,6 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
   JwtAuthoritiesConverter.class,
   JwtAuthenticationEntryPoint.class,
   ExemptingBearerTokenResolver.class,
-  StoreContext.class,
   StoreScopeHolder.class
 })
 class InitialSetupControllerTest {
@@ -63,7 +61,7 @@ class InitialSetupControllerTest {
   // 自身を親に委ね、Bearer の認証失敗が 401 でなく StackOverflowError になる。
   @MockitoBean private UserDetailsService userDetailsService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

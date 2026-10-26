@@ -23,7 +23,6 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.BusinessAudit;
@@ -54,7 +53,6 @@ import tools.jackson.databind.ObjectMapper;
   CustomerService.class,
   CustomerContactService.class,
   CustomerMapperImpl.class,
-  StoreContext.class,
   StoreScopeHolder.class,
   CustomerSearchControllerTest.Security.class
 })

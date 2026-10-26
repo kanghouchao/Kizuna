@@ -27,7 +27,6 @@ import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.order.contact.BusinessContactDecision;
 import com.kizuna.order.contact.OrderBusinessContact;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.task.execution.TaskContext;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
@@ -153,9 +152,7 @@ class NotificationApplicationTest {
   @Test
   void claimLocksTheEventStoresRows() {
     var authorization = mock(DeliveryAuthorization.class);
-    var store = new StoreContext();
-    var claims =
-        new DeliveryAttempts(deliveries, attempts, authorization, contacts, audit, store, clock);
+    var claims = new DeliveryAttempts(deliveries, attempts, authorization, contacts, audit, clock);
     var row = row();
     row.queue(null, "確認済み", false);
     row.dispatch();
@@ -164,12 +161,7 @@ class NotificationApplicationTest {
     when(deliveries.findByIdAndStoreIdForUpdate("101", STORE_ID)).thenReturn(Optional.of(row));
     when(attempts.findByIdAndStoreId("201", STORE_ID)).thenReturn(Optional.of(attempt));
     when(authorization.require(5L, STORE_ID)).thenReturn(SERVICE);
-    store.setStoreId(STORE_ID);
-    try {
-      assertThat(claims.claim(new DeliveryDispatch("101", "201", 5L, STORE_ID, 3L))).isTrue();
-    } finally {
-      store.clear();
-    }
+    assertThat(claims.claim(new DeliveryDispatch("101", "201", 5L, STORE_ID, 3L))).isTrue();
     assertThat(attempt.getStatus()).isEqualTo(DeliveryStatus.SENDING);
   }
 }

@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
@@ -32,11 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
 @WebMvcTest(StoreProfileController.class)
-@Import({
-  StoreProfileControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({StoreProfileControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class StoreProfileControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -50,7 +45,7 @@ class StoreProfileControllerTest {
 
   @MockitoBean private StoreProfileService storeProfileService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

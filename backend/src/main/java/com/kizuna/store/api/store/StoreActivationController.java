@@ -1,6 +1,6 @@
 package com.kizuna.store.api.store;
 
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.store.application.StoreActivationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,12 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class StoreActivationController {
 
   private final StoreActivationService storeActivationService;
-  private final StoreContext storeContext;
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
-  public ResponseEntity<Void> activate() {
-    storeActivationService.activate(storeContext.getStoreId());
+  public ResponseEntity<Void> activate(@CurrentStore Long storeId) {
+    storeActivationService.activate(storeId);
     return ResponseEntity.noContent().build();
   }
 }

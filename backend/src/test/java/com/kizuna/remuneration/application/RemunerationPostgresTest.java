@@ -28,7 +28,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.remuneration.AttendanceFacts;
@@ -123,7 +122,6 @@ class RemunerationPostgresTest {
   }
 
   private void authorize() {
-    context.getBean(StoreContext.class).setStoreId(storeId);
     SecurityContextHolder.getContext()
         .setAuthentication(
             UsernamePasswordAuthenticationToken.authenticated(
@@ -138,7 +136,6 @@ class RemunerationPostgresTest {
           var store = new Store("保証検証店", UUID.randomUUID() + ".example.test", null);
           em.persist(store);
           storeId = store.getId();
-          context.getBean(StoreContext.class).setStoreId(storeId);
           email = UUID.randomUUID() + "@example.test";
           var actor =
               User.builder()
@@ -312,7 +309,6 @@ class RemunerationPostgresTest {
         management
             .createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email)
             .guarantee();
-    context.getBean(StoreContext.class).setStoreId(storeId + 100000);
     assertThatThrownBy(
             () ->
                 management.createBonus(
@@ -547,11 +543,6 @@ class RemunerationPostgresTest {
     @Bean
     PlatformTransactionManager transactionManager(EntityManagerFactory f) {
       return new JpaTransactionManager(f);
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

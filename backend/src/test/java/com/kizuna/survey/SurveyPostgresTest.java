@@ -10,7 +10,7 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
@@ -58,7 +58,7 @@ import tools.jackson.databind.json.JsonMapper;
 class SurveyPostgresTest {
   private ConfigurableApplicationContext context;
   private JdbcTemplate jdbc;
-  private StoreContext store;
+  private Long currentStore;
   private MockMvc mvc;
   private final JsonMapper json =
       JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build();
@@ -88,11 +88,19 @@ class SurveyPostgresTest {
                     Map.entry("logging.level.root", "WARN")))
             .run();
     jdbc = context.getBean(JdbcTemplate.class);
-    store = context.getBean(StoreContext.class);
     mvc =
         MockMvcBuilders.standaloneSetup(
                 context.getBean("surveyController"), context.getBean("surveyResponseController"))
-            .setCustomArgumentResolvers(new CurrentStoreArgumentResolver(store))
+            .setCustomArgumentResolvers(
+                new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+            .defaultRequest(
+                get("/")
+                    .with(
+                        request -> {
+                          if (currentStore != null)
+                            request.addHeader("X-Store-ID", currentStore.toString());
+                          return request;
+                        }))
             .setControllerAdvice(new CommonExceptionHandler())
             .setMessageConverters(new JacksonJsonHttpMessageConverter(json))
             .build();
@@ -106,7 +114,7 @@ class SurveyPostgresTest {
   @AfterEach
   void clearContext() {
     SecurityContextHolder.clearContext();
-    if (store != null) store.clear();
+    currentStore = null;
   }
 
   @BeforeEach
@@ -147,7 +155,7 @@ class SurveyPostgresTest {
                 new SimpleGrantedAuthority("PERM_SURVEY_RECORD"),
                     new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
     SecurityContextHolder.getContext().setAuthentication(auth);
-    store.setStoreId(storeId);
+    currentStore = storeId;
   }
 
   private static final String DEFINITION =
@@ -366,12 +374,12 @@ class SurveyPostgresTest {
     String base = openedRevision();
     var receipt = send(base + "/responses", receipt("first"), 201);
     String answer = "/store/survey-responses/" + receipt.get("answer").get("id").asString();
-    store.setStoreId(otherStore);
+    currentStore = otherStore;
     for (String path : List.of(base, answer, base + "/response-counts", answer + "/history"))
       read(path, 404);
     send(answer + "/withdrawals", action(0, "foreign"), 404);
     assertThat(read("/store/surveys", 200).get("content").isEmpty()).isTrue();
-    store.setStoreId(storeId);
+    currentStore = storeId;
     jdbc.update(
         "delete from t_role_permissions where role_id=? and permission_id=(select id from t_permissions where code='SURVEY_RECORD')",
         roleId);
@@ -525,13 +533,11 @@ class SurveyPostgresTest {
                       pool.submit(
                           (Callable<JsonNode>)
                               () -> {
-                                store.setStoreId(storeId);
                                 SecurityContextHolder.getContext().setAuthentication(auth);
                                 try {
                                   barrier.await(10, TimeUnit.SECONDS);
                                   return task.call();
                                 } finally {
-                                  store.clear();
                                   SecurityContextHolder.clearContext();
                                 }
                               }))
@@ -571,7 +577,7 @@ class SurveyPostgresTest {
   @EntityScan("com.kizuna")
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackages = {"com.kizuna.survey.application", "com.kizuna.survey.api.store"})
-  @Import({StoreContext.class, AuditWriter.class, BusinessAudit.class})
+  @Import({AuditWriter.class, BusinessAudit.class})
   static class Config {
     @Bean
     Clock clock() {

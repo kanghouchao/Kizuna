@@ -17,7 +17,6 @@ import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.application.CustomerService;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -40,11 +39,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** ハンドラ層で閉じている約束（offset ページングの全順序、生成 201 / 削除 204、名乗られた店舗の受け渡し）の単体テスト。 */
 @WebMvcTest(CustomerController.class)
-@Import({
-  CustomerControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({CustomerControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class CustomerControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -58,7 +53,7 @@ class CustomerControllerTest {
 
   @MockitoBean private CustomerService customerService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

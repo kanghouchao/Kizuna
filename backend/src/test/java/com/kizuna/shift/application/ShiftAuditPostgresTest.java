@@ -16,7 +16,6 @@ import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
@@ -112,7 +111,6 @@ class ShiftAuditPostgresTest {
 
   @BeforeEach
   void authenticate() {
-    context.getBean(StoreContext.class).setStoreId(1L);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
@@ -121,7 +119,6 @@ class ShiftAuditPostgresTest {
   @AfterEach
   void clear() {
     SecurityContextHolder.clearContext();
-    context.getBean(StoreContext.class).clear();
   }
 
   @AfterAll
@@ -568,11 +565,6 @@ class ShiftAuditPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

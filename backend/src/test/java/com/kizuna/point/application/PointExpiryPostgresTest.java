@@ -15,7 +15,6 @@ import com.kizuna.pointsexpiry.application.PointExpiryTask;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskRegistry;
@@ -782,11 +781,6 @@ class PointExpiryPostgresTest {
     @Bean
     Clock clock() {
       return Clock.fixed(AS_OF.atStartOfDay(ZONE).toInstant(), ZONE);
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

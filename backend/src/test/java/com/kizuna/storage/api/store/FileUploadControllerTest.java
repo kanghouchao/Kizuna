@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.user.domain.PermissionCode;
@@ -34,21 +33,18 @@ class FileUploadControllerTest {
   @Mock private FileStorageService fileStorageService;
   @Mock private MultipartFile file;
 
-  private StoreContext storeContext;
   private FileUploadController controller;
 
   @BeforeEach
   void setUp() {
-    storeContext = new StoreContext();
     AppProperties appProperties = new AppProperties();
     appProperties.setUpload(new AppProperties.Upload());
-    controller = new FileUploadController(fileStorageService, storeContext, appProperties);
+    controller = new FileUploadController(fileStorageService, appProperties);
   }
 
   @AfterEach
   void tearDown() {
     SecurityContextHolder.clearContext();
-    storeContext.clear();
   }
 
   /** 指定した authority 群で認証済みリクエストを模擬する（platform 保存可否は SecurityContext の authority で判定される）。 */
@@ -62,14 +58,14 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("ASSET_MANAGE 能力のトークンは店舗文脈が無くても platform 配下に保存すること")
+  @DisplayName("ASSET_MANAGE 能力のトークンは店舗を名乗らなくても platform 配下に保存すること")
   void upload_storesUnderPlatformForAssetManage() {
     authenticateWithAuthorities(PermissionCode.ASSET_MANAGE.authority());
     when(fileStorageService.store("platform", "public", file)).thenReturn("public/platform/x.jpg");
     when(file.getOriginalFilename()).thenReturn("x.jpg");
     when(file.getSize()).thenReturn(3L);
 
-    ResponseEntity<FileUploadResponse> res = controller.upload(file, "public");
+    ResponseEntity<FileUploadResponse> res = controller.upload(null, file, "public");
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     verify(fileStorageService).store("platform", "public", file);
@@ -77,26 +73,25 @@ class FileUploadControllerTest {
   }
 
   @Test
-  @DisplayName("ASSET_MANAGE の無いトークンは店舗文脈が無い場合、platform に保存せず拒否すること")
-  void upload_rejectsWithoutAssetManageAndStoreContext() {
+  @DisplayName("ASSET_MANAGE の無いトークンは店舗を名乗らない場合、platform に保存せず拒否すること")
+  void upload_rejectsWithoutAssetManageAndStore() {
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
 
-    assertThatThrownBy(() -> controller.upload(file, "public"))
+    assertThatThrownBy(() -> controller.upload(null, file, "public"))
         .isInstanceOf(AccessDeniedException.class);
 
     verify(fileStorageService, never()).store(any(), any(), any());
   }
 
   @Test
-  @DisplayName("店舗文脈が解決済みならその店舗配下に保存すること")
-  void upload_storesUnderStorePrefixWhenContextResolved() {
-    storeContext.setStoreId(5L);
+  @DisplayName("店舗を名乗ればその店舗配下に保存すること")
+  void upload_storesUnderStorePrefixWhenStoreNamed() {
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
     when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");
     when(file.getSize()).thenReturn(4L);
 
-    ResponseEntity<FileUploadResponse> res = controller.upload(file, "public");
+    ResponseEntity<FileUploadResponse> res = controller.upload(5L, file, "public");
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     verify(fileStorageService).store("5", "public", file);

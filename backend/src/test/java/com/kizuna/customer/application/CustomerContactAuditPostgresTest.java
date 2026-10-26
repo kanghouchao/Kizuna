@@ -26,7 +26,6 @@ import com.kizuna.customer.domain.CustomerListRepository;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerRepository;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -94,7 +93,6 @@ class CustomerContactAuditPostgresTest {
 
   @BeforeEach
   void authenticate() {
-    context.getBean(StoreContext.class).setStoreId(STORE_ID);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
@@ -102,7 +100,6 @@ class CustomerContactAuditPostgresTest {
 
   @AfterEach
   void clear() {
-    context.getBean(StoreContext.class).clear();
     SecurityContextHolder.clearContext();
   }
 
@@ -414,11 +411,6 @@ class CustomerContactAuditPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

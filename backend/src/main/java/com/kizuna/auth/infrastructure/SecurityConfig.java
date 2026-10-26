@@ -44,8 +44,8 @@ public class SecurityConfig {
     // 匿名 POST の LINE ログインと LINE 登録確定（同上）。連携(/me/line)は Bearer 付きで既存免除に該当する。
     PathPatternRequestMatcher.withDefaults().matcher("/auth/line/login"),
     PathPatternRequestMatcher.withDefaults().matcher("/auth/line/register"),
-    // 公開店面からの匿名 POST（ゲスト予約申請）。/store 配下で唯一の匿名の書き込みで、店舗文脈は
-    // StoreIdInterceptor がヘッダから確立する。同一パス上に他のメソッドの handler を作らないよう
+    // 公開サイトからの匿名 POST（ゲスト予約申請）。/store 配下で唯一の匿名の書き込みで、店舗は
+    // X-Store-ID で名乗る（@CurrentStore）。同一パス上に他のメソッドの handler を作らないよう
     // メソッドまで指定する。
     PathPatternRequestMatcher.withDefaults()
         .matcher(HttpMethod.POST, "/store/order-applications/public"),

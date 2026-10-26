@@ -24,7 +24,7 @@ import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
@@ -80,7 +80,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ReviewPostgresTest {
   private ConfigurableApplicationContext context;
   private JdbcTemplate jdbc;
-  private StoreContext store;
+  private Long currentStore;
   private MockMvc mvc;
   private final JsonMapper json =
       JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build();
@@ -110,10 +110,18 @@ class ReviewPostgresTest {
                     Map.entry("logging.level.root", "WARN")))
             .run();
     jdbc = context.getBean(JdbcTemplate.class);
-    store = context.getBean(StoreContext.class);
     mvc =
         MockMvcBuilders.standaloneSetup(context.getBean(ReviewController.class))
-            .setCustomArgumentResolvers(new CurrentStoreArgumentResolver(store))
+            .setCustomArgumentResolvers(
+                new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+            .defaultRequest(
+                get("/")
+                    .with(
+                        request -> {
+                          if (currentStore != null)
+                            request.addHeader("X-Store-ID", currentStore.toString());
+                          return request;
+                        }))
             .setControllerAdvice(new CommonExceptionHandler())
             .setMessageConverters(new JacksonJsonHttpMessageConverter(json))
             .build();
@@ -127,7 +135,7 @@ class ReviewPostgresTest {
   @AfterEach
   void clearContext() {
     SecurityContextHolder.clearContext();
-    if (store != null) store.clear();
+    currentStore = null;
   }
 
   @BeforeEach
@@ -168,7 +176,7 @@ class ReviewPostgresTest {
                 new SimpleGrantedAuthority("PERM_REVIEW_MODERATE"),
                     new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
     SecurityContextHolder.getContext().setAuthentication(auth);
-    store.setStoreId(storeId);
+    currentStore = storeId;
   }
 
   @Test
@@ -323,14 +331,9 @@ class ReviewPostgresTest {
     assertThat(json.valueToTree(projected).properties())
         .extracting(Map.Entry::getKey)
         .containsExactlyInAnyOrder("review_id", "review_version", "display_name", "body");
-    assertThatThrownBy(() -> publication.current(otherStore, Set.of(id)))
-        .isInstanceOf(AccessDeniedException.class);
-    store.setStoreId(otherStore);
     assertThat(publication.current(otherStore, Set.of(id))).isEmpty();
-    store.clear();
-    assertThatThrownBy(() -> publication.current(storeId, Set.of(id)))
+    assertThatThrownBy(() -> publication.current(null, Set.of(id)))
         .isInstanceOf(AccessDeniedException.class);
-    store.setStoreId(storeId);
     var revoked =
         send(
             "/" + id + "/permission-revocations",
@@ -422,7 +425,7 @@ class ReviewPostgresTest {
     assertThat(earlier.get("content").get(0).get("permission_record_id").asString())
         .isEqualTo(old.get("permission").get("id").asString());
     assertThat(earlier.toString()).doesNotContain("口頭確認", "元の本文");
-    store.setStoreId(otherStore);
+    currentStore = otherStore;
     read("/" + id, 404);
     read("/" + id + "/history", 404);
   }
@@ -452,9 +455,9 @@ class ReviewPostgresTest {
     jdbc.update("update t_orders set completion_invalidated=true where id=?", orderId);
     send("", input, 200);
     send("", input.replace("origin-intake", "new-ineligible"), 400);
-    store.setStoreId(otherStore);
+    currentStore = otherStore;
     send("", input, 404);
-    store.setStoreId(storeId);
+    currentStore = storeId;
     jdbc.update(
         "delete from t_role_permissions where role_id=? and permission_id=(select id from t_permissions where code='ORDER_MANAGE')",
         roleId);
@@ -530,9 +533,9 @@ class ReviewPostgresTest {
             "?status=WRONG",
             "/" + firstId + "/history?cursor=bad",
             "/" + firstId + "/history?size=101")) read(bad, 400);
-    store.setStoreId(otherStore);
+    currentStore = otherStore;
     assertThat(read("", 200).get("total_elements").asLong()).isZero();
-    store.setStoreId(storeId);
+    currentStore = storeId;
     jdbc.update("update t_users set enabled=false where id=?", actorId);
     read("", 403);
   }
@@ -668,7 +671,6 @@ class ReviewPostgresTest {
   private List<JsonNode> concurrent(Callable<JsonNode> first, Callable<JsonNode> second)
       throws Exception {
     var barrier = new CyclicBarrier(2);
-    Long selectedStore = storeId;
     var authentication = auth;
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var calls =
@@ -677,13 +679,11 @@ class ReviewPostgresTest {
                   call ->
                       executor.submit(
                           () -> {
-                            store.setStoreId(selectedStore);
                             SecurityContextHolder.getContext().setAuthentication(authentication);
                             try {
                               barrier.await(10, TimeUnit.SECONDS);
                               return call.call();
                             } finally {
-                              store.clear();
                               SecurityContextHolder.clearContext();
                             }
                           }))
@@ -723,7 +723,7 @@ class ReviewPostgresTest {
                       .getBean(ServiceItemRepository.class)
                       .saveAndFlush(
                           ServiceItem.create(
-                              store.getStoreId(),
+                              currentStore,
                               new ServiceTerms(ServiceKind.COURSE, "検証コース", 60, null, 1000, 500)));
               var revision =
                   context
@@ -785,7 +785,6 @@ class ReviewPostgresTest {
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackageClasses = ReviewService.class)
   @Import({
-    StoreContext.class,
     AuditWriter.class,
     BusinessAudit.class,
     ReviewController.class,

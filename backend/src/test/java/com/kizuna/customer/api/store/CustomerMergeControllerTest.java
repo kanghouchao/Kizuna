@@ -21,7 +21,6 @@ import com.kizuna.customer.api.dto.MergeDirection;
 import com.kizuna.customer.application.CustomerMergeService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
@@ -54,7 +53,6 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(CustomerMergeController.class)
 @Import({
   CustomerMergeControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
   StoreScopeHolder.class,
   CommonExceptionHandler.class
 })
@@ -71,7 +69,7 @@ class CustomerMergeControllerTest {
 
   @MockitoBean private CustomerMergeService customerMergeService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

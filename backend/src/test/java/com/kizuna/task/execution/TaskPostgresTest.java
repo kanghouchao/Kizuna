@@ -13,7 +13,6 @@ import com.kizuna.audit.recording.AuditReader;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskQuery;
@@ -329,11 +328,6 @@ class TaskPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

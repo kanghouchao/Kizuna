@@ -30,7 +30,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManager;
@@ -84,14 +83,12 @@ import tools.jackson.databind.json.JsonMapper;
 class AdvertisingPostgresTest {
   AnnotationConfigApplicationContext context;
   AdvertisingService service;
-  StoreContext stores;
   JdbcTemplate jdbc;
 
   @BeforeAll
   void connect() {
     context = new AnnotationConfigApplicationContext(Config.class);
     service = context.getBean(AdvertisingService.class);
-    stores = context.getBean(StoreContext.class);
     jdbc = new JdbcTemplate(context.getBean(DataSource.class));
     jdbc.execute("CREATE UNIQUE INDEX uq_ad_test_month ON t_advertising_months(store_id,month)");
     jdbc.execute(
@@ -113,7 +110,6 @@ class AdvertisingPostgresTest {
         .setAuthentication(
             new UsernamePasswordAuthenticationToken(
                 "reader", "unused", List.of(new SimpleGrantedAuthority("PERM_ORDER_MANAGE"))));
-    stores.setStoreId(1L);
     reset(context.getBean(AdvertisingRecords.class));
     reset((BusinessAudit) AopTestUtils.getTargetObject(context.getBean(BusinessAudit.class)));
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(20000);
@@ -217,7 +213,6 @@ class AdvertisingPostgresTest {
   void filtersAllStoreResourcesAndHistories() {
     var c = service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
     var change = service.changes(1L, "2026-09", null, 20).content().getFirst();
-    stores.setStoreId(2L);
     assertThat(service.list(2L, "2026-09", 0, 20).getContent()).isEmpty();
     assertThat(service.month(2L, "2026-09").recordedTotalAmount()).isZero();
     assertThat(service.snapshot(2L, "2026-09").costs()).isEmpty();
@@ -328,13 +323,7 @@ class AdvertisingPostgresTest {
               try (var pool = Executors.newSingleThreadExecutor()) {
                 pool.submit(
                         () -> {
-                          stores.setStoreId(1L);
-                          try {
-                            service.create(
-                                1L, create("2026-09", 0, 200, UUID.randomUUID()), "actor");
-                          } finally {
-                            stores.clear();
-                          }
+                          service.create(1L, create("2026-09", 0, 200, UUID.randomUUID()), "actor");
                         })
                     .get(5, TimeUnit.SECONDS);
               }
@@ -353,22 +342,15 @@ class AdvertisingPostgresTest {
   void mediaSummaryKeepsInquiryAmountAndRevisionTogetherAndRecalculatesAfterDeletion() {
     var first = service.create(1L, create("2026-09", 5, 100, UUID.randomUUID()), "actor");
     var media = new AdvertisingMediaService(service, context.getBean(AppProperties.class));
-    stores.setStoreId(2L);
     service.create(2L, create("2026-09", 100, 10000, UUID.randomUUID()), "actor");
-    stores.setStoreId(1L);
     doAnswer(
             invocation -> {
               var rows = invocation.callRealMethod();
               try (var pool = Executors.newSingleThreadExecutor()) {
                 pool.submit(
                         () -> {
-                          stores.setStoreId(1L);
-                          try {
-                            service.create(
-                                1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
-                          } finally {
-                            stores.clear();
-                          }
+                          service.create(
+                              1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
                         })
                     .get(5, TimeUnit.SECONDS);
               }
@@ -428,14 +410,11 @@ class AdvertisingPostgresTest {
         futures.add(
             pool.submit(
                 () -> {
-                  stores.setStoreId(1L);
                   gate.await();
                   try {
                     return work.call();
                   } catch (RuntimeException ex) {
                     return ex;
-                  } finally {
-                    stores.clear();
                   }
                 }));
       var result = new ArrayList<Object>();
@@ -446,7 +425,6 @@ class AdvertisingPostgresTest {
 
   String order(
       long store, String month, String media, OrderStatus status, boolean invalid, int amount) {
-    stores.setStoreId(store);
     return new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
         .execute(
             tx -> {
@@ -495,7 +473,6 @@ class AdvertisingPostgresTest {
     order(1, "2026-09", null, OrderStatus.COMPLETED, false, 0);
     order(1, "2026-09", " 媒体 ", OrderStatus.COMPLETED, false, 100);
     order(2, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
-    stores.setStoreId(1L);
     var compare = context.getBean(AdvertisingOrderCostService.class);
     var report = compare.view(1L, "2026-09").report();
     assertThat(report.costEntryCount()).isEqualTo(1);
@@ -524,14 +501,9 @@ class AdvertisingPostgresTest {
                 try (var pool = Executors.newSingleThreadExecutor()) {
                   pool.submit(
                           () -> {
-                            try {
-                              stores.setStoreId(1L);
-                              service.create(
-                                  1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
-                              order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 0);
-                            } finally {
-                              stores.clear();
-                            }
+                            service.create(
+                                1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
+                            order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 0);
                           })
                       .get(5, TimeUnit.SECONDS);
                 }
@@ -557,7 +529,6 @@ class AdvertisingPostgresTest {
         .isInstanceOf(ServiceUnavailableException.class);
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(20000);
     assertThat(compare.view(1L, "2026-09").report().validCompletedOrderCount()).isEqualTo(2);
-    stores.clear();
     assertThatThrownBy(() -> compare.view(null, "2026-09")).isInstanceOf(RuntimeException.class);
   }
 
@@ -608,11 +579,6 @@ class AdvertisingPostgresTest {
     @Bean
     PlatformTransactionManager transactionManager(EntityManagerFactory f) {
       return new JpaTransactionManager(f);
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

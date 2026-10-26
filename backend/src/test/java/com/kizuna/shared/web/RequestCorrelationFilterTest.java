@@ -3,7 +3,7 @@ package com.kizuna.shared.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.shared.storescope.StoreContext;
+import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import jakarta.servlet.DispatcherType;
@@ -19,9 +19,8 @@ class RequestCorrelationFilterTest {
   @ValueSource(booleans = {false, true})
   void asyncExceptionDispatchKeepsResponseIdAndAlwaysClearsContext(boolean suppliedId)
       throws Exception {
-    var store = new StoreContext();
     var holder = new StoreScopeHolder();
-    var filter = new RequestCorrelationFilter(store, holder);
+    var filter = new RequestCorrelationFilter(holder);
     var request = new MockHttpServletRequest();
     var response = new MockHttpServletResponse();
     if (suppliedId) request.addHeader("X-Request-ID", "request-from-client");
@@ -43,18 +42,17 @@ class RequestCorrelationFilterTest {
                       response,
                       (input, output) -> {
                         assertThat(ThreadContext.get("requestId")).isEqualTo(originalId);
-                        store.setStoreId(1L);
+                        ThreadContext.put(CurrentStoreArgumentResolver.MDC_STORE_ID, "1");
                         holder.install(() -> new StoreScope(true, java.util.Set.of()));
                         throw new ServletException("非同期失敗");
                       }))
           .isInstanceOf(ServletException.class);
       assertThat(response.getHeader("X-Request-ID")).isEqualTo(originalId);
       assertThat(ThreadContext.get("requestId")).isNull();
-      assertThat(store.hasStoreId()).isFalse();
+      assertThat(ThreadContext.get(CurrentStoreArgumentResolver.MDC_STORE_ID)).isNull();
       assertThat(holder.current()).as("作用域の保持器も例外経路で掃除されること").isNull();
     } finally {
       ThreadContext.clearAll();
-      store.clear();
       holder.clear();
     }
   }

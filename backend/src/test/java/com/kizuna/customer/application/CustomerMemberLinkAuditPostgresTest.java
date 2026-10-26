@@ -16,7 +16,6 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.domain.MemberIdentityView;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -98,7 +97,6 @@ class CustomerMemberLinkAuditPostgresTest {
 
   @BeforeEach
   void authenticate() {
-    context.getBean(StoreContext.class).setStoreId(STORE_ID);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
@@ -107,7 +105,6 @@ class CustomerMemberLinkAuditPostgresTest {
   @AfterEach
   void clear() {
     SecurityContextHolder.clearContext();
-    context.getBean(StoreContext.class).clear();
   }
 
   @AfterAll
@@ -450,11 +447,6 @@ class CustomerMemberLinkAuditPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

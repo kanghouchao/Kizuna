@@ -29,7 +29,6 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -55,7 +54,6 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @WebMvcTest(AttachmentController.class)
 @Import({
   AttachmentControllerTest.MethodSecurity.class,
-  StoreContext.class,
   StoreScopeHolder.class,
   AppProperties.class
 })

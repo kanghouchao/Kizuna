@@ -12,8 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 本人（キャスト）ポータルの所属店舗解決ユースケース。
  *
- * <p>cast_id 単層自限（{@link CastEnrollmentRepository#findIdsByUserId}）と同じ基点（user_id 逆引き）で、StoreContext
- * を経由せず跨店で解決する。
+ * <p>在籍 id の解決（{@link CastEnrollmentRepository#findIdsByUserId}）と同じく user_id を基点に引き、店舗を限らず
+ * 本人の所属店舗をすべて返す。
  */
 @Service
 @RequiredArgsConstructor

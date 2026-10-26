@@ -16,7 +16,6 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -218,11 +217,6 @@ class OrderAuditPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

@@ -11,7 +11,7 @@ import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/** 要求引数の束縛に横断的な既定を敷く設定。店舗文脈の interceptor 登録とは関心が別なので設定も分ける。 */
+/** 要求引数の束縛に横断的な既定を敷く設定（ページングの副キー補完と {@code @CurrentStore} の解決）。 */
 @Configuration
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor

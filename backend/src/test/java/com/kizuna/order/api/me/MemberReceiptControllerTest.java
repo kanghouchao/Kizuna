@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.order.api.dto.MemberReceiptClaimResponse;
 import com.kizuna.order.application.MemberReceiptClaimService;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -33,11 +32,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * <p>帰属先は認証主体に固定されるため、この経路が会員以外へ開くと、伝票を拾った店舗スタッフが他人の来店を 自分の記録として起こせてしまう。
  */
 @WebMvcTest(MemberReceiptController.class)
-@Import({
-  MemberReceiptControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({MemberReceiptControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class MemberReceiptControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -56,7 +51,7 @@ class MemberReceiptControllerTest {
 
   @MockitoBean private MemberReceiptClaimService memberReceiptClaimService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

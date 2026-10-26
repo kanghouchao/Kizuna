@@ -17,7 +17,6 @@ import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -40,7 +39,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /** ハンドラ層で閉じている約束（offset ページングの全順序、削除 204）の単体テスト。 */
 @WebMvcTest(CastController.class)
-@Import({CastControllerTest.MethodSecurityConfig.class, StoreContext.class, StoreScopeHolder.class})
+@Import({CastControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class CastControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -54,7 +53,7 @@ class CastControllerTest {
   @MockitoBean private CastEnrollmentService enrollmentService;
   @MockitoBean private CastInvitationService castInvitationService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor は HandlerInterceptor として
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
   // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;

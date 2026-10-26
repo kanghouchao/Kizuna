@@ -14,7 +14,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.api.dto.StoreVO;
@@ -40,11 +39,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** グループ級店舗 API のうち、ハンドラ層で閉じている約束（ページングの全順序・要求本文の検査）の単体テスト。 */
 @WebMvcTest(AdminStoreController.class)
-@Import({
-  AdminStoreControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({AdminStoreControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class AdminStoreControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -57,8 +52,8 @@ class AdminStoreControllerTest {
   @MockitoBean private AdminStoreService adminStoreService;
   @MockitoBean private StoreRegistryService storeRegistryService;
 
-  // MaintenanceModeInterceptor / StoreExistenceInterceptor / StoreActivationInterceptor は
-  // HandlerInterceptor として @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
+  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
+  // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;

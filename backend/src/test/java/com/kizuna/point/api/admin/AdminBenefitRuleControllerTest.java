@@ -19,7 +19,6 @@ import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.application.BenefitRuleService;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -40,11 +39,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AdminBenefitRuleController.class)
-@Import({
-  AdminBenefitRuleControllerTest.MethodSecurityConfig.class,
-  StoreContext.class,
-  StoreScopeHolder.class
-})
+@Import({AdminBenefitRuleControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class AdminBenefitRuleControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -56,8 +51,8 @@ class AdminBenefitRuleControllerTest {
 
   @MockitoBean private BenefitRuleService benefitRuleService;
 
-  // HandlerInterceptor（StoreExistenceInterceptor / MaintenanceModeInterceptor）の依存。
-  // @WebMvcTest は interceptor を取り込むため、ポートのモックを用意する。
+  // MaintenanceModeInterceptor と CurrentStoreArgumentResolver の依存。
+  // @WebMvcTest は interceptor と引数解決器を取り込むため、ポートのモックを用意する。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
   @MockitoBean private SystemConfigService systemConfigService;

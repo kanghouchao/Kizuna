@@ -30,7 +30,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -96,7 +95,6 @@ class AttachmentPostgresTest {
   private TransactionTemplate transactions;
   private EntityManager em;
   private AttachmentTransactions service;
-  private StoreContext scope;
   private PrivateAttachmentStorage storage;
   @TempDir Path directory;
 
@@ -107,7 +105,6 @@ class AttachmentPostgresTest {
     transactions = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
     em = context.getBean(EntityManager.class);
     service = context.getBean(AttachmentTransactions.class);
-    scope = context.getBean(StoreContext.class);
     storage = context.getBean(PrivateAttachmentStorage.class);
     jdbc.execute("create table attachment_test_stores(id bigint primary key)");
     jdbc.execute("insert into attachment_test_stores values(1),(2)");
@@ -135,11 +132,10 @@ class AttachmentPostgresTest {
     var limits = context.getBean(AppProperties.class).getPrivateAttachments();
     limits.setMaxApplicantFiles(20);
     limits.setMaxApplicantBytes(200L * 1024 * 1024);
-    authorize(STORE_ID);
+    authorize();
   }
 
-  private void authorize(Long storeId) {
-    scope.setStoreId(storeId);
+  private void authorize() {
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken("operator@example.test", "unused", List.of()));
@@ -293,7 +289,6 @@ class AttachmentPostgresTest {
       assertThat(status(upload.getId())).isEqualTo("PENDING");
       assertThat(service.reserve(STORE_ID, applicant, key, image, "operator@example.test").getId())
           .isEqualTo(upload.getId());
-      authorize(OTHER_STORE_ID);
       assertThatThrownBy(
               () ->
                   service.lookup(
@@ -306,7 +301,6 @@ class AttachmentPostgresTest {
           .isInstanceOf(NotFoundException.class);
       assertThatThrownBy(() -> service.download(OTHER_STORE_ID, applicant, upload.getId()))
           .isInstanceOf(NotFoundException.class);
-      authorize(STORE_ID);
       assertThat(complete(applicant, upload, image).created()).isTrue();
       assertThat(complete(applicant, upload, image).created()).isFalse();
       assertThat(auditCount(upload.getId())).isEqualTo(1);
@@ -385,11 +379,10 @@ class AttachmentPostgresTest {
       var first =
           executor.submit(
               () -> {
-                authorize(STORE_ID);
+                authorize();
                 try {
                   return complete(applicant, upload, image);
                 } finally {
-                  scope.clear();
                   SecurityContextHolder.clearContext();
                 }
               });
@@ -628,7 +621,7 @@ class AttachmentPostgresTest {
     <T> Future<T> submit(ExecutorService executor, Supplier<T> action) {
       return executor.submit(
           () -> {
-            authorize(STORE_ID);
+            authorize();
             try {
               return transactions.execute(
                   tx -> {
@@ -641,7 +634,6 @@ class AttachmentPostgresTest {
                     return action.get();
                   });
             } finally {
-              scope.clear();
               SecurityContextHolder.clearContext();
             }
           });
@@ -735,11 +727,6 @@ class AttachmentPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

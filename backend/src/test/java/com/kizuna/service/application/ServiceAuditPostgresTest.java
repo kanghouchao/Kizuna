@@ -27,7 +27,6 @@ import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
@@ -96,6 +95,7 @@ class ServiceAuditPostgresTest {
   private OwnServiceConditionService own;
   private TransactionTemplate transactions;
   private Long storeId;
+  private Long actingStore;
   private Long staffId;
   private Long castId;
   private String enrollment;
@@ -187,19 +187,18 @@ class ServiceAuditPostgresTest {
   }
 
   private void authenticate(Long store, String email) {
-    context.getBean(StoreContext.class).setStoreId(store);
+    actingStore = store;
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(email, null, List.of()));
   }
 
   private Long currentStore() {
-    return context.getBean(StoreContext.class).getStoreId();
+    return actingStore;
   }
 
   @AfterEach
   void clear() {
     SecurityContextHolder.clearContext();
-    context.getBean(StoreContext.class).clear();
   }
 
   @AfterAll
@@ -666,11 +665,6 @@ class ServiceAuditPostgresTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    StoreContext storeContext() {
-      return new StoreContext();
     }
 
     @Bean

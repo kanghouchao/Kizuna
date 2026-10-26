@@ -36,8 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 本人（キャスト）の出勤希望ユースケース（新規希望・変更申請の提出、履歴）。
  *
- * <p>提出は StoreContext が確立していない {@code /me} 配下のため、対象店舗への所属は「当該店舗に本人の未退店の在籍が存在すること」で判定し、{@link
- * ShiftRequest} の store_id を明示設定する。
+ * <p>提出は現在店舗を持たない {@code /me} 配下のため、対象店舗への所属は「当該店舗に本人の未退店の在籍が存在すること」で判定し、{@link ShiftRequest} の
+ * store_id を明示設定する。
  */
 @Service
 @RequiredArgsConstructor

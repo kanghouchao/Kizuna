@@ -51,7 +51,7 @@ public class OrderApplicationController {
   }
 
   /**
-   * 公開店面からのゲスト予約申請を受け付ける。匿名で、店舗は店面 middleware が域名から解決してヘッダで運ぶ（{@code StoreIdInterceptor}）。
+   * 公開サイトからのゲスト予約申請を受け付ける。匿名で、店舗は公開サイトの middleware がドメインから解決して {@code X-Store-ID} で運ぶ。
    *
    * <p>流量制限はサービスのトランザクション境界の外で判定する。撥ねる要求のためにトランザクションを開けない。
    *
