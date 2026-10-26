@@ -3,7 +3,6 @@ package com.kizuna.shift.application;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shift.api.dto.CastScheduleResponse;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -18,8 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 本人（キャスト）ポータルの週間スケジュールユースケース。
  *
- * <p>隔離は cast_id 単層自限のみで {@code @StoreSetScoped}/{@code @StoreScoped} は用いない — 本人の cast
- * 行は所属店にしか存在しないため、本人自限が同時に店舗自限としても機能する。リクエストパラメータで本人を指定させず、認証済み email から 本人の cast_id 集合を逆引きする。
+ * <p>隔離は本人の cast_id に限ることだけで担う — 本人の cast 行は所属店にしか存在しないため、本人に限れば店舗も限られる。リクエストパラメータで本人を 指定させず、認証済み
+ * email から本人の cast_id 集合を逆引きする。
  */
 @Service
 @RequiredArgsConstructor
@@ -32,7 +31,6 @@ public class CastScheduleService {
   private final ShiftRepository shiftRepository;
   private final ShiftMapper shiftMapper;
 
-  @StoreScopeExempt(reason = "認証済み email から逆引きした本人の cast_id 集合が唯一の境界で、本人の档案は所属店にしか存在しない")
   @Transactional(readOnly = true)
   public List<CastScheduleResponse> myWeek(String email, LocalDate from, LocalDate to) {
     if (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) > MAX_SPAN_DAYS) {

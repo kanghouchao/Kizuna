@@ -9,12 +9,9 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 /** 受注が採用した費用・時間・固定報酬の一行。 */
 @Entity
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Table(name = "t_order_fee_lines")
 @Getter
 @NoArgsConstructor

@@ -9,7 +9,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftMapper;
@@ -51,7 +50,6 @@ public class ShiftService {
   private final BusinessAudit audit;
   private final ShiftRequestRepository requests;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public List<ShiftResponse> list(Long storeId, LocalDate from, LocalDate to) {
     return shiftRepository.findByStoreIdAndWorkDateBetween(storeId, from, to).stream()
@@ -65,7 +63,6 @@ public class ShiftService {
    * cast.domain（{@code CastProfile}）を 直接参照して結合する（cast.api.dto は公開面ではないため）。t_cast_enrollments の参照は
    * {@code findPublished} の店舗条件で現店舗に絞られる。
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public List<PublicShiftResponse> listPublicToday(Long storeId) {
     List<Shift> shifts =
@@ -93,7 +90,6 @@ public class ShiftService {
         .toList();
   }
 
-  @StoreScoped
   @Transactional
   public ShiftResponse create(Long storeId, ShiftCreateRequest request, String actorEmail) {
     if (request.getStartTime().equals(request.getEndTime())) {
@@ -118,7 +114,6 @@ public class ShiftService {
     return toResponse(shift);
   }
 
-  @StoreScoped
   @Transactional
   public ShiftResponse update(
       Long storeId, String id, ShiftUpdateRequest request, String actorEmail) {
@@ -190,7 +185,6 @@ public class ShiftService {
   }
 
   /** 店外への露出可否は承認と独立した軸なので、状態や時間帯の更新とは別の口で受ける。 */
-  @StoreScoped
   @Transactional
   public ShiftResponse changePublication(
       Long storeId, String id, boolean published, String actorEmail) {
@@ -215,7 +209,6 @@ public class ShiftService {
     return toResponse(shift);
   }
 
-  @StoreScoped
   @Transactional
   public void delete(Long storeId, String id) {
     Shift shift = findShiftForUpdate(storeId, id);

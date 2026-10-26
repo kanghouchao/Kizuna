@@ -24,7 +24,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.HashMap;
@@ -76,7 +75,6 @@ public class CastService {
   private final OrderReferenceCheck orderReferenceCheck;
   private final BusinessAudit audit;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Page<CastSummaryResponse> list(Long storeId, String search, Pageable pageable) {
     Sort requestedSort = pageable.getSort();
@@ -111,7 +109,6 @@ public class CastService {
                 deletable.contains(view.enrollment().getId())));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CastResponse get(Long storeId, String id) {
     CastEnrollment enrollment = requireEnrollment(storeId, id);
@@ -158,13 +155,11 @@ public class CastService {
   }
 
   /** 実績の参照先が指定店舗に属することを、削除と直列化して確認する。在籍の後にシフトをロックする。 */
-  @StoreScoped
   @Transactional
   public boolean existsInStoreForUpdate(Long storeId, String id) {
     return castRepository.findByIdAndStoreIdForUpdate(id, storeId).isPresent();
   }
 
-  @StoreScoped
   @Transactional
   public CastResponse create(Long storeId, CastCreateRequest request, String actorEmail) {
     storeRepository.lockCastFields(storeId);
@@ -208,7 +203,6 @@ public class CastService {
         "publication_status", profile.getPublicationStatus().name());
   }
 
-  @StoreScoped
   @Transactional
   public CastResponse update(
       Long storeId, String id, CastUpdateRequest request, String actorEmail) {
@@ -280,7 +274,6 @@ public class CastService {
     return values;
   }
 
-  @StoreScoped
   @Transactional
   public CastPublicationResponse changePublication(
       Long storeId, String id, CastPublicationStatus status) {
@@ -331,7 +324,6 @@ public class CastService {
   }
 
   /** 本人未紐づけの草稿のみ削除できる。受注・実績の参照は履歴の根拠なので維持する。 */
-  @StoreScoped
   @Transactional
   public void delete(Long storeId, String id) {
     CastEnrollment enrollment =
@@ -375,7 +367,6 @@ public class CastService {
     return new ConflictException("実績が記録されているキャストは削除できません。退店操作を利用してください");
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public List<CastPublicResponse> listPublished(Long storeId) {
     List<CastFieldDefinition> publicDefinitions =

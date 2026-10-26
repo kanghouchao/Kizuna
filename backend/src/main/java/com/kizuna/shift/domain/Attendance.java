@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 
 /**
  * キャストが実際に出勤した事実の一等記録。シフト（予定）とは別集約で、予定の無い飛び込み出勤も shift_id = NULL の一等記録として成立する（ADR 0014）。
@@ -19,8 +18,6 @@ import org.hibernate.annotations.Filter;
  */
 @Entity
 @Table(name = "t_attendances")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 public class Attendance extends StoreScopedEntity {

@@ -18,7 +18,6 @@ import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -49,7 +48,6 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -377,10 +375,11 @@ class CustomerMemberLinkAuditPostgresTest {
 
   private String customer() {
     return transactions.execute(
-        status ->
-            customers
-                .saveAndFlush(Customer.builder().name("秘密の顧客-" + UUID.randomUUID()).build())
-                .getId());
+        status -> {
+          var customer = Customer.builder().name("秘密の顧客-" + UUID.randomUUID()).build();
+          customer.setStoreId(STORE_ID);
+          return customers.saveAndFlush(customer).getId();
+        });
   }
 
   private static String memberCode() {
@@ -405,13 +404,11 @@ class CustomerMemberLinkAuditPostgresTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableAspectJAutoProxy
   @EnableJpaRepositories(basePackageClasses = AuditEventRepository.class)
   @Import({
     AuditWriter.class,
     BusinessAudit.class,
     StoreScopeStampListener.class,
-    StoreFilterEnable.class,
     CustomerMemberLinkService.class,
     MemberLookupService.class
   })

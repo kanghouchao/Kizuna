@@ -4,7 +4,6 @@ import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.domain.OrderCorrectionRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +23,6 @@ public class OrderCompletionResults {
     return history.store(storeId, orderId, cursor, size);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Optional<OrderCompletionResult> find(Long storeId, String orderId) {
     return orders

@@ -65,7 +65,7 @@ class NominatableCastLookupTest {
   @Test
   @DisplayName("他店舗のキャストは成立しないこと")
   void findRejectsCastOfAnotherStore() {
-    // 店舗の一致を述語に置くのは、キャストの読み取りに掛かる絞り込みへ暗黙に頼らないため
+    // 店舗の一致は引き当ての述語自体でも確かめる — 引いた在籍が他店舗なら成立させない
     when(castRepository.findByIdAndStoreIdForUpdate("cast-1", STORE_ID))
         .thenReturn(Optional.of(cast("cast-1", OTHER_STORE_ID, "ENROLLED")));
 

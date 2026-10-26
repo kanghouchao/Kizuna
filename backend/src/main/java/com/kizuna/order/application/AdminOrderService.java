@@ -5,7 +5,6 @@ import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreSetScoped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,7 +22,6 @@ public class AdminOrderService {
   private final OrderMapper orderMapper;
 
   /** 授権店舗集合での受注横断一覧。SPECIFIC_STORES は集合内の店舗だけ、ALL_STORES は全店舗を返す。 */
-  @StoreSetScoped
   @Transactional(readOnly = true)
   public Page<AdminOrderResponse> list(StoreScope scope, Pageable pageable) {
     var sort = pageable.getSort().and(Sort.by(Order::getId).descending());

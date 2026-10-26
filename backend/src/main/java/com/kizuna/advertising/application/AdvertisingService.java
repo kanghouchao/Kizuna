@@ -19,7 +19,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
@@ -48,7 +47,6 @@ public class AdvertisingService {
   private final Clock clock;
   private final AppProperties properties;
 
-  @StoreScoped
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
@@ -59,13 +57,11 @@ public class AdvertisingService {
         .map(CostSummary::of);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CostResponse get(Long storeId, String id) {
     return CostResponse.of(records.cost(storeId, id));
   }
 
-  @StoreScoped
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
@@ -99,7 +95,6 @@ public class AdvertisingService {
     return records.month(storeId, month).map(m -> m.getRevision()).orElse(0L);
   }
 
-  @StoreScoped
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public CostResponse create(Long storeId, CreateRequest request, String actor) {
     var month = AdvertisingInput.month(request.month());
@@ -124,7 +119,6 @@ public class AdvertisingService {
         });
   }
 
-  @StoreScoped
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public CostResponse replace(Long storeId, String id, ReplaceRequest request, String actor) {
     var values = request.values();
@@ -148,7 +142,6 @@ public class AdvertisingService {
         });
   }
 
-  @StoreScoped
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public void delete(Long storeId, String id, DeleteRequest request, String actor) {
     once(
@@ -176,7 +169,6 @@ public class AdvertisingService {
     return records.refresh(cost);
   }
 
-  @StoreScoped
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public CopyResponse copy(Long storeId, String target, CopyRequest request, String actor) {
     AdvertisingInput.month(target);
@@ -230,7 +222,6 @@ public class AdvertisingService {
         });
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<ChangeSummary> changes(
       Long storeId, String month, String cursor, int requestedSize) {
@@ -252,7 +243,6 @@ public class AdvertisingService {
                     c.getVersionAfter()));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public ChangeResponse changeDetail(Long storeId, String month, String id) {
     var c = records.change(storeId, AdvertisingInput.month(month), id);
@@ -272,7 +262,6 @@ public class AdvertisingService {
 
   public record ExportSnapshot(MonthResponse summary, List<CostResponse> costs) {}
 
-  @StoreScoped
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,

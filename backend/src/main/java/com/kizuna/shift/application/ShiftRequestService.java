@@ -6,7 +6,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
 import com.kizuna.shift.domain.AttendanceRepository;
@@ -48,7 +47,6 @@ public class ShiftRequestService {
   private final StoreRepository storeRepository;
   private final BusinessAudit audit;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public List<StoreShiftRequestResponse> list(Long storeId, String status) {
     List<ShiftRequest> requests =
@@ -161,7 +159,6 @@ public class ShiftRequestService {
    * @param published NEW で生まれるシフトの公開可否。null は既定の公開可。内密の出勤はここで非公開を指定して出生させる —
    *     公開状態で生まれてから隠すまでの露出窓を作らない（ADR 0015）
    */
-  @StoreScoped
   @Transactional
   public StoreShiftRequestResponse approve(
       Long storeId, String id, Boolean published, String actorEmail) {
@@ -272,7 +269,6 @@ public class ShiftRequestService {
     return shiftRequestMapper.toStoreResponse(request);
   }
 
-  @StoreScoped
   @Transactional
   public StoreShiftRequestResponse decline(Long storeId, String id, String actorEmail) {
     ShiftRequest request = findOwnRequest(storeId, id);

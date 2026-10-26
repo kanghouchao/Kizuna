@@ -49,7 +49,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.task.application.ServiceIdentityCheckTask;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
@@ -83,7 +82,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -227,6 +225,7 @@ class NotificationPostgresTest {
                               new GuestContactConsent(
                                   "v1", "業務連絡に同意", "販促同意", true, false, OffsetDateTime.now()))
                           .build();
+                  row.setStoreId(storeId);
                   return context
                       .getBean(OrderApplicationRepository.class)
                       .saveAndFlush(row)
@@ -337,10 +336,10 @@ class NotificationPostgresTest {
             () ->
                 tx.execute(
                     status -> {
+                      var newCustomer = Customer.builder().name("検証顧客").build();
+                      newCustomer.setStoreId(storeId);
                       var customer =
-                          context
-                              .getBean(CustomerRepository.class)
-                              .saveAndFlush(Customer.builder().name("検証顧客").build());
+                          context.getBean(CustomerRepository.class).saveAndFlush(newCustomer);
                       var c =
                           CustomerContact.create(
                               storeId,
@@ -614,6 +613,7 @@ class NotificationPostgresTest {
                                   "CURRENT_SETTING",
                                   OffsetDateTime.now()))
                           .build();
+                  row.setStoreId(storeId);
                   var saved = context.getBean(OrderRepository.class).saveAndFlush(row);
                   context
                       .getBean(BusinessContactHistoryRepository.class)
@@ -754,13 +754,11 @@ class NotificationPostgresTest {
   @Configuration
   @EnableAutoConfiguration
   @EnableAsync
-  @EnableAspectJAutoProxy
   @EntityScan("com.kizuna")
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackageClasses = NotificationService.class)
   @Import({
     StoreContext.class,
-    StoreFilterEnable.class,
     StoreScopeStampListener.class,
     AuditWriter.class,
     TaskExecutor.class,

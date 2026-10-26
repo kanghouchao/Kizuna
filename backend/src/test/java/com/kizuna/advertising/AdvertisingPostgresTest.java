@@ -32,7 +32,6 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManager;
@@ -61,7 +60,6 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -566,14 +564,12 @@ class AdvertisingPostgresTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableAspectJAutoProxy
   @EnableMethodSecurity
   @Import({
     AdvertisingService.class,
     AdvertisingOrderCostService.class,
     AdvertisingOrderReader.class,
-    StoreScopeStampListener.class,
-    StoreFilterEnable.class
+    StoreScopeStampListener.class
   })
   static class Config {
     @Bean

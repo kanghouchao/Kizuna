@@ -9,7 +9,6 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import java.util.List;
 import java.util.Objects;
@@ -27,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>宛先は<b>帰属記録が持つ会員</b>で、顧客に現在紐づく会員ではない。両者は、伝票の申領で成立した帰属（店舗台帳に 顧客行も関連も作らない）・関連の解除・関連の別会員への張り替え、の 3
  * 経路で食い違う。顧客経路の調整口はこの 3 経路のいずれでも誤った相手に当たるか、そもそも到達できない。
  *
- * <p>店舗の境界を決めるのは受注だけである。帰属記録も台帳も グループ帰属で店舗行分離機構に載らないため、どの操作も 先に受注を引き、引けなければそこで終える。
+ * <p>店舗の境界を決めるのは受注だけである。帰属記録も台帳も グループ帰属で店舗列を持たないため、どの操作も 先に受注を引き、引けなければそこで終える。
  */
 @Service
 @RequiredArgsConstructor
@@ -39,7 +38,6 @@ public class OrderAttributionCorrectionService {
   private final ActorIdentityService actorIdentityService;
 
   /** 訂正の進み具合。画面が差し引く既定値（付与の全額）と引き残しを示すための読み口。 */
-  @StoreScoped
   @Transactional(readOnly = true)
   public OrderAttributionCorrectionResponse status(
       Long storeId, String orderId, Long attributionId) {
@@ -74,7 +72,6 @@ public class OrderAttributionCorrectionService {
    * 直近の無効化記録が引き切り済み（あるいはその会員が現に帰属していて書き込み経路が撥ねる状態）でも、その先に 差し引きの残る古い記録がありうる —
    * 先に選ぶ形では、その古い記録が画面から永久に名指せなくなる。
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public Optional<PendingCorrection> findPendingCorrection(Long storeId, String orderId) {
     requireScopedOrder(storeId, orderId);
@@ -105,7 +102,6 @@ public class OrderAttributionCorrectionService {
    * <p>残高が足りなければ台帳側が全額を撥ねる（部分的な引き当ては作らない）。例外の文言が現在残高を載せているので、
    * 操作者は引ける額へ入れ直せる。引き切れなかった差額の扱いは未裁定である（ADR 0009 / 0012）。
    */
-  @StoreScoped
   @Transactional
   public OrderAttributionCorrectionResponse correct(
       Long storeId, String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
@@ -155,7 +151,6 @@ public class OrderAttributionCorrectionService {
    * 済みで直列化する相手もいない。上限の判定も、その会員が有効な帰属を持たないことの確認も行わない。初回が通った 以上どちらの判定も済んでおり、また会員が勝者の commit
    * のあとに申領し直していれば、後から現況で判じると正当な再送が 失敗する。台帳側の再送判定（内容一致なら何も書かずに戻る／不一致は 409）に落ちることで、 逐次再送と同一の応答になる。
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public OrderAttributionCorrectionResponse replayCorrect(
       Long storeId, String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
@@ -198,7 +193,7 @@ public class OrderAttributionCorrectionService {
    * <p><b>受注の現況では判じない。</b>無効化のあと正しい本人が申領を済ませていれば受注には有効な帰属記録が並んで存在
    * するが、古い無効化記録は依然として正当な訂正の根拠である（誤って付与された分はまだその会員の台帳にある）。
    *
-   * <p>候補は受注 ID から引いた記録に限る。帰属記録は グループ帰属で storeFilter が働かないため、id を直に引く形では
+   * <p>候補は受注 ID から引いた記録に限る。帰属記録は グループ帰属で店舗の条件を持てないため、id を直に引く形では
    * 同一店舗の<b>別の受注</b>に属する記録にも当たり、受注との対応を後から確かめる責務が呼出側に残る。受注から引けば その対応は構造として成り立つ。
    */
   private static OrderAttribution requireInvalidatedAttribution(

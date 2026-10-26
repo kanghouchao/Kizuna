@@ -55,7 +55,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
@@ -124,7 +123,6 @@ public class OrderService {
   private final OrderCalculation calculation;
   private final OrderSpecialServices specialServices;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Page<OrderSummaryResponse> list(Long storeId, String customerId, Pageable pageable) {
     // 一覧は集約を経由せず JPQL join projection で取得。customerId は顧客詳細の注文履歴用
@@ -155,7 +153,6 @@ public class OrderService {
    * @param cursor 続きの位置。null なら先頭から
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<OrderWorkQueueResponse> listWorkQueue(
       Long storeId, OrderQueryCriteria criteria, String cursor, int requestedSize) {
@@ -182,7 +179,6 @@ public class OrderService {
    * <p>ここも 3 本（並び・本体・総件数）を 1 つの断面で読む（{@link #listWorkQueue} と同じ理由）。件数だけが別の断面から来ると、
    * 表示中の行数とページャの主張する総数が食い違う。
    */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<OrderArchiveResponse> listArchive(
       Long storeId, OrderQueryCriteria criteria, Pageable pageable) {
@@ -227,7 +223,6 @@ public class OrderService {
   }
 
   /** 集約・表示用 projection・現在の受諾と要対応を同じ断面から返す。 */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public OrderResponse get(Long storeId, String id) {
     return toResponse(
@@ -241,7 +236,6 @@ public class OrderService {
    * 店舗が起こす受注を作成する。この経路の受注は<b>確定で出生する</b>（出生状態は {@link OrderMapper#toEntity} が持つ）— 電話口で受けると決めた時点で
    * 可否は判断済みであり、画面上でもう一度確定し直す段は無い。
    */
-  @StoreScoped
   @Transactional
   public OrderResponse create(Long storeId, OrderCreateRequest request, String actorEmail) {
     specialServices.lock(storeId);
@@ -322,7 +316,6 @@ public class OrderService {
   }
 
   /** 未完了の受注だけを部分更新する。状態遷移と完了後の訂正は、それぞれの専用操作で検証する。 */
-  @StoreScoped
   @Transactional
   public OrderResponse update(
       Long storeId, String id, OrderUpdateRequest request, String actorEmail) {
@@ -416,7 +409,6 @@ public class OrderService {
    * @param cursor 続きの位置。null なら先頭から
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<OrderApplicationResponse> listApplications(
       Long storeId, Set<OrderApplicationStatus> statuses, String cursor, int requestedSize) {
@@ -441,7 +433,6 @@ public class OrderService {
     return new PageCursor(view.getBusinessDate().toString(), view.getId()).encode();
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public OrderApplicationDetailResponse applicationDetail(Long storeId, String id) {
     var application =
@@ -499,7 +490,6 @@ public class OrderService {
    *
    * <p>顧客は確定の時点で決め直す。完了時の会員解決は顧客の現在の関連だけを見る （ADR 0008 の一本道）ため、古い参照を持ち回ると申請者の来店とポイントが別会員へ積まれる。
    */
-  @StoreScoped
   @Transactional
   public OrderResponse confirmApplication(
       Long storeId, String id, OrderApplicationConfirmationRequest request, String actorEmail) {
@@ -639,7 +629,6 @@ public class OrderService {
   }
 
   /** 会計と会員への帰属を同一トランザクションで確定する。汎用更新からは完了へ遷移させない。 会員に達しない受注では、事後帰属の所持証明となる伝票トークンを発行して生値を返す。 */
-  @StoreScoped
   @Transactional
   public OrderCompletionResponse complete(
       Long storeId, String id, OrderCompletionRequest request, String actorEmail) {
@@ -752,7 +741,6 @@ public class OrderService {
     return generated.raw();
   }
 
-  @StoreScoped
   @Transactional
   public OrderPreviewResponse previewCreate(
       Long storeId, OrderCreateRequest request, String actor) {
@@ -783,7 +771,6 @@ public class OrderService {
         storeId, "CREATE", "", request, calculated, completionPoints(storeId, calculated, 0));
   }
 
-  @StoreScoped
   @Transactional
   public OrderPreviewResponse previewConfirmation(
       Long storeId, String id, OrderApplicationConfirmationRequest request) {
@@ -875,7 +862,6 @@ public class OrderService {
     }
   }
 
-  @StoreScoped
   @Transactional
   public OrderPreviewResponse previewUpdate(Long storeId, String id, OrderUpdateRequest request) {
     specialServices.lock(storeId);
@@ -913,7 +899,6 @@ public class OrderService {
         storeId, "UPDATE", id, request, calculated, completionPoints(storeId, calculated, 0));
   }
 
-  @StoreScoped
   @Transactional
   public OrderPreviewResponse completionPreview(
       Long storeId, String id, OrderCompletionRequest request) {
@@ -935,7 +920,6 @@ public class OrderService {
     return calculation.preview(storeId, "COMPLETE", id, request, calculated, points);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<OrderCustomerCandidateResponse> customerCandidates(
       Long storeId, String search, String cursor, int size) {
@@ -1096,7 +1080,6 @@ public class OrderService {
    * 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消し、実行者・時刻を記録する。
    * 店舗・受注のロックで並行操作を直列化し、二度目の取消は状態違反として拒否する（400）。
    */
-  @StoreScoped
   @Transactional
   public void cancel(Long storeId, String id, OrderCancellationRequest request, String actorEmail) {
     specialServices.lock(storeId);
@@ -1112,7 +1095,6 @@ public class OrderService {
   }
 
   /** 予約申請を謝絶する。理由は必須で、実行者と時刻を記録に残す（取消 ADR 0013 の先例）。確定後の取り消しは理由必須の取消操作（{@link #cancel}）に委ねる。 */
-  @StoreScoped
   @Transactional
   public void declineApplication(
       Long storeId, String id, OrderApplicationDeclineRequest request, String actorEmail) {
@@ -1137,7 +1119,6 @@ public class OrderService {
    *
    * @param search 名前の部分一致（任意）。未指定なら絞り込まない
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public List<OrderCastCandidateResponse> listCastCandidates(Long storeId, String search) {
     return nominatableCast.searchCandidates(storeId, search).stream()
@@ -1150,7 +1131,6 @@ public class OrderService {
         .toList();
   }
 
-  @StoreScoped
   @Transactional
   public OrderResponse start(
       Long storeId, String id, Long expectedVersion, String reason, String actor) {
@@ -1231,7 +1211,6 @@ public class OrderService {
     }
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public List<OrderReceptionistResponse> listReceptionists(Long storeId) {
     return receptionistEligibilityService.listCandidates(storeId).stream()

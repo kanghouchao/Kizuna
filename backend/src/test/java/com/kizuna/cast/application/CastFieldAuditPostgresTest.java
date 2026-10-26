@@ -18,7 +18,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -51,7 +50,6 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -619,7 +617,6 @@ class CastFieldAuditPostgresTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableAspectJAutoProxy
   @EnableJpaRepositories(
       basePackageClasses = {
         AuditEventRepository.class,
@@ -630,7 +627,6 @@ class CastFieldAuditPostgresTest {
     AuditWriter.class,
     BusinessAudit.class,
     StoreScopeStampListener.class,
-    StoreFilterEnable.class,
     CastService.class,
     CastEnrollmentService.class,
     CastInvitationService.class,

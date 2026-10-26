@@ -34,8 +34,6 @@ public interface CustomerMemberLinkRepository extends StoreScopedRepository<Cust
    * <p>顧客参照は行ごと不変の写像（{@code updatable = false}）なので、実体の setter を開かずにここで書く。通常の経路から書き換えられる形にすると、
    * 区間史の顧客が統合以外の理由で動きうることになる。
    *
-   * <p>WHERE 句に店舗を明示するのは、Hibernate の {@code @Filter} が HQL の一括 UPDATE には掛からないため。
-   *
    * @return 移した関連の件数（統合履歴にそのまま残す）
    */
   @Modifying
@@ -49,8 +47,8 @@ public interface CustomerMemberLinkRepository extends StoreScopedRepository<Cust
       @Param("mergedId") String mergedId,
       @Param("storeId") Long storeId);
 
-  // 会員起点の照会。店舗文脈を持たない経路（会員本人）から呼ばれるため storeFilter は働かず、
-  // 引数の storeId が唯一の店舗境界になる。ACTIVE 行は部分一意索引により店舗ごとに 1 件以下。
+  // 会員起点の照会。店舗文脈を持たない経路（会員本人）からも呼ばれ、引数の storeId が唯一の店舗境界になる。
+  // ACTIVE 行は部分一意索引により店舗ごとに 1 件以下。
   Optional<CustomerMemberLink> findByStoreIdAndMemberIdAndStatus(
       Long storeId, Long memberId, LinkStatus status);
 

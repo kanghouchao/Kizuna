@@ -26,7 +26,6 @@ import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.StoreScopeStampListener;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreContext;
-import com.kizuna.shared.storescope.StoreFilterEnable;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
@@ -58,7 +57,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -748,6 +746,7 @@ class ReviewPostgresTest {
                               "CURRENT_SETTING",
                               OffsetDateTime.now()))
                       .build();
+              row.setStoreId(item.getStoreId());
               return context.getBean(OrderRepository.class).saveAndFlush(row).getId();
             });
   }
@@ -782,14 +781,12 @@ class ReviewPostgresTest {
 
   @Configuration
   @EnableAutoConfiguration
-  @EnableAspectJAutoProxy
   @EnableMethodSecurity
   @EntityScan("com.kizuna")
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackageClasses = ReviewService.class)
   @Import({
     StoreContext.class,
-    StoreFilterEnable.class,
     StoreScopeStampListener.class,
     AuditWriter.class,
     BusinessAudit.class,

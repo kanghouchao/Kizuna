@@ -13,7 +13,6 @@ import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.domain.AdminOrderView;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreScopeExecutor;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -31,7 +30,6 @@ class AdminOrderServiceTest {
 
   @Mock OrderRepository orderRepository;
   @Mock OrderService orderService;
-  @Mock StoreScopeExecutor storeScopeExecutor;
   @Mock OrderMapper orderMapper;
 
   @InjectMocks AdminOrderService service;

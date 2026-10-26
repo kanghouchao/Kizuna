@@ -10,7 +10,6 @@ import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.PermissionCode;
@@ -34,7 +33,6 @@ public class NotificationService {
 
   public record Created(DeliveryResponse delivery, boolean created) {}
 
-  @StoreScoped
   @Transactional
   public Created create(Long storeId, String email, DeliveryContent content) {
     var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
@@ -50,7 +48,6 @@ public class NotificationService {
     return new Created(response(storeId, row), true);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Created replay(Long storeId, String email, DeliveryContent content) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
@@ -62,7 +59,6 @@ public class NotificationService {
     return new Created(response(storeId, row), false);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<DeliverySummary> list(Long storeId, String email, String cursor, int size) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
@@ -73,14 +69,12 @@ public class NotificationService {
     return CursorPage.of(rows, size, d -> PageCursor.encodeKey(d.getId())).map(DeliverySummary::of);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public DeliveryResponse get(Long storeId, String email, String id) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
     return response(storeId, require(storeId, id));
   }
 
-  @StoreScoped
   @Transactional
   public DeliveryResponse queue(
       Long storeId, String email, String id, Long version, String reason, boolean retry) {
@@ -96,7 +90,6 @@ public class NotificationService {
     return response(storeId, row);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<DeliveryAttemptResponse> history(
       Long storeId, String email, String id, String cursor, int size) {

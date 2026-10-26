@@ -14,7 +14,6 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.SelfRemunerationView;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +32,6 @@ public class SelfRemunerationService {
   private final OrderRepository orders;
   private final OrderCorrectionHistory history;
 
-  @StoreScopeExempt(reason = "認証主体から本人を解決し、退店を含む全在籍を本人 ID で絞る")
   @Transactional(readOnly = true)
   public Page<SelfRemunerationEnrollmentSummary> enrollments(String actor, int page, int size) {
     var pageable = page(page, size);
@@ -47,7 +45,6 @@ public class SelfRemunerationService {
                     e.getId(), e.getStoreId(), e.getStoreName(), e.getStatus(), e.getEndedAt()));
   }
 
-  @StoreScopeExempt(reason = "認証主体と受注の担当在籍の本人をクエリで照合し、退店履歴も許可する")
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<SelfRemunerationSummary> list(String actor, String enrollmentId, int page, int size) {
     var pageable = page(page, size);
@@ -62,7 +59,6 @@ public class SelfRemunerationService {
         .map(this::summary);
   }
 
-  @StoreScopeExempt(reason = "認証主体と担当在籍の本人一致を各受注の読み取り条件に含める")
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public SelfRemunerationResponse detail(String actor, String id) {
     Long userId = actors.requireUserId(actor);
@@ -78,7 +74,6 @@ public class SelfRemunerationService {
         SelfRemunerationItems.from(OrderCorrectionSnapshot.of(order)));
   }
 
-  @StoreScopeExempt(reason = "本人の受注所有権を検証する履歴読み取りへ委譲し、専用 DTO に限定する")
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<SelfRemunerationChangeResponse> changes(
       String actor, String id, String cursor, int size) {

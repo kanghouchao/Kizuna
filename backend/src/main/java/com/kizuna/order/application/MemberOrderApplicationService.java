@@ -13,7 +13,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
@@ -28,10 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 会員ポータルからの予約申請ユースケース。申請は受注（Order）ではなく予約申請（OrderApplication）の PENDING として起きる（ADR 0017）。
  *
- * <p>会員は店舗を授権されないため店舗文脈（{@code @StoreScoped}）を確立できず、storeFilter も働かない。したがって
+ * <p>会員は店舗を授権されないため店舗文脈を持たない。したがって
  *
  * <ul>
- *   <li>書き込みは店舗の実在を確かめたうえで store_id を明示設定する（{@code StoreScopeStampListener} は設定済みの store_id を尊重する）
+ *   <li>書き込みは店舗の実在を確かめたうえで store_id を明示設定する
  *   <li>読み取り・取り下げは申請者（requesterMemberId）の一致が唯一の隔離境界であり、必ず問い合わせ自体に載せる
  * </ul>
  *
@@ -49,7 +48,6 @@ public class MemberOrderApplicationService {
   private final BusinessDateService businessDateService;
 
   /** 予約を申請する。予約申請の PENDING 行だけが起き、受注（t_orders）には行が生まれない。 */
-  @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、店舗の実在を確かめたうえで store_id を明示設定して書く")
   @Transactional
   public MemberOrderApplicationResponse request(
       String email, MemberOrderApplicationCreateRequest request) {
@@ -73,7 +71,6 @@ public class MemberOrderApplicationService {
             .requesterMemberCode(member.memberCode())
             .requesterDeclaredName(request.getDeclaredName())
             .build();
-    // 店舗文脈が無い経路のため store_id を明示する。
     application.setStoreId(storeId);
 
     OrderApplication saved = orderApplicationRepository.save(application);
@@ -88,7 +85,6 @@ public class MemberOrderApplicationService {
    * @param cursor 続きの位置。null なら先頭から
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
-  @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、申請者（requesterMemberId）の一致を問い合わせ自体に載せることが唯一の境界")
   @Transactional(readOnly = true)
   public CursorPage<MemberOrderApplicationResponse> list(
       String email, String cursor, int requestedSize) {
@@ -118,7 +114,6 @@ public class MemberOrderApplicationService {
   }
 
   /** 本人が申請した未処理の予約を取り下げる。確定・謝絶の後は動かせない（終端）。 */
-  @StoreScopeExempt(reason = "会員は店舗文脈を確立できないため、申請者（requesterMemberId）の一致を取り出しの条件に載せることが唯一の境界")
   @Transactional
   public MemberOrderApplicationResponse withdraw(String email, String applicationId) {
     Long userId = actorIdentityService.requireUserId(email);

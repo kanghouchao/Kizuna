@@ -2,7 +2,6 @@ package com.kizuna.recruitment.api.store;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -32,14 +31,12 @@ import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreContext;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.shared.storescope.StoreScopeExecutor;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -122,8 +119,6 @@ class AttachmentControllerTest {
     when(receiver.admit(any())).thenReturn(admission);
     when(admission.receive(any()))
         .thenReturn(new AttachmentBodyReceiver.Received(received, "hash", "image/png"));
-    when(scope.runInStore(eq(7L), any()))
-        .thenAnswer(call -> call.<Supplier<?>>getArgument(1).get());
     when(service.upload(7L, "a", null, key, received, "hash", "image/png", "actor"))
         .thenReturn(
             new AttachmentTransactions.Completion(
@@ -170,7 +165,6 @@ class AttachmentControllerTest {
   @Autowired MockMvc mvc;
   @MockitoBean AttachmentService service;
   @MockitoBean AttachmentBodyReceiver receiver;
-  @MockitoBean StoreScopeExecutor scope;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
   @MockitoBean StoreScopeResolver storeScopeResolver;

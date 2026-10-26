@@ -8,9 +8,6 @@ import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreScopeExecutor;
-import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.file.Files;
@@ -46,8 +43,6 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 public class AttachmentController {
   private final AttachmentService attachments;
   private final AttachmentBodyReceiver receiver;
-  private final StoreScopeExecutor scope;
-  private final StoreScopeHolder storeScopeHolder;
   private final AppProperties properties;
 
   @GetMapping("/attachment-policy")
@@ -116,35 +111,24 @@ public class AttachmentController {
     UUID key = attachments.preflight(storeId, id, uploadId, rawKey);
     var admission = receiver.admit(request);
     var loggingContext = ThreadContext.getImmutableContext();
-    // 作用域の保持器は要求スレッド局所なので、認証文脈・ログ文脈と同じく解決済みの値を作業スレッドへ運び、
-    // 作業後に必ず消す（作業スレッドは pool で再利用される）。
-    StoreScope resolvedScope = storeScopeHolder.current();
     Callable<ResponseEntity<AttachmentSummaryResponse>> callable =
         new DelegatingSecurityContextCallable<>(
             () -> {
-              storeScopeHolder.install(() -> resolvedScope);
-              try (var _ = CloseableThreadContext.putAll(loggingContext)) {
-                return scope.runInStore(
-                    storeId,
-                    () -> {
-                      try (admission) {
-                        var received = admission.receive(request);
-                        var completed =
-                            attachments.upload(
-                                storeId,
-                                id,
-                                uploadId,
-                                key,
-                                received.path(),
-                                received.originalSha256(),
-                                received.mediaType(),
-                                actorEmail);
-                        int status = uploadId == null && completed.created() ? 201 : 200;
-                        return ResponseEntity.status(status).body(completed.attachment());
-                      }
-                    });
-              } finally {
-                storeScopeHolder.clear();
+              try (var _ = CloseableThreadContext.putAll(loggingContext);
+                  admission) {
+                var received = admission.receive(request);
+                var completed =
+                    attachments.upload(
+                        storeId,
+                        id,
+                        uploadId,
+                        key,
+                        received.path(),
+                        received.originalSha256(),
+                        received.mediaType(),
+                        actorEmail);
+                int status = uploadId == null && completed.created() ? 201 : 200;
+                return ResponseEntity.status(status).body(completed.attachment());
               }
             });
     var task =

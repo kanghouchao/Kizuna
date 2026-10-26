@@ -12,7 +12,6 @@ import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
@@ -41,7 +40,6 @@ public class CastEnrollmentService {
   private final StoreRepository stores;
   private final BusinessAudit audit;
 
-  @StoreScoped
   @Transactional
   public CastEnrollmentStatusResponse suspend(Long storeId, String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(storeId, id);
@@ -54,7 +52,6 @@ public class CastEnrollmentService {
     return response(enrollment);
   }
 
-  @StoreScoped
   @Transactional
   public CastEnrollmentStatusResponse resume(Long storeId, String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(storeId, id);
@@ -67,7 +64,6 @@ public class CastEnrollmentService {
     return response(enrollment);
   }
 
-  @StoreScoped
   @Transactional
   public CastEnrollmentStatusResponse withdraw(Long storeId, String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(storeId, id);
@@ -81,13 +77,11 @@ public class CastEnrollmentService {
     return response(enrollment);
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void recordCreation(CastEnrollment enrollment, String actorEmail) {
     record(enrollment, null, actorEmail, now());
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public void replaceInternalFields(
       CastEnrollment enrollment, Map<String, String> values, String actorEmail) {
@@ -96,7 +90,6 @@ public class CastEnrollmentService {
     enrollment.replaceCustomFields(values);
   }
 
-  @StoreScoped
   @Transactional(propagation = Propagation.MANDATORY)
   public List<CastEnrollmentSnapshot> removeInternalField(
       List<CastEnrollment> enrollments, String key, String actorEmail) {
@@ -126,7 +119,6 @@ public class CastEnrollmentService {
     return snapshots.save(snapshot);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<CastEnrollmentStatusHistoryResponse> history(
       Long storeId, String id, String cursor, int requestedSize) {
@@ -150,7 +142,6 @@ public class CastEnrollmentService {
                     row.getRecordedAt()));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<CastEnrollmentSnapshotResponse> snapshots(
       Long storeId, String id, String cursor, int requestedSize) {

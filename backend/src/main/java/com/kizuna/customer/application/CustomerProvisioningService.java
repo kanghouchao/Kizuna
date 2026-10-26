@@ -8,7 +8,6 @@ import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/** 呼出元のトランザクションに参加して（MANDATORY）顧客を起こす。店舗の境界は呼出元が渡す storeId が引く。 */
 @Service
 @RequiredArgsConstructor
 @NamedInterface("application")
@@ -26,7 +26,6 @@ public class CustomerProvisioningService {
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerReferenceResolver customerReferenceResolver;
 
-  @StoreScopeExempt(reason = "MANDATORY で呼出元のトランザクションに参加し、店舗境界は呼出元が渡す storeId が引く")
   @Transactional(propagation = Propagation.MANDATORY)
   public String ensureMemberRequestCustomer(Long storeId, MemberRequestCustomerInput input) {
     Optional<CustomerMemberLink> established =
@@ -61,7 +60,6 @@ public class CustomerProvisioningService {
     return customer.getId();
   }
 
-  @StoreScopeExempt(reason = "MANDATORY で呼出元のトランザクションに参加し、店舗境界は呼出元が渡す storeId が引く")
   @Transactional(propagation = Propagation.MANDATORY)
   public String createCustomer(Long storeId, NewCustomerInput input) {
     Customer customer = Customer.builder().name(input.name()).build();

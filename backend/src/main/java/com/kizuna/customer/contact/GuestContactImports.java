@@ -12,7 +12,6 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.CannotAcquireLockException;
@@ -28,7 +27,6 @@ public class GuestContactImports {
   private final CustomerContactRepository contacts;
   private final CustomerContactHistoryRepository histories;
 
-  @StoreScoped
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   @Transactional(propagation = Propagation.MANDATORY)
   public GuestContactImport preview(
@@ -47,7 +45,6 @@ public class GuestContactImports {
         type, value, result(storeId, customerId, type, value, marketing), contactId);
   }
 
-  @StoreScoped
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   @Transactional(propagation = Propagation.MANDATORY)
   public GuestContactImport record(

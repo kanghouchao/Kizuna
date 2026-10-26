@@ -8,8 +8,6 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +22,6 @@ public class OrderCorrectionHistory {
   private final OrderRepository orders;
   private final OrderCorrectionRepository corrections;
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<OrderCorrectionResult> store(
       Long storeId, String orderId, String cursor, int size) {
@@ -35,7 +32,6 @@ public class OrderCorrectionHistory {
     return readChanges(order, cursor, size, "store").map(OrderCorrectionHistory::result);
   }
 
-  @StoreScopeExempt(reason = "認証主体と担当在籍の本人一致で受注を検証し、その受注の変更記録のみを返す")
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<OrderCorrection> self(Long userId, String orderId, String cursor, int size) {
     var order =

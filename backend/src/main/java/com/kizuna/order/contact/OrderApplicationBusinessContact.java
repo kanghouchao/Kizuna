@@ -5,7 +5,6 @@ import com.kizuna.order.application.GuestApplicationConsent;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +16,6 @@ public class OrderApplicationBusinessContact {
   private final GuestApplicationConsent consent;
 
   /** 確認前の申請への送信・再送直前に、保存済み証拠と現在の店舗拒否を再判定する。 */
-  @StoreScoped
   @Transactional(readOnly = true)
   public OrderBusinessContact.Decision decide(
       Long storeId, String applicationId, ContactType type) {

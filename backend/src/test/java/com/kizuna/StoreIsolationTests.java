@@ -9,103 +9,13 @@ import jakarta.persistence.Entity;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
-import org.hibernate.annotations.Filter;
-import org.hibernate.annotations.FilterDef;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 
-/**
- * 店舗行レベル分離の不変量を機械検証する。
- *
- * <p>store_id 列を持つ @Entity は、継承経路（StoreScopedEntity）に関わらず、サービス層の {@code @StoreScoped}（{@code
- * StoreFilterEnable}）が有効化する Hibernate フィルタ {@code storeFilter} の対象でなければならない。 {@code @Filter}
- * が無いエンティティはフィルタが有効でも全店舗の行を返してしまう。
- */
+/** store_id 列を持つ @Entity は、継承経路に関わらず StoreScopedEntity の共通土台に載っていなければならない。 */
 class StoreIsolationTests {
-
-  private static final String EXPECTED_CONDITION = "store_id = :storeId";
-  private static final String EXPECTED_SET_CONDITION = "store_id in (:storeIds)";
-
-  @Test
-  @DisplayName("store_id 列を持つ全 @Entity が storeFilter の @Filter を宣言していること")
-  void allStoreScopedEntitiesDeclareStoreFilter() throws Exception {
-    ClassPathScanningCandidateComponentProvider scanner =
-        new ClassPathScanningCandidateComponentProvider(false);
-    scanner.addIncludeFilter(new AnnotationTypeFilter(Entity.class));
-
-    List<String> offenders = new ArrayList<>();
-    List<String> scanned = new ArrayList<>();
-    for (var candidate : scanner.findCandidateComponents("com.kizuna")) {
-      Class<?> entity = Class.forName(candidate.getBeanClassName());
-      if (!hasStoreIdColumn(entity)) {
-        continue;
-      }
-      scanned.add(entity.getSimpleName());
-      // @Filter は Hibernate 6 で repeatable のため、storeFilter を宣言していれば
-      // 他フィルタ（storeSetFilter 等）が並置されていても違反としない。
-      boolean declaresStoreFilter = false;
-      for (Filter filter : entity.getAnnotationsByType(Filter.class)) {
-        if ("storeFilter".equals(filter.name()) && EXPECTED_CONDITION.equals(filter.condition())) {
-          declaresStoreFilter = true;
-          break;
-        }
-      }
-      if (!declaresStoreFilter) {
-        offenders.add(entity.getName());
-      }
-    }
-
-    assertThat(scanned).isNotEmpty();
-    assertThat(offenders)
-        .as(
-            "@Filter(name=\"storeFilter\", condition=\"%s\") が無い store_id 列保持エンティティ",
-            EXPECTED_CONDITION)
-        .isEmpty();
-  }
-
-  /**
-   * {@code @Filter(storeSetFilter)} の宣言は、対象エンティティを実際に読む {@code @StoreSetScoped}
-   * メソッドが存在しなければ休眠（dormant）のままになる。 宣言済みであることは、そのエンティティが集合作用域の全群横断一覧に既に対応済みであることを意味しない。
-   */
-  @Test
-  @DisplayName("store_id 列を持つ全 @Entity が storeSetFilter の @Filter を宣言していること")
-  void allStoreScopedEntitiesDeclareStoreSetFilter() throws Exception {
-    ClassPathScanningCandidateComponentProvider scanner =
-        new ClassPathScanningCandidateComponentProvider(false);
-    scanner.addIncludeFilter(new AnnotationTypeFilter(Entity.class));
-
-    List<String> offenders = new ArrayList<>();
-    List<String> scanned = new ArrayList<>();
-    for (var candidate : scanner.findCandidateComponents("com.kizuna")) {
-      Class<?> entity = Class.forName(candidate.getBeanClassName());
-      if (!hasStoreIdColumn(entity)) {
-        continue;
-      }
-      scanned.add(entity.getSimpleName());
-      // @Filter は Hibernate 6 で repeatable のため、storeSetFilter を宣言していれば
-      // 他フィルタ（storeFilter 等）が並置されていても違反としない。
-      boolean declaresStoreSetFilter = false;
-      for (Filter filter : entity.getAnnotationsByType(Filter.class)) {
-        if ("storeSetFilter".equals(filter.name())
-            && EXPECTED_SET_CONDITION.equals(filter.condition())) {
-          declaresStoreSetFilter = true;
-          break;
-        }
-      }
-      if (!declaresStoreSetFilter) {
-        offenders.add(entity.getName());
-      }
-    }
-
-    assertThat(scanned).isNotEmpty();
-    assertThat(offenders)
-        .as(
-            "@Filter(name=\"storeSetFilter\", condition=\"%s\") が無い store_id 列保持エンティティ",
-            EXPECTED_SET_CONDITION)
-        .isEmpty();
-  }
 
   @Test
   @DisplayName("store_id 列を持つ全 @Entity が StoreScopedEntity を継承していること（豁免なし）")
@@ -122,8 +32,7 @@ class StoreIsolationTests {
         continue;
       }
       scanned.add(entity.getSimpleName());
-      // 基類継承を強制することで、@PrePersist の store_id 採番（StoreScopeStampListener）と
-      // storeFilter/@FilterDef の共通土台が全 store-scoped 集約へ機構的に効く。豁免リストは持たない。
+      // 基類継承を強制することで、store_id 未設定の永続化を拒む StoreScopeStampListener が全店舗級エンティティに効く。
       if (!StoreScopedEntity.class.isAssignableFrom(entity)) {
         offenders.add(entity.getName());
       }
@@ -131,31 +40,8 @@ class StoreIsolationTests {
 
     assertThat(scanned).isNotEmpty();
     assertThat(offenders)
-        .as("store_id 列を持つが StoreScopedEntity を継承していない @Entity（採番・行レベル分離の共通土台から外れる）")
+        .as("store_id 列を持つが StoreScopedEntity を継承していない @Entity（store_id 未設定の検証から外れる）")
         .isEmpty();
-  }
-
-  @Test
-  @DisplayName("storeFilter は主キー直接ロード（EntityManager#find 経由の findById 等）にも適用されること")
-  void storeFilterAppliesToLoadByKey() {
-    // @FilterDef は Hibernate 6 で repeatable のため、storeFilter の定義を名前で取り出す
-    // （storeSetFilter 等が並置されていても getAnnotation は container を返し null になるため）。
-    FilterDef storeFilterDef = null;
-    for (FilterDef filterDef : StoreScopedEntity.class.getAnnotationsByType(FilterDef.class)) {
-      if ("storeFilter".equals(filterDef.name())) {
-        storeFilterDef = filterDef;
-        break;
-      }
-    }
-
-    assertThat(storeFilterDef)
-        .as("StoreScopedEntity が storeFilter の @FilterDef を宣言していること")
-        .isNotNull();
-    assertThat(storeFilterDef.applyToLoadByKey())
-        .as(
-            "applyToLoadByKey=false だと Session#find（Spring Data JPA の findById 実装経路）に"
-                + " filter が効かず、他店舗の ID を直接指定した読み取りが素通りする")
-        .isTrue();
   }
 
   /** store_id 列は StoreScopedEntity 経由（継承フィールド）でも、エンティティ自身の宣言でも良い。 */
@@ -163,7 +49,7 @@ class StoreIsolationTests {
     for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
       for (Field field : c.getDeclaredFields()) {
         // @ElementCollection の @Column は集合テーブルの列（User.storeIds 等の授権店舗集合）であり、
-        // 本体テーブルの行識別列ではないため店舗フィルタの対象判定から除外する。
+        // 本体テーブルの行識別列ではないため店舗級エンティティの判定から除外する。
         if (field.isAnnotationPresent(ElementCollection.class)) {
           continue;
         }

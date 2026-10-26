@@ -10,8 +10,6 @@ import com.kizuna.reporting.domain.OperationalReport;
 import com.kizuna.reporting.domain.ReportCriteria;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreScoped;
-import com.kizuna.shared.storescope.StoreSetScoped;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +25,6 @@ public class ReportSnapshot {
   private final AdvertisingReportReader advertising;
   private final AppProperties properties;
 
-  @StoreScoped
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
@@ -56,7 +53,6 @@ public class ReportSnapshot {
             (stores, from, to, limit) -> advertising.store(storeId, stores, from, to, limit)));
   }
 
-  @StoreSetScoped
   @Transactional(
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,

@@ -8,8 +8,6 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
@@ -28,7 +26,6 @@ public class DailyRemunerationService {
   private final CastRepository people;
   private final SelfMonthlyRemunerationQuery selfQuery;
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public DailyRemunerationResponse store(
       Long storeId, Long personId, String businessDate, int page, int size) {
@@ -44,7 +41,6 @@ public class DailyRemunerationService {
         query.dailyOrders(storeId, personId, target, pageable));
   }
 
-  @StoreScopeExempt(reason = "認証主体の本人と対象店舗の歴史在籍を照合し、退店を含む本人の受注だけを集計する")
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public SelfDailyRemunerationResponse self(
       String actor, Long storeId, String businessDate, int page, int size) {

@@ -9,7 +9,6 @@ import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,7 +31,6 @@ public class GuestOrderApplicationService {
   private final OrderApplicationIntake orderApplicationIntake;
 
   /** 予約を申請する。予約申請の PENDING 行だけが起き、受注（t_orders）には行が生まれない。 */
-  @StoreScoped
   @Transactional
   public GuestOrderApplicationResponse request(
       Long storeId, GuestOrderApplicationCreateRequest request) {

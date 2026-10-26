@@ -8,7 +8,6 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.YearMonth;
@@ -27,7 +26,6 @@ public class SelfMonthlyRemunerationService {
   private final SelfMonthlyRemunerationQuery selfQuery;
   private final RemunerationQuery monthlyQuery;
 
-  @StoreScopeExempt(reason = "認証主体の本人 ID に属する全在籍から店舗候補を限定し、退店も含める")
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<SelfMonthlyRemunerationStoreSummary> stores(String actor, int page, int size) {
     var pageable = page(page, size);
@@ -37,7 +35,6 @@ public class SelfMonthlyRemunerationService {
         .orElseGet(() -> Page.empty(pageable));
   }
 
-  @StoreScopeExempt(reason = "認証主体の本人と店舗の歴史在籍を照合してから、その本人・店舗だけを共通集計へ渡す")
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public SelfMonthlyRemunerationResponse monthly(
       String actor, Long storeId, String month, int page, int size) {

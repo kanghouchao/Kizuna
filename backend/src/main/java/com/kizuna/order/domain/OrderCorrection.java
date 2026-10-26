@@ -9,14 +9,11 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.Type;
 
 /** 訂正の前後を同じ受注版に結び付ける不変の記録。操作者削除後も提供事実を保持する。 */
 @Entity
 @Table(name = "t_order_corrections")
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 @Getter
 @NoArgsConstructor
 public class OrderCorrection extends StoreScopedEntity {

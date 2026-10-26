@@ -12,7 +12,6 @@ import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.HashMap;
@@ -39,7 +38,6 @@ public class CastFieldDefinitionService {
   private final CastProfileRepository profileRepository;
   private final BusinessAudit audit;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public List<CastFieldDefinitionResponse> list(Long storeId) {
     return repository.findAllByStoreIdOrderByDisplayOrderAsc(storeId).stream()
@@ -47,7 +45,6 @@ public class CastFieldDefinitionService {
         .toList();
   }
 
-  @StoreScoped
   @Transactional
   public CastFieldDefinitionResponse create(
       Long storeId, CastFieldDefinitionCreateRequest request) {
@@ -91,7 +88,6 @@ public class CastFieldDefinitionService {
         Objects.toString(definition.getVersion(), ""));
   }
 
-  @StoreScoped
   @Transactional
   public CastFieldDefinitionResponse update(
       Long storeId, String id, CastFieldDefinitionUpdateRequest request) {
@@ -120,7 +116,6 @@ public class CastFieldDefinitionService {
     return mapper.toResponse(definition);
   }
 
-  @StoreScoped
   @Transactional
   public void delete(Long storeId, String id, String actorEmail) {
     storeRepository.lockCastFields(storeId);

@@ -14,13 +14,11 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * 店舗文脈（X-Store-ID）が確立済みのとき、その store_id が実在することを毎リクエスト 1 回検証するインターセプタ。
  *
  * <p>{@link com.kizuna.shared.storescope.StoreIdInterceptor} の後段に同一 mount（{@code /store/**}・{@code
- * /files/**}）で登録する。 実在性判定は跨モジュールポート {@link StoreExistenceCheck} に収束させ、グループ級の {@link
- * com.kizuna.shared.storescope.StoreScopeExecutor} と同一の判定経路にする。
+ * /files/**}）で登録する。 実在性判定はポート {@link StoreExistenceCheck} に寄せる。
  *
- * <p>JWT の授権店舗集合は次回ログインまで陳旧化しうるため、存在しない storeId が文脈に載ることがある。純 FK 兜底だと制約違反が 500 に逃げてしまうため、 本インターセプタが
- * 400 の保証点となる。応答の成形は {@link ServiceException} を送出して {@link
- * com.kizuna.shared.exception.CommonExceptionHandler} へ委ね、ここでは response へ直接書かない — 同じ status
- * を返す経路が複数のワイヤ形を持つと、 呼出側が応答体の形を一つに決められなくなるため。
+ * <p>全店舗を授権された主体と未認証の公開店面は、実在しない store_id も名乗れる。外部キー任せでは制約違反が 500 になるため、本インターセプタが 400 を保証する。応答の成形は
+ * {@link ServiceException} を送出して {@link com.kizuna.shared.exception.CommonExceptionHandler}
+ * へ委ね、ここでは response へ直接書かない — 同じ status を返す経路が複数のワイヤ形を持つと、 呼出側が応答体の形を一つに決められなくなるため。
  *
  * <p>店舗文脈が無い（{@code @StoreOptional} の素通り）場合は検証対象外として許可する。
  */

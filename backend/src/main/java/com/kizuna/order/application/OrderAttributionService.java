@@ -15,7 +15,6 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -32,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * PointLedgerService} を持たないことがその宣言であり、{@link OrderAttributionCorrectionService} を別のサービスに
  * 分けている理由でもある。
  *
- * <p>帰属記録も伝票トークンも グループ帰属で店舗行分離機構に載らないため、店舗の境界を決めるのは受注だけである。 どの操作も先に {@link
+ * <p>帰属記録も伝票トークンも グループ帰属で店舗列を持たないため、店舗の境界を決めるのは受注だけである。 どの操作も先に {@link
  * OrderRepository#findByIdAndStoreId} で受注を引き、引けなければそこで終える。
  *
  * <p>完了（{@link OrderService#complete}）が受け持つのは帰属の<b>成立</b>で、こちらは成立済みの記録の訂正にあたる。
@@ -49,7 +48,6 @@ public class OrderAttributionService {
   private final ActorIdentityService actorIdentityService;
 
   /** 受注 1 件の帰属の現況。無効化・再発行のどちらを提示するかを店舗側の画面が判じるための読み口。 */
-  @StoreScoped
   @Transactional(readOnly = true)
   public OrderAttributionResponse currentAttribution(Long storeId, String orderId) {
     requireScopedOrder(storeId, orderId);
@@ -67,7 +65,6 @@ public class OrderAttributionService {
    * 正しい本人の申領）させると、受注から導く実装では古い理由が<b>新しく成立した正しい帰属</b>へ当たり、 取り戻したばかりの来店を消したうえに誤った監査記録を残す。ずれていれば書かずに
    * 409 で差し戻す。
    */
-  @StoreScoped
   @Transactional
   public OrderAttributionResponse invalidate(
       Long storeId,
@@ -107,7 +104,6 @@ public class OrderAttributionService {
    *
    * <p>有効な帰属記録がある間はトークンが生きていることは無いので、無効化の側にトークンを止める処理は要らない。
    */
-  @StoreScoped
   @Transactional
   public OrderReceiptTokenResponse reissueReceiptToken(Long storeId, String orderId) {
     // 受注を押さえて並行する再発行と直列化する。トークンが 1 本も無い受注（完了時に会員へ帰属した受注）は

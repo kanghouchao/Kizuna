@@ -16,7 +16,6 @@ import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>受注取消（CONFIRMED / IN_SERVICE → CANCELLED）へは配線しない。付与も利用も完了と事後申領の契機でしか記帳されないため、
  * 取消できる受注に打ち消す仕訳は構造上存在しない。 完了後訂正の門とも繋がない — 門は台帳を読みも書きもしないまま（ADR 0019）で、画面の導線だけがここを指す。
  *
- * <p>店舗の境界を決めるのは受注だけである。台帳も操作記録も グループ帰属で店舗行分離機構に載らないため、 先に受注を引き、引けなければそこで終える。
+ * <p>店舗の境界を決めるのは受注だけである。台帳も操作記録も グループ帰属で店舗列を持たないため、 先に受注を引き、引けなければそこで終える。
  */
 @Service
 @RequiredArgsConstructor
@@ -50,7 +49,6 @@ public class OrderPointRollbackService {
    * <p>判定をここへ置くのは、再発行のサービスが台帳へ依存を持たないこと自体が「無効化は台帳へ波及しない」（ADR
    * 0009）の構造的な証跡だからである。あちらへ台帳の読みを足すとその証跡が失われる。
    */
-  @StoreScoped
   @Transactional
   public OrderReceiptTokenResponse reissueReceiptTokenUnlessRolledBack(
       Long storeId, String orderId) {
@@ -64,7 +62,6 @@ public class OrderPointRollbackService {
   }
 
   /** 実行前の下見。画面はこれで「何がいくら動くか」を示し、済んでいる受注では実行の導線を出さない。 */
-  @StoreScoped
   @Transactional
   public OrderPointRollbackPreviewResponse preview(Long storeId, String orderId) {
     Order order =
@@ -100,7 +97,6 @@ public class OrderPointRollbackService {
    * <p>押さえる順は受注行 → 伝票トークン行 → 会員の加算ロット（ADR 0016 の向き）。トークン行を押さえるのは事後申領と
    * 直列化するためで、押さえないと申領は操作記録を見ず、巻き戻しは申領の付与を見ないまま双方が成立し、 打ち消せない付与が残る。
    */
-  @StoreScoped
   @Transactional
   public OrderPointRollbackResponse rollback(
       Long storeId, String orderId, OrderPointRollbackRequest request, String actorEmail) {

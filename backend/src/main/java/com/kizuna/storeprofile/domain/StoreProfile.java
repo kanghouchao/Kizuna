@@ -15,7 +15,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.Type;
 
 @Entity
@@ -26,8 +25,6 @@ import org.hibernate.annotations.Type;
 @AllArgsConstructor
 @Builder
 @ToString
-@Filter(name = "storeFilter", condition = "store_id = :storeId")
-@Filter(name = "storeSetFilter", condition = "store_id in (:storeIds)")
 public class StoreProfile extends StoreScopedEntity {
 
   @Column(name = "template_key", length = 50)
@@ -83,10 +80,7 @@ public class StoreProfile extends StoreScopedEntity {
   /**
    * 店舗用のデフォルト設定を生成する。
    *
-   * <p>店舗登録（グループ級・StoreContext なし）から呼ばれるため store_id を明示設定する。 StoreScopeStampListener はこの設定済み値を尊重する。
-   *
-   * @param storeId 対象店舗の ID
-   * @return デフォルト値が設定された StoreProfile インスタンス
+   * <p>店舗登録から呼ばれ、store_id は登録した店舗の id を明示設定する。
    */
   public static StoreProfile createDefault(Long storeId) {
     StoreProfile profile =

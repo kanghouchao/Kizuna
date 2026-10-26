@@ -30,8 +30,8 @@ public interface ShiftRepository extends StoreScopedRepository<Shift> {
   Optional<Shift> findByIdAndCastIdIn(String id, Collection<String> castIds);
 
   /**
-   * 本人（cast_id 集合、跨店）の週間確定シフトを店名内联で返す。where 句に店舗の絞りは書かない — cast_id は当人が所属する店にしか 存在しないため、cast_id
-   * 自限がそのまま店舗自限として機能する（storeFilter は経由しない）。
+   * 本人（cast_id 集合、店舗を跨ぐ）の週間確定シフトを店名込みで返す。where 句に店舗の絞りは書かない — cast_id は当人が所属する店にしか存在しないため、 cast_id
+   * で本人に限ればそのまま店舗も限られる。
    */
   @Query(
       """
@@ -50,8 +50,7 @@ public interface ShiftRepository extends StoreScopedRepository<Shift> {
   /**
    * 指定店舗・指定日に公開可能なシフトとプロフィールを持つ在籍中のキャストを返す。
    *
-   * <p>会員ポータルからの参照は店舗文脈（{@code @StoreScoped}）を持たず storeFilter が働かないため、where 句の {@code s.storeId}
-   * が唯一の店舗隔離境界である。並びは一意な副キー cast_id まで固定する。
+   * <p>会員ポータルからの参照は店舗文脈を持たないため、where 句の {@code s.storeId} が唯一の店舗隔離境界である。並びは一意な副キー cast_id まで固定する。
    */
   @Query(
       """

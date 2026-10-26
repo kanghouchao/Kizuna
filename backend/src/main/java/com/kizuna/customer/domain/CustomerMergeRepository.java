@@ -36,9 +36,6 @@ public interface CustomerMergeRepository extends StoreScopedRepository<CustomerM
    * OrderRepository.VIEW_SELECT}（customer を参照）や {@code
    * CustomerMemberLinkRepository#findHistory}（user を参照）で既に取っている形と同じで、綴りの誤りは起動時の HQL 検証で大きく失敗する。
    *
-   * <p>WHERE 句に店舗を明示するのは、Hibernate の {@code @Filter} が HQL の一括 UPDATE には掛からないため。フィルタ任せにすると
-   * 店舗境界がこの文から消える。
-   *
    * <p>{@code versioned} を付けるのは、受注の顧客参照が可変列であり、この文が版を上げないと並行する受注更新の
    * 書き戻しが付替えを静かに取り消すため。付替えの前に読まれた受注は、自分が読んだ時点の顧客（墓標）を他の項目と 一緒に flush する — 版が据え置きなら楽観ロックの述語が成立し、その 1
    * 件だけ墓標に着いたまま残る。 版を上げれば敗者は 409 になり、やり直せば正しい存続行に着く。

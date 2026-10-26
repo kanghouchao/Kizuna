@@ -22,7 +22,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
@@ -50,7 +49,6 @@ public class CustomerContactService {
   private final UserRepository users;
   private final BusinessAudit businessAudit;
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<ContactResponse> list(
       Long storeId, String customerId, String cursor, int requestedSize) {
@@ -79,7 +77,6 @@ public class CustomerContactService {
         c -> ContactResponse.from(c, restrictions.get(new ContactKey(c.getType(), c.getValue()))));
   }
 
-  @StoreScoped
   @Transactional
   public ContactResponse create(Long storeId, String customerId, ContactRequest input) {
     lock(storeId, customerId);
@@ -92,7 +89,6 @@ public class CustomerContactService {
     return response(storeId, contact);
   }
 
-  @StoreScoped
   @Transactional
   public ContactResponse update(Long storeId, String customerId, String id, ContactRequest input) {
     lock(storeId, customerId);
@@ -119,7 +115,6 @@ public class CustomerContactService {
     return response(storeId, contact);
   }
 
-  @StoreScoped
   @Transactional
   public ContactResponse changePermission(
       Long storeId,
@@ -147,7 +142,6 @@ public class CustomerContactService {
     return response(storeId, contact);
   }
 
-  @StoreScoped
   @Transactional
   public void delete(Long storeId, String customerId, String id) {
     lock(storeId, customerId);
@@ -162,7 +156,6 @@ public class CustomerContactService {
     audit(contact, auditBefore, history);
   }
 
-  @StoreScoped
   @Transactional
   public void prefer(Long storeId, String customerId, ContactType type, String id) {
     lock(storeId, customerId);
@@ -190,7 +183,6 @@ public class CustomerContactService {
     }
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<ContactHistoryResponse> history(
       Long storeId, String customerId, String cursor, int requestedSize) {
@@ -223,7 +215,6 @@ public class CustomerContactService {
                     h.getApplicationId()));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Map<String, List<ContactSummary>> preferred(Long storeId, Collection<String> customerIds) {
     if (customerIds.isEmpty()) return Map.of();
@@ -237,7 +228,6 @@ public class CustomerContactService {
                 Collectors.mapping(ContactSummary::from, Collectors.toList())));
   }
 
-  @StoreScoped
   @Transactional
   public void transfer(
       Long storeId,

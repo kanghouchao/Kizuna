@@ -3,7 +3,6 @@ package com.kizuna.survey.application;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.survey.api.dto.SurveyAnswerResponse;
 import com.kizuna.survey.api.dto.SurveyAnswerWriteResponse;
 import com.kizuna.survey.api.dto.SurveyOperationResponse;
@@ -47,7 +46,6 @@ public class SurveyService {
   private final BusinessAudit audit;
   private final Clock clock;
 
-  @StoreScoped
   @Transactional
   public SurveyWriteResponse write(Long storeId, String email, SurveyCommand command) {
     var actor = actors.require(storeId, email, permission(command));
@@ -83,7 +81,6 @@ public class SurveyService {
             SurveyOperationResponse.of(receipt, false));
   }
 
-  @StoreScoped
   @Transactional
   public SurveyWriteResponse replayOnly(Long storeId, String email, SurveyCommand command) {
     var actor = actors.require(storeId, email, permission(command));
@@ -96,7 +93,6 @@ public class SurveyService {
     return replay(storeId, receipt, fingerprint(command));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public SurveyRevisionResponse revision(Long storeId, String email, String surveyId, String id) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
@@ -107,7 +103,6 @@ public class SurveyService {
             .orElseThrow(SurveyService::missing));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public SurveyAnswerResponse answer(Long storeId, String email, String id) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
@@ -117,7 +112,6 @@ public class SurveyService {
             .orElseThrow(SurveyService::missing));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public SurveyResponseCountsResponse counts(
       Long storeId, String email, String surveyId, String id) {

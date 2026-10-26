@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 見え続け、関連成立以前・無帰属・未完了・謝絶／取下げの受注は現れない。本人が申請した予約の追跡は {@link MemberOrderApplicationService}
  * が別の読み口として並置する。
  *
- * <p>帰属記録は店舗で分割されない（台帳と同じ グループ帰属）ため storeFilter は働かない。本人の会員 ID の一致を問い合わせ自体に載せることが唯一の隔離境界である。
+ * <p>帰属記録は店舗で分割されない（台帳と同じ グループ帰属）。本人の会員 ID の一致を問い合わせ自体に載せることが唯一の隔離境界である。
  *
  * <p>返すのは表示用の projection だけで、書き込みの口は持たない。会計金額・利用ポイント・顧客台帳の内部項目は projection の段階で落ちる。
  */

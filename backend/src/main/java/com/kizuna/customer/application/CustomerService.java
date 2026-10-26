@@ -26,7 +26,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.validation.ContactValues;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
@@ -87,7 +86,6 @@ public class CustomerService {
   private final BusinessAudit audit;
 
   /** 検索結果と一致理由を同じ断面から読み、途中の連絡先変更による不一致を避ける。 */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<CustomerSummaryResponse> list(
       Long storeId, String search, String classification, Pageable pageable) {
@@ -126,7 +124,6 @@ public class CustomerService {
   }
 
   /** グループ件数と判断材料を同じ断面から読み、途中の削除・統合による不一致を避ける。 */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<CustomerDuplicateGroupResponse> listDuplicateCandidates(
       Long storeId, String search, ContactType type, String cursor, int requestedSize) {
@@ -179,7 +176,6 @@ public class CustomerService {
                     .toList()));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public CursorPage<CustomerMergeComparisonResponse> duplicateCustomers(
       Long storeId, ContactType type, String value, String cursor, int requestedSize) {
@@ -228,7 +224,6 @@ public class CustomerService {
    *
    * @param customerIds 見比べる 2 行。並びはそのまま応答の並びになる
    */
-  @StoreScoped
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public List<CustomerMergeComparisonResponse> mergeComparison(
       Long storeId, List<String> customerIds) {
@@ -333,7 +328,6 @@ public class CustomerService {
    *
    * <p>3xx リダイレクトは採らない — HTTP クライアントが透過的に追随するため、画面が統合の発生そのものを知れなくなる。
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public CustomerResponse get(Long storeId, String id) {
     Customer customer =
@@ -349,7 +343,6 @@ public class CustomerService {
     return withMergeMark(response, id, customer.getId());
   }
 
-  @StoreScoped
   @Transactional
   public CustomerResponse create(Long storeId, CustomerCreateRequest request) {
     Customer customer = customerMapper.toEntity(request);
@@ -369,7 +362,6 @@ public class CustomerService {
     return withMemberLink(response, null);
   }
 
-  @StoreScoped
   @Transactional
   public CustomerResponse update(Long storeId, String id, CustomerUpdateRequest request) {
     Customer customer =
@@ -404,7 +396,6 @@ public class CustomerService {
    * 顧客を削除する。統合に関与した行は存続行・被統合行のいずれも削除できない — 統合履歴が誤統合の唯一の修復根拠であり、旧 ID の解決も
    * 墓標が残っていて初めて届くため、誤削除で消えるほうが重い（ADR 0010）。
    */
-  @StoreScoped
   @Transactional
   public void delete(Long storeId, String id) {
     var customer =

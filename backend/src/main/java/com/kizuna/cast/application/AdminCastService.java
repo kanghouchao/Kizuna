@@ -7,7 +7,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.storescope.StoreScopeExempt;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,7 +21,6 @@ public class AdminCastService {
   private final CastRepository people;
   private final CastEnrollmentRepository enrollments;
 
-  @StoreScopeExempt(reason = "グループ級の本人のみを検索し、店舗スコープ表を参照しない")
   @Transactional(readOnly = true)
   public Page<AdminCastSummaryResponse> list(String search, int page, int size) {
     var pageable = pageRequest(page, size);
@@ -35,7 +33,6 @@ public class AdminCastService {
                 new AdminCastSummaryResponse(row.getId(), row.getDisplayName(), row.getRealName()));
   }
 
-  @StoreScopeExempt(reason = "グループ級の本人のみを取得し、店舗スコープ表を参照しない")
   @Transactional(readOnly = true)
   public AdminCastResponse get(Long id) {
     var row = people.findPerson(id).orElseThrow(() -> new NotFoundException("キャスト本人が見つかりません"));
@@ -43,7 +40,6 @@ public class AdminCastService {
         row.getId(), row.getUserId(), row.getDisplayName(), row.getRealName(), row.getBirthDate());
   }
 
-  @StoreScopeExempt(reason = "CAST_PERSON_VIEW を要求するグループ級端点から全店舗の在籍を照会する")
   @Transactional(readOnly = true)
   public Page<AdminCastEnrollmentResponse> enrollments(Long id, int page, int size) {
     var pageable = pageRequest(page, size);

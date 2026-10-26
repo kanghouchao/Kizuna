@@ -64,7 +64,7 @@ public class StoreIdInterceptor implements HandlerInterceptor {
     if (authenticated && StringUtils.isNotBlank(header)) {
       throw new AccessDeniedException("店舗文脈を名乗る権限がありません");
     }
-    // 店舗文脈が無いまま素通しさせると storeFilter が有効化されず @StoreScoped クエリが全店舗の行を返す（fail-open）ため、
+    // この mount の handler は現在店舗を前提に読む（@CurrentStore・StoreContext）ため、店舗文脈の無い要求は
     // @StoreOptional を明示したエンドポイントに限り許可し、それ以外は 403 で拒否する。
     if (handler instanceof HandlerMethod handlerMethod
         && handlerMethod.hasMethodAnnotation(StoreOptional.class)) {

@@ -11,7 +11,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.user.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,7 +35,6 @@ public class CustomerPointService {
   private final PointLedgerService pointLedgerService;
   private final UserRepository userRepository;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CustomerPointBalanceResponse balance(Long storeId, String customerId) {
     requireCustomer(storeId, customerId);
@@ -52,7 +50,6 @@ public class CustomerPointService {
    *
    * <p>会員に紐づかない顧客は調整できない。台帳は会員が持つものなので、紐づけの無い顧客には積み先そのものが無い。
    */
-  @StoreScoped
   @Transactional
   public CustomerPointBalanceResponse adjust(
       Long storeId, String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
@@ -89,7 +86,6 @@ public class CustomerPointService {
    * <p>検証は書き込み経路と同じ順序で通すが、顧客行はロックしない — 読み取り専用トランザクションでは行ロックが 取れず、勝者は既に commit
    * 済みで直列化する相手もいない。台帳側の再送判定（内容一致なら何も書かず戻る／不一致は 409）に落ちることで、逐次再送と同一の応答になる。
    */
-  @StoreScoped
   @Transactional(readOnly = true)
   public CustomerPointBalanceResponse replayAdjust(
       Long storeId, String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {

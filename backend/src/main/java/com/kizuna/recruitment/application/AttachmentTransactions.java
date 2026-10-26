@@ -16,7 +16,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.storescope.StoreScoped;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
@@ -46,7 +45,6 @@ public class AttachmentTransactions {
   private final PrivateAttachmentStorage storage;
   private final Clock clock;
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public AttachmentUpload operation(Long storeId, String applicantId, UUID key) {
     requireApplicant(storeId, applicantId);
@@ -55,7 +53,6 @@ public class AttachmentTransactions {
         .orElseThrow(AttachmentTransactions::missing);
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public void preflight(Long storeId, String applicantId, String uploadId, UUID key) {
     Applicant applicant = requireApplicant(storeId, applicantId);
@@ -70,7 +67,6 @@ public class AttachmentTransactions {
     }
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public Optional<AttachmentUpload> lookup(
       Long storeId,
@@ -88,7 +84,6 @@ public class AttachmentTransactions {
     return existing;
   }
 
-  @StoreScoped
   @Transactional
   public AttachmentUpload reserve(
       Long storeId, String applicantId, UUID key, NormalizedImage content, String actorEmail) {
@@ -124,7 +119,6 @@ public class AttachmentTransactions {
     return uploads.saveAndFlush(upload);
   }
 
-  @StoreScoped
   @Transactional
   public Completion complete(
       Long storeId,
@@ -181,7 +175,6 @@ public class AttachmentTransactions {
     return new Completion(true, AttachmentSummaryResponse.from(upload));
   }
 
-  @StoreScoped
   @Transactional
   public void recordFailure(
       Long storeId, String applicantId, String uploadId, AttachmentUpload.Failure failure) {
@@ -190,7 +183,6 @@ public class AttachmentTransactions {
         .ifPresent(upload -> upload.recordFailure(failure));
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public CursorPage<AttachmentUpload> list(
       Long storeId, String applicantId, boolean completed, String cursor, int size) {
@@ -236,7 +228,6 @@ public class AttachmentTransactions {
         upload -> new PageCursor(upload.getCreatedAt().toString(), upload.getId()).encode());
   }
 
-  @StoreScoped
   @Transactional(readOnly = true)
   public AttachmentObject download(Long storeId, String applicantId, String uploadId) {
     requireApplicant(storeId, applicantId);
