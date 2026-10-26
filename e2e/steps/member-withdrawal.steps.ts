@@ -146,13 +146,13 @@ Then(
   async ({ request }) => {
     const adminToken = await loginAsStoreAdmin(request);
     const res = await request.get(
-      `/api/store/customers/${createdCustomerId}/member-link`,
+      `/api/customers/${createdCustomerId}/member-link`,
       { headers: { ...STORE_HEADERS, Authorization: `Bearer ${adminToken}` } },
     );
     // 有効な紐づけが無いときは 404（CustomerMemberLinkService.current）。
     expect(res.status()).toBe(404);
     const customer = await request.get(
-      `/api/store/customers/${createdCustomerId}`,
+      `/api/customers/${createdCustomerId}`,
       { headers: { ...STORE_HEADERS, Authorization: `Bearer ${adminToken}` } },
     );
     expect(customer.ok(), await customer.text()).toBeTruthy();
