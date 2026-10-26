@@ -39,12 +39,19 @@ task e2e grep=order-lifecycle
 
 `shard=1/4` のように渡すと、全体を分割したうちの一つだけを実行します（CI が使う形）。
 
-### CI での実行
+### 増分と全量
 
-master 向け PR では [E2E ワークフロー](../.github/workflows/e2e.yml)が全量を実行します。イメージを一度だけビルドし、
-4 つの shard がそれぞれ自分の使い捨てスタックで `task e2e:run shard=i/4` を実行し、最後の `E2E` チェックが
-blob レポートを一つの HTML にまとめます。draft の間は実行せず、同じ PR への新しい push は実行中のものを取り消します。
-統合済みの HTML レポートは artifact `e2e-html-report`、失敗した shard の trace は `e2e-test-results-<shard>` に残ります。
+PR を出す前は、変更に関係する feature だけを `task e2e grep=...` で実行し、選んだ feature と理由を PR に書きます
+（レビューで選択の妥当性を確認するため）。`steps/store-api.ts`・`playwright.config.ts`・E2E のスタック・認証・店舗スコープの
+ように多くのシナリオが共有する部分に触れたときは、ローカルで全量を実行します。
+
+全量は master へ入った後に [E2E ワークフロー](../.github/workflows/e2e.yml)が実行します（手動実行も可）。イメージを一度だけ
+ビルドし、4 つの shard がそれぞれ自分の使い捨てスタックで `task e2e:run shard=i/4` を実行し、最後の `E2E` job が
+blob レポートを一つの HTML にまとめます。合併が続いたときは最新の master だけを検証します。統合済みの HTML レポートは
+artifact `e2e-html-report`、失敗した shard の trace は `e2e-test-results-<shard>` に残ります。
+
+失敗すると、題名「master の全量 E2E が失敗している」の未解決 issue を立てます（既にあれば追記します）。次の PR で直し、
+すぐに直せない場合は原因の合併を revert します。
 
 ### 型検査
 

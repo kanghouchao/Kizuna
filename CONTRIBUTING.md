@@ -34,11 +34,11 @@
 
 ## CI と PR
 
-[CI](.github/workflows/lint-and-test.yml) は `Lint and Test (frontend)`、`Lint and Test (backend)`、`Repo Lint` の三チェック。別の [E2E](.github/workflows/e2e.yml) ワークフローが全量 E2E を 4 分割で並列実行し、`E2E` チェックとして報告する（draft の間は実行しない）。前後端はそれぞれ lint・単体テスト・本番 build を実行する。コード領域に触れない docs-only 差分では前後端の重いステップを省略するが、Repo Lint は常に走り、E2Eの型検査も含む。`frontend/`・`backend/` 等の配下の文書変更もコード領域判定に入る。
+[CI](.github/workflows/lint-and-test.yml) は `Lint and Test (frontend)`、`Lint and Test (backend)`、`Repo Lint` の三チェック。全量 E2E は PR では走らず、master への push ごとに別の [E2E](.github/workflows/e2e.yml) ワークフローが 4 分割で並列実行する。前後端はそれぞれ lint・単体テスト・本番 build を実行する。コード領域に触れない docs-only 差分では前後端の重いステップを省略するが、Repo Lint は常に走り、E2Eの型検査も含む。`frontend/`・`backend/` 等の配下の文書変更もコード領域判定に入る。
 
 別の [CodeQL](.github/workflows/codeql.yml) ワークフローが Java と JavaScript / TypeScript を解析する。master 向け PR、master・`releases/**` への push、週次スケジュールが対象で、docs-only のスキップはない。主 CI の三チェックだけで全ワークフローを表すわけではない。
 
-E2Eの静的型検査はRepo Lintで実行する。PR 作成前は `task lint`、`task test`、`task build`、変更に関係するシナリオだけの `task e2e grep=...` とローカルコードレビューを実施し、全量 E2E は CI の `E2E` チェックで確認する。結果は [PR テンプレート](.github/pull_request_template.md)の検証欄に記す。E2E の実行・成果物・日本語 Gherkin は [E2E ガイド](e2e/README.md)を参照する。
+E2Eの静的型検査はRepo Lintで実行する。PR 作成前は `task lint`、`task test`、`task build`、変更に関係するシナリオだけの `task e2e grep=...` とローカルコードレビューを実施する。どのシナリオを選んだかと理由を PR に書き、レビューで選択を確認する。master の全量 E2E が落ちると issue が立つので、次の PR で直すか、原因の合併を revert する。結果は [PR テンプレート](.github/pull_request_template.md)の検証欄に記す。E2E の実行・成果物・日本語 Gherkin は [E2E ガイド](e2e/README.md)を参照する。
 
 issue は [機能](.github/ISSUE_TEMPLATE/feature.md)／[不具合](.github/ISSUE_TEMPLATE/bug.md)テンプレートを使う。コミットの要約は短く、PR タイトルは conventional commit 形式と日本語を使う。非自明な判断は理由を説明し、関連 issue を紐づける。
 
