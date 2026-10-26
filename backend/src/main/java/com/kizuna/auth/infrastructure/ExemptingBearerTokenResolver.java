@@ -26,10 +26,11 @@ public class ExemptingBearerTokenResolver implements BearerTokenResolver {
     PathPatternRequestMatcher.withDefaults().matcher("/auth/login"),
     // 招待閲覧と新規登録受諾。既存ユーザーの /acceptance/existing は ROLE_CAST を要求するため対象外
     // （2 セグメントなのでここのどの matcher にも当たらない）。
-    PathPatternRequestMatcher.withDefaults().matcher("/cast-invitations/view"),
-    PathPatternRequestMatcher.withDefaults().matcher("/cast-invitations/acceptance"),
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/cast-invitations/view"),
+    PathPatternRequestMatcher.withDefaults()
+        .matcher(HttpMethod.POST, "/cast-invitations/acceptance"),
     // 会員の自助登録（POST）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。
-    PathPatternRequestMatcher.withDefaults().matcher("/members"),
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/members"),
     // LINE ログインの公開端点（設定照会・ログイン・登録確定）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。
     // 連携（/me/line）は認証必須のため対象外 — 免除すると Bearer が解決されず、常に匿名として 401 になる。
     PathPatternRequestMatcher.withDefaults().matcher("/auth/line/config"),

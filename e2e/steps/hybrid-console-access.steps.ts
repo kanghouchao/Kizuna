@@ -12,10 +12,13 @@ let shellRequests: string[] = [];
 
 Then('受注一覧が権限エラーなく表示される', async ({ page }) => {
   // 正当な 403 はページ遷移を起こさないため、URL 断言だけでは権限エラーを検出できない。
-  // 受注一覧を再取得し、X-Store-ID が注入された GET /api/orders 応答が 200 であることを直接確認する。
+  // 受注一覧を再取得し、一覧が読む作業キュー（X-Store-ID が注入された GET /api/orders/work-queue）の応答が
+  // 200 であることを直接確認する。
   const [response] = await Promise.all([
     page.waitForResponse(
-      resp => new URL(resp.url()).pathname === '/api/orders' && resp.request().method() === 'GET',
+      resp =>
+        new URL(resp.url()).pathname === '/api/orders/work-queue' &&
+        resp.request().method() === 'GET',
       { timeout: 15000 }
     ),
     page.reload({ waitUntil: 'domcontentloaded' }),

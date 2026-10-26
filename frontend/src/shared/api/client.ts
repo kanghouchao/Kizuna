@@ -60,7 +60,7 @@ apiClient.interceptors.request.use(
         }
       }
     } catch {
-      // cookie が読めない環境ではヘッダ無しで送る（受否はバックエンドが fail-closed に判定する）
+      // cookie が読めない環境ではヘッダ無しで送る（受け入れの可否はバックエンドが fail-closed に判定する）
     }
     return config;
   },
