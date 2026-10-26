@@ -24,7 +24,6 @@ public enum PermissionCode {
   ADVERTISING_COST_EXPORT("広告費の出力", PermissionGroup.BUSINESS, SystemRole.STORE_MANAGER),
   ADVERTISING_COST_SET_VIEW("広告費の横断閲覧", PermissionGroup.BUSINESS, SystemRole.HQ_ADMIN),
   ADVERTISING_COST_SET_EXPORT("広告費の横断出力", PermissionGroup.BUSINESS, SystemRole.HQ_ADMIN),
-  /** 口コミの閲覧。 */
   REVIEW_VIEW("口コミの閲覧", PermissionGroup.CUSTOMER, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
   SURVEY_VIEW(
       "アンケートの閲覧", PermissionGroup.CUSTOMER, SystemRole.STORE_MANAGER, SystemRole.STORE_STAFF),
@@ -72,7 +71,6 @@ public enum PermissionCode {
   /** 応募者情報と面接状態の登録・更新。 */
   RECRUITMENT_MANAGE("応募者の登録・更新", PermissionGroup.CAST, SystemRole.STORE_MANAGER),
 
-  /** 採用判断の記録。 */
   RECRUITMENT_DECIDE("採用判断の記録", PermissionGroup.CAST, SystemRole.STORE_MANAGER),
 
   /** 応募者の非公開添付の閲覧。 */

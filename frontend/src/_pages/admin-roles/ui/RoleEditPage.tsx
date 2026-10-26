@@ -8,12 +8,20 @@ import { Card, CardContent, RegionError } from '@/shared/ui';
 import { RoleForm, RoleFormValues } from './RoleForm';
 
 export default function RoleEditPage() {
-  const id = Number(useParams<{ id: string }>()?.id);
+  const rawId = useParams<{ id: string }>()?.id;
+  // 数字でない id は指せるロールが無いので、取りに行かず notFound として扱う
+  const id = rawId !== undefined && /^\d+$/.test(rawId) ? Number(rawId) : null;
   const router = useRouter();
-  const { data: role, isLoading, failure, reload } = useResource(() => roleApi.get(id), [id]);
+  const {
+    data: role,
+    isLoading,
+    failure,
+    reload,
+  } = useResource(id !== null ? () => roleApi.get(id) : null, [id]);
+  const loadFailure = id !== null ? failure : 'notFound';
 
   const submit = async (values: RoleFormValues) => {
-    if (role === null) return;
+    if (id === null || role === null) return;
     try {
       await roleApi.update(id, {
         name: values.name,
@@ -35,15 +43,11 @@ export default function RoleEditPage() {
     router.push('/admin/roles');
   };
 
-  if (isLoading && role === null) {
-    return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
-  }
-
-  if (failure !== null || role === null) {
+  if (loadFailure !== null) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground">ロールを編集</h1>
-        {failure === 'notFound' ? (
+        {loadFailure === 'notFound' ? (
           // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="このロールは見つかりませんでした"
@@ -54,6 +58,10 @@ export default function RoleEditPage() {
         )}
       </div>
     );
+  }
+
+  if (isLoading || role === null) {
+    return <div className="p-8 text-center text-muted-foreground">読み込み中...</div>;
   }
 
   return (

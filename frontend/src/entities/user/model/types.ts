@@ -118,9 +118,11 @@ export interface PermissionResponse {
   label?: string;
 }
 
+export type PermissionGroupCode = 'BUSINESS' | 'CAST' | 'CUSTOMER' | 'ORGANIZATION' | 'OPERATION';
+
 // 権限目録の業務領域ごとの束。組の順序と見出しはサーバが決める。
 export interface PermissionGroupResponse {
-  group?: string;
+  group?: PermissionGroupCode;
   label?: string;
   permissions?: PermissionResponse[];
 }

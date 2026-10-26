@@ -38,7 +38,7 @@ describe('ロールフォーム', () => {
     const group = screen.getByRole('group', { name: '権限' });
     expect(
       within(group)
-        .getAllByRole('heading')
+        .getAllByRole('heading', { level: 2 })
         .map(h => h.textContent)
     ).toEqual(['業務', '顧客']);
     expect(within(group).getByRole('checkbox', { name: '受注の管理' })).not.toBeChecked();
@@ -91,6 +91,21 @@ describe('ロールフォーム', () => {
     expect(group).toHaveAttribute('aria-invalid', 'true');
     expect(group.getAttribute('aria-describedby')).toContain(message.id);
     expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: '受注の管理' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('ロール名が 100 文字を超えたら欄の傍に文言を出して送信しない', async () => {
+    const onSubmit = jest.fn();
+    render(<RoleForm onSubmit={onSubmit} />);
+    await screen.findByRole('checkbox', { name: '受注の管理' });
+
+    fireEvent.change(screen.getByLabelText('ロール名'), { target: { value: 'あ'.repeat(101) } });
+    fireEvent.click(screen.getByRole('checkbox', { name: '受注の管理' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(
+      await screen.findByText('ロール名は 100 文字以内で入力してください')
+    ).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
