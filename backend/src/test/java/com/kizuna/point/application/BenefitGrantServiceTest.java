@@ -23,6 +23,7 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.user.domain.StoreScopeType;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -260,7 +261,8 @@ class BenefitGrantServiceTest {
     when(pointEntryRepository.existsByBenefitRuleIdAndMemberId(RULE_ID, MEMBER_ID))
         .thenReturn(true);
 
-    benefitGrantService.grantLoginBenefits(USER_ID);
+    // 受益した翌日のログイン。日付を持たない受益歴だけを見るので、日が変わっても二件目にならない。
+    serviceAt(NOON.plus(Duration.ofDays(1))).grantLoginBenefits(USER_ID);
 
     verify(pointEntryRepository, never()).saveAndFlush(any());
     verify(pointEntryRepository, never())
