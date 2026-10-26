@@ -41,7 +41,7 @@ task up
 
 [管理画面](http://kizuna.test/auth/login)と[公開店舗サイト](http://store1.kizuna.test)から利用できる。`task up` は再ビルドしないため、変更後は対象サービスを先にビルドする。
 
-初回の `task up` の後、[初期設定画面](http://kizuna.test/auth/initial-setup)を開いて最初の管理者を登録する。入口の URL はバックエンドの起動ログ（`task -d infrastructure/development logs service=backend`）にも表示される。最初の管理者はグループ管理者ロールと全店舗の授権を持つ。baseline に店舗は含まれないため、管理画面の店舗一覧から店舗を登録し（公開店舗サイトで開くには `/etc/hosts` に載せたドメインを使う）、以降の従業員は従業員管理から作成する。登録したデータはデータボリュームを削除しない限り残る。
+初回の `task up` の後、[初期設定画面](http://kizuna.test/auth/initial-setup)を開いて最初の管理者を登録する。入口の URL はバックエンドの起動ログ（`task -d infrastructure/development logs service=backend`）にも表示される。最初の管理者は統括ロールと全店舗の授権を持つ。baseline に店舗は含まれないため、管理画面の店舗一覧から店舗を登録し（公開店舗サイトで開くには `/etc/hosts` に載せたドメインを使う）、以降の従業員は従業員管理から作成する。登録したデータはデータボリュームを削除しない限り残る。
 
 起動しない場合は `task -d infrastructure/development ps` と `task -d infrastructure/development logs service=backend` で確認する。`localhost:8080` はバックエンドではなく Traefik。baseline の適用済みチェックサムが変わった開発 DB は、[DB 再作成手順](backend/src/main/resources/db/AGENTS.md#after-editing-the-baseline-the-dev-db-must-be-recreated)に従う。作り直した DB にはアカウントも店舗も無いため、初期設定から管理者を登録し、店舗を登録し直す。Docker ボリュームは削除しない。
 

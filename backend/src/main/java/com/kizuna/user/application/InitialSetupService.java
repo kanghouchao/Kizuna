@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 最初の管理者（グループ管理者 + ALL_STORES）を匿名で登録する初期設定。
+ * 最初の管理者（統括 + ALL_STORES）を匿名で登録する初期設定。
  *
  * <p>要否は「本人種別 STAFF の行が 1 件も無い」で判定する。有効な ROLE_MANAGE 保持者の有無で判定すると、保持者が DB
  * の直接編集などでゼロになったときに匿名の登録口が再び開いてしまう。ユーザー行を削除する経路は無いため、一度完了すると未完了へは戻らない。

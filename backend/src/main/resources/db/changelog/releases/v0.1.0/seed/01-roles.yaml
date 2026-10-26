@@ -235,7 +235,7 @@ databaseChangeLog:
         - insert:
             tableName: t_roles
             columns:
-              - column: { name: name, value: "グループ管理者" }
+              - column: { name: name, value: "統括" }
               - column: { name: is_system, valueBoolean: true }
         - insert:
             tableName: t_roles
@@ -245,119 +245,119 @@ databaseChangeLog:
         - insert:
             tableName: t_roles
             columns:
-              - column: { name: name, value: "店舗スタッフ" }
+              - column: { name: name, value: "スタッフ" }
               - column: { name: is_system, valueBoolean: true }
 
-        # グループ管理者: 初期授与 22 権限
+        # 統括: 初期授与 22 権限
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ADVERTISING_COST_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ADVERTISING_COST_SET_EXPORT')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'NOTIFICATION_DELIVER')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'OPERATIONAL_REPORT_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'OPERATIONAL_REPORT_EXPORT')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'TASK_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'POINT_EXPIRE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'AUDIT_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_PERSON_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ROLE_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_CREDENTIAL_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SYSTEM_CONFIG_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ASSET_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'BENEFIT_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'MEMBER_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'MEMBER_WITHDRAW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SERVICE_ID_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'グループ管理者')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'REMUNERATION_VIEW')" }
 
         # 店長: 初期授与 39 権限
@@ -557,69 +557,69 @@ databaseChangeLog:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_PROFILE_MANAGE')" }
 
-        # 店舗スタッフ: 初期授与 13 権限
+        # スタッフ: 初期授与 13 権限
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'REVIEW_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SURVEY_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SURVEY_RECORD')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'REVIEW_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'NOTIFICATION_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CUSTOMER_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SHIFT_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'CAST_FIELD_DEF_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店舗スタッフ')" }
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_PROFILE_MANAGE')" }

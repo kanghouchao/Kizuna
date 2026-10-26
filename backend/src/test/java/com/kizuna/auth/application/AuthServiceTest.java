@@ -177,7 +177,7 @@ class AuthServiceTest {
     User staff = storeStaff("staff@kizuna.test", "店舗スタッフ", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("staff@kizuna.test", "pass", staff);
     stubRolePermissions(
-        STORE_ROLE_ID, "店舗スタッフ", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
+        STORE_ROLE_ID, "スタッフ", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
     when(jwtIssuer.issue(eq("staff@kizuna.test"), any())).thenReturn(new Token("t", 1L));
 
     authService.login("staff@kizuna.test", "pass");

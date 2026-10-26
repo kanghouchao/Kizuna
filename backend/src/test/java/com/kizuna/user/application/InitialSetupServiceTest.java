@@ -66,9 +66,9 @@ class InitialSetupServiceTest {
   }
 
   private void adminRoleExists() {
-    Role role = Role.builder().name("グループ管理者").systemRole(true).permissionIds(Set.of(1L)).build();
+    Role role = Role.builder().name("統括").systemRole(true).permissionIds(Set.of(1L)).build();
     role.setId(ADMIN_ROLE);
-    when(roleRepository.findByName("グループ管理者")).thenReturn(Optional.of(role));
+    when(roleRepository.findByName("統括")).thenReturn(Optional.of(role));
   }
 
   @Test
@@ -82,7 +82,7 @@ class InitialSetupServiceTest {
   }
 
   @Test
-  @DisplayName("登録はグループ管理者ロール + ALL_STORES の有効な STAFF を作り、本人を行為者として監査する")
+  @DisplayName("登録は統括ロール + ALL_STORES の有効な STAFF を作り、本人を行為者として監査する")
   void registerCreatesRootAdministratorAuditedAsItself() {
     when(userRepository.existsByUserType(UserType.STAFF)).thenReturn(false);
     adminRoleExists();

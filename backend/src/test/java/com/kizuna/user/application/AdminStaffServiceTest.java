@@ -125,9 +125,9 @@ class AdminStaffServiceTest {
 
   private static List<Role> roles() {
     return List.of(
-        role(ADMIN_ROLE, "グループ管理者", Set.of(1L, 2L, 3L, ROLE_MANAGE_PERMISSION)),
+        role(ADMIN_ROLE, "統括", Set.of(1L, 2L, 3L, ROLE_MANAGE_PERMISSION)),
         role(MANAGER_ROLE, "店長", Set.of(1L, 2L)),
-        role(STAFF_ROLE, "店舗スタッフ", Set.of(1L)));
+        role(STAFF_ROLE, "スタッフ", Set.of(1L)));
   }
 
   private static User staff(
@@ -229,7 +229,7 @@ class AdminStaffServiceTest {
         .extracting(AdminStaffResponse::editable)
         .containsExactly(true, false, false);
     assertThat(page.getContent().get(1).roles())
-        .containsExactly(new AdminStaffResponse.RoleRef(ADMIN_ROLE, "グループ管理者"));
+        .containsExactly(new AdminStaffResponse.RoleRef(ADMIN_ROLE, "統括"));
   }
 
   @Test

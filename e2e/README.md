@@ -81,8 +81,8 @@ E2E は**開発スタック（project `kizuna`）を使いません**。専用�
 - `features/*.feature` — 日本語 Gherkin のシナリオ（`chromium` プロジェクト）
 - `features/initial-setup/*.feature` — 初期設定のシナリオ（`initial-setup` プロジェクト）。
   店舗 1（`Sample`・`store1.kizuna.test`）と店舗 2（`Sample 2`・`store2.kizuna.test`）を登録し、
-  `admin@kizuna.test`（グループ管理者）、`tanaka.hanako@kizuna.test`（店長・店舗 1/2）、
-  `yamada.jiro@kizuna.test`（店舗スタッフ・店舗 1）をパスワード `pass1234` で作ります
+  `admin@kizuna.test`（統括）、`tanaka.hanako@kizuna.test`（店長・店舗 1/2）、
+  `yamada.jiro@kizuna.test`（スタッフ・店舗 1）をパスワード `pass1234` で作ります
 - `steps/**/*.ts` — ステップ定義（`initial-setup` プロジェクトは `steps/initial-setup.steps.ts` だけを読みます）
 - `base-url.ts` — 店舗の `BASE_URL` とアプリドメインの `APP_URL` の既定値
 - `playwright.config.ts` — `defineBddProject` による 2 プロジェクトと Playwright 設定。
