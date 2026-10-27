@@ -25,18 +25,15 @@ public class Store extends BaseEntity {
   @Column(nullable = false, unique = true)
   private String domain;
 
-  @Column private String email;
-
   /** 稼働状態。新規登録は必ず準備中から始まるため構築引数には取らず、遷移は {@link #activate()} だけが行う。 */
   @Setter(AccessLevel.NONE)
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   private StoreStatus status = StoreStatus.PREPARING;
 
-  public Store(String name, String domain, String email) {
+  public Store(String name, String domain) {
     this.name = name;
     this.domain = domain;
-    this.email = email;
   }
 
   /** 稼働中へ遷移する。店長の明示操作であり、不可逆な遷移なので繰り返しは 400 で拒む。 */

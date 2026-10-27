@@ -33,10 +33,6 @@ databaseChangeLog:
                     uniqueConstraintName: uq_t_stores_domain
                   remarks: 公開サイトのホスト名（店舗文脈の解決キー）
               - column:
-                  name: email
-                  type: VARCHAR(128)
-                  remarks: 代表連絡先メールアドレス
-              - column:
                   # PREPARING（準備中）は開店前の下ごしらえ期間で、この間だけ店舗を削除できる。
                   # 店舗側の利用者が初めて店舗コンソールへ入った時点で ACTIVE へ一方向に遷移し、以後は戻らない。
                   name: status

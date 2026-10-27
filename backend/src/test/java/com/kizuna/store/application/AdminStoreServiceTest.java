@@ -50,7 +50,7 @@ class AdminStoreServiceTest {
   }
 
   private Store store(long id, String name) {
-    Store t = new Store(name, name + ".test", null);
+    Store t = new Store(name, name + ".test");
     t.setId(id);
     return t;
   }

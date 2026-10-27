@@ -42,22 +42,19 @@ describe('admin store api wrappers', () => {
     const created = await adminStoreApi.create({
       name: 't',
       domain: 't.example.com',
-      email: 't@example.com',
     });
     expect(created).toEqual({ id: 1 });
     expect(mockPost).toHaveBeenCalledWith('/stores', {
       name: 't',
       domain: 't.example.com',
-      email: 't@example.com',
     });
 
     // 更新の端点は 204 No Content。body は返らない。
     mockPut.mockResolvedValueOnce();
-    const updated = await adminStoreApi.update('3', { name: 'u', email: 'u@example.com' });
+    const updated = await adminStoreApi.update('3', { name: 'u' });
     expect(updated).toBeUndefined();
     expect(mockPut).toHaveBeenCalledWith('/stores/3', {
       name: 'u',
-      email: 'u@example.com',
     });
 
     mockDelete.mockResolvedValueOnce();
@@ -79,7 +76,7 @@ describe('admin store api wrappers', () => {
 describe('識別子を欠いた adminStoreApi', () => {
   const calls: [string, () => Promise<unknown>][] = [
     ['getById', () => adminStoreApi.getById(undefined)],
-    ['update', () => adminStoreApi.update(undefined, { name: 'n', email: 'e@example.com' })],
+    ['update', () => adminStoreApi.update(undefined, { name: 'n' })],
     ['delete', () => adminStoreApi.delete(undefined)],
   ];
 

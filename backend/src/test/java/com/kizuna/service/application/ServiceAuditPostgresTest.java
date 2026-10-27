@@ -165,7 +165,7 @@ class ServiceAuditPostgresTest {
         status ->
             context
                 .getBean(StoreRepository.class)
-                .saveAndFlush(new Store("検証店", UUID.randomUUID() + ".example.test", null))
+                .saveAndFlush(new Store("検証店", UUID.randomUUID() + ".example.test"))
                 .getId());
   }
 

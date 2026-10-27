@@ -75,7 +75,6 @@ When('次の店舗を登録する', async ({ request }, table: DataTable) => {
     await createStore(request, adminToken, {
       name: row['店舗名'],
       domain: row['ドメイン'],
-      email: row['メールアドレス'],
     });
   }
 });

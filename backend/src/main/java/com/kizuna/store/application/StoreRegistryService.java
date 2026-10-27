@@ -93,7 +93,6 @@ public class StoreRegistryService {
     Store t = new Store();
     t.setName(req.getName());
     t.setDomain(req.getDomain());
-    t.setEmail(req.getEmail());
     Store saved = storeRepository.save(t);
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
     return saved.getId();
@@ -106,7 +105,6 @@ public class StoreRegistryService {
   public void update(String id, StoreUpdateDTO req) {
     var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
     store.setName(req.getName());
-    store.setEmail(req.getEmail());
     storeRepository.save(store);
   }
 
@@ -165,11 +163,6 @@ public class StoreRegistryService {
 
   private StoreVO toDto(Store t) {
     return new StoreVO(
-        String.valueOf(t.getId()),
-        t.getName(),
-        t.getDomain(),
-        t.getEmail(),
-        t.getStatus(),
-        t.getCreatedAt());
+        String.valueOf(t.getId()), t.getName(), t.getDomain(), t.getStatus(), t.getCreatedAt());
   }
 }

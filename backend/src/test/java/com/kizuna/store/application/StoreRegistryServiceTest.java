@@ -82,7 +82,7 @@ class StoreRegistryServiceTest {
     req.setName("T2");
     req.setDomain("taken.example.com");
     when(storeRepository.findByDomain("taken.example.com"))
-        .thenReturn(Optional.of(createStore(9L, "既存", "taken.example.com", "x@y.com")));
+        .thenReturn(Optional.of(createStore(9L, "既存", "taken.example.com")));
 
     assertThatThrownBy(() -> storeRegistryService.create(req))
         .isInstanceOf(ServiceException.class)
@@ -104,7 +104,7 @@ class StoreRegistryServiceTest {
 
   @Test
   void getById_returnsStoreVO() {
-    Store t = createStore(1L, "Store1", "store1.com", "a@b.com");
+    Store t = createStore(1L, "Store1", "store1.com");
     when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
 
     StoreVO result = storeRegistryService.getById("1");
@@ -131,7 +131,7 @@ class StoreRegistryServiceTest {
 
   @Test
   void getByDomain_returnsStoreVO() {
-    Store t = createStore(2L, "Store2", "store2.com", "b@c.com");
+    Store t = createStore(2L, "Store2", "store2.com");
     when(storeRepository.findByDomain("store2.com")).thenReturn(Optional.of(t));
 
     Optional<StoreVO> result = storeRegistryService.getByDomain("store2.com");
@@ -149,33 +149,15 @@ class StoreRegistryServiceTest {
 
   @Test
   void update_modifiesName() {
-    Store t = createStore(1L, "Old", "old.com", "o@o.com");
+    Store t = createStore(1L, "Old", "old.com");
     when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
 
     StoreUpdateDTO req = new StoreUpdateDTO();
     req.setName("New");
-    req.setEmail("o@o.com");
 
     storeRegistryService.update("1", req);
 
     assertThat(t.getName()).isEqualTo("New");
-    verify(storeRepository).save(t);
-  }
-
-  // 編集画面は name と email を送る。email が取り込まれなければ、成功応答だけ返って値が変わらない。
-  @Test
-  void update_modifiesEmail() {
-    Store t = createStore(1L, "Old", "old.com", "before@example.com");
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
-
-    StoreUpdateDTO req = new StoreUpdateDTO();
-    req.setName("Old");
-    req.setEmail("after@example.com");
-
-    storeRegistryService.update("1", req);
-
-    assertThat(t.getEmail()).isEqualTo("after@example.com");
-    assertThat(t.getName()).as("name は据え置きのまま").isEqualTo("Old");
     verify(storeRepository).save(t);
   }
 
@@ -185,7 +167,6 @@ class StoreRegistryServiceTest {
 
     StoreUpdateDTO req = new StoreUpdateDTO();
     req.setName("New");
-    req.setEmail("n@n.com");
 
     assertThatThrownBy(() -> storeRegistryService.update("99", req))
         .isInstanceOf(NotFoundException.class)
@@ -306,7 +287,7 @@ class StoreRegistryServiceTest {
   }
 
   private Store preparingStore(Long id) {
-    Store store = new Store("削除検証店舗", "delete-check.example.com", null);
+    Store store = new Store("削除検証店舗", "delete-check.example.com");
     store.setId(id);
     return store;
   }
@@ -320,12 +301,11 @@ class StoreRegistryServiceTest {
     assertThat(result.total()).isEqualTo(5L);
   }
 
-  private Store createStore(Long id, String name, String domain, String email) {
+  private Store createStore(Long id, String name, String domain) {
     Store t = new Store();
     t.setId(id);
     t.setName(name);
     t.setDomain(domain);
-    t.setEmail(email);
     t.setCreatedAt(OffsetDateTime.parse("2026-01-01T00:00:00Z"));
     return t;
   }

@@ -33,7 +33,6 @@ const mockedApi = adminStoreApi as jest.Mocked<typeof adminStoreApi>;
 const store = (override: Partial<Store>): Store => ({
   id: '1',
   name: 'アルファ店',
-  email: 'alpha@example.com',
   domain: 'alpha.example.com',
   status: 'PREPARING',
   created_at: '2026-01-01T00:00:00Z',
@@ -239,15 +238,12 @@ describe('店舗管理 3 画面の挙動', () => {
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('7'));
   });
 
-  it('新規作成は name/domain/email を送信し一覧へ遷移すること', async () => {
+  it('新規作成は name/domain だけを送信し一覧へ遷移すること', async () => {
     mockedApi.create.mockResolvedValue({ id: 1 });
 
     render(<StoreCreatePage />);
     fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
     fireEvent.change(screen.getByLabelText(/ドメイン/), { target: { value: 'Gamma.example.com' } });
-    fireEvent.change(screen.getByLabelText(/連絡用メール/), {
-      target: { value: 'gamma@example.com' },
-    });
     fireEvent.click(screen.getByRole('button', { name: '店舗を作成' }));
 
     await waitFor(() => expect(mockedApi.create).toHaveBeenCalledTimes(1));
@@ -255,7 +251,6 @@ describe('店舗管理 3 画面の挙動', () => {
       name: 'ガンマ店',
       // 入力時に小文字化される
       domain: 'gamma.example.com',
-      email: 'gamma@example.com',
     });
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
   });
@@ -264,21 +259,17 @@ describe('店舗管理 3 画面の挙動', () => {
     render(<StoreCreatePage />);
     fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
     fireEvent.change(screen.getByLabelText(/ドメイン/), { target: { value: '不正 ドメイン' } });
-    fireEvent.change(screen.getByLabelText(/連絡用メール/), {
-      target: { value: 'gamma@example.com' },
-    });
     fireEvent.click(screen.getByRole('button', { name: '店舗を作成' }));
 
     expect(await screen.findByText('ドメイン形式が正しくありません')).toBeInTheDocument();
     expect(mockedApi.create).not.toHaveBeenCalled();
   });
 
-  it('編集は取得値を初期表示し name/email を送信して一覧へ遷移すること', async () => {
+  it('編集は取得値を初期表示し name だけを送信して一覧へ遷移すること', async () => {
     mockedApi.getById.mockResolvedValue(
       store({
         id: '1',
         name: 'デルタ店',
-        email: 'delta@example.com',
         domain: 'delta.example.com',
       })
     );
@@ -293,42 +284,19 @@ describe('店舗管理 3 画面の挙動', () => {
     fireEvent.change(nameInput, { target: { value: 'デルタ本店' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
-    await waitFor(() =>
-      expect(mockedApi.update).toHaveBeenCalledWith('1', {
-        name: 'デルタ本店',
-        email: 'delta@example.com',
-      })
-    );
+    await waitFor(() => expect(mockedApi.update).toHaveBeenCalledWith('1', { name: 'デルタ本店' }));
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
   });
 
-  // 上のケースは name を変えて email が素通りすることしか見ていない。
-  // 編集した email が要求に載ることは、保存が反映されるための前提として別に固定する。
-  it('編集は email だけの変更でも新しい email を送信すること', async () => {
-    mockedApi.getById.mockResolvedValue(
-      store({
-        id: '1',
-        name: 'デルタ店',
-        email: 'delta@example.com',
-        domain: 'delta.example.com',
-      })
-    );
-    mockedApi.update.mockResolvedValue(undefined);
+  it('作成・編集のどちらの画面にもメール欄が無いこと', async () => {
+    const { unmount } = render(<StoreCreatePage />);
+    expect(screen.queryByLabelText(/メール/)).not.toBeInTheDocument();
+    unmount();
 
+    mockedApi.getById.mockResolvedValue(store({ id: '1' }));
     render(<StoreEditPage />);
-
-    const emailInput = (await screen.findByLabelText(/連絡用メール/)) as HTMLInputElement;
-    await waitFor(() => expect(emailInput.value).toBe('delta@example.com'));
-
-    fireEvent.change(emailInput, { target: { value: 'delta-new@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
-
-    await waitFor(() =>
-      expect(mockedApi.update).toHaveBeenCalledWith('1', {
-        name: 'デルタ店',
-        email: 'delta-new@example.com',
-      })
-    );
+    await screen.findByLabelText(/店舗名/);
+    expect(screen.queryByLabelText(/メール/)).not.toBeInTheDocument();
   });
 
   it('編集は取得に失敗しても一覧へ離脱せず、頁自身が失敗を名乗って再試行できること', async () => {

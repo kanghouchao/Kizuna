@@ -25,9 +25,7 @@ export default function EditStorePage() {
     null
   );
   const formData: UpdateStoreRequest =
-    draft !== null && draft.store === store
-      ? draft.values
-      : { name: store?.name ?? '', email: store?.email ?? '' };
+    draft !== null && draft.store === store ? draft.values : { name: store?.name ?? '' };
   const edit = (values: UpdateStoreRequest) => setDraft({ store, values });
   const [errors, setErrors] = useState<Partial<UpdateStoreRequest>>({});
   // id を持たない URL で開かれた＝指せる店舗が無い。取りに行けないので再試行も置けない
@@ -36,9 +34,6 @@ export default function EditStorePage() {
   const validate = (): boolean => {
     const next: Partial<UpdateStoreRequest> = {};
     if (!formData.name.trim()) next.name = '店舗名は必須です';
-    if (!formData.email.trim()) next.email = 'メールアドレスは必須です';
-    else if (!/^([^\s@])+@([^\s@])+\.[^\s@]+$/.test(formData.email))
-      next.email = 'メールアドレスの形式が正しくありません';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -119,21 +114,6 @@ export default function EditStorePage() {
                 aria-invalid={!!errors.name}
               />
               {errors.name && <p className="text-sm text-destructive-strong">{errors.name}</p>}
-            </div>
-
-            {/* 連絡用メール */}
-            <div className="grid gap-2">
-              <Label htmlFor="email">
-                連絡用メール <span className="text-destructive-strong">*</span>
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={e => edit({ ...formData, email: e.target.value })}
-                aria-invalid={!!errors.email}
-              />
-              {errors.email && <p className="text-sm text-destructive-strong">{errors.email}</p>}
             </div>
 
             {/* ドメイン（読み取り専用） */}
