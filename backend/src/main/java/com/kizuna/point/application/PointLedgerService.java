@@ -90,6 +90,30 @@ public class PointLedgerService {
     return unit <= 0 ? 1 : unit;
   }
 
+  /**
+   * 受注会計の見込み（残高・利用単位・付与予定）と利用の可否。台帳へは書かず、行ロックも取らない。
+   *
+   * <p>可否は {@link #useForOrder} と同じ引き当て計画で判じ、否なら理由を値で返す — 試算済みの要求を 409 で差し戻すかは 確認値を持つ呼出側が決める。利用 0
+   * は引き当てを作らない（計画は 1 以上しか受けない）。
+   */
+  @Transactional(readOnly = true)
+  public PointQuote quote(long memberId, int grantBasis, int usePoints) {
+    int unit = usageUnit();
+    PointLedger ledger = ledgerOf(pointEntryRepository.findCredits(memberId));
+    String rejection = null;
+    if (usePoints != 0) {
+      try {
+        ledger.planRedemption(usePoints, unit);
+      } catch (ServiceException ex) {
+        rejection = ex.getMessage();
+      }
+    }
+    return new PointQuote(ledger.balance(), unit, previewGrant(grantBasis), rejection);
+  }
+
+  /** {@code rejection} は利用できないときだけ持つ、利用者へ示す理由。 */
+  public record PointQuote(long balance, int usageUnit, int grantPoints, String rejection) {}
+
   /** 会員の現在残高。1 件の仕訳は int でも、台帳全体の合計は int を超えうる。 */
   @Transactional(readOnly = true)
   public long balance(long memberId) {
@@ -187,11 +211,7 @@ public class PointLedgerService {
   /** 受注会計でのポイント利用。期限の早いロットから引き当てる。 */
   public void useForOrder(
       long memberId, String orderId, Long storeId, int points, Long actorUserId) {
-    int unit = usageUnit();
-    if (points <= 0 || points % unit != 0) {
-      throw new ServiceException("利用ポイントは " + unit + " ポイント単位で指定してください");
-    }
-    List<PlannedAllocation> plan = lockedLedgerOf(memberId).planConsumption(points);
+    List<PlannedAllocation> plan = lockedLedgerOf(memberId).planRedemption(points, usageUnit());
     pointEntryRepository.save(
         PointEntry.useForOrder(
             memberId, orderId, storeId, points, allocationsOf(plan), actorUserId));

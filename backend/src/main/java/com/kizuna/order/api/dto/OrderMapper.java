@@ -2,6 +2,7 @@ package com.kizuna.order.api.dto;
 
 import com.kizuna.order.application.OrderCompletionCommand;
 import com.kizuna.order.application.OrderFeeLineInput;
+import com.kizuna.order.application.OrderPoints;
 import com.kizuna.order.domain.AdminOrderView;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderFeeLine;
@@ -26,6 +27,10 @@ public interface OrderMapper {
   List<OrderFeeLineInput> toFeeLineInputs(List<OrderFeeLineRequest> requests);
 
   OrderCompletionCommand toCommand(OrderCompletionRequest request);
+
+  /** 利用資格は会員への紐づけと同義（非会員にポイントは存在しない）。 */
+  @Mapping(target = "redemptionEligible", source = "memberLinked")
+  OrderPreviewResponse.Points toPointsResponse(OrderPoints points);
 
   /** 明細をレスポンスへ変換します。保存されている帯符号金額を表示上の値へ翻します。 */
   default List<OrderFeeLineResponse> toFeeLineResponses(List<OrderFeeLine> lines) {

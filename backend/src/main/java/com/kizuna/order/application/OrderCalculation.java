@@ -97,7 +97,7 @@ public class OrderCalculation {
       String id,
       Object input,
       Order calculated,
-      OrderPreviewResponse.Points points) {
+      OrderPoints points) {
     return preview(storeId, operation, id, input, calculated, points, List.of());
   }
 
@@ -107,10 +107,11 @@ public class OrderCalculation {
       String id,
       Object input,
       Order calculated,
-      OrderPreviewResponse.Points points,
+      OrderPoints points,
       List<GuestContactImport> contactImports) {
     var c = calculated.getCourse();
     var lines = mapper.toFeeLineResponses(calculated.getFeeLines());
+    var pointsResponse = mapper.toPointsResponse(points);
     lines.stream()
         .filter(line -> line.getLineId() == null)
         .forEach(line -> line.setAdoptedAt(null));
@@ -134,7 +135,7 @@ public class OrderCalculation {
             calculated.grantBasisAmount(),
             calculated.getTotalDurationMinutes(),
             calculated.getTotalRemuneration(),
-            points,
+            pointsResponse,
             specials,
             unresolved > 0,
             unresolved,
@@ -147,7 +148,7 @@ public class OrderCalculation {
         result.pointBasisAmount(),
         result.totalDurationMinutes(),
         result.totalRemuneration(),
-        points,
+        pointsResponse,
         specials,
         unresolved > 0,
         unresolved,

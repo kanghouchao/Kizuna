@@ -660,7 +660,7 @@ public class OrderService {
     order.requireRedeemable(usePoints, memberId != null);
 
     var pointsPreview =
-        pointPreview(
+        orderPoints(
             memberId,
             link == null ? null : link.getMemberCode(),
             chargeAmount,
@@ -783,10 +783,10 @@ public class OrderService {
             specialServices.select(
                 storeId, null, request.getCastId(), request.getSpecialServiceIds(), false),
             false);
-    OrderPreviewResponse.Points points;
+    OrderPoints points;
     if (!application.isGuest() && application.getRequesterMemberId() != null) {
       points =
-          pointPreview(
+          orderPoints(
               application.getRequesterMemberId(),
               application.getRequesterMemberCode(),
               calculated.grantBasisAmount(),
@@ -898,7 +898,7 @@ public class OrderService {
     Long memberId = link == null ? null : link.getMemberId();
     calculated.requireRedeemable(usePoints, memberId != null);
     var points =
-        pointPreview(
+        orderPoints(
             memberId,
             link == null ? null : link.getMemberCode(),
             calculated.grantBasisAmount(),
@@ -1020,9 +1020,9 @@ public class OrderService {
     }
   }
 
-  private OrderPreviewResponse.Points completionPoints(Long storeId, Order order, int usePoints) {
+  private OrderPoints completionPoints(Long storeId, Order order, int usePoints) {
     var link = activeLink(storeId, order).orElse(null);
-    return pointPreview(
+    return orderPoints(
         link == null ? null : link.getMemberId(),
         link == null ? null : link.getMemberCode(),
         order.grantBasisAmount(),
@@ -1030,25 +1030,16 @@ public class OrderService {
         false);
   }
 
-  private OrderPreviewResponse.Points pointPreview(
+  /** 利用の可否は台帳が判じる。試算済みの要求で否なら、残高や単位が試算の後に変わったので 409 で再試算へ戻す。 */
+  private OrderPoints orderPoints(
       Long memberId, String memberCode, int basis, int usePoints, boolean confirmed) {
-    int unit = pointLedgerService.usageUnit();
-    Long balance = memberId == null ? null : pointLedgerService.balance(memberId);
-    if (usePoints < 0
-        || usePoints > basis
-        || (usePoints > 0 && (balance == null || balance < usePoints || usePoints % unit != 0))) {
-      String message = "ポイントの利用資格・残高・利用単位・会計金額を確認してください";
-      if (confirmed) throw new OrderConfirmationConflict("use_points", message);
-      throw new ServiceException(message);
+    if (memberId == null) return OrderPoints.nonMember(pointLedgerService.usageUnit(), usePoints);
+    var quote = pointLedgerService.quote(memberId, basis, usePoints);
+    if (quote.rejection() != null) {
+      if (confirmed) throw new OrderConfirmationConflict("use_points", quote.rejection());
+      throw new ServiceException(quote.rejection());
     }
-    return new OrderPreviewResponse.Points(
-        memberId != null,
-        memberId != null,
-        balance,
-        memberId == null ? null : memberCode,
-        unit,
-        usePoints,
-        memberId == null ? 0 : pointLedgerService.previewGrant(basis));
+    return OrderPoints.member(memberCode, usePoints, quote);
   }
 
   /**

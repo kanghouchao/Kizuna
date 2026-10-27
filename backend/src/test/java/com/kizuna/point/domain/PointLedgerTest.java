@@ -37,6 +37,24 @@ class PointLedgerTest {
   }
 
   @Test
+  @DisplayName("受注会計での利用は単位の倍数に限り、足りれば期限の早い順に引き当てること")
+  void redemptionRequiresMultiplesOfTheUnit() {
+    PointLedger ledger =
+        ledger(new PointLot(1L, 300, null, 0), new PointLot(2L, 300, LocalDate.of(2026, 9, 30), 0));
+
+    assertThatThrownBy(() -> ledger.planRedemption(150, 100))
+        .isInstanceOf(InvalidPointEntryException.class)
+        .hasMessage("利用ポイントは 100 ポイント単位で指定してください");
+    assertThatThrownBy(() -> ledger.planRedemption(0, 100))
+        .isInstanceOf(InvalidPointEntryException.class);
+    assertThatThrownBy(() -> ledger.planRedemption(700, 100))
+        .isInstanceOf(InsufficientPointBalanceException.class);
+    assertThat(ledger.planRedemption(400, 100))
+        .extracting(PlannedAllocation::sourceEntryId, PlannedAllocation::amount)
+        .containsExactly(tuple(2L, 300), tuple(1L, 100));
+  }
+
+  @Test
   @DisplayName("期限当日のロットはまだ使えること")
   void lotExpiringTodayIsStillUsable() {
     assertThat(ledger(new PointLot(1L, 100, TODAY, 0)).balance()).isEqualTo(100);
