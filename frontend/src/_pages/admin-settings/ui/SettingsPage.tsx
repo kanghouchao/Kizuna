@@ -8,7 +8,7 @@ import {
   systemConfigService,
 } from '@/entities/system-config';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
-import { Badge, Button, Card, Input, RegionError, Switch, Textarea } from '@/shared/ui';
+import { Badge, Button, Card, Input, RegionError, Textarea } from '@/shared/ui';
 
 type ConfigGroup = {
   [category: string]: SystemConfigResponse[];
@@ -38,18 +38,6 @@ export default function SystemSettingsPage() {
         null
     );
     notify.success('設定を更新しました');
-  };
-
-  const handleToggle = async (config: SystemConfigResponse) => {
-    setSaving(true);
-    try {
-      await saveConfig(config.config_key, config.config_value === 'true' ? 'false' : 'true');
-    } catch (error) {
-      console.error('設定の更新に失敗しました', error);
-      notify.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleEdit = (config: SystemConfigResponse) => {
@@ -139,16 +127,7 @@ export default function SystemSettingsPage() {
                         )}
                       </div>
 
-                      {config.value_type === 'BOOLEAN' ? (
-                        <div className="mt-2">
-                          <Switch
-                            checked={config.config_value === 'true'}
-                            onCheckedChange={() => handleToggle(config)}
-                            disabled={saving}
-                            aria-label={config.config_key}
-                          />
-                        </div>
-                      ) : editingKey === config.config_key ? (
+                      {editingKey === config.config_key ? (
                         <div className="mt-3">
                           {config.secret ? (
                             <Input
@@ -201,7 +180,7 @@ export default function SystemSettingsPage() {
                       )}
                     </div>
 
-                    {config.value_type !== 'BOOLEAN' && editingKey !== config.config_key && (
+                    {editingKey !== config.config_key && (
                       <div className="shrink-0">
                         <Button
                           variant="ghost"

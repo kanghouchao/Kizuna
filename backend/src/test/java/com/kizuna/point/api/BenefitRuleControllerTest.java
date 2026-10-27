@@ -18,7 +18,6 @@ import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
 import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.application.BenefitRuleService;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
-import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -51,11 +50,10 @@ class BenefitRuleControllerTest {
 
   @MockitoBean private BenefitRuleService benefitRuleService;
 
-  // MaintenanceModeInterceptor と CurrentStoreArgumentResolver の依存。
+  // StoreScopeInstallingInterceptor と CurrentStoreArgumentResolver の依存。
   // @WebMvcTest は interceptor と引数解決器を取り込むため、ポートのモックを用意する。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
-  @MockitoBean private SystemConfigService systemConfigService;
 
   private static final String VISIT_RULE_BODY =
       """

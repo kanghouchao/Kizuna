@@ -164,11 +164,6 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     if (value == null || value.isBlank()) {
       return; // 未設定（空）は許容する
     }
-    if ("BOOLEAN".equals(config.getValueType())
-        && !"true".equals(value)
-        && !"false".equals(value)) {
-      throw new ServiceException("真偽値（true / false）を指定してください: " + config.getConfigKey());
-    }
     if ("NUMBER".equals(config.getValueType())) {
       long parsed;
       try {
