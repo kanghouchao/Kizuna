@@ -1,6 +1,8 @@
 # StoreScopedEntity は storeFilter・storeSetFilter を静的に全量宣言する
 
-Status: Accepted
+Status: Superseded by [0031](0031-store-isolation-is-stated-in-every-query.md)
+
+> filter は commit 355c83a4 で宣言ごと撤去され、店舗分離は各クエリの明示条件に置き換わった。
 
 ## 決定時の背景
 
