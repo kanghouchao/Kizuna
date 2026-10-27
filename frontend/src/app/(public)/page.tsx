@@ -23,9 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
     };
   }
 
-  return {
-    title: 'Kizuna Platform',
-  };
+  return {};
 }
 
 /**

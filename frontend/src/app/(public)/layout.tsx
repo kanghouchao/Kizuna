@@ -13,7 +13,7 @@ const cormorant = Cormorant_Garamond({
 
 export const metadata: Metadata = {
   title: 'Kizuna - マルチ店舗',
-  description: 'Laravel と Next.js を基盤としたマルチ店舗型コンテンツ管理システム',
+  description: '単一グループの複数店舗を運営する CMS / CRM / HRM',
 };
 
 /**

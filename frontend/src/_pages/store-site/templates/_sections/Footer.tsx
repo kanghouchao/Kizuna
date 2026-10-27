@@ -102,17 +102,12 @@ export default function Footer({ storeName, partnerLinks, snsLinks }: FooterProp
       {/* コピーライト */}
       <div style={{ borderTop: '1px solid var(--storefront-hairline)' }}>
         <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-10 py-5 md:py-6">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)] text-[10px]">
-                ◆
-              </span>
-              <p className="text-[color-mix(in_srgb,var(--storefront-fg)_20%,transparent)] text-[10px] tracking-wider">
-                © {year} {storeName}. All rights reserved.
-              </p>
-            </div>
-            <p className="text-[color-mix(in_srgb,var(--storefront-fg)_10%,transparent)] text-[9px] tracking-widest">
-              Powered by Kizuna Platform
+          <div className="flex items-center justify-center sm:justify-start gap-3">
+            <span className="text-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)] text-[10px]">
+              ◆
+            </span>
+            <p className="text-[color-mix(in_srgb,var(--storefront-fg)_20%,transparent)] text-[10px] tracking-wider">
+              © {year} {storeName}. All rights reserved.
             </p>
           </div>
         </div>
