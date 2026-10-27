@@ -2,7 +2,7 @@ databaseChangeLog:
   - changeSet:
       id: platform-v0100-005-system-config-schema
       author: kanghouchao
-      # SystemConfig = プラットフォーム級のシステム設定（SMTP・メンテナンスモード等）。
+      # SystemConfig = プラットフォーム級のシステム設定（SMTP・LINE ログイン・ポイント制度等）。
       # 店舗向けの表示設定は StoreProfile 側であり、両者を混ぜない。
       preConditions:
         - dbms:
@@ -10,7 +10,7 @@ databaseChangeLog:
       changes:
         - createTable:
             tableName: t_system_configs
-            remarks: システム全体の設定（SMTP, メンテナンスモード等）
+            remarks: システム全体の設定（SMTP, LINE ログイン, ポイント制度等）
             columns:
               - column:
                   name: id

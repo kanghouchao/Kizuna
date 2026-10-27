@@ -7,8 +7,7 @@ import java.lang.annotation.Target;
 
 /**
  * handler 引数に {@code X-Store-ID} で名乗られた店舗の id を受け取る。検証は {@link CurrentStoreArgumentResolver} が行う。
- * {@code required = false} はヘッダが無ければ null を渡す。メンテナンス中の 503 は {@code required = true} の handler
- * にだけ掛かる。
+ * {@code required = false} はヘッダが無ければ null を渡す。
  */
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
