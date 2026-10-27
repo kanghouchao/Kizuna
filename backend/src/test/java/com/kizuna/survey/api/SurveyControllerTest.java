@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.survey.api.dto.SurveyOperationResponse;
@@ -50,9 +49,8 @@ class SurveyControllerTest {
   @MockitoBean private SurveyService service;
   @MockitoBean private SurveyReadService reads;
 
-  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
-  // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
-  @MockitoBean private SystemConfigService systemConfigService;
+  // CurrentStoreArgumentResolver（引数解決器）は @WebMvcTest に自動で取り込まれるため、
+  // その依存もモックで満たす必要がある。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 

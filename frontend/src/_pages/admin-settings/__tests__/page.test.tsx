@@ -2,7 +2,6 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import SystemSettingsPage from '../ui/SettingsPage';
-import { ClientDataError } from '@/shared/lib';
 
 const mockGetAllConfigs = jest.fn();
 const mockUpdateConfig = jest.fn();
@@ -19,17 +18,6 @@ jest.mock('@/shared/notify', () => ({
 }));
 
 const configs = [
-  {
-    id: 1,
-    config_key: 'maintenance_mode',
-    config_value: 'false',
-    value_type: 'BOOLEAN',
-    secret: false,
-    category: 'SYSTEM',
-    description: 'システムメンテナンスモード',
-    created_at: '',
-    updated_at: '',
-  },
   {
     id: 2,
     config_key: 'smtp_port',
@@ -61,38 +49,6 @@ describe('SystemSettingsPage', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('真偽値設定はトグルで表示され、クリックで更新される', async () => {
-    render(<SystemSettingsPage />);
-    const toggle = await screen.findByRole('switch', { name: 'maintenance_mode' });
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-
-    fireEvent.click(toggle);
-
-    await waitFor(() =>
-      expect(mockUpdateConfig).toHaveBeenCalledWith('maintenance_mode', {
-        config_value: 'true',
-      })
-    );
-  });
-
-  it('識別子を欠いた失敗は、汎用文言に潰さずそのまま名乗ること', async () => {
-    // 識別子を欠いた要求はアダプタが組む前に止める（config-api.test.ts）。画面が負うのは
-    // その失敗を「設定の更新に失敗しました」へ潰さないこと
-    mockGetAllConfigs.mockResolvedValue([{ ...configs[0], config_key: undefined }]);
-    mockUpdateConfig.mockRejectedValue(
-      new ClientDataError('設定の識別子が取得できていません。画面を読み直してください')
-    );
-    render(<SystemSettingsPage />);
-
-    fireEvent.click(await screen.findByRole('switch'));
-
-    await waitFor(() =>
-      expect(notify.error).toHaveBeenCalledWith(
-        expect.stringContaining('設定の識別子が取得できていません')
-      )
-    );
   });
 
   it('秘匿設定は値がマスク表示される', async () => {
@@ -140,7 +96,7 @@ describe('SystemSettingsPage', () => {
 
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
-    expect(await screen.findByRole('switch', { name: 'maintenance_mode' })).toBeInTheDocument();
+    expect(await screen.findByText('smtp_port')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

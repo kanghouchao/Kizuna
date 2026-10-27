@@ -78,13 +78,12 @@ class SystemConfigServiceImplTest {
   @DisplayName("設定を更新できること")
   void updateConfig() {
     // 準備
-    String key = "maintenance_mode";
-    String newValue = "true";
+    String key = "smtp_host";
+    String newValue = "smtp.example.com";
     SystemConfigUpdateRequest request =
         SystemConfigUpdateRequest.builder().configValue(newValue).build();
 
-    SystemConfig existingConfig =
-        SystemConfig.builder().configKey(key).configValue("false").build();
+    SystemConfig existingConfig = SystemConfig.builder().configKey(key).configValue("").build();
     existingConfig.setId(1L);
     SystemConfig updatedConfig =
         SystemConfig.builder().configKey(key).configValue(newValue).build();
@@ -104,21 +103,6 @@ class SystemConfigServiceImplTest {
     assertEquals(newValue, result.getConfigValue());
     verify(systemConfigMapper, times(1)).updateEntityFromRequest(request, existingConfig);
     verify(systemConfigRepository, times(1)).save(existingConfig);
-  }
-
-  @Test
-  @DisplayName("真偽値型の設定に不正な値を指定すると例外が発生すること")
-  void updateConfig_invalidBoolean() {
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue("yes").build();
-    SystemConfig config =
-        SystemConfig.builder().configKey("maintenance_mode").valueType("BOOLEAN").build();
-    when(systemConfigRepository.findByConfigKey("maintenance_mode"))
-        .thenReturn(Optional.of(config));
-
-    assertThrows(
-        ServiceException.class,
-        () -> systemConfigService.updateConfig("maintenance_mode", request));
   }
 
   @Test
@@ -257,11 +241,10 @@ class SystemConfigServiceImplTest {
   @DisplayName("getConfigValue で設定値を取得できること")
   void getConfigValue() {
     SystemConfig config =
-        SystemConfig.builder().configKey("maintenance_mode").configValue("true").build();
-    when(systemConfigRepository.findByConfigKey("maintenance_mode"))
-        .thenReturn(Optional.of(config));
+        SystemConfig.builder().configKey("smtp_host").configValue("smtp.example.com").build();
+    when(systemConfigRepository.findByConfigKey("smtp_host")).thenReturn(Optional.of(config));
 
-    assertEquals(Optional.of("true"), systemConfigService.getConfigValue("maintenance_mode"));
+    assertEquals(Optional.of("smtp.example.com"), systemConfigService.getConfigValue("smtp_host"));
   }
 
   @Test

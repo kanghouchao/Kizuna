@@ -107,10 +107,10 @@ class CommonExceptionHandlerTest {
   @DisplayName("ServiceUnavailableException は 503")
   void serviceUnavailableReturns503() {
     ResponseEntity<Map<String, Object>> response =
-        handler.handle(new ServiceUnavailableException("メンテナンス中です"));
+        handler.handle(new ServiceUnavailableException("しばらくしてから再試行してください"));
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
-    assertThat(response.getBody()).containsEntry("error", "メンテナンス中です");
+    assertThat(response.getBody()).containsEntry("error", "しばらくしてから再試行してください");
   }
 
   @Test

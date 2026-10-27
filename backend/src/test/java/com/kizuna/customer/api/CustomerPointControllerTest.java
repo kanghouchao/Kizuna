@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
 import com.kizuna.customer.application.CustomerPointService;
-import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -53,9 +52,8 @@ class CustomerPointControllerTest {
 
   @MockitoBean private CustomerPointService customerPointService;
 
-  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
-  // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
-  @MockitoBean private SystemConfigService systemConfigService;
+  // CurrentStoreArgumentResolver（引数解決器）は @WebMvcTest に自動で取り込まれるため、
+  // その依存もモックで満たす必要がある。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 

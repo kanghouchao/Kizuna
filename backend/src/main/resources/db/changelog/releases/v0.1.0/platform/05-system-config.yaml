@@ -46,7 +46,7 @@ databaseChangeLog:
                   defaultValue: STRING
                   constraints:
                     nullable: false
-                  remarks: 設定値の型（STRING, NUMBER, BOOLEAN）
+                  remarks: 設定値の型（STRING, NUMBER, TIME）
               - column:
                   name: secret
                   type: BOOLEAN

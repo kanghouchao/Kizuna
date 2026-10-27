@@ -45,7 +45,7 @@ class SystemConfigControllerTest {
   @MockitoBean private SystemConfigService systemConfigService;
 
   // CurrentStoreArgumentResolver（引数解決器）の依存。@WebMvcTest は引数解決器を取り込むため、
-  // MaintenanceModeInterceptor の SystemConfigService と同様にポートのモックを用意する。
+  // ポートのモックを用意する。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 

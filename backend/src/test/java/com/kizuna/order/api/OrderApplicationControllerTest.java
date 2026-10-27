@@ -24,7 +24,6 @@ import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
-import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
@@ -70,9 +69,8 @@ class OrderApplicationControllerTest {
   @MockitoBean private GuestOrderApplicationService guestOrderApplicationService;
   @MockitoBean private GuestApplicationRateLimiter guestApplicationRateLimiter;
 
-  // MaintenanceModeInterceptor（HandlerInterceptor）と CurrentStoreArgumentResolver（引数解決器）は
-  // @WebMvcTest に自動で取り込まれるため、その依存もモックで満たす必要がある。
-  @MockitoBean private SystemConfigService systemConfigService;
+  // CurrentStoreArgumentResolver（引数解決器）は @WebMvcTest に自動で取り込まれるため、
+  // その依存もモックで満たす必要がある。
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 

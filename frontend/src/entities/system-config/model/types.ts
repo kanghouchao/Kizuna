@@ -4,7 +4,7 @@ export interface SystemConfigResponse {
   config_key?: string;
   // 秘匿設定はバックエンドでマスクされ JSON に含まれないため optional
   config_value?: string;
-  value_type?: 'STRING' | 'NUMBER' | 'BOOLEAN';
+  value_type?: 'STRING' | 'NUMBER' | 'TIME';
   secret?: boolean;
   category?: string;
   description?: string;
