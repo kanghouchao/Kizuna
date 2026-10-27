@@ -103,16 +103,20 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("利用ポイントで内訳の総和が負になる完了は拒否すること")
-  void completeWith_rejectsNegativeTotal() {
+  @DisplayName("会計金額を超える利用ポイントの完了は明細を足す前に拒否すること")
+  void completeWith_rejectsPointsBeyondTheGrantBasis() {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "会計", 1000)));
 
     assertThatThrownBy(() -> order.completeWith(1001, 10))
         .isInstanceOf(InvalidOrderFeeLineException.class)
-        .hasMessage("内訳の総和が負になっています。割引・調整の金額を見直してください");
+        .hasMessage("利用ポイントは会計金額を超えられません");
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
     assertThat(order.getAutoGrantPoints()).isNull();
+    assertThat(order.getFeeLines())
+        .extracting(OrderFeeLine::getKind)
+        .doesNotContain(OrderFeeLineKind.POINT_REDEMPTION);
+    assertThat(order.getTotalFee()).isEqualTo(1000);
   }
 
   @Test

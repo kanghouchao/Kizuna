@@ -22,8 +22,6 @@ import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
-import com.kizuna.order.api.dto.OrderCompletionRequest;
-import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderCustomerCandidateResponse;
 import com.kizuna.order.api.dto.OrderMapper;
@@ -34,7 +32,6 @@ import com.kizuna.order.api.dto.OrderSummaryResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.domain.ContactSnapshot;
-import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
@@ -266,7 +263,7 @@ public class OrderService {
             storeId,
             null,
             course,
-            request.getFeeLines(),
+            orderMapper.toFeeLineInputs(request.getFeeLines()),
             specialServices.select(
                 storeId,
                 null,
@@ -325,7 +322,7 @@ public class OrderService {
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
 
-    calculation.requireVersion(order, request.getExpectedVersion());
+    order.requireVersion(request.getExpectedVersion());
 
     // 判定は「終端か」の単一述語で行い、状態ごとに書き分けない。書き分けは同じ規則を二箇所に持たせ、
     // 片方だけが更新される入口になる（ADR 0013）。完了後の内容訂正は権限付き・記録付きの別経路が担う。
@@ -364,7 +361,7 @@ public class OrderService {
             storeId,
             order,
             course,
-            request.getFeeLines(),
+            orderMapper.toFeeLineInputs(request.getFeeLines()),
             specialServices.select(
                 storeId,
                 order,
@@ -534,7 +531,7 @@ public class OrderService {
             storeId,
             null,
             course,
-            request.getFeeLines(),
+            orderMapper.toFeeLineInputs(request.getFeeLines()),
             specialServices.select(
                 storeId,
                 null,
@@ -630,8 +627,8 @@ public class OrderService {
 
   /** 会計と会員への帰属を同一トランザクションで確定する。汎用更新からは完了へ遷移させない。 会員に達しない受注では、事後帰属の所持証明となる伝票トークンを発行して生値を返す。 */
   @Transactional
-  public OrderCompletionResponse complete(
-      Long storeId, String id, OrderCompletionRequest request, String actorEmail) {
+  public OrderCompletionResult complete(
+      Long storeId, String id, OrderCompletionCommand command, String actorEmail) {
     specialServices.lock(storeId);
     Order order =
         orderRepository
@@ -640,43 +637,27 @@ public class OrderService {
 
     // 検証は台帳を触るより先に済ませる。撥ねる要求が仕訳を積んだ後だと、拒否の健全さがトランザクションの
     // 巻き戻しだけに掛かる（同一トランザクション内の後続の読みには積んだ仕訳が見えてしまう）。
-    //
-    // 版の照合は状態の検査より先。別の操作者が終端化させた受注へ陳腐化した版で届く要求は「状態の誤り」
-    // ではなく競合であり、409 で返さないと画面が取り直しの契機を得られず再送が永久に同じ 400 を踏む。
-    // 終端の受注へ現物と一致する版が届くことは無い（完了・取消が版を上げる）ので、順序を入れ替えても
-    // 状態の検査が守る範囲は変わらない。
-    if (!Objects.equals(order.getVersion(), request.getExpectedVersion())) {
-      throw new OrderConfirmationConflict(
-          "expected_version", "この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください");
-    }
-    if (order.getStatus().isTerminal()) {
-      throw new IllegalOrderStateTransitionException(order.getStatus(), OrderStatus.COMPLETED);
-    }
+    order.requireCompletable(command.expectedVersion());
 
     var before = OrderAuditSnapshot.of(order);
     specialServices.requireProgress(storeId, order);
     var calculated =
-        calculation.calculate(storeId, order, order.getCourse(), request.getFeeLines(), true);
+        calculation.calculate(storeId, order, order.getCourse(), command.feeLines(), true);
     order.replaceStoreFeeLines(calculated.editableFeeLines());
     // 付与の基準と利用の上限は、ポイント利用の行を除いた総和で決める。利用の行を入れた後の合計は
     // ポイント控除後の請求額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
     int chargeAmount = order.grantBasisAmount();
 
-    int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
+    int usePoints = command.usedPoints();
     lockCustomerWithoutWaiting(storeId, order);
     CustomerMemberLink link = activeLink(storeId, order).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
-    if (memberId == null && usePoints > 0) {
-      if (calculation.wasPreviewed(
-          storeId, "COMPLETE", id, request, request.getConfirmationToken()))
-        throw new OrderConfirmationConflict("confirmation_token");
-      throw new ServiceException("非会員の受注ではポイントを利用できません");
-    }
-    // 会計金額を超える利用は、請求より大きい割引に相当する仕訳を台帳へ残す。意図してポイントを減らすなら
-    // 理由の付く手動調整の経路があり、取り消せない完了に混ぜない。同額までは全額のポイント払いとして通す。
-    if (usePoints > chargeAmount) {
-      throw new ServiceException("利用ポイントは会計金額を超えられません");
-    }
+    boolean previewed =
+        calculation.wasPreviewed(storeId, "COMPLETE", id, command, command.confirmationToken());
+    // 試算した時には会員だった受注の紐づけが外れた。内容の誤りではないので 409 で再試算へ差し戻す。
+    if (memberId == null && usePoints > 0 && previewed)
+      throw new OrderConfirmationConflict("confirmation_token");
+    order.requireRedeemable(usePoints, memberId != null);
 
     var pointsPreview =
         pointPreview(
@@ -684,12 +665,11 @@ public class OrderService {
             link == null ? null : link.getMemberCode(),
             chargeAmount,
             usePoints,
-            calculation.wasPreviewed(
-                storeId, "COMPLETE", id, request, request.getConfirmationToken()));
+            previewed);
     calculated.completeWith(usePoints, pointsPreview.grantPoints());
     calculation.verify(
-        request.getConfirmationToken(),
-        calculation.preview(storeId, "COMPLETE", id, request, calculated, pointsPreview));
+        command.confirmationToken(),
+        calculation.preview(storeId, "COMPLETE", id, command, calculated, pointsPreview));
     int granted = 0;
     String receiptToken = null;
     if (memberId != null) {
@@ -719,7 +699,7 @@ public class OrderService {
     orderRepository.save(order);
     auditOrder(order, "ORDER_COMPLETED", actorEmail, before, null, null);
     // 生値がこの応答の外へ出る経路は無い（保存されるのはダイジェストだけ）。会員へ帰属した完了では null。
-    return new OrderCompletionResponse(receiptToken);
+    return new OrderCompletionResult(receiptToken);
   }
 
   /**
@@ -761,7 +741,7 @@ public class OrderService {
             storeId,
             null,
             course,
-            request.getFeeLines(),
+            orderMapper.toFeeLineInputs(request.getFeeLines()),
             specialServices.select(
                 storeId, null, request.getCastId(), request.getSpecialServiceIds(), false),
             false);
@@ -799,7 +779,7 @@ public class OrderService {
             storeId,
             null,
             course,
-            request.getFeeLines(),
+            orderMapper.toFeeLineInputs(request.getFeeLines()),
             specialServices.select(
                 storeId, null, request.getCastId(), request.getSpecialServiceIds(), false),
             false);
@@ -870,7 +850,7 @@ public class OrderService {
         orderRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    calculation.requireVersion(order, request.getExpectedVersion());
+    order.requireVersion(request.getExpectedVersion());
     if (order.getStatus().isTerminal()) throw new ServiceException("完了・取消済みの受注は編集できません");
     String castId =
         request.getCastId() == null || request.getCastId().isBlank() ? null : request.getCastId();
@@ -890,7 +870,7 @@ public class OrderService {
             storeId,
             order,
             course,
-            request.getFeeLines(),
+            orderMapper.toFeeLineInputs(request.getFeeLines()),
             specialServices.select(storeId, order, castId, request.getSpecialServiceIds(), false),
             false);
     if (request.getCustomerSelection() != null)
@@ -901,23 +881,31 @@ public class OrderService {
 
   @Transactional
   public OrderPreviewResponse completionPreview(
-      Long storeId, String id, OrderCompletionRequest request) {
+      Long storeId, String id, OrderCompletionCommand command) {
     specialServices.lock(storeId);
-    calculation.requirePreviewInput(request.getConfirmationToken());
+    calculation.requirePreviewInput(command.confirmationToken());
     var order =
         orderRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    calculation.requireVersion(order, request.getExpectedVersion());
-    if (order.getStatus().isTerminal()) throw new ServiceException("未完了の受注だけを完了できます");
+    order.requireCompletable(command.expectedVersion());
     specialServices.requireProgress(storeId, order);
     lockCustomerWithoutWaiting(storeId, order);
     var calculated =
-        calculation.calculate(storeId, order, order.getCourse(), request.getFeeLines(), false);
-    int usePoints = request.getUsePoints() == null ? 0 : request.getUsePoints();
-    var points = completionPoints(storeId, calculated, usePoints);
+        calculation.calculate(storeId, order, order.getCourse(), command.feeLines(), false);
+    int usePoints = command.usedPoints();
+    var link = activeLink(storeId, calculated).orElse(null);
+    Long memberId = link == null ? null : link.getMemberId();
+    calculated.requireRedeemable(usePoints, memberId != null);
+    var points =
+        pointPreview(
+            memberId,
+            link == null ? null : link.getMemberCode(),
+            calculated.grantBasisAmount(),
+            usePoints,
+            false);
     calculated.completeWith(usePoints, points.grantPoints());
-    return calculation.preview(storeId, "COMPLETE", id, request, calculated, points);
+    return calculation.preview(storeId, "COMPLETE", id, command, calculated, points);
   }
 
   @Transactional(readOnly = true)
@@ -1139,7 +1127,7 @@ public class OrderService {
         orderRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    calculation.requireVersion(order, expectedVersion);
+    order.requireVersion(expectedVersion);
     var before = OrderAuditSnapshot.of(order);
     order.start(reason, actorIdentityService.requireUserId(actor), OffsetDateTime.now());
     specialServices.requireProgress(storeId, order);

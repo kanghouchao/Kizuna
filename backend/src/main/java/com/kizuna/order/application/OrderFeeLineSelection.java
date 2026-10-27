@@ -1,7 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.OrderFeeLineRequest;
-import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.domain.InvalidOrderFeeLineException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderFeeLineDraft;
@@ -21,12 +19,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OrderFeeLineSelection {
   private final OrderServiceCatalog catalog;
-  private final OrderMapper mapper;
 
   public List<OrderFeeLineDraft> resolve(
       Long storeId,
       Order original,
-      List<OrderFeeLineRequest> requests,
+      List<OrderFeeLineInput> requests,
       boolean historical,
       boolean saving) {
     if (requests == null) return original == null ? List.of() : original.editableFeeLines();
@@ -35,23 +32,23 @@ public class OrderFeeLineSelection {
         .map(
             request -> {
               if (request == null) throw new InvalidOrderFeeLineException("明細は必須です");
-              if (request.getLineId() != null) {
+              if (request.lineId() != null) {
                 if (original == null
-                    || !retained.add(request.getLineId())
-                    || request.getKind() != null
-                    || request.getName() != null
-                    || request.getAmount() != null
-                    || request.getDurationMinutes() != null
-                    || request.getRemuneration() != null
-                    || request.getServiceId() != null
-                    || request.getRevisionId() != null)
+                    || !retained.add(request.lineId())
+                    || request.kind() != null
+                    || request.name() != null
+                    || request.amount() != null
+                    || request.durationMinutes() != null
+                    || request.remuneration() != null
+                    || request.serviceId() != null
+                    || request.revisionId() != null)
                   throw new InvalidOrderFeeLineException("維持する明細は重複なくIDだけで指定してください");
                 var line =
                     original.getFeeLines().stream()
                         .filter(
                             item ->
                                 item.getId() != null
-                                    && item.getId().toString().equals(request.getLineId()))
+                                    && item.getId().toString().equals(request.lineId()))
                         .findFirst()
                         .orElseThrow(() -> new NotFoundException("維持する明細が見つかりません"));
                 if (line.getKind() == OrderFeeLineKind.SPECIAL_SERVICE
@@ -60,18 +57,15 @@ public class OrderFeeLineSelection {
                   throw new InvalidOrderFeeLineException("コースとポイントの明細は直接変更できません");
                 return OrderFeeLineDraft.of(line);
               }
-              if (request.getKind() != OrderFeeLineKind.SURCHARGE)
-                return mapper.toFeeLineDrafts(List.of(request)).getFirst();
-              String id = historical ? request.getRevisionId() : request.getServiceId();
+              if (request.kind() != OrderFeeLineKind.SURCHARGE) return manual(request);
+              String id = historical ? request.revisionId() : request.serviceId();
               if (id == null
                   || id.isBlank()
-                  || request.getName() != null
-                  || request.getAmount() != null
-                  || request.getDurationMinutes() != null
-                  || request.getRemuneration() != null
-                  || (historical
-                      ? request.getServiceId() != null
-                      : request.getRevisionId() != null))
+                  || request.name() != null
+                  || request.amount() != null
+                  || request.durationMinutes() != null
+                  || request.remuneration() != null
+                  || (historical ? request.serviceId() != null : request.revisionId() != null))
                 throw new InvalidOrderFeeLineException("加算は設定から選択してください。名称・単価・報酬は上書きできません");
               var terms =
                   historical
@@ -92,6 +86,27 @@ public class OrderFeeLineSelection {
                       OffsetDateTime.now()));
             })
         .toList();
+  }
+
+  private static OrderFeeLineDraft manual(OrderFeeLineInput request) {
+    if (request.serviceId() != null || request.revisionId() != null)
+      throw new InvalidOrderFeeLineException("設定と既存明細は採用処理で解決してください");
+    if (request.kind() == null || request.amount() == null || request.amount() < 0)
+      throw new InvalidOrderFeeLineException("明細の種別と0以上の整数円を指定してください");
+    if (request.kind() == OrderFeeLineKind.EXTENSION) {
+      if (request.remuneration() == null || request.durationMinutes() == null)
+        throw new InvalidOrderFeeLineException("延長の分数と固定報酬は必須です");
+    } else if (request.remuneration() != null || request.durationMinutes() != null) {
+      throw new InvalidOrderFeeLineException("この種別では分数・固定報酬を入力できません");
+    }
+    return new OrderFeeLineDraft(
+        null,
+        request.kind(),
+        request.name(),
+        request.kind().signedAmountOf(request.amount()),
+        request.durationMinutes(),
+        request.remuneration() == null ? 0 : request.remuneration(),
+        null);
   }
 
   private OrderServiceTerms current(Long storeId, String id, boolean saving) {

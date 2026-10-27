@@ -1,11 +1,10 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.application.OrderCompletionCommand;
+import com.kizuna.order.application.OrderFeeLineInput;
 import com.kizuna.order.domain.AdminOrderView;
-import com.kizuna.order.domain.InvalidOrderFeeLineException;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderFeeLine;
-import com.kizuna.order.domain.OrderFeeLineDraft;
-import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderView;
 import java.util.List;
@@ -24,37 +23,9 @@ public interface OrderMapper {
   @Mapping(target = "specialServices", ignore = true)
   OrderResponse toResponse(OrderView view);
 
-  default List<OrderFeeLineDraft> toFeeLineDrafts(List<OrderFeeLineRequest> requests) {
-    if (requests == null) return null;
-    return requests.stream()
-        .map(
-            request -> {
-              if (request.getLineId() != null
-                  || request.getServiceId() != null
-                  || request.getRevisionId() != null)
-                throw new InvalidOrderFeeLineException("設定と既存明細は採用処理で解決してください");
-              if (request.getKind() == null
-                  || request.getAmount() == null
-                  || request.getAmount() < 0)
-                throw new InvalidOrderFeeLineException("明細の種別と0以上の整数円を指定してください");
-              if (request.getKind() == OrderFeeLineKind.EXTENSION) {
-                if (request.getRemuneration() == null || request.getDurationMinutes() == null)
-                  throw new InvalidOrderFeeLineException("延長の分数と固定報酬は必須です");
-              } else if (request.getRemuneration() != null
-                  || request.getDurationMinutes() != null) {
-                throw new InvalidOrderFeeLineException("この種別では分数・固定報酬を入力できません");
-              }
-              return new OrderFeeLineDraft(
-                  null,
-                  request.getKind(),
-                  request.getName(),
-                  request.getKind().signedAmountOf(request.getAmount()),
-                  request.getDurationMinutes(),
-                  request.getRemuneration() == null ? 0 : request.getRemuneration(),
-                  null);
-            })
-        .toList();
-  }
+  List<OrderFeeLineInput> toFeeLineInputs(List<OrderFeeLineRequest> requests);
+
+  OrderCompletionCommand toCommand(OrderCompletionRequest request);
 
   /** 明細をレスポンスへ変換します。保存されている帯符号金額を表示上の値へ翻します。 */
   default List<OrderFeeLineResponse> toFeeLineResponses(List<OrderFeeLine> lines) {
