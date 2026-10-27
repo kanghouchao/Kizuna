@@ -1,6 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import java.nio.charset.StandardCharsets;
@@ -11,7 +10,6 @@ import java.util.List;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -22,44 +20,31 @@ public class OrderConfirmation {
   private final ObjectMapper json;
   private final AppProperties properties;
 
+  /**
+   * 試算の確認値。前半は入力の証明（操作・対象・店舗・実行者・入力）で、{@link #wasPreviewed} はこれだけを見る。後半は同意した内容まで含めた証明。
+   * 実行者を含めるのは、他の操作者の試算を流用して確定させないため。
+   */
   public String sign(
-      Long storeId, String operation, String id, Object input, OrderPreviewResponse preview) {
-    ObjectNode result = json.valueToTree(preview);
-    result.remove("confirmation_token");
-    if (result.get("points") instanceof ObjectNode points) points.remove("point_balance");
-    if (result.get("special_services") != null) {
-      for (var value : result.get("special_services")) {
-        if (value instanceof ObjectNode special) {
-          special.remove("adopted_at");
-          special.remove("current_consent_status");
-        }
-      }
-    }
-    String inputProof = inputProof(storeId, operation, id, input);
-    return inputProof + "." + mac(List.of("order-confirmation-result-v2", inputProof, result));
+      Long storeId, String operation, String id, String actor, Object input, OrderConsent consent) {
+    String inputProof = inputProof(storeId, operation, id, actor, input);
+    return inputProof + "." + mac(List.of("order-confirmation-result-v3", inputProof, consent));
   }
 
   public boolean wasPreviewed(
-      Long storeId, String operation, String id, Object input, String token) {
+      Long storeId, String operation, String id, String actor, Object input, String token) {
     if (token == null) return false;
     String[] parts = token.split("\\.", -1);
     return parts.length == 2
         && MessageDigest.isEqual(
             parts[0].getBytes(StandardCharsets.UTF_8),
-            inputProof(storeId, operation, id, input).getBytes(StandardCharsets.UTF_8));
+            inputProof(storeId, operation, id, actor, input).getBytes(StandardCharsets.UTF_8));
   }
 
-  private String inputProof(Long storeId, String operation, String id, Object input) {
+  // 確認値そのものは入力に含めない（試算は確認値なし、確定は確認値つきで同じ入力を送る）。
+  private String inputProof(Long storeId, String operation, String id, String actor, Object input) {
     ObjectNode request = json.valueToTree(input);
     request.remove("confirmation_token");
-    return mac(
-        List.of(
-            "order-confirmation-input-v2",
-            operation,
-            id,
-            storeId,
-            SecurityContextHolder.getContext().getAuthentication().getName(),
-            request));
+    return mac(List.of("order-confirmation-input-v3", operation, id, storeId, actor, request));
   }
 
   private String mac(Object payload) {

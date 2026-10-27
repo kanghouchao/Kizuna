@@ -3,6 +3,7 @@ package com.kizuna.order.api.dto;
 import com.kizuna.order.application.OrderCompletionCommand;
 import com.kizuna.order.application.OrderFeeLineInput;
 import com.kizuna.order.application.OrderPoints;
+import com.kizuna.order.application.OrderPreview;
 import com.kizuna.order.domain.AdminOrderView;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderFeeLine;
@@ -31,6 +32,42 @@ public interface OrderMapper {
   /** 利用資格は会員への紐づけと同義（非会員にポイントは存在しない）。 */
   @Mapping(target = "redemptionEligible", source = "memberLinked")
   OrderPreviewResponse.Points toPointsResponse(OrderPoints points);
+
+  /** 試算の結果を応答へ写す。新しく採用する明細の採用時刻は確定時に打ち直されるので、試算では返さない。 */
+  default OrderPreviewResponse toPreviewResponse(OrderPreview preview) {
+    var c = preview.course();
+    var lines = toFeeLineResponses(preview.feeLines());
+    lines.stream()
+        .filter(line -> line.getLineId() == null)
+        .forEach(line -> line.setAdoptedAt(null));
+    int unresolved = preview.unresolvedSpecialServiceCount();
+    return new OrderPreviewResponse(
+        preview.confirmationToken(),
+        new OrderPreviewResponse.CourseCondition(
+            c.serviceId(),
+            c.revisionId(),
+            c.revisionNumber(),
+            c.name(),
+            c.durationMinutes(),
+            c.price(),
+            c.remuneration(),
+            c.adoptionBasis()),
+        lines,
+        preview.totalFee(),
+        preview.pointBasisAmount(),
+        preview.totalDurationMinutes(),
+        preview.totalRemuneration(),
+        toPointsResponse(preview.points()),
+        preview.specialServices().stream()
+            .map(
+                s ->
+                    new OrderSpecialServiceResponse(
+                        s.snapshot(), s.requiresAttention(), s.currentConsentStatus()))
+            .toList(),
+        unresolved > 0,
+        unresolved,
+        preview.contactImports());
+  }
 
   /** 明細をレスポンスへ変換します。保存されている帯符号金額を表示上の値へ翻します。 */
   default List<OrderFeeLineResponse> toFeeLineResponses(List<OrderFeeLine> lines) {

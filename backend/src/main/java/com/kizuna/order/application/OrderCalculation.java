@@ -1,9 +1,6 @@
 package com.kizuna.order.application;
 
 import com.kizuna.customer.contact.GuestContactImport;
-import com.kizuna.order.api.dto.OrderMapper;
-import com.kizuna.order.api.dto.OrderPreviewResponse;
-import com.kizuna.order.api.dto.OrderSpecialServiceResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
@@ -21,7 +18,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OrderCalculation {
   private final OrderServiceCatalog catalog;
-  private final OrderMapper mapper;
   private final OrderConfirmation confirmation;
   private final OrderFeeLineSelection selection;
   private final OrderSpecialServices specialServices;
@@ -91,67 +87,38 @@ public class OrderCalculation {
             saving));
   }
 
-  public OrderPreviewResponse preview(
+  public OrderPreview preview(
       Long storeId,
       String operation,
       String id,
+      String actor,
       Object input,
       Order calculated,
       OrderPoints points) {
-    return preview(storeId, operation, id, input, calculated, points, List.of());
+    return preview(storeId, operation, id, actor, input, calculated, points, List.of());
   }
 
-  public OrderPreviewResponse preview(
+  public OrderPreview preview(
       Long storeId,
       String operation,
       String id,
+      String actor,
       Object input,
       Order calculated,
       OrderPoints points,
       List<GuestContactImport> contactImports) {
-    var c = calculated.getCourse();
-    var lines = mapper.toFeeLineResponses(calculated.getFeeLines());
-    var pointsResponse = mapper.toPointsResponse(points);
-    lines.stream()
-        .filter(line -> line.getLineId() == null)
-        .forEach(line -> line.setAdoptedAt(null));
-    var specials = specialServices.describe(storeId, calculated);
-    int unresolved =
-        (int) specials.stream().filter(OrderSpecialServiceResponse::requiresAttention).count();
-    var result =
-        new OrderPreviewResponse(
-            null,
-            new OrderPreviewResponse.CourseCondition(
-                c.serviceId(),
-                c.revisionId(),
-                c.revisionNumber(),
-                c.name(),
-                c.durationMinutes(),
-                c.price(),
-                c.remuneration(),
-                c.adoptionBasis()),
-            lines,
-            calculated.getTotalFee(),
-            calculated.grantBasisAmount(),
-            calculated.getTotalDurationMinutes(),
-            calculated.getTotalRemuneration(),
-            pointsResponse,
-            specials,
-            unresolved > 0,
-            unresolved,
-            contactImports);
-    return new OrderPreviewResponse(
-        confirmation.sign(storeId, operation, id, input, result),
-        result.course(),
-        result.feeLines(),
-        result.totalFee(),
-        result.pointBasisAmount(),
-        result.totalDurationMinutes(),
-        result.totalRemuneration(),
-        pointsResponse,
+    var specials = specialServices.describeForPreview(storeId, calculated);
+    var consent = OrderConsent.of(calculated, points, specials, contactImports);
+    return new OrderPreview(
+        confirmation.sign(storeId, operation, id, actor, input, consent),
+        calculated.getCourse(),
+        calculated.getFeeLines(),
+        calculated.getTotalFee(),
+        calculated.grantBasisAmount(),
+        calculated.getTotalDurationMinutes(),
+        calculated.getTotalRemuneration(),
+        points,
         specials,
-        unresolved > 0,
-        unresolved,
         contactImports);
   }
 
@@ -160,11 +127,36 @@ public class OrderCalculation {
   }
 
   public boolean wasPreviewed(
-      Long storeId, String operation, String id, Object input, String token) {
-    return confirmation.wasPreviewed(storeId, operation, id, input, token);
+      Long storeId, String operation, String id, String actor, Object input, String token) {
+    return confirmation.wasPreviewed(storeId, operation, id, actor, input, token);
   }
 
-  public void verify(String token, OrderPreviewResponse preview) {
-    confirmation.verify(token, preview.confirmationToken());
+  public void verify(
+      String token,
+      Long storeId,
+      String operation,
+      String id,
+      String actor,
+      Object input,
+      Order calculated,
+      OrderPoints points) {
+    verify(token, storeId, operation, id, actor, input, calculated, points, List.of());
+  }
+
+  /** 確定の照合。表示だけの値は組み立てず、同意した内容を計算し直して試算の確認値と突き合わせる。 */
+  public void verify(
+      String token,
+      Long storeId,
+      String operation,
+      String id,
+      String actor,
+      Object input,
+      Order calculated,
+      OrderPoints points,
+      List<GuestContactImport> contactImports) {
+    var consent =
+        OrderConsent.of(
+            calculated, points, specialServices.attention(storeId, calculated), contactImports);
+    confirmation.verify(token, confirmation.sign(storeId, operation, id, actor, input, consent));
   }
 }

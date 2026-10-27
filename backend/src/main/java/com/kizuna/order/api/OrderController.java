@@ -369,9 +369,12 @@ public class OrderController {
   public ResponseEntity<OrderPreviewResponse> completionPreview(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody OrderCompletionRequest request) {
+      @Valid @RequestBody OrderCompletionRequest request,
+      Principal principal) {
     return ResponseEntity.ok(
-        orderService.completionPreview(storeId, id, orderMapper.toCommand(request)));
+        orderMapper.toPreviewResponse(
+            orderService.completionPreview(
+                storeId, id, orderMapper.toCommand(request), principal.getName())));
   }
 
   /** 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消す。二度目の取消は状態違反（400）として拒否する。 */
@@ -431,7 +434,8 @@ public class OrderController {
       @CurrentStore Long storeId,
       @Valid @RequestBody OrderCreateRequest request,
       Principal principal) {
-    return orderService.previewCreate(storeId, request, principal.getName());
+    return orderMapper.toPreviewResponse(
+        orderService.previewCreate(storeId, request, principal.getName()));
   }
 
   @PostMapping("/{id}/preview")
@@ -439,8 +443,10 @@ public class OrderController {
   public OrderPreviewResponse previewUpdate(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody OrderUpdateRequest request) {
-    return orderService.previewUpdate(storeId, id, request);
+      @Valid @RequestBody OrderUpdateRequest request,
+      Principal principal) {
+    return orderMapper.toPreviewResponse(
+        orderService.previewUpdate(storeId, id, request, principal.getName()));
   }
 
   @PostMapping("/{id}/correction-preview")
@@ -448,8 +454,10 @@ public class OrderController {
   public OrderPreviewResponse previewCorrection(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody OrderCorrectionRequest request) {
-    return orderCorrectionService.preview(storeId, id, request);
+      @Valid @RequestBody OrderCorrectionRequest request,
+      Principal principal) {
+    return orderMapper.toPreviewResponse(
+        orderCorrectionService.preview(storeId, id, request, principal.getName()));
   }
 
   /** 訂正履歴。横断一覧（/orders/cross-store）からも行の店舗を X-Store-ID に名指して読むので、横断照会者も通す。 */
