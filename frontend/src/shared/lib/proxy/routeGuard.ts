@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { splitLegacyStorePath, storePath } from '../store-route';
-import {
-  consoleAreaOfPath,
-  isPublicAuthPath,
-  isSharedAdminPath,
-  legacyPlatformPathTarget,
-} from '../app-area';
+import { consoleAreaOfPath, isPublicAuthPath, isSharedAdminPath } from '../app-area';
 import { MEMBER_RETURN_PATH_COOKIE, isSafeMemberReturnPath } from '../session';
 
 // セッション種別（ログイン時に保存した session-kind cookie）ごとの入場可能エリアとホーム。
@@ -34,12 +29,6 @@ function isMemberReceiptClaimPath(path: string): boolean {
 export function handleRouteProtection(request: NextRequest, _role: 'app' | 'store') {
   const path = request.nextUrl.pathname;
   const hasToken = request.cookies.has('token');
-
-  // 旧前綴 /platform/** はブックマークに残りうる。クエリを保ったまま新前綴へ送り、その先で通常の守衛に掛ける。
-  const legacyTarget = legacyPlatformPathTarget(path);
-  if (legacyTarget) {
-    return NextResponse.redirect(new URL(`${legacyTarget}${request.nextUrl.search}`, request.url));
-  }
 
   // 公開 auth ルート（ログインフォーム・招待受諾・会員登録・LINE コールバック・初期設定）はセッション不要で、
   // 未認証の差し戻しにもエリア整合の守衛にも掛けない。

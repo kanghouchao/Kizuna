@@ -112,43 +112,13 @@ describe('routeGuard', () => {
     expect(res).toBeNull();
   });
 
-  describe('legacy /platform prefix', () => {
-    it.each([
-      ['/platform/login', '/auth/login'],
-      ['/platform/register', '/auth/register'],
-      ['/platform/invite/abc', '/auth/invite/abc'],
-      ['/platform/line/callback', '/auth/line/callback'],
-      ['/platform', '/admin'],
-      ['/platform/dashboard', '/admin/dashboard'],
-      ['/platform/stores/create', '/admin/stores/create'],
-      ['/platform/settings/account/', '/admin/settings/account/'],
-    ])('redirects %s to %s regardless of session', (from, to) => {
+  it('treats /platform/** as an ordinary unknown path without redirecting', () => {
+    for (const path of ['/platform', '/platform/login', '/platform/dashboard']) {
       for (const hasToken of [false, true]) {
-        const res = handleRouteProtection(createRequest(from, hasToken), 'app');
-
-        expect(NextResponse.redirect).toHaveBeenLastCalledWith(
-          expect.objectContaining({ pathname: to, search: '' })
-        );
-        expect(res).not.toBeNull();
+        expect(handleRouteProtection(createRequest(path, hasToken), 'app')).toBeNull();
       }
-    });
-
-    it('keeps the query string (LINE callback carries code and state)', () => {
-      const req = createRequest('/platform/line/callback', false, {}, '?code=c&state=s');
-      handleRouteProtection(req, 'app');
-
-      expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/auth/line/callback', search: '?code=c&state=s' })
-      );
-    });
-
-    it('does not treat /platforms or /platform-x as the legacy prefix', () => {
-      for (const path of ['/platforms', '/platform-x/y']) {
-        const res = handleRouteProtection(createRequest(path, true), 'app');
-        expect(res).toBeNull();
-      }
-      expect(NextResponse.redirect).not.toHaveBeenCalled();
-    });
+    }
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
   });
 
   it('redirects the retired /store/entry to /admin/dashboard', () => {
