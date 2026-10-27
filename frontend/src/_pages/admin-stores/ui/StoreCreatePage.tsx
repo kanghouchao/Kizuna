@@ -13,7 +13,6 @@ export default function CreateStorePage() {
   const [formData, setFormData] = useState<CreateStoreRequest>({
     name: '',
     domain: '',
-    email: '',
   });
 
   const [errors, setErrors] = useState<Partial<CreateStoreRequest>>({});
@@ -36,12 +35,6 @@ export default function CreateStorePage() {
       if (domain.startsWith('api.') || domain === 'api') {
         newErrors.domain = 'api 関連のドメインは使用できません';
       }
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = 'メールアドレスは必須です';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'メールアドレスの形式が正しくありません';
     }
 
     setErrors(newErrors);
@@ -135,23 +128,6 @@ export default function CreateStorePage() {
               <p className="text-sm text-muted-foreground">
                 完全なドメイン名を入力してください（例：company.shop.example.org）
               </p>
-            </div>
-
-            {/* 連絡用メール */}
-            <div className="grid gap-2">
-              <Label htmlFor="email">
-                連絡用メール <span className="text-destructive-strong">*</span>
-              </Label>
-              <Input
-                type="email"
-                name="email"
-                id="email"
-                value={formData.email}
-                onChange={e => handleInputChange('email', e.target.value)}
-                aria-invalid={!!errors.email}
-                placeholder="contact@abc-company.com"
-              />
-              {errors.email && <p className="text-sm text-destructive-strong">{errors.email}</p>}
             </div>
 
             {/* 提交按钮 */}

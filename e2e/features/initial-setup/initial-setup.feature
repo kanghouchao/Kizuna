@@ -19,9 +19,9 @@
   シナリオ: 最初の管理者が店舗を登録し、従業員管理 API で店長とスタッフのアカウントを作成する
     前提 "admin@kizuna.test" とパスワード "pass1234" で API にログインする
     もし 次の店舗を登録する
-      | 店舗名   | ドメイン           | メールアドレス          |
-      | Sample   | store1.kizuna.test | admin@store1.kizuna.com |
-      | Sample 2 | store2.kizuna.test | admin@store2.kizuna.com |
+      | 店舗名   | ドメイン           |
+      | Sample   | store1.kizuna.test |
+      | Sample 2 | store2.kizuna.test |
     ならば 店舗 "store1.kizuna.test" の id が店舗文脈の固定 id と一致する
     もし 次の従業員を作成する
       | 氏名     | メールアドレス            | パスワード | ロール       | 店舗                                   |

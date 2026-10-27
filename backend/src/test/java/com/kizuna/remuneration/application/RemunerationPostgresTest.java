@@ -133,7 +133,7 @@ class RemunerationPostgresTest {
     when(context.getBean(Clock.class).instant()).thenReturn(Instant.parse("2026-10-09T12:00:00Z"));
     transactions.executeWithoutResult(
         tx -> {
-          var store = new Store("保証検証店", UUID.randomUUID() + ".example.test", null);
+          var store = new Store("保証検証店", UUID.randomUUID() + ".example.test");
           em.persist(store);
           storeId = store.getId();
           email = UUID.randomUUID() + "@example.test";

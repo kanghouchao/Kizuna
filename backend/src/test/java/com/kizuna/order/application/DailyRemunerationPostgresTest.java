@@ -98,7 +98,7 @@ class DailyRemunerationPostgresTest {
   void fixture() {
     transactions.executeWithoutResult(
         status -> {
-          var store = new Store("日別検証店", UUID.randomUUID() + ".example.test", null);
+          var store = new Store("日別検証店", UUID.randomUUID() + ".example.test");
           em.persist(store);
           storeId = store.getId();
           email = UUID.randomUUID() + "@example.test";

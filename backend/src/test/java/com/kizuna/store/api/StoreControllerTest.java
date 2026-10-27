@@ -2,8 +2,7 @@ package com.kizuna.store.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -72,18 +71,18 @@ class StoreControllerTest {
   // 更新は全項目の置換。必須項目を欠く要求を通すと既存値が null で潰れるため、
   // ハンドラ引数の検査（@Valid）が効いていることを固定する。
   @Test
-  @DisplayName("PUT /stores/{id} は email を欠く要求を検査で弾き、サービスへ渡さないこと")
+  @DisplayName("PUT /stores/{id} は name だけの要求を受け付けて 204 を返すこと")
   @WithMockUser(authorities = "PERM_STORE_MANAGE")
-  void updateRejectsRequestMissingEmailBeforeService() throws Exception {
+  void updateAcceptsNameOnly() throws Exception {
     mockMvc
         .perform(
             put("/stores/1")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"店舗\"}"))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isNoContent());
 
-    verify(storeRegistryService, never()).update(anyString(), any());
+    verify(storeRegistryService).update(eq("1"), any());
   }
 
   // 作成応答が id を載せるのは、呼出側が一覧を引き直さずに新しい店舗を名指しできるようにするため。
@@ -98,9 +97,7 @@ class StoreControllerTest {
             post("/stores")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    "{\"name\": \"新店舗\", \"domain\": \"new-store.kizuna.test\","
-                        + " \"email\": \"new-store@kizuna.test\"}"))
+                .content("{\"name\": \"新店舗\", \"domain\": \"new-store.kizuna.test\"}"))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value(42));
   }

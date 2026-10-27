@@ -77,7 +77,6 @@ class StoreRegistryServiceCacheTest {
     store.setId(1L);
     store.setName("店舗A");
     store.setDomain("a.example.com");
-    store.setEmail("a@example.com");
     when(storeRepository.findByDomain("a.example.com")).thenReturn(Optional.of(store));
 
     assertThat(service.getByDomain("a.example.com")).isPresent();
