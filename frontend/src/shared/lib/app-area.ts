@@ -30,15 +30,3 @@ export function consoleAreaOfPath(path: string): 'admin' | 'store' | 'cast' | 'm
   if (path === '/member' || path.startsWith('/member/')) return 'member';
   return null;
 }
-
-/**
- * 旧前綴 /platform/** のブックマーク互換。認証系（login / register / invite / line/callback）は
- * /auth、それ以外は /admin に対応する。旧前綴でなければ undefined。
- */
-export function legacyPlatformPathTarget(path: string): string | undefined {
-  const match = /^\/platform(\/.*)?$/.exec(path);
-  if (!match) return undefined;
-  const rest = match[1] ?? '';
-  const isAuth = /^\/(?:login|register|invite|line\/callback)(?:\/|$)/.test(rest);
-  return `${isAuth ? '/auth' : '/admin'}${rest}`;
-}
