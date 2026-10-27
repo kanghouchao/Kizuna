@@ -25,7 +25,6 @@ import com.kizuna.order.api.dto.OrderCastCandidateResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderCustomerCandidateResponse;
 import com.kizuna.order.api.dto.OrderMapper;
-import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
@@ -255,7 +254,7 @@ public class OrderService {
             () ->
                 eligibilityFailure(
                     calculation.wasPreviewed(
-                        storeId, "CREATE", "", request, request.getConfirmationToken()),
+                        storeId, "CREATE", "", actorEmail, request, request.getConfirmationToken()),
                     NOT_NOMINATABLE_MESSAGE));
     var course = calculation.current(storeId, request.getCourseId(), true);
     var calculated =
@@ -270,7 +269,7 @@ public class OrderService {
                 request.getCastId(),
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed(
-                    storeId, "CREATE", "", request, request.getConfirmationToken())),
+                    storeId, "CREATE", "", actorEmail, request, request.getConfirmationToken())),
             true);
     order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
 
@@ -279,8 +278,13 @@ public class OrderService {
     calculated.linkCustomer(order.getCustomerId());
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview(
-            storeId, "CREATE", "", request, calculated, completionPoints(storeId, calculated, 0)));
+        storeId,
+        "CREATE",
+        "",
+        actorEmail,
+        request,
+        calculated,
+        completionPoints(storeId, calculated, 0));
 
     order.assignCast(request.getCastId());
     order.assignReceptionist(resolveReceptionist(storeId, request.getReceptionistId(), actorEmail));
@@ -343,7 +347,8 @@ public class OrderService {
         order,
         castId,
         receptionistId,
-        calculation.wasPreviewed(storeId, "UPDATE", id, request, request.getConfirmationToken()));
+        calculation.wasPreviewed(
+            storeId, "UPDATE", id, actorEmail, request, request.getConfirmationToken()));
 
     validateEditableCustomer(order, request.getCustomerSelection());
     if (request.getCustomerSelection() != null)
@@ -368,13 +373,18 @@ public class OrderService {
                 castId,
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed(
-                    storeId, "UPDATE", id, request, request.getConfirmationToken())),
+                    storeId, "UPDATE", id, actorEmail, request, request.getConfirmationToken())),
             true);
     lockCustomerWithoutWaiting(storeId, order);
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview(
-            storeId, "UPDATE", id, request, calculated, completionPoints(storeId, calculated, 0)));
+        storeId,
+        "UPDATE",
+        id,
+        actorEmail,
+        request,
+        calculated,
+        completionPoints(storeId, calculated, 0));
     var previousSpecials = order.getSpecialServices();
     int previousTotal = order.getTotalFee();
     String previousCast = order.getCastId();
@@ -508,13 +518,18 @@ public class OrderService {
               () ->
                   eligibilityFailure(
                       calculation.wasPreviewed(
-                          storeId, "CONFIRM", id, request, request.getConfirmationToken()),
+                          storeId,
+                          "CONFIRM",
+                          id,
+                          actorEmail,
+                          request,
+                          request.getConfirmationToken()),
                       "指名キャストが在籍中でないため確定できません。内容を修正するか謝絶してください"));
       if (!confirmedShiftLookupService.hasConfirmedShift(
           storeId, request.getCastId(), request.getBusinessDate())) {
         throw eligibilityFailure(
             calculation.wasPreviewed(
-                storeId, "CONFIRM", id, request, request.getConfirmationToken()),
+                storeId, "CONFIRM", id, actorEmail, request, request.getConfirmationToken()),
             "指名キャストにこの日の確定シフトが無いため確定できません。内容を修正するか謝絶してください");
       }
     }
@@ -538,7 +553,7 @@ public class OrderService {
                 request.getCastId(),
                 request.getSpecialServiceIds(),
                 calculation.wasPreviewed(
-                    storeId, "CONFIRM", id, request, request.getConfirmationToken())),
+                    storeId, "CONFIRM", id, actorEmail, request, request.getConfirmationToken())),
             true);
     Order order =
         Order.builder()
@@ -595,14 +610,14 @@ public class OrderService {
     calculated.linkCustomer(order.getCustomerId());
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview(
-            storeId,
-            "CONFIRM",
-            id,
-            request,
-            calculated,
-            completionPoints(storeId, calculated, 0),
-            contactImports));
+        storeId,
+        "CONFIRM",
+        id,
+        actorEmail,
+        request,
+        calculated,
+        completionPoints(storeId, calculated, 0),
+        contactImports);
     Order saved = orderRepository.save(order);
     businessContactPermissions.record(
         saved,
@@ -653,7 +668,8 @@ public class OrderService {
     CustomerMemberLink link = activeLink(storeId, order).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
     boolean previewed =
-        calculation.wasPreviewed(storeId, "COMPLETE", id, command, command.confirmationToken());
+        calculation.wasPreviewed(
+            storeId, "COMPLETE", id, actorEmail, command, command.confirmationToken());
     // 試算した時には会員だった受注の紐づけが外れた。内容の誤りではないので 409 で再試算へ差し戻す。
     if (memberId == null && usePoints > 0 && previewed)
       throw new OrderConfirmationConflict("confirmation_token");
@@ -669,7 +685,13 @@ public class OrderService {
     calculated.completeWith(usePoints, pointsPreview.grantPoints());
     calculation.verify(
         command.confirmationToken(),
-        calculation.preview(storeId, "COMPLETE", id, command, calculated, pointsPreview));
+        storeId,
+        "COMPLETE",
+        id,
+        actorEmail,
+        command,
+        calculated,
+        pointsPreview);
     int granted = 0;
     String receiptToken = null;
     if (memberId != null) {
@@ -722,8 +744,7 @@ public class OrderService {
   }
 
   @Transactional
-  public OrderPreviewResponse previewCreate(
-      Long storeId, OrderCreateRequest request, String actor) {
+  public OrderPreview previewCreate(Long storeId, OrderCreateRequest request, String actorEmail) {
     specialServices.lock(storeId);
     validateReplacement(storeId, request.getReplacementForOrderId());
     calculation.requirePreviewInput(request.getConfirmationToken());
@@ -732,7 +753,7 @@ public class OrderService {
     nominatableCast
         .findForUpdate(storeId, request.getCastId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
-    resolveReceptionist(storeId, request.getReceptionistId(), actor);
+    resolveReceptionist(storeId, request.getReceptionistId(), actorEmail);
     businessContactPermissions.validate(
         snapshot(request.getContactSnapshot()), request.getBusinessContactPermissions());
     var course = calculation.current(storeId, request.getCourseId(), false);
@@ -748,12 +769,18 @@ public class OrderService {
     String customerId = selectCustomer(storeId, request.getCustomerSelection(), false);
     calculated.linkCustomer(customerId);
     return calculation.preview(
-        storeId, "CREATE", "", request, calculated, completionPoints(storeId, calculated, 0));
+        storeId,
+        "CREATE",
+        "",
+        actorEmail,
+        request,
+        calculated,
+        completionPoints(storeId, calculated, 0));
   }
 
   @Transactional
-  public OrderPreviewResponse previewConfirmation(
-      Long storeId, String id, OrderApplicationConfirmationRequest request) {
+  public OrderPreview previewConfirmation(
+      Long storeId, String id, OrderApplicationConfirmationRequest request, String actorEmail) {
     specialServices.lock(storeId);
     calculation.requirePreviewInput(request.getConfirmationToken());
     var application =
@@ -803,6 +830,7 @@ public class OrderService {
         storeId,
         "CONFIRM",
         id,
+        actorEmail,
         request,
         calculated,
         points,
@@ -843,7 +871,8 @@ public class OrderService {
   }
 
   @Transactional
-  public OrderPreviewResponse previewUpdate(Long storeId, String id, OrderUpdateRequest request) {
+  public OrderPreview previewUpdate(
+      Long storeId, String id, OrderUpdateRequest request, String actorEmail) {
     specialServices.lock(storeId);
     calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
@@ -876,12 +905,18 @@ public class OrderService {
     if (request.getCustomerSelection() != null)
       calculated.linkCustomer(selectCustomer(storeId, request.getCustomerSelection(), false));
     return calculation.preview(
-        storeId, "UPDATE", id, request, calculated, completionPoints(storeId, calculated, 0));
+        storeId,
+        "UPDATE",
+        id,
+        actorEmail,
+        request,
+        calculated,
+        completionPoints(storeId, calculated, 0));
   }
 
   @Transactional
-  public OrderPreviewResponse completionPreview(
-      Long storeId, String id, OrderCompletionCommand command) {
+  public OrderPreview completionPreview(
+      Long storeId, String id, OrderCompletionCommand command, String actorEmail) {
     specialServices.lock(storeId);
     calculation.requirePreviewInput(command.confirmationToken());
     var order =
@@ -905,7 +940,7 @@ public class OrderService {
             usePoints,
             false);
     calculated.completeWith(usePoints, points.grantPoints());
-    return calculation.preview(storeId, "COMPLETE", id, command, calculated, points);
+    return calculation.preview(storeId, "COMPLETE", id, actorEmail, command, calculated, points);
   }
 
   @Transactional(readOnly = true)

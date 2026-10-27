@@ -131,6 +131,27 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
 
   @Transactional(propagation = Propagation.MANDATORY)
   public List<OrderSpecialServiceResponse> describe(Long storeId, Order order) {
+    return statuses(storeId, order, true).stream()
+        .map(
+            s ->
+                new OrderSpecialServiceResponse(
+                    s.snapshot(), s.requiresAttention(), s.currentConsentStatus()))
+        .toList();
+  }
+
+  /** 試算の表示用。修復待ちの印に加えて、在籍の同意の現況を引く。 */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public List<SpecialServiceStatus> describeForPreview(Long storeId, Order order) {
+    return statuses(storeId, order, true);
+  }
+
+  /** 確定の照合用。同意した内容に入るのは修復待ちの印だけなので、同意の現況は引かない。 */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public List<SpecialServiceStatus> attention(Long storeId, Order order) {
+    return statuses(storeId, order, false);
+  }
+
+  private List<SpecialServiceStatus> statuses(Long storeId, Order order, boolean consentStatus) {
     var unresolved =
         order.getId() == null
             ? List.<OrderSpecialServiceEvent>of()
@@ -138,7 +159,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
     return order.getSpecialServices().stream()
         .map(
             s ->
-                new OrderSpecialServiceResponse(
+                new SpecialServiceStatus(
                     s,
                     !order.getStatus().isTerminal()
                         && unresolved.stream()
@@ -146,7 +167,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                                 e ->
                                     e.getServiceId().equals(s.serviceId())
                                         && e.getEnrollmentId().equals(s.enrollmentId())),
-                    order.getStatus().isTerminal()
+                    !consentStatus || order.getStatus().isTerminal()
                         ? null
                         : catalog.status(storeId, s.enrollmentId(), s.serviceId())))
         .toList();

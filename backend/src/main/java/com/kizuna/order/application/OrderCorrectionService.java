@@ -4,7 +4,6 @@ import com.kizuna.order.api.dto.OrderCompletionInvalidationRequest;
 import com.kizuna.order.api.dto.OrderCorrectionRequest;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderMapper;
-import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderSpecialServiceResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCorrection;
@@ -80,7 +79,13 @@ public class OrderCorrectionService {
             true);
     calculation.verify(
         request.getConfirmationToken(),
-        calculation.preview(storeId, "CORRECT", id, request, calculated, null));
+        storeId,
+        "CORRECT",
+        id,
+        actorEmail,
+        request,
+        calculated,
+        null);
     long beforeVersion = order.getVersion();
     var before = OrderCorrectionSnapshot.of(order);
     // 子明細だけの同額訂正でも、親の受注版を進めて履歴順と競合検出を確定する。
@@ -204,7 +209,8 @@ public class OrderCorrectionService {
   }
 
   @Transactional
-  public OrderPreviewResponse preview(Long storeId, String id, OrderCorrectionRequest request) {
+  public OrderPreview preview(
+      Long storeId, String id, OrderCorrectionRequest request, String actorEmail) {
     specialServices.lock(storeId);
     calculation.requirePreviewInput(request.getConfirmationToken());
     var order =
@@ -222,6 +228,7 @@ public class OrderCorrectionService {
         storeId,
         "CORRECT",
         id,
+        actorEmail,
         request,
         calculation.calculate(
             storeId,

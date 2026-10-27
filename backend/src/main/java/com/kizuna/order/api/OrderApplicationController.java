@@ -8,6 +8,7 @@ import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderApplicationDeclineRequest;
 import com.kizuna.order.api.dto.OrderApplicationDetailResponse;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.application.GuestOrderApplicationService;
@@ -43,6 +44,7 @@ public class OrderApplicationController {
   private final OrderService orderService;
   private final GuestOrderApplicationService guestOrderApplicationService;
   private final GuestApplicationRateLimiter guestApplicationRateLimiter;
+  private final OrderMapper orderMapper;
 
   @GetMapping("/public/contact-consent")
   @PermitAll
@@ -150,7 +152,9 @@ public class OrderApplicationController {
   public OrderPreviewResponse preview(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody OrderApplicationConfirmationRequest request) {
-    return orderService.previewConfirmation(storeId, id, request);
+      @Valid @RequestBody OrderApplicationConfirmationRequest request,
+      Principal principal) {
+    return orderMapper.toPreviewResponse(
+        orderService.previewConfirmation(storeId, id, request, principal.getName()));
   }
 }

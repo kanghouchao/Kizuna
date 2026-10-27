@@ -21,7 +21,6 @@ import com.kizuna.order.api.dto.OrderAttributionResponse;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
-import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSummaryResponse;
@@ -33,8 +32,15 @@ import com.kizuna.order.application.OrderCompletionResult;
 import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.application.OrderCorrectionService;
 import com.kizuna.order.application.OrderPointRollbackService;
+import com.kizuna.order.application.OrderPoints;
+import com.kizuna.order.application.OrderPreview;
 import com.kizuna.order.application.OrderService;
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderCourses;
+import com.kizuna.order.domain.OrderFeeLineDraft;
+import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderQueryCriteria;
+import com.kizuna.order.domain.OrderServiceAdoption;
 import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.exception.ServiceException;
@@ -43,6 +49,7 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -394,15 +401,71 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.complete(any(), any(), any(), any()))
         .thenReturn(new OrderCompletionResult(null));
-    when(orderService.completionPreview(any(), any(), any()))
+    when(orderService.completionPreview(any(), any(), any(), any()))
         .thenReturn(
-            new OrderPreviewResponse(
-                "token", null, List.of(), 0, 0, 0, 0, null, List.of(), false, 0, List.of()));
+            new OrderPreview(
+                "token",
+                OrderCourses.course("基本", 60, 0),
+                List.of(),
+                0,
+                0,
+                0,
+                0,
+                null,
+                List.of(),
+                List.of()));
 
     mockMvc.perform(storePost("/orders/o1/completion", COMPLETION_BODY)).andExpect(status().isOk());
     mockMvc
         .perform(storePost("/orders/o1/completion-preview", COMPLETION_BODY))
         .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("試算の応答は確認値・残高・利用資格を返し、新しく採用する明細の採用時刻は返さないこと")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void completionPreviewMapsTheResultIntoTheResponse() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    var calculated =
+        Order.builder()
+            .course(OrderCourses.course("基本", 60, 12000))
+            .status(OrderStatus.CONFIRMED)
+            .build();
+    calculated.replaceStoreFeeLines(
+        List.of(
+            new OrderFeeLineDraft(
+                null,
+                OrderFeeLineKind.SURCHARGE,
+                "加算",
+                1000,
+                null,
+                0,
+                new OrderServiceAdoption("s1", "r1", 2, "CURRENT_SETTING", OffsetDateTime.now()))));
+    when(orderService.completionPreview(any(), eq("o1"), any(), eq("staff@kizuna.test")))
+        .thenReturn(
+            new OrderPreview(
+                "token",
+                OrderCourses.course("基本", 60, 12000),
+                calculated.getFeeLines(),
+                13000,
+                13000,
+                60,
+                0,
+                new OrderPoints(true, 800L, "123456789012", 100, 300, 130),
+                List.of(),
+                List.of()));
+
+    mockMvc
+        .perform(storePost("/orders/o1/completion-preview", COMPLETION_BODY))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.confirmation_token").value("token"))
+        .andExpect(jsonPath("$.course.name").value("基本"))
+        .andExpect(jsonPath("$.fee_lines[1].revision_number").value(2))
+        .andExpect(jsonPath("$.fee_lines[1].adopted_at").doesNotExist())
+        .andExpect(jsonPath("$.points.point_balance").value(800))
+        .andExpect(jsonPath("$.points.redemption_eligible").value(true))
+        .andExpect(jsonPath("$.points.grant_points").value(130))
+        .andExpect(jsonPath("$.requires_attention").value(false));
   }
 
   @Test

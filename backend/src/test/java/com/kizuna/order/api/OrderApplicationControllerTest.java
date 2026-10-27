@@ -19,6 +19,7 @@ import com.kizuna.customer.application.MemberCustomerConflictException;
 import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
 import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
+import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderService;
@@ -49,7 +50,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** 予約受付箱（申請の一覧・確定・謝絶）の授権と契約の単体テスト。 */
 @WebMvcTest(OrderApplicationController.class)
-@Import({OrderApplicationControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  OrderApplicationControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  OrderMapperImpl.class
+})
 class OrderApplicationControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */

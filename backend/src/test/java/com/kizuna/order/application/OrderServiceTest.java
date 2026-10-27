@@ -171,11 +171,7 @@ class OrderServiceTest {
         service,
         "calculation",
         new OrderCalculation(
-            catalog,
-            orderMapper,
-            confirmation,
-            new OrderFeeLineSelection(catalog),
-            specialServices));
+            catalog, confirmation, new OrderFeeLineSelection(catalog), specialServices));
     Mockito.lenient()
         .when(orderRepository.findByIdAndStoreIdForUpdate(nullable(String.class), eq(STORE_ID)))
         .thenAnswer(inv -> orderRepository.findByIdAndStoreId(inv.getArgument(0), STORE_ID));
@@ -2759,7 +2755,7 @@ class OrderServiceTest {
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
 
-    service.completionPreview(STORE_ID, "o1", completion(12000, 0));
+    service.completionPreview(STORE_ID, "o1", completion(12000, 0), ACTOR_EMAIL);
 
     verify(customerMemberLinkRepository)
         .findByStoreIdAndCustomerIdAndStatus(STORE_ID, "cust-1", LinkStatus.ACTIVE);
@@ -2792,7 +2788,7 @@ class OrderServiceTest {
     var request =
         new OrderCompletionCommand(
             CURRENT_VERSION, completion(12000, 300).feeLines(), 300, "confirmed");
-    when(confirmation.wasPreviewed(STORE_ID, "COMPLETE", "o1", request, "confirmed"))
+    when(confirmation.wasPreviewed(STORE_ID, "COMPLETE", "o1", ACTOR_EMAIL, request, "confirmed"))
         .thenReturn(true);
 
     assertThatThrownBy(() -> service.complete(STORE_ID, "o1", request, "staff@kizuna.test"))
@@ -2809,7 +2805,8 @@ class OrderServiceTest {
     stubActiveLink(MEMBER_ID);
     stubQuote(new PointQuote(800L, 100, 120, null));
 
-    var preview = service.completionPreview(STORE_ID, "o1", completion(12000, 0)).points();
+    var preview =
+        service.completionPreview(STORE_ID, "o1", completion(12000, 0), ACTOR_EMAIL).points();
 
     assertThat(preview.memberLinked()).isTrue();
     assertThat(preview.pointBalance()).isEqualTo(800);
@@ -2827,7 +2824,8 @@ class OrderServiceTest {
         .thenReturn(Optional.empty());
     when(pointLedgerService.usageUnit()).thenReturn(100);
 
-    var preview = service.completionPreview(STORE_ID, "o1", completion(12000, 0)).points();
+    var preview =
+        service.completionPreview(STORE_ID, "o1", completion(12000, 0), ACTOR_EMAIL).points();
 
     assertThat(preview.memberLinked()).isFalse();
     assertThat(preview.pointBalance()).as("非会員に残高は存在しない").isNull();
@@ -2845,7 +2843,7 @@ class OrderServiceTest {
     var request =
         new OrderCompletionCommand(
             CURRENT_VERSION, completion(12000, null).feeLines(), null, "confirmed");
-    when(confirmation.wasPreviewed(STORE_ID, "COMPLETE", "o1", request, "confirmed"))
+    when(confirmation.wasPreviewed(STORE_ID, "COMPLETE", "o1", ACTOR_EMAIL, request, "confirmed"))
         .thenReturn(true);
     var failure = new ServiceException("付与ポイントが扱える上限を超えています。付与設定か会計金額を確認してください");
     if (duringMaterialization) {
@@ -2872,10 +2870,10 @@ class OrderServiceTest {
     when(detached.getMemberCode()).thenReturn("123456789012");
     stubLink(detached);
 
-    var preview = service.completionPreview(STORE_ID, "o1", completion(12000, 0)).points();
+    var preview =
+        service.completionPreview(STORE_ID, "o1", completion(12000, 0), ACTOR_EMAIL).points();
 
     assertThat(preview.memberLinked()).isFalse();
-    assertThat(preview.redemptionEligible()).isFalse();
     assertThat(preview.memberCode()).isNull();
     assertThat(preview.pointBalance()).isNull();
     assertThat(preview.grantPoints()).isZero();
@@ -2890,7 +2888,8 @@ class OrderServiceTest {
             STORE_ID, "cust-1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.completionPreview(STORE_ID, "o1", completion(12000, 300)))
+    assertThatThrownBy(
+            () -> service.completionPreview(STORE_ID, "o1", completion(12000, 300), ACTOR_EMAIL))
         .isInstanceOf(InvalidOrderFeeLineException.class)
         .hasMessage("非会員の受注ではポイントを利用できません");
     verifyNoInteractions(pointLedgerService, materializer);
@@ -2902,7 +2901,8 @@ class OrderServiceTest {
         .thenReturn(Optional.of(confirmedOrderWithCustomer()));
     stubActiveLink(MEMBER_ID);
 
-    assertThatThrownBy(() -> service.completionPreview(STORE_ID, "o1", completion(200, 300)))
+    assertThatThrownBy(
+            () -> service.completionPreview(STORE_ID, "o1", completion(200, 300), ACTOR_EMAIL))
         .isInstanceOf(InvalidOrderFeeLineException.class)
         .hasMessage("利用ポイントは会計金額を超えられません");
     verifyNoInteractions(materializer);
@@ -2913,7 +2913,8 @@ class OrderServiceTest {
     // 会計金額は要求パラメータのため契約の下限を持てない。素通りすると負の付与が見込みとして返る
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID))
         .thenReturn(Optional.of(confirmedOrderWithCustomer()));
-    assertThatThrownBy(() -> service.completionPreview(STORE_ID, "o1", completion(-1, 0)))
+    assertThatThrownBy(
+            () -> service.completionPreview(STORE_ID, "o1", completion(-1, 0), ACTOR_EMAIL))
         .isInstanceOf(com.kizuna.order.domain.InvalidOrderFeeLineException.class);
     verifyNoInteractions(pointLedgerService, materializer);
   }
