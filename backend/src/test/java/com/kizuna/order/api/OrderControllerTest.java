@@ -18,8 +18,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderAttributionResponse;
-import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
+import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
@@ -29,6 +29,7 @@ import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
+import com.kizuna.order.application.OrderCompletionResult;
 import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.application.OrderCorrectionService;
 import com.kizuna.order.application.OrderPointRollbackService;
@@ -62,7 +63,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** 呼出側の {@code ?sort=} 上書きで一意な副キー id が消えないことの単体テスト（offset ページングの安定性）。 */
 @WebMvcTest(OrderController.class)
-@Import({OrderControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  OrderControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  OrderMapperImpl.class
+})
 class OrderControllerTest {
 
   @Test
@@ -129,7 +134,7 @@ class OrderControllerTest {
   void completionPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.complete(any(), any(), any(), any()))
-        .thenReturn(new OrderCompletionResponse(null));
+        .thenReturn(new OrderCompletionResult(null));
 
     mockMvc
         .perform(
@@ -266,7 +271,7 @@ class OrderControllerTest {
   void completionResponseCarriesOnlyTheReceiptToken() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.complete(any(), any(), any(), any()))
-        .thenReturn(new OrderCompletionResponse("raw-token"));
+        .thenReturn(new OrderCompletionResult("raw-token"));
 
     mockMvc
         .perform(storePost("/orders/o1/completion", COMPLETION_BODY))
@@ -314,7 +319,7 @@ class OrderControllerTest {
   void completionOfAMemberOrderOmitsTheReceiptTokenKey() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.complete(any(), any(), any(), any()))
-        .thenReturn(new OrderCompletionResponse(null));
+        .thenReturn(new OrderCompletionResult(null));
 
     mockMvc
         .perform(storePost("/orders/o1/completion", COMPLETION_BODY))
@@ -388,7 +393,7 @@ class OrderControllerTest {
   void completionAndPreviewAreAllowedForOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.complete(any(), any(), any(), any()))
-        .thenReturn(new OrderCompletionResponse(null));
+        .thenReturn(new OrderCompletionResult(null));
     when(orderService.completionPreview(any(), any(), any()))
         .thenReturn(
             new OrderPreviewResponse(

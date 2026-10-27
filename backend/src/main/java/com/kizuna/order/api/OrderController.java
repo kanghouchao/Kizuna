@@ -15,6 +15,7 @@ import com.kizuna.order.api.dto.OrderCorrectionRequest;
 import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderCustomerCandidateResponse;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderPointRollbackPreviewResponse;
 import com.kizuna.order.api.dto.OrderPointRollbackRequest;
 import com.kizuna.order.api.dto.OrderPointRollbackResponse;
@@ -78,6 +79,7 @@ public class OrderController {
   private final OrderAttributionCorrectionService orderAttributionCorrectionService;
   private final OrderCorrectionService orderCorrectionService;
   private final OrderPointRollbackService orderPointRollbackService;
+  private final OrderMapper orderMapper;
 
   /** 顧客詳細の注文履歴。ある顧客に着いた受注を新しい順に辿る（状態は問わない）。 */
   @GetMapping
@@ -222,7 +224,9 @@ public class OrderController {
       @PathVariable String id,
       @Valid @RequestBody OrderCompletionRequest request,
       Principal principal) {
-    return ResponseEntity.ok(orderService.complete(storeId, id, request, principal.getName()));
+    var result =
+        orderService.complete(storeId, id, orderMapper.toCommand(request), principal.getName());
+    return ResponseEntity.ok(new OrderCompletionResponse(result.receiptToken()));
   }
 
   /** 受注 1 件の帰属の現況（会員コード・成立の機構・無効化の理由）。無効化と再発行のどちらを提示するかはこの読み口で決まる。 */
@@ -366,7 +370,8 @@ public class OrderController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderCompletionRequest request) {
-    return ResponseEntity.ok(orderService.completionPreview(storeId, id, request));
+    return ResponseEntity.ok(
+        orderService.completionPreview(storeId, id, orderMapper.toCommand(request)));
   }
 
   /** 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消す。二度目の取消は状態違反（400）として拒否する。 */

@@ -1,7 +1,6 @@
 package com.kizuna.order.application;
 
 import com.kizuna.customer.contact.GuestContactImport;
-import com.kizuna.order.api.dto.OrderFeeLineRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderSpecialServiceResponse;
@@ -15,7 +14,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -58,16 +56,11 @@ public class OrderCalculation {
         OffsetDateTime.now());
   }
 
-  public void requireVersion(Order order, Long version) {
-    if (!Objects.equals(order.getVersion(), version))
-      throw new OrderConfirmationConflict("expected_version");
-  }
-
   public Order calculate(
       Long storeId,
       Order original,
       OrderCourse course,
-      List<OrderFeeLineRequest> lines,
+      List<OrderFeeLineInput> lines,
       boolean saving) {
     return calculate(
         storeId,
@@ -82,7 +75,7 @@ public class OrderCalculation {
       Long storeId,
       Order original,
       OrderCourse course,
-      List<OrderFeeLineRequest> lines,
+      List<OrderFeeLineInput> lines,
       List<SpecialServiceSnapshot> specials,
       boolean saving) {
     Order source =

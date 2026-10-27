@@ -15,7 +15,6 @@ import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.result.OrderCorrectionResult;
-import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.application.ActorIdentityService;
@@ -25,7 +24,6 @@ import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,10 +58,7 @@ public class OrderCorrectionService {
     // 版の照合は何も触る前に行う。全量置換なので、開いたまま別の操作者が訂正を済ませていると、送らなかった
     // 項目まで開いた時点の値で押し戻す — 楽観ロックは要求ごとに現物を読み直すため、この照合が無いと
     // 食い違いを検出できないまま、理由と痕を伴う先の訂正が黙って巻き戻る。
-    if (!Objects.equals(order.getVersion(), request.getExpectedVersion())) {
-      throw new OrderConfirmationConflict(
-          "expected_version", "この受注は別の操作者が訂正しました。最新の内容を読み直してからやり直してください");
-    }
+    order.requireVersion(request.getExpectedVersion());
     if (order.isCompletionInvalidated()) throw new ServiceException("無効化した受注は訂正できません");
     int previousTotalFee = order.getTotalFee();
     int previousRemuneration = order.getTotalRemuneration();
@@ -80,7 +75,7 @@ public class OrderCorrectionService {
             storeId,
             order,
             course,
-            request.getFeeLines(),
+            orderMapper.toFeeLineInputs(request.getFeeLines()),
             specialServices.historical(storeId, order, request.getSpecialServiceRevisionIds()),
             true);
     calculation.verify(
@@ -172,10 +167,7 @@ public class OrderCorrectionService {
         orderRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    if (!Objects.equals(order.getVersion(), request.expectedVersion())) {
-      throw new ConflictException(
-          "受注が変更されています。最新の内容を再取得して確認してください", Map.of("expected_version", "最新の内容を再取得して確認してください"));
-    }
+    order.requireVersion(request.expectedVersion());
     // 受注 → 伝票の順に押さえ、申領の状態確認と帰属・付与の物化の間へ無効化を割り込ませない。
     orderReceiptTokenRepository.findByOrderIdForUpdate(id);
     long beforeVersion = order.getVersion();
@@ -219,7 +211,7 @@ public class OrderCorrectionService {
         orderRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    calculation.requireVersion(order, request.getExpectedVersion());
+    order.requireVersion(request.getExpectedVersion());
     if (order.isCompletionInvalidated() || order.getStatus() != OrderStatus.COMPLETED)
       throw new ServiceException("完了した受注だけが訂正できます");
     var course =
@@ -235,7 +227,7 @@ public class OrderCorrectionService {
             storeId,
             order,
             course,
-            request.getFeeLines(),
+            orderMapper.toFeeLineInputs(request.getFeeLines()),
             specialServices.historical(storeId, order, request.getSpecialServiceRevisionIds()),
             false),
         null);

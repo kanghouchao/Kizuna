@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -556,31 +557,57 @@ public class Order extends StoreScopedEntity {
     recalculateTotalFee();
   }
 
+  /** 画面が読み込んだ版と現物を突き合わせる。ずれは競合（409）で、画面は {@code expected_version} を契機に取り直す。 */
+  public void requireVersion(Long expected) {
+    if (!Objects.equals(getVersion(), expected)) throw new OrderVersionConflictException();
+  }
+
+  /**
+   * 完了の前提を台帳へ触る前に検査する。版の照合が状態の検査より先 — 別の操作者が終端化させた受注へ陳腐化した版で届く要求は 競合であり、400 で返すと画面が取り直しの契機を得られない。
+   */
+  public void requireCompletable(Long expectedVersion) {
+    requireVersion(expectedVersion);
+    requireUnfinished();
+  }
+
+  /** ポイント利用の可否。会員へ紐づかない受注は使えず、上限は {@link #grantBasisAmount}。 */
+  public void requireRedeemable(int usedPoints, boolean memberLinked) {
+    if (usedPoints > 0 && !memberLinked)
+      throw new InvalidOrderFeeLineException("非会員の受注ではポイントを利用できません");
+    requireWithinGrantBasis(usedPoints);
+  }
+
+  private void requireUnfinished() {
+    if (status == null || status.isTerminal())
+      throw new IllegalOrderStateTransitionException(status, OrderStatus.COMPLETED);
+  }
+
+  // 会計金額を超える利用は請求より大きい割引の仕訳になる。意図して減らすなら理由の付く手動調整の経路がある。
+  private void requireWithinGrantBasis(int usedPoints) {
+    if (usedPoints < 0) throw new InvalidOrderFeeLineException("利用ポイントは 0 以上です");
+    if (usedPoints > grantBasisAmount())
+      throw new InvalidOrderFeeLineException("利用ポイントは会計金額を超えられません");
+  }
+
   /**
    * 会計を確定して未完了（CONFIRMED / IN_SERVICE）の受注を完了する。ポイント利用の明細と自動付与ポイントはこの経路でのみ確定する。
    *
    * <p>会計金額は引数で受けない — 合計は明細の総和として既に決まっている。利用ポイントは減算の明細行として内訳へ入り、
-   * 合計はそのぶん下がる（ポイント控除後の請求額が合計になる）。付与の基準と利用の上限は、この行が入る前の総和を呼出側が読んで決める。
+   * 合計はそのぶん下がる（ポイント控除後の請求額が合計になる）。利用の上限は {@link #grantBasisAmount} で、上限内なら合計は負にならない。
    *
    * <p>同一状態への静默冪等（{@link #transitionTo}）に委ねず、完了済みを明示的に撥ねる。完了は台帳記帳と不可分のため、
    * 二度目の呼出を黙って通すと同じ受注で付与・利用が二重に記帳される。
    */
   public void completeWith(int usedPoints, int autoGrantPoints) {
-    if (status == null || status.isTerminal()) {
-      throw new IllegalOrderStateTransitionException(status, OrderStatus.COMPLETED);
-    }
-    if (usedPoints < 0) {
-      throw new InvalidOrderFeeLineException("利用ポイントは 0 以上です");
-    }
+    requireUnfinished();
+    requireWithinGrantBasis(usedPoints);
     if (usedPoints > 0) {
       var redemption =
           OrderFeeLine.of(
               OrderFeeLineKind.POINT_REDEMPTION, POINT_REDEMPTION_LINE_NAME, -usedPoints);
       redemption.attachStore(getStoreId());
       feeLines.add(redemption);
-      if (recalculateTotalFee() < 0) {
-        throw new InvalidOrderFeeLineException("内訳の総和が負になっています。割引・調整の金額を見直してください");
-      }
+      recalculateTotalFee();
     }
     this.autoGrantPoints = autoGrantPoints;
     transitionTo(OrderStatus.COMPLETED);

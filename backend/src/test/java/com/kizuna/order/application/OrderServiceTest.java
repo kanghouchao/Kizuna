@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -36,10 +35,7 @@ import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderArchiveResponse;
 import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.api.dto.OrderCastCandidateResponse;
-import com.kizuna.order.api.dto.OrderCompletionRequest;
-import com.kizuna.order.api.dto.OrderCompletionResponse;
 import com.kizuna.order.api.dto.OrderCreateRequest;
-import com.kizuna.order.api.dto.OrderFeeLineRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderReceptionistResponse;
 import com.kizuna.order.api.dto.OrderResponse;
@@ -103,7 +99,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.Answers;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
@@ -168,7 +164,6 @@ class OrderServiceTest {
         .thenReturn(
             new OrderServiceTerms(
                 "course", "revision", 1, "基本", 60, 0, 0, OffsetDateTime.now(), false));
-    Mockito.lenient().doCallRealMethod().when(orderMapper).toFeeLineDrafts(any());
     ReflectionTestUtils.setField(
         service,
         "calculation",
@@ -176,7 +171,7 @@ class OrderServiceTest {
             catalog,
             orderMapper,
             confirmation,
-            new OrderFeeLineSelection(catalog, orderMapper),
+            new OrderFeeLineSelection(catalog),
             specialServices));
     Mockito.lenient()
         .when(orderRepository.findByIdAndStoreIdForUpdate(nullable(String.class), eq(STORE_ID)))
@@ -240,7 +235,10 @@ class OrderServiceTest {
         .thenReturn(Set.of(STAFF_ROLE_ID));
     // 明細の入力 → 下書きの翻訳（表示値から帯符号へ）は写像の既定実装をそのまま通す。ここを mock の
     // 既定値（null）に任せると、内訳が黙って空になったまま合計の検証が通ってしまう。
-    lenient().when(orderMapper.toFeeLineDrafts(anyList())).thenAnswer(Answers.CALLS_REAL_METHODS);
+    lenient()
+        .when(orderMapper.toFeeLineInputs(any()))
+        .thenAnswer(
+            inv -> Mappers.getMapper(OrderMapper.class).toFeeLineInputs(inv.getArgument(0)));
     lenient()
         .when(materializer.materialize(anyLong(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(new AttributionMaterializer.Result(0, 0));
@@ -2165,22 +2163,22 @@ class OrderServiceTest {
    *
    * <p>版は対象の受注が現に持つ値を載せる。ここを省くと null 同士の一致で照合が素通りし、版の門が居ないことに気付けない。
    */
-  private static OrderCompletionRequest completion(Integer totalFee, Integer usePoints) {
+  private static OrderCompletionCommand completion(Integer totalFee, Integer usePoints) {
     return completionAt(CURRENT_VERSION, totalFee, usePoints);
   }
 
   /** 版を明示した完了要求。陳腐化した要求の拒否を見るテストだけが直に使う。 */
-  private static OrderCompletionRequest completionAt(
+  private static OrderCompletionCommand completionAt(
       Long expectedVersion, Integer totalFee, Integer usePoints) {
-    OrderFeeLineRequest line = new OrderFeeLineRequest();
-    line.setKind(OrderFeeLineKind.CREDIT_SURCHARGE);
-    line.setName("会計");
-    line.setAmount(totalFee);
-    OrderCompletionRequest request = new OrderCompletionRequest();
-    request.setExpectedVersion(expectedVersion);
-    request.setFeeLines(List.of(line));
-    request.setUsePoints(usePoints);
-    return request;
+    return new OrderCompletionCommand(
+        expectedVersion,
+        List.of(manualLine(OrderFeeLineKind.CREDIT_SURCHARGE, "会計", totalFee)),
+        usePoints,
+        null);
+  }
+
+  private static OrderFeeLineInput manualLine(OrderFeeLineKind kind, String name, Integer amount) {
+    return new OrderFeeLineInput(null, kind, name, amount, null, null, null, null);
   }
 
   /** 会計で利用したポイント。列は退場し、ポイント利用の明細行の総和を正値へ翻したものが正本になった。 */
@@ -2350,12 +2348,14 @@ class OrderServiceTest {
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
 
     // 入力の金額は正値で送る（引くことは種別が表す）。総和は 12000 - 13000 で負になる
-    OrderFeeLineRequest discount = new OrderFeeLineRequest();
-    discount.setKind(OrderFeeLineKind.DISCOUNT);
-    discount.setName("割引");
-    discount.setAmount(13000);
-    OrderCompletionRequest request = completion(12000, 100);
-    request.setFeeLines(List.of(request.getFeeLines().get(0), discount));
+    var request =
+        new OrderCompletionCommand(
+            CURRENT_VERSION,
+            List.of(
+                manualLine(OrderFeeLineKind.CREDIT_SURCHARGE, "会計", 12000),
+                manualLine(OrderFeeLineKind.DISCOUNT, "割引", 13000)),
+            100,
+            null);
 
     assertThatThrownBy(() -> service.complete(STORE_ID, "o1", request, "staff@kizuna.test"))
         .isInstanceOf(InvalidOrderFeeLineException.class)
@@ -2556,7 +2556,7 @@ class OrderServiceTest {
     stubReceiptTokenIssuance();
     stubWriteBackResponse();
 
-    OrderCompletionResponse response =
+    OrderCompletionResult response =
         service.complete(STORE_ID, "o1", completion(12000, null), "staff@kizuna.test");
 
     OrderReceiptToken token = savedReceiptToken();
@@ -2607,7 +2607,7 @@ class OrderServiceTest {
     stubReceiptTokenIssuance();
     stubWriteBackResponse();
 
-    OrderCompletionResponse response =
+    OrderCompletionResult response =
         service.complete(STORE_ID, "o1", completion(0, null), "staff@kizuna.test");
 
     assertThat(savedReceiptToken().getPlannedPoints()).isZero();
@@ -2623,7 +2623,7 @@ class OrderServiceTest {
     stubActor();
     stubWriteBackResponse();
 
-    OrderCompletionResponse response =
+    OrderCompletionResult response =
         service.complete(STORE_ID, "o1", completion(12000, null), "staff@kizuna.test");
 
     verifyNoInteractions(orderReceiptTokenRepository, receiptTokenGenerator);
@@ -2802,8 +2802,9 @@ class OrderServiceTest {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
-    var request = completion(12000, null);
-    request.setConfirmationToken("confirmed");
+    var request =
+        new OrderCompletionCommand(
+            CURRENT_VERSION, completion(12000, null).feeLines(), null, "confirmed");
     when(confirmation.wasPreviewed(STORE_ID, "COMPLETE", "o1", request, "confirmed"))
         .thenReturn(true);
     var failure = new ServiceException("付与ポイントが扱える上限を超えています。付与設定か会計金額を確認してください");
@@ -2838,6 +2839,33 @@ class OrderServiceTest {
     assertThat(preview.memberCode()).isNull();
     assertThat(preview.pointBalance()).isNull();
     assertThat(preview.grantPoints()).isZero();
+  }
+
+  @Test
+  void completionPreviewRejectsPointUsageOnANonMemberOrder() {
+    // 試算で通すと、完了は「試算済みなのに非会員」を紐づけの変化と読んで 409 を返し、再試算が同じ所へ戻る
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID))
+        .thenReturn(Optional.of(confirmedOrderWithCustomer()));
+    when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
+            STORE_ID, "cust-1", LinkStatus.ACTIVE))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.completionPreview(STORE_ID, "o1", completion(12000, 300)))
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("非会員の受注ではポイントを利用できません");
+    verifyNoInteractions(pointLedgerService, materializer);
+  }
+
+  @Test
+  void completionPreviewRejectsPointUsageBeyondTheTotalFee() {
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID))
+        .thenReturn(Optional.of(confirmedOrderWithCustomer()));
+    stubActiveLink(MEMBER_ID);
+
+    assertThatThrownBy(() -> service.completionPreview(STORE_ID, "o1", completion(200, 300)))
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("利用ポイントは会計金額を超えられません");
+    verifyNoInteractions(materializer);
   }
 
   @Test
