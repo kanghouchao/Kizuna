@@ -114,7 +114,7 @@ describe('apiClient session branch', () => {
     expect(headers['X-Store-ID']).toBeUndefined();
   });
 
-  it('ignores the store id in a legacy URL: the cookie, not the path, is the store context', async () => {
+  it('ignores a store id in the URL path: the cookie, not the path, is the store context', async () => {
     window.history.pushState({}, '', '/store/9/orders');
     session('2');
     const headers = await requestTo('/orders');

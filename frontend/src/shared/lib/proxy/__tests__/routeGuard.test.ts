@@ -121,65 +121,18 @@ describe('routeGuard', () => {
     expect(NextResponse.redirect).not.toHaveBeenCalled();
   });
 
-  it('redirects the retired /store/entry to /admin/dashboard', () => {
-    const req = createRequest('/store/entry', true, { 'session-kind': 'admin' });
-    const res = handleRouteProtection(req, 'store');
-
-    expect(NextResponse.redirect).toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: '/admin/dashboard' })
-    );
-    expect(res).not.toBeNull();
-  });
-
-  it('redirects a legacy id-bearing store path to the id-less path and moves the id to the cookie', () => {
-    const req = createRequest(
-      '/store/5/orders/3/edit',
-      true,
-      { 'session-kind': 'admin' },
-      '?tab=a'
-    );
-    const res = handleRouteProtection(req, 'store') as unknown as {
-      cookies: { set: jest.Mock };
-    };
-
-    expect(NextResponse.redirect).toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: '/store/orders/3/edit', search: '?tab=a' })
-    );
-    expect(res.cookies.set).toHaveBeenCalledWith('current-store-id', '5', { path: '/' });
-  });
-
-  it.each(['/store/5', '/store/5/', '/store/5/dashboard', '/store/5/select'])(
-    'redirects a legacy store path without a live page (%s) to /admin/dashboard with the cookie',
+  it.each(['/store/entry', '/store/5', '/store/5/orders', '/store/5/settings/account'])(
+    'treats %s as an ordinary /store path without redirecting',
     path => {
       const res = handleRouteProtection(
         createRequest(path, true, { 'session-kind': 'admin' }),
         'store'
-      ) as unknown as { cookies: { set: jest.Mock } };
-
-      expect(NextResponse.redirect).toHaveBeenCalledWith(
-        expect.objectContaining({ pathname: '/admin/dashboard' })
       );
-      expect(res.cookies.set).toHaveBeenCalledWith('current-store-id', '5', { path: '/' });
+
+      expect(NextResponse.redirect).not.toHaveBeenCalled();
+      expect(res).toBeNull();
     }
   );
-
-  it('redirects the retired store account settings to the single account settings page', () => {
-    handleRouteProtection(
-      createRequest('/store/5/settings/account', true, { 'session-kind': 'admin' }),
-      'store'
-    );
-
-    expect(NextResponse.redirect).toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: '/admin/settings/account' })
-    );
-  });
-
-  it('sends a legacy store path without a token to / (no cookie rewrite)', () => {
-    const res = handleRouteProtection(createRequest('/store/5/orders', false), 'store');
-
-    expect(NextResponse.redirect).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/' }));
-    expect((res as unknown as { cookies: { set: jest.Mock } }).cookies.set).not.toHaveBeenCalled();
-  });
 
   it('redirects to /auth/login when accessing /cast without token', () => {
     const req = createRequest('/cast/schedule', false);
@@ -377,7 +330,7 @@ describe('routeGuard', () => {
       expect(res).not.toBeNull();
     });
 
-    it('redirects a member-console session on a legacy /store/* path to /member', () => {
+    it('redirects a member-console session on an id-bearing /store/* path to /member', () => {
       const req = createRequest('/store/5/orders', true, { 'session-kind': 'member' });
       const res = handleRouteProtection(req, 'app');
 

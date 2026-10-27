@@ -49,7 +49,7 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
     authApi.stores().then(
       list => {
         if (!active) return;
-        // cookie は利用者が任意値を書けるうえ旧 URL の誘導も書くため、授権店舗に含まれるときだけ採る。
+        // cookie は利用者が任意値を書けるため、授権店舗に含まれるときだけ採る。
         const lastUsed = getCurrentStoreId();
         const resolved = list.some(store => String(store.id) === lastUsed)
           ? lastUsed

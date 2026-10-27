@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { splitLegacyStorePath, storePath } from '../store-route';
 import { consoleAreaOfPath, isPublicAuthPath, isSharedAdminPath } from '../app-area';
 import { MEMBER_RETURN_PATH_COOKIE, isSafeMemberReturnPath } from '../session';
 
@@ -11,9 +10,6 @@ const CONSOLE_AREAS: Record<string, { allowed: readonly string[]; home: string }
   cast: { allowed: ['cast'], home: '/cast/schedule' },
   member: { allowed: ['member'], home: '/member' },
 };
-
-// 現在店舗の置き場（StoreContext と apiClient が読む）。旧 URL の店舗 id はここへ移して着地させる。
-const CURRENT_STORE_ID_COOKIE = 'current-store-id';
 
 /**
  * 伝票トークンの申領画面ちょうど（末尾スラッシュの有無は問わない）。
@@ -96,28 +92,6 @@ export function handleRouteProtection(request: NextRequest, _role: 'app' | 'stor
     if (consoleArea && pathArea && !consoleArea.allowed.includes(pathArea)) {
       return NextResponse.redirect(new URL(consoleArea.home, request.url));
     }
-  }
-
-  // 入口ルートは廃止済み。ブックマークに残る旧 URL は全員の着地先へ送る。
-  if (hasToken && (path === '/store/entry' || path.startsWith('/store/entry/'))) {
-    return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-  }
-
-  // 店舗 id を URL に持つ旧形式（/store/5/orders）は id 無しの形へ送り、id は現在店舗 cookie へ移す。
-  // 店舗側のアカウント設定は唯一のアカウント設定へ、id 直後で終わる URL と廃止済みの着地画面
-  // （dashboard / select）は対応する画面が無いので全員の着地先へ送る。授権外の id は StoreContext が捨てる。
-  const legacy = hasToken ? splitLegacyStorePath(path) : undefined;
-  if (legacy) {
-    const hasPage =
-      legacy.subPath !== '' && !/^\/(?:select|dashboard)?(?:\/|$)/.test(legacy.subPath);
-    const target = /^\/settings\/account(?:\/|$)/.test(legacy.subPath)
-      ? new URL('/admin/settings/account', request.url)
-      : hasPage
-        ? new URL(`${storePath(legacy.subPath)}${request.nextUrl.search}`, request.url)
-        : new URL('/admin/dashboard', request.url);
-    const response = NextResponse.redirect(target);
-    response.cookies.set(CURRENT_STORE_ID_COOKIE, legacy.storeId, { path: '/' });
-    return response;
   }
 
   return null;

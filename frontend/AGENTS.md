@@ -24,7 +24,7 @@ Staff management is one screen (`_pages/admin-staff`, `/admin/staff`) for every 
 
 Server-side code (the proxy and Server Components) reaches the backend through `backendUrl()` in `shared/lib/backend-url`: `BACKEND_URL` carries the host only (default `http://backend:8080`, the compose service name in every environment), and the endpoint path stays in code. Do not reintroduce env vars that carry an endpoint path — a pinned value in an existing `.env` silently outlives every path rename.
 
-Store paths are assembled only in `shared/lib/store-route` (`storePath(subPath)`). `store-path-invariants.test.ts` catches raw interpolated store paths but not every concatenation; review remains necessary. Legacy `/store/{id}/...` bookmarks are redirected by `routeGuard` to the id-less path with the store written to the cookie. Login lands everyone on `/admin/dashboard`; the `session-kind` cookie holds the session kind `admin` / `cast` / `member`.
+Store paths are assembled only in `shared/lib/store-route` (`storePath(subPath)`). `store-path-invariants.test.ts` catches raw interpolated store paths but not every concatenation; review remains necessary. Login lands everyone on `/admin/dashboard`; the `session-kind` cookie holds the session kind `admin` / `cast` / `member`.
 
 ## Public templates and shared UI
 

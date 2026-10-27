@@ -25,7 +25,7 @@ export {
   setCurrentStore,
   startSession,
 } from './session';
-export { isLegacyStorePath, storePath } from './store-route';
+export { storePath } from './store-route';
 export { cn } from './utils';
 export { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, integerRule } from './validation';
 export { isPublicAuthPath } from './app-area';
