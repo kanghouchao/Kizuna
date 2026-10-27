@@ -233,6 +233,32 @@ class PointLedgerServiceTest {
   }
 
   @Test
+  @DisplayName("見込みは行ロックを取らずに残高・単位・付与予定を返し、利用 0 では可否を問わないこと")
+  void quoteReadsWithoutLockingAndSkipsZeroUsage() {
+    when(systemConfigService.pointSettings()).thenReturn(new PointSettings(100, 1, 100));
+    when(pointEntryRepository.findCredits(MEMBER_ID)).thenReturn(List.of());
+
+    assertThat(pointLedgerService.quote(MEMBER_ID, 12000, 0))
+        .isEqualTo(new PointLedgerService.PointQuote(0, 100, 120, null));
+    verify(pointEntryRepository, never()).findCreditsForUpdate(anyLong());
+  }
+
+  @Test
+  @DisplayName("見込みは利用と同じ規則で可否を判じ、否なら理由を値で返すこと")
+  void quoteReportsTheRedemptionRejection() {
+    when(systemConfigService.pointSettings()).thenReturn(new PointSettings(100, 1, 100));
+    when(pointEntryRepository.findCredits(MEMBER_ID)).thenReturn(List.of(credit(1L, 300, null)));
+    when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L))).thenReturn(List.of());
+
+    assertThat(pointLedgerService.quote(MEMBER_ID, 12000, 300).rejection()).isNull();
+    assertThat(pointLedgerService.quote(MEMBER_ID, 12000, 150).rejection())
+        .isEqualTo("利用ポイントは 100 ポイント単位で指定してください");
+    assertThat(pointLedgerService.quote(MEMBER_ID, 12000, 400).rejection())
+        .isEqualTo("ポイント残高が不足しています（残高: 300）");
+    verify(pointEntryRepository, never()).save(any());
+  }
+
+  @Test
   @DisplayName("残高が足りないポイント利用は台帳へ何も書かずに拒否されること")
   void useForOrderRejectsWhenBalanceInsufficient() {
     when(systemConfigService.pointSettings()).thenReturn(new PointSettings(100, 1, 100));

@@ -66,6 +66,7 @@ import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.point.application.PointLedgerService.PointQuote;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.settings.application.BusinessDateService;
@@ -156,7 +157,9 @@ class OrderServiceTest {
   @BeforeEach
   void wireCustomerProvisioning() {
     Mockito.lenient().when(pointLedgerService.usageUnit()).thenReturn(100);
-    Mockito.lenient().when(pointLedgerService.balance(anyLong())).thenReturn(100000L);
+    Mockito.lenient()
+        .when(pointLedgerService.quote(anyLong(), anyInt(), anyInt()))
+        .thenReturn(new PointQuote(100000L, 100, 0, null));
 
     var catalog = Mockito.mock(OrderServiceCatalog.class);
     Mockito.lenient()
@@ -239,6 +242,10 @@ class OrderServiceTest {
         .when(orderMapper.toFeeLineInputs(any()))
         .thenAnswer(
             inv -> Mappers.getMapper(OrderMapper.class).toFeeLineInputs(inv.getArgument(0)));
+    lenient()
+        .when(orderMapper.toPointsResponse(any()))
+        .thenAnswer(
+            inv -> Mappers.getMapper(OrderMapper.class).toPointsResponse(inv.getArgument(0)));
     lenient()
         .when(materializer.materialize(anyLong(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(new AttributionMaterializer.Result(0, 0));
@@ -2205,7 +2212,7 @@ class OrderServiceTest {
             eq(ACTOR_ID),
             any()))
         .thenReturn(new AttributionMaterializer.Result(120, 500));
-    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
+    stubQuote(new PointQuote(100000L, 100, 120, null));
     stubWriteBackResponse();
 
     service.complete(STORE_ID, "o1", completion(12000, 300), "staff@kizuna.test");
@@ -2243,7 +2250,7 @@ class OrderServiceTest {
             eq(ACTOR_ID),
             any()))
         .thenReturn(new AttributionMaterializer.Result(120, 500));
-    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
+    stubQuote(new PointQuote(100000L, 100, 120, null));
     stubWriteBackResponse();
 
     service.complete(STORE_ID, "o1", completion(12000, null), "staff@kizuna.test");
@@ -2760,13 +2767,47 @@ class OrderServiceTest {
   }
 
   @Test
+  void completeRejectsAPointUsageTheLedgerCannotCoverBeforeTouchingIt() {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubQuote(new PointQuote(100L, 100, 120, "ポイント残高が不足しています（残高: 100）"));
+
+    assertThatThrownBy(
+            () -> service.complete(STORE_ID, "o1", completion(12000, 300), "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .isNotInstanceOf(ConflictException.class)
+        .hasMessage("ポイント残高が不足しています（残高: 100）");
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verifyNoInteractions(materializer);
+  }
+
+  @Test
+  void completeSendsAPreviewedUsageTheLedgerNoLongerCoversBackToPreview() {
+    // 試算の後に残高が減った。内容の誤りではないので use_points の 409 で再試算へ戻す
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubQuote(new PointQuote(100L, 100, 120, "ポイント残高が不足しています（残高: 100）"));
+    var request =
+        new OrderCompletionCommand(
+            CURRENT_VERSION, completion(12000, 300).feeLines(), 300, "confirmed");
+    when(confirmation.wasPreviewed(STORE_ID, "COMPLETE", "o1", request, "confirmed"))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> service.complete(STORE_ID, "o1", request, "staff@kizuna.test"))
+        .isInstanceOfSatisfying(
+            ConflictException.class, ex -> assertThat(ex.details()).containsOnlyKeys("use_points"))
+        .hasMessage("ポイント残高が不足しています（残高: 100）");
+    verifyNoInteractions(materializer);
+  }
+
+  @Test
   void completionPreviewOfALinkedOrderCarriesTheBalance() {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
-    when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800L);
-    when(pointLedgerService.usageUnit()).thenReturn(100);
-    when(pointLedgerService.previewGrant(12000)).thenReturn(120);
+    stubQuote(new PointQuote(800L, 100, 120, null));
 
     var preview = service.completionPreview(STORE_ID, "o1", completion(12000, 0)).points();
 
@@ -2792,8 +2833,7 @@ class OrderServiceTest {
     assertThat(preview.pointBalance()).as("非会員に残高は存在しない").isNull();
     // 確定は非会員へ付与しない。見込みが付与を返すと、画面の予定と確定の結果が食い違う
     assertThat(preview.grantPoints()).isZero();
-    verify(pointLedgerService, never()).previewGrant(anyInt());
-    verify(pointLedgerService, never()).balance(anyLong());
+    verify(pointLedgerService, never()).quote(anyLong(), anyInt(), anyInt());
   }
 
   @ParameterizedTest
@@ -2814,7 +2854,7 @@ class OrderServiceTest {
               anyLong(), anyString(), anyString(), any(), any(), any(), any(), any()))
           .thenThrow(failure);
     } else {
-      when(pointLedgerService.previewGrant(12000)).thenThrow(failure);
+      when(pointLedgerService.quote(MEMBER_ID, 12000, 0)).thenThrow(failure);
     }
 
     assertThatThrownBy(() -> service.complete(STORE_ID, "o1", request, "staff@kizuna.test"))
@@ -2876,6 +2916,11 @@ class OrderServiceTest {
     assertThatThrownBy(() -> service.completionPreview(STORE_ID, "o1", completion(-1, 0)))
         .isInstanceOf(com.kizuna.order.domain.InvalidOrderFeeLineException.class);
     verifyNoInteractions(pointLedgerService, materializer);
+  }
+
+  /** 会員の台帳が返す見込み。付与予定・残高・可否は台帳の試験が受け持つので、ここでは値として与える。 */
+  private void stubQuote(PointQuote quote) {
+    when(pointLedgerService.quote(eq(MEMBER_ID), anyInt(), anyInt())).thenReturn(quote);
   }
 
   /** 編集後の応答組み立て（読み口 → DTO）だけを満たす stub。編集そのものの検証は集約の状態で行う。 */

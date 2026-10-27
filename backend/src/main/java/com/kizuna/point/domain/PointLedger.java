@@ -72,6 +72,14 @@ public final class PointLedger {
     return plan;
   }
 
+  /** 受注会計での利用の引き当て計画。利用は単位の倍数に限る（手動調整の減算には単位が掛からない）。 */
+  public List<PlannedAllocation> planRedemption(int points, int unit) {
+    if (points <= 0 || points % unit != 0) {
+      throw new InvalidPointEntryException("利用ポイントは " + unit + " ポイント単位で指定してください");
+    }
+    return planConsumption(points);
+  }
+
   /**
    * 全ロットの未消費量を期限の有無に依らず引き当てる（退会消去）。期限切れの残りも含めるのは、退会後の失効批が 退会済み会員へ別の仕訳を積まないようにするため —
    * 退会消去の後、その会員の台帳に残量は無い。
