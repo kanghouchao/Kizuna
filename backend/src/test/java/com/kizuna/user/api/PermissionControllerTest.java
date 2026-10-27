@@ -28,8 +28,8 @@ class PermissionControllerTest {
   }
 
   @Test
-  @DisplayName("全権限がちょうど 1 回ずつ現れ、組内は code 順で日本語名を伴う")
-  void everyPermissionAppearsOnceSortedWithinGroup() {
+  @DisplayName("全権限がちょうど 1 回ずつ現れ、組内は宣言順で日本語名を伴う")
+  void everyPermissionAppearsOnceInDeclarationOrder() {
     List<PermissionResponse> all = body.stream().flatMap(g -> g.permissions().stream()).toList();
 
     assertThat(all).hasSize(PermissionCode.values().length);
@@ -37,6 +37,14 @@ class PermissionControllerTest {
     assertThat(all)
         .extracting(PermissionResponse::label)
         .allSatisfy(l -> assertThat(l).isNotBlank());
-    body.forEach(g -> assertThat(g.permissions()).extracting(PermissionResponse::code).isSorted());
+    body.forEach(
+        g ->
+            assertThat(g.permissions())
+                .extracting(PermissionResponse::code)
+                .containsExactlyElementsOf(
+                    Arrays.stream(PermissionCode.values())
+                        .filter(code -> code.getGroup().name().equals(g.group()))
+                        .map(PermissionCode::name)
+                        .toList()));
   }
 }
