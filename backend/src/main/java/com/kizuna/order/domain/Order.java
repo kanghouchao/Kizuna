@@ -564,12 +564,14 @@ public class Order extends StoreScopedEntity {
 
   /** 完了後訂正の前提（完了済みかつ無効化されていない）。試算と訂正が副作用の前に同じ規則で撥ねるための検査だけを行う。 */
   public void requireCorrectable() {
-    if (status != OrderStatus.COMPLETED || completionInvalidated)
+    if (completionInvalidated) throw new InvalidOrderCorrectionException("無効化した受注は訂正できません");
+    if (status != OrderStatus.COMPLETED)
       throw new InvalidOrderCorrectionException("完了した受注だけが訂正できます");
   }
 
   /** 完了前の編集の前提（終端でない）。入力の検証より先に撥ねるための検査だけを行う。 */
   public void requireEditable() {
+    if (status == OrderStatus.CANCELLED) throw new InvalidOrderFeeLineException("取消済みの受注は編集できません");
     if (status == null || status.isTerminal())
       throw new InvalidOrderFeeLineException("終端の内容は専用訂正で変更してください");
   }
