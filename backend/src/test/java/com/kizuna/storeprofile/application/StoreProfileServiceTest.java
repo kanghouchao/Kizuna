@@ -16,6 +16,7 @@ import com.kizuna.storeprofile.domain.PartnerLink;
 import com.kizuna.storeprofile.domain.SnsLink;
 import com.kizuna.storeprofile.domain.StoreProfile;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
+import com.kizuna.user.application.BusinessAudit;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +32,7 @@ class StoreProfileServiceTest {
 
   @Mock private StoreProfileRepository storeProfileRepository;
   @Mock private StoreProfileMapper storeProfileMapper;
+  @Mock private BusinessAudit businessAudit;
   @InjectMocks private StoreProfileService storeProfileService;
 
   private static final Long STORE_ID = 1L;

@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
+import com.kizuna.storage.application.StoredFileAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -32,6 +34,7 @@ class FileUploadControllerTest {
 
   @Mock private FileStorageService fileStorageService;
   @Mock private MultipartFile file;
+  @Mock private StoredFileAudit storedFileAudit;
 
   private FileUploadController controller;
 
@@ -39,7 +42,7 @@ class FileUploadControllerTest {
   void setUp() {
     AppProperties appProperties = new AppProperties();
     appProperties.setUpload(new AppProperties.Upload());
-    controller = new FileUploadController(fileStorageService, appProperties);
+    controller = new FileUploadController(fileStorageService, appProperties, storedFileAudit);
   }
 
   @AfterEach
@@ -95,5 +98,33 @@ class FileUploadControllerTest {
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     verify(fileStorageService).store("5", "public", file);
+  }
+
+  @Test
+  @DisplayName("保存が成功した後に、保存先の相対パス・bucket・サイズ・種別で監査を依頼すること")
+  void upload_recordsAuditAfterStore() {
+    authenticateWithAuthorities("PERM_ORDER_MANAGE");
+    when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
+    when(file.getOriginalFilename()).thenReturn("y.jpg");
+    when(file.getSize()).thenReturn(4L);
+    when(file.getContentType()).thenReturn("image/jpeg");
+
+    controller.upload(5L, file, "public");
+
+    var order = org.mockito.Mockito.inOrder(fileStorageService, storedFileAudit);
+    order.verify(fileStorageService).store("5", "public", file);
+    order.verify(storedFileAudit).recorded(5L, "public/5/y.jpg", "public", 4L, "image/jpeg");
+  }
+
+  @Test
+  @DisplayName("保存が失敗したら監査を依頼しないこと")
+  void upload_doesNotRecordAuditWhenStoreFails() {
+    authenticateWithAuthorities("PERM_ORDER_MANAGE");
+    when(fileStorageService.store("5", "public", file)).thenThrow(new IllegalStateException("s3"));
+
+    assertThatThrownBy(() -> controller.upload(5L, file, "public"))
+        .isInstanceOf(IllegalStateException.class);
+
+    verifyNoInteractions(storedFileAudit);
   }
 }
