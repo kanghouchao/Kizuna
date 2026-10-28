@@ -238,7 +238,7 @@ class OrderConfirmationTest {
     var tokens = List.of("t1", "t2");
     for (var confirmation : List.of(this.confirmation, camelCase)) {
       for (var inputs :
-          List.<java.util.function.Function<String, Object>>of(
+          List.<Function<String, Object>>of(
               token ->
                   new OrderCreateCommand(
                       null, null, token, "c", null, null, null, null, null, null, null, null, null,
