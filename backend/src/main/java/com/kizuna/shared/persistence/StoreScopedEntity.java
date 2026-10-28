@@ -51,4 +51,11 @@ public abstract class StoreScopedEntity {
   protected void onUpdate() {
     this.updatedAt = OffsetDateTime.now();
   }
+
+  /**
+   * @PreUpdate と同じ永続化の時刻印で、集約の振る舞いから行を更新済みにするために使う。
+   */
+  protected void touch() {
+    this.updatedAt = OffsetDateTime.now();
+  }
 }

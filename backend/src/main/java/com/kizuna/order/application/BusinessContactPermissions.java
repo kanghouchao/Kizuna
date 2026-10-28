@@ -104,7 +104,7 @@ public class BusinessContactPermissions {
               actors.requireUserId(actorEmail),
               now));
       // 許可だけの編集も受注の版を進め、古い画面からの上書きを拒否する。
-      order.setUpdatedAt(now);
+      order.noteBusinessContactPermission();
     }
   }
 
