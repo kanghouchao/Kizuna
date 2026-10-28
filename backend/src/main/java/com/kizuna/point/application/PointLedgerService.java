@@ -323,8 +323,10 @@ public class PointLedgerService {
    *
    * <p>減算は期限の早いロットから引く。誤って付与されたロットを狙い撃ちにはしないので、そのロットへ既に引き当て済みの
    * 消費行には触れず、「引き当ての合計は減算量に一致する」が最初から最後まで破れない。
+   *
+   * @return 今回記帳した仕訳の ID。再送で何も書かなかったときは空
    */
-  public void correctForAttribution(
+  public Optional<Long> correctForAttribution(
       long memberId,
       Long storeId,
       int delta,
@@ -335,22 +337,25 @@ public class PointLedgerService {
     PointEntry committed = pointEntryRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
     if (committed != null) {
       requireSameCorrection(committed, memberId, storeId, delta, reason, correctedAttributionId);
-      return;
+      return Optional.empty();
     }
     if (delta >= 0) {
       throw new ServiceException("訂正は減算で指定してください");
     }
     List<PlannedAllocation> plan = lockedLedgerOf(memberId).planConsumption(-delta);
-    pointEntryRepository.save(
-        PointEntry.correctAttribution(
-            memberId,
-            storeId,
-            delta,
-            reason,
-            allocationsOf(plan),
-            actorUserId,
-            idempotencyKey,
-            correctedAttributionId));
+    return Optional.of(
+        pointEntryRepository
+            .save(
+                PointEntry.correctAttribution(
+                    memberId,
+                    storeId,
+                    delta,
+                    reason,
+                    allocationsOf(plan),
+                    actorUserId,
+                    idempotencyKey,
+                    correctedAttributionId))
+            .getId());
   }
 
   /** 訂正の再送判定。宛先の帰属記録まで一致して初めて再送と認める — 同じキーで別の帰属を訂正する要求は取り違えであって再送ではない。 */

@@ -13,6 +13,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -57,6 +58,7 @@ class OrderAttributionCorrectionServiceTest {
   @Mock private OrderRepository orderRepository;
   @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private PointLedgerService pointLedgerService;
+  @Mock private BusinessAudit businessAudit;
   private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
   @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);

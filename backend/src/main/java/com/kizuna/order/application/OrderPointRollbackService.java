@@ -13,6 +13,8 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +37,7 @@ public class OrderPointRollbackService {
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final PointLedgerService pointLedgerService;
   private final ActorIdentityService actorIdentityService;
+  private final BusinessAudit businessAudit;
 
   /**
    * 巻き戻し済みでないことを確かめてから伝票を再発行する。
@@ -46,14 +49,15 @@ public class OrderPointRollbackService {
    * 0009）の構造的な証跡だからである。あちらへ台帳の読みを足すとその証跡が失われる。
    */
   @Transactional
-  public String reissueReceiptTokenUnlessRolledBack(Long storeId, String orderId) {
+  public String reissueReceiptTokenUnlessRolledBack(
+      Long storeId, String orderId, String actorEmail) {
     orderRepository
         .findByIdAndStoreIdForUpdate(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     if (pointLedgerService.isRolledBack(orderId)) {
       throw new ServiceException("ポイントを巻き戻した受注には伝票を再発行できません");
     }
-    return orderAttributionService.reissueReceiptToken(storeId, orderId);
+    return orderAttributionService.reissueReceiptToken(storeId, orderId, actorEmail);
   }
 
   /** 実行前の下見。画面はこれで「何がいくら動くか」を示し、済んでいる受注では実行の導線を出さない。 */
@@ -98,6 +102,8 @@ public class OrderPointRollbackService {
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
     order.requirePointRollbackable();
     orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
+    String beforeVersion = String.valueOf(order.getVersion());
+    int beforeTotalFee = order.getTotalFee();
     Long actorUserId = actorIdentityService.requireUserId(actorEmail);
     if (pointLedgerService.isRolledBack(orderId)) {
       throw new ConflictException("この受注のポイントは既に巻き戻されています");
@@ -112,7 +118,33 @@ public class OrderPointRollbackService {
             orderId, command.reason().trim(), actorUserId, order.getTotalFee());
     order.offsetPointRedemption(result.restoredPoints());
     orderRepository.flush();
-    return pointLedgerService.rollbackHistory(orderId).orElseThrow();
+    PointRollbackHistory history = pointLedgerService.rollbackHistory(orderId).orElseThrow();
+    String attributed = Boolean.toString(activeMemberCode(storeId, orderId) != null);
+    businessAudit.recordById(
+        actorUserId,
+        storeId,
+        "ORDER_POINTS_ROLLED_BACK",
+        "ORDER",
+        orderId,
+        "POINT_ROLLBACK",
+        history.id(),
+        Map.of(
+            "version",
+            beforeVersion,
+            "total_fee",
+            Integer.toString(beforeTotalFee),
+            "rolled_back",
+            "false",
+            "attributed",
+            attributed),
+        Map.of(
+            "version", String.valueOf(order.getVersion()),
+            "total_fee", order.getTotalFee().toString(),
+            "rolled_back", "true",
+            "attributed", attributed,
+            "cancelled_points", Long.toString(history.cancelledPoints()),
+            "restored_points", Long.toString(history.restoredPoints())));
+    return history;
   }
 
   /** この受注が現に帰属している会員のコード。帰属していなければ null。 */

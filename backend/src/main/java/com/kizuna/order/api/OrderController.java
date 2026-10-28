@@ -320,13 +320,14 @@ public class OrderController {
   @PostMapping("/{id}/receipt-token")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderReceiptTokenResponse> reissueReceiptToken(
-      @CurrentStore Long storeId, @PathVariable String id) {
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
     // 巻き戻し済みの受注へは発行しない。発行しても申領は拒まれるので、店舗は成功したと告げられたうえで
     // 使えない QR を客へ見せることになる。判定と発行は受注行を押さえたまま 1 つの取引で行う。
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             orderMapper.toReceiptTokenResponse(
-                orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(storeId, id)));
+                orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(
+                    storeId, id, principal.getName())));
   }
 
   /** 誤帰属の訂正の進み具合（この受注がその会員へ与えた付与の合計と、既に差し引いた合計）。画面の既定値はここから取る。 */
