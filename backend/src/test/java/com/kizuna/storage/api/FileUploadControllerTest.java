@@ -114,7 +114,7 @@ class FileUploadControllerTest {
 
     var order = inOrder(fileStorageService, storedFileAudit);
     order.verify(fileStorageService).store("5", "public", file);
-    order.verify(storedFileAudit).recorded(5L, "public/5/y.jpg", "public", 4L, "image/jpeg");
+    order.verify(storedFileAudit).recordUpload(5L, "public/5/y.jpg", "public", 4L, "image/jpeg");
   }
 
   @Test
