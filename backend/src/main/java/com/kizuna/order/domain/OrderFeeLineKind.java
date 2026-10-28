@@ -63,6 +63,11 @@ public enum OrderFeeLineKind {
     return this == POINT_REDEMPTION || this == POINT_REDEMPTION_OFFSET;
   }
 
+  /** 店舗が差し替えられる明細か。コース・特殊サービス・システム専有の行は、それぞれの専用経路だけが書く。 */
+  public boolean isStoreEditable() {
+    return this != BASE_COURSE && this != SPECIAL_SERVICE && !isSystemOwned();
+  }
+
   /** 表示上の金額を保存する帯符号金額へ翻す。 */
   public int signedAmountOf(int displayedAmount) {
     return flipIfDeduction(displayedAmount);

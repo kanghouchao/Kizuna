@@ -405,12 +405,7 @@ class OrderControllerTest {
         .thenReturn(
             new OrderPreview(
                 "token",
-                OrderCourses.course("基本", 60, 0),
-                List.of(),
-                0,
-                0,
-                0,
-                0,
+                Order.calculateNewWith(OrderCourses.course("基本", 60, 0), List.of(), List.of()),
                 null,
                 List.of(),
                 List.of()));
@@ -426,31 +421,25 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void completionPreviewMapsTheResultIntoTheResponse() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    var calculated =
-        Order.builder()
-            .course(OrderCourses.course("基本", 60, 12000))
-            .status(OrderStatus.CONFIRMED)
-            .build();
-    calculated.replaceStoreFeeLines(
-        List.of(
-            new OrderFeeLineDraft(
-                null,
-                OrderFeeLineKind.SURCHARGE,
-                "加算",
-                1000,
-                null,
-                0,
-                new OrderServiceAdoption("s1", "r1", 2, "CURRENT_SETTING", OffsetDateTime.now()))));
+    var quote =
+        Order.calculateNewWith(
+            OrderCourses.course("基本", 60, 12000),
+            List.of(),
+            List.of(
+                new OrderFeeLineDraft(
+                    null,
+                    OrderFeeLineKind.SURCHARGE,
+                    "加算",
+                    1000,
+                    null,
+                    0,
+                    new OrderServiceAdoption(
+                        "s1", "r1", 2, "CURRENT_SETTING", OffsetDateTime.now()))));
     when(orderService.completionPreview(any(), eq("o1"), any(), eq("staff@kizuna.test")))
         .thenReturn(
             new OrderPreview(
                 "token",
-                OrderCourses.course("基本", 60, 12000),
-                calculated.getFeeLines(),
-                13000,
-                13000,
-                60,
-                0,
+                quote,
                 new OrderPoints(true, 800L, "123456789012", 100, 300, 130),
                 List.of(),
                 List.of()));
@@ -950,12 +939,7 @@ class OrderControllerTest {
   private static OrderPreview emptyPreview() {
     return new OrderPreview(
         "token",
-        OrderCourses.course("基本", 60, 0),
-        List.of(),
-        0,
-        0,
-        0,
-        0,
+        Order.calculateNewWith(OrderCourses.course("基本", 60, 0), List.of(), List.of()),
         null,
         List.of(),
         List.of());

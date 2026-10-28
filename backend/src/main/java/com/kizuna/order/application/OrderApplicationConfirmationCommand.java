@@ -1,5 +1,6 @@
 package com.kizuna.order.application;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -8,7 +9,7 @@ import java.util.List;
 public record OrderApplicationConfirmationCommand(
     List<GuestContactImportInput> contactImports,
     List<String> specialServiceIds,
-    String confirmationToken,
+    @JsonIgnore String confirmationToken,
     String courseId,
     List<OrderFeeLineInput> feeLines,
     Long receptionistId,

@@ -30,12 +30,58 @@ import lombok.NoArgsConstructor;
 @Table(name = "t_orders")
 @Getter
 @NoArgsConstructor
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder
 public class Order extends StoreScopedEntity {
 
   /** 完了処理が書くポイント利用の明細の名称。行の名称は写しなので、機構が起こす行では固定の一語を持つ。 */
   private static final String POINT_REDEMPTION_LINE_NAME = "ポイント利用";
+
+  /** 店舗が起こす受注。すべての受注は確定で出生する（ADR 0017）。 */
+  public static Order placedByStore(Long storeId, NewStoreOrder terms) {
+    Order order =
+        Order.builder()
+            .replacementForOrderId(terms.replacementForOrderId())
+            .businessDate(terms.businessDate())
+            .arrivalScheduledStartTime(terms.arrivalScheduledStartTime())
+            .arrivalScheduledEndTime(terms.arrivalScheduledEndTime())
+            .locationAddress(terms.locationAddress())
+            .locationBuilding(terms.locationBuilding())
+            .pax(terms.pax())
+            .receptionRoute(terms.receptionRoute())
+            .carrier(terms.carrier())
+            .mediaName(terms.mediaName())
+            .remarks(terms.remarks())
+            .castDriverMessage(terms.castDriverMessage())
+            .status(OrderStatus.CONFIRMED)
+            .build();
+    order.setStoreId(storeId);
+    return order;
+  }
+
+  /**
+   * 予約申請の確定で生まれる受注。受付経路は申請の入口を写す。判定を会員コードのスナップショットで行うのは、会員行の削除で requesterMemberId
+   * が欠落した会員申請をゲスト由来として記録しないため。
+   */
+  public static Order confirmedFrom(
+      Long storeId, OrderApplication application, ConfirmedOrderDetails details) {
+    Order order =
+        Order.builder()
+            .businessDate(details.businessDate())
+            .arrivalScheduledStartTime(details.arrivalScheduledStartTime())
+            .arrivalScheduledEndTime(details.arrivalScheduledEndTime())
+            .pax(details.pax())
+            .remarks(details.remarks())
+            .status(OrderStatus.CONFIRMED)
+            .receptionRoute(
+                application.isGuest() ? ReceptionRoute.GUEST_WEB : ReceptionRoute.MEMBER_WEB)
+            .requesterMemberId(application.getRequesterMemberId())
+            .requesterMemberCode(application.getRequesterMemberCode())
+            .requesterDeclaredName(application.getRequesterDeclaredName())
+            .build();
+    order.setStoreId(storeId);
+    return order;
+  }
 
   @Column(name = "receptionist_id")
   private Long receptionistId;
@@ -137,26 +183,62 @@ public class Order extends StoreScopedEntity {
     return specialServiceLines.stream().map(OrderSpecialService::getSnapshot).toList();
   }
 
-  /** 採用候補の試算を別の受注で行い、利用と相殺を含む最終的な請求額を検証する。 */
-  public Order calculateWith(
+  /** 採用候補の試算。利用と相殺を含む最終的な請求額を、集約の計算を通して値で返す。 */
+  public OrderQuote calculateWith(
       OrderCourse nextCourse,
       List<SpecialServiceSnapshot> services,
       List<OrderFeeLineDraft> drafts) {
-    Order copy = Order.builder().status(OrderStatus.CONFIRMED).build();
-    copy.setId(getId());
-    copy.assignCast(castId);
-    copy.linkCustomer(customerId);
+    Order scratch = scratch(getId());
     if (status == OrderStatus.COMPLETED) {
       feeLines.stream()
           .filter(line -> line.getKind().isSystemOwned())
           .map(line -> OrderFeeLine.of(line.getKind(), line.getName(), line.getAmount()))
-          .forEach(copy.feeLines::add);
+          .forEach(scratch.feeLines::add);
     }
-    copy.adoptServices(nextCourse, services, drafts);
+    scratch.adoptServices(nextCourse, services, drafts);
     if (status == OrderStatus.COMPLETED) {
-      copy.completeWith(0, autoGrantPoints == null ? 0 : autoGrantPoints, completedAt);
+      scratch.completeWith(0, autoGrantPoints == null ? 0 : autoGrantPoints, completedAt);
     }
-    return copy;
+    return scratch.toQuote();
+  }
+
+  /** まだ受注が無い段階の試算。 */
+  public static OrderQuote calculateNewWith(
+      OrderCourse nextCourse,
+      List<SpecialServiceSnapshot> services,
+      List<OrderFeeLineDraft> drafts) {
+    Order scratch = scratch(null);
+    scratch.adoptServices(nextCourse, services, drafts);
+    return scratch.toQuote();
+  }
+
+  /** 採用済みの試算に、ポイント利用と自動付与を載せた完了の結果。 */
+  public OrderQuote quoteCompletion(
+      OrderQuote adopted, int usedPoints, int autoGrantPoints, OffsetDateTime at) {
+    Order scratch = scratch(getId());
+    scratch.adoptServices(adopted.course(), adopted.specialServices(), adopted.editableFeeLines());
+    scratch.completeWith(usedPoints, autoGrantPoints, at);
+    return scratch.toQuote();
+  }
+
+  // 計算のためだけの使い捨て。集約の外へは返さず、試算は値（OrderQuote）にして渡す。
+  private static Order scratch(String id) {
+    Order scratch = Order.builder().status(OrderStatus.CONFIRMED).build();
+    scratch.setId(id);
+    return scratch;
+  }
+
+  private OrderQuote toQuote() {
+    return new OrderQuote(
+        getId(),
+        status,
+        course,
+        feeLines.stream().map(OrderFeeLineDraft::of).toList(),
+        getSpecialServices(),
+        totalFee,
+        grantBasisAmount(),
+        getTotalDurationMinutes(),
+        getTotalRemuneration());
   }
 
   public void adoptServices(
@@ -357,11 +439,7 @@ public class Order extends StoreScopedEntity {
 
   public List<OrderFeeLineDraft> editableFeeLines() {
     return feeLines.stream()
-        .filter(
-            line ->
-                !line.getKind().isSystemOwned()
-                    && line.getKind() != OrderFeeLineKind.BASE_COURSE
-                    && line.getKind() != OrderFeeLineKind.SPECIAL_SERVICE)
+        .filter(line -> line.getKind().isStoreEditable())
         .map(OrderFeeLineDraft::of)
         .toList();
   }
@@ -372,9 +450,7 @@ public class Order extends StoreScopedEntity {
     var ids = new HashSet<String>();
     var services = new HashSet<String>();
     for (OrderFeeLineDraft draft : drafts) {
-      if (draft.kind() == OrderFeeLineKind.SPECIAL_SERVICE
-          || draft.kind() == OrderFeeLineKind.BASE_COURSE
-          || (draft.kind() != null && draft.kind().isSystemOwned())) {
+      if (draft.kind() != null && !draft.kind().isStoreEditable()) {
         throw new InvalidOrderFeeLineException("コースとポイントの明細は直接変更できません");
       }
       OrderFeeLine line;
@@ -426,12 +502,7 @@ public class Order extends StoreScopedEntity {
     } else {
       base.applyCourse(course);
     }
-    feeLines.removeIf(
-        line ->
-            !line.getKind().isSystemOwned()
-                && line.getKind() != OrderFeeLineKind.BASE_COURSE
-                && line.getKind() != OrderFeeLineKind.SPECIAL_SERVICE
-                && !replaced.contains(line));
+    feeLines.removeIf(line -> line.getKind().isStoreEditable() && !replaced.contains(line));
     var selected = getSpecialServices();
     feeLines.removeIf(
         line ->
@@ -599,9 +670,13 @@ public class Order extends StoreScopedEntity {
 
   /** ポイント利用の可否。会員へ紐づかない受注は使えず、上限は {@link #grantBasisAmount}。 */
   public void requireRedeemable(int usedPoints, boolean memberLinked) {
+    requireRedeemable(grantBasisAmount(), usedPoints, memberLinked);
+  }
+
+  static void requireRedeemable(int grantBasis, int usedPoints, boolean memberLinked) {
     if (usedPoints > 0 && !memberLinked)
       throw new InvalidOrderFeeLineException("非会員の受注ではポイントを利用できません");
-    requireWithinGrantBasis(usedPoints);
+    requireWithin(grantBasis, usedPoints);
   }
 
   private void requireUnfinished() {
@@ -611,9 +686,12 @@ public class Order extends StoreScopedEntity {
 
   // 会計金額を超える利用は請求より大きい割引の仕訳になる。意図して減らすなら理由の付く手動調整の経路がある。
   private void requireWithinGrantBasis(int usedPoints) {
+    requireWithin(grantBasisAmount(), usedPoints);
+  }
+
+  private static void requireWithin(int grantBasis, int usedPoints) {
     if (usedPoints < 0) throw new InvalidOrderFeeLineException("利用ポイントは 0 以上です");
-    if (usedPoints > grantBasisAmount())
-      throw new InvalidOrderFeeLineException("利用ポイントは会計金額を超えられません");
+    if (usedPoints > grantBasis) throw new InvalidOrderFeeLineException("利用ポイントは会計金額を超えられません");
   }
 
   /**

@@ -3,6 +3,7 @@ package com.kizuna.order.application;
 import com.kizuna.customer.contact.GuestContactImport;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
+import com.kizuna.order.domain.OrderQuote;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.SpecialServiceSnapshot;
 import com.kizuna.service.application.OrderServiceCatalog;
@@ -52,7 +53,7 @@ public class OrderCalculation {
         OffsetDateTime.now());
   }
 
-  public Order calculate(
+  public OrderQuote calculate(
       Long storeId,
       Order original,
       OrderCourse course,
@@ -67,24 +68,23 @@ public class OrderCalculation {
         saving);
   }
 
-  public Order calculate(
+  public OrderQuote calculate(
       Long storeId,
       Order original,
       OrderCourse course,
       List<OrderFeeLineInput> lines,
       List<SpecialServiceSnapshot> specials,
       boolean saving) {
-    Order source =
-        original == null ? Order.builder().status(OrderStatus.CONFIRMED).build() : original;
-    return source.calculateWith(
-        course,
-        specials,
+    var drafts =
         selection.resolve(
             storeId,
             original,
             lines,
             original != null && original.getStatus() == OrderStatus.COMPLETED,
-            saving));
+            saving);
+    return original == null
+        ? Order.calculateNewWith(course, specials, drafts)
+        : original.calculateWith(course, specials, drafts);
   }
 
   public OrderPreview preview(
@@ -93,7 +93,7 @@ public class OrderCalculation {
       String id,
       String actor,
       Object input,
-      Order calculated,
+      OrderQuote calculated,
       OrderPoints points) {
     return preview(storeId, operation, id, actor, input, calculated, points, List.of());
   }
@@ -104,19 +104,14 @@ public class OrderCalculation {
       String id,
       String actor,
       Object input,
-      Order calculated,
+      OrderQuote calculated,
       OrderPoints points,
       List<GuestContactImport> contactImports) {
     var specials = specialServices.describe(storeId, calculated);
     var consent = OrderConsent.of(calculated, points, specials, contactImports);
     return new OrderPreview(
         confirmation.sign(storeId, operation, id, actor, input, consent),
-        calculated.getCourse(),
-        calculated.getFeeLines(),
-        calculated.getTotalFee(),
-        calculated.grantBasisAmount(),
-        calculated.getTotalDurationMinutes(),
-        calculated.getTotalRemuneration(),
+        calculated,
         points,
         specials,
         contactImports);
@@ -138,7 +133,7 @@ public class OrderCalculation {
       String id,
       String actor,
       Object input,
-      Order calculated,
+      OrderQuote calculated,
       OrderPoints points) {
     verify(token, storeId, operation, id, actor, input, calculated, points, List.of());
   }
@@ -151,7 +146,7 @@ public class OrderCalculation {
       String id,
       String actor,
       Object input,
-      Order calculated,
+      OrderQuote calculated,
       OrderPoints points,
       List<GuestContactImport> contactImports) {
     var consent =

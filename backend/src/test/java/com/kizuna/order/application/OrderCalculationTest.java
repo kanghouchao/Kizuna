@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourses;
-import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.OrderQuote;
 import com.kizuna.order.domain.SpecialServiceSnapshot;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.shared.config.AppProperties;
@@ -43,11 +43,8 @@ class OrderCalculationTest {
 
   private OrderSpecialServices specialServices;
   private OrderCalculation calculation;
-  private final Order calculated =
-      Order.builder()
-          .course(OrderCourses.course("基本", 60, 12000))
-          .status(OrderStatus.CONFIRMED)
-          .build();
+  private final OrderQuote calculated =
+      Order.calculateNewWith(OrderCourses.course("基本", 60, 12000), List.of(), List.of());
 
   @BeforeEach
   void setUp() {
@@ -64,7 +61,7 @@ class OrderCalculationTest {
                 properties),
             mock(OrderFeeLineSelection.class),
             specialServices);
-    when(specialServices.describe(anyLong(), any()))
+    when(specialServices.describe(anyLong(), any(OrderQuote.class)))
         .thenReturn(List.of(new SpecialServiceStatus(SERVICE, false, "ACTIVE")));
   }
 
@@ -77,7 +74,7 @@ class OrderCalculationTest {
   @Test
   void commitMatchesThePreviewWithoutReadingTheConsentStatus() {
     // 同意の現況は表示だけの値。確定の照合は修復待ちの印だけを引き直す
-    when(specialServices.attention(anyLong(), any()))
+    when(specialServices.attention(anyLong(), any(OrderQuote.class)))
         .thenReturn(List.of(new SpecialServiceStatus(SERVICE, false, null)));
     String token = previewToken();
 
@@ -90,7 +87,7 @@ class OrderCalculationTest {
   @Test
   void aServiceRejectedAfterThePreviewSendsTheCommitBackToPreview() {
     // 更新の確定は修復待ちを撥ねる門を持たない。試算の後に拒否された特殊サービスは照合の食い違いで止める
-    when(specialServices.attention(anyLong(), any()))
+    when(specialServices.attention(anyLong(), any(OrderQuote.class)))
         .thenReturn(List.of(new SpecialServiceStatus(SERVICE, true, null)));
     String token = previewToken();
 

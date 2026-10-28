@@ -353,17 +353,14 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("完了時刻は渡した時刻になり、完了の写しで試算しても元の時刻のまま残ること")
+  @DisplayName("完了時刻は渡した時刻になり、完了した受注の試算は完了の姿で返ること")
   void completeWith_recordsGivenTime() {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.completeWith(0, 10, COMPLETED_AT);
 
     assertThat(order.getCompletedAt()).isEqualTo(COMPLETED_AT);
-    assertThat(
-            order
-                .calculateWith(OrderCourses.course("基本", 60, 0), List.of(), List.of())
-                .getCompletedAt())
-        .isEqualTo(COMPLETED_AT);
+    assertThat(order.calculateWith(OrderCourses.course("基本", 60, 0), List.of(), List.of()).status())
+        .isEqualTo(OrderStatus.COMPLETED);
   }
 
   @Test

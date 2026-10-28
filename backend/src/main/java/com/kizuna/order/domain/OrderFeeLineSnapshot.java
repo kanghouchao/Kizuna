@@ -28,4 +28,16 @@ public record OrderFeeLineSnapshot(
         line.getRemuneration(),
         line.getAdoption());
   }
+
+  public static OrderFeeLineSnapshot of(OrderFeeLineDraft draft) {
+    return new OrderFeeLineSnapshot(
+        draft.lineId(),
+        draft.kind(),
+        draft.name(),
+        draft.adoption() == null ? null : draft.adoption().serviceId(),
+        draft.amount(),
+        draft.durationMinutes(),
+        draft.remuneration(),
+        draft.adoption());
+  }
 }
