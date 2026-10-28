@@ -732,7 +732,8 @@ class OrderServiceTest {
       assertThatThrownBy(() -> service.update(STORE_ID, "o1", req, ACTOR_EMAIL))
           .as("状態 %s の受注が編集を撥ねること", terminal)
           .isInstanceOf(ServiceException.class)
-          .hasMessageMatching(".*(専用訂正で変更してください|取消済みの受注は編集できません)");
+          .hasMessage(
+              terminal == OrderStatus.CANCELLED ? "取消済みの受注は編集できません" : "終端の内容は専用訂正で変更してください");
       assertThat(order.getPax()).as("撥ねた要求が内容を書き換えないこと").isEqualTo(2);
     }
     verify(orderRepository, never()).save(any(Order.class));
