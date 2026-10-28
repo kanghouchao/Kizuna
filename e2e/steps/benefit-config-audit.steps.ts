@@ -10,7 +10,7 @@ import {
   loginUser,
 } from "./store-api";
 
-const { Given, When, Then } = createBdd();
+const { Given, When, Then, After } = createBdd();
 let operator = "",
   limited = "",
   auditor = "",
@@ -18,7 +18,8 @@ let operator = "",
   ruleId = 0,
   secret = "",
   host = "",
-  ruleName = "";
+  ruleName = "",
+  originalHost: string | null = null;
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 const rulePayload = (points: number, name: string) => ({
@@ -133,6 +134,14 @@ When(
       data: { config_value: secret },
     });
     expect(missing.status()).toBe(404);
+    const configs = await request.get("/api/system-configs", {
+      headers: bearer(operator),
+    });
+    expect(configs.status()).toBe(200);
+    const current = (await configs.json()).find(
+      (config: { config_key: string }) => config.config_key === "smtp_host",
+    );
+    originalHost = current.config_value ?? "";
     for (const [key, value] of [
       ["smtp_host", host],
       ["smtp_host", host],
@@ -199,3 +208,20 @@ Then(
     expect(JSON.stringify(dump)).not.toContain(ruleName);
   },
 );
+
+// 空でない smtp_host を残すと、後続の通知配信シナリオが送信不能の前提を失う。
+// 退避に成功した場合だけ戻し、退避前に落ちたシナリオが空値で上書きしないようにする。
+After({ tags: "@benefit-config-audit" }, async ({ request }) => {
+  if (originalHost === null) return;
+  for (const [key, value] of [
+    ["smtp_host", originalHost],
+    ["smtp_password", ""],
+  ]) {
+    const response = await request.put(`/api/system-configs/${key}`, {
+      headers: bearer(operator),
+      data: { config_value: value },
+    });
+    expect(response.status(), await response.text()).toBe(200);
+  }
+  originalHost = null;
+});
