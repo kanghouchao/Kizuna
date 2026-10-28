@@ -562,6 +562,31 @@ public class Order extends StoreScopedEntity {
     if (!Objects.equals(getVersion(), expected)) throw new OrderVersionConflictException();
   }
 
+  /** 完了後訂正の前提（完了済みかつ無効化されていない）。試算と訂正が副作用の前に同じ規則で撥ねるための検査だけを行う。 */
+  public void requireCorrectable() {
+    if (status != OrderStatus.COMPLETED || completionInvalidated)
+      throw new InvalidOrderCorrectionException("完了した受注だけが訂正できます");
+  }
+
+  /** 完了前の編集の前提（終端でない）。入力の検証より先に撥ねるための検査だけを行う。 */
+  public void requireEditable() {
+    if (status == null || status.isTerminal())
+      throw new InvalidOrderFeeLineException("終端の内容は専用訂正で変更してください");
+  }
+
+  /** ポイント巻き戻しの前提（完了済み）。台帳へ触る前に撥ねるための検査だけを行い、相殺済みの判定は台帳に委ねる。 */
+  public void requirePointRollbackable() {
+    if (status != OrderStatus.COMPLETED)
+      throw new InvalidOrderFeeLineException("完了した受注の利用だけを一度相殺できます");
+  }
+
+  /** 伝票再発行の前提（完了済みかつ無効化されていない）。帰属の有無は別集約のため呼び手が見る。 */
+  public void requireReceiptReissuable() {
+    if (status != OrderStatus.COMPLETED)
+      throw new InvalidOrderCorrectionException("完了していない受注に伝票は発行できません");
+    if (completionInvalidated) throw new InvalidOrderCorrectionException("無効化した受注に伝票は発行できません");
+  }
+
   /**
    * 完了の前提を台帳へ触る前に検査する。版の照合が状態の検査より先 — 別の操作者が終端化させた受注へ陳腐化した版で届く要求は 競合であり、400 で返すと画面が取り直しの契機を得られない。
    */

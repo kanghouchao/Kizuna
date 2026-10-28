@@ -138,11 +138,11 @@ class OrderPointRollbackServiceTest {
 
     assertThatThrownBy(() -> service.preview(STORE_ID, ORDER_ID))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("完了した受注だけが");
+        .hasMessageContaining("完了した受注の利用だけを");
 
     assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, request(), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
-        .hasMessageContaining("完了した受注だけが");
+        .hasMessageContaining("完了した受注の利用だけを");
     Mockito.verifyNoInteractions(pointLedgerService);
   }
 

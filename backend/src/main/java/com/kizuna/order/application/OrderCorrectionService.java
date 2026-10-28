@@ -12,10 +12,8 @@ import com.kizuna.order.domain.OrderCorrectionRepository;
 import com.kizuna.order.domain.OrderCorrectionSnapshot;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManager;
@@ -58,7 +56,7 @@ public class OrderCorrectionService {
     // 項目まで開いた時点の値で押し戻す — 楽観ロックは要求ごとに現物を読み直すため、この照合が無いと
     // 食い違いを検出できないまま、理由と痕を伴う先の訂正が黙って巻き戻る。
     order.requireVersion(request.getExpectedVersion());
-    if (order.isCompletionInvalidated()) throw new ServiceException("無効化した受注は訂正できません");
+    order.requireCorrectable();
     int previousTotalFee = order.getTotalFee();
     int previousRemuneration = order.getTotalRemuneration();
     int previousDuration = order.getTotalDurationMinutes();
@@ -218,8 +216,7 @@ public class OrderCorrectionService {
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     order.requireVersion(request.getExpectedVersion());
-    if (order.isCompletionInvalidated() || order.getStatus() != OrderStatus.COMPLETED)
-      throw new ServiceException("完了した受注だけが訂正できます");
+    order.requireCorrectable();
     var course =
         request.getCourseRevisionId() == null
             ? order.getCourse()

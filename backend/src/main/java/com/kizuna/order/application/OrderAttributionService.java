@@ -10,7 +10,6 @@ import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
@@ -112,12 +111,7 @@ public class OrderAttributionService {
         orderRepository
             .findByIdAndStoreIdForUpdate(orderId, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
-    if (order.getStatus() != OrderStatus.COMPLETED) {
-      throw new ServiceException("完了していない受注に伝票は発行できません");
-    }
-    if (order.isCompletionInvalidated()) {
-      throw new ServiceException("無効化した受注に伝票は発行できません");
-    }
+    order.requireReceiptReissuable();
     // トークン行を先に押さえてから帰属記録を読む。順序を入れ替えると、在途の申領が commit する前に読んだ
     // 「帰属していない」という観測のまま発行してしまい、有効な帰属と申領できる伝票が並ぶ。
     List<OrderReceiptToken> tokens = orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
