@@ -13,6 +13,7 @@ import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.application.GuestContactConsentText;
 import com.kizuna.order.application.GuestOrderApplicationService;
+import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
@@ -44,6 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderApplicationController {
 
   private final OrderService orderService;
+  private final OrderQueryService orderQueryService;
   private final GuestOrderApplicationService guestOrderApplicationService;
   private final GuestApplicationRateLimiter guestApplicationRateLimiter;
   private final OrderMapper orderMapper;
@@ -102,7 +104,7 @@ public class OrderApplicationController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public OrderApplicationDetailResponse detail(
       @CurrentStore Long storeId, @PathVariable String id) {
-    return orderMapper.toResponse(orderService.applicationDetail(storeId, id));
+    return orderMapper.toResponse(orderQueryService.applicationDetail(storeId, id));
   }
 
   @GetMapping
@@ -113,7 +115,7 @@ public class OrderApplicationController {
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok(
-        orderService
+        orderQueryService
             .listApplications(storeId, statuses, cursor, size)
             .map(orderMapper::toResponse));
   }

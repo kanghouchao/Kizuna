@@ -26,6 +26,7 @@ import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderApplicationItem;
 import com.kizuna.order.application.OrderDetail;
 import com.kizuna.order.application.OrderPreview;
+import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderApplicationStatus;
@@ -82,6 +83,7 @@ class OrderApplicationControllerTest {
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private OrderService orderService;
+  @MockitoBean private OrderQueryService orderQueryService;
   @MockitoBean private GuestOrderApplicationService guestOrderApplicationService;
   @MockitoBean private GuestApplicationRateLimiter guestApplicationRateLimiter;
 
@@ -98,7 +100,7 @@ class OrderApplicationControllerTest {
     ArgumentCaptor<Set<OrderApplicationStatus>> statusesCaptor = ArgumentCaptor.captor();
     ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
-    when(orderService.listApplications(
+    when(orderQueryService.listApplications(
             eq(STORE_ID), statusesCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
@@ -109,7 +111,7 @@ class OrderApplicationControllerTest {
     assertThat(statusesCaptor.getValue()).containsExactly(OrderApplicationStatus.PENDING);
     assertThat(cursorCaptor.getValue()).isEqualTo("abc");
     assertThat(sizeCaptor.getValue()).isEqualTo(5);
-    verify(orderService).listApplications(eq(STORE_ID), any(), any(), anyInt());
+    verify(orderQueryService).listApplications(eq(STORE_ID), any(), any(), anyInt());
   }
 
   @Test
@@ -316,7 +318,7 @@ class OrderApplicationControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void applicationRowCarriesOnlyApplicationFields() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.listApplications(any(), any(), any(), anyInt()))
+    when(orderQueryService.listApplications(any(), any(), any(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(pendingApplication()), null));
 
     mockMvc

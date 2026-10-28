@@ -32,6 +32,7 @@ import com.kizuna.order.application.OrderDetail;
 import com.kizuna.order.application.OrderPointRollbackService;
 import com.kizuna.order.application.OrderPoints;
 import com.kizuna.order.application.OrderPreview;
+import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCorrection;
@@ -114,6 +115,7 @@ class OrderControllerTest {
 
   @MockitoBean private OrderCorrectionHistory correctionHistory;
   @MockitoBean private OrderService orderService;
+  @MockitoBean private OrderQueryService orderQueryService;
   @MockitoBean private BusinessContactPermissions businessContactPermissions;
   @MockitoBean private OrderAttributionService orderAttributionService;
   @MockitoBean private OrderAttributionCorrectionService orderAttributionCorrectionService;
@@ -130,14 +132,14 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void listPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.list(any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+    when(orderQueryService.list(any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
         .perform(
             get("/orders").param("customer_id", "c1").header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk());
 
-    verify(orderService).list(eq(STORE_ID), eq("c1"), any());
+    verify(orderQueryService).list(eq(STORE_ID), eq("c1"), any());
   }
 
   @Test
@@ -199,7 +201,7 @@ class OrderControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<OrderView> empty = new PageImpl<>(List.of());
-    when(orderService.list(any(), any(), pageableCaptor.capture())).thenReturn(empty);
+    when(orderQueryService.list(any(), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
         .perform(get("/orders?sort=businessDate").header("X-Store-ID", "1"))
@@ -217,7 +219,7 @@ class OrderControllerTest {
         ArgumentCaptor.forClass(OrderQueryCriteria.class);
     ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
-    when(orderService.listWorkQueue(
+    when(orderQueryService.listWorkQueue(
             any(), criteriaCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
@@ -245,7 +247,7 @@ class OrderControllerTest {
     // 抑制ではなく型から消えていることを見る。NON_NULL 下では値が null でもキーは消えるので、
     // isNull() では「型に残ったまま詰め忘れただけ」の状態と区別できない。
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.listWorkQueue(any(), any(), any(), anyInt()))
+    when(orderQueryService.listWorkQueue(any(), any(), any(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(view("o1", OrderStatus.CONFIRMED)), null));
 
     mockMvc
@@ -261,7 +263,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void archiveRowCarriesNeitherTheReceiptTokenNorTheDriverMessage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.listArchive(any(), any(), any()))
+    when(orderQueryService.listArchive(any(), any(), any()))
         .thenReturn(new PageImpl<>(List.of(view("o1", OrderStatus.COMPLETED))));
 
     mockMvc
@@ -342,7 +344,7 @@ class OrderControllerTest {
     ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
         ArgumentCaptor.forClass(OrderQueryCriteria.class);
     ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
-    when(orderService.listWorkQueue(
+    when(orderQueryService.listWorkQueue(
             any(), criteriaCaptor.capture(), cursorCaptor.capture(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
@@ -365,7 +367,7 @@ class OrderControllerTest {
     ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
         ArgumentCaptor.forClass(OrderQueryCriteria.class);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    when(orderService.listArchive(any(), criteriaCaptor.capture(), pageableCaptor.capture()))
+    when(orderQueryService.listArchive(any(), criteriaCaptor.capture(), pageableCaptor.capture()))
         .thenReturn(Page.empty());
 
     mockMvc
@@ -915,12 +917,12 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void customerCandidatesDoNotSearchContactsWithoutCustomerManagement() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.customerCandidates(any(), any(), any(), anyInt(), anyBoolean()))
+    when(orderQueryService.customerCandidates(any(), any(), any(), anyInt(), anyBoolean()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc.perform(storeGet("/orders/customer-candidates?search=090")).andExpect(status().isOk());
 
-    verify(orderService).customerCandidates(any(), eq("090"), any(), anyInt(), eq(false));
+    verify(orderQueryService).customerCandidates(any(), eq("090"), any(), anyInt(), eq(false));
   }
 
   @Test
@@ -928,12 +930,12 @@ class OrderControllerTest {
   @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_CUSTOMER_MANAGE"})
   void customerCandidatesSearchContactsWithCustomerManagement() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.customerCandidates(any(), any(), any(), anyInt(), anyBoolean()))
+    when(orderQueryService.customerCandidates(any(), any(), any(), anyInt(), anyBoolean()))
         .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc.perform(storeGet("/orders/customer-candidates?search=090")).andExpect(status().isOk());
 
-    verify(orderService).customerCandidates(any(), eq("090"), any(), anyInt(), eq(true));
+    verify(orderQueryService).customerCandidates(any(), eq("090"), any(), anyInt(), eq(true));
   }
 
   private static OrderPreview emptyPreview() {

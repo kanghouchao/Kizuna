@@ -1,6 +1,6 @@
 package com.kizuna.order.api;
 
-import com.kizuna.order.application.OrderService;
+import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.storescope.CurrentStore;
@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OrderCourseController {
   private final OrderServiceCatalog catalog;
-  private final OrderService orders;
+  private final OrderQueryService orders;
 
   @GetMapping("/course-candidates")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")

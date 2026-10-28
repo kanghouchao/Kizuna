@@ -46,7 +46,7 @@ public class ShiftLineageService {
   /**
    * <b>系列は 1 つの断面で読む</b>（{@code REPEATABLE READ}）。シフト・申請・実績・実行主体と 4 回問い合わせるので、 既定の READ COMMITTED
    * では文ごとに断面を取り直し、間に変更申請の承認が commit されると同じ応答が「承認済みの 変更申請」と「変更前のシフト」を同時に載せる — 系列を 1
-   * 本の正本として見せるという読み口の目的が崩れる。 断面を固定して根を断つのは {@code CustomerService} / {@code OrderService}
+   * 本の正本として見せるという読み口の目的が崩れる。 断面を固定して根を断つのは {@code CustomerService} / {@code OrderQueryService}
    * の群読み口と同じ選択である。
    */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
