@@ -2256,6 +2256,32 @@ class OrderServiceTest {
   }
 
   @Test
+  void completeForAWithdrawnMemberWithAnActiveLinkCompletesWithZeroGrant() {
+    // 退会済みでも ACTIVE 関連が残る会員。試算の付与予定 0 と物化の結果 0 が一致するので 409 にならない
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+    stubActor();
+    when(materializer.materialize(
+            eq(MEMBER_ID),
+            eq("123456789012"),
+            eq("o1"),
+            eq(STORE_ID),
+            any(),
+            any(),
+            eq(ACTOR_ID),
+            any()))
+        .thenReturn(new AttributionMaterializer.Result(0, 0));
+    stubQuote(new PointQuote(0L, 100, 0, null));
+    stubWriteBackResponse();
+
+    service.complete(STORE_ID, "o1", completion(12000, null), "staff@kizuna.test");
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    assertThat(order.getAutoGrantPoints()).isZero();
+  }
+
+  @Test
   void completeRejectsPointUsageOnANonMemberOrder() {
     // 非会員には台帳そのものが存在しない。利用の指定は黙って 0 に丸めず撥ねる
     Order order = confirmedOrderWithCustomer();

@@ -244,6 +244,19 @@ class PointLedgerServiceTest {
   }
 
   @Test
+  @DisplayName("退会済み会員の見込みは付与予定 0 で、利用は理由付きで否になること")
+  void quoteForAWithdrawnMemberGrantsNothingAndRejectsUsage() {
+    when(systemConfigService.pointSettings()).thenReturn(new PointSettings(100, 1, 100));
+    when(pointEntryRepository.findCredits(MEMBER_ID)).thenReturn(List.of());
+    when(memberLookupService.isWithdrawn(MEMBER_ID)).thenReturn(true);
+
+    assertThat(pointLedgerService.quote(MEMBER_ID, 12000, 0))
+        .isEqualTo(new PointLedgerService.PointQuote(0, 100, 0, null));
+    assertThat(pointLedgerService.quote(MEMBER_ID, 12000, 100).rejection())
+        .isEqualTo("退会済みの会員のポイントは利用できません");
+  }
+
+  @Test
   @DisplayName("見込みは利用と同じ規則で可否を判じ、否なら理由を値で返すこと")
   void quoteReportsTheRedemptionRejection() {
     when(systemConfigService.pointSettings()).thenReturn(new PointSettings(100, 1, 100));
