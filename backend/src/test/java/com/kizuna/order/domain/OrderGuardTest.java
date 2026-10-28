@@ -5,8 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 class OrderGuardTest {
   private static Order order(OrderStatus status, boolean invalidated) {
@@ -20,21 +18,21 @@ class OrderGuardTest {
         .doesNotThrowAnyException();
     assertThatThrownBy(() -> order(OrderStatus.COMPLETED, true).requireCorrectable())
         .isInstanceOf(InvalidOrderCorrectionException.class)
-        .hasMessage("完了した受注だけが訂正できます");
+        .hasMessage("無効化した受注は訂正できません");
     assertThatThrownBy(() -> order(OrderStatus.CONFIRMED, false).requireCorrectable())
         .isInstanceOf(InvalidOrderCorrectionException.class)
         .hasMessage("完了した受注だけが訂正できます");
   }
 
-  @ParameterizedTest
-  @EnumSource(
-      value = OrderStatus.class,
-      names = {"COMPLETED", "CANCELLED"})
-  @DisplayName("終端の受注は編集できないこと")
-  void terminalOrderIsNotEditable(OrderStatus terminal) {
-    assertThatThrownBy(() -> order(terminal, false).requireEditable())
+  @Test
+  @DisplayName("完了済みの受注は専用訂正へ、取消済みの受注は編集不可として案内すること")
+  void terminalOrderIsNotEditable() {
+    assertThatThrownBy(() -> order(OrderStatus.COMPLETED, false).requireEditable())
         .isInstanceOf(InvalidOrderFeeLineException.class)
         .hasMessage("終端の内容は専用訂正で変更してください");
+    assertThatThrownBy(() -> order(OrderStatus.CANCELLED, false).requireEditable())
+        .isInstanceOf(InvalidOrderFeeLineException.class)
+        .hasMessage("取消済みの受注は編集できません");
   }
 
   @Test
