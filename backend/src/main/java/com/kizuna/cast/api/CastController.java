@@ -84,8 +84,9 @@ public class CastController {
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public ResponseEntity<Void> delete(@CurrentStore Long storeId, @PathVariable String id) {
-    castService.delete(storeId, id);
+  public ResponseEntity<Void> delete(
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    castService.delete(storeId, id, principal.getName());
     return ResponseEntity.noContent().build();
   }
 

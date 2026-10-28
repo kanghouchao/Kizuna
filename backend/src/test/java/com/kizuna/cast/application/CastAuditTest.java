@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.domain.AuditEvent;
@@ -13,6 +15,7 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.domain.CastCascadeCounts;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentSnapshot;
@@ -24,6 +27,7 @@ import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import com.kizuna.store.domain.StoreRepository;
@@ -44,6 +48,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -296,6 +301,56 @@ class CastAuditTest {
             () -> service.update(STORE_ID, "enrollment", request, "operator@example.test"))
         .isInstanceOf(ServiceException.class);
     assertThat(recorded).hasSize(1);
+  }
+
+  @Test
+  void deletionAuditsBeforeSnapshotAndCascadeCountsOnly() {
+    existing();
+    when(enrollments.countCascade("enrollment", STORE_ID))
+        .thenReturn(new CastCascadeCounts(3, 2, 1));
+    service.delete(STORE_ID, "enrollment", "operator@example.test");
+    verify(enrollments).delete(any());
+    assertThat(recorded).hasSize(1);
+    var event = recorded.getFirst();
+    assertThat(event.getAction()).isEqualTo("CAST_ENROLLMENT_DELETED");
+    assertThat(event.getTargetType()).isEqualTo("CAST_ENROLLMENT");
+    assertThat(event.getTargetId()).isEqualTo("enrollment");
+    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getBeforeValues())
+        .containsEntry("exists", "true")
+        .containsEntry("status", "ENROLLED")
+        .containsEntry("cast_id", "")
+        .containsEntry("publication_status", "UNPUBLISHED")
+        .containsEntry("enrollment_version", "0");
+    assertThat(event.getAfterValues())
+        .containsOnlyKeys(
+            "exists",
+            "deleted_profiles",
+            "deleted_status_histories",
+            "deleted_snapshots",
+            "deleted_invitations")
+        .containsEntry("exists", "false")
+        .containsEntry("deleted_status_histories", "3")
+        .containsEntry("deleted_snapshots", "2")
+        .containsEntry("deleted_invitations", "1");
+    assertThat(event.getBeforeValues().toString() + event.getAfterValues()).doesNotContain("非公開");
+  }
+
+  @Test
+  void rejectedOrConstraintFailedDeletionLeavesNoAudit() {
+    existing();
+    when(enrollments.countCascade("enrollment", STORE_ID))
+        .thenReturn(new CastCascadeCounts(0, 0, 0));
+    doThrow(new DataIntegrityViolationException("fk")).when(enrollments).flush();
+    assertThatThrownBy(() -> service.delete(STORE_ID, "enrollment", "operator@example.test"))
+        .isInstanceOf(RuntimeException.class);
+    assertThat(recorded).isEmpty();
+    var linked = persisted(CastEnrollment.builder().castId(5L).build(), "linked");
+    when(enrollments.findByIdAndStoreIdForUpdate("linked", STORE_ID))
+        .thenReturn(Optional.of(linked));
+    assertThatThrownBy(() -> service.delete(STORE_ID, "linked", "operator@example.test"))
+        .isInstanceOf(ConflictException.class);
+    assertThat(recorded).isEmpty();
   }
 
   private void existing() {

@@ -238,6 +238,7 @@ class CastServiceTest {
     when(enrollments.findByIdAndStoreIdForUpdate("e1", STORE_ID))
         .thenReturn(Optional.of(CastEnrollment.builder().build()));
     when(attendance.findReferencedCastIds(List.of("e1"))).thenReturn(Set.of("e1"));
-    assertThatThrownBy(() -> service.delete(STORE_ID, "e1")).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.delete(STORE_ID, "e1", "actor"))
+        .isInstanceOf(ConflictException.class);
   }
 }

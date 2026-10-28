@@ -325,7 +325,7 @@ public class CastService {
 
   /** 本人未紐づけの草稿のみ削除できる。受注・実績の参照は履歴の根拠なので維持する。 */
   @Transactional
-  public void delete(Long storeId, String id) {
+  public void delete(Long storeId, String id, String actorEmail) {
     CastEnrollment enrollment =
         castRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
@@ -336,6 +336,8 @@ public class CastService {
     if (attendanceReferenceCheck.findReferencedCastIds(List.of(id)).contains(id)) {
       throw attendanceReferenced();
     }
+    var before = snapshot(enrollment, requireProfile(storeId, id));
+    var cascade = castRepository.countCascade(id, storeId);
     try {
       castRepository.delete(enrollment);
       // flush が要る理由は CustomerService#delete と同じ（commit まで遅れると catch を素通りする）。
@@ -355,6 +357,21 @@ public class CastService {
               DbConstraint.FK_T_ATTENDANCES_SHIFT,
               CastService::attendanceReferenced));
     }
+    audit.record(
+        actorEmail,
+        enrollment.getStoreId(),
+        "CAST_ENROLLMENT_DELETED",
+        "CAST_ENROLLMENT",
+        id,
+        null,
+        null,
+        before,
+        Map.of(
+            "exists", "false",
+            "deleted_profiles", "1",
+            "deleted_status_histories", String.valueOf(cascade.statusHistories()),
+            "deleted_snapshots", String.valueOf(cascade.snapshots()),
+            "deleted_invitations", String.valueOf(cascade.invitations())));
   }
 
   /**
