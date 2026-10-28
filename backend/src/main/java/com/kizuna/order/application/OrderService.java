@@ -328,11 +328,8 @@ public class OrderService {
 
     order.requireVersion(request.getExpectedVersion());
 
-    // 判定は「終端か」の単一述語で行い、状態ごとに書き分けない。書き分けは同じ規則を二箇所に持たせ、
-    // 片方だけが更新される入口になる（ADR 0013）。完了後の内容訂正は権限付き・記録付きの別経路が担う。
-    if (order.getStatus() != null && order.getStatus().isTerminal()) {
-      throw new ServiceException("完了・取消済みの受注は編集できません");
-    }
+    // 完了後の内容訂正は権限付き・記録付きの別経路が担う。
+    order.requireEditable();
 
     var before = OrderAuditSnapshot.of(order);
 
@@ -881,7 +878,7 @@ public class OrderService {
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     order.requireVersion(request.getExpectedVersion());
-    if (order.getStatus().isTerminal()) throw new ServiceException("完了・取消済みの受注は編集できません");
+    order.requireEditable();
     String castId =
         request.getCastId() == null || request.getCastId().isBlank() ? null : request.getCastId();
     validateUpdateAssignments(storeId, order, castId, request.getReceptionistId(), false);

@@ -10,7 +10,6 @@ import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.ConflictException;
@@ -68,7 +67,7 @@ public class OrderPointRollbackService {
         orderRepository
             .findByIdAndStoreIdForUpdate(orderId, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
-    requireCompleted(order);
+    order.requirePointRollbackable();
     PointLedgerService.PointRollbackPreview preview =
         pointLedgerService.previewRollbackForOrder(orderId);
     if (preview.reversibleUsedPoints() + order.getTotalFee() > Integer.MAX_VALUE) {
@@ -104,7 +103,7 @@ public class OrderPointRollbackService {
         orderRepository
             .findByIdAndStoreIdForUpdate(orderId, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
-    requireCompleted(order);
+    order.requirePointRollbackable();
     orderReceiptTokenRepository.findByOrderIdForUpdate(orderId);
     Long actorUserId = actorIdentityService.requireUserId(actorEmail);
     if (pointLedgerService.isRolledBack(orderId)) {
@@ -122,12 +121,6 @@ public class OrderPointRollbackService {
     orderRepository.flush();
     return OrderPointRollbackResponse.from(
         pointLedgerService.rollbackHistory(orderId).orElseThrow());
-  }
-
-  private void requireCompleted(Order order) {
-    if (order.getStatus() != OrderStatus.COMPLETED) {
-      throw new ServiceException("完了した受注だけがポイントを巻き戻せます");
-    }
   }
 
   /** この受注が現に帰属している会員のコード。帰属していなければ null。 */
