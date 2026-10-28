@@ -76,7 +76,7 @@ class StoredFileAuditTest {
 
   @Test
   void recordsWhitelistInIndependentTransaction() {
-    audit.recorded(5L, "public/5/a.jpg", "public", 4L, "image/jpeg");
+    audit.recordUpload(5L, "public/5/a.jpg", "public", 4L, "image/jpeg");
 
     var definition = ArgumentCaptor.forClass(TransactionDefinition.class);
     verify(transactions).getTransaction(definition.capture());
@@ -96,7 +96,7 @@ class StoredFileAuditTest {
 
   @Test
   void requestWithoutStoreAndContentTypeRecordsNullStoreAndBlankType() {
-    audit.recorded(null, "public/platform/a.bin", "public", 0L, null);
+    audit.recordUpload(null, "public/platform/a.bin", "public", 0L, null);
 
     var event = recorded.getFirst();
     assertThat(event.getStoreId()).isNull();
@@ -107,7 +107,7 @@ class StoredFileAuditTest {
   void auditFailureIsSwallowedAndRolledBack() {
     when(events.saveAndFlush(any())).thenThrow(new IllegalStateException("audit"));
 
-    assertThatCode(() -> audit.recorded(5L, "public/5/a.jpg", "public", 4L, "image/jpeg"))
+    assertThatCode(() -> audit.recordUpload(5L, "public/5/a.jpg", "public", 4L, "image/jpeg"))
         .doesNotThrowAnyException();
 
     verify(transactions).rollback(any());

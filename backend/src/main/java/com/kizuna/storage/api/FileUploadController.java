@@ -36,7 +36,8 @@ public class FileUploadController {
       @RequestParam(value = "bucket", defaultValue = "public") String bucket) {
     String prefix = resolveStoragePrefix(storeId);
     String relativePath = fileStorageService.store(prefix, bucket, file);
-    storedFileAudit.recorded(storeId, relativePath, bucket, file.getSize(), file.getContentType());
+    storedFileAudit.recordUpload(
+        storeId, relativePath, bucket, file.getSize(), file.getContentType());
 
     FileUploadResponse response =
         FileUploadResponse.builder()
