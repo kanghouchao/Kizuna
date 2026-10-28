@@ -49,7 +49,8 @@ public class BusinessContactHistory extends StoreScopedEntity {
       String action,
       BusinessContactState before,
       BusinessContactState after,
-      Long actor) {
+      Long actor,
+      OffsetDateTime at) {
     var row = new BusinessContactHistory();
     row.setStoreId(storeId);
     row.orderId = orderId;
@@ -58,7 +59,7 @@ public class BusinessContactHistory extends StoreScopedEntity {
     row.before = before;
     row.after = after;
     row.recordedBy = actor;
-    row.recordedAt = OffsetDateTime.now();
+    row.recordedAt = at;
     return row;
   }
 }

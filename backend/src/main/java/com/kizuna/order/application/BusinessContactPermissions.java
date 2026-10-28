@@ -75,7 +75,8 @@ public class BusinessContactPermissions {
       Order order,
       ContactSnapshot previous,
       List<BusinessContactPermissionRequest> input,
-      String actorEmail) {
+      String actorEmail,
+      OffsetDateTime now) {
     var requests = requests(order.getContactSnapshot(), input);
     for (var type : ContactType.values()) {
       String oldValue = value(previous, type), nextValue = value(order.getContactSnapshot(), type);
@@ -100,9 +101,10 @@ public class BusinessContactPermissions {
               request == null ? "CONTACT_CHANGED" : "RECORDED",
               before,
               after,
-              actors.requireUserId(actorEmail)));
+              actors.requireUserId(actorEmail),
+              now));
       // 許可だけの編集も受注の版を進め、古い画面からの上書きを拒否する。
-      order.setUpdatedAt(OffsetDateTime.now());
+      order.setUpdatedAt(now);
     }
   }
 

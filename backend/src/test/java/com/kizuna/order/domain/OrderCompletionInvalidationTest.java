@@ -9,6 +9,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class OrderCompletionInvalidationTest {
+  private static final OffsetDateTime COMPLETED_AT =
+      OffsetDateTime.parse("2026-08-14T17:42:00+09:00");
+
   @Test
   void invalidationRequiresOffsetAndPreservesOriginalFacts() {
     var order =
@@ -28,7 +31,7 @@ class OrderCompletionInvalidationTest {
             "CURRENT_SETTING",
             OffsetDateTime.now()),
         List.of());
-    order.completeWith(3000, 100);
+    order.completeWith(3000, 100, COMPLETED_AT);
     var completed = order.getCompletedAt();
     assertThatThrownBy(order::invalidateCompletion).hasMessageContaining("ポイント");
     assertThat(order.isCompletionInvalidated()).isFalse();

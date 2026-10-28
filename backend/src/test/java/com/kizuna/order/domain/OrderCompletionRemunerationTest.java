@@ -8,6 +8,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class OrderCompletionRemunerationTest {
+  private static final OffsetDateTime COMPLETED_AT =
+      OffsetDateTime.parse("2026-08-14T17:42:00+09:00");
+
   @Test
   void completionAccruesFixedRemunerationOnOriginalBusinessDate() {
     var date = LocalDate.of(2026, 9, 14);
@@ -28,10 +31,9 @@ class OrderCompletionRemunerationTest {
             new OrderFeeLineDraft(OrderFeeLineKind.DISCOUNT, "割引", -2000)));
     assertThat(order.getAccruedRemuneration()).isZero();
     assertThat(order.getCompletedAt()).isNull();
-    var before = OffsetDateTime.now();
-    order.completeWith(3000, 130);
+    order.completeWith(3000, 130, COMPLETED_AT);
     assertThat(order.getAccruedRemuneration()).isEqualTo(9000);
-    assertThat(order.getCompletedAt()).isBetween(before, OffsetDateTime.now());
+    assertThat(order.getCompletedAt()).isEqualTo(COMPLETED_AT);
     assertThat(order.getBusinessDate()).isEqualTo(date);
     assertThat(order.getTotalFee()).isEqualTo(10000);
     assertThat(order.grantBasisAmount()).isEqualTo(13000);
@@ -105,7 +107,7 @@ class OrderCompletionRemunerationTest {
             "CURRENT_SETTING",
             OffsetDateTime.now()),
         List.of());
-    order.completeWith(3000, 120);
+    order.completeWith(3000, 120, COMPLETED_AT);
     var completedAt = order.getCompletedAt();
     order.correct(
         new OrderCorrectionCommand(

@@ -292,7 +292,11 @@ public class OrderService {
     Order saved = orderRepository.save(order);
     orderRepository.flush();
     businessContactPermissions.record(
-        saved, ContactSnapshot.empty(), request.getBusinessContactPermissions(), actorEmail);
+        saved,
+        ContactSnapshot.empty(),
+        request.getBusinessContactPermissions(),
+        actorEmail,
+        OffsetDateTime.now());
     auditOrder(saved, "ORDER_CREATED", actorEmail, null, null, null);
     return toResponse(storeId, saved);
   }
@@ -395,9 +399,10 @@ public class OrderService {
       order.assignReceptionist(receptionistId);
     }
 
-    specialServices.resolve(storeId, order, previousSpecials, previousTotal, previousCast);
+    var now = OffsetDateTime.now();
+    specialServices.resolve(storeId, order, previousSpecials, previousTotal, previousCast, now);
     businessContactPermissions.record(
-        order, previousContact, request.getBusinessContactPermissions(), actorEmail);
+        order, previousContact, request.getBusinessContactPermissions(), actorEmail, now);
 
     Order saved = orderRepository.save(order);
     auditOrder(saved, "ORDER_UPDATED", actorEmail, before, null, null);
@@ -616,13 +621,15 @@ public class OrderService {
         completionPoints(storeId, calculated, 0),
         contactImports);
     Order saved = orderRepository.save(order);
+    var now = OffsetDateTime.now();
     businessContactPermissions.record(
         saved,
         ContactSnapshot.empty(),
         guestConsent.forOrder(application, saved.getContactSnapshot()),
-        actorEmail);
+        actorEmail,
+        now);
     guestConsent.importContacts(application, saved.getCustomerId(), contactImports, actorId);
-    application.confirmWith(saved.getId(), actorId, OffsetDateTime.now(), today);
+    application.confirmWith(saved.getId(), actorId, now, today);
     orderApplicationRepository.save(application);
     auditOrder(saved, "ORDER_CREATED", actorEmail, null, "ORDER_APPLICATION", application.getId());
     auditApplication(application, "ORDER_APPLICATION_CONFIRMED", actorEmail, before);
@@ -672,6 +679,7 @@ public class OrderService {
       throw new OrderConfirmationConflict("confirmation_token");
     calculated.requireRedeemable(usePoints, memberId != null);
 
+    var now = OffsetDateTime.now();
     var pointsPreview =
         orderPoints(
             memberId,
@@ -679,7 +687,7 @@ public class OrderService {
             chargeAmount,
             usePoints,
             previewed);
-    calculated.completeWith(usePoints, pointsPreview.grantPoints());
+    calculated.completeWith(usePoints, pointsPreview.grantPoints(), now);
     calculation.verify(
         command.confirmationToken(),
         storeId,
@@ -702,7 +710,7 @@ public class OrderService {
                   id,
                   order.getStoreId(),
                   order.getBusinessDate(),
-                  OffsetDateTime.now(),
+                  now,
                   actorId,
                   new AttributionMaterializer.Completion(chargeAmount, usePoints))
               .grantedPoints();
@@ -715,7 +723,7 @@ public class OrderService {
       throw new OrderConfirmationConflict("confirmation_token");
     }
     // ポイント利用は減算の明細行として内訳へ入る（台帳の減算仕訳と対になる記録）。合計はそのぶん下がる。
-    order.completeWith(usePoints, granted);
+    order.completeWith(usePoints, granted, now);
     orderRepository.save(order);
     auditOrder(order, "ORDER_COMPLETED", actorEmail, before, null, null);
     // 生値がこの応答の外へ出る経路は無い（保存されるのはダイジェストだけ）。会員へ帰属した完了では null。
@@ -937,7 +945,7 @@ public class OrderService {
             calculated.grantBasisAmount(),
             usePoints,
             false);
-    calculated.completeWith(usePoints, points.grantPoints());
+    calculated.completeWith(usePoints, points.grantPoints(), OffsetDateTime.now());
     return calculation.preview(storeId, "COMPLETE", id, actorEmail, command, calculated, points);
   }
 

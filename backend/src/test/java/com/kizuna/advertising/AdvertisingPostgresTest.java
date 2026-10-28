@@ -437,7 +437,7 @@ class AdvertisingPostgresTest {
               order.setStoreId(store);
               order.adoptCourse(OrderCourses.course("検証コース", 60, amount), List.of());
               if (status == OrderStatus.COMPLETED) {
-                order.completeWith(0, 0);
+                order.completeWith(0, 0, OffsetDateTime.now());
                 if (invalid) order.invalidateCompletion();
               } else if (status == OrderStatus.CANCELLED)
                 order.cancelWith("検証", 42L, OffsetDateTime.now());
