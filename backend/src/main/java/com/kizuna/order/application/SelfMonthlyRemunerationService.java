@@ -1,9 +1,7 @@
 package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.dto.SelfMonthlyRemunerationOrderSummary;
-import com.kizuna.order.api.dto.SelfMonthlyRemunerationResponse;
-import com.kizuna.order.api.dto.SelfMonthlyRemunerationStoreSummary;
+import com.kizuna.order.domain.RemunerationStoreRow;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.exception.NotFoundException;
@@ -27,7 +25,7 @@ public class SelfMonthlyRemunerationService {
   private final RemunerationQuery monthlyQuery;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<SelfMonthlyRemunerationStoreSummary> stores(String actor, int page, int size) {
+  public Page<RemunerationStoreRow> stores(String actor, int page, int size) {
     var pageable = page(page, size);
     var person = people.findByUserId(actors.requireUserId(actor));
     return person
@@ -36,7 +34,7 @@ public class SelfMonthlyRemunerationService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public SelfMonthlyRemunerationResponse monthly(
+  public SelfMonthlyRemuneration monthly(
       String actor, Long storeId, String month, int page, int size) {
     var pageable = page(page, size);
     if (storeId <= 0) throw new ServiceException("店舗の指定が不正です");
@@ -49,21 +47,12 @@ public class SelfMonthlyRemunerationService {
             .orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
     Long personId = person.getId();
     String name = selfQuery.storeName(personId, storeId);
-    return new SelfMonthlyRemunerationResponse(
+    return new SelfMonthlyRemuneration(
         storeId,
         name,
         month,
         monthlyQuery.total(storeId, personId, target),
-        monthlyQuery
-            .orders(storeId, personId, target, pageable)
-            .map(
-                row ->
-                    new SelfMonthlyRemunerationOrderSummary(
-                        row.orderId(),
-                        row.businessDate(),
-                        row.serviceSummary(),
-                        row.accruedRemuneration(),
-                        row.completionInvalidated())));
+        monthlyQuery.orders(storeId, personId, target, pageable));
   }
 
   private PageRequest page(int page, int size) {

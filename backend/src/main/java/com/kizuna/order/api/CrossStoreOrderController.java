@@ -1,6 +1,7 @@
 package com.kizuna.order.api;
 
 import com.kizuna.order.api.dto.AdminOrderResponse;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.AdminOrderService;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -24,6 +25,7 @@ public class CrossStoreOrderController {
 
   private final AdminOrderService adminOrderService;
   private final StoreScopeHolder storeScopeHolder;
+  private final OrderMapper orderMapper;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_SET_VIEW')")
@@ -31,6 +33,7 @@ public class CrossStoreOrderController {
       @PageableDefault(sort = "businessDate", direction = Sort.Direction.DESC) Pageable pageable) {
     StoreScope scope = storeScopeHolder.current();
     if (scope == null) throw new AccessDeniedException("店舗集合スコープを解決できません");
-    return ResponseEntity.ok(adminOrderService.list(scope, pageable));
+    return ResponseEntity.ok(
+        adminOrderService.list(scope, pageable).map(orderMapper::toAdminResponse));
   }
 }

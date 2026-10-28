@@ -8,9 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.order.api.dto.ContactSnapshotRequest;
-import com.kizuna.order.api.dto.GuestContactConsentRequest;
-import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
+import com.kizuna.order.domain.ContactSnapshot;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
@@ -39,13 +37,14 @@ class GuestOrderApplicationServiceTest {
 
   @Captor private ArgumentCaptor<OrderApplication> applicationCaptor;
 
-  private static GuestOrderApplicationCreateRequest request() {
-    GuestOrderApplicationCreateRequest request = new GuestOrderApplicationCreateRequest();
-    request.setBusinessDate(VISIT_DATE);
-    request.setContactConsent(new GuestContactConsentRequest("1", true, false));
-    request.setPax(2);
-    request.setContactSnapshot(new ContactSnapshotRequest("ゲスト花子", "09012345678", null, null));
-    return request;
+  private static GuestOrderApplicationCommand request() {
+    return new GuestOrderApplicationCommand(
+        new GuestOrderApplicationCommand.Consent("1", true, false),
+        VISIT_DATE,
+        null,
+        2,
+        null,
+        new ContactSnapshot("ゲスト花子", "09012345678", null, null));
   }
 
   @Test

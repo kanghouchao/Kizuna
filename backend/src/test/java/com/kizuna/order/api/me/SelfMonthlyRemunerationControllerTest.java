@@ -11,9 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
-import com.kizuna.order.api.dto.SelfMonthlyRemunerationStoreSummary;
+import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.application.SelfMonthlyRemunerationService;
+import com.kizuna.order.domain.RemunerationOrderRow;
+import com.kizuna.order.domain.RemunerationStoreRow;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
@@ -49,6 +50,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import({
   SelfMonthlyRemunerationControllerTest.MethodSecurityConfig.class,
   SelfMonthlyRemunerationService.class,
+  OrderMapperImpl.class,
   StoreScopeHolder.class
 })
 @WithMockUser(username = "cast@example.test", roles = "CAST")
@@ -100,7 +102,7 @@ class SelfMonthlyRemunerationControllerTest {
         .thenReturn(
             new PageImpl<>(
                 List.of(
-                    new MonthlyRemunerationOrderSummary(
+                    new RemunerationOrderRow(
                         "order", LocalDate.of(2026, 9, 30), "コース", 7000, false))));
     mvc.perform(
             request(BASE)
@@ -147,8 +149,7 @@ class SelfMonthlyRemunerationControllerTest {
   void clampsStorePage(int size, int effective) throws Exception {
     var page = PageRequest.of(0, effective);
     when(selfQuery.stores(34L, page))
-        .thenReturn(
-            new PageImpl<>(List.of(new SelfMonthlyRemunerationStoreSummary(1L, "歴史店舗")), page, 1));
+        .thenReturn(new PageImpl<>(List.of(new RemunerationStoreRow(1L, "歴史店舗")), page, 1));
     mvc.perform(request(BASE + "/stores").param("size", String.valueOf(size)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.size").value(effective))

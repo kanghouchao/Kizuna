@@ -16,11 +16,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.customer.application.MemberCustomerConflictException;
-import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
-import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.application.GuestOrderApplicationCommand;
+import com.kizuna.order.application.GuestOrderApplicationReceipt;
 import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplicationStatus;
@@ -295,8 +295,8 @@ class OrderApplicationControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
     when(guestOrderApplicationService.request(
-            eq(STORE_ID), any(GuestOrderApplicationCreateRequest.class)))
-        .thenReturn(new GuestOrderApplicationResponse("app-1"));
+            eq(STORE_ID), any(GuestOrderApplicationCommand.class)))
+        .thenReturn(new GuestOrderApplicationReceipt("app-1"));
 
     mockMvc
         .perform(guestPost(GUEST_BODY))
@@ -357,8 +357,8 @@ class OrderApplicationControllerTest {
   void guestRequestCountsTheProxyAppendedHop() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(guestOrderApplicationService.request(any(), any(GuestOrderApplicationCreateRequest.class)))
-        .thenReturn(new GuestOrderApplicationResponse("app-1"));
+    when(guestOrderApplicationService.request(any(), any(GuestOrderApplicationCommand.class)))
+        .thenReturn(new GuestOrderApplicationReceipt("app-1"));
 
     mockMvc
         .perform(guestPost(GUEST_BODY).header("X-Forwarded-For", "10.0.0.9, 203.0.113.7"))

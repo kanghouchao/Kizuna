@@ -8,8 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.order.api.dto.AdminOrderResponse;
-import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.domain.AdminOrderView;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.storescope.StoreScope;
@@ -30,25 +28,20 @@ class AdminOrderServiceTest {
 
   @Mock OrderRepository orderRepository;
   @Mock OrderService orderService;
-  @Mock OrderMapper orderMapper;
 
   @InjectMocks AdminOrderService service;
 
   @Test
-  void listMapsGroupWideViewsToResponses() {
+  void listReturnsGroupWideViews() {
     AdminOrderView view = mock(AdminOrderView.class);
-    AdminOrderResponse res = AdminOrderResponse.builder().id("o1").storeId(1L).build();
     Page<AdminOrderView> page = new PageImpl<>(List.of(view), PageRequest.of(0, 10), 1);
 
     when(orderRepository.findGroupWideViews(any(Pageable.class))).thenReturn(page);
-    when(orderMapper.toAdminResponse(view)).thenReturn(res);
 
-    Page<AdminOrderResponse> result =
+    Page<AdminOrderView> result =
         service.list(new StoreScope(true, Set.of()), PageRequest.of(0, 10));
 
-    assertThat(result.getContent()).hasSize(1);
-    assertThat(result.getContent().get(0).getId()).isEqualTo("o1");
-    assertThat(result.getContent().get(0).getStoreId()).isEqualTo(1L);
+    assertThat(result.getContent()).containsExactly(view);
   }
 
   @Test

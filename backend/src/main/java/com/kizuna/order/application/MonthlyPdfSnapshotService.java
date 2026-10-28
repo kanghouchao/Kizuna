@@ -1,7 +1,7 @@
 package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
+import com.kizuna.order.domain.RemunerationOrderRow;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.StoreNames;
 import com.kizuna.shared.exception.NotFoundException;
@@ -79,7 +79,7 @@ public class MonthlyPdfSnapshotService {
     budget.text(storeName);
     budget.text(name);
     var generatedAt = OffsetDateTime.now(clock);
-    var rows = new ArrayList<MonthlyRemunerationOrderSummary>();
+    var rows = new ArrayList<RemunerationOrderRow>();
     long sum = 0;
     // 同一 transaction 内の分割取得なので、訂正で offset の内容と合計が異なる時点へ移らない。
     for (int page = 0; rows.size() < count; page++) {

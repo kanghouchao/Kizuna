@@ -6,7 +6,8 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.order.api.dto.MemberReceiptClaimResponse;
+import com.kizuna.order.api.dto.OrderMapperImpl;
+import com.kizuna.order.application.MemberReceiptClaimResult;
 import com.kizuna.order.application.MemberReceiptClaimService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -31,7 +32,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * <p>帰属先は認証主体に固定されるため、この経路が会員以外へ開くと、伝票を拾った店舗スタッフが他人の来店を 自分の記録として起こせてしまう。
  */
 @WebMvcTest(MemberReceiptController.class)
-@Import({MemberReceiptControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  MemberReceiptControllerTest.MethodSecurityConfig.class,
+  OrderMapperImpl.class,
+  StoreScopeHolder.class
+})
 class MemberReceiptControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -60,7 +65,7 @@ class MemberReceiptControllerTest {
   @WithMockUser(authorities = "ROLE_MEMBER")
   void memberCanClaimAReceipt() throws Exception {
     when(memberReceiptClaimService.claim(anyString(), anyString()))
-        .thenReturn(new MemberReceiptClaimResponse(120));
+        .thenReturn(new MemberReceiptClaimResult(120));
 
     mockMvc.perform(memberPost()).andExpect(status().isCreated());
   }

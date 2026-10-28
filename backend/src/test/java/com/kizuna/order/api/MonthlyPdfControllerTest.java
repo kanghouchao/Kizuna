@@ -13,12 +13,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
 import com.kizuna.order.api.me.SelfMonthlyPdfController;
 import com.kizuna.order.application.MonthlyPdfService;
 import com.kizuna.order.application.MonthlyPdfSnapshotService;
 import com.kizuna.order.application.MonthlyRemunerationService;
 import com.kizuna.order.application.SelfMonthlyRemunerationService;
+import com.kizuna.order.domain.RemunerationOrderRow;
 import com.kizuna.order.infrastructure.MonthlyPdfRenderer;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
@@ -124,7 +124,7 @@ class MonthlyPdfControllerTest {
         IntStream.range(0, count)
             .mapToObj(
                 i ->
-                    new MonthlyRemunerationOrderSummary(
+                    new RemunerationOrderRow(
                         "ORDER-" + String.format("%05d", i),
                         LocalDate.of(2026, 9, 30),
                         "日本語サービス",

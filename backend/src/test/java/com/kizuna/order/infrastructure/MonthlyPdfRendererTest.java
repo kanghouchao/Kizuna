@@ -3,10 +3,10 @@ package com.kizuna.order.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
 import com.kizuna.order.application.MonthlyPdfBudget;
 import com.kizuna.order.application.MonthlyPdfService;
 import com.kizuna.order.application.MonthlyPdfSnapshot;
+import com.kizuna.order.domain.RemunerationOrderRow;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import java.nio.file.Files;
@@ -29,9 +29,9 @@ class MonthlyPdfRendererTest {
         OffsetDateTime.parse("2026-10-01T15:00:00+09:00"),
         123456,
         List.of(
-            new MonthlyRemunerationOrderSummary(
+            new RemunerationOrderRow(
                 "LONG-ORDER-00001", LocalDate.of(2026, 9, 30), service, 123456, false),
-            new MonthlyRemunerationOrderSummary(
+            new RemunerationOrderRow(
                 "INVALIDATED-00002", LocalDate.of(2026, 9, 29), "無効サービス", 0, true)));
   }
 

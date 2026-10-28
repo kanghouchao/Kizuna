@@ -1,7 +1,7 @@
 package com.kizuna.order.infrastructure;
 
-import com.kizuna.order.api.dto.MonthlyRemunerationCastSummary;
-import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
+import com.kizuna.order.domain.RemunerationCastRow;
+import com.kizuna.order.domain.RemunerationOrderRow;
 import com.kizuna.shared.exception.NotFoundException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
@@ -43,7 +43,7 @@ public class RemunerationQuery {
         and o.status = com.kizuna.order.domain.OrderStatus.COMPLETED
       """;
 
-  public Page<MonthlyRemunerationCastSummary> casts(Long storeId, String search, Pageable page) {
+  public Page<RemunerationCastRow> casts(Long storeId, String search, Pageable page) {
     String keyword = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
     String from = PEOPLE;
     if (!keyword.isEmpty())
@@ -74,10 +74,7 @@ public class RemunerationQuery {
             .setMaxResults(page.getPageSize())
             .getResultList()
             .stream()
-            .map(
-                row ->
-                    new MonthlyRemunerationCastSummary(
-                        row.get(0, Long.class), row.get(1, String.class)))
+            .map(row -> new RemunerationCastRow(row.get(0, Long.class), row.get(1, String.class)))
             .toList();
     return new PageImpl<>(content, page, count.getSingleResult());
   }
@@ -131,17 +128,17 @@ public class RemunerationQuery {
         .getSingleResult();
   }
 
-  public Page<MonthlyRemunerationOrderSummary> orders(
+  public Page<RemunerationOrderRow> orders(
       Long storeId, Long personId, YearMonth month, Pageable page) {
     return orders(storeId, personId, month.atDay(1), month.atEndOfMonth(), page);
   }
 
-  public Page<MonthlyRemunerationOrderSummary> dailyOrders(
+  public Page<RemunerationOrderRow> dailyOrders(
       Long storeId, Long personId, LocalDate day, Pageable page) {
     return orders(storeId, personId, day, day, page);
   }
 
-  private Page<MonthlyRemunerationOrderSummary> orders(
+  private Page<RemunerationOrderRow> orders(
       Long storeId, Long personId, LocalDate start, LocalDate end, Pageable page) {
     var rows =
         bind(
@@ -194,7 +191,7 @@ public class RemunerationQuery {
                 row -> {
                   String id = row.get(0, String.class);
                   boolean invalidated = row.get(3, Boolean.class);
-                  return new MonthlyRemunerationOrderSummary(
+                  return new RemunerationOrderRow(
                       id,
                       row.get(1, LocalDate.class),
                       String.join(" / ", names.getOrDefault(id, List.of())),

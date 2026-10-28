@@ -11,6 +11,7 @@ import com.kizuna.order.api.dto.OrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderPreviewResponse;
 import com.kizuna.order.api.dto.OrderResponse;
+import com.kizuna.order.application.GuestContactConsentText;
 import com.kizuna.order.application.GuestOrderApplicationService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderApplicationStatus;
@@ -49,7 +50,7 @@ public class OrderApplicationController {
   @GetMapping("/public/contact-consent")
   @PermitAll
   public GuestContactConsentTextResponse contactConsent() {
-    return GuestContactConsentTextResponse.current();
+    return orderMapper.toResponse(GuestContactConsentText.current());
   }
 
   /**
@@ -69,7 +70,9 @@ public class OrderApplicationController {
       throw new TooManyRequestsException("送信が続いたため受け付けられませんでした。しばらく時間をおいてからお試しください");
     }
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(guestOrderApplicationService.request(storeId, request));
+        .body(
+            orderMapper.toResponse(
+                guestOrderApplicationService.request(storeId, orderMapper.toCommand(request))));
   }
 
   /**

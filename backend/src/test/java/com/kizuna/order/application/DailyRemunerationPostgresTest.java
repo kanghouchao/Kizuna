@@ -10,6 +10,7 @@ import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.api.DailyRemunerationController;
+import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.api.me.SelfDailyRemunerationController;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
@@ -194,8 +195,8 @@ class DailyRemunerationPostgresTest {
     probe.resume = new CountDownLatch(1);
     var http =
         standaloneSetup(
-                new DailyRemunerationController(service),
-                new SelfDailyRemunerationController(service))
+                new DailyRemunerationController(service, new OrderMapperImpl()),
+                new SelfDailyRemunerationController(service, new OrderMapperImpl()))
             .setMessageConverters(
                 new JacksonJsonHttpMessageConverter(
                     JsonMapper.builder()

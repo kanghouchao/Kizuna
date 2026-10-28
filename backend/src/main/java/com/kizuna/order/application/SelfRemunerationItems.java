@@ -1,6 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.SelfRemunerationItem;
 import com.kizuna.order.domain.OrderCorrectionSnapshot;
 import com.kizuna.order.domain.OrderFeeLineKind;
 import java.util.ArrayList;
@@ -9,11 +8,11 @@ import java.util.List;
 final class SelfRemunerationItems {
   private SelfRemunerationItems() {}
 
-  static List<SelfRemunerationItem> from(OrderCorrectionSnapshot snapshot) {
-    var result = new ArrayList<SelfRemunerationItem>();
+  static List<SelfRemunerationLine> from(OrderCorrectionSnapshot snapshot) {
+    var result = new ArrayList<SelfRemunerationLine>();
     var c = snapshot.course();
     result.add(
-        new SelfRemunerationItem(
+        new SelfRemunerationLine(
             "COURSE",
             c.name(),
             c.price(),
@@ -31,7 +30,7 @@ final class SelfRemunerationItems {
             null));
     for (var special : snapshot.specialServices()) {
       result.add(
-          new SelfRemunerationItem(
+          new SelfRemunerationLine(
               "SPECIAL_SERVICE",
               special.name(),
               special.price(),
@@ -53,7 +52,7 @@ final class SelfRemunerationItems {
         continue;
       var a = line.adoption();
       result.add(
-          new SelfRemunerationItem(
+          new SelfRemunerationLine(
               line.kind().name(),
               line.name(),
               line.amount(),

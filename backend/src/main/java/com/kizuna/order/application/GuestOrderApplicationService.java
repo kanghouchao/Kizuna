@@ -1,8 +1,6 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.GuestContactConsentTextResponse;
-import com.kizuna.order.api.dto.GuestOrderApplicationCreateRequest;
-import com.kizuna.order.api.dto.GuestOrderApplicationResponse;
+import com.kizuna.order.domain.ContactSnapshot;
 import com.kizuna.order.domain.GuestContactConsent;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
@@ -32,22 +30,23 @@ public class GuestOrderApplicationService {
 
   /** 予約を申請する。予約申請の PENDING 行だけが起き、受注（t_orders）には行が生まれない。 */
   @Transactional
-  public GuestOrderApplicationResponse request(
-      Long storeId, GuestOrderApplicationCreateRequest request) {
-    var consent = request.getContactConsent();
+  public GuestOrderApplicationReceipt request(Long storeId, GuestOrderApplicationCommand command) {
+    var consent = command.contactConsent();
     if (consent == null
         || !Boolean.TRUE.equals(consent.businessAllowed())
         || consent.marketingAllowed() == null) throw new ServiceException("今回の予約に関する業務連絡への同意が必要です");
-    var text = GuestContactConsentTextResponse.current();
+    var text = GuestContactConsentText.current();
     if (!text.version().equals(consent.version()))
       throw new ConflictException("同意文面が更新されました。内容を確認して再度同意してください");
-    var contact = request.getContactSnapshot().normalized();
+    var original = command.contactSnapshot();
+    var contact =
+        ContactSnapshot.normalize(
+            original.name(), original.phoneNumber(), original.email(), original.lineId());
     if (contact.name() == null
         || (contact.phoneNumber() == null && contact.email() == null && contact.lineId() == null))
       throw new ServiceException("お名前と電話・メール・LINEのいずれかを入力してください");
-    var original = request.getContactSnapshot().original();
     // 指名はこの経路では受けないため常に指名なしで検める（会員の入口と同じ判定を通す）
-    orderApplicationIntake.validateRequestedVisit(storeId, request.getBusinessDate(), null);
+    orderApplicationIntake.validateRequestedVisit(storeId, command.businessDate(), null);
 
     OrderApplication application =
         OrderApplication.builder()
@@ -61,10 +60,10 @@ public class GuestOrderApplicationService {
                     OffsetDateTime.now()))
             .consentContact(contact)
             .status(OrderApplicationStatus.PENDING)
-            .businessDate(request.getBusinessDate())
-            .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())
-            .pax(request.getPax())
-            .remarks(request.getRemarks())
+            .businessDate(command.businessDate())
+            .arrivalScheduledStartTime(command.arrivalScheduledStartTime())
+            .pax(command.pax())
+            .remarks(command.remarks())
             .contactName(original.name())
             .contactPhoneNumber(original.phoneNumber())
             .contactEmail(original.email())
@@ -72,6 +71,6 @@ public class GuestOrderApplicationService {
             .build();
     application.setStoreId(storeId);
 
-    return new GuestOrderApplicationResponse(orderApplicationRepository.save(application).getId());
+    return new GuestOrderApplicationReceipt(orderApplicationRepository.save(application).getId());
   }
 }

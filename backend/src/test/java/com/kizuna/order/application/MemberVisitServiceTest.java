@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.order.api.dto.MemberVisitResponse;
 import com.kizuna.order.domain.MemberVisitView;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.point.application.PointLedgerService;
@@ -162,15 +161,15 @@ class MemberVisitServiceTest {
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of("order-b", 120L, "order-a", 80L));
 
-    CursorPage<MemberVisitResponse> page = service.list(EMAIL, null, 20);
+    CursorPage<MemberVisitSummary> page = service.list(EMAIL, null, 20);
 
     assertThat(page.content())
         .extracting(
-            MemberVisitResponse::visitedOn,
-            MemberVisitResponse::storeName,
-            MemberVisitResponse::pax,
-            MemberVisitResponse::castName,
-            MemberVisitResponse::grantedPoints)
+            MemberVisitSummary::visitedOn,
+            MemberVisitSummary::storeName,
+            MemberVisitSummary::pax,
+            MemberVisitSummary::castName,
+            MemberVisitSummary::grantedPoints)
         .containsExactly(
             tuple(LocalDate.parse("2026-08-11"), "店舗B", 3, "キャスト太郎", 120L),
             tuple(LocalDate.parse("2026-08-10"), "店舗A", 2, null, 80L));
@@ -188,7 +187,7 @@ class MemberVisitServiceTest {
         .thenReturn(Map.of());
 
     assertThat(service.list(EMAIL, null, 20).content())
-        .extracting(MemberVisitResponse::storeName, MemberVisitResponse::grantedPoints)
+        .extracting(MemberVisitSummary::storeName, MemberVisitSummary::grantedPoints)
         .containsExactly(tuple("店舗A", 0L));
   }
 
@@ -205,7 +204,7 @@ class MemberVisitServiceTest {
         .thenReturn(Map.of("order-1", beyondInt));
 
     assertThat(service.list(EMAIL, null, 20).content())
-        .extracting(MemberVisitResponse::grantedPoints)
+        .extracting(MemberVisitSummary::grantedPoints)
         .containsExactly(beyondInt);
   }
 
@@ -247,7 +246,7 @@ class MemberVisitServiceTest {
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of());
 
-    CursorPage<MemberVisitResponse> page = service.list(EMAIL, null, 2);
+    CursorPage<MemberVisitSummary> page = service.list(EMAIL, null, 2);
 
     assertThat(limitCaptor.getValue().max()).as("続きの有無は 1 件多く取って判る").isEqualTo(3);
     assertThat(page.content()).hasSize(2);
@@ -267,7 +266,7 @@ class MemberVisitServiceTest {
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of());
 
-    CursorPage<MemberVisitResponse> page =
+    CursorPage<MemberVisitSummary> page =
         service.list(EMAIL, new PageCursor(position.toString(), "2").encode(), 20);
 
     assertThat(page.content()).hasSize(1);

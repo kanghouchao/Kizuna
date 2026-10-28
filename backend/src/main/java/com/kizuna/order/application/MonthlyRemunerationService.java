@@ -1,7 +1,6 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.MonthlyRemunerationCastSummary;
-import com.kizuna.order.api.dto.MonthlyRemunerationResponse;
+import com.kizuna.order.domain.RemunerationCastRow;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.web.CursorPage;
@@ -20,13 +19,12 @@ public class MonthlyRemunerationService {
   private final RemunerationQuery query;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<MonthlyRemunerationCastSummary> casts(
-      Long storeId, String search, int page, int size) {
+  public Page<RemunerationCastRow> casts(Long storeId, String search, int page, int size) {
     return query.casts(storeId, search, page(page, size));
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public MonthlyRemunerationResponse monthly(
+  public MonthlyRemuneration monthly(
       Long storeId, Long personId, String month, int page, int size) {
     var pageable = page(page, size);
     if (personId <= 0) throw new ServiceException("キャスト本人の指定が不正です");
@@ -39,7 +37,7 @@ public class MonthlyRemunerationService {
       throw new ServiceException("対象月は YYYY-MM 形式で指定してください");
     }
     String name = query.personName(storeId, personId);
-    return new MonthlyRemunerationResponse(
+    return new MonthlyRemuneration(
         personId,
         name,
         month,

@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.order.api.dto.MemberReceiptClaimResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
@@ -91,7 +90,7 @@ class MemberReceiptClaimServiceTest {
     OrderReceiptToken token = Mockito.spy(issuedToken(OffsetDateTime.now()));
     givenToken(token);
 
-    MemberReceiptClaimResponse response = service.claim(EMAIL, RAW_TOKEN);
+    MemberReceiptClaimResult response = service.claim(EMAIL, RAW_TOKEN);
 
     assertThat(response.grantedPoints()).isEqualTo(PLANNED_POINTS);
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);

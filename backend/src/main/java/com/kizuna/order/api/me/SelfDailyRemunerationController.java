@@ -1,5 +1,6 @@
 package com.kizuna.order.api.me;
 
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.SelfDailyRemunerationResponse;
 import com.kizuna.order.application.DailyRemunerationService;
 import java.security.Principal;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SelfDailyRemunerationController {
   private final DailyRemunerationService service;
+  private final OrderMapper mapper;
 
   @GetMapping
   @PreAuthorize("hasRole('CAST')")
@@ -24,6 +26,6 @@ public class SelfDailyRemunerationController {
       @RequestParam(name = "business_date") String businessDate,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.self(principal.getName(), storeId, businessDate, page, size);
+    return mapper.toResponse(service.self(principal.getName(), storeId, businessDate, page, size));
   }
 }

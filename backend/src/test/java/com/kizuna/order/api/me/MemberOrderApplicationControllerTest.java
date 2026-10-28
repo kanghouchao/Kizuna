@@ -9,7 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.order.api.dto.MemberOrderApplicationResponse;
+import com.kizuna.order.api.dto.OrderMapperImpl;
+import com.kizuna.order.application.MemberOrderApplicationResult;
 import com.kizuna.order.application.MemberOrderApplicationService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -32,13 +33,21 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** 会員本人の予約申請経路が会員にだけ開いていることの単体テスト。 */
 @WebMvcTest(MemberOrderApplicationController.class)
-@Import({MemberOrderApplicationControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  MemberOrderApplicationControllerTest.MethodSecurityConfig.class,
+  OrderMapperImpl.class,
+  StoreScopeHolder.class
+})
 class MemberOrderApplicationControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
+
+  private static MemberOrderApplicationResult emptyResult() {
+    return new MemberOrderApplicationResult(null, null, null, null, null, null, null, null, false);
+  }
 
   private static final String BODY =
       """
@@ -58,12 +67,11 @@ class MemberOrderApplicationControllerTest {
   @DisplayName("会員は予約の申請・一覧・取り下げができること")
   @WithMockUser(authorities = "ROLE_MEMBER")
   void memberCanUseOwnApplicationRoutes() throws Exception {
-    when(memberOrderApplicationService.request(anyString(), any()))
-        .thenReturn(MemberOrderApplicationResponse.builder().build());
+    when(memberOrderApplicationService.request(anyString(), any())).thenReturn(emptyResult());
     when(memberOrderApplicationService.list(anyString(), any(), anyInt()))
         .thenReturn(new CursorPage<>(List.of(), null));
     when(memberOrderApplicationService.withdraw(anyString(), anyString()))
-        .thenReturn(MemberOrderApplicationResponse.builder().build());
+        .thenReturn(emptyResult());
 
     mockMvc
         .perform(
