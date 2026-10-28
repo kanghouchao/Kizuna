@@ -1,7 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.OrderSpecialServiceEventResponse;
-import com.kizuna.order.api.dto.OrderSpecialServiceResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderSpecialServiceEvent;
@@ -23,7 +21,6 @@ import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -129,19 +126,9 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
       throw new OrderConfirmationConflict("special_services", "拒否された特殊サービスを編集画面で修復してください");
   }
 
+  /** 試算・応答の表示用。修復待ちの印に加えて、在籍の同意の現況を引く。 */
   @Transactional(propagation = Propagation.MANDATORY)
-  public List<OrderSpecialServiceResponse> describe(Long storeId, Order order) {
-    return statuses(storeId, order, true).stream()
-        .map(
-            s ->
-                new OrderSpecialServiceResponse(
-                    s.snapshot(), s.requiresAttention(), s.currentConsentStatus()))
-        .toList();
-  }
-
-  /** 試算の表示用。修復待ちの印に加えて、在籍の同意の現況を引く。 */
-  @Transactional(propagation = Propagation.MANDATORY)
-  public List<SpecialServiceStatus> describeForPreview(Long storeId, Order order) {
+  public List<SpecialServiceStatus> describe(Long storeId, Order order) {
     return statuses(storeId, order, true);
   }
 
@@ -180,6 +167,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
       List<SpecialServiceSnapshot> previous,
       int previousTotal,
       String previousCast,
+      String actorEmail,
       OffsetDateTime now) {
     var unresolved = events.unresolved(storeId, order.getId());
     var before = historySnapshots(previous, unresolved);
@@ -206,8 +194,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
               after,
               previousTotal,
               resolution,
-              actors.requireUserId(
-                  SecurityContextHolder.getContext().getAuthentication().getName()),
+              actors.requireUserId(actorEmail),
               now));
     }
   }
@@ -248,7 +235,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<OrderSpecialServiceEventResponse> history(
+  public CursorPage<OrderSpecialServiceEvent> history(
       Long storeId, String orderId, String cursor, int size) {
     orders
         .findByIdAndStoreId(orderId, storeId)
@@ -266,10 +253,9 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
       throw new ServiceException("カーソルが正しくありません");
     }
     return CursorPage.of(
-            events.history(
-                storeId, orderId, at, key == null ? "" : key.id(), PageRequest.of(0, size + 1)),
-            size,
-            e -> new PageCursor(e.getOccurredAt().toString(), e.getId()).encode())
-        .map(OrderSpecialServiceEventResponse::of);
+        events.history(
+            storeId, orderId, at, key == null ? "" : key.id(), PageRequest.of(0, size + 1)),
+        size,
+        e -> new PageCursor(e.getOccurredAt().toString(), e.getId()).encode());
   }
 }

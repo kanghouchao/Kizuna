@@ -17,7 +17,7 @@ public record OrderFeeLineSnapshot(
 
   @Serial private static final long serialVersionUID = 1L;
 
-  static OrderFeeLineSnapshot of(OrderFeeLine line) {
+  public static OrderFeeLineSnapshot of(OrderFeeLine line) {
     return new OrderFeeLineSnapshot(
         line.getId(),
         line.getKind(),

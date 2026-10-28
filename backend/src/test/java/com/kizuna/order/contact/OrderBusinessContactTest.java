@@ -11,7 +11,7 @@ import com.kizuna.customer.contact.BusinessContactRestrictions;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.CustomerContactRepository;
-import com.kizuna.order.api.dto.BusinessContactPermissionRequest;
+import com.kizuna.order.application.BusinessContactPermissionInput;
 import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.domain.BusinessContactHistory;
 import com.kizuna.order.domain.BusinessContactHistoryRepository;
@@ -182,7 +182,7 @@ class OrderBusinessContactTest {
         order,
         ContactSnapshot.empty(),
         List.of(
-            new BusinessContactPermissionRequest(
+            new BusinessContactPermissionInput(
                 ContactType.EMAIL, ContactPermissionStatus.ALLOWED, "本人申告", "今回の連絡を希望")),
         "actor@kizuna.test",
         OffsetDateTime.now());

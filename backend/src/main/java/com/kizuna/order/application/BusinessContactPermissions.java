@@ -1,9 +1,6 @@
 package com.kizuna.order.application;
 
 import com.kizuna.customer.domain.ContactType;
-import com.kizuna.order.api.dto.BusinessContactHistoryResponse;
-import com.kizuna.order.api.dto.BusinessContactPermissionRequest;
-import com.kizuna.order.api.dto.BusinessContactPermissionResponse;
 import com.kizuna.order.contact.BusinessContactPolicy;
 import com.kizuna.order.domain.BusinessContactHistory;
 import com.kizuna.order.domain.BusinessContactHistoryRepository;
@@ -45,13 +42,13 @@ public class BusinessContactPermissions {
     };
   }
 
-  public void validate(ContactSnapshot snapshot, List<BusinessContactPermissionRequest> input) {
+  public void validate(ContactSnapshot snapshot, List<BusinessContactPermissionInput> input) {
     requests(snapshot, input);
   }
 
-  private Map<ContactType, BusinessContactPermissionRequest> requests(
-      ContactSnapshot snapshot, List<BusinessContactPermissionRequest> input) {
-    var result = new EnumMap<ContactType, BusinessContactPermissionRequest>(ContactType.class);
+  private Map<ContactType, BusinessContactPermissionInput> requests(
+      ContactSnapshot snapshot, List<BusinessContactPermissionInput> input) {
+    var result = new EnumMap<ContactType, BusinessContactPermissionInput>(ContactType.class);
     if (input == null) return result;
     for (var item : input) {
       if (item == null
@@ -74,7 +71,7 @@ public class BusinessContactPermissions {
   public void record(
       Order order,
       ContactSnapshot previous,
-      List<BusinessContactPermissionRequest> input,
+      List<BusinessContactPermissionInput> input,
       String actorEmail,
       OffsetDateTime now) {
     var requests = requests(order.getContactSnapshot(), input);
@@ -109,8 +106,8 @@ public class BusinessContactPermissions {
   }
 
   @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
-  public List<BusinessContactPermissionResponse> describe(Order order) {
-    var result = new ArrayList<BusinessContactPermissionResponse>();
+  public List<BusinessContactPermissionState> describe(Order order) {
+    var result = new ArrayList<BusinessContactPermissionState>();
     for (var type : ContactType.values()) {
       String value = value(order.getContactSnapshot(), type);
       if (value == null) continue;
@@ -123,7 +120,7 @@ public class BusinessContactPermissions {
       if (state == null || !value.equals(state.value()))
         throw new IllegalStateException("受注の連絡先と許可記録が一致しません");
       result.add(
-          new BusinessContactPermissionResponse(
+          new BusinessContactPermissionState(
               type,
               value,
               state.status(),
@@ -137,20 +134,19 @@ public class BusinessContactPermissions {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<BusinessContactHistoryResponse> history(
+  public CursorPage<BusinessContactHistory> history(
       Long storeId, String orderId, String cursor, int requestedSize) {
     orders
         .findByIdAndStoreId(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     int size = CursorPage.clampSize(requestedSize);
     return CursorPage.of(
-            histories.findByStoreIdAndOrderIdAndIdLessThanOrderByIdDesc(
-                storeId,
-                orderId,
-                cursor == null ? "~" : PageCursor.decodeKey(cursor),
-                Limit.of(size + 1)),
-            size,
-            h -> PageCursor.encodeKey(h.getId()))
-        .map(BusinessContactHistoryResponse::from);
+        histories.findByStoreIdAndOrderIdAndIdLessThanOrderByIdDesc(
+            storeId,
+            orderId,
+            cursor == null ? "~" : PageCursor.decodeKey(cursor),
+            Limit.of(size + 1)),
+        size,
+        h -> PageCursor.encodeKey(h.getId()));
   }
 }

@@ -28,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -101,7 +102,7 @@ public class OrderApplicationController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public OrderApplicationDetailResponse detail(
       @CurrentStore Long storeId, @PathVariable String id) {
-    return orderService.applicationDetail(storeId, id);
+    return orderMapper.toResponse(orderService.applicationDetail(storeId, id));
   }
 
   @GetMapping
@@ -111,7 +112,10 @@ public class OrderApplicationController {
       @RequestParam(name = "statuses") Set<OrderApplicationStatus> statuses,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(orderService.listApplications(storeId, statuses, cursor, size));
+    return ResponseEntity.ok(
+        orderService
+            .listApplications(storeId, statuses, cursor, size)
+            .map(orderMapper::toResponse));
   }
 
   /**
@@ -128,13 +132,21 @@ public class OrderApplicationController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderApplicationConfirmationRequest request,
-      Principal principal) {
+      Authentication authentication) {
+    var command = orderMapper.toCommand(request);
+    boolean canManageCustomers = CustomerManagementAuthority.held(authentication);
     try {
       return ResponseEntity.status(HttpStatus.CREATED)
-          .body(orderService.confirmApplication(storeId, id, request, principal.getName()));
+          .body(
+              orderMapper.toResponse(
+                  orderService.confirmApplication(
+                      storeId, id, command, authentication.getName(), canManageCustomers)));
     } catch (MemberCustomerConflictException ex) {
       return ResponseEntity.status(HttpStatus.CREATED)
-          .body(orderService.confirmApplication(storeId, id, request, principal.getName()));
+          .body(
+              orderMapper.toResponse(
+                  orderService.confirmApplication(
+                      storeId, id, command, authentication.getName(), canManageCustomers)));
     }
   }
 
@@ -146,7 +158,7 @@ public class OrderApplicationController {
       @PathVariable String id,
       @Valid @RequestBody OrderApplicationDeclineRequest request,
       Principal principal) {
-    orderService.declineApplication(storeId, id, request, principal.getName());
+    orderService.declineApplication(storeId, id, request.getReason(), principal.getName());
     return ResponseEntity.noContent().build();
   }
 
@@ -156,8 +168,13 @@ public class OrderApplicationController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderApplicationConfirmationRequest request,
-      Principal principal) {
+      Authentication authentication) {
     return orderMapper.toPreviewResponse(
-        orderService.previewConfirmation(storeId, id, request, principal.getName()));
+        orderService.previewConfirmation(
+            storeId,
+            id,
+            orderMapper.toCommand(request),
+            authentication.getName(),
+            CustomerManagementAuthority.held(authentication)));
   }
 }

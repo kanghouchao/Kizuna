@@ -3,9 +3,6 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.order.api.dto.OrderAttributionInvalidationRequest;
-import com.kizuna.order.api.dto.OrderAttributionResponse;
-import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -95,7 +92,7 @@ class OrderAttributionServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions(activeAttribution());
 
-    OrderAttributionResponse response = service.currentAttribution(STORE_ID, ORDER_ID);
+    OrderAttributionState response = service.currentAttribution(STORE_ID, ORDER_ID);
 
     assertThat(response.attributed()).isTrue();
     assertThat(response.memberCode()).isEqualTo(MEMBER_CODE);
@@ -111,7 +108,7 @@ class OrderAttributionServiceTest {
     invalidated.invalidate(REASON, ACTOR_ID, OffsetDateTime.now());
     givenAttributions(invalidated);
 
-    OrderAttributionResponse response = service.currentAttribution(STORE_ID, ORDER_ID);
+    OrderAttributionState response = service.currentAttribution(STORE_ID, ORDER_ID);
 
     assertThat(response.attributed()).isFalse();
     // 誰の来店として記録されていたかは訂正後も読めなければならない（訂正の妥当性を店舗が確かめる材料）
@@ -126,7 +123,7 @@ class OrderAttributionServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions();
 
-    OrderAttributionResponse response = service.currentAttribution(STORE_ID, ORDER_ID);
+    OrderAttributionState response = service.currentAttribution(STORE_ID, ORDER_ID);
 
     assertThat(response.attributed()).isFalse();
     assertThat(response.memberCode()).isNull();
@@ -155,8 +152,8 @@ class OrderAttributionServiceTest {
     givenAttributions(attribution);
     Mockito.when(orderAttributionRepository.save(attribution)).thenReturn(attribution);
 
-    OrderAttributionResponse response =
-        service.invalidate(STORE_ID, ORDER_ID, request(REASON), ACTOR_EMAIL);
+    OrderAttributionState response =
+        service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL);
 
     assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.INVALIDATED);
     assertThat(attribution.getInvalidatedReason()).isEqualTo(REASON);
@@ -171,7 +168,8 @@ class OrderAttributionServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions();
 
-    assertThatThrownBy(() -> service.invalidate(STORE_ID, ORDER_ID, request(REASON), ACTOR_EMAIL))
+    assertThatThrownBy(
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("会員へ帰属していません");
   }
@@ -184,7 +182,8 @@ class OrderAttributionServiceTest {
     invalidated.invalidate("初回の理由", ACTOR_ID, OffsetDateTime.now());
     givenAttributions(invalidated);
 
-    assertThatThrownBy(() -> service.invalidate(STORE_ID, ORDER_ID, request(REASON), ACTOR_EMAIL))
+    assertThatThrownBy(
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class);
     assertThat(invalidated.getInvalidatedReason()).isEqualTo("初回の理由");
   }
@@ -200,9 +199,7 @@ class OrderAttributionServiceTest {
     givenAttributions(current);
 
     assertThatThrownBy(
-            () ->
-                service.invalidate(
-                    STORE_ID, ORDER_ID, request(ATTRIBUTION_ID, REASON), ACTOR_EMAIL))
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
         .isInstanceOf(ConflictException.class);
 
     assertThat(current.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
@@ -216,7 +213,8 @@ class OrderAttributionServiceTest {
     givenAttributions(activeAttribution());
     Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.invalidate(STORE_ID, ORDER_ID, request(REASON), ACTOR_EMAIL))
+    assertThatThrownBy(
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);
   }
 
@@ -226,7 +224,8 @@ class OrderAttributionServiceTest {
     Mockito.when(orderRepository.findByIdAndStoreId(ORDER_ID, STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.invalidate(STORE_ID, ORDER_ID, request(REASON), ACTOR_EMAIL))
+    assertThatThrownBy(
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
     Mockito.verifyNoInteractions(orderAttributionRepository);
   }
@@ -242,9 +241,9 @@ class OrderAttributionServiceTest {
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    OrderReceiptTokenResponse response = service.reissueReceiptToken(STORE_ID, ORDER_ID);
+    String raw = service.reissueReceiptToken(STORE_ID, ORDER_ID);
 
-    assertThat(response.receiptToken()).isEqualTo("raw");
+    assertThat(raw).isEqualTo("raw");
     Mockito.verify(orderReceiptTokenRepository).save(savedToken.capture());
     OrderReceiptToken token = savedToken.getValue();
     // 誤帰属の期間が本人の申領窓を食い潰したまま原期限を残すと、訂正が形骸化する（ADR 0009 の意図的な例外）
@@ -377,7 +376,7 @@ class OrderAttributionServiceTest {
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    assertThat(service.reissueReceiptToken(STORE_ID, ORDER_ID).receiptToken()).isEqualTo("raw");
+    assertThat(service.reissueReceiptToken(STORE_ID, ORDER_ID)).isEqualTo("raw");
 
     assertThat(expired.getStatus()).isEqualTo(OrderReceiptTokenStatus.REVOKED);
   }
@@ -396,7 +395,7 @@ class OrderAttributionServiceTest {
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
     // 申領済みの行を見て何も発行しない実装も「触らない」を満たすため、発行まで断言する
-    assertThat(service.reissueReceiptToken(STORE_ID, ORDER_ID).receiptToken()).isEqualTo("raw");
+    assertThat(service.reissueReceiptToken(STORE_ID, ORDER_ID)).isEqualTo("raw");
 
     assertThat(claimed.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
     Mockito.verify(orderReceiptTokenRepository, Mockito.never()).saveAndFlush(Mockito.any());
@@ -436,17 +435,6 @@ class OrderAttributionServiceTest {
   }
 
   // ==================== 用意 ====================
-
-  private static OrderAttributionInvalidationRequest request(String reason) {
-    return request(ATTRIBUTION_ID, reason);
-  }
-
-  private static OrderAttributionInvalidationRequest request(Long attributionId, String reason) {
-    OrderAttributionInvalidationRequest request = new OrderAttributionInvalidationRequest();
-    request.setAttributionId(attributionId);
-    request.setReason(reason);
-    return request;
-  }
 
   private void givenOrder(OrderStatus status) {
     Order order =

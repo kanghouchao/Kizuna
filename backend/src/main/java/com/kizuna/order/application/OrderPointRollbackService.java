@@ -1,9 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.OrderPointRollbackPreviewResponse;
-import com.kizuna.order.api.dto.OrderPointRollbackRequest;
-import com.kizuna.order.api.dto.OrderPointRollbackResponse;
-import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -11,6 +7,7 @@ import com.kizuna.order.domain.OrderAttributionStatus;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.point.application.PointLedgerService.PointRollbackHistory;
 import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
@@ -49,8 +46,7 @@ public class OrderPointRollbackService {
    * 0009）の構造的な証跡だからである。あちらへ台帳の読みを足すとその証跡が失われる。
    */
   @Transactional
-  public OrderReceiptTokenResponse reissueReceiptTokenUnlessRolledBack(
-      Long storeId, String orderId) {
+  public String reissueReceiptTokenUnlessRolledBack(Long storeId, String orderId) {
     orderRepository
         .findByIdAndStoreIdForUpdate(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + orderId));
@@ -62,7 +58,7 @@ public class OrderPointRollbackService {
 
   /** 実行前の下見。画面はこれで「何がいくら動くか」を示し、済んでいる受注では実行の導線を出さない。 */
   @Transactional
-  public OrderPointRollbackPreviewResponse preview(Long storeId, String orderId) {
+  public OrderPointRollbackPreview preview(Long storeId, String orderId) {
     Order order =
         orderRepository
             .findByIdAndStoreIdForUpdate(orderId, storeId)
@@ -73,7 +69,7 @@ public class OrderPointRollbackService {
     if (preview.reversibleUsedPoints() + order.getTotalFee() > Integer.MAX_VALUE) {
       throw new ServiceException("相殺後の請求が扱える上限を超えます。受注の内容を確認してください");
     }
-    return new OrderPointRollbackPreviewResponse(
+    return new OrderPointRollbackPreview(
         preview.alreadyRolledBack(),
         activeMemberCode(storeId, orderId),
         preview.cancellablePoints(),
@@ -81,10 +77,7 @@ public class OrderPointRollbackService {
         order.getTotalFee(),
         Math.toIntExact(preview.reversibleUsedPoints()),
         Math.toIntExact(order.getTotalFee() + preview.reversibleUsedPoints()),
-        pointLedgerService
-            .rollbackHistory(orderId)
-            .map(OrderPointRollbackResponse::from)
-            .orElse(null));
+        pointLedgerService.rollbackHistory(orderId).orElse(null));
   }
 
   /**
@@ -97,8 +90,8 @@ public class OrderPointRollbackService {
    * 直列化するためで、押さえないと申領は操作記録を見ず、巻き戻しは申領の付与を見ないまま双方が成立し、 打ち消せない付与が残る。
    */
   @Transactional
-  public OrderPointRollbackResponse rollback(
-      Long storeId, String orderId, OrderPointRollbackRequest request, String actorEmail) {
+  public PointRollbackHistory rollback(
+      Long storeId, String orderId, OrderPointRollbackCommand command, String actorEmail) {
     Order order =
         orderRepository
             .findByIdAndStoreIdForUpdate(orderId, storeId)
@@ -110,17 +103,16 @@ public class OrderPointRollbackService {
       throw new ConflictException("この受注のポイントは既に巻き戻されています");
     }
     long offset = pointLedgerService.previewRollbackForOrder(orderId).reversibleUsedPoints();
-    if (!order.getTotalFee().equals(request.getExpectedTotalFee())
-        || offset != request.getExpectedOffsetAmount().longValue()) {
+    if (!order.getTotalFee().equals(command.expectedTotalFee())
+        || offset != command.expectedOffsetAmount().longValue()) {
       throw new ConflictException("請求または相殺額が変わりました。内容を再確認してください");
     }
     PointRollbackResult result =
         pointLedgerService.rollbackForOrder(
-            orderId, request.getReason().trim(), actorUserId, order.getTotalFee());
+            orderId, command.reason().trim(), actorUserId, order.getTotalFee());
     order.offsetPointRedemption(result.restoredPoints());
     orderRepository.flush();
-    return OrderPointRollbackResponse.from(
-        pointLedgerService.rollbackHistory(orderId).orElseThrow());
+    return pointLedgerService.rollbackHistory(orderId).orElseThrow();
   }
 
   /** この受注が現に帰属している会員のコード。帰属していなければ null。 */

@@ -1,10 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.OrderCompletionInvalidationRequest;
-import com.kizuna.order.api.dto.OrderCorrectionRequest;
-import com.kizuna.order.api.dto.OrderCorrectionResponse;
-import com.kizuna.order.api.dto.OrderMapper;
-import com.kizuna.order.api.dto.OrderSpecialServiceResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCorrection;
 import com.kizuna.order.domain.OrderCorrectionCommand;
@@ -39,14 +34,13 @@ public class OrderCorrectionService {
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final OrderCorrectionRepository orderCorrectionRepository;
   private final ActorIdentityService actorIdentityService;
-  private final OrderMapper orderMapper;
   private final OrderCalculation calculation;
   private final OrderSpecialServices specialServices;
 
   /** 訂正前の快照と更新を同じトランザクションに保存する。受注行をロックしてから要求の版を照合し、 同時訂正による上書きを防ぐ。快照は管理下の集約を書き換える前に作成する。 */
   @Transactional
-  public OrderCorrectionResponse correct(
-      Long storeId, String id, OrderCorrectionRequest request, String actorEmail) {
+  public OrderCorrectionOutcome correct(
+      Long storeId, String id, OrderCorrectionInput input, String actorEmail) {
     specialServices.lock(storeId);
     Order order =
         orderRepository
@@ -55,45 +49,35 @@ public class OrderCorrectionService {
     // 版の照合は何も触る前に行う。全量置換なので、開いたまま別の操作者が訂正を済ませていると、送らなかった
     // 項目まで開いた時点の値で押し戻す — 楽観ロックは要求ごとに現物を読み直すため、この照合が無いと
     // 食い違いを検出できないまま、理由と痕を伴う先の訂正が黙って巻き戻る。
-    order.requireVersion(request.getExpectedVersion());
+    order.requireVersion(input.expectedVersion());
     order.requireCorrectable();
     int previousTotalFee = order.getTotalFee();
     int previousRemuneration = order.getTotalRemuneration();
-    int previousDuration = order.getTotalDurationMinutes();
-    var previousLines = orderMapper.toFeeLineResponses(order.getFeeLines());
 
     var previousCourse = order.getCourse();
     var course =
-        request.getCourseRevisionId() == null
+        input.courseRevisionId() == null
             ? previousCourse
-            : calculation.historical(storeId, request.getCourseRevisionId());
+            : calculation.historical(storeId, input.courseRevisionId());
     var calculated =
         calculation.calculate(
             storeId,
             order,
             course,
-            orderMapper.toFeeLineInputs(request.getFeeLines()),
-            specialServices.historical(storeId, order, request.getSpecialServiceRevisionIds()),
+            input.feeLines(),
+            specialServices.historical(storeId, order, input.specialServiceRevisionIds()),
             true);
     calculation.verify(
-        request.getConfirmationToken(),
-        storeId,
-        "CORRECT",
-        id,
-        actorEmail,
-        request,
-        calculated,
-        null);
+        input.confirmationToken(), storeId, "CORRECT", id, actorEmail, input, calculated, null);
     long beforeVersion = order.getVersion();
     var before = OrderCorrectionSnapshot.of(order);
     // 子明細だけの同額訂正でも、親の受注版を進めて履歴順と競合検出を確定する。
     entityManager.lock(order, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
-    var previousSpecials = order.getSpecialServices();
     order.correctServices(
         calculated.getSpecialServices(),
         new OrderCorrectionCommand(
-            request.getActualArrivalTime(),
-            request.getActualEndTime(),
+            input.actualArrivalTime(),
+            input.actualEndTime(),
             course,
             calculated.editableFeeLines()));
     orderRepository.saveAndFlush(order);
@@ -105,7 +89,7 @@ public class OrderCorrectionService {
                 order,
                 beforeVersion,
                 before,
-                request.getReason(),
+                input.reason(),
                 actorIdentityService.requireUserId(actorEmail),
                 OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS)));
 
@@ -132,45 +116,23 @@ public class OrderCorrectionService {
             "remuneration",
             Integer.toString(order.getTotalRemuneration()),
             "reason",
-            request.getReason()));
+            input.reason()));
 
-    return new OrderCorrectionResponse(
-        correction.getId(),
-        previousTotalFee,
-        order.getTotalFee(),
-        previousCourse,
-        order.getCourse(),
-        previousRemuneration,
-        order.getTotalRemuneration(),
-        previousDuration,
-        order.getTotalDurationMinutes(),
-        previousLines,
-        orderMapper.toFeeLineResponses(order.getFeeLines()),
-        previousSpecials.stream()
-            .map(s -> new OrderSpecialServiceResponse(s, false, null))
-            .toList(),
-        specialServices.describe(storeId, order),
-        order.getId(),
-        order.getStoreId(),
-        correction.getBusinessDate(),
-        correction.getCompletedAt(),
-        correction.getCorrectedAt(),
-        correction.getCorrectedBy(),
-        correction.getReason(),
-        correction.getBeforeVersion(),
-        correction.getAfterVersion(),
-        before.accruedRemuneration(),
-        order.getAccruedRemuneration());
+    return new OrderCorrectionOutcome(
+        correction,
+        before,
+        OrderCorrectionSnapshot.of(order),
+        specialServices.describe(storeId, order));
   }
 
   @Transactional
   public OrderCorrectionResult invalidateCompletion(
-      Long storeId, String id, OrderCompletionInvalidationRequest request, String actorEmail) {
+      Long storeId, String id, Long expectedVersion, String reason, String actorEmail) {
     var order =
         orderRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    order.requireVersion(request.expectedVersion());
+    order.requireVersion(expectedVersion);
     // 受注 → 伝票の順に押さえ、申領の状態確認と帰属・付与の物化の間へ無効化を割り込ませない。
     orderReceiptTokenRepository.findByOrderIdForUpdate(id);
     long beforeVersion = order.getVersion();
@@ -184,7 +146,7 @@ public class OrderCorrectionService {
                 order,
                 beforeVersion,
                 before,
-                request.reason().trim(),
+                reason.trim(),
                 actorIdentityService.requireUserId(actorEmail),
                 OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS)));
     businessAudit.record(
@@ -196,43 +158,37 @@ public class OrderCorrectionService {
         "ORDER_CORRECTION",
         correction.getId(),
         Map.of("version", Long.toString(beforeVersion), "invalidated", "false"),
-        Map.of(
-            "version",
-            order.getVersion().toString(),
-            "invalidated",
-            "true",
-            "reason",
-            request.reason()));
+        Map.of("version", order.getVersion().toString(), "invalidated", "true", "reason", reason));
     return OrderCorrectionHistory.result(correction);
   }
 
   @Transactional
   public OrderPreview preview(
-      Long storeId, String id, OrderCorrectionRequest request, String actorEmail) {
+      Long storeId, String id, OrderCorrectionInput input, String actorEmail) {
     specialServices.lock(storeId);
-    calculation.requirePreviewInput(request.getConfirmationToken());
+    calculation.requirePreviewInput(input.confirmationToken());
     var order =
         orderRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    order.requireVersion(request.getExpectedVersion());
+    order.requireVersion(input.expectedVersion());
     order.requireCorrectable();
     var course =
-        request.getCourseRevisionId() == null
+        input.courseRevisionId() == null
             ? order.getCourse()
-            : calculation.historical(storeId, request.getCourseRevisionId());
+            : calculation.historical(storeId, input.courseRevisionId());
     return calculation.preview(
         storeId,
         "CORRECT",
         id,
         actorEmail,
-        request,
+        input,
         calculation.calculate(
             storeId,
             order,
             course,
-            orderMapper.toFeeLineInputs(request.getFeeLines()),
-            specialServices.historical(storeId, order, request.getSpecialServiceRevisionIds()),
+            input.feeLines(),
+            specialServices.historical(storeId, order, input.specialServiceRevisionIds()),
             false),
         null);
   }
