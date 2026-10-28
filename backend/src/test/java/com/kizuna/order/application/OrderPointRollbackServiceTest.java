@@ -3,10 +3,6 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.order.api.dto.OrderPointRollbackPreviewResponse;
-import com.kizuna.order.api.dto.OrderPointRollbackRequest;
-import com.kizuna.order.api.dto.OrderPointRollbackResponse;
-import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -99,10 +95,9 @@ class OrderPointRollbackServiceTest {
     Mockito.when(pointLedgerService.rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0))
         .thenReturn(new PointRollbackResult(120, 0));
 
-    OrderPointRollbackResponse response =
-        service.rollback(STORE_ID, ORDER_ID, request(), ACTOR_EMAIL);
+    PointRollbackHistory response = service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL);
 
-    assertThat(response).isEqualTo(OrderPointRollbackResponse.from(history(120, 0)));
+    assertThat(response).isEqualTo(history(120, 0));
   }
 
   @Test
@@ -118,7 +113,7 @@ class OrderPointRollbackServiceTest {
     Mockito.when(pointLedgerService.rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0))
         .thenReturn(new PointRollbackResult(0, 0));
 
-    service.rollback(STORE_ID, ORDER_ID, request(), ACTOR_EMAIL);
+    service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL);
 
     InOrder inOrder =
         Mockito.inOrder(orderRepository, orderReceiptTokenRepository, pointLedgerService);
@@ -140,7 +135,7 @@ class OrderPointRollbackServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("完了した受注の利用だけを");
 
-    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, request(), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("完了した受注の利用だけを");
     Mockito.verifyNoInteractions(pointLedgerService);
@@ -152,7 +147,7 @@ class OrderPointRollbackServiceTest {
     Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, request(), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL))
         .isInstanceOf(NotFoundException.class);
     Mockito.verifyNoInteractions(pointLedgerService);
   }
@@ -164,7 +159,7 @@ class OrderPointRollbackServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, request(), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL))
         .isInstanceOf(StaleSessionException.class);
   }
 
@@ -190,7 +185,7 @@ class OrderPointRollbackServiceTest {
   void reissueProceedsForAnIntactOrder() {
     givenOrder(OrderStatus.COMPLETED);
     Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(false);
-    OrderReceiptTokenResponse issued = new OrderReceiptTokenResponse("raw");
+    String issued = "raw";
     Mockito.when(orderAttributionService.reissueReceiptToken(STORE_ID, ORDER_ID))
         .thenReturn(issued);
 
@@ -210,8 +205,7 @@ class OrderPointRollbackServiceTest {
         .thenReturn(List.of(active));
 
     assertThat(service.preview(STORE_ID, ORDER_ID))
-        .isEqualTo(
-            new OrderPointRollbackPreviewResponse(false, MEMBER_CODE, 120, 300, 0, 300, 300, null));
+        .isEqualTo(new OrderPointRollbackPreview(false, MEMBER_CODE, 120, 300, 0, 300, 300, null));
   }
 
   @Test
@@ -230,7 +224,7 @@ class OrderPointRollbackServiceTest {
         .thenReturn(List.of(invalidated));
 
     assertThat(service.preview(STORE_ID, ORDER_ID))
-        .isEqualTo(new OrderPointRollbackPreviewResponse(true, null, 0, 0, 0, 0, 0, null));
+        .isEqualTo(new OrderPointRollbackPreview(true, null, 0, 0, 0, 0, 0, null));
   }
 
   private void givenOrder(OrderStatus status) {
@@ -258,11 +252,7 @@ class OrderPointRollbackServiceTest {
         "1", REASON, ACTOR_ID, NOW, cancelled, restored, 0, (int) restored);
   }
 
-  private static OrderPointRollbackRequest request() {
-    OrderPointRollbackRequest request = new OrderPointRollbackRequest();
-    request.setReason(REASON);
-    request.setExpectedTotalFee(0);
-    request.setExpectedOffsetAmount(0);
-    return request;
+  private static OrderPointRollbackCommand command() {
+    return new OrderPointRollbackCommand(0, 0, REASON);
   }
 }

@@ -64,7 +64,7 @@ class OrderCalculationTest {
                 properties),
             mock(OrderFeeLineSelection.class),
             specialServices);
-    when(specialServices.describeForPreview(anyLong(), any()))
+    when(specialServices.describe(anyLong(), any()))
         .thenReturn(List.of(new SpecialServiceStatus(SERVICE, false, "ACTIVE")));
   }
 

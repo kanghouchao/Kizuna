@@ -4,10 +4,6 @@ import com.kizuna.customer.contact.GuestContactImport;
 import com.kizuna.customer.contact.GuestContactImports;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactType;
-import com.kizuna.order.api.dto.BusinessContactPermissionRequest;
-import com.kizuna.order.api.dto.BusinessContactPermissionResponse;
-import com.kizuna.order.api.dto.CustomerSelectionRequest;
-import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.contact.BusinessContactPolicy;
 import com.kizuna.order.domain.ContactSnapshot;
 import com.kizuna.order.domain.OrderApplication;
@@ -25,16 +21,16 @@ public class GuestApplicationConsent {
   private final GuestContactImports imports;
 
   public List<GuestContactImport> previewImports(
-      OrderApplication application, OrderApplicationConfirmationRequest request) {
-    var input = request.getContactImports();
+      OrderApplication application, OrderApplicationConfirmationCommand command) {
+    var input = command.contactImports();
     if (!application.isGuest()) {
       if (input != null) throw new ServiceException("会員申請ではゲスト同意を取り込めません");
       return List.of();
     }
     if (input == null) throw new ServiceException("連絡先を取り込むか明示してください");
-    var selection = request.getCustomerSelection();
+    var selection = command.customerSelection();
     if (selection == null) throw new ServiceException("顧客の選択方法を指定してください");
-    if (!input.isEmpty() && selection.mode() == CustomerSelectionRequest.Mode.NONE)
+    if (!input.isEmpty() && selection.mode() == CustomerSelection.Mode.NONE)
       throw new ServiceException("取り込み先の顧客を選択してください");
     var seen = EnumSet.noneOf(ContactType.class);
     var results = new ArrayList<GuestContactImport>();
@@ -79,8 +75,8 @@ public class GuestApplicationConsent {
     application.recordContactImports(results);
   }
 
-  public List<BusinessContactPermissionResponse> describe(OrderApplication application) {
-    var result = new ArrayList<BusinessContactPermissionResponse>();
+  public List<BusinessContactPermissionState> describe(OrderApplication application) {
+    var result = new ArrayList<BusinessContactPermissionState>();
     if (!application.isGuest()) return result;
     var consent = application.getContactConsent();
     for (var type : ContactType.values()) {
@@ -91,7 +87,7 @@ public class GuestApplicationConsent {
               ? ContactPermissionStatus.ALLOWED
               : ContactPermissionStatus.UNKNOWN;
       result.add(
-          new BusinessContactPermissionResponse(
+          new BusinessContactPermissionState(
               type,
               value,
               status,
@@ -104,15 +100,15 @@ public class GuestApplicationConsent {
     return result;
   }
 
-  public List<BusinessContactPermissionRequest> forOrder(
+  public List<BusinessContactPermissionInput> forOrder(
       OrderApplication application, ContactSnapshot snapshot) {
-    var result = new ArrayList<BusinessContactPermissionRequest>();
+    var result = new ArrayList<BusinessContactPermissionInput>();
     if (!application.isGuest()) return result;
     for (var type : ContactType.values()) {
       var original = BusinessContactPermissions.value(application.getConsentContact(), type);
       if (original != null && original.equals(BusinessContactPermissions.value(snapshot, type)))
         result.add(
-            new BusinessContactPermissionRequest(
+            new BusinessContactPermissionInput(
                 type, ContactPermissionStatus.ALLOWED, source(application), reason(application)));
     }
     return result;

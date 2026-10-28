@@ -2,9 +2,12 @@ package com.kizuna.order.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEFAULTS;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -16,26 +19,23 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.order.api.dto.OrderArchiveResponse;
-import com.kizuna.order.api.dto.OrderAttributionResponse;
-import com.kizuna.order.api.dto.OrderCorrectionResponse;
 import com.kizuna.order.api.dto.OrderMapperImpl;
-import com.kizuna.order.api.dto.OrderPointRollbackResponse;
-import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
-import com.kizuna.order.api.dto.OrderResponse;
-import com.kizuna.order.api.dto.OrderSummaryResponse;
-import com.kizuna.order.api.dto.OrderWorkQueueResponse;
 import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
 import com.kizuna.order.application.OrderAttributionService;
+import com.kizuna.order.application.OrderAttributionState;
 import com.kizuna.order.application.OrderCompletionResult;
 import com.kizuna.order.application.OrderCorrectionHistory;
+import com.kizuna.order.application.OrderCorrectionOutcome;
 import com.kizuna.order.application.OrderCorrectionService;
+import com.kizuna.order.application.OrderDetail;
 import com.kizuna.order.application.OrderPointRollbackService;
 import com.kizuna.order.application.OrderPoints;
 import com.kizuna.order.application.OrderPreview;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderCorrection;
+import com.kizuna.order.domain.OrderCorrectionSnapshot;
 import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderFeeLineDraft;
 import com.kizuna.order.domain.OrderFeeLineKind;
@@ -43,6 +43,8 @@ import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderServiceAdoption;
 import com.kizuna.order.domain.OrderSortKey;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.OrderView;
+import com.kizuna.point.application.PointLedgerService.PointRollbackHistory;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -62,7 +64,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -147,7 +152,7 @@ class OrderControllerTest {
         .perform(
             post("/orders/o1/completion")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(() -> "staff@kizuna.test")
+                .principal(staff())
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(COMPLETION_BODY))
@@ -162,7 +167,7 @@ class OrderControllerTest {
   void receiptTokenReissuePassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any(), any()))
-        .thenReturn(new OrderReceiptTokenResponse("raw-token"));
+        .thenReturn("raw-token");
 
     mockMvc
         .perform(
@@ -193,7 +198,7 @@ class OrderControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<OrderSummaryResponse> empty = new PageImpl<>(List.of());
+    Page<OrderView> empty = new PageImpl<>(List.of());
     when(orderService.list(any(), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc
@@ -241,10 +246,7 @@ class OrderControllerTest {
     // isNull() では「型に残ったまま詰め忘れただけ」の状態と区別できない。
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.listWorkQueue(any(), any(), any(), anyInt()))
-        .thenReturn(
-            new CursorPage<>(
-                List.of(OrderWorkQueueResponse.builder().id("o1").status("CONFIRMED").build()),
-                null));
+        .thenReturn(new CursorPage<>(List.of(view("o1", OrderStatus.CONFIRMED)), null));
 
     mockMvc
         .perform(storeGet("/orders/work-queue?statuses=CONFIRMED"))
@@ -260,9 +262,7 @@ class OrderControllerTest {
   void archiveRowCarriesNeitherTheReceiptTokenNorTheDriverMessage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderService.listArchive(any(), any(), any()))
-        .thenReturn(
-            new PageImpl<>(
-                List.of(OrderArchiveResponse.builder().id("o1").status("COMPLETED").build())));
+        .thenReturn(new PageImpl<>(List.of(view("o1", OrderStatus.COMPLETED))));
 
     mockMvc
         .perform(storeGet("/orders/archive?statuses=COMPLETED"))
@@ -499,8 +499,10 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void orderUpdateContractAcceptsAnOmittedCastAndReceptionist() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.update(any(), any(), any(), any()))
-        .thenReturn(OrderResponse.builder().build());
+    when(orderService.update(any(), any(), any(), any(), anyBoolean()))
+        .thenReturn(
+            new OrderDetail(
+                view("o1", OrderStatus.CONFIRMED), List.of(), 0, 0, List.of(), List.of()));
 
     // 省略を契約で撥ねると、指名・受付担当が未設定のまま確定した受注が編集できなくなる。
     // 「既にある指名・受付担当は外せない」判定は受注の状態を見るサービス層が持つ（OrderServiceTest）。
@@ -566,7 +568,7 @@ class OrderControllerTest {
   void receiptTokenReissueRespondsCreated() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any(), any()))
-        .thenReturn(new OrderReceiptTokenResponse("raw-token"));
+        .thenReturn("raw-token");
 
     mockMvc
         .perform(storePost("/orders/o1/receipt-token"))
@@ -686,9 +688,8 @@ class OrderControllerTest {
         .andExpect(status().isBadRequest());
 
     // 正向対照: 上限ちょうどは通る
-    when(orderAttributionService.invalidate(any(), any(), any(), any()))
-        .thenReturn(
-            new OrderAttributionResponse(null, false, null, null, null, null, null, null, null));
+    when(orderAttributionService.invalidate(any(), any(), any(), any(), any()))
+        .thenReturn(OrderAttributionState.none());
     mockMvc
         .perform(
             storePost(
@@ -768,8 +769,7 @@ class OrderControllerTest {
 
     // 正向対照: 上限ちょうどは通る（400 が端点の不在でない証明）。新たな操作記録を生むので 201
     when(orderPointRollbackService.rollback(any(), any(), any(), any()))
-        .thenReturn(
-            new OrderPointRollbackResponse("1", "理由", 1L, null, 120, 300, 11700, 300, 12000));
+        .thenReturn(new PointRollbackHistory("1", "理由", 1L, null, 120, 300, 11700, 12000));
     mockMvc
         .perform(
             storePost(
@@ -788,32 +788,7 @@ class OrderControllerTest {
   void correctionIsReachableWithOrderCorrect() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderCorrectionService.correct(any(), any(), any(), any()))
-        .thenReturn(
-            new OrderCorrectionResponse(
-                "correction",
-                12000,
-                15000,
-                null,
-                null,
-                0,
-                0,
-                0,
-                0,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                "o1",
-                1L,
-                null,
-                null,
-                null,
-                1L,
-                "訂正",
-                3L,
-                4L,
-                0,
-                0));
+        .thenReturn(correctionOutcome(12000, 15000));
 
     mockMvc
         .perform(storePost("/orders/o1/corrections", CORRECTION_BODY))
@@ -869,32 +844,7 @@ class OrderControllerTest {
 
     // 正向対照: 凍結字段を外した同じ本文は通る（400 が「内訳が空だから」でない証明）
     when(orderCorrectionService.correct(any(), any(), any(), any()))
-        .thenReturn(
-            new OrderCorrectionResponse(
-                "correction",
-                12000,
-                0,
-                null,
-                null,
-                0,
-                0,
-                0,
-                0,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                "o1",
-                1L,
-                null,
-                null,
-                null,
-                1L,
-                "訂正",
-                3L,
-                4L,
-                0,
-                0));
+        .thenReturn(correctionOutcome(12000, 0));
     mockMvc
         .perform(
             storePost(
@@ -928,9 +878,135 @@ class OrderControllerTest {
     verifyNoInteractions(orderCorrectionService);
   }
 
+  /** 顧客を新規登録できるか・連絡先で検索できるかは顧客管理権限の有無で決まり、controller が判じて service へ渡す。 */
+  private static final String CREATE_BODY =
+      "{\"course_id\":\"c1\",\"business_date\":\"2026-10-28\",\"cast_id\":\"cast-1\","
+          + "\"customer_selection\":{\"mode\":\"NONE\"}}";
+
+  @Test
+  @DisplayName("受注管理権限だけの実行者が作成・試算しても、顧客管理権限なしとして service へ渡ること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void createAndPreviewPassNoCustomerManagementWithoutThePermission() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.create(any(), any(), any(), anyBoolean()))
+        .thenReturn(
+            new OrderDetail(
+                view("o1", OrderStatus.CONFIRMED), List.of(), 0, 0, List.of(), List.of()));
+
+    when(orderService.previewCreate(any(), any(), any(), anyBoolean())).thenReturn(emptyPreview());
+
+    mockMvc.perform(storePost("/orders", CREATE_BODY)).andExpect(status().isCreated());
+    mockMvc.perform(storePost("/orders/preview", CREATE_BODY)).andExpect(status().isOk());
+
+    verify(orderService).create(any(), any(), eq("staff@kizuna.test"), eq(false));
+    verify(orderService).previewCreate(any(), any(), eq("staff@kizuna.test"), eq(false));
+  }
+
+  @Test
+  @DisplayName("顧客管理権限があれば作成・試算で顧客管理権限ありとして service へ渡ること")
+  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_CUSTOMER_MANAGE"})
+  void createAndPreviewPassCustomerManagementWithThePermission() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.create(any(), any(), any(), anyBoolean()))
+        .thenReturn(
+            new OrderDetail(
+                view("o1", OrderStatus.CONFIRMED), List.of(), 0, 0, List.of(), List.of()));
+
+    when(orderService.previewCreate(any(), any(), any(), anyBoolean())).thenReturn(emptyPreview());
+
+    mockMvc.perform(storePost("/orders", CREATE_BODY)).andExpect(status().isCreated());
+    mockMvc.perform(storePost("/orders/preview", CREATE_BODY)).andExpect(status().isOk());
+
+    verify(orderService).create(any(), any(), eq("staff@kizuna.test"), eq(true));
+    verify(orderService).previewCreate(any(), any(), eq("staff@kizuna.test"), eq(true));
+  }
+
+  @Test
+  @DisplayName("顧客候補の連絡先検索は顧客管理権限が無ければ使えない形で service へ渡ること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void customerCandidatesDoNotSearchContactsWithoutCustomerManagement() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.customerCandidates(any(), any(), any(), anyInt(), anyBoolean()))
+        .thenReturn(new CursorPage<>(List.of(), null));
+
+    mockMvc.perform(storeGet("/orders/customer-candidates?search=090")).andExpect(status().isOk());
+
+    verify(orderService).customerCandidates(any(), eq("090"), any(), anyInt(), eq(false));
+  }
+
+  @Test
+  @DisplayName("顧客候補の連絡先検索は顧客管理権限があれば使える形で service へ渡ること")
+  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_CUSTOMER_MANAGE"})
+  void customerCandidatesSearchContactsWithCustomerManagement() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(orderService.customerCandidates(any(), any(), any(), anyInt(), anyBoolean()))
+        .thenReturn(new CursorPage<>(List.of(), null));
+
+    mockMvc.perform(storeGet("/orders/customer-candidates?search=090")).andExpect(status().isOk());
+
+    verify(orderService).customerCandidates(any(), eq("090"), any(), anyInt(), eq(true));
+  }
+
+  private static OrderPreview emptyPreview() {
+    return new OrderPreview(
+        "token",
+        OrderCourses.course("基本", 60, 0),
+        List.of(),
+        0,
+        0,
+        0,
+        0,
+        null,
+        List.of(),
+        List.of());
+  }
+
+  private static OrderView view(String id, OrderStatus status) {
+    // thenReturn の引数の中で作られるので、when を使わない答え方で組む（進行中の stubbing を壊さない）
+    return mock(
+        OrderView.class,
+        invocation ->
+            switch (invocation.getMethod().getName()) {
+              case "getId" -> id;
+              case "getStatus" -> status;
+              default -> RETURNS_DEFAULTS.answer(invocation);
+            });
+  }
+
+  private static OrderCorrectionOutcome correctionOutcome(int previousTotalFee, int totalFee) {
+    OrderCorrection correction =
+        mock(
+            OrderCorrection.class,
+            invocation ->
+                switch (invocation.getMethod().getName()) {
+                  case "getId" -> "correction";
+                  case "getOrderId" -> "o1";
+                  case "getReason" -> "訂正";
+                  default -> RETURNS_DEFAULTS.answer(invocation);
+                });
+    return new OrderCorrectionOutcome(
+        correction,
+        snapshotWithTotalFee(previousTotalFee),
+        snapshotWithTotalFee(totalFee),
+        List.of());
+  }
+
+  private static OrderCorrectionSnapshot snapshotWithTotalFee(int totalFee) {
+    return new OrderCorrectionSnapshot(
+        null, null, null, List.of(), List.of(), totalFee, 0, 0, 0, false);
+  }
+
+  /** 本番の認証済み主体は Authentication で、権限は文脈に載った {@code @WithMockUser} のものと同じ。 氏名だけを実行者の識別子に差し替えて載せる。 */
+  private static Authentication staff() {
+    return new TestingAuthenticationToken(
+        "staff@kizuna.test",
+        null,
+        List.copyOf(SecurityContextHolder.getContext().getAuthentication().getAuthorities()));
+  }
+
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder storePost(String path) {
-    return post(path).header("X-Store-ID", "1").principal(() -> "staff@kizuna.test").with(csrf());
+    return post(path).header("X-Store-ID", "1").principal(staff()).with(csrf());
   }
 
   private MockHttpServletRequestBuilder storePost(String path, String body) {
@@ -938,13 +1014,13 @@ class OrderControllerTest {
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path).header("X-Store-ID", "1").principal(() -> "staff@kizuna.test");
+    return get(path).header("X-Store-ID", "1").principal(staff());
   }
 
   private MockHttpServletRequestBuilder storePut(String path, String body) {
     return put(path)
         .header("X-Store-ID", "1")
-        .principal(() -> "staff@kizuna.test")
+        .principal(staff())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body)
         .with(csrf());

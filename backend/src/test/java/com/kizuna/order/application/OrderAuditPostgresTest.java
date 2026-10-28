@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.order.api.dto.OrderCancellationRequest;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderRepository;
@@ -84,7 +83,7 @@ class OrderAuditPostgresTest {
   @Test
   void cancellationAndItsAuditCommitTogetherWithDatabaseVersions() {
     var id = createOrder();
-    service.cancel(STORE_ID, id, cancellation(), "operator@example.test");
+    service.cancel(STORE_ID, id, CANCELLATION_REASON, "operator@example.test");
 
     assertThat(status(id)).isEqualTo("CANCELLED");
     assertThat(auditCount(id)).isEqualTo(1);
@@ -106,7 +105,8 @@ class OrderAuditPostgresTest {
                 String.class,
                 id))
         .isEqualTo("1");
-    assertThatThrownBy(() -> service.cancel(STORE_ID, id, cancellation(), "operator@example.test"))
+    assertThatThrownBy(
+            () -> service.cancel(STORE_ID, id, CANCELLATION_REASON, "operator@example.test"))
         .isInstanceOf(RuntimeException.class);
     assertThat(auditCount(id)).isEqualTo(1);
   }
@@ -118,7 +118,7 @@ class OrderAuditPostgresTest {
         "alter table t_audit_events add constraint ck_audit_test_reject check (action <> 'ORDER_CANCELLED') not valid");
     try {
       assertThatThrownBy(
-              () -> service.cancel(STORE_ID, id, cancellation(), "operator@example.test"))
+              () -> service.cancel(STORE_ID, id, CANCELLATION_REASON, "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(status(id)).isEqualTo("CONFIRMED");
       assertThat(auditCount(id)).isZero();
@@ -136,7 +136,7 @@ class OrderAuditPostgresTest {
             () ->
                 transactions.executeWithoutResult(
                     transaction -> {
-                      service.cancel(STORE_ID, id, cancellation(), "operator@example.test");
+                      service.cancel(STORE_ID, id, CANCELLATION_REASON, "operator@example.test");
                       assertThat(auditCount(id)).isEqualTo(1);
                       throw new IllegalStateException("同じ業務取引の後続失敗");
                     }))
@@ -161,11 +161,7 @@ class OrderAuditPostgresTest {
         });
   }
 
-  private OrderCancellationRequest cancellation() {
-    var request = new OrderCancellationRequest();
-    request.setReason("元受注にだけ残す理由");
-    return request;
-  }
+  private static final String CANCELLATION_REASON = "元受注にだけ残す理由";
 
   private String status(String id) {
     return jdbc.queryForObject("select status from t_orders where id = ?", String.class, id);

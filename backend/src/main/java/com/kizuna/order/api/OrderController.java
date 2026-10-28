@@ -57,6 +57,7 @@ import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -88,7 +89,8 @@ public class OrderController {
       @CurrentStore Long storeId,
       @RequestParam(name = "customer_id", required = false) String customerId,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(orderService.list(storeId, customerId, pageable));
+    return ResponseEntity.ok(
+        orderService.list(storeId, customerId, pageable).map(orderMapper::toSummaryResponse));
   }
 
   /**
@@ -112,11 +114,13 @@ public class OrderController {
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok(
-        orderService.listWorkQueue(
-            storeId,
-            criteria(statuses, customerName, businessDate, sortKey, descending),
-            cursor,
-            size));
+        orderService
+            .listWorkQueue(
+                storeId,
+                criteria(statuses, customerName, businessDate, sortKey, descending),
+                cursor,
+                size)
+            .map(orderMapper::toWorkQueueResponse));
   }
 
   /**
@@ -139,10 +143,12 @@ public class OrderController {
               sort = {})
           Pageable pageable) {
     return ResponseEntity.ok(
-        orderService.listArchive(
-            storeId,
-            criteria(statuses, customerName, businessDate, sortKey, descending),
-            pageable));
+        orderService
+            .listArchive(
+                storeId,
+                criteria(statuses, customerName, businessDate, sortKey, descending),
+                pageable)
+            .map(orderMapper::toArchiveResponse));
   }
 
   /** 空文字の検索語は「送っていない」と同じに扱う。画面の検索欄をクリアした状態がそのまま乗ってくるため。 */
@@ -162,14 +168,18 @@ public class OrderController {
       @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return orderService.customerCandidates(storeId, search, cursor, size);
+      @RequestParam(defaultValue = "20") int size,
+      Authentication authentication) {
+    return orderService
+        .customerCandidates(
+            storeId, search, cursor, size, CustomerManagementAuthority.held(authentication))
+        .map(orderMapper::toResponse);
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
-    return ResponseEntity.ok(orderService.get(storeId, id));
+    return ResponseEntity.ok(orderMapper.toResponse(orderService.get(storeId, id)));
   }
 
   @GetMapping("/{id}/business-contact-permission-history")
@@ -179,14 +189,17 @@ public class OrderController {
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return businessContactPermissions.history(storeId, id, cursor, size);
+    return businessContactPermissions
+        .history(storeId, id, cursor, size)
+        .map(orderMapper::toResponse);
   }
 
   @GetMapping("/receptionists")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<List<OrderReceptionistResponse>> listReceptionists(
       @CurrentStore Long storeId) {
-    return ResponseEntity.ok(orderService.listReceptionists(storeId));
+    return ResponseEntity.ok(
+        orderService.listReceptionists(storeId).stream().map(orderMapper::toResponse).toList());
   }
 
   /**
@@ -198,7 +211,10 @@ public class OrderController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<List<OrderCastCandidateResponse>> listCastCandidates(
       @CurrentStore Long storeId, @RequestParam(required = false) String search) {
-    return ResponseEntity.ok(orderService.listCastCandidates(storeId, search));
+    return ResponseEntity.ok(
+        orderService.listCastCandidates(storeId, search).stream()
+            .map(orderMapper::toResponse)
+            .toList());
   }
 
   /**
@@ -211,9 +227,15 @@ public class OrderController {
   public ResponseEntity<OrderResponse> create(
       @CurrentStore Long storeId,
       @Valid @RequestBody OrderCreateRequest request,
-      Principal principal) {
+      Authentication authentication) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(orderService.create(storeId, request, principal.getName()));
+        .body(
+            orderMapper.toResponse(
+                orderService.create(
+                    storeId,
+                    orderMapper.toCommand(request),
+                    authentication.getName(),
+                    CustomerManagementAuthority.held(authentication))));
   }
 
   /** 受注を完了する（会計の確定）。ポイントの付与・利用はこの経路でのみ台帳へ入る。 */
@@ -236,7 +258,9 @@ public class OrderController {
       @CurrentStore Long storeId, @PathVariable String id) {
     return ResponseEntity.ok(
         withPendingCorrection(
-            storeId, id, orderAttributionService.currentAttribution(storeId, id)));
+            storeId,
+            id,
+            orderMapper.toResponse(orderAttributionService.currentAttribution(storeId, id))));
   }
 
   /**
@@ -275,7 +299,13 @@ public class OrderController {
         withPendingCorrection(
             storeId,
             id,
-            orderAttributionService.invalidate(storeId, id, request, principal.getName())));
+            orderMapper.toResponse(
+                orderAttributionService.invalidate(
+                    storeId,
+                    id,
+                    request.getAttributionId(),
+                    request.getReason(),
+                    principal.getName()))));
   }
 
   /**
@@ -290,7 +320,9 @@ public class OrderController {
     // 巻き戻し済みの受注へは発行しない。発行しても申領は拒まれるので、店舗は成功したと告げられたうえで
     // 使えない QR を客へ見せることになる。判定と発行は受注行を押さえたまま 1 つの取引で行う。
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(storeId, id));
+        .body(
+            orderMapper.toReceiptTokenResponse(
+                orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(storeId, id)));
   }
 
   /** 誤帰属の訂正の進み具合（この受注がその会員へ与えた付与の合計と、既に差し引いた合計）。画面の既定値はここから取る。 */
@@ -300,7 +332,9 @@ public class OrderController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(name = "attribution_id") Long attributionId) {
-    return ResponseEntity.ok(orderAttributionCorrectionService.status(storeId, id, attributionId));
+    return ResponseEntity.ok(
+        orderMapper.toResponse(
+            orderAttributionCorrectionService.status(storeId, id, attributionId)));
   }
 
   /**
@@ -318,14 +352,17 @@ public class OrderController {
       Principal principal) {
     try {
       return ResponseEntity.ok(
-          orderAttributionCorrectionService.correct(storeId, id, request, principal.getName()));
+          orderMapper.toResponse(
+              orderAttributionCorrectionService.correct(
+                  storeId, id, orderMapper.toCommand(request), principal.getName())));
     } catch (DataIntegrityViolationException ex) {
       if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY)) {
         throw ex;
       }
       return ResponseEntity.ok(
-          orderAttributionCorrectionService.replayCorrect(
-              storeId, id, request, principal.getName()));
+          orderMapper.toResponse(
+              orderAttributionCorrectionService.replayCorrect(
+                  storeId, id, orderMapper.toCommand(request), principal.getName())));
     }
   }
 
@@ -334,7 +371,8 @@ public class OrderController {
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderPointRollbackPreviewResponse> pointRollbackPreview(
       @CurrentStore Long storeId, @PathVariable String id) {
-    return ResponseEntity.ok(orderPointRollbackService.preview(storeId, id));
+    return ResponseEntity.ok(
+        orderMapper.toResponse(orderPointRollbackService.preview(storeId, id)));
   }
 
   /**
@@ -354,7 +392,10 @@ public class OrderController {
       Principal principal) {
     try {
       return ResponseEntity.status(HttpStatus.CREATED)
-          .body(orderPointRollbackService.rollback(storeId, id, request, principal.getName()));
+          .body(
+              orderMapper.toResponse(
+                  orderPointRollbackService.rollback(
+                      storeId, id, orderMapper.toCommand(request), principal.getName())));
     } catch (DataIntegrityViolationException ex) {
       if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ROLLBACKS_ORDER)) {
         throw ex;
@@ -385,7 +426,7 @@ public class OrderController {
       @PathVariable String id,
       @Valid @RequestBody OrderCancellationRequest request,
       Principal principal) {
-    orderService.cancel(storeId, id, request, principal.getName());
+    orderService.cancel(storeId, id, request.getReason(), principal.getName());
     return ResponseEntity.noContent().build();
   }
 
@@ -398,7 +439,8 @@ public class OrderController {
       Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
-            orderCorrectionService.invalidateCompletion(storeId, id, request, principal.getName()));
+            orderCorrectionService.invalidateCompletion(
+                storeId, id, request.expectedVersion(), request.reason(), principal.getName()));
   }
 
   /** 完了受注の明細・実績時刻・コース・特殊サービスを理由付きで訂正する。 状態・ポイントを変えず、訂正前後の採用条件・金額・分数・報酬を返す。 */
@@ -410,7 +452,10 @@ public class OrderController {
       @Valid @RequestBody OrderCorrectionRequest request,
       Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(orderCorrectionService.correct(storeId, id, request, principal.getName()));
+        .body(
+            orderMapper.toResponse(
+                orderCorrectionService.correct(
+                    storeId, id, orderMapper.toInput(request), principal.getName())));
   }
 
   /**
@@ -424,8 +469,15 @@ public class OrderController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderUpdateRequest request,
-      Principal principal) {
-    return ResponseEntity.ok(orderService.update(storeId, id, request, principal.getName()));
+      Authentication authentication) {
+    return ResponseEntity.ok(
+        orderMapper.toResponse(
+            orderService.update(
+                storeId,
+                id,
+                orderMapper.toCommand(request),
+                authentication.getName(),
+                CustomerManagementAuthority.held(authentication))));
   }
 
   @PostMapping("/preview")
@@ -433,9 +485,13 @@ public class OrderController {
   public OrderPreviewResponse previewCreate(
       @CurrentStore Long storeId,
       @Valid @RequestBody OrderCreateRequest request,
-      Principal principal) {
+      Authentication authentication) {
     return orderMapper.toPreviewResponse(
-        orderService.previewCreate(storeId, request, principal.getName()));
+        orderService.previewCreate(
+            storeId,
+            orderMapper.toCommand(request),
+            authentication.getName(),
+            CustomerManagementAuthority.held(authentication)));
   }
 
   @PostMapping("/{id}/preview")
@@ -444,9 +500,14 @@ public class OrderController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody OrderUpdateRequest request,
-      Principal principal) {
+      Authentication authentication) {
     return orderMapper.toPreviewResponse(
-        orderService.previewUpdate(storeId, id, request, principal.getName()));
+        orderService.previewUpdate(
+            storeId,
+            id,
+            orderMapper.toCommand(request),
+            authentication.getName(),
+            CustomerManagementAuthority.held(authentication)));
   }
 
   @PostMapping("/{id}/correction-preview")
@@ -457,7 +518,8 @@ public class OrderController {
       @Valid @RequestBody OrderCorrectionRequest request,
       Principal principal) {
     return orderMapper.toPreviewResponse(
-        orderCorrectionService.preview(storeId, id, request, principal.getName()));
+        orderCorrectionService.preview(
+            storeId, id, orderMapper.toInput(request), principal.getName()));
   }
 
   /** 訂正履歴。横断一覧（/orders/cross-store）からも行の店舗を X-Store-ID に名指して読むので、横断照会者も通す。 */

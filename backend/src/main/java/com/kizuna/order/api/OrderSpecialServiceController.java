@@ -1,5 +1,6 @@
 package com.kizuna.order.api;
 
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSpecialServiceEventResponse;
 import com.kizuna.order.api.dto.OrderStartRequest;
@@ -30,6 +31,7 @@ public class OrderSpecialServiceController {
   private final OrderSpecialServiceCatalog catalog;
   private final OrderSpecialServices specials;
   private final OrderService orders;
+  private final OrderMapper orderMapper;
 
   @GetMapping("/special-service-candidates")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
@@ -61,7 +63,7 @@ public class OrderSpecialServiceController {
       @PathVariable String id,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return specials.history(storeId, id, cursor, size);
+    return specials.history(storeId, id, cursor, size).map(orderMapper::toResponse);
   }
 
   @PostMapping("/{id}/start")
@@ -71,8 +73,9 @@ public class OrderSpecialServiceController {
       @PathVariable String id,
       @Valid @RequestBody OrderStartRequest request,
       Principal principal) {
-    return orders.start(
-        storeId, id, request.expectedVersion(), request.reason(), principal.getName());
+    return orderMapper.toResponse(
+        orders.start(
+            storeId, id, request.expectedVersion(), request.reason(), principal.getName()));
   }
 
   public record Candidate(

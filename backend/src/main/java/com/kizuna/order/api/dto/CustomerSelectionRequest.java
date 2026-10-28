@@ -1,6 +1,5 @@
 package com.kizuna.order.api.dto;
 
-import com.kizuna.shared.exception.ServiceException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,17 +14,4 @@ public record CustomerSelectionRequest(
   }
 
   public record NewCustomer(@NotBlank @Size(max = 255) String name) {}
-
-  public void validate() {
-    if (mode == null
-        || switch (mode) {
-          case EXISTING -> customerId == null || customerId.isBlank() || newCustomer != null;
-          case NEW ->
-              customerId != null
-                  || newCustomer == null
-                  || newCustomer.name() == null
-                  || newCustomer.name().isBlank();
-          case NONE -> customerId != null || newCustomer != null;
-        }) throw new ServiceException("既存顧客・新規顧客・顧客未設定のいずれかを指定してください");
-  }
 }

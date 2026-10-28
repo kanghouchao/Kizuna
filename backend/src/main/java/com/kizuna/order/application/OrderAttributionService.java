@@ -1,8 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.OrderAttributionInvalidationRequest;
-import com.kizuna.order.api.dto.OrderAttributionResponse;
-import com.kizuna.order.api.dto.OrderReceiptTokenResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -48,9 +45,9 @@ public class OrderAttributionService {
 
   /** 受注 1 件の帰属の現況。無効化・再発行のどちらを提示するかを店舗側の画面が判じるための読み口。 */
   @Transactional(readOnly = true)
-  public OrderAttributionResponse currentAttribution(Long storeId, String orderId) {
+  public OrderAttributionState currentAttribution(Long storeId, String orderId) {
     requireScopedOrder(storeId, orderId);
-    return toResponse(latestAttribution(storeId, orderId).orElse(null));
+    return toState(latestAttribution(storeId, orderId).orElse(null));
   }
 
   /**
@@ -65,23 +62,20 @@ public class OrderAttributionService {
    * 409 で差し戻す。
    */
   @Transactional
-  public OrderAttributionResponse invalidate(
-      Long storeId,
-      String orderId,
-      OrderAttributionInvalidationRequest request,
-      String actorEmail) {
+  public OrderAttributionState invalidate(
+      Long storeId, String orderId, Long attributionId, String reason, String actorEmail) {
     requireScopedOrder(storeId, orderId);
     OrderAttribution attribution =
         latestAttribution(storeId, orderId)
             .filter(row -> row.getStatus() == OrderAttributionStatus.ACTIVE)
             .orElseThrow(() -> new ServiceException("この受注は会員へ帰属していません"));
-    if (!attribution.getId().equals(request.getAttributionId())) {
+    if (!attribution.getId().equals(attributionId)) {
       throw new ConflictException("この受注の帰属は別の操作で変わりました。最新の状態を確認してからやり直してください");
     }
 
     attribution.invalidate(
-        request.getReason(), actorIdentityService.requireUserId(actorEmail), OffsetDateTime.now());
-    return toResponse(orderAttributionRepository.save(attribution));
+        reason, actorIdentityService.requireUserId(actorEmail), OffsetDateTime.now());
+    return toState(orderAttributionRepository.save(attribution));
   }
 
   /**
@@ -104,7 +98,7 @@ public class OrderAttributionService {
    * <p>有効な帰属記録がある間はトークンが生きていることは無いので、無効化の側にトークンを止める処理は要らない。
    */
   @Transactional
-  public OrderReceiptTokenResponse reissueReceiptToken(Long storeId, String orderId) {
+  public String reissueReceiptToken(Long storeId, String orderId) {
     // 受注を押さえて並行する再発行と直列化する。トークンが 1 本も無い受注（完了時に会員へ帰属した受注）は
     // 押さえる行が下に無いため、ここだけが直列化点になる。
     Order order =
@@ -140,7 +134,7 @@ public class OrderAttributionService {
     orderReceiptTokenRepository.save(
         OrderReceiptToken.issueFor(
             orderId, generated.digest(), plannedPoints, OffsetDateTime.now()));
-    return new OrderReceiptTokenResponse(generated.raw());
+    return generated.raw();
   }
 
   /**
@@ -166,21 +160,19 @@ public class OrderAttributionService {
    * 会員側の情報は会員コードだけを写す。表示名・メールはグループ共通プロフィールで、店舗へは渡らない。
    *
    * <p>残っている訂正の項目はここでは埋めない。台帳を読まなければ決まらず、このサービスが台帳へ依存しないことが 「無効化はポイント台帳へ自動波及しない」（ADR
-   * 0009）の構造的な証跡である。呼出側が訂正のサービスから受け取って {@link OrderAttributionResponse#withPendingCorrection} で添える。
+   * 0009）の構造的な証跡である。呼出側（controller）が訂正のサービスから受け取って添える。
    */
-  private static OrderAttributionResponse toResponse(OrderAttribution attribution) {
+  private static OrderAttributionState toState(OrderAttribution attribution) {
     if (attribution == null) {
-      return new OrderAttributionResponse(null, false, null, null, null, null, null, null, null);
+      return OrderAttributionState.none();
     }
-    return new OrderAttributionResponse(
+    return new OrderAttributionState(
         attribution.getId(),
         attribution.getStatus() == OrderAttributionStatus.ACTIVE,
         attribution.getMemberCode(),
         attribution.getSource().name(),
         attribution.getAttributedAt(),
         attribution.getInvalidatedReason(),
-        attribution.getInvalidatedAt(),
-        null,
-        null);
+        attribution.getInvalidatedAt());
   }
 }

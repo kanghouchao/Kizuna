@@ -1,7 +1,5 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.OrderAttributionCorrectionRequest;
-import com.kizuna.order.api.dto.OrderAttributionCorrectionResponse;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.order.domain.OrderAttributionStatus;
@@ -39,7 +37,7 @@ public class OrderAttributionCorrectionService {
 
   /** 訂正の進み具合。画面が差し引く既定値（付与の全額）と引き残しを示すための読み口。 */
   @Transactional(readOnly = true)
-  public OrderAttributionCorrectionResponse status(
+  public OrderAttributionCorrectionProgress status(
       Long storeId, String orderId, Long attributionId) {
     requireScopedOrder(storeId, orderId);
     List<OrderAttribution> attributions =
@@ -48,12 +46,12 @@ public class OrderAttributionCorrectionService {
         requireInvalidatedAttribution(attributions, orderId, attributionId);
     Long memberId = attribution.getMemberId();
     if (memberId == null) {
-      return new OrderAttributionCorrectionResponse(0, 0);
+      return new OrderAttributionCorrectionProgress(0, 0);
     }
     // 書き込み経路と同じ門を通す。撥ねられる要求の材料を「引ける額」として画面に描くと、既定値を
     // そのまま送った操作者が理由の分からない失敗を受け取る。
     requireNoActiveAttributionFor(attributions, memberId);
-    return new OrderAttributionCorrectionResponse(
+    return new OrderAttributionCorrectionProgress(
         grantedPointsFor(memberId, orderId),
         pointLedgerService.correctedPointsFor(attributionIdsOf(attributions, memberId)));
   }
@@ -65,8 +63,7 @@ public class OrderAttributionCorrectionService {
    * その人の有効な帰属へ入れ替わり、古い無効化記録は現況の読み口からは見えなくなる。画面が古い記録を名指せる 経路をここでだけ与える —
    * 無ければ「後で行う」は、誤付与が相手の台帳に残ったまま二度と辿り着けない行き止まりになる。
    *
-   * <p>返すのは<b>1 件</b>だけで、区間の履歴一覧にはしない（{@link com.kizuna.order.api.dto.OrderAttributionResponse}
-   * と同じ紀律）。差し引きが済むごとに次の 1 件が現れるので、複数の会員に誤付与が残っていても順に片付く。
+   * <p>返すのは<b>1 件</b>だけで、区間の履歴一覧にはしない（帰属の現況と同じ紀律）。差し引きが済むごとに次の 1 件が現れるので、複数の会員に誤付与が残っていても順に片付く。
    *
    * <p>選ぶのは<b>新しい順に条件を当てて最初に通った記録</b>であって、先に直近の 1 件を選んでから条件を当てるのではない。
    * 直近の無効化記録が引き切り済み（あるいはその会員が現に帰属していて書き込み経路が撥ねる状態）でも、その先に 差し引きの残る古い記録がありうる —
@@ -103,8 +100,8 @@ public class OrderAttributionCorrectionService {
    * 操作者は引ける額へ入れ直せる。引き切れなかった差額の扱いは未裁定である（ADR 0009 / 0012）。
    */
   @Transactional
-  public OrderAttributionCorrectionResponse correct(
-      Long storeId, String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
+  public OrderAttributionCorrectionProgress correct(
+      Long storeId, String orderId, OrderAttributionCorrectionCommand command, String actorEmail) {
     // 上限を数えてから記帳し終えるまで、同じ受注に対する並行の訂正と直列化する。押さえないと双方が同じ
     // 「まだ引かれていない」を観測し、合計が付与額を超えて通る。
     orderRepository
@@ -113,21 +110,21 @@ public class OrderAttributionCorrectionService {
     List<OrderAttribution> attributions =
         orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId);
     OrderAttribution attribution =
-        requireInvalidatedAttribution(attributions, orderId, request.getAttributionId());
+        requireInvalidatedAttribution(attributions, orderId, command.attributionId());
     long memberId = requireMemberId(attribution);
     // 再送の判定は現況を材料にする検証より先に置く（ADR 0007 が台帳の内側で採っている順序を、台帳の
     // 外側のこの門にも当てる）。初回の commit のあとに会員が再発行された伝票を申領し直すと、応答を
     // 取り逃しただけの正当な再送が「今は通せない要求」として撥ねられ、台帳が冪等キーで収束させる機会が
     // 失われる。上限の判定は同じキーの行を除いて数えるので、初回と同じ結論に落ちる。
-    if (!pointLedgerService.isIdempotencyKeyCommitted(request.getIdempotencyKey())) {
+    if (!pointLedgerService.isIdempotencyKeyCommitted(command.idempotencyKey())) {
       requireNoActiveAttributionFor(attributions, memberId);
     }
 
     long granted = grantedPointsFor(memberId, orderId);
     long already =
         pointLedgerService.correctedPointsFor(
-            attributionIdsOf(attributions, memberId), request.getIdempotencyKey());
-    if (already + request.getPoints() > granted) {
+            attributionIdsOf(attributions, memberId), command.idempotencyKey());
+    if (already + command.points() > granted) {
       throw new ServiceException(
           "差し引ける上限を超えています（この受注の付与は " + granted + " ポイント、うち訂正済みは " + already + " ポイントです）");
     }
@@ -135,12 +132,12 @@ public class OrderAttributionCorrectionService {
     pointLedgerService.correctForAttribution(
         memberId,
         storeId,
-        -request.getPoints(),
-        request.getReason(),
+        -command.points(),
+        command.reason(),
         actorIdentityService.requireUserId(actorEmail),
-        request.getIdempotencyKey(),
+        command.idempotencyKey(),
         attribution.getId());
-    return new OrderAttributionCorrectionResponse(granted, already + request.getPoints());
+    return new OrderAttributionCorrectionProgress(granted, already + command.points());
   }
 
   /**
@@ -152,28 +149,28 @@ public class OrderAttributionCorrectionService {
    * のあとに申領し直していれば、後から現況で判じると正当な再送が 失敗する。台帳側の再送判定（内容一致なら何も書かずに戻る／不一致は 409）に落ちることで、 逐次再送と同一の応答になる。
    */
   @Transactional(readOnly = true)
-  public OrderAttributionCorrectionResponse replayCorrect(
-      Long storeId, String orderId, OrderAttributionCorrectionRequest request, String actorEmail) {
+  public OrderAttributionCorrectionProgress replayCorrect(
+      Long storeId, String orderId, OrderAttributionCorrectionCommand command, String actorEmail) {
     requireScopedOrder(storeId, orderId);
     List<OrderAttribution> attributions =
         orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId);
     OrderAttribution attribution =
-        requireInvalidatedAttribution(attributions, orderId, request.getAttributionId());
+        requireInvalidatedAttribution(attributions, orderId, command.attributionId());
     long memberId = requireMemberId(attribution);
     long granted = grantedPointsFor(memberId, orderId);
     long already =
         pointLedgerService.correctedPointsFor(
-            attributionIdsOf(attributions, memberId), request.getIdempotencyKey());
+            attributionIdsOf(attributions, memberId), command.idempotencyKey());
 
     pointLedgerService.correctForAttribution(
         memberId,
         storeId,
-        -request.getPoints(),
-        request.getReason(),
+        -command.points(),
+        command.reason(),
         actorIdentityService.requireUserId(actorEmail),
-        request.getIdempotencyKey(),
+        command.idempotencyKey(),
         attribution.getId());
-    return new OrderAttributionCorrectionResponse(granted, already + request.getPoints());
+    return new OrderAttributionCorrectionProgress(granted, already + command.points());
   }
 
   /**

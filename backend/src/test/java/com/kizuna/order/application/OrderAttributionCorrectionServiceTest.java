@@ -3,8 +3,6 @@ package com.kizuna.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.order.api.dto.OrderAttributionCorrectionRequest;
-import com.kizuna.order.api.dto.OrderAttributionCorrectionResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderAttributionRepository;
@@ -303,7 +301,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     givenCorrected(70L, ATTRIBUTION_ID);
 
-    OrderAttributionCorrectionResponse response =
+    OrderAttributionCorrectionProgress response =
         service.correct(STORE_ID, ORDER_ID, request(30), ACTOR_EMAIL);
 
     assertThat(response.grantedPoints()).isEqualTo(100L);
@@ -345,7 +343,7 @@ class OrderAttributionCorrectionServiceTest {
                             && ids.containsAll(List.of(ATTRIBUTION_ID, OTHER_ATTRIBUTION_ID)))))
         .thenReturn(100L);
 
-    OrderAttributionCorrectionResponse response =
+    OrderAttributionCorrectionProgress response =
         service.status(STORE_ID, ORDER_ID, ATTRIBUTION_ID);
 
     // 画面はこの差を既定値に取る。書き込み側と作用域がずれると、撥ねられる額を既定値として描く。
@@ -476,13 +474,8 @@ class OrderAttributionCorrectionServiceTest {
     return row;
   }
 
-  private static OrderAttributionCorrectionRequest request(int points) {
-    OrderAttributionCorrectionRequest request = new OrderAttributionCorrectionRequest();
-    request.setAttributionId(ATTRIBUTION_ID);
-    request.setPoints(points);
-    request.setReason(REASON);
-    request.setIdempotencyKey(KEY);
-    return request;
+  private static OrderAttributionCorrectionCommand request(int points) {
+    return new OrderAttributionCorrectionCommand(ATTRIBUTION_ID, points, REASON, KEY);
   }
 
   /** 会員削除で FK が SET NULL になった状態を作る。域には会員参照を落とす操作が無いため、ここでだけ直接倒す。 */

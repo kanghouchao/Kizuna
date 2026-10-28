@@ -4,6 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.order.api.dto.CustomerSelectionRequest;
+import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
+import com.kizuna.order.api.dto.OrderCorrectionRequest;
+import com.kizuna.order.api.dto.OrderCreateRequest;
+import com.kizuna.order.api.dto.OrderMapper;
+import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderFeeLineDraft;
@@ -11,10 +17,13 @@ import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderServiceAdoption;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.config.AppProperties;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mapstruct.factory.Mappers;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -85,6 +94,89 @@ class OrderConfirmationTest {
         .isTrue();
     assertThat(confirmation.wasPreviewed(7L, "COMPLETE", "o1", ACTOR, command(400, token), token))
         .isFalse();
+  }
+
+  // 試算と確定は同じ要求本文を別の型経路で受けるため、本文が写される Command の署名で束ねる
+  private void assertTokenBindsInput(
+      String operation, Function<String, Object> input, Function<String, Object> changedInput) {
+    var consent = consent(calculatedAt(OffsetDateTime.now()), 130, 800L);
+    String token = confirmation.sign(7L, operation, "id", ACTOR, input.apply(null), consent);
+
+    assertThat(confirmation.wasPreviewed(7L, operation, "id", ACTOR, input.apply(token), token))
+        .isTrue();
+    assertThat(
+            confirmation.wasPreviewed(7L, operation, "id", ACTOR, changedInput.apply(token), token))
+        .isFalse();
+  }
+
+  @Test
+  void tokenSignedAtPreviewProvesTheSameCreateRequest() {
+    OrderMapper mapper = Mappers.getMapper(OrderMapper.class);
+    Function<Integer, Function<String, Object>> request =
+        pax ->
+            token -> {
+              var req = new OrderCreateRequest();
+              req.setCourseId("course");
+              req.setCastId("cast-1");
+              req.setBusinessDate(LocalDate.parse("2026-10-28"));
+              req.setCustomerSelection(
+                  new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
+              req.setPax(pax);
+              req.setConfirmationToken(token);
+              return mapper.toCommand(req);
+            };
+
+    assertTokenBindsInput("CREATE", request.apply(2), request.apply(3));
+  }
+
+  @Test
+  void tokenSignedAtPreviewProvesTheSameUpdateRequest() {
+    OrderMapper mapper = Mappers.getMapper(OrderMapper.class);
+    Function<Integer, Function<String, Object>> request =
+        pax ->
+            token -> {
+              var req = new OrderUpdateRequest();
+              req.setExpectedVersion(4L);
+              req.setPax(pax);
+              req.setConfirmationToken(token);
+              return mapper.toCommand(req);
+            };
+
+    assertTokenBindsInput("UPDATE", request.apply(2), request.apply(3));
+  }
+
+  @Test
+  void tokenSignedAtPreviewProvesTheSameApplicationConfirmationRequest() {
+    OrderMapper mapper = Mappers.getMapper(OrderMapper.class);
+    Function<Integer, Function<String, Object>> request =
+        pax ->
+            token -> {
+              var req = new OrderApplicationConfirmationRequest();
+              req.setCourseId("course");
+              req.setBusinessDate(LocalDate.parse("2026-10-28"));
+              req.setPax(pax);
+              req.setConfirmationToken(token);
+              return mapper.toCommand(req);
+            };
+
+    assertTokenBindsInput("CONFIRM", request.apply(2), request.apply(3));
+  }
+
+  @Test
+  void tokenSignedAtPreviewProvesTheSameCorrectionRequest() {
+    OrderMapper mapper = Mappers.getMapper(OrderMapper.class);
+    Function<String, Function<String, Object>> request =
+        reason ->
+            token -> {
+              var req = new OrderCorrectionRequest();
+              req.setExpectedVersion(4L);
+              req.setReason(reason);
+              req.setFeeLines(List.of());
+              req.setConfirmationToken(token);
+              return mapper.toInput(req);
+            };
+
+    assertTokenBindsInput("CORRECT", request.apply("誤記"), request.apply("別の理由"));
   }
 
   @Test

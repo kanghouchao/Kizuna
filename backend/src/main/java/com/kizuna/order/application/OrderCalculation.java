@@ -107,7 +107,7 @@ public class OrderCalculation {
       Order calculated,
       OrderPoints points,
       List<GuestContactImport> contactImports) {
-    var specials = specialServices.describeForPreview(storeId, calculated);
+    var specials = specialServices.describe(storeId, calculated);
     var consent = OrderConsent.of(calculated, points, specials, contactImports);
     return new OrderPreview(
         confirmation.sign(storeId, operation, id, actor, input, consent),
