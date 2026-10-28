@@ -22,6 +22,7 @@ import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -121,6 +122,17 @@ class StoreProfileAuditTest {
 
     assertThat(recorded.getFirst().getAfterValues())
         .containsEntry("changed_fields", "custom_texts,sns_links");
+  }
+
+  @Test
+  void nullLinkElementsDoNotBreakSnapshot() {
+    profile.setSnsLinks(new ArrayList<>(Arrays.asList((SnsLink) null)));
+    var request = new StoreProfileUpdateRequest();
+    request.setSnsLinks(new ArrayList<>());
+
+    service.update(STORE_ID, request);
+
+    assertThat(recorded.getFirst().getAfterValues()).containsEntry("changed_fields", "sns_links");
   }
 
   @Test
