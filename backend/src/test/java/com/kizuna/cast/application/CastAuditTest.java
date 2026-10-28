@@ -84,7 +84,8 @@ class CastAuditTest {
             Mappers.getMapper(CastMapper.class),
             profiles,
             stores,
-            new CastInvitationService(enrollments, mock(CastInvitationRepository.class), stores),
+            new CastInvitationService(
+                enrollments, mock(CastInvitationRepository.class), stores, audit),
             definitions,
             ids -> Set.of(),
             ids -> Set.of(),

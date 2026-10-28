@@ -92,8 +92,9 @@ public class CastController {
   @PostMapping("/{id}/invitation")
   @PreAuthorize("hasAuthority('PERM_CAST_INVITE')")
   public ResponseEntity<CastInvitationResponse> issueInvitation(
-      @CurrentStore Long storeId, @PathVariable String id) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(castInvitationService.issue(storeId, id));
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(castInvitationService.issue(storeId, id, principal.getName()));
   }
 
   @PatchMapping("/{id}/publication")
