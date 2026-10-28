@@ -1,8 +1,8 @@
 # HQ 管理者はアカウント生命周期・ロール定義・統治層の授与を担い、店舗の日常からは撤退する
 
-Status: Accepted
+Status: Superseded
 
-> 帰結に記した過渡期は commit edee7a59 の撤退（HQ の `STAFF_MANAGE`・`STORE_MENU_VIEW` 既定授与の取り下げ）で終わり、停止の二重化は解消している。
+> 「HQ 管理者」という区分は commit 9accca45（platform / store の「側」の撤去）で消え、後台の利用者は従業員（STAFF）+ ロール + 管轄店舗集合の一種類になった。本決定の「日常からの撤退」は統括ロールの初期授与（店舗業務の権限を持たない）としてだけ残り、既定ロールの権限は管理者が編集できる。授権の現行方式は GLOSSARY「授権の二軸」「Role / Permission」。
 
 ## 決定時の背景
 
