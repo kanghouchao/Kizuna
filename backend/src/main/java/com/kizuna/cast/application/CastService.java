@@ -357,6 +357,7 @@ public class CastService {
               DbConstraint.FK_T_ATTENDANCES_SHIFT,
               CastService::attendanceReferenced));
     }
+    // 件数は行ロック下で数えた連鎖先。公開プロフィールは在籍と 1 対 1（一意制約）なので常に 1 件。
     audit.record(
         actorEmail,
         enrollment.getStoreId(),
