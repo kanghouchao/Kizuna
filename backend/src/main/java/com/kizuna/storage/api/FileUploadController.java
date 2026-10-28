@@ -4,6 +4,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
+import com.kizuna.storage.application.StoredFileAudit;
 import com.kizuna.user.domain.PermissionCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ public class FileUploadController {
 
   private final FileStorageService fileStorageService;
   private final AppProperties appProperties;
+  private final StoredFileAudit storedFileAudit;
 
   @PostMapping
   @PreAuthorize("isAuthenticated()")
@@ -34,6 +36,7 @@ public class FileUploadController {
       @RequestParam(value = "bucket", defaultValue = "public") String bucket) {
     String prefix = resolveStoragePrefix(storeId);
     String relativePath = fileStorageService.store(prefix, bucket, file);
+    storedFileAudit.recorded(storeId, relativePath, bucket, file.getSize(), file.getContentType());
 
     FileUploadResponse response =
         FileUploadResponse.builder()
