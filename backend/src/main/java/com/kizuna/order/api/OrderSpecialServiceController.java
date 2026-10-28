@@ -4,6 +4,7 @@ import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderSpecialServiceEventResponse;
 import com.kizuna.order.api.dto.OrderStartRequest;
+import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.application.OrderSpecialServices;
 import com.kizuna.service.application.OrderSpecialServiceCatalog;
@@ -31,6 +32,7 @@ public class OrderSpecialServiceController {
   private final OrderSpecialServiceCatalog catalog;
   private final OrderSpecialServices specials;
   private final OrderService orders;
+  private final OrderQueryService orderQueries;
   private final OrderMapper orderMapper;
 
   @GetMapping("/special-service-candidates")
@@ -52,7 +54,7 @@ public class OrderSpecialServiceController {
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    orders.get(storeId, id);
+    orderQueries.get(storeId, id);
     return catalog.history(storeId, search, cursor, size).map(Revision::of);
   }
 

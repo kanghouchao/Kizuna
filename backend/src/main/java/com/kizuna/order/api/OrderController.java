@@ -32,6 +32,7 @@ import com.kizuna.order.application.OrderAttributionService;
 import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.application.OrderCorrectionService;
 import com.kizuna.order.application.OrderPointRollbackService;
+import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.OrderQueryCriteria;
 import com.kizuna.order.domain.OrderSortKey;
@@ -75,6 +76,7 @@ public class OrderController {
   private final OrderCorrectionHistory correctionHistory;
 
   private final OrderService orderService;
+  private final OrderQueryService orderQueryService;
   private final BusinessContactPermissions businessContactPermissions;
   private final OrderAttributionService orderAttributionService;
   private final OrderAttributionCorrectionService orderAttributionCorrectionService;
@@ -90,7 +92,7 @@ public class OrderController {
       @RequestParam(name = "customer_id", required = false) String customerId,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
     return ResponseEntity.ok(
-        orderService.list(storeId, customerId, pageable).map(orderMapper::toSummaryResponse));
+        orderQueryService.list(storeId, customerId, pageable).map(orderMapper::toSummaryResponse));
   }
 
   /**
@@ -114,7 +116,7 @@ public class OrderController {
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
     return ResponseEntity.ok(
-        orderService
+        orderQueryService
             .listWorkQueue(
                 storeId,
                 criteria(statuses, customerName, businessDate, sortKey, descending),
@@ -143,7 +145,7 @@ public class OrderController {
               sort = {})
           Pageable pageable) {
     return ResponseEntity.ok(
-        orderService
+        orderQueryService
             .listArchive(
                 storeId,
                 criteria(statuses, customerName, businessDate, sortKey, descending),
@@ -170,7 +172,7 @@ public class OrderController {
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size,
       Authentication authentication) {
-    return orderService
+    return orderQueryService
         .customerCandidates(
             storeId, search, cursor, size, CustomerManagementAuthority.held(authentication))
         .map(orderMapper::toResponse);
@@ -179,7 +181,7 @@ public class OrderController {
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<OrderResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
-    return ResponseEntity.ok(orderMapper.toResponse(orderService.get(storeId, id)));
+    return ResponseEntity.ok(orderMapper.toResponse(orderQueryService.get(storeId, id)));
   }
 
   @GetMapping("/{id}/business-contact-permission-history")
@@ -199,7 +201,9 @@ public class OrderController {
   public ResponseEntity<List<OrderReceptionistResponse>> listReceptionists(
       @CurrentStore Long storeId) {
     return ResponseEntity.ok(
-        orderService.listReceptionists(storeId).stream().map(orderMapper::toResponse).toList());
+        orderQueryService.listReceptionists(storeId).stream()
+            .map(orderMapper::toResponse)
+            .toList());
   }
 
   /**
@@ -212,7 +216,7 @@ public class OrderController {
   public ResponseEntity<List<OrderCastCandidateResponse>> listCastCandidates(
       @CurrentStore Long storeId, @RequestParam(required = false) String search) {
     return ResponseEntity.ok(
-        orderService.listCastCandidates(storeId, search).stream()
+        orderQueryService.listCastCandidates(storeId, search).stream()
             .map(orderMapper::toResponse)
             .toList());
   }
