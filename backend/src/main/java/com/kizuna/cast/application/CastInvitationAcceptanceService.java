@@ -18,14 +18,17 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -53,6 +56,7 @@ public class CastInvitationAcceptanceService {
   private final UserRepository userRepository;
   private final StoreRepository storeRepository;
   private final PasswordEncoder passwordEncoder;
+  private final BusinessAudit audit;
 
   /** 招待を照会する。受諾可否のビュー状態と店舗名・档案名を返す。 */
   @Transactional(readOnly = true)
@@ -92,6 +96,7 @@ public class CastInvitationAcceptanceService {
                 .storeIds(Set.of(invitation.getStoreId()))
                 .build());
     link(cast, user.getId());
+    recordAcceptance(invitation, cast, user, "NEW_USER", null);
     return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
   }
 
@@ -124,13 +129,15 @@ public class CastInvitationAcceptanceService {
 
     // ALL_STORES は既に全店アクセス権を持つため、SPECIFIC_STORES へ降格させない（不変条件で storeIds は空）。
     // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する（束・精算範囲は触らない — CAST は保持しない）。
+    boolean membershipAdded = false;
     if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES) {
       Set<Long> storeIds = new HashSet<>(user.getStoreIds());
-      storeIds.add(invitation.getStoreId());
+      membershipAdded = storeIds.add(invitation.getStoreId());
       user.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
       userRepository.save(user);
     }
     link(cast, user.getId());
+    recordAcceptance(invitation, cast, user, "EXISTING_USER", membershipAdded);
     return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
   }
 
@@ -156,6 +163,36 @@ public class CastInvitationAcceptanceService {
     if (claimed != 1) {
       throw new CastInvitationStateException("この招待は既に受諾済みまたは失効しています");
     }
+  }
+
+  /** 招待の状態遷移は条件付き UPDATE で確定済みなので、前後の version は同じ実値を写す。 */
+  private void recordAcceptance(
+      CastInvitation invitation,
+      CastEnrollment cast,
+      User user,
+      String acceptance,
+      Boolean membershipAdded) {
+    String version = Objects.toString(invitation.getVersion(), "");
+    var after = new HashMap<String, String>();
+    after.put("status", CastInvitation.Status.ACCEPTED.name());
+    after.put("version", version);
+    after.put("acceptance", acceptance);
+    after.put("cast_enrollment_id", cast.getId());
+    after.put("user_id", String.valueOf(user.getId()));
+    after.put("store_id", String.valueOf(invitation.getStoreId()));
+    if (membershipAdded != null) {
+      after.put("store_membership_added", String.valueOf(membershipAdded));
+    }
+    audit.recordById(
+        user.getId(),
+        invitation.getStoreId(),
+        "CAST_INVITATION_ACCEPTED",
+        "CAST_INVITATION",
+        invitation.getId(),
+        "CAST_ENROLLMENT",
+        cast.getId(),
+        Map.of("status", CastInvitation.Status.PENDING.name(), "version", version),
+        after);
   }
 
   private void link(CastEnrollment cast, Long userId) {

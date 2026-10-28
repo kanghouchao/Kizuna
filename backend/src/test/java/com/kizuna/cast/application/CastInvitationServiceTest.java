@@ -18,6 +18,7 @@ import com.kizuna.cast.domain.CastInvitationStateException;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -42,6 +43,7 @@ class CastInvitationServiceTest {
   @Mock private CastEnrollmentRepository castRepository;
   @Mock private CastInvitationRepository castInvitationRepository;
   @Mock private StoreRepository storeRepository;
+  @Mock private BusinessAudit audit;
 
   @InjectMocks private CastInvitationService castInvitationService;
 
@@ -69,7 +71,8 @@ class CastInvitationServiceTest {
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     OffsetDateTime before = OffsetDateTime.now();
-    CastInvitationResponse response = castInvitationService.issue(STORE_ID, "c1");
+    CastInvitationResponse response =
+        castInvitationService.issue(STORE_ID, "c1", "op@example.test");
 
     assertThat(response.token()).isNotBlank();
     assertThat(response.expiresAt())
@@ -86,7 +89,7 @@ class CastInvitationServiceTest {
     when(castRepository.findByIdAndStoreIdForUpdate("missing", STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "missing"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "missing", "op@example.test"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
     verify(castInvitationRepository, never()).saveAndFlush(any());
@@ -97,7 +100,7 @@ class CastInvitationServiceTest {
     when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(cast("c1", 99L)));
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }
@@ -109,7 +112,7 @@ class CastInvitationServiceTest {
     when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(enrollment));
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }
@@ -122,7 +125,7 @@ class CastInvitationServiceTest {
         .thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-    castInvitationService.issue(STORE_ID, "c1");
+    castInvitationService.issue(STORE_ID, "c1", "op@example.test");
 
     InOrder inOrder = inOrder(castInvitationRepository);
     inOrder
@@ -148,7 +151,8 @@ class CastInvitationServiceTest {
                 "uq_t_cast_invitations_pending_cast"));
     when(castInvitationRepository.saveAndFlush(any())).thenThrow(violation);
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1")).isSameAs(violation);
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
+        .isSameAs(violation);
   }
 
   @Test
@@ -167,7 +171,7 @@ class CastInvitationServiceTest {
                     new SQLException("insert or update violates foreign key constraint"),
                     "fk_t_cast_invitations_cast")));
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
@@ -180,7 +184,7 @@ class CastInvitationServiceTest {
         .thenReturn(Optional.of(cast("c1", null)));
     when(castRepository.findCastIdByIdAndStoreId("c1", STORE_ID)).thenReturn(Optional.of(77L));
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }

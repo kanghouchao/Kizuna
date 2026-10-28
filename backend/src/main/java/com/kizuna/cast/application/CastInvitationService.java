@@ -11,6 +11,7 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,7 @@ public class CastInvitationService {
   private final CastEnrollmentRepository castRepository;
   private final CastInvitationRepository castInvitationRepository;
   private final StoreRepository storeRepository;
+  private final BusinessAudit audit;
 
   /**
    * 招待を発行する。紐づき済みの在籍は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 在籍は店舗条件付きで引くため他店舗の在籍は
@@ -50,7 +53,7 @@ public class CastInvitationService {
    * 再読込で再確認し、 並行受諾が在籍を紐づけていれば新規発行を中止する（連携済み在籍に有効トークンが残る矛盾を塞ぐ）。
    */
   @Transactional
-  public CastInvitationResponse issue(Long storeId, String castId) {
+  public CastInvitationResponse issue(Long storeId, String castId, String actorEmail) {
     // 招待行を書く前に店舗行・在籍行を押さえる（ADR 0016）。招待を先に押さえると、同じ在籍を
     // 「店舗 → 在籍 → 招待」の順で辿る受諾と逆順になって環になる。
     storeRepository.lockAgainstDeletion(storeId);
@@ -92,6 +95,19 @@ public class CastInvitationService {
             Map.of(
                 DbConstraint.FK_T_CAST_INVITATIONS_CAST,
                 () -> new NotFoundException("キャストが見つかりません: " + castId)));
+    audit.record(
+        actorEmail,
+        saved.getStoreId(),
+        "CAST_INVITATION_ISSUED",
+        "CAST_INVITATION",
+        saved.getId(),
+        "CAST_ENROLLMENT",
+        castId,
+        Map.of(),
+        Map.of(
+            "status", saved.getStatus().name(),
+            "expires_at", saved.getExpiresAt().toString(),
+            "version", Objects.toString(saved.getVersion(), "")));
     return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
   }
 

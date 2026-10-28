@@ -24,6 +24,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -58,6 +59,7 @@ class CastInvitationAcceptanceServiceTest {
   @Mock private UserRepository userRepository;
   @Mock private StoreRepository storeRepository;
   @Mock private PasswordEncoder passwordEncoder;
+  @Mock private BusinessAudit audit;
   @Mock private CastRepository personRepository;
   @Mock private CastProfileRepository profileRepository;
   private final Map<String, String> profileNames = new HashMap<>();
