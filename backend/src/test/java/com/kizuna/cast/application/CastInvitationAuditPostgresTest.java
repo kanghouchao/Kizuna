@@ -219,6 +219,62 @@ class CastInvitationAuditPostgresTest {
   }
 
   @Test
+  void existingUserAcceptanceRollsBackOnAuditFailureThenAuditsRealVersion() {
+    String email = "existing-" + UUID.randomUUID() + "@example.test";
+    String home = issue(enrollment());
+    accepting.acceptAsNewUser(home, request(home, email));
+    Long otherStoreId =
+        transactions.execute(
+            status ->
+                context
+                    .getBean(StoreRepository.class)
+                    .saveAndFlush(new Store("別店", UUID.randomUUID() + ".example.test"))
+                    .getId());
+    String enrollmentId =
+        transactions.execute(
+            status -> {
+              var enrollment = CastEnrollment.builder().build();
+              enrollment.setStoreId(otherStoreId);
+              return context
+                  .getBean(CastEnrollmentRepository.class)
+                  .saveAndFlush(enrollment)
+                  .getId();
+            });
+    String token = issuing.issue(otherStoreId, enrollmentId, STAFF).token();
+    long acceptedAudits = audits("CAST_INVITATION_ACCEPTED");
+
+    rejectAudit("CAST_INVITATION_ACCEPTED");
+    try {
+      assertThatThrownBy(() -> accepting.acceptAsExistingUser(token, email))
+          .isInstanceOf(DataIntegrityViolationException.class);
+    } finally {
+      allowAudit();
+    }
+    assertThat(storeIds(email)).containsExactly(storeId);
+    assertThat(
+            jdbc.queryForObject(
+                "select status from t_cast_invitations where token=?", String.class, token))
+        .isEqualTo("PENDING");
+    assertThat(audits("CAST_INVITATION_ACCEPTED")).isEqualTo(acceptedAudits);
+
+    accepting.acceptAsExistingUser(token, email);
+
+    assertThat(storeIds(email)).containsExactlyInAnyOrder(storeId, otherStoreId);
+    var event =
+        jdbc.queryForMap(
+            "select a.after_values ->> 'version' as version,a.after_values ->> 'store_membership_added' as added,i.version as stored from t_audit_events a join t_cast_invitations i on i.id=a.target_id where a.action='CAST_INVITATION_ACCEPTED' and a.source_id=?",
+            enrollmentId);
+    assertThat(event.get("version")).isEqualTo(String.valueOf(event.get("stored")));
+    assertThat(event.get("added")).isEqualTo("true");
+  }
+
+  private Set<Long> storeIds(String email) {
+    return transactions.execute(
+        status ->
+            context.getBean(UserRepository.class).findByEmail(email).orElseThrow().getStoreIds());
+  }
+
+  @Test
   void concurrentAcceptancesCommitOneAccountAndOneAudit() throws Exception {
     String enrollmentId = enrollment();
     String token = issue(enrollmentId);

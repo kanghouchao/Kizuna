@@ -9,8 +9,10 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
@@ -19,6 +21,7 @@ import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -85,6 +88,25 @@ class CastControllerTest {
         .andExpect(status().isOk());
 
     assertThat(searchCaptor.getValue()).isNull();
+  }
+
+  @Test
+  @DisplayName("POST /casts/{id}/invitation は操作者のメールを監査の主体として service へ渡すこと")
+  @WithMockUser(username = "operator@example.test", authorities = "PERM_CAST_INVITE")
+  void issueInvitationPassesTheOperatorAsAuditActor() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(castInvitationService.issue(1L, "cast-1", "operator@example.test"))
+        .thenReturn(new CastInvitationResponse("token", OffsetDateTime.now()));
+
+    mockMvc
+        .perform(
+            post("/casts/cast-1/invitation")
+                .with(csrf())
+                .principal(() -> "operator@example.test")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isCreated());
+
+    verify(castInvitationService).issue(1L, "cast-1", "operator@example.test");
   }
 
   @Test
