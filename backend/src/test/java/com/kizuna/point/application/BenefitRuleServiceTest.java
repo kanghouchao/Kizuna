@@ -19,6 +19,7 @@ import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +42,7 @@ class BenefitRuleServiceTest {
   @Mock private BenefitRuleRepository benefitRuleRepository;
 
   @Spy private BenefitRuleMapperImpl benefitRuleMapper;
+  @Mock private BusinessAudit businessAudit;
 
   @InjectMocks private BenefitRuleService benefitRuleService;
 

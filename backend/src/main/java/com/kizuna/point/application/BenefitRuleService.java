@@ -13,7 +13,12 @@ import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.user.application.BusinessAudit;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +37,7 @@ public class BenefitRuleService {
 
   private final BenefitRuleRepository benefitRuleRepository;
   private final BenefitRuleMapper benefitRuleMapper;
+  private final BusinessAudit businessAudit;
 
   /**
    * 指した店舗が実在しないことの写像。集合表の行は commit まで flush されないので、{@code save} だけでは違反が全域ハンドラの兜底へ落ちて 500 になる（FK
@@ -57,8 +63,15 @@ public class BenefitRuleService {
   @Transactional
   public BenefitRuleResponse create(BenefitRuleCreateRequest request) {
     BenefitRule rule =
-        BenefitRule.define(request.getType(), benefitRuleMapper.toDefinition(request));
-    return benefitRuleMapper.toResponse(persist(rule));
+        persist(BenefitRule.define(request.getType(), benefitRuleMapper.toDefinition(request)));
+    businessAudit.recordCurrent(
+        null,
+        "BENEFIT_RULE_CREATED",
+        "BENEFIT_RULE",
+        String.valueOf(rule.getId()),
+        Map.of("exists", "false"),
+        snapshot(rule));
+    return benefitRuleMapper.toResponse(rule);
   }
 
   @Transactional
@@ -68,8 +81,21 @@ public class BenefitRuleService {
     // 押し戻す。陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に
     // 見える）ため、応答で往復させた version を明示比対して 409 で拒否する。
     requireExpectedVersion(rule, request.getVersion());
+    var before = snapshot(rule);
+    String oldName = rule.getName();
     rule.redefine(benefitRuleMapper.toDefinition(request));
-    return benefitRuleMapper.toResponse(persist(rule));
+    persist(rule);
+    var after = snapshot(rule);
+    var changed = changedFields(before, after);
+    if (!Objects.equals(oldName, rule.getName())) {
+      changed.add("name");
+    }
+    if (!changed.isEmpty()) {
+      after.put("changed_fields", String.join(",", changed));
+      businessAudit.recordCurrent(
+          null, "BENEFIT_RULE_UPDATED", "BENEFIT_RULE", String.valueOf(id), before, after);
+    }
+    return benefitRuleMapper.toResponse(rule);
   }
 
   /**
@@ -79,7 +105,44 @@ public class BenefitRuleService {
   public void deactivate(Long id, BenefitRuleDeactivationRequest request) {
     BenefitRule rule = find(id);
     requireExpectedVersion(rule, request.getVersion());
+    var before = snapshot(rule);
     rule.deactivate();
+    persist(rule);
+    businessAudit.recordCurrent(
+        null,
+        "BENEFIT_RULE_DEACTIVATED",
+        "BENEFIT_RULE",
+        String.valueOf(id),
+        before,
+        snapshot(rule));
+  }
+
+  /** 名前は自由文なので値を持たず、変更項目名だけで表す。 */
+  private static Map<String, String> snapshot(BenefitRule rule) {
+    var values = new LinkedHashMap<String, String>();
+    values.put("exists", "true");
+    values.put("active", String.valueOf(rule.getEnabled()));
+    values.put("version", String.valueOf(rule.getVersion()));
+    values.put("type", rule.getType().name());
+    values.put("store_scope_type", rule.getStoreScopeType().name());
+    values.put("store_ids", BusinessAudit.ids(rule.getStoreIds()));
+    values.put("effective_from", Objects.toString(rule.getEffectiveFrom(), ""));
+    values.put("effective_until", Objects.toString(rule.getEffectiveUntil(), ""));
+    values.put("grant_validity_days", Objects.toString(rule.getGrantValidityDays(), ""));
+    values.put("repeat_policy", rule.getRepeatPolicy().name());
+    values.put("points", Objects.toString(rule.getPoints(), ""));
+    values.put("referrer_points", Objects.toString(rule.getReferrerPoints(), ""));
+    values.put("referred_points", Objects.toString(rule.getReferredPoints(), ""));
+    return values;
+  }
+
+  private static List<String> changedFields(Map<String, String> before, Map<String, String> after) {
+    var changed = new ArrayList<String>();
+    after.forEach(
+        (key, value) -> {
+          if (!"version".equals(key) && !value.equals(before.get(key))) changed.add(key);
+        });
+    return changed;
   }
 
   private static void requireExpectedVersion(BenefitRule rule, Long expected) {
