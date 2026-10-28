@@ -179,7 +179,8 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
       Order order,
       List<SpecialServiceSnapshot> previous,
       int previousTotal,
-      String previousCast) {
+      String previousCast,
+      OffsetDateTime now) {
     var unresolved = events.unresolved(storeId, order.getId());
     var before = historySnapshots(previous, unresolved);
     var after = historySnapshots(order.getSpecialServices(), unresolved);
@@ -206,7 +207,8 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
               previousTotal,
               resolution,
               actors.requireUserId(
-                  SecurityContextHolder.getContext().getAuthentication().getName())));
+                  SecurityContextHolder.getContext().getAuthentication().getName()),
+              now));
     }
   }
 

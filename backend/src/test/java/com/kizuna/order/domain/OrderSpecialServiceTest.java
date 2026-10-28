@@ -42,10 +42,15 @@ class OrderSpecialServiceTest {
     order.setId("o1");
     order.setStoreId(7L);
 
+    var rejectedAt = OffsetDateTime.parse("2026-08-14T17:42:00+09:00");
+    var resolvedAt = rejectedAt.plusHours(1);
     var rejected =
         OrderSpecialServiceEvent.rejected(
-            order, List.of(), "cast", "special", "consent", 1L, OffsetDateTime.now());
-    var resolved = rejected.resolved(order, List.of(), List.of(), 0, "REMOVED", 1L);
+            order, List.of(), "cast", "special", "consent", 1L, rejectedAt);
+    var resolved = rejected.resolved(order, List.of(), List.of(), 0, "REMOVED", 1L, resolvedAt);
+
+    assertThat(rejected.getOccurredAt()).isEqualTo(rejectedAt);
+    assertThat(resolved.getOccurredAt()).isEqualTo(resolvedAt);
 
     assertThat(rejected.getStoreId()).isEqualTo(7L);
     assertThat(resolved.getStoreId()).isEqualTo(7L);

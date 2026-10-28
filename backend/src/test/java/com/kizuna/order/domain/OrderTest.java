@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import com.kizuna.customer.domain.ContactType;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -14,6 +15,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 class OrderTest {
+  private static final OffsetDateTime COMPLETED_AT =
+      OffsetDateTime.parse("2026-08-14T17:42:00+09:00");
+
   private OrderFeeLineDraft draft(OrderFeeLineKind kind, String name, int amount) {
     if (kind == OrderFeeLineKind.EXTENSION) return OrderFeeLineDraft.extension(name, 30, amount, 0);
     return new OrderFeeLineDraft(kind, name, amount);
@@ -32,7 +36,7 @@ class OrderTest {
             .status(OrderStatus.CONFIRMED)
             .build();
     order.replaceStoreFeeLines(List.of());
-    order.completeWith(3000, 100);
+    order.completeWith(3000, 100, COMPLETED_AT);
     assertThat(order.getTotalFee()).isEqualTo(7000);
 
     order.offsetPointRedemption(3000);
@@ -54,7 +58,7 @@ class OrderTest {
             .status(OrderStatus.CONFIRMED)
             .build();
     order.replaceStoreFeeLines(List.of());
-    order.completeWith(0, 100);
+    order.completeWith(0, 100, COMPLETED_AT);
     assertThatThrownBy(() -> order.offsetPointRedemption(3000))
         .isInstanceOf(InvalidOrderFeeLineException.class);
     order.offsetPointRedemption(0);
@@ -72,7 +76,7 @@ class OrderTest {
             .status(OrderStatus.CONFIRMED)
             .build();
     order.replaceStoreFeeLines(List.of());
-    order.completeWith(3000, 100);
+    order.completeWith(3000, 100, COMPLETED_AT);
     order.offsetPointRedemption(3000);
     assertThat(order.getTotalFee()).isEqualTo(Integer.MAX_VALUE);
   }
@@ -86,7 +90,7 @@ class OrderTest {
     Order order = orderWithStatus(status);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "指名料", 12000)));
 
-    order.completeWith(500, 120);
+    order.completeWith(500, 120, COMPLETED_AT);
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     assertThat(order.getTotalFee()).isEqualTo(11500);
@@ -108,7 +112,7 @@ class OrderTest {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "会計", 1000)));
 
-    assertThatThrownBy(() -> order.completeWith(1001, 10))
+    assertThatThrownBy(() -> order.completeWith(1001, 10, COMPLETED_AT))
         .isInstanceOf(InvalidOrderFeeLineException.class)
         .hasMessage("利用ポイントは会計金額を超えられません");
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
@@ -125,7 +129,7 @@ class OrderTest {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "会計", 1000)));
 
-    order.completeWith(1000, 10);
+    order.completeWith(1000, 10, COMPLETED_AT);
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     assertThat(order.getTotalFee()).isZero();
@@ -147,7 +151,7 @@ class OrderTest {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "指名料", 12000)));
 
-    assertThatThrownBy(() -> order.completeWith(0, 120))
+    assertThatThrownBy(() -> order.completeWith(0, 120, COMPLETED_AT))
         .isInstanceOf(IllegalOrderStateTransitionException.class)
         .hasMessageContaining("CANCELLED")
         .hasMessageContaining("COMPLETED");
@@ -161,9 +165,9 @@ class OrderTest {
     // 完了は台帳記帳と不可分のため、同一状態への静默冪等（transitionTo）に委ねると二重記帳になる
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "指名料", 12000)));
-    order.completeWith(500, 120);
+    order.completeWith(500, 120, COMPLETED_AT);
 
-    assertThatThrownBy(() -> order.completeWith(100, 99))
+    assertThatThrownBy(() -> order.completeWith(100, 99, COMPLETED_AT))
         .isInstanceOf(IllegalOrderStateTransitionException.class)
         .hasMessageContaining("COMPLETED");
     assertThat(order.getTotalFee()).isEqualTo(11500);
@@ -229,7 +233,7 @@ class OrderTest {
     // 台帳の減算仕訳と対で書かれた記録が通常の編集で外れると、内訳と台帳が黙って食い違う
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "指名料", 10000)));
-    order.completeWith(500, 0);
+    order.completeWith(500, 0, COMPLETED_AT);
 
     assertThatThrownBy(
             () ->
@@ -348,6 +352,37 @@ class OrderTest {
     assertThat(order.getTotalFee()).isEqualTo(2000);
   }
 
+  @Test
+  @DisplayName("完了時刻は渡した時刻になり、完了の写しで試算しても元の時刻のまま残ること")
+  void completeWith_recordsGivenTime() {
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    order.completeWith(0, 10, COMPLETED_AT);
+
+    assertThat(order.getCompletedAt()).isEqualTo(COMPLETED_AT);
+    assertThat(
+            order
+                .calculateWith(OrderCourses.course("基本", 60, 0), List.of(), List.of())
+                .getCompletedAt())
+        .isEqualTo(COMPLETED_AT);
+  }
+
+  @Test
+  @DisplayName("業務連絡履歴は渡した時刻を記録すること")
+  void businessContactHistoryRecordsGivenTime() {
+    var row =
+        BusinessContactHistory.record(
+            7L,
+            "o1",
+            ContactType.PHONE,
+            "RECORDED",
+            null,
+            BusinessContactState.unknown("090"),
+            1L,
+            COMPLETED_AT);
+
+    assertThat(row.getRecordedAt()).isEqualTo(COMPLETED_AT);
+  }
+
   @ParameterizedTest
   @EnumSource(
       value = OrderStatus.class,
@@ -409,7 +444,7 @@ class OrderTest {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
     assertThatThrownBy(() -> order.start("開始", 1L, OffsetDateTime.now()))
         .isInstanceOf(IllegalOrderStateTransitionException.class);
-    assertThatThrownBy(() -> order.completeWith(0, 0))
+    assertThatThrownBy(() -> order.completeWith(0, 0, COMPLETED_AT))
         .isInstanceOf(IllegalOrderStateTransitionException.class);
   }
 
@@ -494,7 +529,7 @@ class OrderTest {
             .course(OrderCourses.course("60 分コース", 60, 14000))
             .build();
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション A", 2000)));
-    order.completeWith(500, 120);
+    order.completeWith(500, 120, COMPLETED_AT);
 
     order.correct(
         new OrderCorrectionCommand(
@@ -529,7 +564,7 @@ class OrderTest {
   void correct_cannotTouchSystemOwnedLines() {
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "指名料", 10000)));
-    order.completeWith(500, 0);
+    order.completeWith(500, 0, COMPLETED_AT);
 
     assertThatThrownBy(
             () ->
@@ -577,7 +612,7 @@ class OrderTest {
     // 下回った差を吸収する先が無く、通すと負の請求額が恒久的に残る
     Order order = orderWithStatus(OrderStatus.CONFIRMED);
     order.replaceStoreFeeLines(List.of(draft(OrderFeeLineKind.CREDIT_SURCHARGE, "会計", 1000)));
-    order.completeWith(800, 0);
+    order.completeWith(800, 0, COMPLETED_AT);
     assertThat(order.getTotalFee()).as("前提: 控除後の請求額が 200 であること").isEqualTo(200);
 
     assertThatThrownBy(

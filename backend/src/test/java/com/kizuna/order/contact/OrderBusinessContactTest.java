@@ -26,6 +26,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import java.time.OffsetDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Optional;
@@ -94,7 +95,8 @@ class OrderBusinessContactTest {
                       null,
                       new BusinessContactState(
                           value, ContactPermissionStatus.ALLOWED, "電話", "今回だけ"),
-                      1L));
+                      1L,
+                      OffsetDateTime.now()));
             });
     assertThat(boundary.decide(STORE_ID, "o1", ContactType.PHONE))
         .isEqualTo(
@@ -142,7 +144,8 @@ class OrderBusinessContactTest {
                     null,
                     new BusinessContactState(
                         "old@example.com", ContactPermissionStatus.ALLOWED, "電話", "今回だけ"),
-                    1L)));
+                    1L,
+                    OffsetDateTime.now())));
     assertThatThrownBy(() -> boundary.decide(STORE_ID, "o1", ContactType.EMAIL))
         .isInstanceOf(IllegalStateException.class);
   }
@@ -181,19 +184,20 @@ class OrderBusinessContactTest {
         List.of(
             new BusinessContactPermissionRequest(
                 ContactType.EMAIL, ContactPermissionStatus.ALLOWED, "本人申告", "今回の連絡を希望")),
-        "actor@kizuna.test");
+        "actor@kizuna.test",
+        OffsetDateTime.now());
     assertThat(stored.get(ContactType.EMAIL).getStoreId()).isEqualTo(STORE_ID);
     assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL).decision())
         .isEqualTo(BusinessContactDecision.ALLOWED);
     var changed = ContactSnapshot.normalize(null, null, "second@example.com", null);
     order.replaceContact(changed);
-    permissions.record(order, original, List.of(), "actor@kizuna.test");
+    permissions.record(order, original, List.of(), "actor@kizuna.test", OffsetDateTime.now());
     assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL))
         .isEqualTo(
             new OrderBusinessContact.Decision(
                 "second@example.com", BusinessContactDecision.NOT_ALLOWED));
     order.replaceContact(original);
-    permissions.record(order, changed, null, "actor@kizuna.test");
+    permissions.record(order, changed, null, "actor@kizuna.test", OffsetDateTime.now());
     assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL).decision())
         .isEqualTo(BusinessContactDecision.NOT_ALLOWED);
   }

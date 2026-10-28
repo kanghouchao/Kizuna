@@ -154,7 +154,7 @@ public class Order extends StoreScopedEntity {
     }
     copy.adoptServices(nextCourse, services, drafts);
     if (status == OrderStatus.COMPLETED) {
-      copy.completeWith(0, autoGrantPoints == null ? 0 : autoGrantPoints);
+      copy.completeWith(0, autoGrantPoints == null ? 0 : autoGrantPoints, completedAt);
     }
     return copy;
   }
@@ -625,7 +625,7 @@ public class Order extends StoreScopedEntity {
    * <p>同一状態への静默冪等（{@link #transitionTo}）に委ねず、完了済みを明示的に撥ねる。完了は台帳記帳と不可分のため、
    * 二度目の呼出を黙って通すと同じ受注で付与・利用が二重に記帳される。
    */
-  public void completeWith(int usedPoints, int autoGrantPoints) {
+  public void completeWith(int usedPoints, int autoGrantPoints, OffsetDateTime at) {
     requireUnfinished();
     requireWithinGrantBasis(usedPoints);
     if (usedPoints > 0) {
@@ -638,7 +638,7 @@ public class Order extends StoreScopedEntity {
     }
     this.autoGrantPoints = autoGrantPoints;
     transitionTo(OrderStatus.COMPLETED);
-    completedAt = OffsetDateTime.now();
+    completedAt = at;
     accruedRemuneration = getTotalRemuneration();
   }
 

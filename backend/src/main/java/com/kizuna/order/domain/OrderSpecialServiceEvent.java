@@ -77,7 +77,8 @@ public class OrderSpecialServiceEvent extends StoreScopedEntity {
       List<SpecialServiceHistorySnapshot> current,
       int previousTotal,
       String resolution,
-      Long actor) {
+      Long actor,
+      OffsetDateTime at) {
     var e = new OrderSpecialServiceEvent();
     e.setStoreId(order.getStoreId());
     e.orderId = orderId;
@@ -85,7 +86,7 @@ public class OrderSpecialServiceEvent extends StoreScopedEntity {
     e.serviceId = serviceId;
     e.consentEventId = consentEventId;
     e.actorId = actor;
-    e.occurredAt = OffsetDateTime.now();
+    e.occurredAt = at;
     e.kind = "RESOLVED";
     e.before = previous;
     e.after = current;

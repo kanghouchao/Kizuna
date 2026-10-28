@@ -566,7 +566,8 @@ class NotificationPostgresTest {
                           ContactPermissionStatus.ALLOWED,
                           "受付",
                           "業務連絡への同意"),
-                      operatorId));
+                      operatorId,
+                      OffsetDateTime.now()));
           return saved.getId();
         });
   }
@@ -602,7 +603,8 @@ class NotificationPostgresTest {
                         "CONTACT_CHANGED",
                         null,
                         BusinessContactState.unknown("changed@example.invalid"),
-                        operatorId)));
+                        operatorId,
+                        OffsetDateTime.now())));
     var nextInput =
         new DeliveryContent(
             input.sourceType(),

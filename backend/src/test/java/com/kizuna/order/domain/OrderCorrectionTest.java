@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class OrderCorrectionTest {
+  private static final OffsetDateTime COMPLETED_AT =
+      OffsetDateTime.parse("2026-08-14T17:42:00+09:00");
 
   private Order completedOrder() {
     Order order =
@@ -20,7 +23,7 @@ class OrderCorrectionTest {
     order.replaceStoreFeeLines(
         List.of(new OrderFeeLineDraft(OrderFeeLineKind.CREDIT_SURCHARGE, "オプション A", 2000)));
 
-    order.completeWith(500, 140);
+    order.completeWith(500, 140, COMPLETED_AT);
     return order;
   }
 
