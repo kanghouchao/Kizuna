@@ -7,12 +7,16 @@ import com.kizuna.settings.domain.SystemConfig;
 import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.application.BusinessAudit;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -31,8 +35,15 @@ public class SystemConfigServiceImpl implements SystemConfigService {
   private static final DateTimeFormatter TIME_FORMAT =
       DateTimeFormatter.ofPattern("HH:mm").withResolverStyle(ResolverStyle.STRICT);
 
+  /** 監査に前後値を残してよい設定。ここに無い key（秘密を含む）は値を持たず、変化したことだけを残す。 */
+  private static final Set<String> VALUE_AUDITED_KEYS =
+      Set.of("smtp_host", "smtp_port", "smtp_username", "smtp_from", "line_channel_id");
+
+  private static final List<String> VALUE_AUDITED_PREFIXES = List.of("point_", "member_rank_");
+
   private final SystemConfigRepository systemConfigRepository;
   private final SystemConfigMapper systemConfigMapper;
+  private final BusinessAudit businessAudit;
 
   @Override
   @Transactional(readOnly = true)
@@ -61,9 +72,31 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             .orElseThrow(() -> new NotFoundException("設定キーが見つかりません: " + configKey));
 
     validateValue(config, request.getConfigValue());
+    String oldValue = Objects.toString(config.getConfigValue(), "");
     systemConfigMapper.updateEntityFromRequest(request, config);
     SystemConfig saved = systemConfigRepository.save(config);
+    String newValue = Objects.toString(saved.getConfigValue(), "");
+    if (!oldValue.equals(newValue)) {
+      auditUpdate(saved, oldValue, newValue);
+    }
     return toMaskedResponse(saved);
+  }
+
+  private void auditUpdate(SystemConfig config, String oldValue, String newValue) {
+    boolean valueAudited =
+        !Boolean.TRUE.equals(config.getSecret()) && isValueAudited(config.getConfigKey());
+    businessAudit.recordCurrent(
+        null,
+        "SYSTEM_CONFIG_UPDATED",
+        "SYSTEM_CONFIG",
+        config.getConfigKey(),
+        valueAudited ? Map.of("config_value", oldValue) : Map.of(),
+        valueAudited ? Map.of("config_value", newValue) : Map.of("changed", "true"));
+  }
+
+  private static boolean isValueAudited(String configKey) {
+    return VALUE_AUDITED_KEYS.contains(configKey)
+        || VALUE_AUDITED_PREFIXES.stream().anyMatch(configKey::startsWith);
   }
 
   @Override

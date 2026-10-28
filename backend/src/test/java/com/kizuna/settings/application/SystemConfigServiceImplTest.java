@@ -16,6 +16,7 @@ import com.kizuna.settings.domain.SystemConfig;
 import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.application.BusinessAudit;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +31,7 @@ class SystemConfigServiceImplTest {
 
   @Mock private SystemConfigRepository systemConfigRepository;
   @Mock private SystemConfigMapper systemConfigMapper;
+  @Mock private BusinessAudit businessAudit;
 
   @InjectMocks private SystemConfigServiceImpl systemConfigService;
 
