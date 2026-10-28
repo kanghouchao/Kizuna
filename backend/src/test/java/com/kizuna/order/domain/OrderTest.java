@@ -367,6 +367,20 @@ class OrderTest {
   }
 
   @Test
+  @DisplayName("特殊サービスの拒否・業務連絡の許可の記録は、更新時刻を進めること")
+  void noteBehaviorsAdvanceUpdatedAt() {
+    Order order = orderWithStatus(OrderStatus.CONFIRMED);
+    var before = OffsetDateTime.now();
+
+    order.noteSpecialServiceRejection();
+    assertThat(order.getUpdatedAt()).isAfterOrEqualTo(before);
+
+    order.setUpdatedAt(null);
+    order.noteBusinessContactPermission();
+    assertThat(order.getUpdatedAt()).isAfterOrEqualTo(before);
+  }
+
+  @Test
   @DisplayName("業務連絡履歴は渡した時刻を記録すること")
   void businessContactHistoryRecordsGivenTime() {
     var row =

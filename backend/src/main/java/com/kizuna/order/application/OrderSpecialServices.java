@@ -243,7 +243,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
               event.consentEventId(),
               event.actorId(),
               event.occurredAt()));
-      order.setUpdatedAt(event.occurredAt());
+      order.noteSpecialServiceRejection();
     }
   }
 

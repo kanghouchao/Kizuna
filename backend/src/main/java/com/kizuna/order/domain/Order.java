@@ -642,6 +642,16 @@ public class Order extends StoreScopedEntity {
     accruedRemuneration = getTotalRemuneration();
   }
 
+  /** 特殊サービスの拒否を受けた事実で行を更新済みにする（保存時の時刻は @PreUpdate が付ける）。 */
+  public void noteSpecialServiceRejection() {
+    touch();
+  }
+
+  /** 業務連絡の許可が記録された事実で行を更新済みにし、版を進める（許可だけの編集も古い画面からの上書きを拒む）。 */
+  public void noteBusinessContactPermission() {
+    touch();
+  }
+
   public void invalidateCompletion() {
     if (status != OrderStatus.COMPLETED || completionInvalidated)
       throw new InvalidOrderCorrectionException("未無効化の完了した受注だけが無効化できます");
