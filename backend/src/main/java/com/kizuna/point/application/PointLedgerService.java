@@ -47,6 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PointLedgerService {
 
+  /** 退会済み会員のポイント利用を断る固定文言。見込みと帰属の物化が同じ文言で断る。 */
+  public static final String WITHDRAWN_USAGE_REJECTION = "退会済みの会員のポイントは利用できません";
+
   /** 巻き戻しが退会済み会員へ戻した残高を同じ取引で再び消去するときの固定文言（ADR 0030）。 */
   public static final String WITHDRAWN_RECLEAR_REASON = "退会済み会員のため消去";
 
@@ -100,6 +103,11 @@ public class PointLedgerService {
   public PointQuote quote(long memberId, int grantBasis, int usePoints) {
     int unit = usageUnit();
     PointLedger ledger = ledgerOf(pointEntryRepository.findCredits(memberId));
+    // 退会済み会員は付与も利用も受けない（ADR 0030）。帰属の物化と同じ結果を見込みで返し、完了の照合を一致させる。
+    if (memberLookupService.isWithdrawn(memberId)) {
+      return new PointQuote(
+          ledger.balance(), unit, 0, usePoints != 0 ? WITHDRAWN_USAGE_REJECTION : null);
+    }
     String rejection = null;
     if (usePoints != 0) {
       try {
