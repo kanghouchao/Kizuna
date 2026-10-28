@@ -64,13 +64,7 @@ public class BenefitRuleService {
   public BenefitRuleResponse create(BenefitRuleCreateRequest request) {
     BenefitRule rule =
         persist(BenefitRule.define(request.getType(), benefitRuleMapper.toDefinition(request)));
-    businessAudit.recordCurrent(
-        null,
-        "BENEFIT_RULE_CREATED",
-        "BENEFIT_RULE",
-        String.valueOf(rule.getId()),
-        Map.of("exists", "false"),
-        snapshot(rule));
+    audit("BENEFIT_RULE_CREATED", rule.getId(), Map.of("exists", "false"), snapshot(rule));
     return benefitRuleMapper.toResponse(rule);
   }
 
@@ -92,8 +86,7 @@ public class BenefitRuleService {
     }
     if (!changed.isEmpty()) {
       after.put("changed_fields", String.join(",", changed));
-      businessAudit.recordCurrent(
-          null, "BENEFIT_RULE_UPDATED", "BENEFIT_RULE", String.valueOf(id), before, after);
+      audit("BENEFIT_RULE_UPDATED", id, before, after);
     }
     return benefitRuleMapper.toResponse(rule);
   }
@@ -117,7 +110,7 @@ public class BenefitRuleService {
         snapshot(rule));
   }
 
-  /** 名前は自由文なので値を持たず、変更項目名だけで表す。 */
+  /** 名前は自由文なので snapshot に載せず、更新では変更項目名（name）だけで表す。 */
   private static Map<String, String> snapshot(BenefitRule rule) {
     var values = new LinkedHashMap<String, String>();
     values.put("exists", "true");
