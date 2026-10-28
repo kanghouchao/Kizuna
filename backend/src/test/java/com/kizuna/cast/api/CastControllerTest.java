@@ -116,10 +116,14 @@ class CastControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(delete("/casts/cast-1").with(csrf()).header("X-Store-ID", "1"))
+        .perform(
+            delete("/casts/cast-1")
+                .with(csrf())
+                .principal(() -> "operator@example.test")
+                .header("X-Store-ID", "1"))
         .andExpect(status().isNoContent());
 
-    verify(castService).delete(1L, "cast-1");
+    verify(castService).delete(1L, "cast-1", "operator@example.test");
   }
 
   @Test

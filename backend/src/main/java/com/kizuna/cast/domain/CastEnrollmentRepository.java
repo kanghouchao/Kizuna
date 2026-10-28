@@ -57,4 +57,17 @@ public interface CastEnrollmentRepository extends StoreScopedRepository<CastEnro
   @Query(
       "select distinct e.storeId as storeId, st.name as storeName from CastEnrollment e join com.kizuna.cast.domain.Cast c on c.id = e.castId join com.kizuna.store.domain.Store st on st.id = e.storeId where c.userId = :userId and e.status <> com.kizuna.cast.domain.CastEnrollmentStatus.WITHDRAWN order by st.name")
   List<CastStoreView> findStoresByUserId(@Param("userId") Long userId);
+
+  @Query(
+      """
+      select new com.kizuna.cast.domain.CastCascadeCounts(
+        (select count(h) from CastEnrollmentStatusHistory h
+          where h.storeId = :storeId and h.enrollmentId = :id),
+        (select count(s) from CastEnrollmentSnapshot s
+          where s.storeId = :storeId and s.enrollmentId = :id),
+        (select count(i) from CastInvitation i
+          where i.storeId = :storeId and i.castId = :id))
+      from CastEnrollment e where e.id = :id and e.storeId = :storeId
+      """)
+  CastCascadeCounts countCascade(@Param("id") String id, @Param("storeId") Long storeId);
 }
