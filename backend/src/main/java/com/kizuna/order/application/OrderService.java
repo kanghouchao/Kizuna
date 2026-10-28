@@ -658,10 +658,10 @@ public class OrderService {
     specialServices.requireProgress(storeId, order);
     var calculated =
         calculation.calculate(storeId, order, order.getCourse(), command.feeLines(), true);
-    order.replaceStoreFeeLines(calculated.editableFeeLines());
     // 付与の基準と利用の上限は、ポイント利用の行を除いた総和で決める。利用の行を入れた後の合計は
     // ポイント控除後の請求額であり、それを基準にすると同じ会計がポイントを使うほど付与も減る。
-    int chargeAmount = order.grantBasisAmount();
+    // 受注はまだ書き換えていないので、採用後の明細は試算の写しから読む。
+    int chargeAmount = calculated.grantBasisAmount();
 
     int usePoints = command.usedPoints();
     lockCustomerWithoutWaiting(storeId, order);
@@ -673,7 +673,7 @@ public class OrderService {
     // 試算した時には会員だった受注の紐づけが外れた。内容の誤りではないので 409 で再試算へ差し戻す。
     if (memberId == null && usePoints > 0 && previewed)
       throw new OrderConfirmationConflict("confirmation_token");
-    order.requireRedeemable(usePoints, memberId != null);
+    calculated.requireRedeemable(usePoints, memberId != null);
 
     var pointsPreview =
         orderPoints(
@@ -692,6 +692,7 @@ public class OrderService {
         command,
         calculated,
         pointsPreview);
+    order.replaceStoreFeeLines(calculated.editableFeeLines());
     int granted = 0;
     String receiptToken = null;
     if (memberId != null) {

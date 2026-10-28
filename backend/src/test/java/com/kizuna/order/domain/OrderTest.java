@@ -407,9 +407,9 @@ class OrderTest {
   @DisplayName("キャンセル済みの注文からは一切遷移できないこと")
   void transitions_fromCancelled_areRejected() {
     Order order = orderWithStatus(OrderStatus.CANCELLED);
-    assertThatThrownBy(() -> order.transitionTo(OrderStatus.CONFIRMED))
+    assertThatThrownBy(() -> order.start("開始", 1L, OffsetDateTime.now()))
         .isInstanceOf(IllegalOrderStateTransitionException.class);
-    assertThatThrownBy(() -> order.transitionTo(OrderStatus.COMPLETED))
+    assertThatThrownBy(() -> order.completeWith(0, 0))
         .isInstanceOf(IllegalOrderStateTransitionException.class);
   }
 
@@ -476,11 +476,12 @@ class OrderTest {
   }
 
   @Test
-  @DisplayName("同じステータスへの遷移は何もしない（冪等）こと")
-  void transitionTo_sameStatus_isNoOp() {
-    Order order = orderWithStatus(OrderStatus.CONFIRMED);
-    order.transitionTo(OrderStatus.CONFIRMED);
-    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+  @DisplayName("開始済みの注文を再度開始しても状態は変わらず撥ねられること")
+  void start_whenAlreadyInService_isRejected() {
+    Order order = orderWithStatus(OrderStatus.IN_SERVICE);
+    assertThatThrownBy(() -> order.start("開始", 1L, OffsetDateTime.now()))
+        .isInstanceOf(IllegalOrderStateTransitionException.class);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.IN_SERVICE);
   }
 
   @Test

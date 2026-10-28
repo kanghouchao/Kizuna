@@ -2300,6 +2300,21 @@ class OrderServiceTest {
   }
 
   @Test
+  void completeRejectedByTheUsageLimitLeavesTheAggregateUntouched() {
+    // 利用の上限は採用後の明細（試算の写し）で判じ、撥ねた要求は受注の明細を書き換えない
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    stubActiveLink(MEMBER_ID);
+
+    assertThatThrownBy(
+            () -> service.complete(STORE_ID, "o1", completion(5000, 6000), "staff@kizuna.test"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessageContaining("利用ポイントは会計金額を超えられません");
+    assertThat(order.getFeeLines()).isEmpty();
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+  }
+
+  @Test
   void completeRejectsPointUsageBeyondTheTotalFee() {
     // 請求を超える割引に相当する利用を台帳へ残さない。完了は取り消せないので、積んでから気づいても戻せない
     Order order = confirmedOrderWithCustomer();

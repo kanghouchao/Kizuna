@@ -45,7 +45,8 @@ class AttributionMaterializer implements MemberRankMetrics {
     // 将来の別経路が残高を作らないよう守衛を置く。利用だけは飛ばせない — 会計に割引が残って台帳に減算が無い状態になる。
     if (members.isWithdrawn(memberId)) {
       if (trigger instanceof Completion completion && completion.usePoints() > 0) {
-        throw new OrderConfirmationConflict("use_points", PointLedgerService.WITHDRAWN_USAGE_REJECTION);
+        throw new OrderConfirmationConflict(
+            "use_points", PointLedgerService.WITHDRAWN_USAGE_REJECTION);
       }
       // 申領は成功扱いにしない — 零の結果で戻ると伝票だけが消費され、正当な会員が二度と申領できない。
       if (trigger instanceof ReceiptClaim) {

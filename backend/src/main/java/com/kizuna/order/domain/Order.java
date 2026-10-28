@@ -674,7 +674,7 @@ public class Order extends StoreScopedEntity {
   }
 
   /** 指定ステータスへ遷移する。同一ステータスへは冪等（何もしない）、不正な遷移はドメイン例外を投げる。 */
-  public void transitionTo(OrderStatus target) {
+  private void transitionTo(OrderStatus target) {
     if (status == target) {
       return;
     }
