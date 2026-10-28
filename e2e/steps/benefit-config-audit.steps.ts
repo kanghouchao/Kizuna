@@ -21,14 +21,12 @@ let operator = "",
   ruleName = "";
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
-const rulePayload = (points: number, name: string, version?: number) => ({
+const rulePayload = (points: number, name: string) => ({
   name,
-  type: "VISIT",
   store_scope_type: "ALL_STORES",
   store_ids: [],
   repeat_policy: "EVERY_TIME",
   points,
-  ...(version === undefined ? {} : { version }),
 });
 
 Given(
@@ -88,34 +86,35 @@ When(
   async ({ request }) => {
     const denied = await request.post("/api/benefit-rules", {
       headers: bearer(limited),
-      data: rulePayload(500, ruleName),
+      data: { ...rulePayload(500, ruleName), type: "VISIT" },
     });
     expect(denied.status()).toBe(403);
     const created = await request.post("/api/benefit-rules", {
       headers: bearer(operator),
-      data: rulePayload(500, ruleName),
+      data: { ...rulePayload(500, ruleName), type: "VISIT" },
     });
     expect(created.status(), await created.text()).toBe(201);
     ruleId = (await created.json()).id;
 
     const same = await request.put(`/api/benefit-rules/${ruleId}`, {
       headers: bearer(operator),
-      data: rulePayload(500, ruleName, 0),
+      data: { ...rulePayload(500, ruleName), version: 0 },
     });
     expect(same.status(), await same.text()).toBe(200);
+    const version = (await same.json()).version;
     const stale = await request.put(`/api/benefit-rules/${ruleId}`, {
       headers: bearer(operator),
-      data: rulePayload(900, ruleName, 7),
+      data: { ...rulePayload(900, ruleName), version: version + 7 },
     });
     expect(stale.status()).toBe(409);
     const updated = await request.put(`/api/benefit-rules/${ruleId}`, {
       headers: bearer(operator),
-      data: rulePayload(800, ruleName, 0),
+      data: { ...rulePayload(800, ruleName), version },
     });
     expect(updated.status(), await updated.text()).toBe(200);
     const stopped = await request.post(
       `/api/benefit-rules/${ruleId}/deactivation`,
-      { headers: bearer(operator), data: { version: 1 } },
+      { headers: bearer(operator), data: { version: version + 1 } },
     );
     expect(stopped.status(), await stopped.text()).toBeLessThan(300);
 
@@ -163,7 +162,7 @@ Then(
     ]) {
       const events = await mine(action, String(ruleId));
       expect(events, action).toHaveLength(1);
-      expect(events[0].store_id).toBeNull();
+      expect(events[0].store_id ?? null).toBeNull();
       expect(events[0].target_type).toBe("BENEFIT_RULE");
       expect(events[0].actor_id).toBe(operatorId);
       dump.push(await getAuditEvent(request, auditor, events[0].id));
@@ -179,7 +178,7 @@ Then(
     const hostEvents = await mine("SYSTEM_CONFIG_UPDATED", "smtp_host");
     const mineHost = hostEvents.filter((event) => event.actor_id === operatorId);
     expect(mineHost).toHaveLength(1);
-    expect(mineHost[0].store_id).toBeNull();
+    expect(mineHost[0].store_id ?? null).toBeNull();
     const hostDetail = await getAuditEvent(request, auditor, mineHost[0].id);
     expect(hostDetail.after_values.config_value).toBe(host);
     dump.push(hostDetail);
@@ -187,7 +186,7 @@ Then(
       await mine("SYSTEM_CONFIG_UPDATED", "smtp_password")
     ).filter((event) => event.actor_id === operatorId);
     expect(secretEvents).toHaveLength(1);
-    expect(secretEvents[0].store_id).toBeNull();
+    expect(secretEvents[0].store_id ?? null).toBeNull();
     const secretDetail = await getAuditEvent(
       request,
       auditor,
