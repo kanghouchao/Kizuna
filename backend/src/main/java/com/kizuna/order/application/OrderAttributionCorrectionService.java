@@ -8,7 +8,9 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class OrderAttributionCorrectionService {
   private final OrderAttributionRepository orderAttributionRepository;
   private final PointLedgerService pointLedgerService;
   private final ActorIdentityService actorIdentityService;
+  private final BusinessAudit businessAudit;
 
   /** 訂正の進み具合。画面が差し引く既定値（付与の全額）と引き残しを示すための読み口。 */
   @Transactional(readOnly = true)
@@ -129,15 +132,40 @@ public class OrderAttributionCorrectionService {
           "差し引ける上限を超えています（この受注の付与は " + granted + " ポイント、うち訂正済みは " + already + " ポイントです）");
     }
 
-    pointLedgerService.correctForAttribution(
-        memberId,
-        storeId,
-        -command.points(),
-        command.reason(),
-        actorIdentityService.requireUserId(actorEmail),
-        command.idempotencyKey(),
-        attribution.getId());
+    Long actorUserId = actorIdentityService.requireUserId(actorEmail);
+    // 再送で何も書かなかったときは空が返る。利用者操作は初回で記録済みなので監査も足さない。
+    pointLedgerService
+        .correctForAttribution(
+            memberId,
+            storeId,
+            -command.points(),
+            command.reason(),
+            actorUserId,
+            command.idempotencyKey(),
+            attribution.getId())
+        .ifPresent(
+            entryId ->
+                businessAudit.recordById(
+                    actorUserId,
+                    storeId,
+                    "ORDER_ATTRIBUTION_CORRECTED",
+                    "ORDER_ATTRIBUTION",
+                    attribution.getId().toString(),
+                    "POINT_LEDGER_ENTRY",
+                    entryId.toString(),
+                    correctionState(attribution, memberId, already),
+                    correctionState(attribution, memberId, already + command.points())));
     return new OrderAttributionCorrectionProgress(granted, already + command.points());
+  }
+
+  private static Map<String, String> correctionState(
+      OrderAttribution attribution, long memberId, long correctedPoints) {
+    return Map.of(
+        "exists", "true",
+        "status", attribution.getStatus().name(),
+        "version", String.valueOf(attribution.getVersion()),
+        "member_id", Long.toString(memberId),
+        "corrected_points", Long.toString(correctedPoints));
   }
 
   /**

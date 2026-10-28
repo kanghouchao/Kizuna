@@ -17,6 +17,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -61,6 +62,7 @@ class OrderPointRollbackServiceTest {
   @Mock private OrderAttributionService orderAttributionService;
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock private PointLedgerService pointLedgerService;
+  @Mock private BusinessAudit businessAudit;
   private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
   @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
@@ -170,7 +172,8 @@ class OrderPointRollbackServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID))
+    assertThatThrownBy(
+            () -> service.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID, ACTOR_EMAIL))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("巻き戻した受注には伝票を再発行できません");
 
@@ -186,10 +189,11 @@ class OrderPointRollbackServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(false);
     String issued = "raw";
-    Mockito.when(orderAttributionService.reissueReceiptToken(STORE_ID, ORDER_ID))
+    Mockito.when(orderAttributionService.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL))
         .thenReturn(issued);
 
-    assertThat(service.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID)).isEqualTo(issued);
+    assertThat(service.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+        .isEqualTo(issued);
   }
 
   @Test

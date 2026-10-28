@@ -12,8 +12,10 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
@@ -42,6 +44,7 @@ public class OrderAttributionService {
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final ActorIdentityService actorIdentityService;
+  private final BusinessAudit businessAudit;
 
   /** 受注 1 件の帰属の現況。無効化・再発行のどちらを提示するかを店舗側の画面が判じるための読み口。 */
   @Transactional(readOnly = true)
@@ -73,9 +76,36 @@ public class OrderAttributionService {
       throw new ConflictException("この受注の帰属は別の操作で変わりました。最新の状態を確認してからやり直してください");
     }
 
-    attribution.invalidate(
-        reason, actorIdentityService.requireUserId(actorEmail), OffsetDateTime.now());
-    return toState(orderAttributionRepository.save(attribution));
+    Long actorUserId = actorIdentityService.requireUserId(actorEmail);
+    String beforeVersion = String.valueOf(attribution.getVersion());
+    attribution.invalidate(reason, actorUserId, OffsetDateTime.now());
+    // 実 version を記録するため flush する。理由は自由文なので共通監査へは写さない。
+    OrderAttribution saved = orderAttributionRepository.saveAndFlush(attribution);
+    businessAudit.recordById(
+        actorUserId,
+        storeId,
+        "ORDER_ATTRIBUTION_INVALIDATED",
+        "ORDER_ATTRIBUTION",
+        saved.getId().toString(),
+        null,
+        null,
+        Map.of(
+            "exists",
+            "true",
+            "status",
+            OrderAttributionStatus.ACTIVE.name(),
+            "version",
+            beforeVersion),
+        Map.of(
+            "exists",
+            "true",
+            "status",
+            saved.getStatus().name(),
+            "version",
+            String.valueOf(saved.getVersion()),
+            "redacted_fields_changed",
+            "invalidated_reason"));
+    return toState(saved);
   }
 
   /**
@@ -98,7 +128,7 @@ public class OrderAttributionService {
    * <p>有効な帰属記録がある間はトークンが生きていることは無いので、無効化の側にトークンを止める処理は要らない。
    */
   @Transactional
-  public String reissueReceiptToken(Long storeId, String orderId) {
+  public String reissueReceiptToken(Long storeId, String orderId, String actorEmail) {
     // 受注を押さえて並行する再発行と直列化する。トークンが 1 本も無い受注（完了時に会員へ帰属した受注）は
     // 押さえる行が下に無いため、ここだけが直列化点になる。
     Order order =
@@ -120,20 +150,40 @@ public class OrderAttributionService {
 
     // 失効を先に flush する。Hibernate は INSERT を UPDATE より先に流すため、まとめて save すると
     // 新しい行が「まだ倒れていない旧行」と部分一意索引の上で衝突する。
-    tokens.stream()
-        .filter(OrderReceiptToken::isRevocable)
-        .forEach(
-            token -> {
-              token.revoke();
-              orderReceiptTokenRepository.saveAndFlush(token);
-            });
+    List<OrderReceiptToken> revocable =
+        tokens.stream().filter(OrderReceiptToken::isRevocable).toList();
+    revocable.forEach(
+        token -> {
+          token.revoke();
+          orderReceiptTokenRepository.saveAndFlush(token);
+        });
 
     int plannedPoints =
         tokens.isEmpty() ? order.getAutoGrantPoints() : tokens.get(0).getPlannedPoints();
     ReceiptTokenGenerator.GeneratedToken generated = receiptTokenGenerator.generate();
-    orderReceiptTokenRepository.save(
+    OrderReceiptToken issued =
         OrderReceiptToken.issueFor(
-            orderId, generated.digest(), plannedPoints, OffsetDateTime.now()));
+            orderId, generated.digest(), plannedPoints, OffsetDateTime.now());
+    orderReceiptTokenRepository.save(issued);
+    // トークンの生値と digest は写さず、旧トークンの失効は件数で示す。
+    businessAudit.record(
+        actorEmail,
+        storeId,
+        "ORDER_RECEIPT_TOKEN_REISSUED",
+        "ORDER",
+        orderId,
+        "ORDER_RECEIPT_TOKEN",
+        String.valueOf(issued.getId()),
+        Map.of("issued_tokens", Integer.toString(revocable.size())),
+        Map.of(
+            "issued_tokens",
+            "1",
+            "revoked_tokens",
+            Integer.toString(revocable.size()),
+            "token_status",
+            issued.getStatus().name(),
+            "planned_points",
+            Integer.toString(plannedPoints)));
     return generated.raw();
   }
 

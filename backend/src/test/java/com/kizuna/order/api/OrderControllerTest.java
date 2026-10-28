@@ -168,15 +168,19 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void receiptTokenReissuePassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any(), any()))
+    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any(), any(), any()))
         .thenReturn("raw-token");
 
     mockMvc
         .perform(
-            post("/orders/o1/receipt-token").header("X-Store-ID", STORE_ID.toString()).with(csrf()))
+            post("/orders/o1/receipt-token")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(staff())
+                .with(csrf()))
         .andExpect(status().isCreated());
 
-    verify(orderPointRollbackService).reissueReceiptTokenUnlessRolledBack(STORE_ID, "o1");
+    verify(orderPointRollbackService)
+        .reissueReceiptTokenUnlessRolledBack(eq(STORE_ID), eq("o1"), any());
   }
 
   @Test
@@ -558,7 +562,7 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void receiptTokenReissueRespondsCreated() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any(), any()))
+    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(any(), any(), any()))
         .thenReturn("raw-token");
 
     mockMvc
@@ -694,11 +698,11 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void receiptTokenIsNotReissuedForARolledBackOrder() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(1L, "o1"))
+    when(orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(eq(1L), eq("o1"), any()))
         .thenThrow(new ServiceException("ポイントを巻き戻した受注には伝票を再発行できません"));
 
     mockMvc.perform(storePost("/orders/o1/receipt-token", "")).andExpect(status().isBadRequest());
-    verify(orderAttributionService, never()).reissueReceiptToken(any(), any());
+    verify(orderAttributionService, never()).reissueReceiptToken(any(), any(), any());
   }
 
   @Test
