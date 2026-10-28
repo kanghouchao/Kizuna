@@ -85,13 +85,11 @@ public class SystemConfigServiceImpl implements SystemConfigService {
   private void auditUpdate(SystemConfig config, String oldValue, String newValue) {
     boolean valueAudited =
         !Boolean.TRUE.equals(config.getSecret()) && isValueAudited(config.getConfigKey());
+    Map<String, String> before = valueAudited ? Map.of("config_value", oldValue) : Map.of();
+    Map<String, String> after =
+        valueAudited ? Map.of("config_value", newValue) : Map.of("changed", "true");
     businessAudit.recordCurrent(
-        null,
-        "SYSTEM_CONFIG_UPDATED",
-        "SYSTEM_CONFIG",
-        config.getConfigKey(),
-        valueAudited ? Map.of("config_value", oldValue) : Map.of(),
-        valueAudited ? Map.of("config_value", newValue) : Map.of("changed", "true"));
+        null, "SYSTEM_CONFIG_UPDATED", "SYSTEM_CONFIG", config.getConfigKey(), before, after);
   }
 
   private static boolean isValueAudited(String configKey) {

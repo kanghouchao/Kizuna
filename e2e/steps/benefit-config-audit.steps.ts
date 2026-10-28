@@ -116,7 +116,7 @@ When(
       `/api/benefit-rules/${ruleId}/deactivation`,
       { headers: bearer(operator), data: { version: version + 1 } },
     );
-    expect(stopped.status(), await stopped.text()).toBeLessThan(300);
+    expect(stopped.status(), await stopped.text()).toBe(204);
 
     const configDenied = await request.put("/api/system-configs/smtp_host", {
       headers: bearer(limited),
