@@ -184,9 +184,9 @@ class OrderRescueAuditTest {
     assertThat(event.getTargetId()).isEqualTo(ORDER_ID);
     assertThat(event.getSourceType()).isEqualTo("ORDER_RECEIPT_TOKEN");
     assertThat(event.getSourceId()).isEqualTo("88");
-    assertThat(event.getBeforeValues()).containsEntry("issued_tokens", "1");
+    assertThat(event.getBeforeValues()).containsEntry("active_tokens", "1");
     assertThat(event.getAfterValues())
-        .containsEntry("issued_tokens", "1")
+        .containsEntry("active_tokens", "1")
         .containsEntry("revoked_tokens", "1")
         .containsEntry("token_status", "ISSUED");
     assertThat(everyValue(event)).doesNotContain("raw-secret", "new-digest", "old-digest");

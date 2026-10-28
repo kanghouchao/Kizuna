@@ -121,7 +121,8 @@ When(
     );
     expect(progress.status(), await progress.text()).toBe(200);
     const granted = (await progress.json()).granted_points as number;
-    if (granted > 0) {
+    expect(granted).toBeGreaterThan(0);
+    {
       const key = crypto.randomUUID();
       const body = { attribution_id: attributionId, points: 1, reason, idempotency_key: key };
       const first = await request.post(

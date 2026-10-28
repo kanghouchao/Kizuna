@@ -174,9 +174,9 @@ public class OrderAttributionService {
         orderId,
         "ORDER_RECEIPT_TOKEN",
         String.valueOf(issued.getId()),
-        Map.of("issued_tokens", Integer.toString(revocable.size())),
+        Map.of("active_tokens", Integer.toString(revocable.size())),
         Map.of(
-            "issued_tokens",
+            "active_tokens",
             "1",
             "revoked_tokens",
             Integer.toString(revocable.size()),
