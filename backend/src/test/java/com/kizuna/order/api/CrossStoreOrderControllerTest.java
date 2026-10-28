@@ -8,8 +8,9 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.order.api.dto.AdminOrderResponse;
+import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.application.AdminOrderService;
+import com.kizuna.order.domain.AdminOrderView;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -38,7 +39,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** 横断一覧が要求ごとに解決した授権店舗集合を service へ渡すことと、offset ページングの並びの安定性の単体テスト。 */
 @WebMvcTest(CrossStoreOrderController.class)
-@Import({CrossStoreOrderControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  CrossStoreOrderControllerTest.MethodSecurityConfig.class,
+  OrderMapperImpl.class,
+  StoreScopeHolder.class
+})
 class CrossStoreOrderControllerTest {
 
   /** メソッドセキュリティ（@PreAuthorize）を有効化し、jwt() の認証主体をそのまま通す設定 */
@@ -74,7 +79,7 @@ class CrossStoreOrderControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<AdminOrderResponse> empty = new PageImpl<>(List.of());
+    Page<AdminOrderView> empty = new PageImpl<>(List.of());
     when(adminOrderService.list(any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc.perform(list("?sort=status")).andExpect(status().isOk());

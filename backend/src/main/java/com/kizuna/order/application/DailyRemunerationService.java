@@ -1,9 +1,6 @@
 package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.dto.DailyRemunerationResponse;
-import com.kizuna.order.api.dto.SelfDailyRemunerationResponse;
-import com.kizuna.order.api.dto.SelfMonthlyRemunerationOrderSummary;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.exception.NotFoundException;
@@ -27,13 +24,13 @@ public class DailyRemunerationService {
   private final SelfMonthlyRemunerationQuery selfQuery;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public DailyRemunerationResponse store(
+  public DailyRemuneration store(
       Long storeId, Long personId, String businessDate, int page, int size) {
     var target = day(businessDate);
     var pageable = page(page, size);
     if (personId <= 0) throw new ServiceException("キャスト本人の指定が不正です");
     String name = query.personName(storeId, personId);
-    return new DailyRemunerationResponse(
+    return new DailyRemuneration(
         personId,
         name,
         target,
@@ -42,7 +39,7 @@ public class DailyRemunerationService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public SelfDailyRemunerationResponse self(
+  public SelfDailyRemuneration self(
       String actor, Long storeId, String businessDate, int page, int size) {
     var target = day(businessDate);
     var pageable = page(page, size);
@@ -53,21 +50,12 @@ public class DailyRemunerationService {
             .orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
     Long personId = person.getId();
     String name = selfQuery.storeName(personId, storeId);
-    return new SelfDailyRemunerationResponse(
+    return new SelfDailyRemuneration(
         storeId,
         name,
         target,
         query.dailyTotal(storeId, personId, target),
-        query
-            .dailyOrders(storeId, personId, target, pageable)
-            .map(
-                row ->
-                    new SelfMonthlyRemunerationOrderSummary(
-                        row.orderId(),
-                        row.businessDate(),
-                        row.serviceSummary(),
-                        row.accruedRemuneration(),
-                        row.completionInvalidated())));
+        query.dailyOrders(storeId, personId, target, pageable));
   }
 
   private LocalDate day(String value) {

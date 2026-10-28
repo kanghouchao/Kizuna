@@ -1,6 +1,7 @@
 package com.kizuna.order.api.me;
 
 import com.kizuna.order.api.dto.MemberVisitResponse;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.MemberVisitService;
 import com.kizuna.shared.web.CursorPage;
 import java.security.Principal;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MemberVisitController {
 
   private final MemberVisitService memberVisitService;
+  private final OrderMapper orderMapper;
 
   /** 本人の来店履歴。続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。 */
   @GetMapping
@@ -31,6 +33,7 @@ public class MemberVisitController {
       Principal principal,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(memberVisitService.list(principal.getName(), cursor, size));
+    return ResponseEntity.ok(
+        memberVisitService.list(principal.getName(), cursor, size).map(orderMapper::toResponse));
   }
 }

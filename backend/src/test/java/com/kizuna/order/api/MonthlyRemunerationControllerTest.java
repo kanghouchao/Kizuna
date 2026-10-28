@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.application.MonthlyRemunerationService;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
@@ -40,6 +41,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import({
   MonthlyRemunerationControllerTest.MethodSecurityConfig.class,
   MonthlyRemunerationService.class,
+  OrderMapperImpl.class,
   RemunerationQuery.class,
   StoreScopeHolder.class
 })

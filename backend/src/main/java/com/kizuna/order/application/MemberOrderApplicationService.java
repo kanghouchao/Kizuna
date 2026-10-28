@@ -2,8 +2,6 @@ package com.kizuna.order.application;
 
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.order.api.dto.MemberOrderApplicationCreateRequest;
-import com.kizuna.order.api.dto.MemberOrderApplicationResponse;
 import com.kizuna.order.domain.MemberOrderApplicationView;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
@@ -49,37 +47,36 @@ public class MemberOrderApplicationService {
 
   /** 予約を申請する。予約申請の PENDING 行だけが起き、受注（t_orders）には行が生まれない。 */
   @Transactional
-  public MemberOrderApplicationResponse request(
-      String email, MemberOrderApplicationCreateRequest request) {
+  public MemberOrderApplicationResult request(String email, MemberOrderApplicationCommand command) {
     MemberLookup member = resolveMember(email);
     // 退会と並行する申請が退会の commit 後に PENDING のまま成立しないよう、退会と同じ会員行を押さえてから退会状態を見る。
     memberLookupService.lockForBalanceConfirmation(member.memberId());
     if (memberLookupService.isWithdrawn(member.memberId())) {
       throw new StaleSessionException("会員情報が存在しません");
     }
-    Long storeId = request.getStoreId();
+    Long storeId = command.storeId();
     if (!storeExistenceCheck.exists(storeId)) {
       throw new ServiceException("店舗が見つかりません");
     }
     orderApplicationIntake.validateRequestedVisit(
-        storeId, request.getBusinessDate(), request.getCastId());
+        storeId, command.businessDate(), command.castId());
 
     OrderApplication application =
         OrderApplication.builder()
             .status(OrderApplicationStatus.PENDING)
-            .businessDate(request.getBusinessDate())
-            .arrivalScheduledStartTime(request.getArrivalScheduledStartTime())
-            .pax(request.getPax())
-            .castId(request.getCastId())
-            .remarks(request.getRemarks())
+            .businessDate(command.businessDate())
+            .arrivalScheduledStartTime(command.arrivalScheduledStartTime())
+            .pax(command.pax())
+            .castId(command.castId())
+            .remarks(command.remarks())
             .requesterMemberId(member.memberId())
             .requesterMemberCode(member.memberCode())
-            .requesterDeclaredName(request.getDeclaredName())
+            .requesterDeclaredName(command.declaredName())
             .build();
     application.setStoreId(storeId);
 
     OrderApplication saved = orderApplicationRepository.save(application);
-    return toResponse(member.memberId(), saved.getId());
+    return toResult(member.memberId(), saved.getId());
   }
 
   /**
@@ -91,7 +88,7 @@ public class MemberOrderApplicationService {
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
   @Transactional(readOnly = true)
-  public CursorPage<MemberOrderApplicationResponse> list(
+  public CursorPage<MemberOrderApplicationResult> list(
       String email, String cursor, int requestedSize) {
     MemberLookup member = resolveMember(email);
     int size = CursorPage.clampSize(requestedSize);
@@ -103,7 +100,7 @@ public class MemberOrderApplicationService {
             : fetchAfter(member.memberId(), PageCursor.decode(cursor), limit);
     LocalDate today = businessDateService.currentBusinessDate();
     return CursorPage.of(fetched, size, MemberOrderApplicationService::cursorOf)
-        .map(view -> toResponse(view, today));
+        .map(view -> toResult(view, today));
   }
 
   private List<MemberOrderApplicationView> fetchAfter(
@@ -120,13 +117,13 @@ public class MemberOrderApplicationService {
 
   /** 本人が申請した未処理の予約を取り下げる。確定・謝絶の後は動かせない（終端）。 */
   @Transactional
-  public MemberOrderApplicationResponse withdraw(String email, String applicationId) {
+  public MemberOrderApplicationResult withdraw(String email, String applicationId) {
     Long userId = actorIdentityService.requireUserId(email);
     MemberLookup member = resolveMemberByUserId(userId);
     OrderApplication application = ownedApplication(member.memberId(), applicationId);
     application.withdraw(userId, OffsetDateTime.now());
     orderApplicationRepository.save(application);
-    return toResponse(member.memberId(), applicationId);
+    return toResult(member.memberId(), applicationId);
   }
 
   /** 本人が申請した予約を取り出す。他人の申請・存在しない id は「見つからない」として扱う — 権限違反として区別すると、その id の申請が存在することそのものが分かってしまう。 */
@@ -146,28 +143,25 @@ public class MemberOrderApplicationService {
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }
 
-  private MemberOrderApplicationResponse toResponse(Long memberId, String applicationId) {
+  private MemberOrderApplicationResult toResult(Long memberId, String applicationId) {
     LocalDate today = businessDateService.currentBusinessDate();
     return orderApplicationRepository
         .findMemberView(memberId, applicationId)
-        .map(view -> toResponse(view, today))
+        .map(view -> toResult(view, today))
         .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + applicationId));
   }
 
-  private MemberOrderApplicationResponse toResponse(
+  private MemberOrderApplicationResult toResult(
       MemberOrderApplicationView view, LocalDate currentBusinessDate) {
-    return MemberOrderApplicationResponse.builder()
-        .id(view.getId())
-        .storeId(view.getStoreId())
-        .storeName(view.getStoreName())
-        .businessDate(view.getBusinessDate())
-        .arrivalScheduledStartTime(view.getArrivalScheduledStartTime())
-        .pax(view.getPax())
-        .castName(view.getCastName())
-        .status(view.getStatus() == null ? null : view.getStatus().name())
-        .expired(
-            OrderApplication.isExpired(
-                view.getStatus(), view.getBusinessDate(), currentBusinessDate))
-        .build();
+    return new MemberOrderApplicationResult(
+        view.getId(),
+        view.getStoreId(),
+        view.getStoreName(),
+        view.getBusinessDate(),
+        view.getArrivalScheduledStartTime(),
+        view.getPax(),
+        view.getCastName(),
+        view.getStatus(),
+        OrderApplication.isExpired(view.getStatus(), view.getBusinessDate(), currentBusinessDate));
   }
 }

@@ -2,6 +2,7 @@ package com.kizuna.order.api.me;
 
 import com.kizuna.order.api.dto.MemberReceiptClaimRequest;
 import com.kizuna.order.api.dto.MemberReceiptClaimResponse;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.MemberReceiptClaimService;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MemberReceiptController {
 
   private final MemberReceiptClaimService memberReceiptClaimService;
+  private final OrderMapper orderMapper;
 
   /** 申領は本人の帰属記録を起こす生成なので 201。トークンは本体で受ける（パスに載せるとアクセスログへ残る）。 */
   @PostMapping
@@ -33,6 +35,8 @@ public class MemberReceiptController {
   public ResponseEntity<MemberReceiptClaimResponse> claim(
       Principal principal, @Valid @RequestBody MemberReceiptClaimRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(memberReceiptClaimService.claim(principal.getName(), request.getToken()));
+        .body(
+            orderMapper.toResponse(
+                memberReceiptClaimService.claim(principal.getName(), request.getToken())));
   }
 }

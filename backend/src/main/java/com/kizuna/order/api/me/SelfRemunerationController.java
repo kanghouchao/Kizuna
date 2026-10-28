@@ -1,5 +1,6 @@
 package com.kizuna.order.api.me;
 
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.SelfRemunerationChangeResponse;
 import com.kizuna.order.api.dto.SelfRemunerationEnrollmentSummary;
 import com.kizuna.order.api.dto.SelfRemunerationResponse;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SelfRemunerationController {
   private final SelfRemunerationService service;
+  private final OrderMapper mapper;
 
   @GetMapping("/remuneration-enrollments")
   @PreAuthorize("hasRole('CAST')")
@@ -28,7 +30,7 @@ public class SelfRemunerationController {
       Principal principal,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.enrollments(principal.getName(), page, size);
+    return service.enrollments(principal.getName(), page, size).map(mapper::toEnrollmentSummary);
   }
 
   @GetMapping("/remunerations")
@@ -38,13 +40,15 @@ public class SelfRemunerationController {
       @RequestParam(name = "enrollment_id", required = false) String enrollmentId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.list(principal.getName(), enrollmentId, page, size);
+    return service
+        .list(principal.getName(), enrollmentId, page, size)
+        .map(mapper::toRemunerationSummary);
   }
 
   @GetMapping("/remunerations/{orderId}")
   @PreAuthorize("hasRole('CAST')")
   public SelfRemunerationResponse detail(Principal principal, @PathVariable String orderId) {
-    return service.detail(principal.getName(), orderId);
+    return mapper.toResponse(service.detail(principal.getName(), orderId));
   }
 
   @GetMapping("/remunerations/{orderId}/changes")
@@ -54,6 +58,6 @@ public class SelfRemunerationController {
       @PathVariable String orderId,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return service.changes(principal.getName(), orderId, cursor, size);
+    return service.changes(principal.getName(), orderId, cursor, size).map(mapper::toResponse);
   }
 }

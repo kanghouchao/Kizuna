@@ -11,9 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
+import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.api.me.SelfDailyRemunerationController;
 import com.kizuna.order.application.DailyRemunerationService;
+import com.kizuna.order.domain.RemunerationOrderRow;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
@@ -45,6 +46,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Import({
   DailyRemunerationControllerTest.Security.class,
   DailyRemunerationService.class,
+  OrderMapperImpl.class,
   StoreScopeHolder.class
 })
 @WithMockUser(
@@ -80,7 +82,7 @@ class DailyRemunerationControllerTest {
             call ->
                 new PageImpl<>(
                     List.of(
-                        new MonthlyRemunerationOrderSummary(
+                        new RemunerationOrderRow(
                             "order", call.getArgument(2), "保存済みコース", 7000, false)),
                     call.getArgument(3),
                     2));

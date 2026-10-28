@@ -2,6 +2,7 @@ package com.kizuna.order.api;
 
 import com.kizuna.order.api.dto.MonthlyRemunerationCastSummary;
 import com.kizuna.order.api.dto.MonthlyRemunerationResponse;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.MonthlyRemunerationService;
 import com.kizuna.shared.storescope.CurrentStore;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class MonthlyRemunerationController {
   private final MonthlyRemunerationService service;
+  private final OrderMapper mapper;
 
   @GetMapping("/casts")
   @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
@@ -26,7 +28,7 @@ public class MonthlyRemunerationController {
       @RequestParam(required = false) String search,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.casts(storeId, search, page, size);
+    return service.casts(storeId, search, page, size).map(mapper::toCastSummary);
   }
 
   @GetMapping
@@ -37,6 +39,6 @@ public class MonthlyRemunerationController {
       @RequestParam String month,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.monthly(storeId, personId, month, page, size);
+    return mapper.toResponse(service.monthly(storeId, personId, month, page, size));
   }
 }

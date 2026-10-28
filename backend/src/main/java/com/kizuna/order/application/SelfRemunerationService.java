@@ -2,12 +2,6 @@ package com.kizuna.order.application;
 
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastRepository;
-import com.kizuna.order.api.dto.SelfRemunerationChangeResponse;
-import com.kizuna.order.api.dto.SelfRemunerationEnrollmentSummary;
-import com.kizuna.order.api.dto.SelfRemunerationItem;
-import com.kizuna.order.api.dto.SelfRemunerationResponse;
-import com.kizuna.order.api.dto.SelfRemunerationSnapshot;
-import com.kizuna.order.api.dto.SelfRemunerationSummary;
 import com.kizuna.order.domain.OrderCorrectionSnapshot;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
@@ -33,7 +27,7 @@ public class SelfRemunerationService {
   private final OrderCorrectionHistory history;
 
   @Transactional(readOnly = true)
-  public Page<SelfRemunerationEnrollmentSummary> enrollments(String actor, int page, int size) {
+  public Page<SelfRemunerationEnrollment> enrollments(String actor, int page, int size) {
     var pageable = page(page, size);
     var person = people.findByUserId(actors.requireUserId(actor));
     if (person.isEmpty()) return Page.empty(pageable);
@@ -41,12 +35,12 @@ public class SelfRemunerationService {
         .findPersonEnrollments(person.get().getId(), pageable)
         .map(
             e ->
-                new SelfRemunerationEnrollmentSummary(
+                new SelfRemunerationEnrollment(
                     e.getId(), e.getStoreId(), e.getStoreName(), e.getStatus(), e.getEndedAt()));
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<SelfRemunerationSummary> list(String actor, String enrollmentId, int page, int size) {
+  public Page<SelfRemunerationOrder> list(String actor, String enrollmentId, int page, int size) {
     var pageable = page(page, size);
     Long userId = actors.requireUserId(actor);
     if (enrollmentId == null)
@@ -60,7 +54,7 @@ public class SelfRemunerationService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public SelfRemunerationResponse detail(String actor, String id) {
+  public SelfRemunerationDetail detail(String actor, String id) {
     Long userId = actors.requireUserId(actor);
     var view =
         orders
@@ -68,20 +62,20 @@ public class SelfRemunerationService {
             .orElseThrow(() -> new NotFoundException("報酬明細が見つかりません"));
     var order =
         orders.findSelfOrder(userId, id).orElseThrow(() -> new NotFoundException("報酬明細が見つかりません"));
-    return new SelfRemunerationResponse(
+    return new SelfRemunerationDetail(
         summary(view),
         order.getVersion(),
         SelfRemunerationItems.from(OrderCorrectionSnapshot.of(order)));
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<SelfRemunerationChangeResponse> changes(
+  public CursorPage<SelfRemunerationChange> changes(
       String actor, String id, String cursor, int size) {
     return history
         .self(actors.requireUserId(actor), id, cursor, size)
         .map(
             c ->
-                new SelfRemunerationChangeResponse(
+                new SelfRemunerationChange(
                     c.getId(),
                     c.getChangeType(),
                     c.getOrderId(),
@@ -95,23 +89,23 @@ public class SelfRemunerationService {
                     snapshot(c.getAfterSnapshot())));
   }
 
-  private SelfRemunerationSnapshot snapshot(OrderCorrectionSnapshot value) {
+  private SelfRemunerationState snapshot(OrderCorrectionSnapshot value) {
     var items = SelfRemunerationItems.from(value);
-    return new SelfRemunerationSnapshot(
+    return new SelfRemunerationState(
         items,
-        items.stream().mapToInt(SelfRemunerationItem::remuneration).sum(),
+        items.stream().mapToInt(SelfRemunerationLine::remuneration).sum(),
         value.accruedRemuneration(),
         value.completionInvalidated());
   }
 
-  private SelfRemunerationSummary summary(SelfRemunerationView view) {
+  private SelfRemunerationOrder summary(SelfRemunerationView view) {
     boolean planned =
         view.getStatus() == OrderStatus.CONFIRMED || view.getStatus() == OrderStatus.IN_SERVICE;
     int accrued =
         view.getStatus() == OrderStatus.COMPLETED && !view.isCompletionInvalidated()
             ? view.getAccruedRemuneration()
             : 0;
-    return new SelfRemunerationSummary(
+    return new SelfRemunerationOrder(
         view.getOrderId(),
         view.getEnrollmentId(),
         view.getStoreId(),

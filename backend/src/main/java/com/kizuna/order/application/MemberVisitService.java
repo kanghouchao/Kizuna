@@ -2,7 +2,6 @@ package com.kizuna.order.application;
 
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.order.api.dto.MemberVisitResponse;
 import com.kizuna.order.domain.MemberVisitView;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.point.application.PointLedgerService;
@@ -47,7 +46,7 @@ public class MemberVisitService {
    * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
   @Transactional(readOnly = true)
-  public CursorPage<MemberVisitResponse> list(String email, String cursor, int requestedSize) {
+  public CursorPage<MemberVisitSummary> list(String email, String cursor, int requestedSize) {
     Long memberId = resolveMemberId(email);
     int size = CursorPage.clampSize(requestedSize);
     // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
@@ -64,7 +63,7 @@ public class MemberVisitService {
     Map<String, Long> grantedPoints =
         pointLedgerService.grantedPointsByOrder(
             memberId, page.content().stream().map(MemberVisitView::getOrderId).toList());
-    return page.map(view -> toResponse(view, grantedPoints));
+    return page.map(view -> toSummary(view, grantedPoints));
   }
 
   private List<MemberVisitView> fetchAfter(Long memberId, PageCursor cursor, Limit limit) {
@@ -87,8 +86,8 @@ public class MemberVisitService {
   }
 
   /** 付与行の無い受注は台帳に現れないので 0 とみなす — 0 円完了でも帰属記録は生まれ、来店としては見える。 */
-  private MemberVisitResponse toResponse(MemberVisitView view, Map<String, Long> grantedPoints) {
-    return new MemberVisitResponse(
+  private MemberVisitSummary toSummary(MemberVisitView view, Map<String, Long> grantedPoints) {
+    return new MemberVisitSummary(
         view.getVisitedOn(),
         view.getStoreName(),
         view.getPax(),

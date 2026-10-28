@@ -2,6 +2,7 @@ package com.kizuna.order.api.me;
 
 import com.kizuna.order.api.dto.MemberOrderApplicationCreateRequest;
 import com.kizuna.order.api.dto.MemberOrderApplicationResponse;
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.MemberOrderApplicationService;
 import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
@@ -25,13 +26,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class MemberOrderApplicationController {
 
   private final MemberOrderApplicationService memberOrderApplicationService;
+  private final OrderMapper orderMapper;
 
   @PostMapping
   @PreAuthorize("hasRole('MEMBER')")
   public ResponseEntity<MemberOrderApplicationResponse> request(
       Principal principal, @Valid @RequestBody MemberOrderApplicationCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(memberOrderApplicationService.request(principal.getName(), request));
+        .body(
+            orderMapper.toResponse(
+                memberOrderApplicationService.request(
+                    principal.getName(), orderMapper.toCommand(request))));
   }
 
   /** 本人の予約申請一覧。続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。 */
@@ -41,7 +46,10 @@ public class MemberOrderApplicationController {
       Principal principal,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(memberOrderApplicationService.list(principal.getName(), cursor, size));
+    return ResponseEntity.ok(
+        memberOrderApplicationService
+            .list(principal.getName(), cursor, size)
+            .map(orderMapper::toResponse));
   }
 
   /** 未処理の申請を取り下げる（WITHDRAWN）。確定・謝絶の後は 400 で撥ねられる。 */
@@ -49,6 +57,7 @@ public class MemberOrderApplicationController {
   @PreAuthorize("hasRole('MEMBER')")
   public ResponseEntity<MemberOrderApplicationResponse> withdraw(
       Principal principal, @PathVariable String id) {
-    return ResponseEntity.ok(memberOrderApplicationService.withdraw(principal.getName(), id));
+    return ResponseEntity.ok(
+        orderMapper.toResponse(memberOrderApplicationService.withdraw(principal.getName(), id)));
   }
 }

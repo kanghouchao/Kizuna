@@ -1,6 +1,6 @@
 package com.kizuna.order.infrastructure;
 
-import com.kizuna.order.api.dto.SelfMonthlyRemunerationStoreSummary;
+import com.kizuna.order.domain.RemunerationStoreRow;
 import com.kizuna.shared.exception.NotFoundException;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -23,14 +23,14 @@ public class SelfMonthlyRemunerationQuery {
       """;
 
   /** 店舗を跨ぐ本人照会。境界は本人 id（cast_id）で、在籍の歴史がある店舗だけを返す。 */
-  public Page<SelfMonthlyRemunerationStoreSummary> stores(Long personId, Pageable page) {
+  public Page<RemunerationStoreRow> stores(Long personId, Pageable page) {
     var content =
         entityManager
             .createQuery(
-                "select new com.kizuna.order.api.dto.SelfMonthlyRemunerationStoreSummary(s.id, s.name) "
+                "select new com.kizuna.order.domain.RemunerationStoreRow(s.id, s.name) "
                     + STORES
                     + " order by s.id asc",
-                SelfMonthlyRemunerationStoreSummary.class)
+                RemunerationStoreRow.class)
             .setParameter("personId", personId)
             .setFirstResult((int) page.getOffset())
             .setMaxResults(page.getPageSize())

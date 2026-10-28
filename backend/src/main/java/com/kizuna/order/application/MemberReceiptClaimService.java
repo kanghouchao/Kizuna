@@ -2,7 +2,6 @@ package com.kizuna.order.application;
 
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.order.api.dto.MemberReceiptClaimResponse;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
@@ -48,7 +47,7 @@ public class MemberReceiptClaimService {
 
   /** 伝票トークンを申領し、その来店を本人の記録として確定する。 */
   @Transactional
-  public MemberReceiptClaimResponse claim(String email, String rawToken) {
+  public MemberReceiptClaimResult claim(String email, String rawToken) {
     Long userId = actorIdentityService.requireUserId(email);
     MemberLookup member = resolveMember(userId);
 
@@ -91,7 +90,7 @@ public class MemberReceiptClaimService {
             now,
             userId,
             new AttributionMaterializer.ReceiptClaim(token.getPlannedPoints()));
-    return new MemberReceiptClaimResponse((long) result.grantedPoints() + result.benefitPoints());
+    return new MemberReceiptClaimResult((long) result.grantedPoints() + result.benefitPoints());
   }
 
   private MemberLookup resolveMember(Long userId) {

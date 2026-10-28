@@ -16,8 +16,6 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.order.api.dto.MemberOrderApplicationCreateRequest;
-import com.kizuna.order.api.dto.MemberOrderApplicationResponse;
 import com.kizuna.order.domain.InvalidOrderApplicationOperationException;
 import com.kizuna.order.domain.MemberOrderApplicationView;
 import com.kizuna.order.domain.OrderApplication;
@@ -107,14 +105,12 @@ class MemberOrderApplicationServiceTest {
     return LocalDate.now(ZoneId.of(TIMEZONE));
   }
 
-  private MemberOrderApplicationCreateRequest requestFor(LocalDate date, String castId) {
-    MemberOrderApplicationCreateRequest request = new MemberOrderApplicationCreateRequest();
-    request.setStoreId(STORE_ID);
-    request.setBusinessDate(date);
-    request.setPax(2);
-    request.setCastId(castId);
-    request.setDeclaredName(DECLARED_NAME);
-    return request;
+  private MemberOrderApplicationCommand requestFor(LocalDate date, String castId) {
+    return requestFor(STORE_ID, date, castId);
+  }
+
+  private MemberOrderApplicationCommand requestFor(Long storeId, LocalDate date, String castId) {
+    return new MemberOrderApplicationCommand(storeId, DECLARED_NAME, date, null, 2, castId, null);
   }
 
   private void stubSavedView() {
@@ -177,10 +173,7 @@ class MemberOrderApplicationServiceTest {
     when(storeExistenceCheck.exists(OTHER_STORE_ID)).thenReturn(true);
     stubSavedView();
 
-    MemberOrderApplicationCreateRequest request = requestFor(today().plusDays(3), "cast-1");
-    request.setStoreId(OTHER_STORE_ID);
-
-    service.request(EMAIL, request);
+    service.request(EMAIL, requestFor(OTHER_STORE_ID, today().plusDays(3), "cast-1"));
 
     verify(orderApplicationIntake)
         .validateRequestedVisit(OTHER_STORE_ID, today().plusDays(3), "cast-1");
@@ -233,7 +226,7 @@ class MemberOrderApplicationServiceTest {
     when(orderApplicationRepository.findMemberViews(anyLong(), eq(Limit.of(2))))
         .thenReturn(fetched);
 
-    CursorPage<MemberOrderApplicationResponse> page = service.list(EMAIL, null, 1);
+    CursorPage<MemberOrderApplicationResult> page = service.list(EMAIL, null, 1);
 
     assertThat(page.content()).hasSize(1);
     assertThat(PageCursor.decode(page.nextCursor())).isEqualTo(new PageCursor("2026-08-04", "a1"));
@@ -251,10 +244,10 @@ class MemberOrderApplicationServiceTest {
     when(orderApplicationRepository.findMemberViews(anyLong(), any(Limit.class)))
         .thenReturn(List.of(stale, fresh, declined));
 
-    CursorPage<MemberOrderApplicationResponse> page = service.list(EMAIL, null, 20);
+    CursorPage<MemberOrderApplicationResult> page = service.list(EMAIL, null, 20);
 
     assertThat(page.content())
-        .extracting(MemberOrderApplicationResponse::isExpired)
+        .extracting(MemberOrderApplicationResult::expired)
         .containsExactly(true, false, false);
   }
 

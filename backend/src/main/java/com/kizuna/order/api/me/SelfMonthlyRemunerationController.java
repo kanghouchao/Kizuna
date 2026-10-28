@@ -1,5 +1,6 @@
 package com.kizuna.order.api.me;
 
+import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.SelfMonthlyRemunerationResponse;
 import com.kizuna.order.api.dto.SelfMonthlyRemunerationStoreSummary;
 import com.kizuna.order.application.SelfMonthlyRemunerationService;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SelfMonthlyRemunerationController {
   private final SelfMonthlyRemunerationService service;
+  private final OrderMapper mapper;
 
   @GetMapping("/stores")
   @PreAuthorize("hasRole('CAST')")
@@ -24,7 +26,7 @@ public class SelfMonthlyRemunerationController {
       Principal principal,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.stores(principal.getName(), page, size);
+    return service.stores(principal.getName(), page, size).map(mapper::toStoreSummary);
   }
 
   @GetMapping
@@ -35,6 +37,6 @@ public class SelfMonthlyRemunerationController {
       @RequestParam String month,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.monthly(principal.getName(), storeId, month, page, size);
+    return mapper.toResponse(service.monthly(principal.getName(), storeId, month, page, size));
   }
 }

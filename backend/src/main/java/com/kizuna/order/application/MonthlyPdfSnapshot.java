@@ -1,6 +1,6 @@
 package com.kizuna.order.application;
 
-import com.kizuna.order.api.dto.MonthlyRemunerationOrderSummary;
+import com.kizuna.order.domain.RemunerationOrderRow;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -10,7 +10,7 @@ public record MonthlyPdfSnapshot(
     String month,
     OffsetDateTime generatedAt,
     long total,
-    List<MonthlyRemunerationOrderSummary> orders) {
+    List<RemunerationOrderRow> orders) {
   public MonthlyPdfSnapshot {
     orders = List.copyOf(orders);
   }

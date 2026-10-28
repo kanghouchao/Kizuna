@@ -1,14 +1,34 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.application.DailyRemuneration;
+import com.kizuna.order.application.GuestContactConsentText;
+import com.kizuna.order.application.GuestOrderApplicationCommand;
+import com.kizuna.order.application.GuestOrderApplicationReceipt;
+import com.kizuna.order.application.MemberOrderApplicationCommand;
+import com.kizuna.order.application.MemberOrderApplicationResult;
+import com.kizuna.order.application.MemberReceiptClaimResult;
+import com.kizuna.order.application.MemberVisitSummary;
+import com.kizuna.order.application.MonthlyRemuneration;
 import com.kizuna.order.application.OrderCompletionCommand;
 import com.kizuna.order.application.OrderFeeLineInput;
 import com.kizuna.order.application.OrderPoints;
 import com.kizuna.order.application.OrderPreview;
+import com.kizuna.order.application.SelfDailyRemuneration;
+import com.kizuna.order.application.SelfMonthlyRemuneration;
+import com.kizuna.order.application.SelfRemunerationChange;
+import com.kizuna.order.application.SelfRemunerationDetail;
+import com.kizuna.order.application.SelfRemunerationEnrollment;
+import com.kizuna.order.application.SelfRemunerationLine;
+import com.kizuna.order.application.SelfRemunerationOrder;
+import com.kizuna.order.application.SelfRemunerationState;
 import com.kizuna.order.domain.AdminOrderView;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderFeeLine;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderView;
+import com.kizuna.order.domain.RemunerationCastRow;
+import com.kizuna.order.domain.RemunerationOrderRow;
+import com.kizuna.order.domain.RemunerationStoreRow;
 import java.util.List;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -148,4 +168,75 @@ public interface OrderMapper {
   /** 注文更新リクエストをドメインの部分更新コマンドに変換します。null フィールドは「変更しない」。 */
   @Mapping(target = "feeLines", ignore = true)
   OrderPatch toPatch(OrderUpdateRequest request);
+
+  GuestOrderApplicationCommand toCommand(GuestOrderApplicationCreateRequest request);
+
+  GuestOrderApplicationResponse toResponse(GuestOrderApplicationReceipt receipt);
+
+  GuestContactConsentTextResponse toResponse(GuestContactConsentText text);
+
+  MemberOrderApplicationCommand toCommand(MemberOrderApplicationCreateRequest request);
+
+  MemberOrderApplicationResponse toResponse(MemberOrderApplicationResult result);
+
+  MemberVisitResponse toResponse(MemberVisitSummary summary);
+
+  MemberReceiptClaimResponse toResponse(MemberReceiptClaimResult result);
+
+  MonthlyRemunerationCastSummary toCastSummary(RemunerationCastRow row);
+
+  MonthlyRemunerationOrderSummary toMonthlyOrderSummary(RemunerationOrderRow row);
+
+  SelfMonthlyRemunerationOrderSummary toSelfMonthlyOrderSummary(RemunerationOrderRow row);
+
+  SelfMonthlyRemunerationStoreSummary toStoreSummary(RemunerationStoreRow row);
+
+  default DailyRemunerationResponse toResponse(DailyRemuneration result) {
+    return new DailyRemunerationResponse(
+        result.personId(),
+        result.name(),
+        result.businessDate(),
+        result.totalRemuneration(),
+        result.orders().map(this::toMonthlyOrderSummary));
+  }
+
+  default MonthlyRemunerationResponse toResponse(MonthlyRemuneration result) {
+    return new MonthlyRemunerationResponse(
+        result.personId(),
+        result.name(),
+        result.month(),
+        result.totalRemuneration(),
+        result.orders().map(this::toMonthlyOrderSummary));
+  }
+
+  default SelfDailyRemunerationResponse toResponse(SelfDailyRemuneration result) {
+    return new SelfDailyRemunerationResponse(
+        result.storeId(),
+        result.storeName(),
+        result.businessDate(),
+        result.totalRemuneration(),
+        result.orders().map(this::toSelfMonthlyOrderSummary));
+  }
+
+  default SelfMonthlyRemunerationResponse toResponse(SelfMonthlyRemuneration result) {
+    return new SelfMonthlyRemunerationResponse(
+        result.storeId(),
+        result.storeName(),
+        result.month(),
+        result.totalRemuneration(),
+        result.orders().map(this::toSelfMonthlyOrderSummary));
+  }
+
+  SelfRemunerationEnrollmentSummary toEnrollmentSummary(SelfRemunerationEnrollment enrollment);
+
+  SelfRemunerationSummary toRemunerationSummary(SelfRemunerationOrder order);
+
+  SelfRemunerationItem toItem(SelfRemunerationLine line);
+
+  SelfRemunerationSnapshot toSnapshot(SelfRemunerationState state);
+
+  @Mapping(target = "summary", source = "order")
+  SelfRemunerationResponse toResponse(SelfRemunerationDetail detail);
+
+  SelfRemunerationChangeResponse toResponse(SelfRemunerationChange change);
 }
