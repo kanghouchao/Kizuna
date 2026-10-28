@@ -26,7 +26,7 @@ public class StoredFileAudit {
     this.independent.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
   }
 
-  public void recorded(
+  public void recordUpload(
       Long storeId, String relativePath, String bucket, long size, String contentType) {
     try {
       independent.executeWithoutResult(
