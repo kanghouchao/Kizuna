@@ -83,14 +83,16 @@ public class StoreProfileService {
         profile.getSnsLinks() == null
             ? null
             : profile.getSnsLinks().stream()
-                .map(l -> new SnsLink(l.getPlatform(), l.getUrl(), l.getLabel()))
+                .map(l -> l == null ? null : new SnsLink(l.getPlatform(), l.getUrl(), l.getLabel()))
                 .toList());
     values.put(
         "partner_links",
         profile.getPartnerLinks() == null
             ? null
             : profile.getPartnerLinks().stream()
-                .map(l -> new PartnerLink(l.getName(), l.getUrl(), l.getLogoUrl()))
+                .map(
+                    l ->
+                        l == null ? null : new PartnerLink(l.getName(), l.getUrl(), l.getLogoUrl()))
                 .toList());
     return values;
   }
