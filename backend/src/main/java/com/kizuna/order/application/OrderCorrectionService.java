@@ -74,7 +74,7 @@ public class OrderCorrectionService {
     // 子明細だけの同額訂正でも、親の受注版を進めて履歴順と競合検出を確定する。
     entityManager.lock(order, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
     order.correctServices(
-        calculated.getSpecialServices(),
+        calculated.specialServices(),
         new OrderCorrectionCommand(
             input.actualArrivalTime(),
             input.actualEndTime(),

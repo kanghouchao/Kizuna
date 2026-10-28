@@ -14,8 +14,8 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderFeeLineDraft;
 import com.kizuna.order.domain.OrderFeeLineKind;
+import com.kizuna.order.domain.OrderQuote;
 import com.kizuna.order.domain.OrderServiceAdoption;
-import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.config.AppProperties;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -31,10 +31,11 @@ class OrderConfirmationTest {
   private static final String ACTOR = "staff@kizuna.test";
 
   private OrderConfirmation confirmation;
+  private AppProperties properties;
 
   @BeforeEach
   void setUp() {
-    var properties = new AppProperties();
+    properties = new AppProperties();
     properties.getJwt().setSecret("order-confirmation-test-secret-0123456789");
     confirmation =
         new OrderConfirmation(
@@ -55,15 +56,10 @@ class OrderConfirmationTest {
   }
 
   // 採用時刻は計算のたびに now() で打たれる。試算と確定は別の瞬間に計算する
-  private static Order calculatedAt(OffsetDateTime adoptedAt) {
-    Order order =
-        Order.builder()
-            .course(
-                new OrderCourse(
-                    "course", "revision", 1, "基本", 60, 12000, 0, "CURRENT_SETTING", adoptedAt))
-            .status(OrderStatus.CONFIRMED)
-            .build();
-    order.replaceStoreFeeLines(
+  private static OrderQuote calculatedAt(OffsetDateTime adoptedAt) {
+    return Order.calculateNewWith(
+        new OrderCourse("course", "revision", 1, "基本", 60, 12000, 0, "CURRENT_SETTING", adoptedAt),
+        List.of(),
         List.of(
             new OrderFeeLineDraft(
                 null,
@@ -73,10 +69,9 @@ class OrderConfirmationTest {
                 null,
                 0,
                 new OrderServiceAdoption("s1", "r1", 2, "CURRENT_SETTING", adoptedAt))));
-    return order;
   }
 
-  private static OrderConsent consent(Order calculated, int grantPoints, Long balance) {
+  private static OrderConsent consent(OrderQuote calculated, int grantPoints, Long balance) {
     return OrderConsent.of(
         calculated,
         new OrderPoints(true, balance, "123456789012", 100, 300, grantPoints),
@@ -234,5 +229,43 @@ class OrderConfirmationTest {
                         command(300, previewed),
                         consent(calculatedAt(OffsetDateTime.now()), 120, 800L))))
         .isInstanceOf(OrderConfirmationConflict.class);
+  }
+
+  @Test
+  void everyCommandExcludesItsTokenFromTheSignedInputWhateverTheNamingStrategy() {
+    // 命名戦略に依らず、確認値を持たない試算と確認値つきの確定が同じ入力を署名する
+    var camelCase = new OrderConfirmation(JsonMapper.builder().build(), properties);
+    var tokens = List.of("t1", "t2");
+    for (var confirmation : List.of(this.confirmation, camelCase)) {
+      for (var inputs :
+          List.<java.util.function.Function<String, Object>>of(
+              token ->
+                  new OrderCreateCommand(
+                      null, null, token, "c", null, null, null, null, null, null, null, null, null,
+                      "cast", 1, null, null, null, null, null, null),
+              token ->
+                  new OrderUpdateCommand(
+                      null, token, "c", 1L, null, null, null, null, null, 1, null, null, null, null,
+                      null, null, null, null, null, null),
+              token ->
+                  new OrderApplicationConfirmationCommand(
+                      null, null, token, "c", null, null, null, null, null, null, 1, null, null,
+                      null),
+              token -> new OrderCorrectionInput(null, token, null, 1L, "理由", null, null, List.of()),
+              token -> command(300, token))) {
+        String issued =
+            confirmation.sign(
+                7L,
+                "OP",
+                "o1",
+                ACTOR,
+                inputs.apply(null),
+                consent(calculatedAt(OffsetDateTime.now()), 130, 800L));
+        for (var token : tokens) {
+          assertThat(confirmation.wasPreviewed(7L, "OP", "o1", ACTOR, inputs.apply(token), issued))
+              .isTrue();
+        }
+      }
+    }
   }
 }

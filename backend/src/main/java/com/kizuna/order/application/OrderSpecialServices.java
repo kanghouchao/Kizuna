@@ -1,6 +1,7 @@
 package com.kizuna.order.application;
 
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderQuote;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderSpecialServiceEvent;
 import com.kizuna.order.domain.OrderSpecialServiceEventRepository;
@@ -126,35 +127,47 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
       throw new OrderConfirmationConflict("special_services", "拒否された特殊サービスを編集画面で修復してください");
   }
 
-  /** 試算・応答の表示用。修復待ちの印に加えて、在籍の同意の現況を引く。 */
+  /** 応答の表示用。修復待ちの印に加えて、在籍の同意の現況を引く。 */
   @Transactional(propagation = Propagation.MANDATORY)
   public List<SpecialServiceStatus> describe(Long storeId, Order order) {
-    return statuses(storeId, order, true);
+    return statuses(
+        storeId, order.getId(), order.getStatus().isTerminal(), order.getSpecialServices(), true);
+  }
+
+  /** 試算の表示用。修復待ちの印に加えて、在籍の同意の現況を引く。 */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public List<SpecialServiceStatus> describe(Long storeId, OrderQuote quote) {
+    return statuses(
+        storeId, quote.orderId(), quote.status().isTerminal(), quote.specialServices(), true);
   }
 
   /** 確定の照合用。同意した内容に入るのは修復待ちの印だけなので、同意の現況は引かない。 */
   @Transactional(propagation = Propagation.MANDATORY)
-  public List<SpecialServiceStatus> attention(Long storeId, Order order) {
-    return statuses(storeId, order, false);
+  public List<SpecialServiceStatus> attention(Long storeId, OrderQuote quote) {
+    return statuses(
+        storeId, quote.orderId(), quote.status().isTerminal(), quote.specialServices(), false);
   }
 
-  private List<SpecialServiceStatus> statuses(Long storeId, Order order, boolean consentStatus) {
+  private List<SpecialServiceStatus> statuses(
+      Long storeId,
+      String orderId,
+      boolean terminal,
+      List<SpecialServiceSnapshot> specials,
+      boolean consentStatus) {
     var unresolved =
-        order.getId() == null
-            ? List.<OrderSpecialServiceEvent>of()
-            : events.unresolved(storeId, order.getId());
-    return order.getSpecialServices().stream()
+        orderId == null ? List.<OrderSpecialServiceEvent>of() : events.unresolved(storeId, orderId);
+    return specials.stream()
         .map(
             s ->
                 new SpecialServiceStatus(
                     s,
-                    !order.getStatus().isTerminal()
+                    !terminal
                         && unresolved.stream()
                             .anyMatch(
                                 e ->
                                     e.getServiceId().equals(s.serviceId())
                                         && e.getEnrollmentId().equals(s.enrollmentId())),
-                    !consentStatus || order.getStatus().isTerminal()
+                    !consentStatus || terminal
                         ? null
                         : catalog.status(storeId, s.enrollmentId(), s.serviceId())))
         .toList();

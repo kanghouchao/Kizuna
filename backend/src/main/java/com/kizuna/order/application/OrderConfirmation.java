@@ -12,7 +12,6 @@ import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 @Component
 @RequiredArgsConstructor
@@ -40,11 +39,9 @@ public class OrderConfirmation {
             inputProof(storeId, operation, id, actor, input).getBytes(StandardCharsets.UTF_8));
   }
 
-  // 確認値そのものは入力に含めない（試算は確認値なし、確定は確認値つきで同じ入力を送る）。
+  // 確認値そのものは入力に含めない（試算は確認値なし、確定は確認値つきで同じ入力を送る）。各コマンドは確認値の成分を @JsonIgnore にしている。
   private String inputProof(Long storeId, String operation, String id, String actor, Object input) {
-    ObjectNode request = json.valueToTree(input);
-    request.remove("confirmation_token");
-    return mac(List.of("order-confirmation-input-v3", operation, id, storeId, actor, request));
+    return mac(List.of("order-confirmation-input-v3", operation, id, storeId, actor, input));
   }
 
   private String mac(Object payload) {

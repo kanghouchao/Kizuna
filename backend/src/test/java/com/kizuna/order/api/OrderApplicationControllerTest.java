@@ -27,6 +27,7 @@ import com.kizuna.order.application.OrderApplicationItem;
 import com.kizuna.order.application.OrderDetail;
 import com.kizuna.order.application.OrderPreview;
 import com.kizuna.order.application.OrderService;
+import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderApplicationView;
 import com.kizuna.order.domain.OrderCourses;
@@ -432,12 +433,7 @@ class OrderApplicationControllerTest {
   private static OrderPreview emptyPreview() {
     return new OrderPreview(
         "token",
-        OrderCourses.course("基本", 60, 0),
-        List.of(),
-        0,
-        0,
-        0,
-        0,
+        Order.calculateNewWith(OrderCourses.course("基本", 60, 0), List.of(), List.of()),
         null,
         List.of(),
         List.of());

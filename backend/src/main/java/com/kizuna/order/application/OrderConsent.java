@@ -1,7 +1,7 @@
 package com.kizuna.order.application;
 
 import com.kizuna.customer.contact.GuestContactImport;
-import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderQuote;
 import java.util.List;
 
 /**
@@ -62,11 +62,11 @@ public record OrderConsent(
       boolean requiresAttention) {}
 
   static OrderConsent of(
-      Order calculated,
+      OrderQuote quote,
       OrderPoints points,
       List<SpecialServiceStatus> specialServices,
       List<GuestContactImport> contactImports) {
-    var c = calculated.getCourse();
+    var c = quote.course();
     return new OrderConsent(
         new Course(
             c.serviceId(),
@@ -77,27 +77,27 @@ public record OrderConsent(
             c.price(),
             c.remuneration(),
             c.adoptionBasis()),
-        calculated.getFeeLines().stream()
+        quote.feeLines().stream()
             .map(
                 line -> {
-                  var adoption = line.getAdoption();
+                  var adoption = line.adoption();
                   return new FeeLine(
-                      line.getId() == null ? null : line.getId().toString(),
-                      line.getKind().name(),
-                      line.getName(),
-                      line.getAmount(),
-                      line.getDurationMinutes(),
-                      line.getRemuneration(),
-                      line.getServiceId(),
+                      line.lineId(),
+                      line.kind().name(),
+                      line.name(),
+                      line.amount(),
+                      line.durationMinutes(),
+                      line.remuneration(),
+                      adoption == null ? null : adoption.serviceId(),
                       adoption == null ? null : adoption.revisionId(),
                       adoption == null ? null : adoption.revisionNumber(),
                       adoption == null ? null : adoption.adoptionBasis());
                 })
             .toList(),
-        calculated.getTotalFee(),
-        calculated.grantBasisAmount(),
-        calculated.getTotalDurationMinutes(),
-        calculated.getTotalRemuneration(),
+        quote.totalFee(),
+        quote.grantBasisAmount(),
+        quote.totalDurationMinutes(),
+        quote.totalRemuneration(),
         points == null
             ? null
             : new Points(

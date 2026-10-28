@@ -1,5 +1,6 @@
 package com.kizuna.order.application;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.kizuna.order.domain.ReceptionRoute;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -9,7 +10,7 @@ import java.util.List;
 public record OrderCreateCommand(
     String replacementForOrderId,
     List<String> specialServiceIds,
-    String confirmationToken,
+    @JsonIgnore String confirmationToken,
     String courseId,
     Long receptionistId,
     LocalDate businessDate,

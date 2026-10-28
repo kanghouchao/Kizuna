@@ -79,9 +79,10 @@ public interface OrderMapper {
 
   /** 試算の結果を応答へ写す。新しく採用する明細の採用時刻は確定時に打ち直されるので、試算では返さない。 */
   default OrderPreviewResponse toPreviewResponse(OrderPreview preview) {
-    var c = preview.course();
+    var quote = preview.quote();
+    var c = quote.course();
     var lines =
-        toFeeLineResponses(preview.feeLines().stream().map(OrderFeeLineSnapshot::of).toList());
+        toFeeLineResponses(quote.feeLines().stream().map(OrderFeeLineSnapshot::of).toList());
     lines.stream()
         .filter(line -> line.getLineId() == null)
         .forEach(line -> line.setAdoptedAt(null));
@@ -98,10 +99,10 @@ public interface OrderMapper {
             c.remuneration(),
             c.adoptionBasis()),
         lines,
-        preview.totalFee(),
-        preview.pointBasisAmount(),
-        preview.totalDurationMinutes(),
-        preview.totalRemuneration(),
+        quote.totalFee(),
+        quote.grantBasisAmount(),
+        quote.totalDurationMinutes(),
+        quote.totalRemuneration(),
         toPointsResponse(preview.points()),
         preview.specialServices().stream().map(this::toResponse).toList(),
         unresolved > 0,

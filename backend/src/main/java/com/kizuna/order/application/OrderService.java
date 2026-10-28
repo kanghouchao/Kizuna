@@ -12,7 +12,9 @@ import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.order.domain.ConfirmedOrderDetails;
 import com.kizuna.order.domain.ContactSnapshot;
+import com.kizuna.order.domain.NewStoreOrder;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
@@ -21,12 +23,11 @@ import com.kizuna.order.domain.OrderApplicationView;
 import com.kizuna.order.domain.OrderFeeLineSnapshot;
 import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderQueryCriteria;
+import com.kizuna.order.domain.OrderQuote;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
-import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.OrderView;
-import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.order.infrastructure.OrderSearchQuery.OrderedRow;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
@@ -220,25 +221,23 @@ public class OrderService {
       throw new ServiceException("受付経路に Web 申請は指定できません。予約申請の確定だけが MEMBER_WEB / GUEST_WEB を名乗ります");
     }
 
+    // 明細の店舗は採用時に受注から写すため、採用より先に置く（出生時に店舗が付く）
     Order order =
-        Order.builder()
-            .replacementForOrderId(command.replacementForOrderId())
-            .businessDate(command.businessDate())
-            .arrivalScheduledStartTime(command.arrivalScheduledStartTime())
-            .arrivalScheduledEndTime(command.arrivalScheduledEndTime())
-            .locationAddress(command.address())
-            .locationBuilding(command.buildingName())
-            .pax(command.pax())
-            .receptionRoute(command.receptionRoute())
-            .carrier(command.carrier())
-            .mediaName(command.mediaName())
-            .remarks(command.remarks())
-            .castDriverMessage(command.castDriverMessage())
-            // すべての受注は確定で出生する（ADR 0017）
-            .status(OrderStatus.CONFIRMED)
-            .build();
-    // 明細の店舗は採用時に受注から写すため、採用より先に置く
-    order.setStoreId(storeId);
+        Order.placedByStore(
+            storeId,
+            new NewStoreOrder(
+                command.replacementForOrderId(),
+                command.businessDate(),
+                command.arrivalScheduledStartTime(),
+                command.arrivalScheduledEndTime(),
+                command.address(),
+                command.buildingName(),
+                command.pax(),
+                command.receptionRoute(),
+                command.carrier(),
+                command.mediaName(),
+                command.remarks(),
+                command.castDriverMessage()));
 
     // 指名は候補一覧と同じ条件で書き込み側でも見る — 候補に出さないだけでは、キャスト ID を直接送る要求を防げない。
     // 店舗が起こす受注は常に新しい指名を立てるため、据え置きの余地は無く無条件に要求する。
@@ -265,12 +264,11 @@ public class OrderService {
                 calculation.wasPreviewed(
                     storeId, "CREATE", "", actorEmail, command, command.confirmationToken())),
             true);
-    order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
+    order.adoptServices(course, calculated.specialServices(), calculated.editableFeeLines());
 
     order.linkCustomer(
         selectCustomer(storeId, command.customerSelection(), true, canManageCustomers));
     order.replaceContact(snapshot(command.contactSnapshot()));
-    calculated.linkCustomer(order.getCustomerId());
     calculation.verify(
         command.confirmationToken(),
         storeId,
@@ -279,7 +277,7 @@ public class OrderService {
         actorEmail,
         command,
         calculated,
-        completionPoints(storeId, calculated, 0));
+        completionPoints(storeId, order.getCustomerId(), calculated, 0));
 
     order.assignCast(command.castId());
     order.assignReceptionist(resolveReceptionist(storeId, command.receptionistId(), actorEmail));
@@ -385,11 +383,11 @@ public class OrderService {
         actorEmail,
         command,
         calculated,
-        completionPoints(storeId, calculated, 0));
+        completionPoints(storeId, order.getCustomerId(), calculated, 0));
     var previousSpecials = order.getSpecialServices();
     int previousTotal = order.getTotalFee();
     String previousCast = order.getCastId();
-    order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
+    order.adoptServices(course, calculated.specialServices(), calculated.editableFeeLines());
     order.apply(
         new OrderPatch(
             command.businessDate(),
@@ -552,24 +550,16 @@ public class OrderService {
                     storeId, "CONFIRM", id, actorEmail, command, command.confirmationToken())),
             true);
     Order order =
-        Order.builder()
-            .businessDate(command.businessDate())
-            .arrivalScheduledStartTime(command.arrivalScheduledStartTime())
-            .arrivalScheduledEndTime(command.arrivalScheduledEndTime())
-            .pax(command.pax())
-            .remarks(command.remarks())
-            .status(OrderStatus.CONFIRMED)
-            // 受付経路は申請が入ってきた入口を写す。店舗の作成経路（create）はこの群を拒否する。
-            // 判定を会員コードのスナップショットで行うのは、会員行の削除で requesterMemberId が
-            // 欠落した会員申請をゲスト由来として記録しないため。
-            .receptionRoute(
-                application.isGuest() ? ReceptionRoute.GUEST_WEB : ReceptionRoute.MEMBER_WEB)
-            .requesterMemberId(application.getRequesterMemberId())
-            .requesterMemberCode(application.getRequesterMemberCode())
-            .requesterDeclaredName(application.getRequesterDeclaredName())
-            .build();
-    order.setStoreId(storeId);
-    order.adoptServices(course, calculated.getSpecialServices(), calculated.editableFeeLines());
+        Order.confirmedFrom(
+            storeId,
+            application,
+            new ConfirmedOrderDetails(
+                command.businessDate(),
+                command.arrivalScheduledStartTime(),
+                command.arrivalScheduledEndTime(),
+                command.pax(),
+                command.remarks()));
+    order.adoptServices(course, calculated.specialServices(), calculated.editableFeeLines());
     if (command.castId() != null) {
       order.assignCast(command.castId());
     }
@@ -604,7 +594,6 @@ public class OrderService {
                     application.getContactLineId())
                 : ContactSnapshot.normalize(
                     application.getRequesterDeclaredName(), null, null, null));
-    calculated.linkCustomer(order.getCustomerId());
     calculation.verify(
         command.confirmationToken(),
         storeId,
@@ -613,7 +602,7 @@ public class OrderService {
         actorEmail,
         command,
         calculated,
-        completionPoints(storeId, calculated, 0),
+        completionPoints(storeId, order.getCustomerId(), calculated, 0),
         contactImports);
     Order saved = orderRepository.save(order);
     var now = OffsetDateTime.now();
@@ -668,7 +657,7 @@ public class OrderService {
 
     int usePoints = command.usedPoints();
     lockCustomerWithoutWaiting(storeId, order);
-    CustomerMemberLink link = activeLink(storeId, order).orElse(null);
+    CustomerMemberLink link = activeLink(storeId, order.getCustomerId()).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
     boolean previewed =
         calculation.wasPreviewed(
@@ -686,7 +675,7 @@ public class OrderService {
             chargeAmount,
             usePoints,
             previewed);
-    calculated.completeWith(usePoints, pointsPreview.grantPoints(), now);
+    var completed = order.quoteCompletion(calculated, usePoints, pointsPreview.grantPoints(), now);
     calculation.verify(
         command.confirmationToken(),
         storeId,
@@ -694,7 +683,7 @@ public class OrderService {
         id,
         actorEmail,
         command,
-        calculated,
+        completed,
         pointsPreview);
     order.replaceStoreFeeLines(calculated.editableFeeLines());
     int granted = 0;
@@ -774,7 +763,6 @@ public class OrderService {
             false);
     String customerId =
         selectCustomer(storeId, command.customerSelection(), false, canManageCustomers);
-    calculated.linkCustomer(customerId);
     return calculation.preview(
         storeId,
         "CREATE",
@@ -782,7 +770,7 @@ public class OrderService {
         actorEmail,
         command,
         calculated,
-        completionPoints(storeId, calculated, 0));
+        completionPoints(storeId, customerId, calculated, 0));
   }
 
   @Transactional
@@ -830,11 +818,11 @@ public class OrderService {
               0,
               false);
     } else {
-      calculated.linkCustomer(
+      String customerId =
           application.isGuest()
               ? selectCustomer(storeId, command.customerSelection(), false, canManageCustomers)
-              : null);
-      points = completionPoints(storeId, calculated, 0);
+              : null;
+      points = completionPoints(storeId, customerId, calculated, 0);
     }
     return calculation.preview(
         storeId,
@@ -916,9 +904,10 @@ public class OrderService {
             command.feeLines(),
             specialServices.select(storeId, order, castId, command.specialServiceIds(), false),
             false);
-    if (command.customerSelection() != null)
-      calculated.linkCustomer(
-          selectCustomer(storeId, command.customerSelection(), false, canManageCustomers));
+    String customerId =
+        command.customerSelection() != null
+            ? selectCustomer(storeId, command.customerSelection(), false, canManageCustomers)
+            : order.getCustomerId();
     return calculation.preview(
         storeId,
         "UPDATE",
@@ -926,7 +915,7 @@ public class OrderService {
         actorEmail,
         command,
         calculated,
-        completionPoints(storeId, calculated, 0));
+        completionPoints(storeId, customerId, calculated, 0));
   }
 
   @Transactional
@@ -944,7 +933,7 @@ public class OrderService {
     var calculated =
         calculation.calculate(storeId, order, order.getCourse(), command.feeLines(), false);
     int usePoints = command.usedPoints();
-    var link = activeLink(storeId, calculated).orElse(null);
+    var link = activeLink(storeId, order.getCustomerId()).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
     calculated.requireRedeemable(usePoints, memberId != null);
     var points =
@@ -954,8 +943,9 @@ public class OrderService {
             calculated.grantBasisAmount(),
             usePoints,
             false);
-    calculated.completeWith(usePoints, points.grantPoints(), OffsetDateTime.now());
-    return calculation.preview(storeId, "COMPLETE", id, actorEmail, command, calculated, points);
+    var completed =
+        order.quoteCompletion(calculated, usePoints, points.grantPoints(), OffsetDateTime.now());
+    return calculation.preview(storeId, "COMPLETE", id, actorEmail, command, completed, points);
   }
 
   @Transactional(readOnly = true)
@@ -1064,12 +1054,13 @@ public class OrderService {
     }
   }
 
-  private OrderPoints completionPoints(Long storeId, Order order, int usePoints) {
-    var link = activeLink(storeId, order).orElse(null);
+  private OrderPoints completionPoints(
+      Long storeId, String customerId, OrderQuote quote, int usePoints) {
+    var link = activeLink(storeId, customerId).orElse(null);
     return orderPoints(
         link == null ? null : link.getMemberId(),
         link == null ? null : link.getMemberCode(),
-        order.grantBasisAmount(),
+        quote.grantBasisAmount(),
         usePoints,
         false);
   }
@@ -1091,12 +1082,12 @@ public class OrderService {
    * この問い合わせ自体はロックを取らない。通常更新・完了・完了試算は呼出前に顧客行を NOWAIT で押さえ、 取得競合は customer_lock の 409
    * で返す。他の試算は顧客行のロックをこの問い合わせの前提としない。
    */
-  private Optional<CustomerMemberLink> activeLink(Long storeId, Order order) {
-    if (order.getCustomerId() == null) {
+  private Optional<CustomerMemberLink> activeLink(Long storeId, String customerId) {
+    if (customerId == null) {
       return Optional.empty();
     }
     return customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
-        storeId, order.getCustomerId(), LinkStatus.ACTIVE);
+        storeId, customerId, LinkStatus.ACTIVE);
   }
 
   /**
