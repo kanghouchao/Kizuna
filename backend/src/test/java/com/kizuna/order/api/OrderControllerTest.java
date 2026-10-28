@@ -180,7 +180,7 @@ class OrderControllerTest {
         .andExpect(status().isCreated());
 
     verify(orderPointRollbackService)
-        .reissueReceiptTokenUnlessRolledBack(eq(STORE_ID), eq("o1"), any());
+        .reissueReceiptTokenUnlessRolledBack(eq(STORE_ID), eq("o1"), eq("staff@kizuna.test"));
   }
 
   @Test
