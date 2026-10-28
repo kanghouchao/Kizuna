@@ -108,6 +108,7 @@ public class OrderPointRollbackService {
     if (pointLedgerService.isRolledBack(orderId)) {
       throw new ConflictException("この受注のポイントは既に巻き戻されています");
     }
+    String attributedBefore = Boolean.toString(activeMemberCode(storeId, orderId) != null);
     long offset = pointLedgerService.previewRollbackForOrder(orderId).reversibleUsedPoints();
     if (!order.getTotalFee().equals(command.expectedTotalFee())
         || offset != command.expectedOffsetAmount().longValue()) {
@@ -119,7 +120,6 @@ public class OrderPointRollbackService {
     order.offsetPointRedemption(result.restoredPoints());
     orderRepository.flush();
     PointRollbackHistory history = pointLedgerService.rollbackHistory(orderId).orElseThrow();
-    String attributed = Boolean.toString(activeMemberCode(storeId, orderId) != null);
     businessAudit.recordById(
         actorUserId,
         storeId,
@@ -136,12 +136,12 @@ public class OrderPointRollbackService {
             "rolled_back",
             "false",
             "attributed",
-            attributed),
+            attributedBefore),
         Map.of(
             "version", String.valueOf(order.getVersion()),
             "total_fee", order.getTotalFee().toString(),
             "rolled_back", "true",
-            "attributed", attributed,
+            "attributed", Boolean.toString(activeMemberCode(storeId, orderId) != null),
             "cancelled_points", Long.toString(history.cancelledPoints()),
             "restored_points", Long.toString(history.restoredPoints())));
     return history;
