@@ -101,13 +101,13 @@ public class BenefitRuleService {
     var before = snapshot(rule);
     rule.deactivate();
     persist(rule);
-    businessAudit.recordCurrent(
-        null,
-        "BENEFIT_RULE_DEACTIVATED",
-        "BENEFIT_RULE",
-        String.valueOf(id),
-        before,
-        snapshot(rule));
+    audit("BENEFIT_RULE_DEACTIVATED", id, before, snapshot(rule));
+  }
+
+  /** 特典規則はどの店舗にも属さないグループ共通の設定なので、監査の店舗は常に null。 */
+  private void audit(
+      String action, Long id, Map<String, String> before, Map<String, String> after) {
+    businessAudit.recordCurrent(null, action, "BENEFIT_RULE", String.valueOf(id), before, after);
   }
 
   /** 名前は自由文なので snapshot に載せず、更新では変更項目名（name）だけで表す。 */
