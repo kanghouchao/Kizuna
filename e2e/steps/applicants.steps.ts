@@ -857,7 +857,7 @@ Then(
       }, theme);
       await page.setViewportSize({ width, height: 960 });
       await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
-      await expect(value("不採用")).toHaveText("6 か月後に匿名化");
+      await expect(value("不採用")).toHaveText("保持 6 か月");
       await expect(value("辞退")).toHaveText("自動匿名化しない");
       await expect(value("採用")).toHaveText("自動匿名化しない");
       await page

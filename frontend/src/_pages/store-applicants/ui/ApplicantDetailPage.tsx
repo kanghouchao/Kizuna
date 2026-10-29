@@ -303,7 +303,7 @@ export default function ApplicantDetailPage() {
                       {applicantStatusLabels[status]}
                     </dt>
                     <dd className="mt-1">
-                      {months === null ? '自動匿名化しない' : `${months} か月後に匿名化`}
+                      {months === null ? '自動匿名化しない' : `保持 ${months} か月`}
                     </dd>
                   </div>
                 ))}
