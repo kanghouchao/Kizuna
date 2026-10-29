@@ -36,7 +36,7 @@ public class StoreCreateDTO {
   private String shortName;
 
   public void setShortName(String shortName) {
-    this.shortName = shortName == null ? null : shortName.strip();
+    this.shortName = ShortNameText.trim(shortName);
   }
 
   @NotBlank(message = "domain is required")

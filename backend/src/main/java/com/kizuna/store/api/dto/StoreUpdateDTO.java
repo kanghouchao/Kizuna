@@ -20,6 +20,6 @@ public class StoreUpdateDTO {
   private String shortName;
 
   public void setShortName(String shortName) {
-    this.shortName = shortName == null ? null : shortName.strip();
+    this.shortName = ShortNameText.trim(shortName);
   }
 }
