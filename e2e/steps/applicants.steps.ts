@@ -942,6 +942,17 @@ When(
   "添付付きの応募者を面接後に不採用へ確定し不採用の保持期間を0か月にする",
   async ({ page, request }) => {
     let detail = await interviewed(request);
+    const interview = await request.put(`${path()}/interview`, {
+      headers: headers(),
+      data: {
+        version: detail.version,
+        interview_at: "2026-10-01T10:30:00+09:00",
+        interviewer: "面接担当者",
+        notes: "非公開面接メモ",
+        checklist: { 非公開の確認項目: true },
+      },
+    });
+    expect(interview.status(), await interview.text()).toBe(200);
     const image = Buffer.from(
       await page.evaluate(() => {
         const canvas = document.createElement("canvas");
@@ -1078,9 +1089,9 @@ Then(
       interview: {
         interview_at: expect.any(String),
         interviewer: "面接担当者",
-        checklist: {},
       },
     });
+    expect(detail.interview.checklist).toEqual({});
     expect(detail.anonymized_at).toEqual(expect.any(String));
     for (const field of [
       "phone",
