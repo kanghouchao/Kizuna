@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** G5 の検査と業務変更が同じトランザクションで確定するよう、既存のトランザクションを必須とする。 */
+/** ROLE_MANAGE 保持者をゼロにしない検査と業務変更が同じトランザクションで確定するよう、既存のトランザクションを必須とする。 */
 @Service
 @RequiredArgsConstructor
 @Transactional(propagation = Propagation.MANDATORY)

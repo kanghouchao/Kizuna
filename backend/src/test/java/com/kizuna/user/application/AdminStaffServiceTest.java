@@ -448,7 +448,7 @@ class AdminStaffServiceTest {
   }
 
   @Test
-  @DisplayName("更新: ロールの除去は不減零の守衛を通す")
+  @DisplayName("更新: ロールの除去は ROLE_MANAGE 保持者をゼロにしない守衛を通す")
   void updateRunsRoleManageHolderGuardWhenRemovingRoles() {
     actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
     User target = target(2L, Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());

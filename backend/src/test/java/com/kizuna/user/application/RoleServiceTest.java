@@ -48,7 +48,7 @@ class RoleServiceTest {
   private static final long CUSTOMER_MANAGE_ID = 2L;
   private static final long ROLE_MANAGE_ID = 3L;
 
-  /** 不減零（G5）の対象になる自作ロールと、母集団を分け合うもう 1 つのロール。 */
+  /** ROLE_MANAGE 保持者をゼロにしない守衛の対象になる自作ロールと、母集団を分け合うもう 1 つのロール。 */
   private static final long GUARDED_ROLE = 7L;
 
   private static final long OTHER_ROLE_MANAGE_ROLE = 8L;

@@ -36,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class RoleService {
 
-  /** 不減零の母集団を定める権限コード。目録行そのものが守衛の直列化点でもある。 */
+  /** ROLE_MANAGE 保持者をゼロにしない守衛の母集団を定める権限コード。目録行そのものが守衛の直列化点でもある。 */
   private static final String ROLE_MANAGE = PermissionCode.ROLE_MANAGE.name();
 
   private final BusinessAudit businessAudit;
@@ -90,7 +90,7 @@ public class RoleService {
       throw new StaleRoleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
     // 同一ロールへの並行する権限追加は、そのロール行の @Version が保存時に検出する。既定ロールも権限を編集できるので
-    // 不減零の検査から外さない。
+    // ROLE_MANAGE 保持者をゼロにしない検査から外さない。
     if (!req.getPermissions().contains(ROLE_MANAGE)
         && roleRepository.findIdsByPermissionCode(ROLE_MANAGE).contains(role.getId())) {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
