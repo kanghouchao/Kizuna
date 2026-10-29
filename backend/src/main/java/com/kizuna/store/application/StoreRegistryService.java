@@ -18,6 +18,8 @@ import com.kizuna.store.domain.StoreStatus;
 import com.kizuna.storeprofile.domain.StoreProfile;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -96,8 +98,9 @@ public class StoreRegistryService {
     }
     Store t = new Store();
     t.setName(req.getName());
+    t.setShortName(req.getShortName());
     t.setDomain(req.getDomain());
-    Store saved = storeRepository.saveAndFlush(t);
+    Store saved = saveShortNameUnique(t);
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
     record(
         saved.getId(),
@@ -108,7 +111,7 @@ public class StoreRegistryService {
             "status", saved.getStatus().name(),
             "version", String.valueOf(saved.getVersion()),
             "domain", saved.getDomain(),
-            "changed_fields", "name,domain"));
+            "changed_fields", "name,short_name,domain"));
     return saved.getId();
   }
 
@@ -120,15 +123,35 @@ public class StoreRegistryService {
     var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
     String versionBefore = String.valueOf(store.getVersion());
     boolean renamed = !Objects.equals(store.getName(), req.getName());
+    boolean shortNameChanged = !Objects.equals(store.getShortName(), req.getShortName());
     store.setName(req.getName());
-    storeRepository.saveAndFlush(store);
+    store.setShortName(req.getShortName());
+    saveShortNameUnique(store);
+    List<String> changed = new ArrayList<>();
     if (renamed) {
+      changed.add("name");
+    }
+    if (shortNameChanged) {
+      changed.add("short_name");
+    }
+    if (!changed.isEmpty()) {
       record(
           store.getId(),
           "STORE_UPDATED",
           Map.of("version", versionBefore),
-          Map.of("version", String.valueOf(store.getVersion()), "changed_fields", "name"));
+          Map.of(
+              "version", String.valueOf(store.getVersion()),
+              "changed_fields", String.join(",", changed)));
     }
+  }
+
+  /** 略称の重複は並行する登録でも起こりうるため、flush で制約違反をこの場に顕在化させて 409 へ写す。 */
+  private Store saveShortNameUnique(Store store) {
+    return IntegrityViolations.translateOnFailure(
+        () -> storeRepository.saveAndFlush(store),
+        Map.of(
+            DbConstraint.UQ_T_STORES_SHORT_NAME,
+            () -> new ConflictException("この略称は既に使われています")));
   }
 
   /**
@@ -203,6 +226,11 @@ public class StoreRegistryService {
 
   private StoreVO toDto(Store t) {
     return new StoreVO(
-        String.valueOf(t.getId()), t.getName(), t.getDomain(), t.getStatus(), t.getCreatedAt());
+        String.valueOf(t.getId()),
+        t.getName(),
+        t.getShortName(),
+        t.getDomain(),
+        t.getStatus(),
+        t.getCreatedAt());
   }
 }

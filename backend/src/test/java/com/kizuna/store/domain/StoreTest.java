@@ -12,7 +12,7 @@ class StoreTest {
   @Test
   @DisplayName("新規登録した店舗は準備中から始まること")
   void newStore_startsPreparing() {
-    Store store = new Store("新規店舗", "new.kizuna.test");
+    Store store = new Store("新規店舗", "店", "new.kizuna.test");
 
     assertThat(store.getStatus()).isEqualTo(StoreStatus.PREPARING);
   }
@@ -20,7 +20,7 @@ class StoreTest {
   @Test
   @DisplayName("準備中の店舗を稼働中へ遷移できること")
   void activate_fromPreparing() {
-    Store store = new Store("準備中店舗", "preparing.kizuna.test");
+    Store store = new Store("準備中店舗", "店", "preparing.kizuna.test");
 
     store.activate();
 
@@ -30,7 +30,7 @@ class StoreTest {
   @Test
   @DisplayName("稼働中の店舗を再度稼働させようとすると 400 で拒むこと（不可逆遷移の繰り返し拒否）")
   void activate_whenAlreadyActive_isRejected() {
-    Store store = new Store("稼働中店舗", "active.kizuna.test");
+    Store store = new Store("稼働中店舗", "店", "active.kizuna.test");
     store.activate();
 
     assertThatThrownBy(store::activate).isInstanceOf(ServiceException.class);

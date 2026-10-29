@@ -74,6 +74,7 @@ When('次の店舗を登録する', async ({ request }, table: DataTable) => {
   for (const row of table.hashes()) {
     await createStore(request, adminToken, {
       name: row['店舗名'],
+      short_name: row['略称'],
       domain: row['ドメイン'],
     });
   }

@@ -50,7 +50,7 @@ class AdminStoreServiceTest {
   }
 
   private Store store(long id, String name) {
-    Store t = new Store(name, name + ".test");
+    Store t = new Store(name, name.substring(0, 1), name + ".test");
     t.setId(id);
     return t;
   }
@@ -65,8 +65,8 @@ class AdminStoreServiceTest {
 
     assertThat(result)
         .containsExactly(
-            new AdminStoreResponse(1L, "A店", StoreStatus.PREPARING),
-            new AdminStoreResponse(2L, "B店", StoreStatus.PREPARING));
+            new AdminStoreResponse(1L, "A店", "A", StoreStatus.PREPARING),
+            new AdminStoreResponse(2L, "B店", "B", StoreStatus.PREPARING));
     verify(storeRepository).findAll();
     verify(storeRepository, never()).findAllById(any());
   }
@@ -78,7 +78,8 @@ class AdminStoreServiceTest {
 
     List<AdminStoreResponse> result = service.listAuthorizedStores();
 
-    assertThat(result).containsExactly(new AdminStoreResponse(1L, "A店", StoreStatus.PREPARING));
+    assertThat(result)
+        .containsExactly(new AdminStoreResponse(1L, "A店", "A", StoreStatus.PREPARING));
     verify(storeRepository).findAllById(Set.of(1L));
     verify(storeRepository, never()).findAll();
   }

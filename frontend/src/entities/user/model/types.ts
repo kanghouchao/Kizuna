@@ -109,6 +109,7 @@ export type StoreStatus = 'PREPARING' | 'ACTIVE';
 export interface AuthorizedStore {
   id?: number;
   name?: string;
+  short_name?: string;
   status?: StoreStatus;
 }
 

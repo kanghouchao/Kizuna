@@ -42,6 +42,9 @@ public enum DbConstraint {
   /** t_user_roles → t_roles の FK。授与中のロールの削除を止める。 */
   FK_T_USER_ROLES_ROLE("fk_t_user_roles_role"),
 
+  /** t_stores.short_name の一意制約。 */
+  UQ_T_STORES_SHORT_NAME("uq_t_stores_short_name"),
+
   /** t_user_stores → t_stores の FK。 */
   FK_T_USER_STORES_STORE("fk_t_user_stores_store"),
 

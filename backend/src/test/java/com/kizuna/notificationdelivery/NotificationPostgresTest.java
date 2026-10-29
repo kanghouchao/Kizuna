@@ -47,6 +47,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.task.application.ServiceIdentityCheckTask;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
@@ -151,15 +152,17 @@ class NotificationPostgresTest {
     email = suffix + "@example.invalid";
     storeId =
         jdbc.queryForObject(
-            "insert into t_stores(name,domain) values (?,?) returning id",
+            "insert into t_stores(name,short_name,domain) values (?,?,?) returning id",
             Long.class,
             "通知検証",
+            StoreShortNames.next(),
             suffix + ".invalid");
     otherStore =
         jdbc.queryForObject(
-            "insert into t_stores(name,domain) values (?,?) returning id",
+            "insert into t_stores(name,short_name,domain) values (?,?,?) returning id",
             Long.class,
             "別店舗",
+            StoreShortNames.next(),
             suffix + "-other.invalid");
     operatorId =
         jdbc.queryForObject(

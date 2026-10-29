@@ -33,6 +33,7 @@ const mockedApi = adminStoreApi as jest.Mocked<typeof adminStoreApi>;
 const store = (override: Partial<Store>): Store => ({
   id: '1',
   name: 'アルファ店',
+  short_name: 'ア',
   domain: 'alpha.example.com',
   status: 'PREPARING',
   created_at: '2026-01-01T00:00:00Z',
@@ -238,17 +239,20 @@ describe('店舗管理 3 画面の挙動', () => {
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('7'));
   });
 
-  it('新規作成は name/domain だけを送信し一覧へ遷移すること', async () => {
+  it('新規作成は name/short_name/domain だけを送信し一覧へ遷移すること', async () => {
     mockedApi.create.mockResolvedValue({ id: 1 });
 
     render(<StoreCreatePage />);
     fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
+    fireEvent.change(screen.getByLabelText(/略称/), { target: { value: ' 新宿西 ' } });
     fireEvent.change(screen.getByLabelText(/ドメイン/), { target: { value: 'Gamma.example.com' } });
     fireEvent.click(screen.getByRole('button', { name: '店舗を作成' }));
 
     await waitFor(() => expect(mockedApi.create).toHaveBeenCalledTimes(1));
     expect(mockedApi.create).toHaveBeenCalledWith({
       name: 'ガンマ店',
+      // 全角 3 文字は上限内で、前後の空白は送る前に除く
+      short_name: '新宿西',
       // 入力時に小文字化される
       domain: 'gamma.example.com',
     });
@@ -258,6 +262,7 @@ describe('店舗管理 3 画面の挙動', () => {
   it('新規作成はドメイン形式が不正なら送信せずエラーを表示すること', async () => {
     render(<StoreCreatePage />);
     fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
+    fireEvent.change(screen.getByLabelText(/略称/), { target: { value: 'ガ' } });
     fireEvent.change(screen.getByLabelText(/ドメイン/), { target: { value: '不正 ドメイン' } });
     fireEvent.click(screen.getByRole('button', { name: '店舗を作成' }));
 
@@ -265,11 +270,27 @@ describe('店舗管理 3 画面の挙動', () => {
     expect(mockedApi.create).not.toHaveBeenCalled();
   });
 
-  it('編集は取得値を初期表示し name だけを送信して一覧へ遷移すること', async () => {
+  it.each([
+    ['', '略称は必須です'],
+    ['   ', '略称は必須です'],
+    ['ABCD', '略称は 3 文字以内で入力してください'],
+  ])('新規作成は略称 %j が不正なら送信せずエラーを表示すること', async (value, message) => {
+    render(<StoreCreatePage />);
+    fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
+    fireEvent.change(screen.getByLabelText(/略称/), { target: { value } });
+    fireEvent.change(screen.getByLabelText(/ドメイン/), { target: { value: 'gamma.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: '店舗を作成' }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(mockedApi.create).not.toHaveBeenCalled();
+  });
+
+  it('編集は取得値を初期表示し name と short_name を送信して一覧へ遷移すること', async () => {
     mockedApi.getById.mockResolvedValue(
       store({
         id: '1',
         name: 'デルタ店',
+        short_name: 'デ',
         domain: 'delta.example.com',
       })
     );
@@ -281,10 +302,16 @@ describe('店舗管理 3 画面の挙動', () => {
     await waitFor(() => expect(nameInput.value).toBe('デルタ店'));
     expect(screen.getByText('delta.example.com')).toBeInTheDocument();
 
+    const shortNameInput = screen.getByLabelText(/略称/) as HTMLInputElement;
+    expect(shortNameInput.value).toBe('デ');
+
     fireEvent.change(nameInput, { target: { value: 'デルタ本店' } });
+    fireEvent.change(shortNameInput, { target: { value: '本店' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
-    await waitFor(() => expect(mockedApi.update).toHaveBeenCalledWith('1', { name: 'デルタ本店' }));
+    await waitFor(() =>
+      expect(mockedApi.update).toHaveBeenCalledWith('1', { name: 'デルタ本店', short_name: '本店' })
+    );
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
   });
 

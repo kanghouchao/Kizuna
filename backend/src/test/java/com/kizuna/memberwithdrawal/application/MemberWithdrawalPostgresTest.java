@@ -34,6 +34,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.UserRepository;
@@ -493,8 +494,9 @@ class MemberWithdrawalPostgresTest {
 
   private long store() {
     return jdbc.queryForObject(
-        "insert into t_stores(name,domain) values ('検証店舗',?) returning id",
+        "insert into t_stores(name,short_name,domain) values ('検証店舗',?,?) returning id",
         Long.class,
+        StoreShortNames.next(),
         UUID.randomUUID() + ".invalid");
   }
 

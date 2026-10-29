@@ -37,7 +37,10 @@ public class AdminStoreService {
             : storeRepository.findAllById(scope.storeIds());
     return StreamSupport.stream(stores.spliterator(), false)
         .sorted(Comparator.comparing(Store::getId))
-        .map(store -> new AdminStoreResponse(store.getId(), store.getName(), store.getStatus()))
+        .map(
+            store ->
+                new AdminStoreResponse(
+                    store.getId(), store.getName(), store.getShortName(), store.getStatus()))
         .toList();
   }
 }

@@ -17,6 +17,7 @@ import com.kizuna.pointsexpiry.application.PointExpiryTask;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskRegistry;
@@ -606,8 +607,9 @@ class PointExpiryPostgresTest {
   private OrderFixture order() {
     long store =
         jdbc.queryForObject(
-            "insert into t_stores(name,domain) values ('検証店舗',?) returning id",
+            "insert into t_stores(name,short_name,domain) values ('検証店舗',?,?) returning id",
             Long.class,
+            StoreShortNames.next(),
             UUID.randomUUID() + ".invalid");
     String order = UUID.randomUUID().toString();
     String course = UUID.randomUUID().toString();

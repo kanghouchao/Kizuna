@@ -2,6 +2,8 @@
 export interface Store {
   id?: string;
   name?: string;
+  /** 略称（1〜3 文字） */
+  short_name?: string;
   domain?: string;
   /** 稼働状態。準備中の店舗だけが削除できる */
   status?: 'PREPARING' | 'ACTIVE';
@@ -11,6 +13,7 @@ export interface Store {
 // 店舗作成リクエスト
 export interface CreateStoreRequest {
   name: string;
+  short_name: string;
   domain: string;
 }
 
@@ -22,6 +25,7 @@ export interface CreateStoreResponse {
 // 店舗更新リクエスト
 export interface UpdateStoreRequest {
   name: string;
+  short_name: string;
 }
 
 // 店舗統計データ

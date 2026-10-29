@@ -11,6 +11,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.survey.api.SurveyController;
 import com.kizuna.survey.api.SurveyResponseController;
 import com.kizuna.user.application.BusinessAudit;
@@ -126,13 +127,15 @@ class SurveyPostgresTest {
     email = suffix + "@example.invalid";
     storeId =
         jdbc.queryForObject(
-            "insert into t_stores(name,domain) values ('受付検証',?) returning id",
+            "insert into t_stores(name,short_name,domain) values ('受付検証',?,?) returning id",
             Long.class,
+            StoreShortNames.next(),
             suffix + ".invalid");
     otherStore =
         jdbc.queryForObject(
-            "insert into t_stores(name,domain) values ('別店舗',?) returning id",
+            "insert into t_stores(name,short_name,domain) values ('別店舗',?,?) returning id",
             Long.class,
+            StoreShortNames.next(),
             suffix + "-other.invalid");
     actorId =
         jdbc.queryForObject(

@@ -38,7 +38,7 @@ class StoreActivationServiceTest {
   @InjectMocks private StoreActivationService storeActivationService;
 
   private Store preparingStore() {
-    Store store = new Store("準備中店舗", "preparing.kizuna.test");
+    Store store = new Store("準備中店舗", "準", "preparing.kizuna.test");
     store.setId(STORE_ID);
     return store;
   }

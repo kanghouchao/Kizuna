@@ -22,6 +22,9 @@ public class Store extends BaseEntity {
   @Column(nullable = false)
   private String name;
 
+  @Column(name = "short_name", nullable = false, length = 3)
+  private String shortName;
+
   @Column(nullable = false, unique = true)
   private String domain;
 
@@ -31,8 +34,9 @@ public class Store extends BaseEntity {
   @Column(nullable = false, length = 20)
   private StoreStatus status = StoreStatus.PREPARING;
 
-  public Store(String name, String domain) {
+  public Store(String name, String shortName, String domain) {
     this.name = name;
+    this.shortName = shortName;
     this.domain = domain;
   }
 

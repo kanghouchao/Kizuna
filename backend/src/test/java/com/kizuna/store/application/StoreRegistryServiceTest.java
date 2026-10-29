@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.api.dto.StoreCreateDTO;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -65,15 +67,18 @@ class StoreRegistryServiceTest {
   void create_savesStoreAndDefaultStoreProfileAndReturnsTheNewId() {
     StoreCreateDTO req = new StoreCreateDTO();
     req.setName("T1");
+    req.setShortName("新宿西");
     req.setDomain("d1.com");
 
-    Store t = new Store("T1", "d1.com");
+    Store t = new Store("T1", "新", "d1.com");
     t.setId(1L);
     when(storeRepository.saveAndFlush(any())).thenReturn(t);
 
     assertThat(storeRegistryService.create(req)).isEqualTo(1L);
 
-    verify(storeRepository).saveAndFlush(any());
+    ArgumentCaptor<Store> saved = ArgumentCaptor.forClass(Store.class);
+    verify(storeRepository).saveAndFlush(saved.capture());
+    assertThat(saved.getValue().getShortName()).isEqualTo("新宿西");
     verify(storeProfileRepository).save(any());
   }
 
@@ -92,6 +97,44 @@ class StoreRegistryServiceTest {
 
     verify(storeRepository, never()).saveAndFlush(any());
     verify(storeProfileRepository, never()).save(any());
+  }
+
+  @Test
+  void create_duplicateShortName_mapsUniqueViolationToConflict() {
+    StoreCreateDTO req = new StoreCreateDTO();
+    req.setName("T3");
+    req.setShortName("新宿");
+    req.setDomain("fresh.example.com");
+    when(storeRepository.saveAndFlush(any())).thenThrow(shortNameViolation());
+
+    assertThatThrownBy(() -> storeRegistryService.create(req))
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("この略称は既に使われています");
+
+    verify(storeProfileRepository, never()).save(any());
+  }
+
+  @Test
+  void update_duplicateShortName_mapsUniqueViolationToConflict() {
+    Store t = createStore(1L, "Old", "old.com");
+    when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
+    when(storeRepository.saveAndFlush(t)).thenThrow(shortNameViolation());
+    StoreUpdateDTO req = new StoreUpdateDTO();
+    req.setName("New");
+    req.setShortName("新宿");
+
+    assertThatThrownBy(() -> storeRegistryService.update("1", req))
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("この略称は既に使われています");
+  }
+
+  private static DataIntegrityViolationException shortNameViolation() {
+    return new DataIntegrityViolationException(
+        "save failed",
+        new ConstraintViolationException(
+            "duplicate",
+            new SQLException("duplicate"),
+            DbConstraint.UQ_T_STORES_SHORT_NAME.sqlName()));
   }
 
   @Test
@@ -156,10 +199,12 @@ class StoreRegistryServiceTest {
 
     StoreUpdateDTO req = new StoreUpdateDTO();
     req.setName("New");
+    req.setShortName("新");
 
     storeRegistryService.update("1", req);
 
     assertThat(t.getName()).isEqualTo("New");
+    assertThat(t.getShortName()).isEqualTo("新");
     verify(storeRepository).saveAndFlush(t);
   }
 
@@ -289,7 +334,7 @@ class StoreRegistryServiceTest {
   }
 
   private Store preparingStore(Long id) {
-    Store store = new Store("削除検証店舗", "delete-check.example.com");
+    Store store = new Store("削除検証店舗", "削", "delete-check.example.com");
     store.setId(id);
     return store;
   }

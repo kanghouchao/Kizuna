@@ -87,7 +87,7 @@ class StoreAuditTest {
             attendance,
             audit);
     activation = new StoreActivationService(stores, mock(CacheManager.class), audit);
-    store = new Store("旧名称", "old.example.test");
+    store = new Store("旧名称", "旧", "old.example.test");
     store.setId(STORE_ID);
     ReflectionTestUtils.setField(store, "version", 3L);
     when(stores.findById(STORE_ID)).thenReturn(Optional.of(store));
