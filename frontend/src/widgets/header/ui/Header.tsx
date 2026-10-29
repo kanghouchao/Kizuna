@@ -47,7 +47,7 @@ export function Header() {
             ) : (
               me !== null && (
                 <>
-                  {/* 表示名は 150 字まで許されるため、店舗名と同じく行の固有幅に上界を与える。 */}
+                  {/* 表示名は 150 字まで許されるため、行の固有幅に上界を与える。 */}
                   <p className="max-w-40 truncate text-sm font-semibold text-foreground">
                     {me.display_name}
                   </p>
