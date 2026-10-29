@@ -49,7 +49,7 @@ public class InitialSetupService {
     if (staffExists()) {
       throw new NotFoundException("初期設定は完了しています");
     }
-    Role admin = roleRepository.findByName(SystemRole.HQ_ADMIN.getRoleName()).orElseThrow();
+    Role admin = roleRepository.findByName(SystemRole.ADMIN.getRoleName()).orElseThrow();
     User user =
         save(
             User.builder()

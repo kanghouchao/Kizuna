@@ -14,13 +14,13 @@ import lombok.Getter;
 public enum SystemRole {
 
   /** 統括。全群級の権限と跨店参照系・従業員管理を初期授与として持つ。店舗業務の権限は ROLE_MANAGE 保持者として配れる。 */
-  HQ_ADMIN("統括"),
+  ADMIN("統括"),
 
   /** 店長。店舗業務の全権限と跨店参照系・従業員管理を初期授与として持つ。 */
-  STORE_MANAGER("店長"),
+  MANAGER("店長"),
 
   /** スタッフ。店長から確定系・金額・機微情報・出力の操作を除いた日常業務の権限を持つ。 */
-  STORE_STAFF("スタッフ");
+  STAFF("スタッフ");
 
   /** {@code t_roles.name} に現れる表示名。播種行との対応はこの名称で解決する。 */
   private final String roleName;
