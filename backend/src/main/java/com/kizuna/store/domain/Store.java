@@ -22,6 +22,7 @@ public class Store extends BaseEntity {
   @Column(nullable = false)
   private String name;
 
+  @Setter(AccessLevel.NONE)
   @Column(name = "short_name", nullable = false, length = 3)
   private String shortName;
 
@@ -38,6 +39,11 @@ public class Store extends BaseEntity {
     this.name = name;
     this.shortName = shortName;
     this.domain = domain;
+  }
+
+  public void apply(StorePatch patch) {
+    this.name = patch.name();
+    this.shortName = patch.shortName();
   }
 
   /** 稼働中へ遷移する。店長の明示操作であり、不可逆な遷移なので繰り返しは 400 で拒む。 */

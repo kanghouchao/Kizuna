@@ -13,6 +13,7 @@ import com.kizuna.store.api.dto.StoreVO;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StorePatch;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.store.domain.StoreStatus;
 import com.kizuna.storeprofile.domain.StoreProfile;
@@ -96,11 +97,8 @@ public class StoreRegistryService {
     if (storeRepository.findByDomain(req.getDomain()).isPresent()) {
       throw new ServiceException("このドメインは既に登録されています");
     }
-    Store t = new Store();
-    t.setName(req.getName());
-    t.setShortName(req.getShortName());
-    t.setDomain(req.getDomain());
-    Store saved = saveShortNameUnique(t);
+    Store saved =
+        saveShortNameUnique(new Store(req.getName(), req.getShortName(), req.getDomain()));
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
     record(
         saved.getId(),
@@ -124,8 +122,7 @@ public class StoreRegistryService {
     String versionBefore = String.valueOf(store.getVersion());
     boolean renamed = !Objects.equals(store.getName(), req.getName());
     boolean shortNameChanged = !Objects.equals(store.getShortName(), req.getShortName());
-    store.setName(req.getName());
-    store.setShortName(req.getShortName());
+    store.apply(new StorePatch(req.getName(), req.getShortName()));
     saveShortNameUnique(store);
     List<String> changed = new ArrayList<>();
     if (renamed) {
