@@ -5,6 +5,7 @@ import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_SET_EXPORT;
 import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_SET_VIEW;
 import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_VIEW;
+import static com.kizuna.user.domain.PermissionCode.APPLICANT_ANONYMIZE;
 import static com.kizuna.user.domain.PermissionCode.ASSET_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.AUDIT_VIEW;
 import static com.kizuna.user.domain.PermissionCode.BENEFIT_MANAGE;
@@ -140,8 +141,9 @@ class DefaultGrantApprovalTests {
           Map.entry(BONUS_AWARD, Set.of(MANAGER)),
           Map.entry(REMUNERATION_CORRECT, Set.of(MANAGER)));
 
-  /** どの既定ロールにも与えないと承認済みの権限。サービス ID 専用で人のロールに載せないもの。 */
-  private static final Set<PermissionCode> APPROVED_WITHOUT_DEFAULT_GRANT = Set.of(TASK_EXECUTE);
+  /** どの既定ロールにも与えないと承認済みの権限。サービス ID 専用か、取り消せない処理のため管理者が明示授与するもの。 */
+  private static final Set<PermissionCode> APPROVED_WITHOUT_DEFAULT_GRANT =
+      Set.of(TASK_EXECUTE, APPLICANT_ANONYMIZE);
 
   @Test
   @DisplayName("既定授与の無い権限は承認済みのものに限ること")

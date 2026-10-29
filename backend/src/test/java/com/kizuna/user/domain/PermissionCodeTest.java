@@ -24,7 +24,7 @@ class PermissionCodeTest {
   @Test
   @DisplayName("権限目録は 55 個")
   void catalogIsComplete() {
-    assertThat(PermissionCode.values()).hasSize(55);
+    assertThat(PermissionCode.values()).hasSize(56);
   }
 
   @Test

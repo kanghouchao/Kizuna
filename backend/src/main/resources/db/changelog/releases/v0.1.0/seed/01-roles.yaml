@@ -94,6 +94,10 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
+              - column: { name: code, value: APPLICANT_ANONYMIZE }
+        - insert:
+            tableName: t_permissions
+            columns:
               - column: { name: code, value: AUDIT_VIEW }
         - insert:
             tableName: t_permissions

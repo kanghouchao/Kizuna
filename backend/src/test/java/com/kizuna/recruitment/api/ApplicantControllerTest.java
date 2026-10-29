@@ -103,7 +103,8 @@ class ApplicantControllerTest {
             "担当",
             OffsetDateTime.now(),
             0L,
-            "e1");
+            "e1",
+            OffsetDateTime.parse("2026-10-30T00:00:00+09:00"));
     when(service.list(eq(1L), any(), any(), any())).thenReturn(new PageImpl<>(List.of(summary)));
     mvc.perform(
             get("/applicants")
@@ -112,6 +113,7 @@ class ApplicantControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].name").value("応募者"))
         .andExpect(jsonPath("$.content[0].enrollment_id").value("e1"))
+        .andExpect(jsonPath("$.content[0].anonymized_at").value("2026-10-30T00:00:00+09:00"))
         .andExpect(jsonPath("$.content[0].phone").doesNotExist())
         .andExpect(jsonPath("$.content[0].address").doesNotExist())
         .andExpect(jsonPath("$.content[0].interview").doesNotExist());
@@ -128,7 +130,8 @@ class ApplicantControllerTest {
             "assignee",
             "createdAt",
             "version",
-            "enrollmentId");
+            "enrollmentId",
+            "anonymizedAt");
   }
 
   @Test

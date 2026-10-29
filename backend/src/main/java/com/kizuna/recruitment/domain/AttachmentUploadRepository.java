@@ -3,6 +3,7 @@ package com.kizuna.recruitment.domain;
 import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -14,6 +15,8 @@ public interface AttachmentUploadRepository
     extends StoreScopedRepository<AttachmentUpload>, JpaSpecificationExecutor<AttachmentUpload> {
   Optional<AttachmentUpload> findByStoreIdAndApplicantIdAndIdempotencyKey(
       Long storeId, String applicantId, UUID key);
+
+  List<AttachmentUpload> findByStoreIdAndApplicantId(Long storeId, String applicantId);
 
   Optional<AttachmentUpload> findByIdAndStoreIdAndApplicantId(
       String id, Long storeId, String applicantId);

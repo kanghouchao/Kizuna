@@ -25,4 +25,5 @@ public record ApplicantResponse(
     ApplicantInterview interview,
     Long modifiedBy,
     OffsetDateTime updatedAt,
-    String enrollmentId) {}
+    String enrollmentId,
+    OffsetDateTime anonymizedAt) {}

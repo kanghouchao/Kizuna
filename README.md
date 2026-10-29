@@ -65,6 +65,21 @@ task up
 授権は実行開始と確定前の検証点ごとに、別の短い読み取り専用取引で確定済みの状態を読み直す。
 最後の検証後に確定した権限の取り消しは、次の検証点から有効になる。
 
+## 応募者の匿名化の運用
+
+保持期間を過ぎた応募者の匿名化は既定で停止している。明示的に `app.applicant-anonymization.enabled=true` と
+`app.applicant-anonymization.service-user-id` を設定した環境だけで、アプリケーションの暦日・時区に従い日次に実行する。
+保持期間はシステム設定の `applicant_retention_rejected_months`・`applicant_retention_withdrawn_months`・
+`applicant_retention_hired_months` で終端状態ごとに定め、未設定の状態は匿名化しない。0 か月は終端へ確定した当日から対象になる。
+手動の新規実行・再試行には運用者の `TASK_MANAGE`・`APPLICANT_ANONYMIZE` と `ALL_STORES` が必要となる。
+サービス ID には `TASK_EXECUTE`・`APPLICANT_ANONYMIZE` と `ALL_STORES` を明示授与する。
+`APPLICANT_ANONYMIZE` はどの既定ロールにも授与されない。
+
+`app.applicant-anonymization.cron` の既定は `0 15 0 * * *`、`app.applicant-anonymization.max-applicants` は 100（一回の実行で匿名化する上限。残りは次回の実行で処理する）。
+添付の実体を先に削除し、DB 側の更新と監査 `APPLICANT_ANONYMIZED`（状態・版のみ）は一つの取引で確定する。
+途中で失敗すると DB 側は全件取り消され、処理の実行履歴に失敗が残る。実体だけが消えた応募者も次回の実行・再試行で同じく匿名化される（実体の不在は成功扱い）。
+匿名化は取り消せない。行・選考状態・状態履歴と理由文・担当者名・面接日時と面接担当者名・在籍 ID は残り、在籍には触れない。
+
 ## 文書案内
 
 | 目的 | 文書 |

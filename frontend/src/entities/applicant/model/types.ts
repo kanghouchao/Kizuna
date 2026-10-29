@@ -43,6 +43,8 @@ export interface ApplicantSummary {
   created_at: string;
   version: number;
   enrollment_id?: string | null;
+  /** 保持期間の満了で個人情報を消した時刻。未匿名化は省略される。 */
+  anonymized_at?: string | null;
 }
 export interface ApplicantInterview {
   interview_at: string;
@@ -59,6 +61,7 @@ export interface ApplicantDetail extends ApplicantIntake {
   version: number;
   interview?: ApplicantInterview | null;
   enrollment_id?: string | null;
+  anonymized_at?: string | null;
 }
 /** 在籍登録の本文。項目はキャスト直接登録と同じで、操作者が入力する（応募者の個人情報は写さない）。 */
 export interface ApplicantEnrollmentInput {
@@ -117,6 +120,8 @@ export const applicantStatusClasses: Record<ApplicantStatus, string> = {
   REJECTED: 'border-transparent bg-destructive/10 text-destructive-strong',
   WITHDRAWN: 'border-transparent bg-muted text-foreground',
 };
+
+export const anonymizedBadgeClass = 'border-transparent bg-muted text-foreground';
 
 export interface ApplicantAttachment {
   id: string;

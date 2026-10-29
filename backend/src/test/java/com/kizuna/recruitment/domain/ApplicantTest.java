@@ -258,4 +258,64 @@ class ApplicantTest {
     assertThatThrownBy(() -> new ApplicantInterview(null, "担当", null, Map.of()))
         .isInstanceOf(ServiceException.class);
   }
+
+  @Test
+  void anonymizationClearsPersonalDataAndKeepsTheSelectionRecord() {
+    var applicant = Applicant.receive(7L, intake());
+    applicant.recordInterview(interview());
+    applicant.transition(ApplicantStatus.SCREENING, "確認開始");
+    applicant.transition(ApplicantStatus.INTERVIEWED, "面接終了");
+    applicant.decide(ApplicantStatus.HIRED, "採用");
+    applicant.recordEnrollment("e1");
+    ReflectionTestUtils.setField(applicant, "referrer", "紹介者");
+    ReflectionTestUtils.setField(applicant, "email", "a@example.com");
+    ReflectionTestUtils.setField(applicant, "sourceMedia", "求人誌");
+    var now = OffsetDateTime.parse("2026-10-30T00:15:00+09:00");
+    applicant.anonymize(now);
+    assertThat(applicant.getName()).isEqualTo(Applicant.ANONYMIZED_NAME);
+    assertThat(applicant.getReferrer()).isNull();
+    assertThat(applicant.getPhone()).isNull();
+    assertThat(applicant.getEmail()).isNull();
+    assertThat(applicant.getAddress()).isNull();
+    assertThat(applicant.getExperience()).isNull();
+    assertThat(applicant.getDesiredConditions()).isNull();
+    assertThat(applicant.getInterview().notes()).isNull();
+    assertThat(applicant.getInterview().checklist()).isEmpty();
+    assertThat(applicant.getInterview().interviewAt()).isEqualTo(interview().interviewAt());
+    assertThat(applicant.getInterview().interviewer()).isEqualTo("面接担当");
+    assertThat(applicant.getAssignee()).isEqualTo("担当者");
+    assertThat(applicant.getSourceMedia()).isEqualTo("求人誌");
+    assertThat(applicant.getStatus()).isEqualTo(ApplicantStatus.HIRED);
+    assertThat(applicant.getEnrollmentId()).isEqualTo("e1");
+    assertThat(applicant.getAnonymizedAt()).isEqualTo(now);
+    assertThatThrownBy(() -> applicant.anonymize(now)).isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  void anonymizationWithoutInterviewKeepsItAbsent() {
+    var applicant = Applicant.receive(7L, intake());
+    applicant.transition(ApplicantStatus.WITHDRAWN, "辞退");
+    applicant.anonymize(OffsetDateTime.parse("2026-10-30T00:15:00+09:00"));
+    assertThat(applicant.getInterview()).isNull();
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = ApplicantStatus.class,
+      names = {"RECEIVED", "SCREENING", "INTERVIEWED"})
+  void openApplicantsAreNeverAnonymized(ApplicantStatus source) {
+    var applicant = Applicant.receive(7L, intake());
+    ReflectionTestUtils.setField(applicant, "status", source);
+    assertThatThrownBy(() -> applicant.anonymize(OffsetDateTime.now()))
+        .isInstanceOf(IllegalStateException.class);
+    assertThat(applicant.getName()).isEqualTo("応募者");
+  }
+
+  @Test
+  void anonymizedHiredApplicantCannotBeEnrolled() {
+    var applicant = Applicant.receive(7L, intake());
+    ReflectionTestUtils.setField(applicant, "status", ApplicantStatus.HIRED);
+    applicant.anonymize(OffsetDateTime.now());
+    assertThatThrownBy(applicant::requireEnrollable).isInstanceOf(ConflictException.class);
+  }
 }

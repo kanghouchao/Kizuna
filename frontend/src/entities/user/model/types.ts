@@ -29,6 +29,7 @@ export type PermissionCode =
   | 'TASK_MANAGE'
   | 'TASK_EXECUTE'
   | 'POINT_EXPIRE'
+  | 'APPLICANT_ANONYMIZE'
   | 'SURVEY_VIEW'
   | 'SURVEY_MANAGE'
   | 'SURVEY_RECORD'

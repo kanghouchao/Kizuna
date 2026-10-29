@@ -34,6 +34,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.apache5.Apache5HttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -102,6 +103,18 @@ public class PrivateAttachmentStorage implements AutoCloseable {
         throw unavailable();
       }
     } catch (IOException | SdkException exception) {
+      throw unavailable();
+    }
+  }
+
+  /** 実体が既に無い場合も成功とする。削除後に DB 更新が失敗しても、再実行が同じ添付を削除し直せるようにするため。 */
+  public void delete(AttachmentObject object) {
+    requireConfigured();
+    try {
+      client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key(object)).build());
+    } catch (S3Exception exception) {
+      if (exception.statusCode() != 404) throw unavailable();
+    } catch (SdkException exception) {
       throw unavailable();
     }
   }
