@@ -115,6 +115,7 @@ class StoreAuditTest {
   void createRecordsStateVersionAndDomainUnderTheNewStoreId() {
     var request = new StoreCreateDTO();
     request.setName("新店舗");
+    request.setShortName("新");
     request.setDomain("new.example.test");
 
     registry.create(request);
@@ -131,7 +132,7 @@ class StoreAuditTest {
             Map.entry("status", "PREPARING"),
             Map.entry("version", "0"),
             Map.entry("domain", "new.example.test"),
-            Map.entry("changed_fields", "name,domain"));
+            Map.entry("changed_fields", "name,short_name,domain"));
     assertThat(event.toString()).doesNotContain("新店舗");
   }
 
@@ -151,6 +152,7 @@ class StoreAuditTest {
   void renameRecordsFieldNameAndVersionsButNeverNames() {
     var request = new StoreUpdateDTO();
     request.setName("新名称");
+    request.setShortName("旧");
 
     registry.update("7", request);
 
@@ -167,10 +169,25 @@ class StoreAuditTest {
   void sameNameUpdateRecordsNothing() {
     var request = new StoreUpdateDTO();
     request.setName("旧名称");
+    request.setShortName("旧");
 
     registry.update("7", request);
 
     assertThat(recorded).isEmpty();
+  }
+
+  @Test
+  void shortNameChangeRecordsFieldNameOnly() {
+    var request = new StoreUpdateDTO();
+    request.setName("旧名称");
+    request.setShortName("新");
+
+    registry.update("7", request);
+
+    var event = recorded.getFirst();
+    assertThat(event.getAfterValues())
+        .containsOnly(Map.entry("version", "4"), Map.entry("changed_fields", "short_name"));
+    assertThat(event.toString()).doesNotContain("旧名称");
   }
 
   @Test
