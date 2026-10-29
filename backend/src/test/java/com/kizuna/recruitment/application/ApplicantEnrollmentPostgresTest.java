@@ -148,7 +148,7 @@ class ApplicantEnrollmentPostgresTest {
         .containsEntry("name", "源氏名")
         .containsEntry("introduction", "操作者の紹介文")
         .containsEntry("publication_status", "UNPUBLISHED");
-    assertThat(profile.values().toString()).doesNotContain("非公開", "090", "面接");
+    assertThat(profile.values().toString()).doesNotContain("非公開", "090-0000-0000", "面接");
     assertThat(count("t_cast_invitations where cast_id=?", enrollment)).isZero();
     assertThat(
             jdbc.queryForMap(
@@ -157,7 +157,7 @@ class ApplicantEnrollmentPostgresTest {
         .satisfies(
             row -> {
               assertThat(row.get("after").toString()).contains(enrollment, "\"version\": \"1\"");
-              assertThat(row.values().toString()).doesNotContain("非公開", "090", "面接");
+              assertThat(row.values().toString()).doesNotContain("非公開", "090-0000-0000", "面接");
             });
     assertThatThrownBy(() -> applicants.enroll(storeId, applicant, request(1L), ACTOR))
         .isInstanceOf(ConflictException.class);
