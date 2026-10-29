@@ -92,7 +92,9 @@ class AttributionMaterializerTest {
             OCCURRED_AT,
             10L,
             new AttributionMaterializer.Completion(12000, 300));
-    assertThat(result).isEqualTo(new AttributionMaterializer.Result(120, 500L));
+    assertThat(result.grantedPoints()).isEqualTo(120);
+    assertThat(result.benefitPoints()).isEqualTo(500L);
+    assertThat(result.attribution().getId()).isEqualTo(88L);
     var order = inOrder(ranks, ledger, attributions, benefits);
     order.verify(ranks).lockForPromotion(7L);
     order.verify(ledger).useForOrder(7L, "o1", 3L, 300, 10L);
@@ -131,7 +133,10 @@ class AttributionMaterializerTest {
             OCCURRED_AT,
             10L,
             new AttributionMaterializer.ReceiptClaim(90));
-    assertThat(result).isEqualTo(new AttributionMaterializer.Result(90, 500L));
+    assertThat(result.rankChanged()).isFalse();
+    assertThat(result.grantedPoints()).isEqualTo(90);
+    assertThat(result.benefitPoints()).isEqualTo(500L);
+    assertThat(result.attribution().getId()).isEqualTo(88L);
     var order = inOrder(ranks, ledger, attributions, benefits);
     order.verify(ranks).lockForPromotion(7L);
     var saved = ArgumentCaptor.forClass(OrderAttribution.class);
@@ -165,10 +170,11 @@ class AttributionMaterializerTest {
       when(ledger.grantPlannedForOrder(7L, "o1", 3L, 0, 10L)).thenReturn(null);
     }
     when(benefits.grantVisitBenefits(7L, "o1", 3L, BUSINESS_DATE, 10L)).thenReturn(500L);
-    assertThat(
-            materializer.materialize(
-                7L, "123456789012", "o1", 3L, BUSINESS_DATE, OCCURRED_AT, 10L, trigger))
-        .isEqualTo(new AttributionMaterializer.Result(0, 500));
+    var result =
+        materializer.materialize(
+            7L, "123456789012", "o1", 3L, BUSINESS_DATE, OCCURRED_AT, 10L, trigger);
+    assertThat(result.grantedPoints()).isZero();
+    assertThat(result.benefitPoints()).isEqualTo(500L);
     verify(attributions).save(any());
     verify(ranks).syncOnAttribution(7L, materializer, 88L, null);
     verify(ledger, never()).useForOrder(anyLong(), any(), any(), anyInt(), any());
@@ -204,7 +210,7 @@ class AttributionMaterializerTest {
             10L,
             new AttributionMaterializer.Completion(12000, 0));
 
-    assertThat(result).isEqualTo(new AttributionMaterializer.Result(0, 0L));
+    assertThat(result).isEqualTo(new AttributionMaterializer.Result(0, 0L, null, false));
     verify(ranks).lockForPromotion(7L);
     verify(attributions, never()).save(any());
     verify(ledger, never()).grantForOrder(anyLong(), any(), any(), anyInt(), any());

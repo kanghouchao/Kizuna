@@ -206,7 +206,7 @@ class OrderServiceTest {
         .thenReturn(Set.of(STAFF_ROLE_ID));
     lenient()
         .when(materializer.materialize(anyLong(), any(), any(), any(), any(), any(), any(), any()))
-        .thenReturn(new AttributionMaterializer.Result(0, 0));
+        .thenReturn(new AttributionMaterializer.Result(0, 0, null, false));
   }
 
   private User receptionist(UserType userType, StoreScopeType scopeType, Set<Long> storeIds) {
@@ -1776,7 +1776,7 @@ class OrderServiceTest {
             any(),
             eq(ACTOR_ID),
             any()))
-        .thenReturn(new AttributionMaterializer.Result(120, 500));
+        .thenReturn(new AttributionMaterializer.Result(120, 500, null, false));
     stubQuote(new PointQuote(100000L, 100, 120, null));
     stubWriteBackResponse();
 
@@ -1814,7 +1814,7 @@ class OrderServiceTest {
             any(),
             eq(ACTOR_ID),
             any()))
-        .thenReturn(new AttributionMaterializer.Result(120, 500));
+        .thenReturn(new AttributionMaterializer.Result(120, 500, null, false));
     stubQuote(new PointQuote(100000L, 100, 120, null));
     stubWriteBackResponse();
 
@@ -1840,7 +1840,7 @@ class OrderServiceTest {
             any(),
             eq(ACTOR_ID),
             any()))
-        .thenReturn(new AttributionMaterializer.Result(0, 0));
+        .thenReturn(new AttributionMaterializer.Result(0, 0, null, false));
     stubQuote(new PointQuote(0L, 100, 0, null));
     stubWriteBackResponse();
 

@@ -62,7 +62,7 @@ class AttributionMaterializerTransactionTest {
       new TransactionTemplate(transactions)
           .executeWithoutResult(
               status -> {
-                assertThat(materialize(proxy)).isEqualTo(new AttributionMaterializer.Result(0, 0));
+                assertThat(materialize(proxy).grantedPoints()).isZero();
               });
       assertThat(transactions.commits).isEqualTo(1);
       verify(ranks).lockForPromotion(7L);
