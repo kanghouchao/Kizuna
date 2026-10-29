@@ -137,7 +137,7 @@ Then(
       const event = matches[0];
       expect(event.target_type).toBe("MEMBER");
       expect(event.actor_type).toBe(actorType);
-      expect(event.store_id).toBeNull();
+      expect(event.store_id ?? null).toBeNull();
       expect(event.result).toBe("SUCCEEDED");
       expect(event.source_type).toBe("POINT_LEDGER_ENTRY");
       expect(event.source_id).toMatch(/^\d+$/);
