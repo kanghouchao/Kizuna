@@ -33,6 +33,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -679,10 +680,18 @@ class PointLedgerServiceTest {
                 credit(3L, Integer.MAX_VALUE, null)));
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L, 2L, 3L)))
         .thenReturn(List.of());
+    var nextId = new AtomicLong(SAVED_ENTRY_ID);
+    when(pointEntryRepository.save(any()))
+        .thenAnswer(
+            invocation -> {
+              PointEntry saved = invocation.getArgument(0);
+              saved.setId(nextId.getAndIncrement());
+              return saved;
+            });
 
     var split = pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会");
     assertThat(split.points()).isEqualTo(2L * Integer.MAX_VALUE + 10);
-    assertThat(split.firstEntryId()).contains(SAVED_ENTRY_ID);
+    assertThat(split.firstEntryId()).as("先頭の仕訳の ID").contains(SAVED_ENTRY_ID);
 
     verify(pointEntryRepository, times(3)).save(savedEntry.capture());
     assertThat(savedEntry.getAllValues())
