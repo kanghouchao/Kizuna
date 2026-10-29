@@ -9,6 +9,7 @@ import {
   findStoreIdByDomain,
   getAuthorizedStores,
   loginUser,
+  revealSidebarLink,
 } from './store-api';
 
 // initial-setup プロジェクトはこのファイルだけを読む（他の steps の無条件 After は未作成の店長で
@@ -52,7 +53,8 @@ Then('自動でログインしてダッシュボードへ遷移する', async ({
 
 // 遷移はサイドバー経由にし、メニューに出ていること自体も到達の条件に含める。
 When('サイドバーの {string} から {string} を開く', async ({ page }, linkName: string, path: string) => {
-  await page.locator('aside').getByRole('link', { name: linkName, exact: true }).click();
+  const link = await revealSidebarLink(page, aside => aside.getByRole('link', { name: linkName, exact: true }));
+  await link.click();
   await expect(page).toHaveURL(new RegExp(`${path}/?$`), { timeout: 15000 });
 });
 

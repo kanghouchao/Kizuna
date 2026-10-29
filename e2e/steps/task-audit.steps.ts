@@ -1,7 +1,14 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createPermissionRole, createStaffFixture, loginUser, STORE1_ID } from './store-api';
+import {
+  createPermissionRole,
+  createStaffFixture,
+  expectSidebarLinkAbsentEverywhere,
+  loginUser,
+  revealSidebarLink,
+  STORE1_ID,
+} from './store-api';
 const { Given, When, Then } = createBdd();
 let admin = '';
 let operator = '';
@@ -54,8 +61,8 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
     await restrictedPage.getByRole('button', { name: 'ログイン', exact: true }).click();
     await expect(restrictedPage).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
     await expect(restrictedPage.locator('aside').locator('a[href="/admin/dashboard"]')).toBeVisible();
-    await expect(restrictedPage.locator('aside').locator('a[href="/admin/task-executions"]')).toHaveCount(0);
-    await expect(restrictedPage.locator('aside').locator('a[href="/admin/audit-events"]')).toHaveCount(0);
+    await expectSidebarLinkAbsentEverywhere(restrictedPage, aside => aside.locator('a[href="/admin/task-executions"]'));
+    await expectSidebarLinkAbsentEverywhere(restrictedPage, aside => aside.locator('a[href="/admin/audit-events"]'));
   } finally {
     await restrictedPage.close();
   }
@@ -120,8 +127,8 @@ Then('実行履歴と変更前後の監査を画面で確認できる', async ({
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
-  await expect(page.locator('aside').locator('a[href="/admin/audit-events"]')).toBeVisible();
-  await page.locator('aside').locator('a[href="/admin/task-executions"]').click();
+  await expect(await revealSidebarLink(page, aside => aside.locator('a[href="/admin/audit-events"]'))).toBeVisible();
+  await (await revealSidebarLink(page, aside => aside.locator('a[href="/admin/task-executions"]'))).click();
   await expect(page.getByRole('heading', { name: '処理の実行履歴' })).toBeVisible();
   await page.getByRole('combobox', { name: '実行主体' }).click();
   await page.getByRole('option', { name: serviceName }).click();

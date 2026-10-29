@@ -1,7 +1,7 @@
-import { expect, Locator, Page } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createCast, deleteCast, loginAsStoreAdmin, storeSwitchToggle, switchStoreInHeader } from './store-api';
+import { createCast, deleteCast, loginAsStoreAdmin, switchStoreOnRail } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -9,26 +9,12 @@ const { Given, When, Then, After } = createBdd();
 // X-Store-ID 注入により操作する。cookie はオリジン別に分離されるため、遷移先は常に APP_URL を用いる。
 const LOGIN_URL = `${APP_URL}/auth/login`;
 
-// 店舗業務 URL は店舗 id を持たず、表示店舗はヘッダの店舗切替が決める。
+// 店舗業務 URL は店舗 id を持たず、表示店舗はサイドバーのレールが決める。
 const CASTS_URL = `${APP_URL}/store/casts`;
 
 // 播種したキャストの id / 一意名。scenario 2 の Given でのみ設定し、断言と後始末で共有する。
 let createdCastId = '';
 let createdCastName = '';
-
-/** 店舗切替ドロップダウンを開いた状態にし、開いたメニュー要素を返す（既に開いていれば再クリックしない）。 */
-async function openStoreSwitch(page: Page): Promise<Locator> {
-  const toggle = storeSwitchToggle(page);
-  // stores() の取得完了までトグルは描画されない。toBeEnabled は出現も併せて待つため、
-  // これで一覧ロード済みを待ってから開くことになる。
-  await expect(toggle).toBeEnabled();
-  const menu = page.getByRole('menu');
-  if ((await menu.count()) === 0) {
-    await toggle.click();
-    await expect(menu).toBeVisible();
-  }
-  return menu;
-}
 
 Given('統一ログイン画面を開く', async ({ page }) => {
   await page.goto(LOGIN_URL);
@@ -56,21 +42,6 @@ Then('ダッシュボードへ遷移する', async ({ page }) => {
   await expect(page).toHaveURL(/\/admin\/dashboard\/?$/, { timeout: 15000 });
 });
 
-Then(
-  '店舗切替に {string} と {string} が表示される',
-  async ({ page }, first: string, second: string) => {
-    const menu = await openStoreSwitch(page);
-    await expect(menu.getByText(first, { exact: true })).toBeVisible();
-    await expect(menu.getByText(second, { exact: true })).toBeVisible();
-  }
-);
-
-Then('店舗切替が表示されない', async ({ page }) => {
-  // ヘッダの描画完了を待ってから欠如を断言する（未描画のまま 0 件になる空振りを避ける）。
-  await expect(page.getByRole('button', { name: 'アカウントメニュー' })).toBeVisible();
-  await expect(storeSwitchToggle(page)).toHaveCount(0);
-});
-
 Then('キャスト一覧に {string} が表示される', async ({ page }, _label: string) => {
   // {string} は可読性のための表記。実際の照合は一意名（createdCastName）で行う。
   await page.goto(CASTS_URL, { waitUntil: 'domcontentloaded' });
@@ -79,8 +50,8 @@ Then('キャスト一覧に {string} が表示される', async ({ page }, _labe
   await expect(page.getByText(createdCastName, { exact: true })).toBeVisible({ timeout: 15000 });
 });
 
-When('店舗を {string} に切り替える', async ({ page }, storeName: string) => {
-  await switchStoreInHeader(page, storeName);
+When('レールで店舗を {string} に切り替える', async ({ page }, storeName: string) => {
+  await switchStoreOnRail(page, storeName);
 });
 
 Then('キャスト一覧に {string} が表示されない', async ({ page }, _label: string) => {

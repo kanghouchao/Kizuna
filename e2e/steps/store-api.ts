@@ -48,26 +48,73 @@ export async function loginViaUiAndEnterStore(page: Page): Promise<string> {
   return STORE1_ID;
 }
 
-// ヘッダのドロップダウンのうち店舗切替だけはアクセシブル名が現在店舗名（動的値）で aria-label を
-// 持たないため、その欠如で一意に特定する。授権店舗が 1 店舗だけなら描画されない。
-export const storeSwitchToggle = (page: Page): Locator =>
-  page.locator("header button[aria-haspopup]:not([aria-label])");
+const sidebar = (page: Page): Locator => page.locator("aside");
 
-/** ヘッダの店舗切替で現在店舗を変える。切替は URL を変えないため、トグルの店舗名で完了を待つ。 */
-export async function switchStoreInHeader(page: Page, storeName: string): Promise<void> {
-  const toggle = storeSwitchToggle(page);
-  await expect(toggle).toBeEnabled();
-  // 項目はキーボードで選ぶ。pointer だと開いた直後の位置合わせで項目が外れ、押下が宙に浮くことがある。
-  const menu = page.getByRole("menu");
-  if (!(await menu.isVisible())) {
-    await toggle.focus();
-    await toggle.press("Enter");
+// レールのボタン（グループと各店舗）。文脈が 1 つしか無い利用者にはレールが無く、0 件になる。
+const railButtons = (page: Page): Locator =>
+  sidebar(page).locator("button[aria-pressed]");
+
+/**
+ * メニューとレールが出揃うまで待つ。ダッシュボードは文脈に関係なく最上段に出るので、
+ * パネルが描かれた（授権店舗の解決後）ことの目印にできる。
+ */
+async function waitSidebarReady(page: Page): Promise<void> {
+  await expect(
+    sidebar(page).locator('a[href="/admin/dashboard"]'),
+  ).toBeVisible({ timeout: 15000 });
+}
+
+/** レールで文脈（"グループ" または店名）を選び、選択表示になるまで待つ。 */
+export async function selectRailContext(
+  page: Page,
+  label: string,
+): Promise<void> {
+  await waitSidebarReady(page);
+  const button = sidebar(page).getByRole("button", {
+    name: label,
+    exact: true,
+  });
+  await button.click();
+  await expect(button).toHaveAttribute("aria-pressed", "true");
+}
+
+/** レールで現在店舗を変える。同じ画面が再マウントされるので、選択表示で完了を待つ。 */
+export const switchStoreOnRail = selectRailContext;
+
+/**
+ * 指定のリンクを含む文脈を選んで、そのリンクの Locator を返す。
+ * 表示中のパネル、グループ、各店舗の順に探す（店舗の切替は現在店舗を変えるので最後に回す）。
+ */
+export async function revealSidebarLink(
+  page: Page,
+  link: (aside: Locator) => Locator,
+): Promise<Locator> {
+  await waitSidebarReady(page);
+  const aside = sidebar(page);
+  if ((await link(aside).count()) > 0) return link(aside);
+  const buttons = railButtons(page);
+  const count = await buttons.count();
+  for (let i = 0; i < count; i++) {
+    await buttons.nth(i).click();
+    if ((await link(aside).count()) > 0) return link(aside);
   }
-  const item = menu.getByRole("menuitem", { name: storeName, exact: true });
-  await expect(item).toBeVisible({ timeout: 15000 });
-  await item.focus();
-  await item.press("Enter");
-  await expect(toggle).toContainText(storeName, { timeout: 15000 });
+  return link(aside);
+}
+
+/** どの文脈のパネルにも、そのリンクが無いことを断言する。 */
+export async function expectSidebarLinkAbsentEverywhere(
+  page: Page,
+  link: (aside: Locator) => Locator,
+): Promise<void> {
+  await waitSidebarReady(page);
+  const aside = sidebar(page);
+  await expect(link(aside)).toHaveCount(0);
+  const buttons = railButtons(page);
+  const count = await buttons.count();
+  for (let i = 0; i < count; i++) {
+    await buttons.nth(i).click();
+    await expect(link(aside)).toHaveCount(0);
+  }
 }
 
 /**

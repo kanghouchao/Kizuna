@@ -5,7 +5,7 @@ import {
   acceptCastInvitation, acceptExistingCastInvitation, cancelOrder,
   completeAgreedOrder, correctOrderExtension, createAgreedOrder, createCast, createCourse,
   getAuthorizedStores, getOrder, invalidateOrder, issueCastInvitation,
-  loginAsStoreAdmin, loginUser, STORE1_ID, suspendCast, switchStoreInHeader, withdrawCast,
+  loginAsStoreAdmin, loginUser, STORE1_ID, suspendCast, switchStoreOnRail, withdrawCast,
 } from './store-api';
 
 const { Given, When, Then } = createBdd();
@@ -129,7 +129,7 @@ When('横断照会者が受注照会から現在店舗の月次給与明細で�
   await page.goto(APP_URL + '/admin/orders');
   await page.getByRole('link', { name: '月次給与明細', exact: true }).click();
   await expect(page).toHaveURL(/\/store\/orders\/monthly-remunerations$/);
-  if (readerEmail === allReaderEmail) await switchStoreInHeader(page, storeName);
+  if (readerEmail === allReaderEmail) await switchStoreOnRail(page, storeName);
   // 横断照会者は日別（受注の担当者の画面）を持たない。
   await expect(page.getByRole('button', { name: '日別', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '照会', exact: true }).click();
@@ -279,7 +279,7 @@ Then('横断照会の月次画面は失敗から再試行でき店舗切替で�
   await page.unroute(path);
   await page.getByRole('button', { name: '再試行', exact: true }).click();
   await expect(page.getByLabel('月次報酬合計')).toHaveText('¥14,000');
-  await switchStoreInHeader(page, secondStoreName);
+  await switchStoreOnRail(page, secondStoreName);
   await expect(page.getByLabel('月次報酬合計')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '訂正履歴', exact: true })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'キャスト本人', exact: true })).toContainText('源氏名で検索');
