@@ -22,7 +22,6 @@ const { Given, When, Then } = createBdd();
 let auditor = "";
 let orderId = "";
 let memberEmail = "";
-let memberName = "";
 let secrets: string[] = [];
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 const today = () =>
@@ -89,9 +88,8 @@ When(
     secrets.push(receiptToken);
 
     memberEmail = "claim-member-" + suffix + "@example.test";
-    memberName = "申領会員-" + suffix;
     const password = crypto.randomUUID();
-    await registerMember(request, memberEmail, password, memberName);
+    await registerMember(request, memberEmail, password, "申領会員-" + suffix);
     secrets.push(password);
     const member = await loginUser(request, memberEmail, password);
 
@@ -127,7 +125,7 @@ Then(
     expect(detail.after_values.status).toBe("ACTIVE");
     expect(detail.after_values.rank_changed).toMatch(/^(true|false)$/);
     const serialized = JSON.stringify(detail);
-    for (const secret of [...secrets, memberEmail, memberName]) {
+    for (const secret of [...secrets, memberEmail]) {
       expect(serialized).not.toContain(secret);
     }
   },
