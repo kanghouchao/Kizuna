@@ -91,7 +91,7 @@ describe('apiClient 401/403 interceptor', () => {
   });
 
   it('clears session and redirects on 403 when the session-kind cookie holds a legacy role value (旧トークンのデッドロック回避)', async () => {
-    sessionKindValue = 'STORE_MANAGER';
+    sessionKindValue = 'MANAGER';
     const removeSpy = jest.spyOn(Cookies, 'remove');
 
     await withRejectingAdapter(403, () => apiClient.get('/orders'));

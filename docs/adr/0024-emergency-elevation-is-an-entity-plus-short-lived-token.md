@@ -12,7 +12,7 @@ HQ の日常操作からの撤退（ADR 0021）後も、店長不在時の緊急
 
 - **器は緊急昇格実体（`t_emergency_elevations`）+ 短命な昇格トークン。** 発動時に通常 claim へ昇格分を重ねた
   トークンを再発行する。時限のロール授与は採らない。
-- **自己昇格は可、入口は新設権限 `EMERGENCY_ELEVATE`**（Console.PLATFORM・既定授与 HQ_ADMIN）。誰が昇格できるかは
+- **自己昇格は可、入口は新設権限 `EMERGENCY_ELEVATE`**（Console.PLATFORM・既定授与 ADMIN）。誰が昇格できるかは
   ロール定義（ADR 0021 面B）の既有語彙に残す。
 - **一発動一店舗**。昇格 claim は指定した 1 店舗ぶんの Console.STORE 全権限（`storeBridge` 語義を含む）を有効化する。
   他店舗への同操作は集合作用域の検証が拒む。
