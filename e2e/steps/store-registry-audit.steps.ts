@@ -10,7 +10,7 @@ import {
   loginUser,
 } from "./store-api";
 
-const { Given, When, Then } = createBdd();
+const { Given, When, Then, After } = createBdd();
 let operator = "",
   limited = "",
   auditor = "",
@@ -195,10 +195,15 @@ Then(
       ),
     );
     expect(everything).not.toContain(secretName);
-
-    const cleanup = await request.delete(`/api/stores/${untouched}`, {
-      headers: bearer(operator),
-    });
-    expect(cleanup.status()).toBe(204);
   },
 );
+
+// 稼働化した店舗は仕様上削除できないため残る。それ以外の作成物はここで戻す。
+After({ tags: "@store-registry-audit" }, async ({ request }) => {
+  if (!operator || !untouched) return;
+  const cleanup = await request.delete(`/api/stores/${untouched}`, {
+    headers: bearer(operator),
+  });
+  expect(cleanup.status()).toBe(204);
+  untouched = "";
+});

@@ -31,6 +31,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
   @Query(value = "select id from t_stores where id = :id for key share", nativeQuery = true)
   Optional<Long> lockAgainstDeletion(@Param("id") Long id);
 
+  // 削除の前置判定・削除前 snapshot・連鎖件数を、同じ店舗行に対する一貫した読みにするための排他。
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select s from Store s where s.id = :id")
   Optional<Store> findByIdForUpdate(@Param("id") Long id);
@@ -60,6 +61,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
            where c.contype = 'f'
              and c.confrelid = 't_stores'::regclass
              and c.confdeltype = 'c'
+             and cardinality(c.conkey) = 1
            order by 1
           """,
       nativeQuery = true)
