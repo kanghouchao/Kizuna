@@ -35,11 +35,17 @@ public class SystemConfigServiceImpl implements SystemConfigService {
   private static final DateTimeFormatter TIME_FORMAT =
       DateTimeFormatter.ofPattern("HH:mm").withResolverStyle(ResolverStyle.STRICT);
 
+  /** 保持期間の設定。負数は「既に満了」と読め、過大な値は満了日の計算が日付の範囲を超えるため 0〜100 年に限る。 */
+  private static final String RETENTION_MONTHS_PREFIX = "applicant_retention_";
+
+  private static final int MAX_RETENTION_MONTHS = 1200;
+
   /** 監査に前後値を残してよい設定。ここに無い key（秘密を含む）は値を持たず、変化したことだけを残す。 */
   private static final Set<String> VALUE_AUDITED_KEYS =
       Set.of("smtp_host", "smtp_port", "smtp_username", "smtp_from", "line_channel_id");
 
-  private static final List<String> VALUE_AUDITED_PREFIXES = List.of("point_", "member_rank_");
+  private static final List<String> VALUE_AUDITED_PREFIXES =
+      List.of("point_", "member_rank_", RETENTION_MONTHS_PREFIX);
 
   private final SystemConfigRepository systemConfigRepository;
   private final SystemConfigMapper systemConfigMapper;
@@ -169,6 +175,30 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             intValue("member_rank_gold_granted_points", 0)));
   }
 
+  /** 保持期間も都度読む。理由は {@link #pointSettings} と同じ。 */
+  @Override
+  @Transactional(readOnly = true)
+  public ApplicantRetentionSettings applicantRetentionSettings() {
+    return new ApplicantRetentionSettings(
+        monthsValue("applicant_retention_rejected_months"),
+        monthsValue("applicant_retention_withdrawn_months"),
+        monthsValue("applicant_retention_hired_months"));
+  }
+
+  /** 保持期間の読み取り。未設定・範囲外を含む不正値は null（何もしない）へ倒す — 匿名化は取り返しがつかないため、疑わしい値で消す側へ倒さない。 */
+  private Integer monthsValue(String configKey) {
+    String raw = rawValue(configKey);
+    if (raw.isBlank()) {
+      return null;
+    }
+    try {
+      int months = Integer.parseInt(raw.trim());
+      return months < 0 || months > MAX_RETENTION_MONTHS ? null : months;
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
   /** 数値設定の読み取り。未設定・不正値は既定値へ倒す（更新時に NUMBER として int の範囲まで検証済みのため不正値は通常は到達しない）。 */
   private int intValue(String configKey, int fallback) {
     String raw = rawValue(configKey);
@@ -207,6 +237,11 @@ public class SystemConfigServiceImpl implements SystemConfigService {
       if (parsed < Integer.MIN_VALUE || parsed > Integer.MAX_VALUE) {
         throw new ServiceException(
             "数値は -2147483648 から 2147483647 の範囲で指定してください: " + config.getConfigKey());
+      }
+      if (config.getConfigKey().startsWith(RETENTION_MONTHS_PREFIX)
+          && (parsed < 0 || parsed > MAX_RETENTION_MONTHS)) {
+        throw new ServiceException(
+            "保持期間は 0 から " + MAX_RETENTION_MONTHS + " か月の整数で指定してください: " + config.getConfigKey());
       }
     }
     // 解釈できない時刻は読み手が 00:00 へ倒すため、保存だけが成功して暦日と同じ挙動へ静かに入れ替わる。

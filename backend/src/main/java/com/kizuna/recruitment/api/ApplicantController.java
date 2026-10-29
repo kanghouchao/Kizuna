@@ -49,7 +49,7 @@ public class ApplicantController {
   @GetMapping("/policy")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW')")
   public RecruitmentPolicyResponse policy() {
-    return RecruitmentPolicyResponse.unconfigured();
+    return applicants.policy();
   }
 
   @GetMapping("/{id}")

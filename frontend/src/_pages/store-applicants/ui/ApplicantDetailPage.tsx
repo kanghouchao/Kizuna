@@ -288,9 +288,31 @@ export default function ApplicantDetailPage() {
         ) : policy.isLoading ? (
           <p>読み込み中...</p>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            保存期間・匿名化期限は未設定です。自動削除は行いません。
-          </p>
+          policy.data && (
+            <>
+              <dl className="grid gap-6 md:grid-cols-3">
+                {(
+                  [
+                    ['REJECTED', policy.data.retention_periods.rejected_months],
+                    ['WITHDRAWN', policy.data.retention_periods.withdrawn_months],
+                    ['HIRED', policy.data.retention_periods.hired_months],
+                  ] as const
+                ).map(([status, months]) => (
+                  <div key={status}>
+                    <dt className="text-sm text-muted-foreground">
+                      {applicantStatusLabels[status]}
+                    </dt>
+                    <dd className="mt-1">
+                      {months === null ? '自動匿名化しない' : `${months} か月後に匿名化`}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="text-sm text-muted-foreground">
+                期間は終端状態へ確定した時点から数えます。保持期間はシステム設定で管理します。
+              </p>
+            </>
+          )
         )}
       </section>
       <ConfirmDialog

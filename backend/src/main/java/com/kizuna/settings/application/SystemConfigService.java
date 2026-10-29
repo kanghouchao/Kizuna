@@ -26,4 +26,7 @@ public interface SystemConfigService {
 
   /** 会員ランクの昇格閾値の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
   MemberRankSettings memberRankSettings();
+
+  /** 応募者の保持期間の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
+  ApplicantRetentionSettings applicantRetentionSettings();
 }

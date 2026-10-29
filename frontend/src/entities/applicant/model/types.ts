@@ -66,8 +66,13 @@ export interface ApplicantHistory {
   created_at: string;
   reason: string;
 }
+// 終端状態ごとの保持期間（月数）。null は未設定で、自動匿名化しない
 export interface RecruitmentPolicy {
-  retention_periods: Record<string, number> | null;
+  retention_periods: {
+    rejected_months: number | null;
+    withdrawn_months: number | null;
+    hired_months: number | null;
+  };
 }
 export function allowedApplicantTransitions(status: ApplicantStatus): ApplicantStatus[] {
   switch (status) {
