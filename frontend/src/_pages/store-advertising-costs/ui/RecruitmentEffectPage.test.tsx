@@ -76,7 +76,7 @@ it('費用だけ・入店だけ・媒体未入力と定着の可判定を区別�
   render(<RecruitmentEffectPage month="2026-05" />);
   const matched = await screen.findByRole('row', { name: /^求人A/ });
   expect(within(matched).getByText('約 15,000.00円')).toBeVisible();
-  expect(within(matched).getByText('1人 / 可判定 2人')).toBeVisible();
+  expect(within(matched).getByText('1 / 2人')).toBeVisible();
   expect(within(matched).getAllByText('判定時点前')).toHaveLength(2);
   const hireOnly = screen.getByRole('row', { name: /^入店だけ/ });
   expect(within(hireOnly).getByText('未登録')).toBeVisible();
@@ -84,6 +84,7 @@ it('費用だけ・入店だけ・媒体未入力と定着の可判定を区別�
   const costOnly = screen.getByRole('row', { name: /^費用だけ/ });
   expect(within(costOnly).getByText('未算出')).toBeVisible();
   expect(within(costOnly).getByText('入店人数が0人')).toBeVisible();
+  expect(within(costOnly).getAllByText('対象なし')).toHaveLength(3);
   expect(screen.getByLabelText('採用効果の月合計')).toHaveTextContent('媒体未入力の入店：1人');
   expect(screen.getByText(/ROIを示しません/)).toBeVisible();
   expect(screen.getByText(/2026-07-15/)).toBeVisible();

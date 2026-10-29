@@ -212,6 +212,59 @@ export async function createUnpublishedCast(
   return (await response.json()).id;
 }
 
+/**
+ * 応募受付 → 面接記録 → 面接済 → 採用確定 → 在籍登録を API で行い、在籍 ID を返す
+ * （RECRUITMENT_VIEW / MANAGE / DECIDE と CAST_MANAGE を要する）。
+ */
+export async function createEnrolledHire(
+  request: APIRequestContext,
+  token: string,
+  hire: { sourceType: "DIRECT" | "MEDIA" | "REFERRAL" | "SCOUT"; sourceMedia: string | null; startedOn: string },
+  storeId: string = STORE1_ID,
+): Promise<string> {
+  const headers = { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` };
+  const introduced = hire.sourceType === "REFERRAL" || hire.sourceType === "SCOUT";
+  let response = await request.post("/api/applicants", {
+    headers,
+    data: {
+      name: "採用効果の検証応募者",
+      channel: "PHONE",
+      source_type: hire.sourceType,
+      source_media: hire.sourceMedia,
+      referrer: introduced ? "検証紹介者" : null,
+    },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  let detail = await response.json();
+  const path = `/api/applicants/${detail.id}`;
+  response = await request.put(`${path}/interview`, {
+    headers,
+    data: { version: detail.version, interview_at: "2026-10-01T10:30:00+09:00", interviewer: "面接担当者", checklist: {} },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  detail = await response.json();
+  for (const status of ["SCREENING", "INTERVIEWED"]) {
+    response = await request.post(`${path}/transitions`, {
+      headers,
+      data: { version: detail.version, status, reason: "選考を進める" },
+    });
+    expect(response.status(), await response.text()).toBe(200);
+    detail = await response.json();
+  }
+  response = await request.post(`${path}/decision`, {
+    headers,
+    data: { version: detail.version, status: "HIRED", reason: "採用効果の検証" },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  detail = await response.json();
+  response = await request.post(`${path}/enrollment`, {
+    headers,
+    data: { version: detail.version, name: "採用効果の検証在籍", started_on: hire.startedOn },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).enrollment_id;
+}
+
 export async function setCastPublication(
   request: APIRequestContext,
   token: string,

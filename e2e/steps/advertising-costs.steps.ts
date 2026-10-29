@@ -21,6 +21,8 @@ import {
   cancelOrder,
   submitConfirmedStoreRequest,
   switchStoreOnRail,
+  createEnrolledHire,
+  withdrawCast,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const base = "/api/advertising-costs",
@@ -104,7 +106,8 @@ Given(
     storeName = stores.find((s) => String(s.id) === storeId)!.name;
     const suffix = randomUUID();
     password = randomUUID();
-    month = `${($testInfo.title.includes("受注あたり") ? 1980 : $testInfo.title.includes("媒体別") ? 1970 : $testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
+    const effects = $testInfo.title.includes("採用効果");
+    month = `${(effects ? 1990 : $testInfo.title.includes("受注あたり") ? 1980 : $testInfo.title.includes("媒体別") ? 1970 : $testInfo.title.includes("ページ") ? 1950 : $testInfo.title.includes("応答") ? 1960 : 1940) - $testInfo.retry}-09`;
     const tokens: string[] = [];
     for (const [index, perms] of [
       [
@@ -112,12 +115,22 @@ Given(
         "ADVERTISING_COST_MANAGE",
         "ADVERTISING_COST_EXPORT",
         ...($testInfo.title.includes("受注あたり") ? ["ORDER_MANAGE"] : []),
+        ...(effects
+          ? [
+              "RECRUITMENT_VIEW",
+              "RECRUITMENT_MANAGE",
+              "RECRUITMENT_DECIDE",
+              "CAST_MANAGE",
+            ]
+          : []),
       ],
       ["ADVERTISING_COST_VIEW"],
       ["ADVERTISING_COST_EXPORT"],
       ...($testInfo.title.includes("受注あたり")
         ? [["ADVERTISING_COST_VIEW", "ORDER_MANAGE"]]
-        : []),
+        : effects
+          ? [["RECRUITMENT_VIEW"]]
+          : []),
     ].entries()) {
       const role = await createPermissionRole(
         request,
@@ -1333,5 +1346,140 @@ Then(
     await expect(
       page.getByRole("cell", { name: "=検証媒体0001", exact: true }),
     ).toBeVisible();
+  },
+);
+
+const effectBase = "/api/advertising-recruitment-effects";
+let effectMedia = "";
+When("採用広告費と媒体別の入店と退店の記録を用意する", async ({ request }) => {
+  effectMedia = `求人-${randomUUID()}`;
+  const startedOn = `${month}-10`;
+  await add(request, {
+    category: "RECRUITMENT",
+    media_name: effectMedia,
+    amount: 30000,
+  });
+  await add(request, {
+    category: "RECRUITMENT",
+    media_name: `${effectMedia}-費用だけ`,
+    amount: 500,
+  });
+  const hire = (sourceType: "MEDIA" | "REFERRAL", sourceMedia: string | null) =>
+    createEnrolledHire(request, token, { sourceType, sourceMedia, startedOn }, storeId);
+  await hire("MEDIA", effectMedia);
+  const leaver = await hire("MEDIA", effectMedia);
+  await hire("MEDIA", `${effectMedia}-入店だけ`);
+  await hire("REFERRAL", null);
+  await createEnrolledHire(
+    request,
+    token,
+    { sourceType: "MEDIA", sourceMedia: effectMedia, startedOn: `${month}-30` },
+    storeId,
+  );
+  await withdrawCast(request, token, leaver, storeId);
+  // 退店日は API では当日にしかならないため、2 か月時点と 3 か月時点の間へ寄せる。
+  if (process.env.PGHOST !== "database")
+    throw new Error("専用 E2E DB でのみ実行できます");
+  const db = new Client({ application_name: "recruitment-effect-bdd" });
+  await db.connect();
+  try {
+    await db.query(
+      "UPDATE t_cast_enrollments SET ended_at = $2::date + interval '12 hours' WHERE id = $1",
+      [leaver, `${Number(month.slice(0, 4))}-12-01`],
+    );
+  } finally {
+    await db.end();
+  }
+});
+Then(
+  "採用効果の行形状と未算出理由と定着の可判定が守られる",
+  async ({ request, page, $testInfo }) => {
+    const read = (t = token, store = storeId) =>
+      request.get(effectBase, {
+        headers: h(t, store),
+        params: { month, size: 100 },
+      });
+    const response = await read();
+    expect(response.status(), await response.text()).toBe(200);
+    const report = await response.json();
+    expect(report).toMatchObject({
+      month,
+      cost_entry_count: 2,
+      recorded_recruitment_amount: 30500,
+      hire_count: 5,
+      unnamed_media_hire_count: 1,
+    });
+    const row = (name: string) =>
+      report.rows.content.find((r: any) => r.media_name === name);
+    expect(row(effectMedia)).toEqual({
+      media_name: effectMedia,
+      cost_entry_count: 1,
+      recorded_recruitment_amount: 30000,
+      hire_count: 3,
+      cost_per_hire: "10000.00",
+      calculation_status: "CALCULATED",
+      retention: [
+        { months: 2, judgeable_count: 3, retained_count: 3 },
+        { months: 3, judgeable_count: 3, retained_count: 2 },
+        { months: 4, judgeable_count: 3, retained_count: 2 },
+      ],
+    });
+    expect(row(`${effectMedia}-費用だけ`)).toMatchObject({
+      hire_count: 0,
+      cost_per_hire: null,
+      calculation_status: "NO_HIRES",
+    });
+    expect(row(`${effectMedia}-入店だけ`)).toMatchObject({
+      recorded_recruitment_amount: null,
+      hire_count: 1,
+      cost_per_hire: null,
+      calculation_status: "NO_COST_RECORDS",
+    });
+    expect(report.rows.content).toHaveLength(3);
+    const body = JSON.stringify(report);
+    expect(body).not.toContain("採用効果の検証応募者");
+    expect(body).not.toContain("applicant");
+    expect(body).not.toContain("enrollment");
+
+    // 4 人目は採用効果シナリオでは RECRUITMENT_VIEW だけを持つ。
+    for (const t of [reader, orderReader])
+      expect((await read(t)).status()).toBe(403);
+    const foreignReport = await (await read(token, foreign)).json();
+    expect(foreignReport.hire_count).toBe(0);
+    expect(foreignReport.rows.content).toHaveLength(0);
+
+    await login(page);
+    await page.getByRole("tab", { name: "採用効果", exact: true }).click();
+    await expect(
+      page.getByRole("row", { name: new RegExp(`^${effectMedia} `) }),
+    ).toContainText("約 10,000.00円");
+    await expect(
+      page.getByRole("row", { name: new RegExp(`^${effectMedia} `) }),
+    ).toContainText("2 / 3人");
+    await expect(page.getByLabel("採用効果の月合計")).toContainText(
+      "媒体未入力の入店：1人",
+    );
+    await expect(page.getByText(/ROIを示しません/)).toBeVisible();
+    for (const theme of ["ライト", "ダーク"]) {
+      await page
+        .getByRole("button", { name: "表示モード", exact: true })
+        .click();
+      await page
+        .getByRole("menuitemradio", { name: theme, exact: true })
+        .click();
+      await page.screenshot({
+        path: $testInfo.outputPath(
+          `advertising-recruitment-effect-${theme === "ライト" ? "light" : "dark"}.png`,
+        ),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    await page.setViewportSize({ width: 760, height: 900 });
+    await page.screenshot({
+      path: $testInfo.outputPath("advertising-recruitment-effect-narrow.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
   },
 );
