@@ -34,8 +34,8 @@ Status: Accepted
   一意制約違反で自トランザクションが作廃されるため、**トランザクション外**で catch し
   （`IntegrityViolations.violates` で制約名を検証、他の違反は素通し）、新しい読み取り専用トランザクション
   （`replayAdjust`）で再読して逐次と同一の比較ロジックへ落とす。この catch は **controller に置く** — 制約違反の時点で敗者のトランザクションは作廃されており、
-サービスのトランザクション内で catch しても読み直せない。書き込み腿は `@Transactional` のサービスメソッドに保ち、
-サービス代理の外側（controller）で catch して再読へ回す。
+  サービスのトランザクション内で catch しても読み直せない。書き込み腿は `@Transactional` のサービスメソッドに保ち、
+  サービス代理の外側（controller）で catch して再読へ回す。
 
 ## 帰結
 
