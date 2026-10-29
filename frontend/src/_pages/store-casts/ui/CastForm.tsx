@@ -32,6 +32,7 @@ import { integerRule, useManagedList } from '@/shared/lib';
 export interface CastFormData {
   name: string;
   status: 'ENROLLED' | 'SUSPENDED';
+  started_on: string;
   photo_url: string;
   introduction: string;
   age: number | null;
@@ -114,6 +115,7 @@ export function CastForm({
     defaultValues: {
       name: '',
       status: 'ENROLLED',
+      started_on: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date()),
       photo_url: '',
       introduction: '',
       age: null,
@@ -153,7 +155,22 @@ export function CastForm({
                 在籍
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <FormField
+                control={control}
+                name="started_on"
+                rules={{ required: '入店日を入力してください' }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>入店日 *</FormLabel>
+                    <FormControl>
+                      {/* 入店予定の先行登録もあるため max は設けない */}
+                      <Input type="date" required {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={control}
                 name="status"

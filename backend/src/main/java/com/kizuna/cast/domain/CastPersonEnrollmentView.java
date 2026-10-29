@@ -1,5 +1,6 @@
 package com.kizuna.cast.domain;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 public interface CastPersonEnrollmentView {
@@ -12,6 +13,8 @@ public interface CastPersonEnrollmentView {
   String getName();
 
   CastEnrollmentStatus getStatus();
+
+  LocalDate getStartedOn();
 
   OffsetDateTime getEndedAt();
 }

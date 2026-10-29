@@ -3,6 +3,7 @@ package com.kizuna.cast.api.dto;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastPublicationStatus;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -19,6 +20,7 @@ public class CastResponse {
   private boolean deletable;
   private String name;
   private CastEnrollmentStatus status;
+  private LocalDate startedOn;
   private OffsetDateTime endedAt;
   private CastPublicationStatus publicationStatus;
   private String photoUrl;

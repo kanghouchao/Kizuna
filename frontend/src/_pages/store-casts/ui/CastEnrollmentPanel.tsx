@@ -53,6 +53,7 @@ export function CastEnrollmentPanel({
       <section aria-label="在籍操作" className="space-y-3 rounded-xl border bg-card p-6">
         <h2 className="text-lg font-semibold">在籍</h2>
         <p>在籍状態: {status ? statusLabels[status] : '不明'}</p>
+        <p>入店日: {cast.started_on ?? '-'}</p>
         {endedAt && <p>退店日時: {new Date(endedAt).toLocaleString('ja-JP')}</p>}
         <div className="flex gap-3">
           {status === 'ENROLLED' && (

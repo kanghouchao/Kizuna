@@ -26,6 +26,7 @@ import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -234,6 +235,7 @@ class CastAuditPostgresTest {
 
   private String create() {
     var request = new CastCreateRequest();
+    request.setStartedOn(LocalDate.of(2026, 1, 1));
     request.setName("秘密の名前-" + UUID.randomUUID());
     return casts.create(storeId, request, ORDINARY).getId();
   }

@@ -98,6 +98,7 @@ function Enrollments({ id }: { id: number }) {
             <TableHead>店舗</TableHead>
             <TableHead>源氏名</TableHead>
             <TableHead>在籍状態</TableHead>
+            <TableHead>入店日</TableHead>
             <TableHead>退店日時</TableHead>
           </TableRow>
         </TableHeader>
@@ -107,6 +108,7 @@ function Enrollments({ id }: { id: number }) {
               <TableCell>{row.store_name}</TableCell>
               <TableCell>{row.name}</TableCell>
               <TableCell>{statusLabels[row.status]}</TableCell>
+              <TableCell>{row.started_on}</TableCell>
               <TableCell>
                 {row.ended_at
                   ? new Date(row.ended_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })

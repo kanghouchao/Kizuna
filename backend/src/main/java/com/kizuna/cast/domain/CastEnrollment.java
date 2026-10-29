@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,6 +33,10 @@ public class CastEnrollment extends StoreScopedEntity {
   @Column(nullable = false)
   @Builder.Default
   private CastEnrollmentStatus status = CastEnrollmentStatus.ENROLLED;
+
+  /** 入店日。再入店は新しい在籍行なので、在籍区間ごとに持つ。 */
+  @Column(name = "started_on", nullable = false, updatable = false)
+  private LocalDate startedOn;
 
   @Column(name = "ended_at")
   private OffsetDateTime endedAt;

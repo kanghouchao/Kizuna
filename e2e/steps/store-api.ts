@@ -190,6 +190,13 @@ export async function setCustomTexts(
   }
 }
 
+/** 日本時間の当日（YYYY-MM-DD）。キャスト作成画面の入店日の既定値と同じ暦日。 */
+export function todayInTokyo(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(
+    new Date(),
+  );
+}
+
 /** キャストを作成し id を返す（POST /api/casts, hasAuthority('CAST_MANAGE')）。 */
 export async function createUnpublishedCast(
   request: APIRequestContext,
@@ -199,7 +206,7 @@ export async function createUnpublishedCast(
 ): Promise<string> {
   const response = await request.post("/api/casts", {
     headers: { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` },
-    data: { name },
+    data: { name, started_on: todayInTokyo() },
   });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;

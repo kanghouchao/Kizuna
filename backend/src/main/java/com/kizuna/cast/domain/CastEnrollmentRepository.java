@@ -16,7 +16,8 @@ public interface CastEnrollmentRepository extends StoreScopedRepository<CastEnro
   @Query(
       """
       select e.id as id, e.storeId as storeId, st.name as storeName,
-             p.name as name, e.status as status, e.endedAt as endedAt
+             p.name as name, e.status as status, e.startedOn as startedOn,
+             e.endedAt as endedAt
       from CastEnrollment e
       join com.kizuna.store.domain.Store st on st.id = e.storeId
       join CastProfile p on p.enrollmentId = e.id and p.storeId = e.storeId

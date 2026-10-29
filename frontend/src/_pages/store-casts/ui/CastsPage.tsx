@@ -145,6 +145,7 @@ export default function CastListPage() {
               <TableHead>スリーサイズ</TableHead>
               <TableHead>表示順</TableHead>
               <TableHead>在籍状態</TableHead>
+              <TableHead>入店日</TableHead>
               <TableHead>招待状態</TableHead>
               <TableHead className="text-right">アクション</TableHead>
             </TableRow>
@@ -187,6 +188,7 @@ export default function CastListPage() {
                       {status.text}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{cast.started_on ?? '-'}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={`border-transparent ${invitation.color}`}>
                       {invitation.text}

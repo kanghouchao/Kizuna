@@ -14,6 +14,7 @@ import {
   suspendCast,
   resumeCast,
   withdrawCast,
+  todayInTokyo,
   castStatusHistory,
   getAuditEvent,
   listAuditEvents,
@@ -144,7 +145,11 @@ When(
       await renameCast(request, token, id, secret);
       await setCastPublication(request, token, id, "UNPUBLISHED");
       const mutations = [
-        { path: "/api/casts", method: "POST", data: { name: secret } },
+        {
+          path: "/api/casts",
+          method: "POST",
+          data: { name: secret, started_on: todayInTokyo() },
+        },
         {
           path: `/api/casts/${id}`,
           method: "PUT",
