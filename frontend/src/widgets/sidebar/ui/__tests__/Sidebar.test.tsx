@@ -151,13 +151,40 @@ describe('Sidebar', () => {
       expect(container.querySelector('.w-\\[200px\\]')).toBeNull();
     });
 
-    it('グループ級の項目だけを持つ利用者にはレールを出さない', async () => {
+    it('グループ級の項目だけを持ち授権店舗が無い利用者にはレールを出さない', async () => {
       mockedGetMenus.mockResolvedValue(groupOnlyMenu);
+      withStores([]);
 
       render(<Sidebar />);
 
       await screen.findByRole('link', { name: '店舗一覧' });
       expect(screen.queryByRole('button')).toBeNull();
+    });
+
+    it('店舗級の項目が無くても授権店舗はすべてレールに並び、既定はグループの文脈', async () => {
+      mockedGetMenus.mockResolvedValue(groupOnlyMenu);
+
+      render(<Sidebar />);
+
+      expect(await screen.findByRole('link', { name: '店舗一覧' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'グループ' })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+      expect(screen.getByRole('button', { name: '銀座本店' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '新宿店' })).toBeInTheDocument();
+    });
+
+    it('店舗級の項目が無い利用者が店舗の文脈を選ぶと、パネルはダッシュボードだけになる', async () => {
+      mockedGetMenus.mockResolvedValue(groupOnlyMenu);
+      render(<Sidebar />);
+      await screen.findByRole('link', { name: '店舗一覧' });
+
+      fireEvent.click(screen.getByRole('button', { name: '新宿店' }));
+
+      expect(screen.getAllByRole('link').map(l => l.textContent)).toEqual(['ダッシュボード']);
+      expect(screen.queryByRole('heading')).toBeNull();
+      expect(switchStore).toHaveBeenCalledWith(2);
     });
 
     it('店舗 1 件とグループ級の項目を持つ利用者にはレールが出て、パネルは 200px', async () => {
@@ -293,12 +320,48 @@ describe('Sidebar', () => {
       );
     });
 
-    it('画面を行き来しても選んだ文脈は保たれる', async () => {
+    it('店舗級の画面へ移ると文脈が現在店舗に合い、グループ級へ戻っても戻らない', async () => {
+      mockedGetMenus.mockResolvedValue(groupOnlyMenu);
+      const { rerender } = render(<Sidebar />);
+      await screen.findByRole('link', { name: '店舗一覧' });
+      expect(screen.getByRole('button', { name: 'グループ' })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+
+      mockPathname = '/store/orders/monthly-remunerations';
+      rerender(<Sidebar />);
+
+      expect(screen.getByRole('button', { name: '銀座本店' })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+
+      mockPathname = '/admin/orders';
+      rerender(<Sidebar />);
+
+      expect(screen.getByRole('button', { name: '銀座本店' })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+    });
+
+    it('店舗級の画面にいる間もレールで「グループ」を選べる', async () => {
+      mockPathname = '/store/orders';
+      render(<Sidebar />);
+      await screen.findByRole('link', { name: '予約・案件管理' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
+
+      expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
+    });
+
+    it('グループ級の画面どうしの遷移では選んだ文脈が保たれる', async () => {
       const { rerender } = render(<Sidebar />);
       await screen.findByRole('link', { name: '予約・案件管理' });
       fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
 
-      mockPathname = '/store/orders';
+      mockPathname = '/admin/orders';
       rerender(<Sidebar />);
 
       expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();

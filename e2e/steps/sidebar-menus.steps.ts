@@ -67,6 +67,11 @@ Then('サイドバーのパネルの最上段が {string} である', async ({ p
   await expect(page.locator('aside nav a').first()).toHaveText(name);
 });
 
+Then('サイドバーのパネルのリンクがダッシュボードだけである', async ({ page }) => {
+  await expect(page.locator('aside nav a')).toHaveCount(1);
+  await expect(page.locator('aside nav h3')).toHaveCount(0);
+});
+
 Then('サイドバーのパネルに見出し {string} がない', async ({ page }, heading: string) => {
   await expect(page.locator('aside nav h3', { hasText: heading })).toHaveCount(0);
 });
