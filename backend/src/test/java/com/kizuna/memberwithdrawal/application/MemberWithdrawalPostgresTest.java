@@ -193,6 +193,71 @@ class MemberWithdrawalPostgresTest {
                 link,
                 otherLink))
         .isEqualTo(2);
+    long clearId =
+        jdbc.queryForObject(
+            "select id from t_point_entries where member_id=? and entry_type='WITHDRAWAL_CLEAR'",
+            Long.class,
+            member.memberId);
+    var audits =
+        jdbc.queryForList(
+            "select actor_id, store_id, source_type, source_id, after_values->>'cleared_points' as cleared, after_values->>'withdrawn_applications' as apps from t_audit_events where action='MEMBER_WITHDRAWN' and target_type='MEMBER' and target_id=?",
+            String.valueOf(member.memberId));
+    assertThat(audits).hasSize(1);
+    assertThat(audits.getFirst())
+        .containsEntry("actor_id", member.userId)
+        .containsEntry("store_id", null)
+        .containsEntry("source_type", "POINT_LEDGER_ENTRY")
+        .containsEntry("source_id", String.valueOf(clearId))
+        .containsEntry("cleared", "500")
+        .containsEntry("apps", "1");
+  }
+
+  @Test
+  void auditFailureRollsBackWithdrawalClearanceLinksAndApplications() {
+    var member = member();
+    credit(member.memberId, 100, null);
+    String link = link(store, customer(store), member);
+    String pending = application(member, "PENDING");
+    jdbc.execute(
+        "create function withdrawal_audit_reject() returns trigger language plpgsql as $$ begin if NEW.action='MEMBER_WITHDRAWN' then raise exception '検証用の監査障害'; end if; return NEW; end $$");
+    jdbc.execute(
+        "create trigger withdrawal_audit_reject before insert on t_audit_events for each row execute function withdrawal_audit_reject()");
+    try {
+      assertThatThrownBy(() -> service.withdrawSelf(member.userId, "やめる"))
+          .isInstanceOf(DataAccessException.class);
+    } finally {
+      jdbc.execute("drop trigger withdrawal_audit_reject on t_audit_events");
+      jdbc.execute("drop function withdrawal_audit_reject()");
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "select withdrawn_at from t_members where id=?", Object.class, member.memberId))
+        .isNull();
+    assertThat(
+            jdbc.queryForObject(
+                "select enabled from t_users where id=?", Boolean.class, member.userId))
+        .isTrue();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_point_entries where member_id=? and entry_type='WITHDRAWAL_CLEAR'",
+                Long.class,
+                member.memberId))
+        .isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "select status from t_customer_member_links where id=?", String.class, link))
+        .isEqualTo("ACTIVE");
+    assertThat(
+            jdbc.queryForObject(
+                "select status from t_order_applications where id=?", String.class, pending))
+        .isEqualTo("PENDING");
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_audit_events where target_id in (?,?) and action in ('MEMBER_WITHDRAWN','CUSTOMER_MEMBER_LINK_RELEASED')",
+                Long.class,
+                String.valueOf(member.memberId),
+                link))
+        .isZero();
   }
 
   @Test
@@ -409,8 +474,23 @@ class MemberWithdrawalPostgresTest {
             jdbc.queryForObject(
                 "select status from t_order_applications where id=?", String.class, pending))
         .isEqualTo("WITHDRAWN");
+    assertThat(
+            jdbc.queryForList(
+                "select actor_id, store_id from t_audit_events where action='MEMBER_WITHDRAWN' and target_id=?",
+                String.valueOf(member.memberId)))
+        .singleElement()
+        .satisfies(
+            row ->
+                assertThat(row).containsEntry("actor_id", staff).containsEntry("store_id", null));
     assertThatThrownBy(() -> service.withdrawByStaff(member.memberId, staff, "二度目"))
         .isInstanceOf(MemberAlreadyWithdrawnException.class);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_audit_events where action='MEMBER_WITHDRAWN' and target_id=?",
+                Long.class,
+                String.valueOf(member.memberId)))
+        .as("再退会の 409 は成功監査を作らない")
+        .isEqualTo(1);
     assertThatThrownBy(() -> service.withdrawByStaff(-1L, staff, "居ない"))
         .isInstanceOf(NotFoundException.class);
 

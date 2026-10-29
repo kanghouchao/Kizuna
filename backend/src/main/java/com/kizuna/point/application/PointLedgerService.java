@@ -514,17 +514,22 @@ public class PointLedgerService {
    *
    * <p>消費と同じ行ロックの下で数える。呼出側は会員行を先に押さえていること — 仕訳の外部キー検査が置く KEY SHARE の後から 会員行の FOR UPDATE を求めると死錠する。
    *
-   * @return 消去したポイント。ロットを跨いだ合計は int を超えうる
+   * @return 消去したポイントと、最初に記帳した仕訳の ID。ロットを跨いだ合計は int を超えうる
    */
-  public long clearForWithdrawal(long memberId, Long actorUserId, String reason) {
+  public WithdrawalClearance clearForWithdrawal(long memberId, Long actorUserId, String reason) {
     long total = 0;
+    Long firstEntryId = null;
     List<PlannedAllocation> chunk = new ArrayList<>();
     int chunkTotal = 0;
     for (PlannedAllocation allocation : lockedLedgerOf(memberId).planClearance()) {
       if (chunkTotal > Integer.MAX_VALUE - allocation.amount()) {
-        pointEntryRepository.save(
-            PointEntry.withdrawalClear(
-                memberId, chunkTotal, allocationsOf(chunk), actorUserId, reason));
+        Long saved =
+            pointEntryRepository
+                .save(
+                    PointEntry.withdrawalClear(
+                        memberId, chunkTotal, allocationsOf(chunk), actorUserId, reason))
+                .getId();
+        if (firstEntryId == null) firstEntryId = saved;
         chunk = new ArrayList<>();
         chunkTotal = 0;
       }
@@ -533,12 +538,19 @@ public class PointLedgerService {
       total += allocation.amount();
     }
     if (chunkTotal > 0) {
-      pointEntryRepository.save(
-          PointEntry.withdrawalClear(
-              memberId, chunkTotal, allocationsOf(chunk), actorUserId, reason));
+      Long saved =
+          pointEntryRepository
+              .save(
+                  PointEntry.withdrawalClear(
+                      memberId, chunkTotal, allocationsOf(chunk), actorUserId, reason))
+              .getId();
+      if (firstEntryId == null) firstEntryId = saved;
     }
-    return total;
+    return new WithdrawalClearance(total, Optional.ofNullable(firstEntryId));
   }
+
+  /** 退会消去の結果。仕訳を作らなかったとき（残量なし）は {@code firstEntryId} が空。 */
+  public record WithdrawalClearance(long points, Optional<Long> firstEntryId) {}
 
   @Transactional(readOnly = true)
   public Optional<PointRollbackHistory> rollbackHistory(String orderId) {

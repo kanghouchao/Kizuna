@@ -653,7 +653,9 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L, 2L, 3L)))
         .thenReturn(List.of(consumption(1L, 500), consumption(2L, 50)));
 
-    assertThat(pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会")).isEqualTo(350);
+    var cleared = pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会");
+    assertThat(cleared.points()).isEqualTo(350);
+    assertThat(cleared.firstEntryId()).contains(SAVED_ENTRY_ID);
 
     verify(pointEntryRepository).save(savedEntry.capture());
     PointEntry entry = savedEntry.getValue();
@@ -678,7 +680,7 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L, 2L, 3L)))
         .thenReturn(List.of());
 
-    assertThat(pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会"))
+    assertThat(pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会").points())
         .isEqualTo(2L * Integer.MAX_VALUE + 10);
 
     verify(pointEntryRepository, times(3)).save(savedEntry.capture());
@@ -695,7 +697,9 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L)))
         .thenReturn(List.of(consumption(1L, 500)));
 
-    assertThat(pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会")).isZero();
+    var none = pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会");
+    assertThat(none.points()).isZero();
+    assertThat(none.firstEntryId()).isEmpty();
 
     verify(pointEntryRepository, never()).save(any());
   }
