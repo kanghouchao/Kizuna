@@ -33,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -60,6 +61,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
+import software.amazon.awssdk.services.s3.S3Client;
 
 /** 実PGで店舗プロフィール更新の原子性と、ファイル登録の「保存成功後に独立取引で監査」の順序を確認する。 */
 @EnabledIfEnvironmentVariable(
@@ -228,6 +230,25 @@ class StoreProfileFileAuditPostgresTest {
 
     assertThat(stored).containsExactly("public/11/window.jpg");
     assertThat(auditedPaths()).doesNotContain("public/11/window.jpg");
+  }
+
+  @Test
+  void acceptedKeyAtLengthLimitIsAudited() {
+    var upload = new AppProperties.Upload();
+    upload.setBucket("uploads");
+    upload.setMaxFileSize(1024L);
+    upload.setAllowedTypes(List.of("image/jpeg"));
+    var properties = new AppProperties();
+    properties.setUpload(upload);
+    var real = new S3FileStorage(Mockito.mock(S3Client.class), properties);
+    var controller =
+        new FileUploadController(real, properties, context.getBean(StoredFileAudit.class));
+    // "public/11/" (10) + UUID (36) + 拡張子（"." 込み）で key をちょうど 100 文字にする
+    String name = "x." + "e".repeat(100 - 10 - 36 - 1);
+
+    controller.upload(STORE_ID, file(name), "public");
+
+    assertThat(auditedPaths()).anyMatch(path -> path.length() == 100);
   }
 
   private List<String> auditedPaths() {

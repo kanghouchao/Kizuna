@@ -274,7 +274,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                   <ImageUpload
                     value={value}
                     onChange={onChange}
-                    bucket="public"
                     className="w-32 h-32"
                   />
                 )}
@@ -295,7 +294,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                 <ImageUpload
                   value={value}
                   onChange={onChange}
-                  bucket="public"
                   className="w-full h-40 max-w-2xl"
                 />
               )}
@@ -344,7 +342,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                 <ImageUpload
                   value={value}
                   onChange={onChange}
-                  bucket="public"
                   className="w-full h-64"
                 />
               )}
@@ -488,7 +485,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                             <ImageUpload
                               value={value}
                               onChange={onChange}
-                              bucket="public"
                               className="w-full h-10"
                             />
                           )}

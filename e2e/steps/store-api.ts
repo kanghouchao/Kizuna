@@ -1586,7 +1586,7 @@ export const SAMPLE_PNG = Buffer.from(
   "base64",
 );
 
-/** 店舗 1 の領域へ SAMPLE_PNG をアップロードする（POST /api/files, isAuthenticated()）。 */
+/** 店舗 1 の領域へ SAMPLE_PNG をアップロードする（POST /api/files）。 */
 export function uploadStoreImage(
   request: APIRequestContext,
   token: string,

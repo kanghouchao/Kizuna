@@ -21,6 +21,12 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @RequiredArgsConstructor
 public class S3FileStorage implements FileStorageService, ApplicationRunner {
 
+  /** 受け付ける唯一の bucket。object key の先頭になるので、自由入力を通さず固定する。 */
+  private static final String PUBLIC_BUCKET = "public";
+
+  /** 完成形 key は監査の target_id（VARCHAR(100)）にそのまま入るので、これを超える key は保存しない。 */
+  private static final int MAX_KEY_LENGTH = 100;
+
   private final S3Client s3Client;
   private final AppProperties appProperties;
 
@@ -33,7 +39,7 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
       throw new ServiceException("不正なプレフィックスです");
     }
 
-    if (bucket == null || !bucket.matches("^[a-zA-Z0-9_-]+$")) {
+    if (!PUBLIC_BUCKET.equals(bucket)) {
       throw new ServiceException("不正なバケット名です");
     }
 
@@ -56,6 +62,9 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
     // （実 S3 bucket は固定値、リクエストの bucket 値は key の一部として扱う）
     String filename = UUID.randomUUID() + extension;
     String key = bucket + "/" + prefix + "/" + filename;
+    if (key.length() > MAX_KEY_LENGTH) {
+      throw new ServiceException("ファイル名の拡張子が長すぎます");
+    }
 
     byte[] bytes;
     try {

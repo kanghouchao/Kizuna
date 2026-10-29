@@ -9,7 +9,6 @@ import { notify } from '@/shared/notify';
 interface ImageUploadProps {
   value?: string;
   onChange: (url: string) => void;
-  bucket?: string;
   className?: string;
   required?: boolean;
   accept?: string;
@@ -19,7 +18,6 @@ interface ImageUploadProps {
 export default function ImageUpload({
   value,
   onChange,
-  bucket = 'public',
   required = false,
   className = 'w-40 h-52',
   accept = 'image/jpeg,image/png,image/webp',
@@ -40,7 +38,7 @@ export default function ImageUpload({
 
     try {
       setIsUploading(true);
-      const response = await fileApi.upload(file, bucket);
+      const response = await fileApi.upload(file);
       onChange(response.url ?? '');
       notify.success('画像をアップロードしました');
     } catch {
