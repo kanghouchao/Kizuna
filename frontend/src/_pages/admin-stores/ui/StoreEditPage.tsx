@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Store, UpdateStoreRequest, adminStoreApi } from '@/entities/store';
+import { Store, UpdateStoreRequest, adminStoreApi, storeShortNameError } from '@/entities/store';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
@@ -25,7 +25,9 @@ export default function EditStorePage() {
     null
   );
   const formData: UpdateStoreRequest =
-    draft !== null && draft.store === store ? draft.values : { name: store?.name ?? '' };
+    draft !== null && draft.store === store
+      ? draft.values
+      : { name: store?.name ?? '', short_name: store?.short_name ?? '' };
   const edit = (values: UpdateStoreRequest) => setDraft({ store, values });
   const [errors, setErrors] = useState<Partial<UpdateStoreRequest>>({});
   // id を持たない URL で開かれた＝指せる店舗が無い。取りに行けないので再試行も置けない
@@ -34,6 +36,8 @@ export default function EditStorePage() {
   const validate = (): boolean => {
     const next: Partial<UpdateStoreRequest> = {};
     if (!formData.name.trim()) next.name = '店舗名は必須です';
+    const shortNameError = storeShortNameError(formData.short_name);
+    if (shortNameError) next.short_name = shortNameError;
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -44,7 +48,10 @@ export default function EditStorePage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await adminStoreApi.update(store.id, formData);
+      await adminStoreApi.update(store.id, {
+        ...formData,
+        short_name: formData.short_name.trim(),
+      });
       notify.success('店舗情報を更新しました');
       router.push('/admin/stores');
     } catch (err: unknown) {
@@ -114,6 +121,26 @@ export default function EditStorePage() {
                 aria-invalid={!!errors.name}
               />
               {errors.name && <p className="text-sm text-destructive-strong">{errors.name}</p>}
+            </div>
+
+            {/* 略称 */}
+            <div className="grid gap-2">
+              <Label htmlFor="short_name">
+                略称 <span className="text-destructive-strong">*</span>
+              </Label>
+              <Input
+                id="short_name"
+                type="text"
+                value={formData.short_name}
+                onChange={e => edit({ ...formData, short_name: e.target.value })}
+                aria-invalid={!!errors.short_name}
+              />
+              {errors.short_name && (
+                <p className="text-sm text-destructive-strong">{errors.short_name}</p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                1〜3 文字で入力してください。店舗の切替ボタンに表示されます。
+              </p>
             </div>
 
             {/* ドメイン（読み取り専用） */}

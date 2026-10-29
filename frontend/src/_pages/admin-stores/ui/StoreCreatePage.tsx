@@ -3,7 +3,13 @@
 import { useState } from 'react';
 import { Loader2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { CreateStoreRequest, isStoreDomain, adminStoreApi } from '@/entities/store';
+import {
+  CreateStoreRequest,
+  isStoreDomain,
+  storeShortNameError,
+  adminStoreApi,
+} from '@/entities/store';
+import { getApiErrorMessage } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 
@@ -12,6 +18,7 @@ export default function CreateStorePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<CreateStoreRequest>({
     name: '',
+    short_name: '',
     domain: '',
   });
 
@@ -22,6 +29,11 @@ export default function CreateStorePage() {
 
     if (!formData.name.trim()) {
       newErrors.name = '店舗名は必須です';
+    }
+
+    const shortNameError = storeShortNameError(formData.short_name);
+    if (shortNameError) {
+      newErrors.short_name = shortNameError;
     }
 
     if (!formData.domain.trim()) {
@@ -51,7 +63,7 @@ export default function CreateStorePage() {
     setIsSubmitting(true);
 
     try {
-      await adminStoreApi.create(formData);
+      await adminStoreApi.create({ ...formData, short_name: formData.short_name.trim() });
       notify.success('店舗を作成しました。店舗一覧に戻ります');
       router.push('/admin/stores');
     } catch (error: unknown) {
@@ -68,7 +80,7 @@ export default function CreateStorePage() {
       ) {
         setErrors(error.response.data.errors as Partial<CreateStoreRequest>);
       }
-      notify.error('店舗作成に失敗しました。入力内容をご確認ください');
+      notify.error(getApiErrorMessage(error, '店舗作成に失敗しました。入力内容をご確認ください'));
     } finally {
       setIsSubmitting(false);
     }
@@ -108,6 +120,28 @@ export default function CreateStorePage() {
                 placeholder="例：ABC株式会社"
               />
               {errors.name && <p className="text-sm text-destructive-strong">{errors.name}</p>}
+            </div>
+
+            {/* 略称 */}
+            <div className="grid gap-2">
+              <Label htmlFor="short_name">
+                略称 <span className="text-destructive-strong">*</span>
+              </Label>
+              <Input
+                type="text"
+                name="short_name"
+                id="short_name"
+                value={formData.short_name}
+                onChange={e => handleInputChange('short_name', e.target.value)}
+                aria-invalid={!!errors.short_name}
+                placeholder="例：新宿"
+              />
+              {errors.short_name && (
+                <p className="text-sm text-destructive-strong">{errors.short_name}</p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                1〜3 文字で入力してください。店舗の切替ボタンに表示されます。
+              </p>
             </div>
 
             {/* 域名 */}

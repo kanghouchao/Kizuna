@@ -1,3 +1,3 @@
 export * from './model/types';
-export { isStoreDomain } from './model/domain';
+export { isStoreDomain, storeShortNameError } from './model/domain';
 export { adminStoreApi } from './api/admin';

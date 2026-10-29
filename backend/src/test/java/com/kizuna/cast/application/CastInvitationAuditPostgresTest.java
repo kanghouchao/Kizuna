@@ -9,6 +9,7 @@ import com.kizuna.cast.api.dto.CastInvitationAcceptRequest;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -80,7 +81,9 @@ class CastInvitationAuditPostgresTest {
             status ->
                 context
                     .getBean(StoreRepository.class)
-                    .saveAndFlush(new Store("検証店", UUID.randomUUID() + ".example.test"))
+                    .saveAndFlush(
+                        new Store(
+                            "検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test"))
                     .getId());
     transactions.executeWithoutResult(
         status ->
@@ -228,7 +231,9 @@ class CastInvitationAuditPostgresTest {
             status ->
                 context
                     .getBean(StoreRepository.class)
-                    .saveAndFlush(new Store("別店", UUID.randomUUID() + ".example.test"))
+                    .saveAndFlush(
+                        new Store(
+                            "別店", StoreShortNames.next(), UUID.randomUUID() + ".example.test"))
                     .getId());
     String enrollmentId =
         transactions.execute(

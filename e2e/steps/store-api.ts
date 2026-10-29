@@ -1017,7 +1017,7 @@ export async function createStaffAccount(request: APIRequestContext, token: stri
 }
 
 /** 店舗を登録する（POST /stores, PERM_STORE_MANAGE）。 */
-export async function createStore(request: APIRequestContext, token: string, store: { name: string; domain: string }): Promise<void> {
+export async function createStore(request: APIRequestContext, token: string, store: { name: string; short_name: string; domain: string }): Promise<void> {
   const response = await request.post('/api/stores', { headers: { Authorization: `Bearer ${token}` }, data: store });
   expect(response.status(), await response.text()).toBe(201);
 }

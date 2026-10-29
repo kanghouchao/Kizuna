@@ -19,6 +19,7 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
@@ -99,7 +100,8 @@ class DailyRemunerationPostgresTest {
   void fixture() {
     transactions.executeWithoutResult(
         status -> {
-          var store = new Store("日別検証店", UUID.randomUUID() + ".example.test");
+          var store =
+              new Store("日別検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test");
           em.persist(store);
           storeId = store.getId();
           email = UUID.randomUUID() + "@example.test";

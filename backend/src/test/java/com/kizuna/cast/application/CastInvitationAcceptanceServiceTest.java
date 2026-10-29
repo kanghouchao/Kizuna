@@ -164,7 +164,7 @@ class CastInvitationAcceptanceServiceTest {
   }
 
   private void stubStore(long storeId, String name) {
-    Store store = new Store(name, "store-" + storeId);
+    Store store = new Store(name, "店", "store-" + storeId);
     when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
   }
 

@@ -18,6 +18,7 @@ public class StoreVO implements Serializable {
 
   private String id;
   private String name;
+  private String shortName;
   private String domain;
   private StoreStatus status;
   private OffsetDateTime createdAt;

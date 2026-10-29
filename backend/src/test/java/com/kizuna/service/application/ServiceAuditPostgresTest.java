@@ -27,6 +27,7 @@ import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
@@ -165,7 +166,8 @@ class ServiceAuditPostgresTest {
         status ->
             context
                 .getBean(StoreRepository.class)
-                .saveAndFlush(new Store("検証店", UUID.randomUUID() + ".example.test"))
+                .saveAndFlush(
+                    new Store("検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test"))
                 .getId());
   }
 

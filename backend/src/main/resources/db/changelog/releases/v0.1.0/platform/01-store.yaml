@@ -25,6 +25,14 @@ databaseChangeLog:
                     nullable: false
                   remarks: 店舗名
               - column:
+                  name: short_name
+                  type: VARCHAR(3)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_stores_short_name
+                  remarks: 略称（1〜3 文字。管理画面の店舗切替ボタンに載る。グループ内で一意）
+              - column:
                   name: domain
                   type: VARCHAR(128)
                   constraints:

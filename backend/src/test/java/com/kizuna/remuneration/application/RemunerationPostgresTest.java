@@ -31,6 +31,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.remuneration.AttendanceFacts;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -133,7 +134,8 @@ class RemunerationPostgresTest {
     when(context.getBean(Clock.class).instant()).thenReturn(Instant.parse("2026-10-09T12:00:00Z"));
     transactions.executeWithoutResult(
         tx -> {
-          var store = new Store("保証検証店", UUID.randomUUID() + ".example.test");
+          var store =
+              new Store("保証検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test");
           em.persist(store);
           storeId = store.getId();
           email = UUID.randomUUID() + "@example.test";
