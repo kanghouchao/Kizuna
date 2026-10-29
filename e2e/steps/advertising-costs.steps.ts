@@ -37,6 +37,7 @@ let storeId = "",
   email = "",
   readerEmail = "",
   orderReader = "",
+  recruitmentReader = "",
   orderReaderEmail = "",
   password = "",
   month = "",
@@ -155,7 +156,9 @@ Given(
       );
       tokens.push(await loginUser(request, address, password));
     }
-    [token, reader, exporter, orderReader] = tokens;
+    [token, reader, exporter] = tokens;
+    orderReader = effects ? "" : (tokens[3] ?? "");
+    recruitmentReader = effects ? tokens[3] : "";
   },
 );
 When("広告費を登録変更コピー削除する", async ({ request }) => {
@@ -1441,8 +1444,7 @@ Then(
     expect(body).not.toContain("applicant");
     expect(body).not.toContain("enrollment");
 
-    // 4 人目は採用効果シナリオでは RECRUITMENT_VIEW だけを持つ。
-    for (const t of [reader, orderReader])
+    for (const t of [reader, recruitmentReader])
       expect((await read(t)).status()).toBe(403);
     const foreignReport = await (await read(token, foreign)).json();
     expect(foreignReport.hire_count).toBe(0);
