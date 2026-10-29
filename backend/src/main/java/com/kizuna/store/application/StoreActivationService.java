@@ -3,6 +3,8 @@ package com.kizuna.store.application;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
+import com.kizuna.user.application.BusinessAudit;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -16,6 +18,7 @@ public class StoreActivationService {
 
   private final StoreRepository storeRepository;
   private final CacheManager cacheManager;
+  private final BusinessAudit businessAudit;
 
   /** 稼働中へ遷移させる。既に稼働中なら集約が 400 で拒む。 */
   @Transactional
@@ -24,8 +27,17 @@ public class StoreActivationService {
         storeRepository
             .findById(storeId)
             .orElseThrow(() -> new NotFoundException("店舗が見つかりません: " + storeId));
+    var before =
+        Map.of("status", store.getStatus().name(), "version", String.valueOf(store.getVersion()));
     store.activate();
-    storeRepository.save(store);
+    storeRepository.saveAndFlush(store);
+    businessAudit.recordCurrent(
+        storeId,
+        "STORE_ACTIVATED",
+        "STORE",
+        String.valueOf(storeId),
+        before,
+        Map.of("status", store.getStatus().name(), "version", String.valueOf(store.getVersion())));
     evictDomainLookup(store.getDomain());
   }
 
