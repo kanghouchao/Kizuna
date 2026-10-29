@@ -71,13 +71,15 @@ Given(
   },
 );
 
+// 略称は一意制約があるため、乱数ではなく通し番号で払い出す（リトライでも重ならない）。
 const shortNames = new Map<string, string>();
+let shortNameSeq = 0;
 
 async function register(
   request: import("@playwright/test").APIRequestContext,
   name: string,
 ): Promise<string> {
-  const shortName = randomUUID().slice(0, 3);
+  const shortName = `E${++shortNameSeq}`;
   const created = await request.post("/api/stores", {
     headers: bearer(operator),
     data: { name, short_name: shortName, domain: `audit-${randomUUID()}.kizuna.test` },
