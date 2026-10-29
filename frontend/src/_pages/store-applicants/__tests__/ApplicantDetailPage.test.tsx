@@ -63,9 +63,9 @@ test('保持方針は終端状態ごとの月数を示し、未設定は自動�
   ) as HTMLElement;
   const value = (label: string) =>
     within(section).getByText(label, { selector: 'dt' }).nextElementSibling;
-  await waitFor(() => expect(value('不採用')).toHaveTextContent('6 か月後に匿名化'));
+  await waitFor(() => expect(value('不採用')).toHaveTextContent('保持 6 か月'));
   expect(value('辞退')).toHaveTextContent('自動匿名化しない');
-  expect(value('採用')).toHaveTextContent('0 か月後に匿名化');
+  expect(value('採用')).toHaveTextContent('保持 0 か月');
 });
 test('保持期間がすべて未設定なら三つとも自動匿名化しないと示す', async () => {
   render(<ApplicantDetailPage />);
