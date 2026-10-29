@@ -7,6 +7,7 @@ import {
 } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import type {
+  ApplicantDecision,
   ApplicantDetail,
   ApplicantHistory,
   ApplicantIntake,
@@ -42,6 +43,13 @@ export const applicantApi = {
     reason: string
   ): Promise<ApplicantDetail> =>
     (await apiClient.post(`${resource(id)}/transitions`, { version, status, reason })).data,
+  decide: async (
+    id: string,
+    version: number,
+    status: ApplicantDecision,
+    reason: string
+  ): Promise<ApplicantDetail> =>
+    (await apiClient.post(`${resource(id)}/decision`, { version, status, reason })).data,
   history: async (id: string, cursor?: string): Promise<CursorPageResult<ApplicantHistory>> =>
     fromCursorPage(
       (await apiClient.get(`${resource(id)}/history`, { params: { cursor, size: 20 } })).data

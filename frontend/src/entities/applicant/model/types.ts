@@ -67,7 +67,6 @@ export interface ApplicantHistory {
   reason: string;
 }
 export interface RecruitmentPolicy {
-  final_decision_configured: boolean;
   retention_periods: Record<string, number> | null;
 }
 export function allowedApplicantTransitions(status: ApplicantStatus): ApplicantStatus[] {
@@ -81,6 +80,12 @@ export function allowedApplicantTransitions(status: ApplicantStatus): ApplicantS
     default:
       return [];
   }
+}
+
+export type ApplicantDecision = Extract<ApplicantStatus, 'HIRED' | 'REJECTED'>;
+export function allowedApplicantDecisions(status: ApplicantStatus): ApplicantDecision[] {
+  if (status === 'INTERVIEWED') return ['HIRED', 'REJECTED'];
+  return allowedApplicantTransitions(status).length > 0 ? ['REJECTED'] : [];
 }
 
 export const applicantStatusClasses: Record<ApplicantStatus, string> = {

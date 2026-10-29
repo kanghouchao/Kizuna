@@ -14,7 +14,6 @@ import com.kizuna.recruitment.domain.ApplicantStatus;
 import com.kizuna.recruitment.domain.ApplicantStatusHistory;
 import com.kizuna.recruitment.domain.ApplicantStatusHistoryRepository;
 import com.kizuna.recruitment.domain.ApplicantSummaryView;
-import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -132,11 +131,18 @@ public class ApplicantService {
   }
 
   @Transactional
-  public ApplicantResponse decide(Long storeId, String id, ApplicantTransitionRequest request) {
-    locked(storeId, id, request.version());
-    if (request.status() != ApplicantStatus.HIRED && request.status() != ApplicantStatus.REJECTED)
-      throw new ServiceException("採否の確定には採用または不採用を指定してください");
-    throw new ConflictException("選考の最終責任者が未設定のため、採否を確定できません");
+  public ApplicantResponse decide(
+      Long storeId, String id, ApplicantTransitionRequest request, String actorEmail) {
+    Applicant applicant = locked(storeId, id, request.version());
+    var before = auditValues(applicant);
+    ApplicantStatus previous = applicant.getStatus();
+    applicant.decide(request.status(), request.reason());
+    Long actorId = actorId(actorEmail);
+    applicant.recordEditor(actorId);
+    record(applicant, previous, actorId, request.reason().strip());
+    applicants.flush();
+    recordAudit(applicant, "APPLICANT_DECIDED", before);
+    return mapper.toResponse(applicant);
   }
 
   @Transactional(readOnly = true)

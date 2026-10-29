@@ -122,6 +122,16 @@ public class Applicant extends StoreScopedEntity {
     status = target;
   }
 
+  public void decide(ApplicantStatus target, String reason) {
+    requireEditable();
+    if (ApplicantIntake.text(reason, 1000) == null) throw new ServiceException("確定理由は必須です");
+    if (target != ApplicantStatus.HIRED && target != ApplicantStatus.REJECTED)
+      throw new ServiceException("採否の確定には採用または不採用を指定してください");
+    if (target == ApplicantStatus.HIRED && status != ApplicantStatus.INTERVIEWED)
+      throw new ServiceException("採用は面接済の応募者だけに確定できます");
+    status = target;
+  }
+
   private void requireEditable() {
     if (status.isTerminal()) throw new ConflictException("選考が終了した応募者は変更できません");
   }

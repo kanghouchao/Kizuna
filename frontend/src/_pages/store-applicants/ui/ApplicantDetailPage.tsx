@@ -22,6 +22,7 @@ import {
 import { notify } from '@/shared/notify';
 import { Badge, Button, ConfirmDialog, RegionError } from '@/shared/ui';
 import { ApplicantAttachmentsPanel } from './ApplicantAttachmentsPanel';
+import { ApplicantDecisionForm } from './ApplicantDecisionForm';
 import { ApplicantIntakeForm } from './ApplicantIntakeForm';
 import { ApplicantInterviewForm } from './ApplicantInterviewForm';
 import { ApplicantHistoryPanel } from './ApplicantHistoryPanel';
@@ -32,9 +33,16 @@ export default function ApplicantDetailPage() {
   const resource = useResource(() => applicantApi.get(id), [id]);
   const policy = useResource(() => applicantApi.policy());
   const [canManage, setCanManage] = useState(false);
+  const [canDecide, setCanDecide] = useState(false);
   const [attachments, setAttachments] = useState({ read: false, write: false });
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
+  const [decisionDirty, setDecisionDirty] = useState(false);
+  const dirty = formDirty || decisionDirty;
+  const clearDirty = () => {
+    setFormDirty(false);
+    setDecisionDirty(false);
+  };
   const [pendingMode, setPendingMode] = useState<
     'intake' | 'interview' | 'close' | 'reload' | null
   >(null);
@@ -48,6 +56,9 @@ export default function ApplicantDetailPage() {
     setCanManage(
       hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'RECRUITMENT_MANAGE')
     );
+    setCanDecide(
+      hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'RECRUITMENT_DECIDE')
+    );
   }, []);
   const move = (next: 'intake' | 'interview' | 'close' | 'reload') => {
     if (saving) return;
@@ -60,14 +71,14 @@ export default function ApplicantDetailPage() {
   };
   const discardAndMove = () => {
     if (!pendingMode || saving) return;
-    setDirty(false);
+    clearDirty();
     setMode(pendingMode === 'close' || pendingMode === 'reload' ? null : pendingMode);
     if (pendingMode === 'reload') void resource.reload();
     setPendingMode(null);
   };
   const applicant = resource.data;
   const changed = (value: ApplicantDetail) => {
-    setDirty(false);
+    clearDirty();
     resource.setData(value);
     setMode(null);
   };
@@ -122,7 +133,8 @@ export default function ApplicantDetailPage() {
         )}
       </div>
     );
-  const editable = canManage && allowedApplicantTransitions(applicant.status).length > 0;
+  const open = allowedApplicantTransitions(applicant.status).length > 0;
+  const editable = canManage && open;
   return (
     <div className="space-y-6">
       {header}
@@ -133,6 +145,11 @@ export default function ApplicantDetailPage() {
             <Badge variant="outline" className={applicantStatusClasses[applicant.status]}>
               {applicantStatusLabels[applicant.status]}
             </Badge>
+            {!open && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                選考は終了しました。編集・再開はできません。
+              </p>
+            )}
           </div>
           {editable && (
             <Button
@@ -172,7 +189,7 @@ export default function ApplicantDetailPage() {
         <ApplicantIntakeForm
           key={`intake:${id}:${applicant.version}`}
           initial={applicant}
-          onDirtyChange={setDirty}
+          onDirtyChange={setFormDirty}
           onSave={data =>
             save(() => applicantApi.update(id, applicant.version, data), '受付情報を保存しました')
           }
@@ -198,7 +215,7 @@ export default function ApplicantDetailPage() {
           <ApplicantInterviewForm
             key={`interview:${id}:${applicant.version}`}
             initial={applicant.interview}
-            onDirtyChange={setDirty}
+            onDirtyChange={setFormDirty}
             onSave={data =>
               save(
                 () => applicantApi.interview(id, applicant.version, data),
@@ -234,7 +251,7 @@ export default function ApplicantDetailPage() {
             key={`transition:${id}:${applicant.version}`}
             applicant={applicant}
             busy={saving}
-            onDirtyChange={setDirty}
+            onDirtyChange={setFormDirty}
             onSave={(status, reason) =>
               save(
                 () => applicantApi.transition(id, applicant.version, status, reason),
@@ -244,8 +261,25 @@ export default function ApplicantDetailPage() {
           />
         </section>
       )}
+      {canDecide && open && mode === null && (
+        <section className="rounded-xl border bg-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold">採否の確定</h2>
+          <ApplicantDecisionForm
+            key={`decision:${id}:${applicant.version}`}
+            applicant={applicant}
+            busy={saving}
+            onDirtyChange={setDecisionDirty}
+            onSave={(status, reason) =>
+              save(
+                () => applicantApi.decide(id, applicant.version, status, reason),
+                '採否を確定しました'
+              )
+            }
+          />
+        </section>
+      )}
       <section className="rounded-xl border bg-card p-6 space-y-4">
-        <h2 className="text-lg font-semibold">採否確定・情報保持方針</h2>
+        <h2 className="text-lg font-semibold">情報保持方針</h2>
         {policy.failure !== null ? (
           <RegionError
             message="採用方針の取得に失敗しました"
@@ -254,17 +288,9 @@ export default function ApplicantDetailPage() {
         ) : policy.isLoading ? (
           <p>読み込み中...</p>
         ) : (
-          <>
-            <p>
-              {policy.data?.final_decision_configured
-                ? '採否確定は専用権限が必要です。'
-                : '最終責任者が未設定のため、採用・不採用は確定できません。'}
-            </p>
-            <Button disabled>採否を確定</Button>
-            <p className="text-sm text-muted-foreground">
-              保存期間・匿名化期限は未設定です。自動削除は行いません。
-            </p>
-          </>
+          <p className="text-sm text-muted-foreground">
+            保存期間・匿名化期限は未設定です。自動削除は行いません。
+          </p>
         )}
       </section>
       <ConfirmDialog
@@ -280,7 +306,7 @@ export default function ApplicantDetailPage() {
           key={`attachments:${storeId}:${id}`}
           id={id}
           canManage={attachments.write}
-          editable={allowedApplicantTransitions(applicant.status).length > 0}
+          editable={open}
         />
       )}
       <ApplicantHistoryPanel key={`history:${id}:${applicant.version}`} id={id} />
