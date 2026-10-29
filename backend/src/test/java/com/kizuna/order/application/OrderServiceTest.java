@@ -32,7 +32,6 @@ import com.kizuna.order.api.dto.CustomerSelectionRequest;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
-import com.kizuna.order.api.dto.OrderResponse;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.InvalidOrderFeeLineException;
@@ -43,7 +42,6 @@ import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderFeeLineDraft;
 import com.kizuna.order.domain.OrderFeeLineKind;
-import com.kizuna.order.domain.OrderPatch;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderReceiptTokenStatus;
@@ -249,14 +247,6 @@ class OrderServiceTest {
     req.setCastId("g1");
     req.setReceptionistId(1L);
 
-    Order entity =
-        Order.builder()
-            .status(OrderStatus.CONFIRMED)
-            .course(OrderCourses.course("基本", 60, 0))
-            .build();
-    OrderResponse res = OrderResponse.builder().status("CONFIRMED").build();
-
-    // 指定された顧客は共有の解決口を通って書き込み先になる（そこで行が押さえられる）
     Customer selected = Customer.builder().build();
     selected.setId("c1");
     when(customerRepository.findByIdAndStoreIdForUpdateNoWait("c1", STORE_ID))
@@ -883,11 +873,6 @@ class OrderServiceTest {
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("受付担当者が見つかりません");
     verify(orderRepository, never()).save(any());
-  }
-
-  /** 人数と備考だけを差し替える部分更新コマンド（汎用更新の典型的な編集）。 */
-  private static OrderPatch paxAndRemarksPatch(Integer pax, String remarks) {
-    return new OrderPatch(null, null, null, pax, null, null, null, null, null, remarks, null);
   }
 
   @Test
