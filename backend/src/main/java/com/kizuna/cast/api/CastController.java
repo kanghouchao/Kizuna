@@ -70,8 +70,11 @@ public class CastController {
       @CurrentStore Long storeId,
       @Valid @RequestBody CastCreateRequest request,
       Principal principal) {
-    String id = castService.create(storeId, castMapper.toCommand(request), principal.getName());
-    return ResponseEntity.status(HttpStatus.CREATED).body(castService.get(storeId, id));
+    var created = castService.create(storeId, castMapper.toCommand(request), principal.getName());
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(
+            castMapper.toResponse(
+                created.enrollment(), created.profile(), null, created.deletable()));
   }
 
   @PutMapping("/{id}")

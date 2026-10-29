@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.cast.api.dto.CastMapper;
+import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
@@ -248,21 +249,24 @@ class CastDeleteAuditPostgresTest {
   }
 
   private String create() {
-    return casts.create(
-        storeId,
-        new CastCreateCommand(
-            "秘密の名前-" + UUID.randomUUID(),
-            null,
-            LocalDate.of(2026, 1, 1),
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null),
-        ORDINARY);
+    return casts
+        .create(
+            storeId,
+            new CastCreateCommand(
+                "秘密の名前-" + UUID.randomUUID(),
+                null,
+                LocalDate.of(2026, 1, 1),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null),
+            ORDINARY)
+        .enrollment()
+        .getId();
   }
 
   private long count(String table, String id) {
@@ -351,6 +355,11 @@ class CastDeleteAuditPostgresTest {
 
     @Bean
     OrderReferenceCheck orders() {
+      return ids -> Set.of();
+    }
+
+    @Bean
+    ApplicantReferenceCheck applicants() {
       return ids -> Set.of();
     }
 

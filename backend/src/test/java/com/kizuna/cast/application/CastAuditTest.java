@@ -94,6 +94,7 @@ class CastAuditTest {
             definitions,
             ids -> Set.of(),
             ids -> Set.of(),
+            ids -> Set.of(),
             audit);
     var actor =
         User.builder()
@@ -142,7 +143,8 @@ class CastAuditTest {
             null,
             null,
             null);
-    assertThat(service.create(STORE_ID, command, "operator@example.test")).isEqualTo("enrollment");
+    assertThat(service.create(STORE_ID, command, "operator@example.test").enrollment().getId())
+        .isEqualTo("enrollment");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_ENROLLMENT_CREATED");

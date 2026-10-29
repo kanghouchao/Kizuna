@@ -6,6 +6,7 @@ import com.kizuna.cast.api.dto.CastPublicationResponse;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
@@ -72,6 +73,7 @@ public class CastService {
   private final CastFieldDefinitionRepository castFieldDefinitionRepository;
   private final AttendanceReferenceCheck attendanceReferenceCheck;
   private final OrderReferenceCheck orderReferenceCheck;
+  private final ApplicantReferenceCheck applicantReferenceCheck;
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
@@ -128,6 +130,7 @@ public class CastService {
     Set<String> ids = Set.copyOf(candidates);
     Set<String> referenced = new HashSet<>(attendanceReferenceCheck.findReferencedCastIds(ids));
     referenced.addAll(orderReferenceCheck.findReferencedCastIds(ids));
+    referenced.addAll(applicantReferenceCheck.findReferencedCastIds(ids));
     candidates.removeAll(referenced);
     return candidates;
   }
@@ -160,7 +163,7 @@ public class CastService {
   }
 
   @Transactional
-  public String create(Long storeId, CastCreateCommand command, String actorEmail) {
+  public CastCreation create(Long storeId, CastCreateCommand command, String actorEmail) {
     storeRepository.lockCastFields(storeId);
     CastEnrollment newEnrollment =
         CastEnrollment.builder()
@@ -184,7 +187,8 @@ public class CastService {
         null,
         Map.of(),
         snapshot(enrollment, profile));
-    return enrollment.getId();
+    return new CastCreation(
+        enrollment, profile, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
   }
 
   private static Map<String, String> snapshot(CastEnrollment enrollment, CastProfile profile) {
