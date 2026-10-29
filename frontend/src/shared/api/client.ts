@@ -5,6 +5,7 @@ import {
   clearSession,
   getSessionKind,
   getCurrentStoreId,
+  isStorePath,
   redirectToLogin,
   rememberMemberReturnPath,
 } from '@/shared/lib';
@@ -46,11 +47,7 @@ apiClient.interceptors.request.use(
       if (sessionKind) {
         const storeId = getCurrentStoreId();
         const pathname = window.location.pathname;
-        if (
-          sessionKind === 'admin' &&
-          storeId &&
-          (pathname === '/store' || pathname.startsWith('/store/'))
-        ) {
+        if (sessionKind === 'admin' && storeId && isStorePath(pathname)) {
           (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
         }
       } else {

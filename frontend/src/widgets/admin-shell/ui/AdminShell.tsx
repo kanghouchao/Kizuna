@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { MeProvider, StoreContextProvider, useAuth, useStoreContext } from '@/entities/user';
+import { isStorePath } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
 
 interface AdminShellProps {
@@ -52,7 +53,7 @@ function StoreScopedContent({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const { stores, currentStoreId, loadFailed, reload } = useStoreContext();
 
-  if (pathname !== '/store' && !pathname.startsWith('/store/')) {
+  if (!isStorePath(pathname)) {
     return children;
   }
 
