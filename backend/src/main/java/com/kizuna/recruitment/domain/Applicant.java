@@ -68,6 +68,9 @@ public class Applicant extends StoreScopedEntity {
   @Column(nullable = false)
   private Long modifiedBy;
 
+  @Column(length = 64)
+  private String enrollmentId;
+
   public void recordEditor(Long actorId) {
     modifiedBy = Objects.requireNonNull(actorId);
     editSequence++;
@@ -130,6 +133,17 @@ public class Applicant extends StoreScopedEntity {
     if (target == ApplicantStatus.HIRED && status != ApplicantStatus.INTERVIEWED)
       throw new ServiceException("採用は面接済の応募者だけに確定できます");
     status = target;
+  }
+
+  /** 在籍登録は選考の終端後の操作なので、終端を拒む requireEditable とは別の前提で判定する。 */
+  public void requireEnrollable() {
+    if (status != ApplicantStatus.HIRED) throw new ServiceException("在籍登録は採用済みの応募者だけに行えます");
+    if (enrollmentId != null) throw new ConflictException("この応募者は既に在籍登録されています");
+  }
+
+  public void recordEnrollment(String enrollmentId) {
+    requireEnrollable();
+    this.enrollmentId = Objects.requireNonNull(enrollmentId);
   }
 
   private void requireEditable() {

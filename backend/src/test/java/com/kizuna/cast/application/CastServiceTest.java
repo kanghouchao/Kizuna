@@ -7,13 +7,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
@@ -121,20 +121,20 @@ class CastServiceTest {
               return e;
             });
     when(profiles.save(any())).thenAnswer(inv -> inv.getArgument(0));
-    CastCreateRequest request = new CastCreateRequest();
-    request.setStartedOn(LocalDate.of(2026, 1, 1));
-    request.setName("花");
-    var response = service.create(STORE_ID, request, "actor");
-    assertThat(response.getId()).isEqualTo("e1");
-    assertThat(response.isDeletable()).isTrue();
-    assertThat(response.getName()).isEqualTo("花");
-    assertThat(response.getPublicationStatus()).isEqualTo(CastPublicationStatus.UNPUBLISHED);
-    assertThat(response.getStartedOn()).isEqualTo(LocalDate.of(2026, 1, 1));
+    var command =
+        new CastCreateCommand(
+            "花", null, LocalDate.of(2026, 1, 1), null, null, null, null, null, null, null, null);
+    assertThat(service.create(STORE_ID, command, "actor")).isEqualTo("e1");
     var savedEnrollment = ArgumentCaptor.forClass(CastEnrollment.class);
     verify(enrollments).save(savedEnrollment.capture());
     assertThat(savedEnrollment.getValue().getStartedOn()).isEqualTo(LocalDate.of(2026, 1, 1));
+    assertThat(savedEnrollment.getValue().getStatus()).isEqualTo(CastEnrollmentStatus.ENROLLED);
     var savedProfile = ArgumentCaptor.forClass(CastProfile.class);
     verify(profiles).save(savedProfile.capture());
+    assertThat(savedProfile.getValue().getName()).isEqualTo("花");
+    assertThat(savedProfile.getValue().getEnrollmentId()).isEqualTo("e1");
+    assertThat(savedProfile.getValue().getPublicationStatus())
+        .isEqualTo(CastPublicationStatus.UNPUBLISHED);
     var savedHistory = ArgumentCaptor.forClass(CastEnrollmentStatusHistory.class);
     verify(histories).save(savedHistory.capture());
     assertThat(

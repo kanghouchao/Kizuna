@@ -116,6 +116,26 @@ class ApplicantTest {
         .isInstanceOf(ConflictException.class);
   }
 
+  @ParameterizedTest
+  @EnumSource(ApplicantStatus.class)
+  void enrollsOnlyHiredApplicantOnce(ApplicantStatus source) {
+    var applicant = Applicant.receive(7L, intake());
+    ReflectionTestUtils.setField(applicant, "status", source);
+    if (source != ApplicantStatus.HIRED) {
+      assertThatThrownBy(() -> applicant.recordEnrollment("e1"))
+          .isInstanceOf(ServiceException.class);
+      assertThat(applicant.getEnrollmentId()).isNull();
+      return;
+    }
+    applicant.recordEnrollment("e1");
+    assertThat(applicant.getEnrollmentId()).isEqualTo("e1");
+    assertThat(applicant.getStatus()).isEqualTo(ApplicantStatus.HIRED);
+    assertThatThrownBy(applicant::requireEnrollable).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> applicant.recordEnrollment("e2"))
+        .isInstanceOf(ConflictException.class);
+    assertThat(applicant.getEnrollmentId()).isEqualTo("e1");
+  }
+
   @Test
   void rejectsStaleVersionAndTracksEverySaveEvenUnchanged() {
     var applicant = Applicant.receive(7L, intake());

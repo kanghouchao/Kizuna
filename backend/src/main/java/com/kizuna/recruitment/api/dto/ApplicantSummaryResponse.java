@@ -14,4 +14,5 @@ public record ApplicantSummaryResponse(
     String sourceMedia,
     String assignee,
     OffsetDateTime createdAt,
-    Long version) {}
+    Long version,
+    String enrollmentId) {}

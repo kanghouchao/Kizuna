@@ -11,6 +11,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.cast.application.CastCreateCommand;
+import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
+import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
 import com.kizuna.recruitment.api.dto.ApplicantMapper;
@@ -33,6 +37,7 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +60,7 @@ class ApplicantServiceTest {
   @Mock UserRepository users;
   @Mock BusinessAudit audit;
   @Mock SystemConfigService systemConfigs;
+  @Mock CastService casts;
   ApplicantService service;
   Applicant applicant;
   ApplicantIntakeRequest intake =
@@ -80,7 +86,8 @@ class ApplicantServiceTest {
             users,
             Mappers.getMapper(ApplicantMapper.class),
             audit,
-            systemConfigs);
+            systemConfigs,
+            casts);
     applicant = Applicant.receive(STORE_ID, intake.toIntake());
     applicant.setId("a");
     ReflectionTestUtils.setField(applicant, "version", 0L);
@@ -255,6 +262,73 @@ class ApplicantServiceTest {
     verifyNoInteractions(audit);
   }
 
+  private static ApplicantEnrollmentRequest enrollment(Long version) {
+    return new ApplicantEnrollmentRequest(
+        version,
+        "源氏名",
+        "SUSPENDED",
+        LocalDate.of(2026, 11, 1),
+        null,
+        "紹介",
+        20,
+        null,
+        null,
+        null,
+        null,
+        3);
+  }
+
+  @Test
+  void enrollmentCreatesCastFromOperatorInputAndAuditsTheLink() {
+    actor();
+    lock();
+    ReflectionTestUtils.setField(applicant, "status", ApplicantStatus.HIRED);
+    var command = ArgumentCaptor.forClass(CastCreateCommand.class);
+    when(casts.create(eq(STORE_ID), command.capture(), eq("actor"))).thenReturn("e1");
+    var response = service.enroll(STORE_ID, "a", enrollment(0L), "actor");
+    assertThat(response.enrollmentId()).isEqualTo("e1");
+    assertThat(response.status()).isEqualTo(ApplicantStatus.HIRED);
+    assertThat(applicant.getModifiedBy()).isEqualTo(9L);
+    assertThat(command.getValue())
+        .isEqualTo(
+            new CastCreateCommand(
+                "源氏名",
+                CastEnrollmentStatus.SUSPENDED,
+                LocalDate.of(2026, 11, 1),
+                null,
+                "紹介",
+                20,
+                null,
+                null,
+                null,
+                null,
+                3));
+    verify(histories, never()).save(any());
+    verify(audit)
+        .recordCurrent(
+            STORE_ID,
+            "APPLICANT_ENROLLED",
+            "APPLICANT",
+            "a",
+            Map.of("enrollment_id", "", "version", "0"),
+            Map.of("enrollment_id", "e1", "version", "0"));
+  }
+
+  @Test
+  void enrollmentRefusesBeforeCreatingAnything() {
+    lock();
+    assertThatThrownBy(() -> service.enroll(STORE_ID, "a", enrollment(0L), "actor"))
+        .isInstanceOf(ServiceException.class);
+    ReflectionTestUtils.setField(applicant, "status", ApplicantStatus.HIRED);
+    assertThatThrownBy(() -> service.enroll(STORE_ID, "a", enrollment(3L), "actor"))
+        .isInstanceOf(ConflictException.class);
+    applicant.recordEnrollment("existing");
+    assertThatThrownBy(() -> service.enroll(STORE_ID, "a", enrollment(0L), "actor"))
+        .isInstanceOf(ConflictException.class);
+    verifyNoInteractions(casts, audit);
+    verify(applicants, never()).flush();
+  }
+
   @Test
   void scopeInvisibleReadsAndMutationsFailClosed() {
     assertThatThrownBy(() -> service.get(STORE_ID, "outside"))
@@ -266,6 +340,9 @@ class ApplicantServiceTest {
                 service.update(
                     STORE_ID, "outside", new ApplicantUpdateRequest(0L, intake), "actor"))
         .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.enroll(STORE_ID, "outside", enrollment(0L), "actor"))
+        .isInstanceOf(NotFoundException.class);
+    verifyNoInteractions(casts);
     verify(histories, never())
         .findByStoreIdAndApplicantIdOrderByCreatedAtDescIdDesc(any(), any(), any());
   }

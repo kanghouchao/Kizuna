@@ -20,4 +20,6 @@ public interface ApplicantSummaryView {
   OffsetDateTime getCreatedAt();
 
   Long getVersion();
+
+  String getEnrollmentId();
 }

@@ -13,10 +13,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastInvitationResponse;
+import com.kizuna.cast.api.dto.CastMapperImpl;
 import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
+import com.kizuna.cast.application.CastCreateCommand;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
@@ -45,7 +46,11 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /** ハンドラ層で閉じている約束（offset ページングの全順序、削除 204）の単体テスト。 */
 @WebMvcTest(CastController.class)
-@Import({CastControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  CastControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  CastMapperImpl.class
+})
 class CastControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -193,9 +198,10 @@ class CastControllerTest {
         .andExpect(status().isBadRequest());
     verify(castService, never()).create(anyLong(), any(), any());
 
-    ArgumentCaptor<CastCreateRequest> captor = ArgumentCaptor.forClass(CastCreateRequest.class);
+    ArgumentCaptor<CastCreateCommand> captor = ArgumentCaptor.forClass(CastCreateCommand.class);
     when(castService.create(eq(1L), captor.capture(), eq("operator@example.test")))
-        .thenReturn(new CastResponse());
+        .thenReturn("e1");
+    when(castService.get(1L, "e1")).thenReturn(new CastResponse());
     mockMvc
         .perform(
             post("/casts")
@@ -205,6 +211,6 @@ class CastControllerTest {
                 .contentType("application/json")
                 .content("{\"name\":\"花\",\"started_on\":\"2099-04-01\"}"))
         .andExpect(status().isCreated());
-    assertThat(captor.getValue().getStartedOn()).isEqualTo(LocalDate.of(2099, 4, 1));
+    assertThat(captor.getValue().startedOn()).isEqualTo(LocalDate.of(2099, 4, 1));
   }
 }

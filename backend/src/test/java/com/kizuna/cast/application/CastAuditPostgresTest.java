@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
@@ -234,10 +233,21 @@ class CastAuditPostgresTest {
   }
 
   private String create() {
-    var request = new CastCreateRequest();
-    request.setStartedOn(LocalDate.of(2026, 1, 1));
-    request.setName("秘密の名前-" + UUID.randomUUID());
-    return casts.create(storeId, request, ORDINARY).getId();
+    return casts.create(
+        storeId,
+        new CastCreateCommand(
+            "秘密の名前-" + UUID.randomUUID(),
+            null,
+            LocalDate.of(2026, 1, 1),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null),
+        ORDINARY);
   }
 
   @Test

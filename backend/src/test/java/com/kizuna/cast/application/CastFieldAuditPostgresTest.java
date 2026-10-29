@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastFieldDefinitionCreateRequest;
 import com.kizuna.cast.api.dto.CastFieldDefinitionMapper;
 import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
@@ -188,10 +187,22 @@ class CastFieldAuditPostgresTest {
   }
 
   private String cast(Map<String, String> values) {
-    var request = new CastCreateRequest();
-    request.setStartedOn(LocalDate.of(2026, 1, 1));
-    request.setName("秘密の名前-" + UUID.randomUUID());
-    String id = casts.create(currentStore(), request, ORDINARY).getId();
+    String id =
+        casts.create(
+            currentStore(),
+            new CastCreateCommand(
+                "秘密の名前-" + UUID.randomUUID(),
+                null,
+                LocalDate.of(2026, 1, 1),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null),
+            ORDINARY);
     if (!values.isEmpty()) write(id, values);
     return id;
   }
@@ -400,10 +411,22 @@ class CastFieldAuditPostgresTest {
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     String definition = definition("private-key", false);
-    var request = new CastCreateRequest();
-    request.setStartedOn(LocalDate.of(2026, 1, 1));
-    request.setName("秘密の名前");
-    String id = casts.create(storeId, request, SECOND).getId();
+    String id =
+        casts.create(
+            storeId,
+            new CastCreateCommand(
+                "秘密の名前",
+                null,
+                LocalDate.of(2026, 1, 1),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null),
+            SECOND);
     var write = new CastUpdateRequest();
     write.setCustomFields(Map.of("private-key", "秘密の値"));
     casts.update(storeId, id, write, SECOND);

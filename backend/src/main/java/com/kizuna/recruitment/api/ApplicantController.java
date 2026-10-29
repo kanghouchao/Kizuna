@@ -1,5 +1,6 @@
 package com.kizuna.recruitment.api;
 
+import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantHistoryResponse;
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
@@ -106,6 +107,17 @@ public class ApplicantController {
       @Valid @RequestBody ApplicantTransitionRequest request,
       Principal principal) {
     return applicants.decide(storeId, id, request, principal.getName());
+  }
+
+  @PostMapping("/{id}/enrollment")
+  @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW') and hasAuthority('PERM_CAST_MANAGE')")
+  public ResponseEntity<ApplicantResponse> enroll(
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @Valid @RequestBody ApplicantEnrollmentRequest request,
+      Principal principal) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(applicants.enroll(storeId, id, request, principal.getName()));
   }
 
   @GetMapping("/{id}/history")

@@ -5,6 +5,7 @@ import com.kizuna.cast.api.dto.CastEnrollmentSnapshotResponse;
 import com.kizuna.cast.api.dto.CastEnrollmentStatusHistoryResponse;
 import com.kizuna.cast.api.dto.CastEnrollmentStatusResponse;
 import com.kizuna.cast.api.dto.CastInvitationResponse;
+import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastPublicationRequest;
 import com.kizuna.cast.api.dto.CastPublicationResponse;
@@ -44,6 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CastController {
 
   private final CastService castService;
+  private final CastMapper castMapper;
   private final CastEnrollmentService enrollmentService;
   private final CastInvitationService castInvitationService;
 
@@ -68,8 +70,8 @@ public class CastController {
       @CurrentStore Long storeId,
       @Valid @RequestBody CastCreateRequest request,
       Principal principal) {
-    return ResponseEntity.status(HttpStatus.CREATED)
-        .body(castService.create(storeId, request, principal.getName()));
+    String id = castService.create(storeId, castMapper.toCommand(request), principal.getName());
+    return ResponseEntity.status(HttpStatus.CREATED).body(castService.get(storeId, id));
   }
 
   @PutMapping("/{id}")

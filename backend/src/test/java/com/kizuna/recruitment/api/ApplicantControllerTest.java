@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
 import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
@@ -30,12 +31,14 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.lang.reflect.RecordComponent;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -99,7 +102,8 @@ class ApplicantControllerTest {
             null,
             "担当",
             OffsetDateTime.now(),
-            0L);
+            0L,
+            "e1");
     when(service.list(eq(1L), any(), any(), any())).thenReturn(new PageImpl<>(List.of(summary)));
     mvc.perform(
             get("/applicants")
@@ -107,6 +111,7 @@ class ApplicantControllerTest {
                 .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].name").value("応募者"))
+        .andExpect(jsonPath("$.content[0].enrollment_id").value("e1"))
         .andExpect(jsonPath("$.content[0].phone").doesNotExist())
         .andExpect(jsonPath("$.content[0].address").doesNotExist())
         .andExpect(jsonPath("$.content[0].interview").doesNotExist());
@@ -122,7 +127,8 @@ class ApplicantControllerTest {
             "sourceMedia",
             "assignee",
             "createdAt",
-            "version");
+            "version",
+            "enrollmentId");
   }
 
   @Test
@@ -224,6 +230,66 @@ class ApplicantControllerTest {
                             new SimpleGrantedAuthority("PERM_RECRUITMENT_DECIDE"))))
         .andExpect(status().isOk());
     verify(service).decide(eq(7L), eq("a"), any(ApplicantTransitionRequest.class), eq("actor"));
+  }
+
+  @Test
+  void enrollmentRequiresReadAndCastManageTogether() throws Exception {
+    String body = "{\"version\":0,\"name\":\"花\",\"started_on\":\"2026-11-01\"}";
+    for (List<String> permissions :
+        List.of(
+            List.of("PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_MANAGE", "PERM_RECRUITMENT_DECIDE"),
+            List.of("PERM_CAST_MANAGE"))) {
+      mvc.perform(
+              post("/applicants/a/enrollment")
+                  .with(csrf())
+                  .header("X-Store-ID", "1")
+                  .contentType("application/json")
+                  .content(body)
+                  .with(
+                      actor()
+                          .authorities(
+                              permissions.stream().map(SimpleGrantedAuthority::new).toList())))
+          .andExpect(status().isForbidden());
+    }
+    verifyNoInteractions(service);
+    mvc.perform(
+            post("/applicants/a/enrollment")
+                .with(csrf())
+                .header("X-Store-ID", "7")
+                .contentType("application/json")
+                .content(body)
+                .with(
+                    actor()
+                        .authorities(
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                            new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
+        .andExpect(status().isCreated());
+    var request = ArgumentCaptor.forClass(ApplicantEnrollmentRequest.class);
+    verify(service).enroll(eq(7L), eq("a"), request.capture(), eq("actor"));
+    assertThat(request.getValue().startedOn()).isEqualTo(LocalDate.of(2026, 11, 1));
+  }
+
+  @Test
+  void enrollmentRequiresVersionNameAndStartedOn() throws Exception {
+    for (String body :
+        List.of(
+            "{\"name\":\"花\",\"started_on\":\"2026-11-01\"}",
+            "{\"version\":0,\"name\":\" \",\"started_on\":\"2026-11-01\"}",
+            "{\"version\":0,\"name\":\"花\"}",
+            "{\"version\":0,\"name\":\"花\",\"started_on\":\"2026-11-01\",\"status\":\"WITHDRAWN\"}"))
+      mvc.perform(
+              post("/applicants/a/enrollment")
+                  .with(csrf())
+                  .header("X-Store-ID", "1")
+                  .contentType("application/json")
+                  .content(body)
+                  .with(
+                      actor()
+                          .authorities(
+                              new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                              new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
+          .andExpect(status().isBadRequest());
+    verifyNoInteractions(service);
   }
 
   @Test
