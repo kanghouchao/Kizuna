@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import {
   allowedApplicantDecisions,
   applicantStatusLabels,
@@ -41,6 +41,7 @@ export function ApplicantDecisionForm({
   const [pending, setPending] = useState<{ status: ApplicantDecision; reason: string } | null>(
     null
   );
+  const selected = useWatch({ control: form.control, name: 'status' });
   const dirty = form.formState.isDirty;
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   if (!allowed.length) return null;
@@ -113,7 +114,7 @@ export function ApplicantDecisionForm({
       </Form>
       <ConfirmDialog
         open={pending !== null}
-        title={pending ? `応募者を${applicantStatusLabels[pending.status]}に確定しますか？` : ''}
+        title={`応募者を${selected ? applicantStatusLabels[selected] : ''}に確定しますか？`}
         description="選考を終了します。この操作の後は編集・再開できません。"
         confirmLabel="確定する"
         onClose={() => setPending(null)}
