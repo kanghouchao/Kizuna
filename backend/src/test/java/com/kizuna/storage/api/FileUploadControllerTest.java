@@ -90,7 +90,7 @@ class FileUploadControllerTest {
   @Test
   @DisplayName("店舗を名乗ればその店舗配下に保存すること")
   void upload_storesUnderStorePrefixWhenStoreNamed() {
-    authenticateWithAuthorities("PERM_ORDER_MANAGE");
+    authenticateWithAuthorities(PermissionCode.STORE_PROFILE_MANAGE.authority());
     when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");
     when(file.getSize()).thenReturn(4L);
@@ -104,7 +104,7 @@ class FileUploadControllerTest {
   @Test
   @DisplayName("保存が成功した後に、保存先の相対パス・bucket・サイズ・種別で監査を依頼すること")
   void upload_recordsAuditAfterStore() {
-    authenticateWithAuthorities("PERM_ORDER_MANAGE");
+    authenticateWithAuthorities(PermissionCode.STORE_PROFILE_MANAGE.authority());
     when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");
     when(file.getSize()).thenReturn(4L);
@@ -120,12 +120,24 @@ class FileUploadControllerTest {
   @Test
   @DisplayName("保存が失敗したら監査を依頼しないこと")
   void upload_doesNotRecordAuditWhenStoreFails() {
-    authenticateWithAuthorities("PERM_ORDER_MANAGE");
+    authenticateWithAuthorities(PermissionCode.STORE_PROFILE_MANAGE.authority());
     when(fileStorageService.store("5", "public", file)).thenThrow(new IllegalStateException("s3"));
 
     assertThatThrownBy(() -> controller.upload(5L, file, "public"))
         .isInstanceOf(IllegalStateException.class);
 
+    verifyNoInteractions(storedFileAudit);
+  }
+
+  @Test
+  @DisplayName("店舗を名乗っても、店舗プロフィール・キャスト管理のどちらの能力も無ければ保存せず拒否すること")
+  void upload_rejectsStoreWithoutProfileOrCastManage() {
+    authenticateWithAuthorities(PermissionCode.ASSET_MANAGE.authority(), "PERM_ORDER_MANAGE");
+
+    assertThatThrownBy(() -> controller.upload(5L, file, "public"))
+        .isInstanceOf(AccessDeniedException.class);
+
+    verify(fileStorageService, never()).store(any(), any(), any());
     verifyNoInteractions(storedFileAudit);
   }
 }

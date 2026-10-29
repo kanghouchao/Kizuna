@@ -6,6 +6,7 @@ import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.storage.application.StoredFileAudit;
 import com.kizuna.user.domain.PermissionCode;
+import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,8 @@ public class FileUploadController {
   private final StoredFileAudit storedFileAudit;
 
   @PostMapping
-  @PreAuthorize("isAuthenticated()")
+  @PreAuthorize(
+      "hasAnyAuthority('PERM_STORE_PROFILE_MANAGE', 'PERM_CAST_MANAGE', 'PERM_ASSET_MANAGE')")
   public ResponseEntity<FileUploadResponse> upload(
       @CurrentStore(required = false) Long storeId,
       @RequestParam("file") MultipartFile file,
@@ -52,26 +54,32 @@ public class FileUploadController {
   /**
    * 保存先プレフィクスを決める。店舗を名乗ればその店舗配下、名乗らなければプラットフォーム共有領域（platform）へ保存する。
    *
-   * <p>共有領域への保存はプラットフォーム資産管理能力（{@code PERM_ASSET_MANAGE}）の保持者のみ許可する。店舗を名乗らない要求は
-   * 店舗の検証を経ないため、資産を共有領域へ誤って保存しないよう fail-closed で 403 拒否する。
+   * <p>店舗配下への保存は店舗プロフィール管理（{@code PERM_STORE_PROFILE_MANAGE}）かキャスト管理（{@code PERM_CAST_MANAGE}）の
+   * 保持者のみ、共有領域への保存は資産管理（{@code PERM_ASSET_MANAGE}）の保持者のみ許可する。店舗を名乗らない要求は店舗の検証を経ないため、
+   * 共有領域へ誤って保存しないよう fail-closed で 403 拒否する。
    */
   private String resolveStoragePrefix(Long storeId) {
     if (storeId != null) {
+      if (!hasAnyAuthority(PermissionCode.STORE_PROFILE_MANAGE, PermissionCode.CAST_MANAGE)) {
+        throw new AccessDeniedException("店舗配下へのアップロードは店舗プロフィール管理またはキャスト管理能力の保持者のみ許可されています");
+      }
       return String.valueOf(storeId);
     }
-    if (!hasAssetManage()) {
+    if (!hasAnyAuthority(PermissionCode.ASSET_MANAGE)) {
       throw new AccessDeniedException("プラットフォーム共有領域へのアップロードはプラットフォーム資産管理能力の保持者のみ許可されています");
     }
     return "platform";
   }
 
-  private boolean hasAssetManage() {
+  private boolean hasAnyAuthority(PermissionCode... codes) {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication == null) {
       return false;
     }
-    String required = PermissionCode.ASSET_MANAGE.authority();
     return authentication.getAuthorities().stream()
-        .anyMatch(granted -> required.equals(granted.getAuthority()));
+        .anyMatch(
+            granted ->
+                Arrays.stream(codes)
+                    .anyMatch(code -> code.authority().equals(granted.getAuthority())));
   }
 }

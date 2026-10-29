@@ -22,7 +22,7 @@ describe('fileApi.upload', () => {
     apiClient.defaults.adapter = adapter;
 
     try {
-      await fileApi.upload(new File(['x'], 'a.png', { type: 'image/png' }), 'public');
+      await fileApi.upload(new File(['x'], 'a.png', { type: 'image/png' }));
     } finally {
       apiClient.defaults.adapter = original;
     }

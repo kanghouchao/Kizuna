@@ -1,6 +1,13 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { loginAsStoreAdmin, SAMPLE_PNG as image, uploadStoreImage } from './store-api';
+import {
+  loginAsStoreAdmin,
+  loginUser,
+  registerMember,
+  SAMPLE_PNG as image,
+  STORE_HEADERS,
+  uploadStoreImage,
+} from './store-api';
 
 const { When, Then } = createBdd();
 let publicUrl: string;
@@ -26,4 +33,28 @@ Then('返された公開 URL から認証なしで同じ画像を取得できる
 Then('公開ストレージへの匿名書き込みと一覧取得は拒否される', async ({ request }) => {
   expect((await request.put(publicUrl, { data: image })).status()).toBe(403);
   expect((await request.get('/static/uploads?list-type=2')).status()).toBe(403);
+});
+
+let memberUpload: Awaited<ReturnType<typeof uploadStoreImage>>;
+
+When('会員が店舗の領域へ画像をアップロードする', async ({ request }) => {
+  const email = `file-upload-e2e-${Date.now()}@kizuna.test`;
+  await registerMember(request, email, 'pass12345', 'E2E画像会員');
+  memberUpload = await uploadStoreImage(request, await loginUser(request, email, 'pass12345'));
+});
+
+Then('保存は権限がないため拒否される', async () => {
+  expect(memberUpload.status()).toBe(403);
+});
+
+Then('店長が白名簿外の bucket を指定すると不正な要求として拒否される', async ({ request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const response = await request.post('/api/files', {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    multipart: {
+      bucket: 'private',
+      file: { name: 'storage-probe.png', mimeType: 'image/png', buffer: image },
+    },
+  });
+  expect(response.status()).toBe(400);
 });

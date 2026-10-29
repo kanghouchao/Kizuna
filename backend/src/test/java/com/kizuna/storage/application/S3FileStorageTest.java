@@ -154,4 +154,27 @@ class S3FileStorageTest {
 
     verify(s3Client).putBucketPolicy(any(PutBucketPolicyRequest.class));
   }
+
+  @Test
+  void store_rejectsBucketOutsideAllowList() {
+    assertThatThrownBy(() -> storageService.store("1", "private", multipartFile))
+        .isInstanceOf(ServiceException.class);
+
+    verifyNoInteractions(s3Client);
+  }
+
+  @Test
+  void store_acceptsKeyAtAuditTargetLimitAndRejectsOneOver() throws IOException {
+    when(multipartFile.getSize()).thenReturn(1L);
+    when(multipartFile.getContentType()).thenReturn("image/jpeg");
+    when(multipartFile.getBytes()).thenReturn(new byte[1]);
+    // key = "public/1/" (9) + UUID (36) + 拡張子（"." 込み）
+    String atLimit = "x." + "e".repeat(100 - 9 - 36 - 1);
+    when(multipartFile.getOriginalFilename()).thenReturn(atLimit);
+    assertThat(storageService.store("1", "public", multipartFile)).hasSize(100);
+
+    when(multipartFile.getOriginalFilename()).thenReturn(atLimit + "e");
+    assertThatThrownBy(() -> storageService.store("1", "public", multipartFile))
+        .isInstanceOf(ServiceException.class);
+  }
 }
