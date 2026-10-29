@@ -42,6 +42,7 @@ export interface ApplicantSummary {
   status: ApplicantStatus;
   created_at: string;
   version: number;
+  enrollment_id: string | null;
 }
 export interface ApplicantInterview {
   interview_at: string;
@@ -57,6 +58,21 @@ export interface ApplicantDetail extends ApplicantIntake {
   modified_by: number;
   version: number;
   interview?: ApplicantInterview | null;
+  enrollment_id: string | null;
+}
+/** 在籍登録の本文。項目はキャスト直接登録と同じで、操作者が入力する（応募者の個人情報は写さない）。 */
+export interface ApplicantEnrollmentInput {
+  name: string;
+  status?: 'ENROLLED' | 'SUSPENDED';
+  started_on: string;
+  photo_url?: string;
+  introduction?: string;
+  age?: number;
+  height?: number;
+  bust?: number;
+  waist?: number;
+  hip?: number;
+  display_order?: number;
 }
 export interface ApplicantHistory {
   id: string;

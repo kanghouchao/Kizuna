@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CastForm, CastFormData } from './CastForm';
-import { CastCreateRequest, castApi } from '@/entities/cast';
+import { CastForm, type CastFormData, toCastCreateRequest } from '@/features/cast-form';
+import { castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
 import { storePath } from '@/shared/lib';
 
@@ -15,20 +15,7 @@ export default function CastCreatePage() {
   const handleSubmit = async (data: CastFormData) => {
     try {
       setIsSubmitting(true);
-      const requestData: CastCreateRequest = {
-        name: data.name,
-        status: data.status,
-        started_on: data.started_on,
-        photo_url: data.photo_url,
-        introduction: data.introduction,
-        age: data.age ?? undefined,
-        height: data.height ?? undefined,
-        bust: data.bust ?? undefined,
-        waist: data.waist ?? undefined,
-        hip: data.hip ?? undefined,
-        display_order: data.display_order ?? undefined,
-      };
-      await castApi.create(requestData);
+      await castApi.create(toCastCreateRequest(data));
       notify.success('キャストを登録しました');
       router.push(storePath('/casts'));
     } catch {

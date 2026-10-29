@@ -171,3 +171,41 @@ test('面接済なら採用を選べる', async () => {
   expect(await screen.findByRole('option', { name: '採用' })).toBeVisible();
   expect(screen.getByRole('option', { name: '不採用' })).toBeVisible();
 });
+
+test('採用済みで未登録なら CAST_MANAGE 保持者にだけ在籍登録への導線を出す', async () => {
+  (applicantApi.get as jest.Mock).mockResolvedValue({
+    ...detail,
+    status: 'HIRED',
+    enrollment_id: null,
+  });
+  const { unmount } = render(<ApplicantDetailPage />);
+  expect(await screen.findByRole('link', { name: '在籍登録' })).toHaveAttribute(
+    'href',
+    '/store/applicants/a/enrollment'
+  );
+  unmount();
+  (hasPermission as jest.Mock).mockImplementation(
+    (_claims: unknown, code: string) => code !== 'CAST_MANAGE'
+  );
+  render(<ApplicantDetailPage />);
+  expect(await screen.findByText('在籍は未登録です。')).toBeVisible();
+  expect(screen.queryByRole('link', { name: '在籍登録' })).toBeNull();
+});
+test('在籍登録済みなら在籍画面へ移動できる', async () => {
+  (applicantApi.get as jest.Mock).mockResolvedValue({
+    ...detail,
+    status: 'HIRED',
+    enrollment_id: 'e1',
+  });
+  render(<ApplicantDetailPage />);
+  expect(await screen.findByRole('link', { name: '在籍を開く' })).toHaveAttribute(
+    'href',
+    '/store/casts/e1/edit'
+  );
+  expect(screen.queryByRole('link', { name: '在籍登録' })).toBeNull();
+});
+test('採用前は在籍の欄を出さない', async () => {
+  render(<ApplicantDetailPage />);
+  expect(await screen.findByRole('button', { name: '選考状態を変更' })).toBeVisible();
+  expect(screen.queryByRole('heading', { name: '在籍' })).toBeNull();
+});

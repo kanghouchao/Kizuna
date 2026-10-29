@@ -2,7 +2,11 @@
 
 import { Control, UseFormRegister, useForm, useWatch } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { CastFieldDefinitionResponse, castFieldDefinitionApi } from '@/entities/cast';
+import {
+  CastCreateRequest,
+  CastFieldDefinitionResponse,
+  castFieldDefinitionApi,
+} from '@/entities/cast';
 import {
   Button,
   Card,
@@ -43,6 +47,23 @@ export interface CastFormData {
   display_order: number;
   // 活きた定義に対応する入力欄のみ登録される（孤児キーは含まれない）
   custom_fields?: Record<string, string>;
+}
+
+/** 新規登録の入力を作成 API の本文へ写す。直接登録と応募者からの在籍登録が共有する。 */
+export function toCastCreateRequest(data: CastFormData): CastCreateRequest {
+  return {
+    name: data.name,
+    status: data.status,
+    started_on: data.started_on,
+    photo_url: data.photo_url,
+    introduction: data.introduction,
+    age: data.age ?? undefined,
+    height: data.height ?? undefined,
+    bust: data.bust ?? undefined,
+    waist: data.waist ?? undefined,
+    hip: data.hip ?? undefined,
+    display_order: data.display_order ?? undefined,
+  };
 }
 
 interface CastFormProps {

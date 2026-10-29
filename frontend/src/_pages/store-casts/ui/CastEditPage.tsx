@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { CastForm, CastFormData } from './CastForm';
+import { CastForm, type CastFormData } from '@/features/cast-form';
 import { CastEnrollmentPanel } from './CastEnrollmentPanel';
 import { CastUpdateRequest, castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
