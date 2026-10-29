@@ -115,6 +115,7 @@ class StoreDeleteAuditPostgresTest {
 
   @AfterAll
   void close() {
+    if (jdbc != null) jdbc.execute("drop table if exists t_cascade_child, t_services");
     if (context != null) context.close();
   }
 
