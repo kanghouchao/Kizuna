@@ -10,7 +10,7 @@
 
 削除は deleted 標記と削除版本の追記で表す。現在値と歴史版本を物理削除せず、削除済み一覧から履歴に到達できる。歴史版本には変更前後の条件、操作者 ID、日時を保持する。項目・店舗の複合 FK が店舗を跨ぐ歴史行を防ぎ、店舗・操作者の削除も記録の連鎖消失を起こさない。
 
-設定の全操作と履歴照会には SERVICE_MANAGE を要し、MANAGER のみに既定授与する。店舗自作ロールへの委譲を許す。ORDER_MANAGE 単独と通常 HQ は設定管理の口を操作・照会しない。受注用のコース・加算候補は ORDER_MANAGE、訂正用の歴史版本は ORDER_MANAGE と ORDER_CORRECT で照会する。
+設定の全操作と履歴照会には SERVICE_MANAGE を要し、MANAGER のみに既定授与する。自作ロールへの委譲を許す。SERVICE_MANAGE を持たないロール（ORDER_MANAGE 単独を含む）は設定管理の口を操作・照会しない。受注用のコース・加算候補は ORDER_MANAGE、訂正用の歴史版本は ORDER_MANAGE と ORDER_CORRECT で照会する。
 
 ## 理由
 
