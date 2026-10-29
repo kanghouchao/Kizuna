@@ -9,6 +9,12 @@ api:
   dashboard: true
   insecure: true
 
+# 開発ではルーティングの確認用に起動ログとアクセスログを標準出力へ出す（既定はアクセスログなし・ERROR のみ）
+log:
+  level: INFO
+
+accessLog: {}
+
 # Enable ping for health checks
 ping: {}
 
