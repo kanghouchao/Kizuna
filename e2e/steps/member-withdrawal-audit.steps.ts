@@ -58,6 +58,7 @@ When(
   "会員を新規登録してポイントと関連を用意し、本人退会と職員代行退会を行う",
   async ({ request }) => {
     const staff = await loginAsStoreAdmin(request);
+    const owner = await loginUser(request, "admin@kizuna.test", ADMIN_PASSWORD);
     const suffix = randomUUID();
     selfMember = {
       id: "",
@@ -74,8 +75,8 @@ When(
       ),
       await registerLinkedMember(request, staff, staffMember.email, randomUUID()),
     ];
-    selfMember.id = await memberIdOf(request, staff, selfMember.email);
-    staffMember.id = await memberIdOf(request, staff, staffMember.email);
+    selfMember.id = await memberIdOf(request, owner, selfMember.email);
+    staffMember.id = await memberIdOf(request, owner, staffMember.email);
 
     const memberToken = await loginUser(
       request,
@@ -88,10 +89,19 @@ When(
     });
     expect(self.status(), await self.text()).toBe(204);
 
-    const byStaff = await request.post(
+    const denied = await request.post(
       `/api/members/${staffMember.id}/withdrawal`,
       {
         headers: { Authorization: `Bearer ${staff}` },
+        data: { reason: secret },
+      },
+    );
+    expect(denied.status(), "MEMBER_WITHDRAW を持たない店長は 403").toBe(403);
+
+    const byStaff = await request.post(
+      `/api/members/${staffMember.id}/withdrawal`,
+      {
+        headers: { Authorization: `Bearer ${owner}` },
         data: { reason: secret },
       },
     );
@@ -100,13 +110,13 @@ When(
     const again = await request.post(
       `/api/members/${staffMember.id}/withdrawal`,
       {
-        headers: { Authorization: `Bearer ${staff}` },
+        headers: { Authorization: `Bearer ${owner}` },
         data: { reason: secret },
       },
     );
     expect(again.status()).toBe(409);
     const unknown = await request.post("/api/members/999999999/withdrawal", {
-      headers: { Authorization: `Bearer ${staff}` },
+      headers: { Authorization: `Bearer ${owner}` },
       data: { reason: secret },
     });
     expect(unknown.status()).toBe(404);
