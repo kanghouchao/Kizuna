@@ -117,8 +117,17 @@ export function Sidebar() {
   const pathname = usePathname();
   const { stores, currentStoreId, loadFailed, switchStore } = useStoreContext();
   const [navigation, setNavigation] = useState<NavigationSection[]>([]);
-  // 利用者が明示的に選んだ文脈。未選択の間は既定（店舗級の項目を見られるなら現在店舗）に従う。
-  const [picked, setPicked] = useState<'group' | 'store'>();
+  // 利用者が選んだ文脈。未選択の間は既定（店舗級の項目を見られるなら現在店舗、無ければグループ）に従う。
+  const [picked, setPicked] = useState<'group' | 'store' | undefined>(
+    isStorePath(pathname) ? 'store' : undefined
+  );
+  // 店舗級の画面へ移ったら、レールで現在店舗が分かるよう文脈を現在店舗に合わせる。
+  // 遷移はせず、グループ級の画面へ戻っても文脈は戻さない。
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
+    if (isStorePath(pathname)) setPicked('store');
+  }
 
   useEffect(() => {
     const fetchMenus = async () => {
@@ -162,13 +171,13 @@ export function Sidebar() {
   );
 
   const hasGroup = groupSections.length > 0;
-  const hasStore = storeSections.length > 0 && railStores.length > 0;
+  const hasStore = railStores.length > 0;
   const showRail = (hasGroup ? 1 : 0) + (hasStore ? railStores.length : 0) >= 2;
   const showing: 'group' | 'store' = !hasStore
     ? 'group'
     : !hasGroup
       ? 'store'
-      : (picked ?? 'store');
+      : (picked ?? (storeSections.length > 0 ? 'store' : 'group'));
 
   const currentName = railStores.find(store => String(store.id) === currentStoreId)?.name;
   const heading = showing === 'group' ? 'グループ' : (currentName ?? '');
