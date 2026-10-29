@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.storage.application.StoredFileAudit;
@@ -138,6 +139,18 @@ class FileUploadControllerTest {
         .isInstanceOf(AccessDeniedException.class);
 
     verify(fileStorageService, never()).store(any(), any(), any());
+    verifyNoInteractions(storedFileAudit);
+  }
+
+  @Test
+  @DisplayName("保存が要求誤りで拒否されたら監査を依頼しないこと")
+  void upload_doesNotRecordAuditWhenStoreRejectsRequest() {
+    authenticateWithAuthorities(PermissionCode.STORE_PROFILE_MANAGE.authority());
+    when(fileStorageService.store("5", "public", file)).thenThrow(new ServiceException("長すぎる"));
+
+    assertThatThrownBy(() -> controller.upload(5L, file, "public"))
+        .isInstanceOf(ServiceException.class);
+
     verifyNoInteractions(storedFileAudit);
   }
 }
