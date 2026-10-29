@@ -17,6 +17,7 @@ public interface CastMapper {
   @Mapping(target = ".", source = "profile")
   @Mapping(target = "id", source = "enrollment.id")
   @Mapping(target = "status", source = "enrollment.status")
+  @Mapping(target = "startedOn", source = "enrollment.startedOn")
   @Mapping(target = "deletable", source = "deletable")
   @Mapping(target = "invitationStatus", source = "invitationStatus")
   @Mapping(target = "endedAt", source = "enrollment.endedAt")
@@ -32,6 +33,7 @@ public interface CastMapper {
   @Mapping(target = ".", source = "profile")
   @Mapping(target = "id", source = "enrollment.id")
   @Mapping(target = "status", source = "enrollment.status")
+  @Mapping(target = "startedOn", source = "enrollment.startedOn")
   @Mapping(target = "deletable", source = "deletable")
   @Mapping(target = "invitationStatus", source = "invitationStatus")
   CastSummaryResponse toSummaryResponse(

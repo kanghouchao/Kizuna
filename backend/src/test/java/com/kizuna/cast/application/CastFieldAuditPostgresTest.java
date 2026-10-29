@@ -27,6 +27,7 @@ import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -188,6 +189,7 @@ class CastFieldAuditPostgresTest {
 
   private String cast(Map<String, String> values) {
     var request = new CastCreateRequest();
+    request.setStartedOn(LocalDate.of(2026, 1, 1));
     request.setName("秘密の名前-" + UUID.randomUUID());
     String id = casts.create(currentStore(), request, ORDINARY).getId();
     if (!values.isEmpty()) write(id, values);
@@ -399,6 +401,7 @@ class CastFieldAuditPostgresTest {
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     String definition = definition("private-key", false);
     var request = new CastCreateRequest();
+    request.setStartedOn(LocalDate.of(2026, 1, 1));
     request.setName("秘密の名前");
     String id = casts.create(storeId, request, SECOND).getId();
     var write = new CastUpdateRequest();

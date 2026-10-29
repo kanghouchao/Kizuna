@@ -592,7 +592,7 @@ class ShiftAuditPostgresTest {
     @Bean
     CastEnrollmentRepository enrollments() {
       var r = mock(CastEnrollmentRepository.class);
-      var e = CastEnrollment.builder().build();
+      var e = CastEnrollment.builder().startedOn(LocalDate.of(2026, 1, 1)).build();
       e.setId("cast");
       e.setStoreId(1L);
       when(r.findByIdAndStoreIdForUpdate("cast", 1L)).thenReturn(Optional.of(e));

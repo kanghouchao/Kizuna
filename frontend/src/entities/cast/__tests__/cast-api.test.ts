@@ -38,7 +38,10 @@ describe('castApi', () => {
     expect(await castApi.get('c1')).toEqual({ ok: true, url: '/casts/c1' });
   });
   it('create は /casts を POST する', async () => {
-    expect(await castApi.create({ name: 'A' })).toEqual({ ok: true, url: '/casts' });
+    expect(await castApi.create({ name: 'A', started_on: '2026-04-01' })).toEqual({
+      ok: true,
+      url: '/casts',
+    });
   });
   it('update は /casts/:id を PUT する', async () => {
     expect(await castApi.update('c1', {})).toEqual({ ok: true, url: '/casts/c1' });

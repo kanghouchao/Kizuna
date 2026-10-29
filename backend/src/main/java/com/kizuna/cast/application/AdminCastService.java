@@ -54,6 +54,7 @@ public class AdminCastService {
                     row.getStoreName(),
                     row.getName(),
                     row.getStatus(),
+                    row.getStartedOn(),
                     row.getEndedAt()));
   }
 

@@ -37,6 +37,7 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -130,6 +131,7 @@ class CastAuditTest {
   @Test
   void creationAuditsBothEntitiesWithoutDuplicatingInternalHistory() {
     var request = new CastCreateRequest();
+    request.setStartedOn(LocalDate.of(2026, 1, 1));
     request.setName("非公開の氏名");
     request.setIntroduction("非公開の紹介");
     request.setPhotoUrl("https://example.test/private-photo");

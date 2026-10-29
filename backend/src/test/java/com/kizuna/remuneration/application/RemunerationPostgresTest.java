@@ -457,7 +457,12 @@ class RemunerationPostgresTest {
   }
 
   private String enrollment(CastEnrollmentStatus status) {
-    var enrollment = CastEnrollment.builder().castId(personId).status(status).build();
+    var enrollment =
+        CastEnrollment.builder()
+            .castId(personId)
+            .status(status)
+            .startedOn(LocalDate.of(2026, 1, 1))
+            .build();
     enrollment.setStoreId(storeId);
     em.persist(enrollment);
     var profile = CastProfile.builder().enrollmentId(enrollment.getId()).name("保存された源氏名").build();

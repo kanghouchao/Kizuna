@@ -25,6 +25,7 @@ it('本人属性と店舗ごとの在籍を読み取り専用で表示する', a
         store_name: '東京店',
         name: 'さくら',
         status: 'ENROLLED',
+        started_on: '2026-04-01',
         ended_at: null,
       },
       {
@@ -33,6 +34,7 @@ it('本人属性と店舗ごとの在籍を読み取り専用で表示する', a
         store_name: '大阪店',
         name: 'はな',
         status: 'WITHDRAWN',
+        started_on: '2026-05-10',
         ended_at: '2026-09-01T12:00:00+09:00',
       },
     ],
@@ -43,6 +45,7 @@ it('本人属性と店舗ごとの在籍を読み取り専用で表示する', a
   render(<AdminCastDetailPage />);
   expect(await screen.findByText('花子')).toBeInTheDocument();
   expect(await screen.findByText('大阪店')).toBeInTheDocument();
+  expect(screen.getByText('2026-05-10')).toBeInTheDocument();
   expect(screen.getByText('退店')).toBeInTheDocument();
   expect(screen.getAllByText('未登録')).toHaveLength(2);
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
@@ -89,6 +92,7 @@ it('在籍領域だけを再試行しページ送りできる', async () => {
         store_name: '東京店',
         name: 'さくら',
         status: 'SUSPENDED',
+        started_on: '2026-04-01',
         ended_at: null,
       },
     ],

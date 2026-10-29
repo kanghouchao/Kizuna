@@ -169,6 +169,7 @@ public class CastService {
                 request.getStatus() == null
                     ? CastEnrollmentStatus.ENROLLED
                     : CastEnrollmentStatus.valueOf(request.getStatus()))
+            .startedOn(request.getStartedOn())
             .build();
     newEnrollment.setStoreId(storeId);
     CastEnrollment enrollment = castRepository.save(newEnrollment);

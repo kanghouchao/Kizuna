@@ -49,6 +49,7 @@ const cast: CastResponse = {
   id: 'cast-1',
   name: '花子',
   status: 'ENROLLED',
+  started_on: '2026-04-01',
   invitation_status: 'NOT_INVITED',
   created_at: '2026-07-01T00:00:00Z',
   updated_at: '2026-07-01T00:00:00Z',
@@ -115,6 +116,7 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
     await screen.findByText('花子');
 
     expect(await screen.findByRole('button', { name: '招待を発行' })).toBeInTheDocument();
+    expect(screen.getByText('2026-04-01')).toBeInTheDocument();
   });
 
   it.each(['NOT_INVITED', 'INVITED', 'EXPIRED', 'UNAVAILABLE'] as const)(

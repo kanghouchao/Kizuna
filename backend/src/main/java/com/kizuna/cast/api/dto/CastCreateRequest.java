@@ -1,7 +1,9 @@
 package com.kizuna.cast.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import java.time.LocalDate;
 import lombok.Data;
 
 @Data
@@ -15,6 +17,10 @@ public class CastCreateRequest {
    */
   @Pattern(regexp = "ENROLLED|SUSPENDED", message = "在籍状態は ENROLLED または SUSPENDED です")
   private String status;
+
+  /** 入店日。未来日も受け付ける（入店予定の先行登録）。 */
+  @NotNull(message = "入店日を入力してください")
+  private LocalDate startedOn;
 
   private String photoUrl;
   private String introduction;

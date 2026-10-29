@@ -11,6 +11,8 @@ export interface CastResponse {
   deletable?: boolean;
   name?: string;
   status?: CastEnrollmentStatus;
+  // 入店日（YYYY-MM-DD）
+  started_on?: string;
   photo_url?: string;
   introduction?: string;
   age?: number;
@@ -37,6 +39,7 @@ export interface CastSummaryResponse {
   deletable?: boolean;
   name?: string;
   status?: CastEnrollmentStatus;
+  started_on?: string;
   photo_url?: string;
   age?: number;
   bust?: number;
@@ -73,6 +76,7 @@ export interface CastPublicResponse {
 export interface CastCreateRequest {
   name: string;
   status?: CastEditableStatus;
+  started_on: string;
   photo_url?: string;
   introduction?: string;
   age?: number;

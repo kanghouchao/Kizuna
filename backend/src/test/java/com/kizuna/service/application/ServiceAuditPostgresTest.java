@@ -182,7 +182,11 @@ class ServiceAuditPostgresTest {
               var person =
                   repo.findByUserId(castId)
                       .orElseGet(() -> repo.saveAndFlush(Cast.builder().userId(castId).build()));
-              var row = CastEnrollment.builder().castId(person.getId()).build();
+              var row =
+                  CastEnrollment.builder()
+                      .castId(person.getId())
+                      .startedOn(LocalDate.of(2026, 1, 1))
+                      .build();
               row.setStoreId(storeId);
               return context.getBean(CastEnrollmentRepository.class).saveAndFlush(row).getId();
             });

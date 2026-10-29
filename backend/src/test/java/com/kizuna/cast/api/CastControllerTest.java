@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -12,7 +13,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastInvitationResponse;
+import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
@@ -21,6 +24,7 @@ import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -171,5 +175,36 @@ class CastControllerTest {
                 .contentType("application/json")
                 .content("{\"publication_status\":\"PUBLISHED\"}"))
         .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("キャスト作成は入店日を必須とし、未来日を受け付けること")
+  @WithMockUser(username = "operator@example.test", authorities = "PERM_CAST_MANAGE")
+  void createRequiresStartedOn() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    mockMvc
+        .perform(
+            post("/casts")
+                .with(csrf())
+                .principal(() -> "operator@example.test")
+                .header("X-Store-ID", "1")
+                .contentType("application/json")
+                .content("{\"name\":\"花\"}"))
+        .andExpect(status().isBadRequest());
+    verify(castService, never()).create(anyLong(), any(), any());
+
+    ArgumentCaptor<CastCreateRequest> captor = ArgumentCaptor.forClass(CastCreateRequest.class);
+    when(castService.create(eq(1L), captor.capture(), eq("operator@example.test")))
+        .thenReturn(new CastResponse());
+    mockMvc
+        .perform(
+            post("/casts")
+                .with(csrf())
+                .principal(() -> "operator@example.test")
+                .header("X-Store-ID", "1")
+                .contentType("application/json")
+                .content("{\"name\":\"花\",\"started_on\":\"2099-04-01\"}"))
+        .andExpect(status().isCreated());
+    assertThat(captor.getValue().getStartedOn()).isEqualTo(LocalDate.of(2099, 4, 1));
   }
 }

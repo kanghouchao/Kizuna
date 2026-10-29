@@ -20,6 +20,7 @@ import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -109,7 +110,7 @@ class CastInvitationAuditPostgresTest {
   private String enrollment() {
     return transactions.execute(
         status -> {
-          var enrollment = CastEnrollment.builder().build();
+          var enrollment = CastEnrollment.builder().startedOn(LocalDate.of(2026, 1, 1)).build();
           enrollment.setStoreId(storeId);
           return context.getBean(CastEnrollmentRepository.class).saveAndFlush(enrollment).getId();
         });
@@ -238,7 +239,7 @@ class CastInvitationAuditPostgresTest {
     String enrollmentId =
         transactions.execute(
             status -> {
-              var enrollment = CastEnrollment.builder().build();
+              var enrollment = CastEnrollment.builder().startedOn(LocalDate.of(2026, 1, 1)).build();
               enrollment.setStoreId(otherStoreId);
               return context
                   .getBean(CastEnrollmentRepository.class)

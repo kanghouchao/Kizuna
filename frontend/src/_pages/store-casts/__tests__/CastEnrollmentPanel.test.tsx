@@ -26,7 +26,13 @@ it('退店は確認後だけ実行し、完了後は状態操作を表示しな�
     status: 'WITHDRAWN',
     ended_at: '2026-09-10T12:00:00+09:00',
   });
-  render(<CastEnrollmentPanel cast={{ id: 'e1', status: 'ENROLLED' }} onChanged={jest.fn()} />);
+  render(
+    <CastEnrollmentPanel
+      cast={{ id: 'e1', status: 'ENROLLED', started_on: '2026-04-01' }}
+      onChanged={jest.fn()}
+    />
+  );
+  expect(screen.getByText('入店日: 2026-04-01')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '退店する' }));
   let dialog = screen.getByRole('alertdialog');
   expect(within(dialog).getByText(/元に戻せません/)).toBeInTheDocument();

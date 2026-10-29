@@ -100,6 +100,35 @@ describe('キャスト登録・更新の送信ペイロード', () => {
     expect(body).not.toHaveProperty('photoUrl');
   });
 
+  it('入店日の既定値は日本時間の当日で、未来日に変えて送信できること', async () => {
+    // UTC ではまだ前日の時刻。既定値が日本時間の暦日で決まることを確かめる
+    jest.useFakeTimers({ now: new Date('2026-03-31T15:30:00Z'), advanceTimers: true });
+    try {
+      mockedCastApi.create.mockResolvedValue({} as never);
+      const { container } = render(<CastCreatePage />);
+      expect(inputByName(container, 'started_on')).toHaveValue('2026-04-01');
+
+      fireEvent.change(inputByName(container, 'name'), { target: { value: '花子' } });
+      fireEvent.change(inputByName(container, 'started_on'), { target: { value: '2099-04-01' } });
+      fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+      await waitFor(() => expect(mockedCastApi.create).toHaveBeenCalledTimes(1));
+      expect(mockedCastApi.create.mock.calls[0][0]).toHaveProperty('started_on', '2099-04-01');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('入店日を空にすると送信せず、理由を表示すること', async () => {
+    const { container } = render(<CastCreatePage />);
+    fireEvent.change(inputByName(container, 'name'), { target: { value: '花子' } });
+    fireEvent.change(inputByName(container, 'started_on'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('入店日を入力してください')).toBeInTheDocument();
+    expect(mockedCastApi.create).not.toHaveBeenCalled();
+  });
+
   it('入力後に空へ戻した数値は NaN のまま送信されること', async () => {
     mockedCastApi.create.mockResolvedValue({} as never);
 

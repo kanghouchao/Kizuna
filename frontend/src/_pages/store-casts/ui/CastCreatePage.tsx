@@ -18,6 +18,7 @@ export default function CastCreatePage() {
       const requestData: CastCreateRequest = {
         name: data.name,
         status: data.status,
+        started_on: data.started_on,
         photo_url: data.photo_url,
         introduction: data.introduction,
         age: data.age ?? undefined,

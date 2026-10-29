@@ -1,7 +1,14 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createCast, issueCastInvitation, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
+import {
+  STORE_HEADERS,
+  createCast,
+  issueCastInvitation,
+  loginAsStoreAdmin,
+  loginViaUiAndEnterStore,
+  todayInTokyo,
+} from './store-api';
 
 const { Given, When, Then } = createBdd();
 
@@ -68,4 +75,41 @@ Then('管理一覧は招待不可を表示し招待ページは受諾を案内�
   await expect(page.getByText('この招待は利用できません。店舗の担当者にご確認ください。')).toBeVisible();
   await expect(page.getByRole('button', { name: '新規登録して受諾' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '既存アカウントでログイン' })).toHaveCount(0);
+});
+
+let startedOnCastName: string;
+const FUTURE_STARTED_ON = '2099-04-01';
+
+Given('キャスト新規登録画面を開く', async ({ page }) => {
+  await loginViaUiAndEnterStore(page);
+  await page.goto(`${APP_URL}/store/casts/create`);
+  await expect(page.getByRole('heading', { name: '新規キャスト登録' })).toBeVisible();
+});
+
+Then('入店日の既定値は当日である', async ({ page }) => {
+  await expect(page.getByLabel('入店日 *')).toHaveValue(todayInTokyo());
+});
+
+When('入店日を未来日にしてキャストを登録する', async ({ page }) => {
+  startedOnCastName = `入店日-${Date.now()}`;
+  await page.getByLabel('源氏名 *').fill(startedOnCastName);
+  await page.getByLabel('入店日 *').fill(FUTURE_STARTED_ON);
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await page.waitForURL(/\/store\/casts$/);
+});
+
+Then('キャスト一覧に登録した入店日が表示される', async ({ page }) => {
+  await page.getByPlaceholder('名前で検索...').fill(startedOnCastName);
+  await page.getByRole('button', { name: '検索', exact: true }).click();
+  const row = page.getByRole('row').filter({ hasText: startedOnCastName });
+  await expect(row.getByText(FUTURE_STARTED_ON, { exact: true })).toBeVisible();
+});
+
+Then('入店日の無いキャスト作成は 400 で拒否される', async ({ request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const response = await request.post('/api/casts', {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+    data: { name: `入店日なし-${Date.now()}` },
+  });
+  expect(response.status(), await response.text()).toBe(400);
 });

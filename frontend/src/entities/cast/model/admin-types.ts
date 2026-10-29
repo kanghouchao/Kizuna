@@ -17,5 +17,6 @@ export interface AdminCastEnrollmentResponse {
   store_name: string;
   name: string;
   status: CastEnrollmentStatus;
+  started_on: string;
   ended_at: string | null;
 }
