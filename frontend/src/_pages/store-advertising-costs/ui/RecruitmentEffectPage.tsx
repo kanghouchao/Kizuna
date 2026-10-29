@@ -24,9 +24,10 @@ function ratio(value: string | null) {
   const [integer, fraction] = value.split('.');
   return `約 ${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${fraction}円`;
 }
-function retention(value: RecruitmentRetention | undefined) {
+function retention(hires: number, value: RecruitmentRetention | undefined) {
+  if (hires === 0) return '対象なし';
   if (!value || value.judgeable_count === 0) return '判定時点前';
-  return `${value.retained_count.toLocaleString()}人 / 可判定 ${value.judgeable_count.toLocaleString()}人`;
+  return `${value.retained_count.toLocaleString()} / ${value.judgeable_count.toLocaleString()}人`;
 }
 
 export function RecruitmentEffectPage({ month }: { month: string }) {
@@ -61,14 +62,27 @@ export function RecruitmentEffectPage({ month }: { month: string }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="min-w-40">媒体</TableHead>
-              <TableHead className="text-right">登録採用広告費</TableHead>
-              <TableHead className="text-right">入店人数</TableHead>
-              <TableHead className="text-right">一人あたり記録費用</TableHead>
-              <TableHead>算出状況</TableHead>
+              <TableHead rowSpan={2} className="min-w-40">
+                媒体
+              </TableHead>
+              <TableHead rowSpan={2} className="text-right">
+                登録採用広告費
+              </TableHead>
+              <TableHead rowSpan={2} className="text-right">
+                入店人数
+              </TableHead>
+              <TableHead rowSpan={2} className="text-right">
+                一人あたり記録費用
+              </TableHead>
+              <TableHead rowSpan={2}>算出状況</TableHead>
+              <TableHead colSpan={checkpoints.length} className="text-center">
+                入店後の定着（定着 / 可判定）
+              </TableHead>
+            </TableRow>
+            <TableRow>
               {checkpoints.map(n => (
                 <TableHead key={n} className="text-right">
-                  {n}か月後の定着
+                  {n}か月後
                 </TableHead>
               ))}
             </TableRow>
@@ -95,7 +109,10 @@ export function RecruitmentEffectPage({ month }: { month: string }) {
                 <TableCell>{statusLabels[row.calculation_status]}</TableCell>
                 {checkpoints.map(n => (
                   <TableCell key={n} className="text-right tabular-nums">
-                    {retention(row.retention.find(r => r.months === n))}
+                    {retention(
+                      row.hire_count,
+                      row.retention.find(r => r.months === n)
+                    )}
                   </TableCell>
                 ))}
               </TableRow>
