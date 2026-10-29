@@ -175,7 +175,7 @@ export function Sidebar() {
   const dashboards = ready ? navigation.filter(section => section.href) : [];
 
   return (
-    <aside className="flex shrink-0 border-r bg-card">
+    <aside className="flex shrink-0 bg-card">
       {ready && showRail && (
         <ContextRail
           showGroup={hasGroup}
@@ -189,7 +189,7 @@ export function Sidebar() {
         />
       )}
 
-      <div className={`${showRail ? 'w-[200px]' : 'w-64'} min-w-0`}>
+      <div className={`${showRail ? 'w-[200px]' : 'w-64'} min-w-0 border-r`}>
         <div className="h-16 flex flex-col justify-center px-4 border-b">
           <span className="text-xs font-bold tracking-wider text-primary-strong">Kizuna</span>
           <span className="truncate font-semibold text-foreground" title={heading}>
