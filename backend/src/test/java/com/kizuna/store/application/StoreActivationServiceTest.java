@@ -67,7 +67,7 @@ class StoreActivationServiceTest {
     assertThatThrownBy(() -> storeActivationService.activate(STORE_ID))
         .isInstanceOf(ServiceException.class);
 
-    verify(storeRepository, never()).save(any());
+    verify(storeRepository, never()).saveAndFlush(any());
   }
 
   @Test
