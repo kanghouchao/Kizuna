@@ -2,11 +2,9 @@
 
 Status: Accepted
 
-Supersedes: [0004](0004-frontend-shadcn-ui-on-radix.md)
-
 ## 決定時の背景
 
-ADR 0004 の vendoring と token 方式は維持し、部品ごとに asChild/render や状態属性の異なる基盤が混ざるのを避ける。cmdk が Radix を推移的に導入するため、直接依存だけの削除では移行を完了できない。選定時の比較は ADR 0004 と本決定の参照先に残す。
+shadcn/ui の vendoring と token 方式は維持し、部品ごとに asChild/render や状態属性の異なる基盤が混ざるのを避ける。cmdk が Radix を推移的に導入するため、直接依存だけの削除では移行を完了できない。選定時の比較は本決定の参照先に残す。
 
 ## 決定
 
