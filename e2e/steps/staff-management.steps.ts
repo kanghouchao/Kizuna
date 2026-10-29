@@ -1,5 +1,6 @@
 import { Page, expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
+import { revealSidebarLink } from './store-api';
 
 const { When, Then } = createBdd();
 
@@ -63,7 +64,8 @@ async function addStaffInStore(page: Page, baseName: string, roleLabels: string[
 
 // 遷移をサイドバーのリンク経由にすることで、メニュー行そのものの可視性も同時に固定する。
 When('従業員管理画面を開く', async ({ page }) => {
-  await page.locator('aside').getByRole('link', { name: '従業員管理', exact: true }).click();
+  const link = await revealSidebarLink(page, aside => aside.getByRole('link', { name: '従業員管理', exact: true }));
+  await link.click();
   await expect(page).toHaveURL(/\/admin\/staff\/?$/, { timeout: 15000 });
   await expect(page.getByRole('button', { name: '従業員を追加', exact: true })).toBeVisible();
 });

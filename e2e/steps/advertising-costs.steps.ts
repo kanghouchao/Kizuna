@@ -20,7 +20,7 @@ import {
   invalidateOrder,
   cancelOrder,
   submitConfirmedStoreRequest,
-  switchStoreInHeader,
+  switchStoreOnRail,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const base = "/api/advertising-costs",
@@ -487,10 +487,10 @@ Then(
     ).toBeVisible();
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
     await page.unroute("**/api/advertising-costs?**");
-    await switchStoreInHeader(page, foreignName);
+    await switchStoreOnRail(page, foreignName);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
-    await switchStoreInHeader(page, storeName);
+    await switchStoreOnRail(page, storeName);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeVisible();
     for (const theme of ["light", "dark"]) {
@@ -1241,7 +1241,7 @@ Then(
       .click();
     await storeArrived;
     await page.unroute("**/api/advertising-order-costs?**");
-    await switchStoreInHeader(page, foreignName);
+    await switchStoreOnRail(page, foreignName);
     await selectMonth(page, month);
     await page
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
