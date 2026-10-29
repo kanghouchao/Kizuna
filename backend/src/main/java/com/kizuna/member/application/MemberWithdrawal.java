@@ -52,7 +52,7 @@ public class MemberWithdrawal {
         memberRepository
             .findByUserIdForUpdate(user.getId())
             .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
-    return terminate(member, user, user.getId(), reason);
+    return applyWithdrawal(member, user, user.getId(), reason);
   }
 
   /** 職員による代行退会。対象は会員 ID で名指しし、操作者は職員の利用者 ID で記録する。効果と直列化は本人退会と同じで、 存在しない会員は 404、退会済みは 409。 */
@@ -65,10 +65,11 @@ public class MemberWithdrawal {
         userRepository
             .findById(member.getUserId())
             .orElseThrow(() -> new NotFoundException("会員の利用者が見つかりません"));
-    return terminate(member, user, actorUserId, reason);
+    return applyWithdrawal(member, user, actorUserId, reason);
   }
 
-  private WithdrawnMember terminate(Member member, User user, long actorUserId, String reason) {
+  private WithdrawnMember applyWithdrawal(
+      Member member, User user, long actorUserId, String reason) {
     OffsetDateTime now = OffsetDateTime.now();
     long versionBefore = member.getVersion();
     boolean enabledBefore = user.getEnabled();

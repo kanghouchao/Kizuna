@@ -523,12 +523,7 @@ public class PointLedgerService {
     int chunkTotal = 0;
     for (PlannedAllocation allocation : lockedLedgerOf(memberId).planClearance()) {
       if (chunkTotal > Integer.MAX_VALUE - allocation.amount()) {
-        Long saved =
-            pointEntryRepository
-                .save(
-                    PointEntry.withdrawalClear(
-                        memberId, chunkTotal, allocationsOf(chunk), actorUserId, reason))
-                .getId();
+        Long saved = saveClearance(memberId, chunkTotal, chunk, actorUserId, reason);
         if (firstEntryId == null) firstEntryId = saved;
         chunk = new ArrayList<>();
         chunkTotal = 0;
@@ -538,15 +533,18 @@ public class PointLedgerService {
       total += allocation.amount();
     }
     if (chunkTotal > 0) {
-      Long saved =
-          pointEntryRepository
-              .save(
-                  PointEntry.withdrawalClear(
-                      memberId, chunkTotal, allocationsOf(chunk), actorUserId, reason))
-              .getId();
+      Long saved = saveClearance(memberId, chunkTotal, chunk, actorUserId, reason);
       if (firstEntryId == null) firstEntryId = saved;
     }
     return new WithdrawalClearance(total, Optional.ofNullable(firstEntryId));
+  }
+
+  private Long saveClearance(
+      long memberId, int amount, List<PlannedAllocation> chunk, Long actorUserId, String reason) {
+    return pointEntryRepository
+        .save(
+            PointEntry.withdrawalClear(memberId, amount, allocationsOf(chunk), actorUserId, reason))
+        .getId();
   }
 
   /** 退会消去の結果。仕訳を作らなかったとき（残量なし）は {@code firstEntryId} が空。 */

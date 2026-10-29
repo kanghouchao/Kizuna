@@ -12,6 +12,7 @@ import {
   listAuditEvents,
   loginAsStoreAdmin,
   loginUser,
+  memberIdOf,
   registerMember,
 } from "./store-api";
 
@@ -19,6 +20,7 @@ const { Given, When, Then } = createBdd();
 
 const POINTS = 120;
 let auditor = "";
+let customers: string[] = [];
 let secret = "";
 let selfMember = { id: "", email: "", password: "" };
 let staffMember = { id: "", email: "" };
@@ -33,22 +35,7 @@ async function registerLinkedMember(
   const customer = await createCustomer(request, token, secret);
   await linkMemberToCustomer(request, token, customer, code);
   await adjustCustomerPoints(request, token, customer, POINTS, "退会監査の付与");
-  return code;
-}
-
-async function memberIdOf(
-  request: Parameters<typeof registerMember>[0],
-  token: string,
-  email: string,
-) {
-  const response = await request.get("/api/members", {
-    headers: { Authorization: `Bearer ${token}` },
-    params: { search: email },
-  });
-  expect(response.status()).toBe(200);
-  const rows = (await response.json()).content as { id: number }[];
-  expect(rows).toHaveLength(1);
-  return String(rows[0].id);
+  return customer;
 }
 
 Given("退会監査専用の監査者が用意されている", async ({ request }) => {
@@ -78,13 +65,15 @@ When(
       password: randomUUID(),
     };
     staffMember = { id: "", email: `withdrawal-staff-${suffix}@example.test` };
-    await registerLinkedMember(
-      request,
-      staff,
-      selfMember.email,
-      selfMember.password,
-    );
-    await registerLinkedMember(request, staff, staffMember.email, randomUUID());
+    customers = [
+      await registerLinkedMember(
+        request,
+        staff,
+        selfMember.email,
+        selfMember.password,
+      ),
+      await registerLinkedMember(request, staff, staffMember.email, randomUUID()),
+    ];
     selfMember.id = await memberIdOf(request, staff, selfMember.email);
     staffMember.id = await memberIdOf(request, staff, staffMember.email);
 
@@ -155,5 +144,13 @@ Then(
       for (const value of [secret, member.email])
         expect(JSON.stringify(detail)).not.toContain(value);
     }
+    const released = (
+      await listAuditEvents(request, auditor, "CUSTOMER_MEMBER_LINK_RELEASED")
+    ).content;
+    for (const customer of customers)
+      expect(
+        released.filter((event) => event.source_id === customer),
+        "関連解除の既存監査は退会ごとに1行のまま",
+      ).toHaveLength(1);
   },
 );
