@@ -31,7 +31,7 @@ async function registerLinkedMember(
   email: string,
   password: string,
 ) {
-  const code = await registerMember(request, email, password, secret);
+  const code = await registerMember(request, email, password, `退会監査会員-${randomUUID()}`);
   const customer = await createCustomer(request, token, secret);
   await linkMemberToCustomer(request, token, customer, code);
   await adjustCustomerPoints(request, token, customer, POINTS, "退会監査の付与");
