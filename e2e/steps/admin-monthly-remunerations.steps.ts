@@ -93,6 +93,12 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
     data: { name: '月次店舗権限のみ-' + suffix, permissions: ['ORDER_MANAGE',] } });
   expect(storeOnlyRole.status(), await storeOnlyRole.text()).toBe(201);
   const storeOnlyRoleId = (await storeOnlyRole.json()).id;
+  // 店舗の切替はレールが担い、レールの店舗は店舗級のメニュー項目を見られる利用者にだけ並ぶ。
+  // 全店授権の照会者が店舗を替えられるよう、店舗級の項目（広告費管理）を見られる権限を加える。
+  const storeMenuRole = await request.post('/api/roles', { headers: { Authorization: 'Bearer ' + admin },
+    data: { name: '月次店舗メニュー閲覧-' + suffix, permissions: ['ADVERTISING_COST_VIEW'] } });
+  expect(storeMenuRole.status(), await storeMenuRole.text()).toBe(201);
+  const storeMenuRoleId = (await storeMenuRole.json()).id;
   const tokens: string[] = [];
   for (const [index, scope] of [STORE1_ID, secondStore, 'all', STORE1_ID].entries()) {
     const email = 'admin-monthly-reader-' + suffix + '-' + index + '@kizuna.test';
@@ -100,7 +106,7 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
     if (index === 2) allReaderEmail = email;
     const created = await request.post('/api/staff', { headers: { Authorization: 'Bearer ' + admin }, data: {
       email, password, display_name: '月次参照者-' + suffix + '-' + index,
-      role_ids: [index === 3 ? storeOnlyRoleId : roleId], store_scope_type: scope === 'all' ? 'ALL_STORES' : 'SPECIFIC_STORES',
+      role_ids: index === 3 ? [storeOnlyRoleId] : index === 2 ? [roleId, storeMenuRoleId] : [roleId], store_scope_type: scope === 'all' ? 'ALL_STORES' : 'SPECIFIC_STORES',
       store_ids: scope === 'all' ? [] : [Number(scope)],
     } });
     expect(created.status(), await created.text()).toBe(201);
