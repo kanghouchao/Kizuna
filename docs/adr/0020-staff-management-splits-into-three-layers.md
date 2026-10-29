@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-更新関係: 店舗日常管理のコード名・HQ 既定授与は [ADR 0021](0021-hq-admin-retreats-from-store-daily-operations.md)で更新。以下の決定は現在の STAFF_MANAGE と統治層の分離を記す。
+更新関係: 店舗日常管理のコード名・HQ 既定授与は [ADR 0021](0021-hq-admin-retreats-from-store-daily-operations.md)で更新。G1・G3 の「店舗側ロール」に基づく条件は platform / store の側の撤去とともに消え、委譲の守衛は「付与するロールの権限並集 ⊆ 行使者の有効権限並集」と G2 の店舗集合条件になった。現行の規則は [GLOSSARY](../../GLOSSARY.md)「Role / Permission」を参照。
 
 ## 決定時の背景
 
