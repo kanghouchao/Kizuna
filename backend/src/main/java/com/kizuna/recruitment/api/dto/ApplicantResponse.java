@@ -24,4 +24,5 @@ public record ApplicantResponse(
     String desiredConditions,
     ApplicantInterview interview,
     Long modifiedBy,
-    OffsetDateTime updatedAt) {}
+    OffsetDateTime updatedAt,
+    String enrollmentId) {}

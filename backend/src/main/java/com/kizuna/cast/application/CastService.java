@@ -1,6 +1,5 @@
 package com.kizuna.cast.application;
 
-import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastPublicResponse;
 import com.kizuna.cast.api.dto.CastPublicationResponse;
@@ -161,20 +160,17 @@ public class CastService {
   }
 
   @Transactional
-  public CastResponse create(Long storeId, CastCreateRequest request, String actorEmail) {
+  public String create(Long storeId, CastCreateCommand command, String actorEmail) {
     storeRepository.lockCastFields(storeId);
     CastEnrollment newEnrollment =
         CastEnrollment.builder()
-            .status(
-                request.getStatus() == null
-                    ? CastEnrollmentStatus.ENROLLED
-                    : CastEnrollmentStatus.valueOf(request.getStatus()))
-            .startedOn(request.getStartedOn())
+            .status(command.status() == null ? CastEnrollmentStatus.ENROLLED : command.status())
+            .startedOn(command.startedOn())
             .build();
     newEnrollment.setStoreId(storeId);
     CastEnrollment enrollment = castRepository.save(newEnrollment);
     enrollmentService.recordCreation(enrollment, actorEmail);
-    CastProfile newProfile = castMapper.toProfile(request, enrollment.getId());
+    CastProfile newProfile = castMapper.toProfile(command, enrollment.getId());
     newProfile.setStoreId(storeId);
     CastProfile profile = profileRepository.save(newProfile);
     profileRepository.flush();
@@ -188,8 +184,7 @@ public class CastService {
         null,
         Map.of(),
         snapshot(enrollment, profile));
-    return castMapper.toResponse(
-        enrollment, profile, null, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
+    return enrollment.getId();
   }
 
   private static Map<String, String> snapshot(CastEnrollment enrollment, CastProfile profile) {
@@ -356,7 +351,9 @@ public class CastService {
               DbConstraint.FK_T_ATTENDANCES_CAST,
               CastService::attendanceReferenced,
               DbConstraint.FK_T_ATTENDANCES_SHIFT,
-              CastService::attendanceReferenced));
+              CastService::attendanceReferenced,
+              DbConstraint.FK_T_APPLICANTS_ENROLLMENT,
+              () -> new ConflictException("応募者から在籍登録されたキャストは削除できません。退店操作を利用してください")));
     }
     // 件数は行ロック下で数えた連鎖先。公開プロフィールは在籍と 1 対 1（一意制約）なので常に 1 件。
     audit.record(

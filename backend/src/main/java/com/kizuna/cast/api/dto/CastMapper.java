@@ -1,5 +1,6 @@
 package com.kizuna.cast.api.dto;
 
+import com.kizuna.cast.application.CastCreateCommand;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastInvitationStatus;
@@ -46,7 +47,9 @@ public interface CastMapper {
   @Mapping(target = "displayOrder", defaultValue = "0")
   @Mapping(target = "publicationStatus", constant = "UNPUBLISHED")
   @Mapping(target = "customFields", ignore = true)
-  CastProfile toProfile(CastCreateRequest request, String enrollmentId);
+  CastProfile toProfile(CastCreateCommand command, String enrollmentId);
+
+  CastCreateCommand toCommand(CastCreateRequest request);
 
   CastProfilePatch toPatch(CastUpdateRequest request);
 

@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastCreateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.CastCascadeCounts;
@@ -130,13 +129,20 @@ class CastAuditTest {
 
   @Test
   void creationAuditsBothEntitiesWithoutDuplicatingInternalHistory() {
-    var request = new CastCreateRequest();
-    request.setStartedOn(LocalDate.of(2026, 1, 1));
-    request.setName("非公開の氏名");
-    request.setIntroduction("非公開の紹介");
-    request.setPhotoUrl("https://example.test/private-photo");
-    assertThat(service.create(STORE_ID, request, "operator@example.test").getId())
-        .isEqualTo("enrollment");
+    var command =
+        new CastCreateCommand(
+            "非公開の氏名",
+            null,
+            LocalDate.of(2026, 1, 1),
+            "https://example.test/private-photo",
+            "非公開の紹介",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    assertThat(service.create(STORE_ID, command, "operator@example.test")).isEqualTo("enrollment");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_ENROLLMENT_CREATED");

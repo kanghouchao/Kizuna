@@ -53,6 +53,8 @@ public enum DbConstraint {
 
   /** t_orders → t_cast_enrollments の FK。受注が担当キャストを指したまま消えないようにする。 */
   FK_T_ORDERS_CAST("fk_t_orders_cast"),
+  /** t_applicants → t_cast_enrollments の FK。応募者から登録した在籍が応募記録との対応を失ったまま消えないようにする。 */
+  FK_T_APPLICANTS_ENROLLMENT("fk_t_applicants_enrollment"),
 
   /** t_order_applications → t_cast_enrollments の FK。予約申請が指名キャストを指したまま消えないようにする。 */
   FK_T_ORDER_APPLICATIONS_CAST("fk_t_order_applications_cast"),

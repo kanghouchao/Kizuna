@@ -1,5 +1,7 @@
 package com.kizuna.recruitment.application;
 
+import com.kizuna.cast.application.CastService;
+import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantHistoryResponse;
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
@@ -27,6 +29,7 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
@@ -46,6 +49,7 @@ public class ApplicantService {
   private final ApplicantMapper mapper;
   private final BusinessAudit audit;
   private final SystemConfigService systemConfigs;
+  private final CastService casts;
 
   public RecruitmentPolicyResponse policy() {
     return RecruitmentPolicyResponse.from(systemConfigs.applicantRetentionSettings());
@@ -152,6 +156,27 @@ public class ApplicantService {
     return mapper.toResponse(applicant);
   }
 
+  /** 在籍の作成・応募者の更新・双方の監査を一つのトランザクションで確定する。招待は発行しない（在籍側で手動発行する）。 */
+  @Transactional
+  public ApplicantResponse enroll(
+      Long storeId, String id, ApplicantEnrollmentRequest request, String actorEmail) {
+    Applicant applicant = locked(storeId, id, request.version());
+    applicant.requireEnrollable();
+    Long actorId = actorId(actorEmail);
+    var before = enrollmentAuditValues(applicant);
+    applicant.recordEnrollment(casts.create(storeId, request.toCommand(), actorEmail));
+    applicant.recordEditor(actorId);
+    applicants.flush();
+    audit.recordCurrent(
+        storeId,
+        "APPLICANT_ENROLLED",
+        "APPLICANT",
+        applicant.getId(),
+        before,
+        enrollmentAuditValues(applicant));
+    return mapper.toResponse(applicant);
+  }
+
   @Transactional(readOnly = true)
   public CursorPage<ApplicantHistoryResponse> history(
       Long storeId, String id, String cursor, int requestedSize) {
@@ -182,6 +207,14 @@ public class ApplicantService {
   private static Map<String, String> auditValues(Applicant applicant) {
     return Map.of(
         "status", applicant.getStatus().name(), "version", String.valueOf(applicant.getVersion()));
+  }
+
+  private static Map<String, String> enrollmentAuditValues(Applicant applicant) {
+    return Map.of(
+        "enrollment_id",
+        Objects.toString(applicant.getEnrollmentId(), ""),
+        "version",
+        String.valueOf(applicant.getVersion()));
   }
 
   private Applicant require(Long storeId, String id) {

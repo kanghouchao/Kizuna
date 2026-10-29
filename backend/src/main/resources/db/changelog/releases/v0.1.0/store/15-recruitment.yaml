@@ -110,6 +110,12 @@ databaseChangeLog:
                   defaultValueNumeric: 0
                   constraints:
                     nullable: false
+              - column:
+                  # 採用済み応募者から登録した在籍（ADR 0032）。在籍側は応募者を知らない。
+                  name: enrollment_id
+                  type: varchar(64)
+                  constraints:
+                    nullable: true
         - addForeignKeyConstraint:
             baseTableName: t_applicants
             baseColumnNames: store_id
@@ -124,6 +130,19 @@ databaseChangeLog:
             referencedColumnNames: id
             constraintName: fk_t_applicants_modified_by
             onDelete: NO ACTION
+        # 複合外部キーで在籍が同じ店舗に属することを DB に守らせる。応募者が指す在籍の削除は止める —
+        # 応募記録と在籍の対応が黙って消えるため。拒否を 409 の案内へ写すので NO ACTION（理由は DbConstraint の Javadoc）。
+        - addForeignKeyConstraint:
+            baseTableName: t_applicants
+            baseColumnNames: enrollment_id, store_id
+            referencedTableName: t_cast_enrollments
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_applicants_enrollment
+            onDelete: NO ACTION
+        # 一つの在籍を指せる応募者は最大一つ。
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_applicants_enrollment ON t_applicants (enrollment_id) WHERE enrollment_id IS NOT NULL
         - createIndex:
             tableName: t_applicants
             indexName: idx_t_applicants_store_created
