@@ -4,7 +4,7 @@ Status: Accepted（実装は #1048、PR #1055 / #1061 / #1068）
 
 ## 決定時の背景
 
-店舗文脈はテナント期の設計を引き継ぎ、ThreadLocal（`StoreContext`）に暗黙に置かれ、`@StoreScoped` の切面が Hibernate の `storeFilter` へ流し込んでいた。店舗文脈が無いと filter は何もせず、読みが全店舗の行を返す（fail-open）。[ADR 0002](0002-store-scoped-entities-declare-filters-statically.md) の静的全量宣言は filter の宣言漏れを閉じたが、有効化の漏れ — 文脈が確立されないまま走る読み — は閉じられなかった。
+店舗文脈はテナント期の設計を引き継ぎ、ThreadLocal（`StoreContext`）に暗黙に置かれ、`@StoreScoped` の切面が Hibernate の `storeFilter` へ流し込んでいた。店舗文脈が無いと filter は何もせず、読みが全店舗の行を返す（fail-open）。filter の静的全量宣言は宣言漏れを閉じたが、有効化の漏れ — 文脈が確立されないまま走る読み — は閉じられなかった。
 
 「側」の撤去以降、店舗が要るかどうかは端点ごとに決まるのに、店舗文脈の確立は URL 前綴 `/store/**` に掛けたインターセプタに依存していた。前綴に頼る限り、店舗を要する端点がその外に置かれた時点で filter は黙って外れる。
 
