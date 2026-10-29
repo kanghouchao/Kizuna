@@ -146,9 +146,7 @@ public class StoreRegistryService {
   private Store saveShortNameUnique(Store store) {
     return IntegrityViolations.translateOnFailure(
         () -> storeRepository.saveAndFlush(store),
-        Map.of(
-            DbConstraint.UQ_T_STORES_SHORT_NAME,
-            () -> new ConflictException("この略称は既に使われています")));
+        Map.of(DbConstraint.UQ_T_STORES_SHORT_NAME, () -> new ConflictException("この略称は既に使われています")));
   }
 
   /**
