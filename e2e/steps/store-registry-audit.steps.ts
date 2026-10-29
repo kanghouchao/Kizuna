@@ -71,23 +71,34 @@ Given(
   },
 );
 
-// 略称は一意制約があるため、乱数ではなく通し番号で払い出す（リトライでも重ならない）。
+// 略称は一意制約があり、リトライで worker が替わると前回の試行の店舗が残る。重複（409）なら引き直す。
 const shortNames = new Map<string, string>();
-let shortNameSeq = 0;
+const SHORT_NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+function randomShortName(): string {
+  return Array.from(
+    { length: 3 },
+    () => SHORT_NAME_ALPHABET[Math.floor(Math.random() * SHORT_NAME_ALPHABET.length)],
+  ).join("");
+}
 
 async function register(
   request: import("@playwright/test").APIRequestContext,
   name: string,
 ): Promise<string> {
-  const shortName = `E${++shortNameSeq}`;
-  const created = await request.post("/api/stores", {
-    headers: bearer(operator),
-    data: { name, short_name: shortName, domain: `audit-${randomUUID()}.kizuna.test` },
-  });
-  expect(created.status(), await created.text()).toBe(201);
-  const id = String((await created.json()).id);
-  shortNames.set(id, shortName);
-  return id;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const shortName = randomShortName();
+    const created = await request.post("/api/stores", {
+      headers: bearer(operator),
+      data: { name, short_name: shortName, domain: `audit-${randomUUID()}.kizuna.test` },
+    });
+    if (created.status() === 409) continue;
+    expect(created.status(), await created.text()).toBe(201);
+    const id = String((await created.json()).id);
+    shortNames.set(id, shortName);
+    return id;
+  }
+  throw new Error("略称の重複が続き、店舗を登録できませんでした");
 }
 
 When(
