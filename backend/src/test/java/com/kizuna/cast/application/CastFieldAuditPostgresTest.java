@@ -10,6 +10,7 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionMapper;
 import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.OrderReferenceCheck;
@@ -188,21 +189,24 @@ class CastFieldAuditPostgresTest {
 
   private String cast(Map<String, String> values) {
     String id =
-        casts.create(
-            currentStore(),
-            new CastCreateCommand(
-                "秘密の名前-" + UUID.randomUUID(),
-                null,
-                LocalDate.of(2026, 1, 1),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null),
-            ORDINARY);
+        casts
+            .create(
+                currentStore(),
+                new CastCreateCommand(
+                    "秘密の名前-" + UUID.randomUUID(),
+                    null,
+                    LocalDate.of(2026, 1, 1),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+                ORDINARY)
+            .enrollment()
+            .getId();
     if (!values.isEmpty()) write(id, values);
     return id;
   }
@@ -412,21 +416,24 @@ class CastFieldAuditPostgresTest {
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     String definition = definition("private-key", false);
     String id =
-        casts.create(
-            storeId,
-            new CastCreateCommand(
-                "秘密の名前",
-                null,
-                LocalDate.of(2026, 1, 1),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null),
-            SECOND);
+        casts
+            .create(
+                storeId,
+                new CastCreateCommand(
+                    "秘密の名前",
+                    null,
+                    LocalDate.of(2026, 1, 1),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+                SECOND)
+            .enrollment()
+            .getId();
     var write = new CastUpdateRequest();
     write.setCustomFields(Map.of("private-key", "秘密の値"));
     casts.update(storeId, id, write, SECOND);
@@ -719,6 +726,11 @@ class CastFieldAuditPostgresTest {
 
     @Bean
     OrderReferenceCheck orders() {
+      return ids -> Set.of();
+    }
+
+    @Bean
+    ApplicantReferenceCheck applicants() {
       return ids -> Set.of();
     }
 

@@ -2,7 +2,8 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { applicantApi } from '@/entities/applicant';
+import { applicantApi, type ApplicantEnrollmentInput } from '@/entities/applicant';
+import type { CastCreateRequest } from '@/entities/cast';
 import { CastForm, type CastFormData, toCastCreateRequest } from '@/features/cast-form';
 import {
   getApiErrorMessage,
@@ -13,6 +14,16 @@ import {
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Button, RegionError } from '@/shared/ui';
+// 在籍登録とキャスト直接登録の本文は同じ項目を持つ（entities 同士は参照できないので、両方を使うここで型を突き合わせる）。
+type SameKeys<A, B> = [keyof A] extends [keyof B]
+  ? [keyof B] extends [keyof A]
+    ? true
+    : false
+  : false;
+const enrollmentMirrorsCastCreation: SameKeys<ApplicantEnrollmentInput, CastCreateRequest> &
+  ([CastCreateRequest] extends [ApplicantEnrollmentInput] ? true : false) &
+  ([ApplicantEnrollmentInput] extends [CastCreateRequest] ? true : false) = true;
+void enrollmentMirrorsCastCreation;
 export default function ApplicantEnrollmentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();

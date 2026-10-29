@@ -15,12 +15,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.api.dto.CastMapperImpl;
-import com.kizuna.cast.api.dto.CastResponse;
 import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.application.CastCreateCommand;
+import com.kizuna.cast.application.CastCreation;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentStatus;
+import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -200,8 +203,11 @@ class CastControllerTest {
 
     ArgumentCaptor<CastCreateCommand> captor = ArgumentCaptor.forClass(CastCreateCommand.class);
     when(castService.create(eq(1L), captor.capture(), eq("operator@example.test")))
-        .thenReturn("e1");
-    when(castService.get(1L, "e1")).thenReturn(new CastResponse());
+        .thenReturn(
+            new CastCreation(
+                CastEnrollment.builder().status(CastEnrollmentStatus.ENROLLED).build(),
+                new CastProfile(),
+                true));
     mockMvc
         .perform(
             post("/casts")

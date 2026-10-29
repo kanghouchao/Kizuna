@@ -12,8 +12,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.application.CastCreateCommand;
+import com.kizuna.cast.application.CastCreation;
 import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
+import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
@@ -284,7 +287,10 @@ class ApplicantServiceTest {
     lock();
     ReflectionTestUtils.setField(applicant, "status", ApplicantStatus.HIRED);
     var command = ArgumentCaptor.forClass(CastCreateCommand.class);
-    when(casts.create(eq(STORE_ID), command.capture(), eq("actor"))).thenReturn("e1");
+    var enrollment = CastEnrollment.builder().build();
+    enrollment.setId("e1");
+    when(casts.create(eq(STORE_ID), command.capture(), eq("actor")))
+        .thenReturn(new CastCreation(enrollment, new CastProfile(), true));
     var response = service.enroll(STORE_ID, "a", enrollment(0L), "actor");
     assertThat(response.enrollmentId()).isEqualTo("e1");
     assertThat(response.status()).isEqualTo(ApplicantStatus.HIRED);

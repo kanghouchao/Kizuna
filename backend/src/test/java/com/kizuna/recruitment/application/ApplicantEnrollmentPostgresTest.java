@@ -16,10 +16,12 @@ import com.kizuna.cast.api.dto.CastMapperImpl;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
+import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantMapperImpl;
+import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
@@ -198,7 +200,11 @@ class ApplicantEnrollmentPostgresTest {
   @Test
   void applicantCannotHoldAnotherStoresEnrollment() {
     String enrollment =
-        context.getBean(CastService.class).create(otherStoreId, request(0L).toCommand(), ACTOR);
+        context
+            .getBean(CastService.class)
+            .create(otherStoreId, request(0L).toCommand(), ACTOR)
+            .enrollment()
+            .getId();
     String local = hiredApplicant(storeId);
     assertThatThrownBy(
             () ->
@@ -212,6 +218,7 @@ class ApplicantEnrollmentPostgresTest {
   void deletingAnEnrollmentHeldByAnApplicantIsRefusedWithConflict() {
     String applicant = hiredApplicant(storeId);
     String enrollment = applicants.enroll(storeId, applicant, request(0L), ACTOR).enrollmentId();
+    assertThat(context.getBean(CastService.class).get(storeId, enrollment).isDeletable()).isFalse();
     assertThatThrownBy(() -> context.getBean(CastService.class).delete(storeId, enrollment, ACTOR))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("応募者から在籍登録された");
@@ -303,6 +310,11 @@ class ApplicantEnrollmentPostgresTest {
     @Bean
     OrderReferenceCheck orders() {
       return ids -> Set.of();
+    }
+
+    @Bean
+    ApplicantReferenceCheck applicantReferences(ApplicantRepository applicants) {
+      return applicants::findReferencedEnrollmentIds;
     }
   }
 }

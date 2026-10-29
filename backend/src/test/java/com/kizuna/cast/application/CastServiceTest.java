@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.api.dto.CastMapper;
 import com.kizuna.cast.api.dto.CastUpdateRequest;
+import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
@@ -59,6 +60,7 @@ class CastServiceTest {
   @Mock CastFieldDefinitionRepository definitions;
   @Mock AttendanceReferenceCheck attendance;
   @Mock OrderReferenceCheck orders;
+  @Mock ApplicantReferenceCheck applicantReferences;
   @Mock StoreRepository stores;
   @Mock CastEnrollmentStatusHistoryRepository histories;
   @Mock CastEnrollmentSnapshotRepository snapshots;
@@ -81,6 +83,7 @@ class CastServiceTest {
             definitions,
             attendance,
             orders,
+            applicantReferences,
             audit);
   }
 
@@ -124,7 +127,9 @@ class CastServiceTest {
     var command =
         new CastCreateCommand(
             "花", null, LocalDate.of(2026, 1, 1), null, null, null, null, null, null, null, null);
-    assertThat(service.create(STORE_ID, command, "actor")).isEqualTo("e1");
+    var created = service.create(STORE_ID, command, "actor");
+    assertThat(created.enrollment().getId()).isEqualTo("e1");
+    assertThat(created.deletable()).isTrue();
     var savedEnrollment = ArgumentCaptor.forClass(CastEnrollment.class);
     verify(enrollments).save(savedEnrollment.capture());
     assertThat(savedEnrollment.getValue().getStartedOn()).isEqualTo(LocalDate.of(2026, 1, 1));
