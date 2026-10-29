@@ -22,6 +22,7 @@ import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
+import com.kizuna.user.application.BusinessAudit;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -48,6 +49,7 @@ class StoreRegistryServiceTest {
   @Mock private CompletedOrderCheck completedOrderCheck;
   @Mock private PointLedgerService pointLedgerService;
   @Mock private AttendanceRecordCheck attendanceRecordCheck;
+  @Mock private BusinessAudit businessAudit;
   @InjectMocks private StoreRegistryService storeRegistryService;
 
   @Test
@@ -65,13 +67,13 @@ class StoreRegistryServiceTest {
     req.setName("T1");
     req.setDomain("d1.com");
 
-    Store t = new Store();
+    Store t = new Store("T1", "d1.com");
     t.setId(1L);
-    when(storeRepository.save(any())).thenReturn(t);
+    when(storeRepository.saveAndFlush(any())).thenReturn(t);
 
     assertThat(storeRegistryService.create(req)).isEqualTo(1L);
 
-    verify(storeRepository).save(any());
+    verify(storeRepository).saveAndFlush(any());
     verify(storeProfileRepository).save(any());
   }
 
@@ -88,7 +90,7 @@ class StoreRegistryServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に登録されています");
 
-    verify(storeRepository, never()).save(any());
+    verify(storeRepository, never()).saveAndFlush(any());
     verify(storeProfileRepository, never()).save(any());
   }
 
@@ -158,7 +160,7 @@ class StoreRegistryServiceTest {
     storeRegistryService.update("1", req);
 
     assertThat(t.getName()).isEqualTo("New");
-    verify(storeRepository).save(t);
+    verify(storeRepository).saveAndFlush(t);
   }
 
   @Test
@@ -175,7 +177,7 @@ class StoreRegistryServiceTest {
 
   @Test
   void delete_preparingStoreWithoutRecords_deletesById() {
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(preparingStore(1L)));
     when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
     when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(false);
 
@@ -189,7 +191,7 @@ class StoreRegistryServiceTest {
   void delete_activeStore_isRejected() {
     Store active = preparingStore(1L);
     active.activate();
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(active));
+    when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(active));
 
     assertThatThrownBy(() -> storeRegistryService.delete("1"))
         .isInstanceOf(ServiceException.class)
@@ -199,7 +201,7 @@ class StoreRegistryServiceTest {
 
   @Test
   void delete_storeWithCompletedOrder_isRejected() {
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(preparingStore(1L)));
     when(completedOrderCheck.existsForStore(1L)).thenReturn(true);
 
     assertThatThrownBy(() -> storeRegistryService.delete("1"))
@@ -211,7 +213,7 @@ class StoreRegistryServiceTest {
   // 台帳は会員が持つが、発生店舗の帰属が残る限りその店舗は消せない（消すと帰属だけが静かに外れる）。
   @Test
   void delete_storeWithPointEntry_isRejected() {
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(preparingStore(1L)));
     when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
     when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(true);
 
@@ -223,7 +225,7 @@ class StoreRegistryServiceTest {
 
   @Test
   void delete_storeWithAttendance_isRejected() {
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(preparingStore(1L)));
     when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
     when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(false);
     when(attendanceRecordCheck.existsForStore(1L)).thenReturn(true);
@@ -242,7 +244,7 @@ class StoreRegistryServiceTest {
     "fk_t_bonus_awards_store_id, ボーナスの記録が存在する店舗は削除できません"
   })
   void delete_storeWithRetainedRecords_translatesConstraint(String constraint, String message) {
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(preparingStore(1L)));
     doThrow(
             new DataIntegrityViolationException(
                 "削除拒否",
@@ -258,7 +260,7 @@ class StoreRegistryServiceTest {
   @ParameterizedTest
   @ValueSource(strings = {"fk_t_applicant_uploads_store", "fk_t_applicant_uploads_applicant_store"})
   void delete_storeWithPrivateAttachmentOwnership_isConflict(String constraint) {
-    when(storeRepository.findById(1L)).thenReturn(Optional.of(preparingStore(1L)));
+    when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(preparingStore(1L)));
     doThrow(
             new DataIntegrityViolationException(
                 "削除拒否",
@@ -272,7 +274,7 @@ class StoreRegistryServiceTest {
 
   @Test
   void delete_missingStore_throwsNotFound() {
-    when(storeRepository.findById(99L)).thenReturn(Optional.empty());
+    when(storeRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> storeRegistryService.delete("99"))
         .isInstanceOf(NotFoundException.class)

@@ -12,6 +12,7 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.store.domain.StoreStatus;
+import com.kizuna.user.application.BusinessAudit;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ class StoreActivationServiceTest {
 
   @Mock private StoreRepository storeRepository;
   @Mock private CacheManager cacheManager;
+  @Mock private BusinessAudit businessAudit;
   @Mock private Cache cache;
   @InjectMocks private StoreActivationService storeActivationService;
 
@@ -51,7 +53,7 @@ class StoreActivationServiceTest {
     storeActivationService.activate(STORE_ID);
 
     assertThat(store.getStatus()).isEqualTo(StoreStatus.ACTIVE);
-    verify(storeRepository).save(store);
+    verify(storeRepository).saveAndFlush(store);
     verify(cache).evict("preparing.kizuna.test");
   }
 

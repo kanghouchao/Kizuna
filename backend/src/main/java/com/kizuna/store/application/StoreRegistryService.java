@@ -17,9 +17,12 @@ import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.store.domain.StoreStatus;
 import com.kizuna.storeprofile.domain.StoreProfile;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
+import com.kizuna.user.application.BusinessAudit;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.cache.annotation.CacheEvict;
@@ -40,6 +43,7 @@ public class StoreRegistryService {
   private final CompletedOrderCheck completedOrderCheck;
   private final PointLedgerService pointLedgerService;
   private final AttendanceRecordCheck attendanceRecordCheck;
+  private final BusinessAudit businessAudit;
 
   /** 削除を止める側の外部キーの写像。履歴と業務記録は誤登録の撤回にも従わせない。 */
   private static final Map<DbConstraint, Supplier<RuntimeException>> DELETION_VIOLATIONS =
@@ -93,8 +97,18 @@ public class StoreRegistryService {
     Store t = new Store();
     t.setName(req.getName());
     t.setDomain(req.getDomain());
-    Store saved = storeRepository.save(t);
+    Store saved = storeRepository.saveAndFlush(t);
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
+    record(
+        saved.getId(),
+        "STORE_CREATED",
+        Map.of(),
+        Map.of(
+            "exists", "true",
+            "status", saved.getStatus().name(),
+            "version", String.valueOf(saved.getVersion()),
+            "domain", saved.getDomain(),
+            "changed_fields", "name,domain"));
     return saved.getId();
   }
 
@@ -104,8 +118,17 @@ public class StoreRegistryService {
   @CacheEvict(value = "storeByDomain", allEntries = true)
   public void update(String id, StoreUpdateDTO req) {
     var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
+    String versionBefore = String.valueOf(store.getVersion());
+    boolean renamed = !Objects.equals(store.getName(), req.getName());
     store.setName(req.getName());
-    storeRepository.save(store);
+    storeRepository.saveAndFlush(store);
+    if (renamed) {
+      record(
+          store.getId(),
+          "STORE_UPDATED",
+          Map.of("version", versionBefore),
+          Map.of("version", String.valueOf(store.getVersion()), "changed_fields", "name"));
+    }
   }
 
   /**
@@ -123,7 +146,7 @@ public class StoreRegistryService {
   @CacheEvict(value = "storeByDomain", allEntries = true)
   public void delete(String id) {
     Long storeId = parseId(id);
-    Store store = storeRepository.findById(storeId).orElseThrow(() -> notFound(id));
+    Store store = storeRepository.findByIdForUpdate(storeId).orElseThrow(() -> notFound(id));
     if (store.getStatus() == StoreStatus.ACTIVE) {
       throw new ServiceException("稼働中の店舗は削除できません");
     }
@@ -136,12 +159,29 @@ public class StoreRegistryService {
     }
     // 外部キーによる削除拒否は flush で
     // この場に顕在化させて業務例外へ写す（commit まで遅らせると catch を擦り抜けて 500 になる）。
+    var before =
+        Map.of(
+            "exists", "true",
+            "status", store.getStatus().name(),
+            "version", String.valueOf(store.getVersion()),
+            "domain", store.getDomain());
+    String cascade =
+        storeRepository.countCascade(storeId).stream()
+            .filter(c -> c.getRows() > 0)
+            .map(c -> c.getKind() + "=" + c.getRows())
+            .collect(Collectors.joining(","));
     try {
       storeRepository.deleteById(storeId);
       storeRepository.flush();
     } catch (DataIntegrityViolationException ex) {
       throw IntegrityViolations.translate(ex, DELETION_VIOLATIONS);
     }
+    record(storeId, "STORE_DELETED", before, Map.of("exists", "false", "cascade_deleted", cascade));
+  }
+
+  private void record(
+      Long storeId, String action, Map<String, String> before, Map<String, String> after) {
+    businessAudit.recordCurrent(storeId, action, "STORE", String.valueOf(storeId), before, after);
   }
 
   @Transactional(readOnly = true)
