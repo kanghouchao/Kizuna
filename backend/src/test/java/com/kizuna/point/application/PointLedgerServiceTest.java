@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -681,13 +682,14 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L, 2L, 3L)))
         .thenReturn(List.of());
     var nextId = new AtomicLong(SAVED_ENTRY_ID);
-    when(pointEntryRepository.save(any()))
-        .thenAnswer(
+    doAnswer(
             invocation -> {
               PointEntry saved = invocation.getArgument(0);
               saved.setId(nextId.getAndIncrement());
               return saved;
-            });
+            })
+        .when(pointEntryRepository)
+        .save(any());
 
     var split = pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会");
     assertThat(split.points()).isEqualTo(2L * Integer.MAX_VALUE + 10);
