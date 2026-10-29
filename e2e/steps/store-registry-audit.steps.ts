@@ -71,16 +71,21 @@ Given(
   },
 );
 
+const shortNames = new Map<string, string>();
+
 async function register(
   request: import("@playwright/test").APIRequestContext,
   name: string,
 ): Promise<string> {
+  const shortName = randomUUID().slice(0, 3);
   const created = await request.post("/api/stores", {
     headers: bearer(operator),
-    data: { name, domain: `audit-${randomUUID()}.kizuna.test` },
+    data: { name, short_name: shortName, domain: `audit-${randomUUID()}.kizuna.test` },
   });
   expect(created.status(), await created.text()).toBe(201);
-  return String((await created.json()).id);
+  const id = String((await created.json()).id);
+  shortNames.set(id, shortName);
+  return id;
 }
 
 When(
@@ -88,7 +93,7 @@ When(
   async ({ request }) => {
     const denied = await request.post("/api/stores", {
       headers: bearer(limited),
-      data: { name: secretName, domain: `denied-${randomUUID()}.kizuna.test` },
+      data: { name: secretName, short_name: "x", domain: `denied-${randomUUID()}.kizuna.test` },
     });
     expect(denied.status()).toBe(403);
 
@@ -98,12 +103,12 @@ When(
 
     const renamed = await request.put(`/api/stores/${activated}`, {
       headers: bearer(operator),
-      data: { name: `${secretName}-改名` },
+      data: { name: `${secretName}-改名`, short_name: shortNames.get(activated) },
     });
     expect(renamed.status()).toBe(204);
     const same = await request.put(`/api/stores/${activated}`, {
       headers: bearer(operator),
-      data: { name: `${secretName}-改名` },
+      data: { name: `${secretName}-改名`, short_name: shortNames.get(activated) },
     });
     expect(same.status()).toBe(204);
 
@@ -156,7 +161,7 @@ Then(
       expect(after.exists).toBe("true");
       expect(after.status).toBe("PREPARING");
       expect(after.version).toBe("0");
-      expect(after.changed_fields).toBe("name,domain");
+      expect(after.changed_fields).toBe("name,short_name,domain");
     }
 
     const updated = await mine("STORE_UPDATED");
