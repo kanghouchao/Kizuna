@@ -88,7 +88,8 @@ class SystemConfigAuditTest {
         "smtp_from",
         "line_channel_id",
         "point_usage_unit",
-        "member_rank_gold_visit_count"
+        "member_rank_gold_visit_count",
+        "applicant_retention_hired_months"
       })
   void whitelistedKeysRecordBeforeAndAfter(String key) {
     stored(key, "10", false);

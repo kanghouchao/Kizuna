@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { applicantApi, applicantAttachmentApi } from '@/entities/applicant';
 import { hasPermission } from '@/shared/lib';
 import ApplicantDetailPage from '../ui/ApplicantDetailPage';
@@ -48,10 +48,31 @@ beforeEach(() => {
   (applicantAttachmentApi.policy as jest.Mock).mockResolvedValue({ configured: false });
   (applicantApi.get as jest.Mock).mockResolvedValue(detail);
   (applicantApi.policy as jest.Mock).mockResolvedValue({
-    retention_periods: null,
+    retention_periods: { rejected_months: null, withdrawn_months: null, hired_months: null },
   });
   (applicantApi.history as jest.Mock).mockResolvedValue({ rows: [], nextCursor: null });
   (hasPermission as jest.Mock).mockReturnValue(true);
+});
+test('保持方針は終端状態ごとの月数を示し、未設定は自動匿名化しないと示す', async () => {
+  (applicantApi.policy as jest.Mock).mockResolvedValue({
+    retention_periods: { rejected_months: 6, withdrawn_months: null, hired_months: 0 },
+  });
+  render(<ApplicantDetailPage />);
+  const section = (await screen.findByRole('heading', { name: '情報保持方針' })).closest(
+    'section'
+  ) as HTMLElement;
+  const value = (label: string) =>
+    within(section).getByText(label, { selector: 'dt' }).nextElementSibling;
+  await waitFor(() => expect(value('不採用')).toHaveTextContent('6 か月後に匿名化'));
+  expect(value('辞退')).toHaveTextContent('自動匿名化しない');
+  expect(value('採用')).toHaveTextContent('0 か月後に匿名化');
+});
+test('保持期間がすべて未設定なら三つとも自動匿名化しないと示す', async () => {
+  render(<ApplicantDetailPage />);
+  const section = (await screen.findByRole('heading', { name: '情報保持方針' })).closest(
+    'section'
+  ) as HTMLElement;
+  await waitFor(() => expect(within(section).getAllByText('自動匿名化しない')).toHaveLength(3));
 });
 test('未保存の受付編集を面接編集への移動で黙って破棄しない', async () => {
   render(<ApplicantDetailPage />);

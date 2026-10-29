@@ -1,6 +1,8 @@
 package com.kizuna.recruitment.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,10 +19,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
 import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
+import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.application.ApplicantService;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
 import com.kizuna.recruitment.domain.ApplicantStatus;
 import com.kizuna.recruitment.domain.ReceptionChannel;
+import com.kizuna.settings.application.ApplicantRetentionSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -240,7 +244,33 @@ class ApplicantControllerTest {
   }
 
   @Test
-  void updateRequiresVersionAndPolicyExposesUnconfiguredValues() throws Exception {
+  void policyReturnsThreeRetentionPeriodsWithUnsetAsNull() throws Exception {
+    when(service.policy())
+        .thenReturn(RecruitmentPolicyResponse.from(new ApplicantRetentionSettings(6, null, 0)));
+    mvc.perform(
+            get("/applicants/policy")
+                .header("X-Store-ID", "1")
+                .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.final_decision_configured").doesNotExist())
+        .andExpect(jsonPath("$.retention_periods.rejected_months").value(6))
+        .andExpect(jsonPath("$.retention_periods.withdrawn_months").value(nullValue()))
+        .andExpect(jsonPath("$.retention_periods", hasKey("withdrawn_months")))
+        .andExpect(jsonPath("$.retention_periods.hired_months").value(0));
+  }
+
+  @Test
+  void policyRequiresRecruitmentView() throws Exception {
+    mvc.perform(
+            get("/applicants/policy")
+                .header("X-Store-ID", "1")
+                .with(actor().authorities(new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void updateRequiresVersion() throws Exception {
     mvc.perform(
             put("/applicants/a")
                 .with(csrf())
@@ -254,12 +284,5 @@ class ApplicantControllerTest {
                             new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
                             new SimpleGrantedAuthority("PERM_RECRUITMENT_MANAGE"))))
         .andExpect(status().isBadRequest());
-    mvc.perform(
-            get("/applicants/policy")
-                .header("X-Store-ID", "1")
-                .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.final_decision_configured").doesNotExist())
-        .andExpect(jsonPath("$.retention_periods").isEmpty());
   }
 }

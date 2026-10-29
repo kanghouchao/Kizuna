@@ -8,12 +8,14 @@ import com.kizuna.recruitment.api.dto.ApplicantResponse;
 import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
 import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
 import com.kizuna.recruitment.api.dto.ApplicantUpdateRequest;
+import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.domain.Applicant;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.ApplicantStatus;
 import com.kizuna.recruitment.domain.ApplicantStatusHistory;
 import com.kizuna.recruitment.domain.ApplicantStatusHistoryRepository;
 import com.kizuna.recruitment.domain.ApplicantSummaryView;
+import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -43,6 +45,11 @@ public class ApplicantService {
   private final UserRepository users;
   private final ApplicantMapper mapper;
   private final BusinessAudit audit;
+  private final SystemConfigService systemConfigs;
+
+  public RecruitmentPolicyResponse policy() {
+    return RecruitmentPolicyResponse.from(systemConfigs.applicantRetentionSettings());
+  }
 
   @Transactional(readOnly = true)
   public Page<ApplicantSummaryResponse> list(

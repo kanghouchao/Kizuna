@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +23,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -399,6 +402,95 @@ class SystemConfigServiceImplTest {
 
     assertThat(rank.silver().isReachedBy(Long.MAX_VALUE, Long.MAX_VALUE)).isFalse();
     assertThat(rank.gold().isReachedBy(Long.MAX_VALUE, Long.MAX_VALUE)).isFalse();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"-1", "1201"})
+  @DisplayName("保持期間に 0〜1200 か月の範囲外を指定すると例外が発生すること")
+  void updateConfig_retentionMonthsOutOfRange(String value) {
+    // 負数は「既に満了」と読め、過大な値は満了日の計算が日付の範囲を超えて定期処理を毎回落とす
+    SystemConfig config =
+        SystemConfig.builder()
+            .configKey("applicant_retention_rejected_months")
+            .valueType("NUMBER")
+            .build();
+    when(systemConfigRepository.findByConfigKey("applicant_retention_rejected_months"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(
+        ServiceException.class,
+        () ->
+            systemConfigService.updateConfig(
+                "applicant_retention_rejected_months",
+                SystemConfigUpdateRequest.builder().configValue(value).build()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"1.5", "abc"})
+  @DisplayName("保持期間に整数以外を指定すると例外が発生すること")
+  void updateConfig_nonIntegerRetentionMonths(String value) {
+    SystemConfig config =
+        SystemConfig.builder()
+            .configKey("applicant_retention_hired_months")
+            .valueType("NUMBER")
+            .build();
+    when(systemConfigRepository.findByConfigKey("applicant_retention_hired_months"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(
+        ServiceException.class,
+        () ->
+            systemConfigService.updateConfig(
+                "applicant_retention_hired_months",
+                SystemConfigUpdateRequest.builder().configValue(value).build()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "1200", ""})
+  @DisplayName("保持期間は 0〜1200 か月の整数と空欄（未設定）を保存できること")
+  void updateConfig_acceptsRetentionMonths(String value) {
+    SystemConfig config =
+        SystemConfig.builder()
+            .configKey("applicant_retention_withdrawn_months")
+            .valueType("NUMBER")
+            .build();
+    when(systemConfigRepository.findByConfigKey("applicant_retention_withdrawn_months"))
+        .thenReturn(Optional.of(config));
+    when(systemConfigRepository.save(config)).thenReturn(config);
+    when(systemConfigMapper.toResponse(config))
+        .thenReturn(SystemConfigResponse.builder().configValue(value).build());
+
+    assertEquals(
+        value,
+        systemConfigService
+            .updateConfig(
+                "applicant_retention_withdrawn_months",
+                SystemConfigUpdateRequest.builder().configValue(value).build())
+            .getConfigValue());
+  }
+
+  @Test
+  void applicantRetentionSettings_buildsTypedSnapshotFromKeys() {
+    when(systemConfigRepository.findByConfigKey("applicant_retention_rejected_months"))
+        .thenReturn(Optional.of(config("applicant_retention_rejected_months", "6")));
+    when(systemConfigRepository.findByConfigKey("applicant_retention_withdrawn_months"))
+        .thenReturn(Optional.of(config("applicant_retention_withdrawn_months", "0")));
+    when(systemConfigRepository.findByConfigKey("applicant_retention_hired_months"))
+        .thenReturn(Optional.of(config("applicant_retention_hired_months", "36")));
+
+    assertThat(systemConfigService.applicantRetentionSettings())
+        .isEqualTo(new ApplicantRetentionSettings(6, 0, 36));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", "abc", "-1", "1201"})
+  void applicantRetentionSettings_unsetOrInvalidMeansDoNothing(String value) {
+    // 未設定・不正値を 0 か月へ倒すと、方針を決める前に終端の応募者が匿名化される
+    when(systemConfigRepository.findByConfigKey(anyString()))
+        .thenReturn(Optional.of(config("applicant_retention_rejected_months", value)));
+
+    assertThat(systemConfigService.applicantRetentionSettings())
+        .isEqualTo(new ApplicantRetentionSettings(null, null, null));
   }
 
   private SystemConfig config(String key, String value) {

@@ -16,6 +16,7 @@ import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
 import com.kizuna.recruitment.api.dto.ApplicantMapper;
 import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
 import com.kizuna.recruitment.api.dto.ApplicantUpdateRequest;
+import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.domain.Applicant;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
@@ -23,6 +24,8 @@ import com.kizuna.recruitment.domain.ApplicantStatus;
 import com.kizuna.recruitment.domain.ApplicantStatusHistory;
 import com.kizuna.recruitment.domain.ApplicantStatusHistoryRepository;
 import com.kizuna.recruitment.domain.ReceptionChannel;
+import com.kizuna.settings.application.ApplicantRetentionSettings;
+import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -51,6 +54,7 @@ class ApplicantServiceTest {
   @Mock ApplicantStatusHistoryRepository histories;
   @Mock UserRepository users;
   @Mock BusinessAudit audit;
+  @Mock SystemConfigService systemConfigs;
   ApplicantService service;
   Applicant applicant;
   ApplicantIntakeRequest intake =
@@ -71,7 +75,12 @@ class ApplicantServiceTest {
   void setup() {
     service =
         new ApplicantService(
-            applicants, histories, users, Mappers.getMapper(ApplicantMapper.class), audit);
+            applicants,
+            histories,
+            users,
+            Mappers.getMapper(ApplicantMapper.class),
+            audit,
+            systemConfigs);
     applicant = Applicant.receive(STORE_ID, intake.toIntake());
     applicant.setId("a");
     ReflectionTestUtils.setField(applicant, "version", 0L);
@@ -85,6 +94,15 @@ class ApplicantServiceTest {
 
   void lock() {
     when(applicants.findByIdAndStoreIdForUpdate("a", STORE_ID)).thenReturn(Optional.of(applicant));
+  }
+
+  @Test
+  void policyReturnsEachTerminalStatusRetention() {
+    when(systemConfigs.applicantRetentionSettings())
+        .thenReturn(new ApplicantRetentionSettings(6, 12, 36));
+
+    assertThat(service.policy().retentionPeriods())
+        .isEqualTo(new RecruitmentPolicyResponse.RetentionPeriods(6, 12, 36));
   }
 
   @Test
