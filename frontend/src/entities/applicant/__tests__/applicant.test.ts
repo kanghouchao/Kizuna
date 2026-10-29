@@ -54,6 +54,14 @@ test('受付と面接と状態変更は明示した版を送る', async () => {
     reason: '面接で合意',
   });
 });
+test('在籍登録は版とキャスト登録と同じ項目を送る', async () => {
+  const enrollment = { name: '源氏名', status: 'ENROLLED' as const, started_on: '2026-11-01' };
+  await applicantApi.enroll('a', 8, enrollment);
+  expect(apiClient.post).toHaveBeenCalledWith('/applicants/a/enrollment', {
+    version: 8,
+    ...enrollment,
+  });
+});
 test('一覧条件と履歴cursorを保持する', async () => {
   await applicantApi.list({ page: 2, size: 20, search: '応募者', status: 'SCREENING' });
   expect(apiClient.get).toHaveBeenCalledWith('/applicants', {

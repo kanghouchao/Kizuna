@@ -9,6 +9,7 @@ import { requireId } from '@/shared/lib';
 import type {
   ApplicantDecision,
   ApplicantDetail,
+  ApplicantEnrollmentInput,
   ApplicantHistory,
   ApplicantIntake,
   ApplicantInterview,
@@ -50,6 +51,12 @@ export const applicantApi = {
     reason: string
   ): Promise<ApplicantDetail> =>
     (await apiClient.post(`${resource(id)}/decision`, { version, status, reason })).data,
+  enroll: async (
+    id: string,
+    version: number,
+    enrollment: ApplicantEnrollmentInput
+  ): Promise<ApplicantDetail> =>
+    (await apiClient.post(`${resource(id)}/enrollment`, { version, ...enrollment })).data,
   history: async (id: string, cursor?: string): Promise<CursorPageResult<ApplicantHistory>> =>
     fromCursorPage(
       (await apiClient.get(`${resource(id)}/history`, { params: { cursor, size: 20 } })).data

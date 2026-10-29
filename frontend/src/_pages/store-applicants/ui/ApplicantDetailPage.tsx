@@ -34,6 +34,7 @@ export default function ApplicantDetailPage() {
   const policy = useResource(() => applicantApi.policy());
   const [canManage, setCanManage] = useState(false);
   const [canDecide, setCanDecide] = useState(false);
+  const [canEnroll, setCanEnroll] = useState(false);
   const [attachments, setAttachments] = useState({ read: false, write: false });
   const [saving, setSaving] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
@@ -59,6 +60,7 @@ export default function ApplicantDetailPage() {
     setCanDecide(
       hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'RECRUITMENT_DECIDE')
     );
+    setCanEnroll(hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'CAST_MANAGE'));
   }, []);
   const move = (next: 'intake' | 'interview' | 'close' | 'reload') => {
     if (saving) return;
@@ -276,6 +278,31 @@ export default function ApplicantDetailPage() {
               )
             }
           />
+        </section>
+      )}
+      {applicant.status === 'HIRED' && (
+        <section className="rounded-xl border bg-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold">在籍</h2>
+          {applicant.enrollment_id ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm">在籍登録済みです。招待はキャスト一覧から発行します。</p>
+              <Button
+                variant="outline"
+                render={<Link href={storePath(`/casts/${applicant.enrollment_id}/edit`)} />}
+              >
+                在籍を開く
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">在籍は未登録です。</p>
+              {canEnroll && (
+                <Button render={<Link href={storePath(`/applicants/${id}/enrollment`)} />}>
+                  在籍登録
+                </Button>
+              )}
+            </div>
+          )}
         </section>
       )}
       <section className="rounded-xl border bg-card p-6 space-y-4">
