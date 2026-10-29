@@ -92,7 +92,7 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 - 管理画面は system sans と日本語 fallback。本文／ラベル 14px、主要数値 30px bold、ページ見出しは全 breakpoint で `text-2xl`。default 店舗サイトの見出しは Noto Serif JP 系と広い字間を使う。
 - アイコンは `lucide-react` の `Icon` 接尾辞の export、既定 strokeWidth = 2。メニューの ICON_MAP が許可名を定める。
 - console layout が `p-8 max-w-7xl mx-auto` を供給する。ページは padding・幅制限・ナビゲーションを重ねない。
-- カード内周 24px、カード間／フィールド間 24px、ラベルと入力 8px、toolbar 12px、行内操作 4px。sidebar 256px、header 64px、カード `rounded-xl shadow-sm`。
+- カード内周 24px、カード間／フィールド間 24px、ラベルと入力 8px、toolbar 12px、行内操作 4px。sidebar 256px（文脈レール 56px + パネル 200px。レールが無ければパネルが 256px 全幅）、header 64px、カード `rounded-xl shadow-sm`。
 - 表は `TableCard` と `Table` を使う。左右端セル 24px、内部セル横 8px・縦 12px、header `h-11`。カードの内周とセル密度を別々に保つ。暦セルは `p-3`、行カードは `p-4`。
 - TableCard の子孫 selector はセルの単純 class より強い。密度変更はそこで行い、最初／最後の checkbox セルでは primitive の余白規則との競合を確認する。1024px で表の scrollWidth を確認してから横余白を広げる。
 - 管理 console の内容列は `min-w-[44rem]`。狭い viewport は横スクロールで操作可能性を保つ。新しい toolbar は最大長の店名・人名で intrinsic width を測り、label の幅上限を決めた後に床幅を確認する。
@@ -117,7 +117,7 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 - CardTitle が章見出しなら `role="heading" aria-level={N}` を渡す。h1 直下は 2、入れ子は 3 とし、飛ばさない。単なるラベルには付けない。
 - destructive の DropdownMenuItem は consumer で `text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong`。vendored の destructive variant は tint 上の文字対比が不足する。
 - 裸の操作要素は `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`。この ring はカード／ページ面でのみ認証済み。overflow で切れる場合は ring-inset を検討し、背景も再検証する。
-- sidebar は高さ 40px・icon 20px・文字 14px。選択は primary tint と strong の縁、非選択 hover は `bg-muted text-foreground`。グループ見出しは折り畳まない。
+- sidebar は左端の文脈レール（56px）と、その文脈のメニューだけを出すパネル（200px）からなり、全画面幅で表示する。レールは「グループ」（icon のみ）、区切り線、授権店舗の略称ボタン（40px 角、`aria-label` / `title` は店名）を縦に並べ、はみ出せばレールだけが縦スクロールする。文脈が 1 つしか無い利用者にはレールを出さない。レールの選択は `bg-primary/10 text-primary-strong ring-2 ring-primary`、非選択 hover は `bg-muted text-foreground`。パネルは見出しに文脈名（長い名前は省略表示）、最上段にダッシュボード、続けて項目のある業務領域の見出しだけを出す。パネルの項目は高さ 40px・icon 20px・文字 14px。選択は primary tint と strong の縁、非選択 hover は `bg-muted text-foreground`。グループ見出しは折り畳まない。ヘッダーに店舗切替は置かない。
 - 統計カードは注釈・数値・増減の順。カテゴリ chip は chart tint と foreground。ランキングは 32px の primary tint の順位と名前、右端に金額／件数。
 - 選択 preview は label 内の sr-only radio、選択時 `border-primary ring-2 ring-primary bg-primary/10`。説明は未選択時だけ muted、hover／選択時は foreground。focus-visible を label に伝播する。
 - 本人ポータルの固定下部 tab は 24px icon + 12px label、content に `pb-16`。選択文字は primary-strong、非選択 hover は背景と文字を同時に変更する。

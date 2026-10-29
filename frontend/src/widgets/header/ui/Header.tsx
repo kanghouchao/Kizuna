@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuth, useMe, useStoreContext } from '@/entities/user';
+import { useAuth, useMe } from '@/entities/user';
 import {
   Button,
   DropdownMenu,
@@ -10,15 +10,11 @@ import {
   DropdownMenuTrigger,
   RegionError,
 } from '@/shared/ui';
-import { BellIcon, CircleUserRoundIcon, StoreIcon } from 'lucide-react';
+import { BellIcon, CircleUserRoundIcon } from 'lucide-react';
 import { ModeToggle } from './ModeToggle';
 
 export function Header() {
   const { logout } = useAuth();
-
-  // 現在店舗・授権店舗・切替は店舗コンテキスト（管理画面シェルに搭載）が一手に担う。
-  // 切替は選べる店舗が 2 つ以上あるときだけ出す。1 店舗のグループでは店名だけを掲げる。
-  const { stores, currentStore, switchStore } = useStoreContext();
 
   // 表示名は token claim に無い（wire 契約は authorities / userType のみ）ため、
   // /me の共有 seam（管理画面シェルに搭載）から読む。アカウント設定ページの
@@ -40,35 +36,6 @@ export function Header() {
         <ModeToggle />
 
         <div className="h-8 w-px bg-border" />
-
-        {stores && stores.length === 1 && (
-          <span className="flex items-center gap-2 text-sm text-foreground">
-            <StoreIcon className="size-5 shrink-0 text-muted-foreground" />
-            <span className="max-w-40 truncate">{currentStore?.name}</span>
-          </span>
-        )}
-
-        {stores && stores.length > 1 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
-              <StoreIcon className="size-5 shrink-0 text-muted-foreground" />
-              {/* 店名は 200 字まで許されるため、上限を置かないと行の固有幅に上界が無くなり、
-                  シェルの下限幅では守れなくなる。 */}
-              <span className="max-w-40 truncate">{currentStore?.name || '店舗を選択'}</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="w-56">
-              {stores.map(store => {
-                const id = store.id;
-                if (id === undefined) return null;
-                return (
-                  <DropdownMenuItem key={id} onClick={() => switchStore(id)}>
-                    {store.name}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
 
         <div className="flex items-center gap-4">
           <div className="text-right hidden sm:block">
