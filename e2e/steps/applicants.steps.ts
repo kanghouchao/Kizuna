@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
@@ -94,6 +94,42 @@ async function decide(
     data,
   });
 }
+async function interviewed(request: APIRequestContext) {
+  let detail = await receive(request);
+  applicantId = detail.id;
+  const interview = await request.put(`${path()}/interview`, {
+    headers: headers(),
+    data: {
+      version: detail.version,
+      interview_at: "2026-10-01T10:30:00+09:00",
+      interviewer: "面接担当者",
+      notes: "非公開面接メモ",
+      checklist: {},
+    },
+  });
+  expect(interview.status(), await interview.text()).toBe(200);
+  detail = await interview.json();
+  for (const status of ["SCREENING", "INTERVIEWED"]) {
+    const moved = await request.post(`${path()}/transitions`, {
+      headers: headers(),
+      data: { version: detail.version, status, reason: "選考を進める" },
+    });
+    expect(moved.status(), await moved.text()).toBe(200);
+    detail = await moved.json();
+  }
+  return detail;
+}
+async function enroll(
+  request: APIRequestContext,
+  id: string,
+  data: Record<string, unknown>,
+  authorization = token,
+) {
+  return request.post(`/api/applicants/${id}/enrollment`, {
+    headers: { ...headers(), Authorization: `Bearer ${authorization}` },
+    data,
+  });
+}
 async function foreignApplicant(request: APIRequestContext, sourceId: string) {
   const catalog = await (
     await request.get("/api/stores/me", {
@@ -117,32 +153,52 @@ async function foreignApplicant(request: APIRequestContext, sourceId: string) {
   }
 }
 
+async function loginAsRecruiter(
+  page: Page,
+  request: APIRequestContext,
+  permissions: string[],
+) {
+  applicantName = `応募検証-${randomUUID()}`;
+  managerToken = await loginAsStoreAdmin(request);
+  const ownerLogin = await request.post("/api/auth/login", {
+    data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD },
+  });
+  expect(ownerLogin.status()).toBe(200);
+  ownerToken = (await ownerLogin.json()).token;
+  const { email, password, token: actorToken } = await createRecruiter(
+    request,
+    permissions,
+  );
+  token = actorToken;
+  await page.goto(`${APP_URL}/auth/login`);
+  await page.getByLabel("メールアドレス", { exact: true }).fill(email);
+  await page.getByLabel("パスワード", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "ログイン", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard\/?$/, { timeout: 20000 });
+}
+const RECRUITER_PERMISSIONS = [
+  "RECRUITMENT_VIEW",
+  "RECRUITMENT_MANAGE",
+  "RECRUITMENT_DECIDE",
+  "STORE_VIEW",
+];
+
 Given(
   "検証専用の採用担当者でログインしている",
   async ({ page, request, $testInfo }) => {
     $testInfo.setTimeout(120000);
-    applicantName = `応募検証-${randomUUID()}`;
-    managerToken = await loginAsStoreAdmin(request);
-    const ownerLogin = await request.post("/api/auth/login", {
-      data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD },
-    });
-    expect(ownerLogin.status()).toBe(200);
-    ownerToken = (await ownerLogin.json()).token;
-    const { email, password, token: actorToken } = await createRecruiter(
-      request,
-      [
-        "RECRUITMENT_VIEW",
-        "RECRUITMENT_MANAGE",
-        "RECRUITMENT_DECIDE",
-        "STORE_VIEW",
-      ],
-    );
-    token = actorToken;
-    await page.goto(`${APP_URL}/auth/login`);
-    await page.getByLabel("メールアドレス", { exact: true }).fill(email);
-    await page.getByLabel("パスワード", { exact: true }).fill(password);
-    await page.getByRole("button", { name: "ログイン", exact: true }).click();
-    await expect(page).toHaveURL(/\/admin\/dashboard\/?$/, { timeout: 20000 });
+    await loginAsRecruiter(page, request, RECRUITER_PERMISSIONS);
+  },
+);
+
+Given(
+  "在籍登録もできる採用担当者でログインしている",
+  async ({ page, request, $testInfo }) => {
+    $testInfo.setTimeout(120000);
+    await loginAsRecruiter(page, request, [
+      ...RECRUITER_PERMISSIONS,
+      "CAST_MANAGE",
+    ]);
   },
 );
 
@@ -583,28 +639,7 @@ Then(
 When(
   "面接済の応募者を画面で採用に確定する",
   async ({ page, request, $testInfo }) => {
-  let detail = await receive(request);
-  applicantId = detail.id;
-  const interview = await request.put(`${path()}/interview`, {
-    headers: headers(),
-    data: {
-      version: detail.version,
-      interview_at: "2026-10-01T10:30:00+09:00",
-      interviewer: "面接担当者",
-      notes: "非公開面接メモ",
-      checklist: {},
-    },
-  });
-  expect(interview.status(), await interview.text()).toBe(200);
-  detail = await interview.json();
-  for (const status of ["SCREENING", "INTERVIEWED"]) {
-    const moved = await request.post(`${path()}/transitions`, {
-      headers: headers(),
-      data: { version: detail.version, status, reason: "選考を進める" },
-    });
-    expect(moved.status(), await moved.text()).toBe(200);
-    detail = await moved.json();
-  }
+  await interviewed(request);
   await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
   await page.getByLabel("採否", { exact: true }).click();
   await page.getByRole("option", { name: "採用", exact: true }).click();
@@ -884,3 +919,165 @@ After({ tags: "@applicant-retention" }, async ({ request }) => {
     expect(response.status(), await response.text()).toBe(200);
   }
 });
+
+let stageName = "";
+let enrollmentId = "";
+
+When("面接済の応募者を採用に確定する", async ({ request }) => {
+  const detail = await interviewed(request);
+  const hired = await decide(request, applicantId, {
+    version: detail.version,
+    status: "HIRED",
+    reason: "面接で入店に合意",
+  });
+  expect(hired.status(), await hired.text()).toBe(200);
+  expect(await hired.json()).not.toHaveProperty("enrollment_id");
+});
+
+When(
+  "採用済みの応募者から画面で在籍を登録する",
+  async ({ page, $testInfo }) => {
+    stageName = `在籍検証-${randomUUID().slice(0, 8)}`;
+    await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+    const section = page.locator("section", {
+      has: page.getByRole("heading", { name: "在籍", exact: true }),
+    });
+    await expect(section.getByText("在籍は未登録です。")).toBeVisible();
+    await section.getByRole("link", { name: "在籍登録", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "在籍登録", exact: true }),
+    ).toBeVisible();
+    // 応募者の氏名・連絡先は源氏名の初期値に写さない。
+    await expect(page.getByLabel("源氏名 *")).toHaveValue("");
+    await page.getByLabel("源氏名 *").fill(stageName);
+    await page.getByLabel("入店日 *").fill("2026-11-01");
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((value) => {
+        localStorage.setItem("theme", value);
+        document.documentElement.classList.toggle("dark", value === "dark");
+      }, theme);
+      for (const [width, suffix] of [
+        [1280, ""],
+        [390, "-narrow"],
+      ] as const) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.screenshot({
+          path: $testInfo.outputPath(`applicant-enrollment-${theme}${suffix}.png`),
+          fullPage: true,
+        });
+      }
+    }
+    await page.evaluate(() => {
+      localStorage.setItem("theme", "light");
+      document.documentElement.classList.remove("dark");
+    });
+    await page.setViewportSize({ width: 1280, height: 960 });
+    await page.getByRole("button", { name: "保存する", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/store/applicants/${applicantId}$`));
+    await expect(
+      page.getByRole("link", { name: "在籍を開く", exact: true }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .locator("section", {
+        has: page.getByRole("heading", { name: "在籍", exact: true }),
+      })
+      .screenshot({ path: $testInfo.outputPath("applicant-enrolled-narrow.png") });
+    await page.setViewportSize({ width: 1280, height: 960 });
+  },
+);
+
+Then(
+  "在籍は未公開・招待なしで在籍一覧に出て応募者詳細から開ける",
+  async ({ page, request }) => {
+    const detail = await current(request);
+    expect(detail.status).toBe("HIRED");
+    enrollmentId = detail.enrollment_id;
+    expect(enrollmentId).toBeTruthy();
+    const list = await (
+      await request.get("/api/applicants", {
+        headers: headers(),
+        params: { search: applicantName },
+      })
+    ).json();
+    expect(list.content[0]).toMatchObject({
+      id: applicantId,
+      enrollment_id: enrollmentId,
+    });
+    const cast = await request.get(`/api/casts/${enrollmentId}`, {
+      headers: headers(),
+    });
+    expect(cast.status(), await cast.text()).toBe(200);
+    expect(await cast.json()).toMatchObject({
+      id: enrollmentId,
+      name: stageName,
+      status: "ENROLLED",
+      started_on: "2026-11-01",
+      publication_status: "UNPUBLISHED",
+      invitation_status: "NOT_INVITED",
+    });
+    expect(JSON.stringify(await cast.json())).not.toContain("非公開");
+    await page.getByRole("link", { name: "在籍を開く", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/store/casts/${enrollmentId}/edit$`));
+    await page.goto(`${APP_URL}/store/casts`);
+    await page.getByPlaceholder("名前で検索...").fill(stageName);
+    await page.getByRole("button", { name: "検索", exact: true }).click();
+    await expect(
+      page.getByRole("cell", { name: stageName, exact: true }),
+    ).toBeVisible();
+  },
+);
+
+Then(
+  "同じ応募者への二度目の在籍登録と採用前の在籍登録は拒否される",
+  async ({ request }) => {
+    const detail = await current(request);
+    const body = { name: `${stageName}-2`, started_on: "2026-11-01" };
+    const again = await enroll(request, applicantId, {
+      ...body,
+      version: detail.version,
+    });
+    expect(again.status(), await again.text()).toBe(409);
+    const stale = await enroll(request, applicantId, {
+      ...body,
+      version: detail.version - 1,
+    });
+    expect(stale.status()).toBe(409);
+    expect((await current(request)).enrollment_id).toBe(enrollmentId);
+    const open = await receive(request);
+    const early = await enroll(request, open.id, {
+      ...body,
+      version: open.version,
+    });
+    expect(early.status(), await early.text()).toBe(400);
+    const casts = await (
+      await request.get("/api/casts", {
+        headers: headers(),
+        params: { search: `${stageName}-2` },
+      })
+    ).json();
+    expect(casts.content).toHaveLength(0);
+  },
+);
+
+Then(
+  "在籍登録はキャスト管理権限の無い者を拒否し他店舗の応募者を見つけない",
+  async ({ request }) => {
+    const detail = await interviewed(request);
+    const hired = await decide(request, detail.id, {
+      version: detail.version,
+      status: "HIRED",
+      reason: "権限検証",
+    });
+    expect(hired.status()).toBe(200);
+    const version = (await hired.json()).version;
+    const recruiter = await createRecruiter(request, RECRUITER_PERMISSIONS);
+    const body = { version, name: "権限検証", started_on: "2026-11-01" };
+    expect(
+      (await enroll(request, detail.id, body, recruiter.token)).status(),
+    ).toBe(403);
+    const foreign = await foreignApplicant(request, detail.id);
+    expect((await enroll(request, foreign.id, body)).status()).toBe(404);
+    expect(await current(request)).not.toHaveProperty("enrollment_id");
+  },
+);
