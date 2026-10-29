@@ -20,22 +20,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.advertising.api.AdvertisingCostController;
 import com.kizuna.advertising.api.AdvertisingMediaController;
 import com.kizuna.advertising.api.AdvertisingOrderCostController;
+import com.kizuna.advertising.api.AdvertisingRecruitmentEffectController;
+import com.kizuna.advertising.api.dto.AdvertisingRecruitmentEffectResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingOrderCostService;
+import com.kizuna.advertising.application.AdvertisingRecruitmentEffectService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
+import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,7 +62,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @WebMvcTest({
   AdvertisingCostController.class,
   AdvertisingMediaController.class,
-  AdvertisingOrderCostController.class
+  AdvertisingOrderCostController.class,
+  AdvertisingRecruitmentEffectController.class
 })
 @Import({AdvertisingControllerTest.MethodSecurity.class, StoreScopeHolder.class})
 class AdvertisingControllerTest {
@@ -67,6 +75,7 @@ class AdvertisingControllerTest {
   @MockitoBean AdvertisingService service;
   @MockitoBean AdvertisingMediaService media;
   @MockitoBean AdvertisingOrderCostService orderCosts;
+  @MockitoBean AdvertisingRecruitmentEffectService recruitmentEffects;
   @MockitoBean AdvertisingExportService exports;
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
@@ -427,5 +436,87 @@ class AdvertisingControllerTest {
                     orderPermissions(
                         "ADVERTISING_COST_VIEW", "ORDER_MANAGE", "ADVERTISING_COST_EXPORT")))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void recruitmentEffectsKeepNotComputedRatiosAndRetentionCounts() throws Exception {
+    var report =
+        AdvertisingRecruitmentEffectReport.aggregate(
+            List.of(new AdvertisingRecruitmentEffectReport.Cost("費用だけ", 30000)),
+            List.of(
+                new AdvertisingRecruitmentEffectReport.Hire("入店だけ", LocalDate.of(2026, 5, 1), null),
+                new AdvertisingRecruitmentEffectReport.Hire(null, LocalDate.of(2026, 5, 2), null)),
+            LocalDate.of(2026, 7, 15),
+            ZoneOffset.UTC);
+    when(recruitmentEffects.view(1L, "2026-05"))
+        .thenReturn(
+            new AdvertisingRecruitmentEffectService.Snapshot(
+                1, "2026-05", 0, OffsetDateTime.now(), LocalDate.of(2026, 7, 15), report));
+    var result =
+        mvc.perform(
+                get("/advertising-recruitment-effects")
+                    .param("month", "2026-05")
+                    .header("X-Store-ID", "1")
+                    .with(orderPermissions("ADVERTISING_COST_VIEW", "RECRUITMENT_VIEW")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.unnamed_media_hire_count").value(1))
+            .andExpect(jsonPath("$.retention_as_of").value("2026-07-15"))
+            .andExpect(jsonPath("$.rows.content[0].media_name").value("入店だけ"))
+            .andExpect(jsonPath("$.rows.content[0].calculation_status").value("NO_COST_RECORDS"))
+            .andExpect(jsonPath("$.rows.content[0].retention[0].months").value(2))
+            .andExpect(jsonPath("$.rows.content[0].retention[0].judgeable_count").value(1))
+            .andExpect(jsonPath("$.rows.content[0].retention[0].retained_count").value(1))
+            .andExpect(jsonPath("$.rows.content[0].retention[1].judgeable_count").value(0))
+            .andExpect(jsonPath("$.rows.content[1].calculation_status").value("NO_HIRES"))
+            .andReturn();
+    assertThat(result.getResponse().getContentAsString())
+        .contains("\"recorded_recruitment_amount\":null", "\"cost_per_hire\":null");
+    assertThat(result.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
+    mvc.perform(
+            get("/advertising-recruitment-effects")
+                .param("month", "2026-05")
+                .param("sort", "media")
+                .header("X-Store-ID", "1")
+                .with(orderPermissions("ADVERTISING_COST_VIEW", "RECRUITMENT_VIEW")))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void recruitmentEffectsRequireBothCostAndRecruitmentPermissions() throws Exception {
+    for (var codes :
+        List.of(
+            new String[] {"ADVERTISING_COST_VIEW"},
+            new String[] {"RECRUITMENT_VIEW"},
+            new String[] {"ADVERTISING_COST_VIEW", "ORDER_MANAGE"})) {
+      mvc.perform(
+              get("/advertising-recruitment-effects")
+                  .param("month", "2026-05")
+                  .header("X-Store-ID", "1")
+                  .with(orderPermissions(codes)))
+          .andExpect(status().isForbidden());
+    }
+    verifyNoInteractions(recruitmentEffects);
+  }
+
+  @Test
+  void recruitmentEffectResponseTypesCarryNoApplicantIdentity() {
+    for (var type :
+        List.of(
+            AdvertisingRecruitmentEffectResponse.class,
+            AdvertisingRecruitmentEffectResponse.RecruitmentEffectSummary.class,
+            AdvertisingRecruitmentEffectResponse.RetentionSummary.class)) {
+      assertThat(
+              Arrays.stream(type.getRecordComponents())
+                  .map(c -> c.getName().toLowerCase(Locale.ROOT)))
+          .noneMatch(
+              n ->
+                  n.contains("applicant")
+                      || n.contains("enrollment")
+                      || n.equals("id")
+                      || n.equals("name")
+                      || n.contains("phone")
+                      || n.contains("email")
+                      || n.contains("address"));
+    }
   }
 }
