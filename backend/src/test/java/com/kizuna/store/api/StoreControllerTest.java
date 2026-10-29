@@ -147,4 +147,41 @@ class StoreControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value(42));
   }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", "   ", "ABCD", "新宿西口"})
+  @DisplayName("POST /stores も不正な略称を 400 と日本語の検証メッセージで拒むこと")
+  @WithMockUser(authorities = "PERM_STORE_MANAGE")
+  void createRejectsInvalidShortName(String shortName) throws Exception {
+    mockMvc
+        .perform(
+            post("/stores")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody(shortName)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.details.short_name").value(containsString("略称")));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"新宿西", " 新宿西 ", "\u00A0新宿西\u00A0"})
+  @DisplayName("POST /stores は空白を除いて全角 3 文字になる略称を受け付けること")
+  @WithMockUser(authorities = "PERM_STORE_MANAGE")
+  void createAcceptsThreeFullWidthCharacters(String shortName) throws Exception {
+    when(storeRegistryService.create(any())).thenReturn(1L);
+
+    mockMvc
+        .perform(
+            post("/stores")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody(shortName)))
+        .andExpect(status().isCreated());
+  }
+
+  private static String createBody(String shortName) {
+    return "{\"name\": \"新店舗\", \"short_name\": \""
+        + shortName
+        + "\", \"domain\": \"new-store.kizuna.test\"}";
+  }
 }
