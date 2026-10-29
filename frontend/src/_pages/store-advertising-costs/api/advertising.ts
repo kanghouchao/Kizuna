@@ -71,6 +71,37 @@ export interface OrderCostReport {
   unnamed_media_order_count: number;
   rows: Page<OrderCostSummary>;
 }
+export interface RecruitmentRetention {
+  months: 2 | 3 | 4;
+  judgeable_count: number;
+  retained_count: number;
+}
+export interface RecruitmentEffectSummary {
+  media_name: string;
+  cost_entry_count: number;
+  recorded_recruitment_amount: number | null;
+  hire_count: number;
+  cost_per_hire: string | null;
+  calculation_status: 'CALCULATED' | 'NO_COST_RECORDS' | 'NO_HIRES';
+  retention: RecruitmentRetention[];
+}
+export interface RecruitmentEffectReport {
+  store_id: number;
+  month: string;
+  month_version: number;
+  generated_at: string;
+  retention_as_of: string;
+  basis: 'recorded-recruitment-cost-per-hire-v1';
+  media_matching: 'EXACT_STORED_NAME';
+  hire_basis: 'HIRED_APPLICANT_ENROLLMENT_STARTED_IN_MONTH';
+  retention_basis: 'NOT_ENDED_AFTER_STARTED_ON_PLUS_MONTHS';
+  rounding: 'HALF_UP_2_DECIMAL_YEN';
+  cost_entry_count: number;
+  recorded_recruitment_amount: number | null;
+  hire_count: number;
+  unnamed_media_hire_count: number;
+  rows: Page<RecruitmentEffectSummary>;
+}
 export interface Month {
   store_id: number;
   month: string;
@@ -124,6 +155,12 @@ export const advertisingApi = {
   orderCosts: async (month: string, page = 0) =>
     (
       await apiClient.get<OrderCostReport>('/advertising-order-costs', {
+        params: { month, page, size: 20 },
+      })
+    ).data,
+  recruitmentEffects: async (month: string, page = 0) =>
+    (
+      await apiClient.get<RecruitmentEffectReport>('/advertising-recruitment-effects', {
         params: { month, page, size: 20 },
       })
     ).data,

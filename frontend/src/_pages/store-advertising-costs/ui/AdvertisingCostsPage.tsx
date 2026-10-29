@@ -40,6 +40,7 @@ import { CostHistory } from './CostHistory';
 import { CopyPreview } from './CopyPreview';
 import { MediaSummaryPage } from './MediaSummaryPage';
 import { OrderCostPage } from './OrderCostPage';
+import { RecruitmentEffectPage } from './RecruitmentEffectPage';
 export default function AdvertisingCostsPage() {
   const storeId = useStoreContext().currentStoreId;
   const [claims, setClaims] = useState<ReturnType<typeof readTokenClaims>>(null);
@@ -59,6 +60,7 @@ export default function AdvertisingCostsPage() {
       manage={hasPermission(claims, 'ADVERTISING_COST_MANAGE')}
       canExport={hasPermission(claims, 'ADVERTISING_COST_EXPORT')}
       canReadOrders={hasPermission(claims, 'ORDER_MANAGE')}
+      canReadRecruitment={hasPermission(claims, 'RECRUITMENT_VIEW')}
     />
   );
 }
@@ -68,12 +70,14 @@ function StorePage({
   manage,
   canExport,
   canReadOrders,
+  canReadRecruitment,
 }: {
   store: string;
   subject: string;
   manage: boolean;
   canExport: boolean;
   canReadOrders: boolean;
+  canReadRecruitment: boolean;
 }) {
   const [month, setMonth] = useState(() => {
     const d = new Date();
@@ -121,6 +125,7 @@ function StorePage({
           <TabsTrigger value="costs">費用記録</TabsTrigger>
           <TabsTrigger value="media">媒体別集計</TabsTrigger>
           {canReadOrders && <TabsTrigger value="orders">受注あたり記録広告費</TabsTrigger>}
+          {canReadRecruitment && <TabsTrigger value="recruitment">採用効果</TabsTrigger>}
         </TabsList>
         <TabsContent value="costs">
           {view === 'costs' && (
@@ -133,6 +138,11 @@ function StorePage({
         {canReadOrders && (
           <TabsContent value="orders">
             {view === 'orders' && <OrderCostPage key={month} {...{ store, month, canExport }} />}
+          </TabsContent>
+        )}
+        {canReadRecruitment && (
+          <TabsContent value="recruitment">
+            {view === 'recruitment' && <RecruitmentEffectPage key={month} month={month} />}
           </TabsContent>
         )}
       </Tabs>
