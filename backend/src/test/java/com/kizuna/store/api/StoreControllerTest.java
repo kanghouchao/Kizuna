@@ -117,7 +117,7 @@ class StoreControllerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"新宿西", "A", "𠮷𠮷𠮷", " 新宿 ", "\u3000新\u3000"})
+  @ValueSource(strings = {"新宿西", "A", "𠮷𠮷𠮷", " 新宿 ", "\u3000新\u3000", "\u00A0新宿西\u00A0"})
   @DisplayName("全角・半角とも 1 文字、前後の空白は除いて数えること")
   @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void acceptsShortNameCountedByCodePointAfterTrim(String shortName) throws Exception {
