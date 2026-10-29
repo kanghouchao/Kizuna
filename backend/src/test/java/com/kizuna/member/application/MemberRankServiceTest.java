@@ -54,9 +54,11 @@ class MemberRankServiceTest {
     Member member = stubMember();
     when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
 
-    memberRankService.syncOnAttribution(MEMBER_ID, metrics(5, 0), ATTRIBUTION_ID, ENTRY_ID);
+    boolean promoted =
+        memberRankService.syncOnAttribution(MEMBER_ID, metrics(5, 0), ATTRIBUTION_ID, ENTRY_ID);
 
     assertThat(member.getRank()).isEqualTo(MemberRank.SILVER);
+    assertThat(promoted).isTrue();
   }
 
   @Test
@@ -76,8 +78,10 @@ class MemberRankServiceTest {
     Member member = stubMember();
     when(systemConfigService.memberRankSettings()).thenReturn(SEEDED);
 
-    memberRankService.syncOnAttribution(MEMBER_ID, metrics(4, 4999), ATTRIBUTION_ID, ENTRY_ID);
+    boolean promoted =
+        memberRankService.syncOnAttribution(MEMBER_ID, metrics(4, 4999), ATTRIBUTION_ID, ENTRY_ID);
 
+    assertThat(promoted).isFalse();
     assertThat(member.getRank()).isEqualTo(MemberRank.BRONZE);
     verify(memberRankHistoryRepository, never()).save(any());
   }

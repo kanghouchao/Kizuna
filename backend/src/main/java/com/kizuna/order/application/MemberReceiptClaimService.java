@@ -3,6 +3,7 @@ package com.kizuna.order.application;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderAttribution;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
@@ -11,7 +12,9 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +47,7 @@ public class MemberReceiptClaimService {
   private final ActorIdentityService actorIdentityService;
   private final MemberLookupService memberLookupService;
   private final AttributionMaterializer materializer;
+  private final BusinessAudit businessAudit;
 
   /** 伝票トークンを申領し、その来店を本人の記録として確定する。 */
   @Transactional
@@ -90,7 +94,25 @@ public class MemberReceiptClaimService {
             now,
             userId,
             new AttributionMaterializer.ReceiptClaim(token.getPlannedPoints()));
-    return new MemberReceiptClaimResult((long) result.grantedPoints() + result.benefitPoints());
+    long bookedPoints = (long) result.grantedPoints() + result.benefitPoints();
+    OrderAttribution attribution = result.attribution();
+    businessAudit.recordById(
+        userId,
+        order.getStoreId(),
+        "RECEIPT_CLAIMED",
+        "ORDER",
+        token.getOrderId(),
+        "ORDER_ATTRIBUTION",
+        attribution.getId().toString(),
+        Map.of("exists", "false"),
+        Map.of(
+            "exists", "true",
+            "status", attribution.getStatus().name(),
+            "version", String.valueOf(attribution.getVersion()),
+            "member_id", Long.toString(member.memberId()),
+            "granted_points", Long.toString(bookedPoints),
+            "rank_changed", String.valueOf(result.rankChanged())));
+    return new MemberReceiptClaimResult(bookedPoints);
   }
 
   private MemberLookup resolveMember(Long userId) {

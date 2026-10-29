@@ -47,8 +47,9 @@ public class MemberRankService {
    * 現在より上位でなければ何も書かない。
    *
    * @param triggeringEntryId 同時に記帳された付与仕訳。付与が 0 なら null
+   * @return ランクが上がったとき true
    */
-  public void syncOnAttribution(
+  public boolean syncOnAttribution(
       long memberId,
       MemberRankMetrics metrics,
       long triggeringAttributionId,
@@ -64,7 +65,7 @@ public class MemberRankService {
     MemberRank reached =
         highestReached(metrics.completedVisitCount(memberId), metrics.netGrantedPoints(memberId));
     if (!reached.isAbove(current)) {
-      return;
+      return false;
     }
     member.promoteTo(reached);
     memberRankHistoryRepository.save(
@@ -75,6 +76,7 @@ public class MemberRankService {
             triggeringAttributionId,
             triggeringEntryId,
             OffsetDateTime.now()));
+    return true;
   }
 
   /** 指標が届いている最上位のランク。閾値は都度読むので、設定の変更は次回の判定から効く。 */

@@ -52,7 +52,7 @@ class AttributionMaterializer implements MemberRankMetrics {
       if (trigger instanceof ReceiptClaim) {
         throw new StaleSessionException("会員情報が存在しません");
       }
-      return new Result(0, 0);
+      return new Result(0, 0, null, false);
     }
     if (trigger instanceof Completion completion && completion.usePoints() > 0) {
       try {
@@ -82,8 +82,9 @@ class AttributionMaterializer implements MemberRankMetrics {
         };
     long benefitPoints =
         benefits.grantVisitBenefits(memberId, orderId, storeId, businessDate, actorId);
-    ranks.syncOnAttribution(memberId, this, attribution.getId(), grant.entryId());
-    return new Result(grant.points(), benefitPoints);
+    boolean rankChanged =
+        ranks.syncOnAttribution(memberId, this, attribution.getId(), grant.entryId());
+    return new Result(grant.points(), benefitPoints, attribution, rankChanged);
   }
 
   sealed interface Trigger permits Completion, ReceiptClaim {}
@@ -92,7 +93,9 @@ class AttributionMaterializer implements MemberRankMetrics {
 
   record ReceiptClaim(int plannedPoints) implements Trigger {}
 
-  record Result(int grantedPoints, long benefitPoints) {}
+  /** 退会済み会員で何も物化しなかったとき {@code attribution} は null。 */
+  record Result(
+      int grantedPoints, long benefitPoints, OrderAttribution attribution, boolean rankChanged) {}
 
   @Override
   public long completedVisitCount(long memberId) {
