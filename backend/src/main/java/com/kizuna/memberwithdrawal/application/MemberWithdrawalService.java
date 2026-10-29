@@ -54,13 +54,14 @@ public class MemberWithdrawalService {
         applicationWithdrawal.withdrawPending(
             withdrawn.memberId(), actorUserId, withdrawn.withdrawnAt());
     // 理由の原文は写さない。関連解除は解除側が行ごとに記録済みなので、ここでは数えない。
+    // 消去仕訳が分かれたときの source は先頭の仕訳。合計は cleared_points に載る。
     audit.recordById(
         actorUserId,
         null,
         "MEMBER_WITHDRAWN",
         "MEMBER",
         Long.toString(withdrawn.memberId()),
-        cleared.firstEntryId().map(id -> "POINT_LEDGER_ENTRY").orElse(null),
+        cleared.firstEntryId().isPresent() ? "POINT_LEDGER_ENTRY" : null,
         cleared.firstEntryId().map(Object::toString).orElse(null),
         Map.of(
             "status", "ACTIVE",

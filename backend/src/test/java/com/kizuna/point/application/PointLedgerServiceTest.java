@@ -680,8 +680,9 @@ class PointLedgerServiceTest {
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L, 2L, 3L)))
         .thenReturn(List.of());
 
-    assertThat(pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会").points())
-        .isEqualTo(2L * Integer.MAX_VALUE + 10);
+    var split = pointLedgerService.clearForWithdrawal(MEMBER_ID, ACTOR_ID, "会員退会");
+    assertThat(split.points()).isEqualTo(2L * Integer.MAX_VALUE + 10);
+    assertThat(split.firstEntryId()).contains(SAVED_ENTRY_ID);
 
     verify(pointEntryRepository, times(3)).save(savedEntry.capture());
     assertThat(savedEntry.getAllValues())

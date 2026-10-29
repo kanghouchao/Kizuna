@@ -457,6 +457,22 @@ export async function registerMember(
   return body.member_code as string;
 }
 
+/** 電子メールで会員を引き、会員 ID を返す（GET /api/members?search=, MEMBER_VIEW）。 */
+export async function memberIdOf(
+  request: APIRequestContext,
+  token: string,
+  email: string,
+) {
+  const response = await request.get("/api/members", {
+    headers: { Authorization: `Bearer ${token}` },
+    params: { search: email },
+  });
+  expect(response.status()).toBe(200);
+  const rows = (await response.json()).content as { id: number }[];
+  expect(rows).toHaveLength(1);
+  return String(rows[0].id);
+}
+
 /** 顧客を作成し id を返す（POST /api/customers, hasAuthority('CUSTOMER_MANAGE')）。 */
 export async function createCustomer(
   request: APIRequestContext,
