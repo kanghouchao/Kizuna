@@ -8,6 +8,7 @@ import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreUpdateDTO;
 import com.kizuna.store.domain.AttendanceRecordCheck;
@@ -125,6 +126,7 @@ class StoreDeleteAuditPostgresTest {
     jdbc.update("insert into t_cascade_child(store_id) values (?), (?)", id, id);
     var rename = new StoreUpdateDTO();
     rename.setName("改名後");
+    rename.setShortName(StoreShortNames.next());
     stores.update(String.valueOf(id), rename);
     stores.update(String.valueOf(id), rename);
 
@@ -191,6 +193,7 @@ class StoreDeleteAuditPostgresTest {
   private long create() {
     var request = new StoreCreateDTO();
     request.setName("検証店");
+    request.setShortName(StoreShortNames.next());
     request.setDomain(UUID.randomUUID() + ".example.test");
     return stores.create(request);
   }
