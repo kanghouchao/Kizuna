@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
+import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
 import com.kizuna.recruitment.application.ApplicantService;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
 import com.kizuna.recruitment.domain.ApplicantStatus;
@@ -188,7 +189,7 @@ class ApplicantControllerTest {
   }
 
   @Test
-  void manageCannotDecideAndDecisionAloneCannotRead() throws Exception {
+  void decisionRequiresReadAndDecideTogether() throws Exception {
     for (List<String> permissions :
         List.of(
             List.of("PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_MANAGE"),
@@ -205,6 +206,36 @@ class ApplicantControllerTest {
                               permissions.stream().map(SimpleGrantedAuthority::new).toList())))
           .andExpect(status().isForbidden());
     }
+    verifyNoInteractions(service);
+    mvc.perform(
+            post("/applicants/a/decision")
+                .with(csrf())
+                .header("X-Store-ID", "7")
+                .contentType("application/json")
+                .content("{\"version\":0,\"status\":\"HIRED\",\"reason\":\"確認\"}")
+                .with(
+                    actor()
+                        .authorities(
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_DECIDE"))))
+        .andExpect(status().isOk());
+    verify(service).decide(eq(7L), eq("a"), any(ApplicantTransitionRequest.class), eq("actor"));
+  }
+
+  @Test
+  void decisionRequiresReason() throws Exception {
+    mvc.perform(
+            post("/applicants/a/decision")
+                .with(csrf())
+                .header("X-Store-ID", "1")
+                .contentType("application/json")
+                .content("{\"version\":0,\"status\":\"REJECTED\",\"reason\":\" \"}")
+                .with(
+                    actor()
+                        .authorities(
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                            new SimpleGrantedAuthority("PERM_RECRUITMENT_DECIDE"))))
+        .andExpect(status().isBadRequest());
     verifyNoInteractions(service);
   }
 
@@ -228,7 +259,7 @@ class ApplicantControllerTest {
                 .header("X-Store-ID", "1")
                 .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.final_decision_configured").value(false))
+        .andExpect(jsonPath("$.final_decision_configured").doesNotExist())
         .andExpect(jsonPath("$.retention_periods").isEmpty());
   }
 }

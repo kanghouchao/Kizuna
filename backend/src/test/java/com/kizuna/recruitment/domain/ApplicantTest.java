@@ -78,6 +78,44 @@ class ApplicantTest {
     }
   }
 
+  @ParameterizedTest
+  @EnumSource(ApplicantStatus.class)
+  void decidesHireOnlyAfterInterviewAndRejectionFromAnyOpenState(ApplicantStatus source) {
+    for (ApplicantStatus target : ApplicantStatus.values()) {
+      var applicant = Applicant.receive(7L, intake());
+      applicant.recordInterview(interview());
+      ReflectionTestUtils.setField(applicant, "status", source);
+      boolean allowed =
+          !source.isTerminal()
+              && (target == ApplicantStatus.REJECTED
+                  || target == ApplicantStatus.HIRED && source == ApplicantStatus.INTERVIEWED);
+      if (allowed) {
+        applicant.decide(target, "判断理由");
+        assertThat(applicant.getStatus()).isEqualTo(target);
+      } else {
+        assertThatThrownBy(() -> applicant.decide(target, "判断理由"))
+            .isInstanceOf(source.isTerminal() ? ConflictException.class : ServiceException.class);
+        assertThat(applicant.getStatus()).isEqualTo(source);
+      }
+    }
+  }
+
+  @Test
+  void decisionRequiresReasonAndEndsTheSelection() {
+    var applicant = Applicant.receive(7L, intake());
+    for (String reason : new String[] {null, "", "   ", "x".repeat(1001)})
+      assertThatThrownBy(() -> applicant.decide(ApplicantStatus.REJECTED, reason))
+          .isInstanceOf(ServiceException.class);
+    assertThat(applicant.getStatus()).isEqualTo(ApplicantStatus.RECEIVED);
+    applicant.decide(ApplicantStatus.REJECTED, "書類で見送り");
+    assertThatThrownBy(() -> applicant.replaceIntake(intake()))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> applicant.decide(ApplicantStatus.REJECTED, "再確定"))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> applicant.transition(ApplicantStatus.WITHDRAWN, "辞退"))
+        .isInstanceOf(ConflictException.class);
+  }
+
   @Test
   void rejectsStaleVersionAndTracksEverySaveEvenUnchanged() {
     var applicant = Applicant.receive(7L, intake());

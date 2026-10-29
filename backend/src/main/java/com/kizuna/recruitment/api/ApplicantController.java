@@ -103,8 +103,9 @@ public class ApplicantController {
   public ApplicantResponse decide(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody ApplicantTransitionRequest request) {
-    return applicants.decide(storeId, id, request);
+      @Valid @RequestBody ApplicantTransitionRequest request,
+      Principal principal) {
+    return applicants.decide(storeId, id, request, principal.getName());
   }
 
   @GetMapping("/{id}/history")

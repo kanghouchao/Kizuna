@@ -15,6 +15,7 @@ import {
 const { Given, When, Then } = createBdd();
 let token = "";
 let managerToken = "";
+let ownerToken = "";
 let applicantId = "";
 let applicantName = "";
 const storeId = STORE1_ID;
@@ -43,22 +44,92 @@ async function current(request: APIRequestContext) {
   return result.json();
 }
 
+async function createRecruiter(
+  request: APIRequestContext,
+  permissions: string[],
+) {
+  const suffix = randomUUID();
+  const roleId = await createPermissionRole(
+    request,
+    ownerToken,
+    `採用検証-${suffix}`,
+    permissions,
+  );
+  const email = `recruitment-${suffix}@example.invalid`;
+  const password = randomUUID();
+  const created = await request.post("/api/staff", {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` },
+    data: {
+      email,
+      password,
+      display_name: "採用検証担当",
+      role_ids: [roleId],
+      store_scope_type: "SPECIFIC_STORES",
+      store_ids: [Number(STORE1_ID)],
+    },
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  const login = await request.post("/api/auth/login", {
+    data: { email, password },
+  });
+  expect(login.status()).toBe(200);
+  return { email, password, token: (await login.json()).token as string };
+}
+async function receive(request: APIRequestContext) {
+  const created = await request.post("/api/applicants", {
+    headers: headers(),
+    data: intake(),
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  return created.json();
+}
+async function decide(
+  request: APIRequestContext,
+  id: string,
+  data: { version: number; status: string; reason: string },
+  authorization = token,
+) {
+  return request.post(`/api/applicants/${id}/decision`, {
+    headers: { ...headers(), Authorization: `Bearer ${authorization}` },
+    data,
+  });
+}
+async function foreignApplicant(request: APIRequestContext, sourceId: string) {
+  const catalog = await (
+    await request.get("/api/stores/me", {
+      headers: { Authorization: `Bearer ${managerToken}` },
+    })
+  ).json();
+  const otherStore = (
+    Array.isArray(catalog) ? catalog : catalog.content
+  ).find((store: { id: number }) => String(store.id) !== storeId);
+  expect(otherStore).toBeTruthy();
+  const db = new Client();
+  await db.connect();
+  try {
+    const insert = await db.query(
+      "INSERT INTO t_applicants (id,store_id,name,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence) SELECT $1,$2,$3,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence FROM t_applicants WHERE id=$4 RETURNING id",
+      [`outside-${randomUUID()}`, otherStore.id, "別店舗応募者", sourceId],
+    );
+    return { id: insert.rows[0].id as string, storeId: String(otherStore.id) };
+  } finally {
+    await db.end();
+  }
+}
+
 Given(
   "検証専用の採用担当者でログインしている",
   async ({ page, request, $testInfo }) => {
     $testInfo.setTimeout(120000);
-    const suffix = randomUUID();
-    applicantName = `応募検証-${suffix}`;
+    applicantName = `応募検証-${randomUUID()}`;
     managerToken = await loginAsStoreAdmin(request);
     const ownerLogin = await request.post("/api/auth/login", {
       data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD },
     });
     expect(ownerLogin.status()).toBe(200);
-    const ownerToken = (await ownerLogin.json()).token;
-    const roleId = await createPermissionRole(
+    ownerToken = (await ownerLogin.json()).token;
+    const { email, password, token: actorToken } = await createRecruiter(
       request,
-      ownerToken,
-      `採用検証-${suffix}`,
       [
         "RECRUITMENT_VIEW",
         "RECRUITMENT_MANAGE",
@@ -66,25 +137,7 @@ Given(
         "STORE_VIEW",
       ],
     );
-    const email = `recruitment-${suffix}@example.invalid`;
-    const password = randomUUID();
-    const created = await request.post("/api/staff", {
-      headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` },
-      data: {
-        email,
-        password,
-        display_name: "採用検証担当",
-        role_ids: [roleId],
-        store_scope_type: "SPECIFIC_STORES",
-        store_ids: [Number(STORE1_ID)],
-      },
-    });
-    expect(created.status(), await created.text()).toBe(201);
-    const login = await request.post("/api/auth/login", {
-      data: { email, password },
-    });
-    expect(login.status()).toBe(200);
-    token = (await login.json()).token;
+    token = actorToken;
     await page.goto(`${APP_URL}/auth/login`);
     await page.getByLabel("メールアドレス", { exact: true }).fill(email);
     await page.getByLabel("パスワード", { exact: true }).fill(password);
@@ -148,8 +201,8 @@ Then(
     ])
       expect(rows[0]).not.toHaveProperty(key);
     await expect(
-      page.getByRole("button", { name: "採否を確定", exact: true }),
-    ).toBeDisabled();
+      page.getByRole("heading", { name: "採否の確定", exact: true }),
+    ).toBeVisible();
     for (const theme of ["light", "dark"]) {
       await page.evaluate((value) => {
         localStorage.setItem("theme", value);
@@ -278,12 +331,7 @@ Then(
 Then(
   "応募者APIは店舗外アクセスと通常キャスト権限を拒否する",
   async ({ request }) => {
-    const created = await request.post("/api/applicants", {
-      headers: headers(),
-      data: intake(),
-    });
-    expect(created.status(), await created.text()).toBe(201);
-    applicantId = (await created.json()).id;
+    applicantId = (await receive(request)).id;
     // 店舗スタッフは CAST_MANAGE を持つが採用権限は既定授与されない。
     const staffToken = await loginUser(
       request,
@@ -294,51 +342,32 @@ Then(
       headers: { ...STORE_HEADERS, Authorization: `Bearer ${staffToken}` },
     });
     expect(denied.status()).toBe(403);
-    const outsideStore = await request.get("/api/stores/me", {
-      headers: { Authorization: `Bearer ${managerToken}` },
-    });
-    expect(outsideStore.status()).toBe(200);
-    const catalog = await outsideStore.json();
-    const otherStore = (
-      Array.isArray(catalog) ? catalog : catalog.content
-    ).find((store: { id: number }) => String(store.id) !== storeId);
-    expect(otherStore).toBeTruthy();
+    const foreign = await foreignApplicant(request, applicantId);
     const forbiddenStore = await request.get(path(), {
-      headers: { ...headers(), "X-Store-ID": String(otherStore.id) },
+      headers: { ...headers(), "X-Store-ID": foreign.storeId },
     });
     expect(forbiddenStore.status()).toBe(403);
-    const db = new Client();
-    await db.connect();
-    try {
-      const insert = await db.query(
-        "INSERT INTO t_applicants (id,store_id,name,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence) SELECT $1,$2,$3,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence FROM t_applicants WHERE id=$4 RETURNING id",
-        [`outside-${randomUUID()}`, otherStore.id, "別店舗応募者", applicantId],
-      );
-      const foreignId = insert.rows[0].id;
-      for (const suffix of ["", "/history"])
-        expect(
-          (
-            await request.get(`/api/applicants/${foreignId}${suffix}`, {
-              headers: headers(),
-            })
-          ).status(),
-        ).toBe(404);
+    for (const suffix of ["", "/history"])
       expect(
         (
-          await request.put(`/api/applicants/${foreignId}`, {
+          await request.get(`/api/applicants/${foreign.id}${suffix}`, {
             headers: headers(),
-            data: { version: 0, intake: intake() },
           })
         ).status(),
       ).toBe(404);
-    } finally {
-      await db.end();
-    }
+    expect(
+      (
+        await request.put(`/api/applicants/${foreign.id}`, {
+          headers: headers(),
+          data: { version: 0, intake: intake() },
+        })
+      ).status(),
+    ).toBe(404);
   },
 );
 
 Then(
-  "応募者APIは旧版と同時変更を拒否し未設定の採否を確定しない",
+  "応募者APIは旧版と同時変更を拒否し面接前の採用を確定しない",
   async ({ request }) => {
     const original = await current(request);
     const update = await request.put(path(), {
@@ -369,16 +398,18 @@ Then(
       200, 409,
     ]);
     const detail = await current(request);
+    expect(
+      (
+        await decide(request, applicantId, {
+          version: detail.version,
+          status: "HIRED",
+          reason: "面接前の採用",
+        })
+      ).status(),
+    ).toBe(400);
+    expect((await current(request)).status).toBe("SCREENING");
     for (const status of ["HIRED", "REJECTED"]) {
-      const body = { version: detail.version, status, reason: "未設定検証" };
-      expect(
-        (
-          await request.post(`${path()}/decision`, {
-            headers: headers(),
-            data: body,
-          })
-        ).status(),
-      ).toBe(409);
+      const body = { version: detail.version, status, reason: "通常遷移の検証" };
       expect(
         (
           await request.post(`${path()}/transitions`, {
@@ -546,5 +577,160 @@ Then(
       await db.query("DROP FUNCTION IF EXISTS recruitment_audit_failure()");
       await db.end();
     }
+  },
+);
+
+When("面接済の応募者を画面で採用に確定する", async ({ page, request }) => {
+  let detail = await receive(request);
+  applicantId = detail.id;
+  const interview = await request.put(`${path()}/interview`, {
+    headers: headers(),
+    data: {
+      version: detail.version,
+      interview_at: "2026-10-01T10:30:00+09:00",
+      interviewer: "面接担当者",
+      notes: "非公開面接メモ",
+      checklist: {},
+    },
+  });
+  expect(interview.status(), await interview.text()).toBe(200);
+  detail = await interview.json();
+  for (const status of ["SCREENING", "INTERVIEWED"]) {
+    const moved = await request.post(`${path()}/transitions`, {
+      headers: headers(),
+      data: { version: detail.version, status, reason: "選考を進める" },
+    });
+    expect(moved.status(), await moved.text()).toBe(200);
+    detail = await moved.json();
+  }
+  await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+  await page.getByLabel("採否", { exact: true }).click();
+  await page.getByRole("option", { name: "採用", exact: true }).click();
+  await page.getByLabel("確定理由", { exact: true }).fill("面接で入店に合意");
+  await page.getByRole("button", { name: "採否を確定", exact: true }).click();
+  await page.getByRole("button", { name: "確定する", exact: true }).click();
+  await expect(
+    page.getByText("選考は終了しました。編集・再開はできません。"),
+  ).toBeVisible();
+  await expect(page.getByText("面接で入店に合意", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "採否の確定", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "受付情報を編集" }),
+  ).toHaveCount(0);
+});
+
+Then(
+  "採用は状態履歴と状態だけの監査を残し再確定できない",
+  async ({ request }) => {
+    const detail = await current(request);
+    expect(detail.status).toBe("HIRED");
+    const history = await (
+      await request.get(`${path()}/history`, { headers: headers() })
+    ).json();
+    expect(history.content[0]).toMatchObject({
+      previous_status: "INTERVIEWED",
+      new_status: "HIRED",
+      reason: "面接で入店に合意",
+    });
+    const db = new Client();
+    await db.connect();
+    try {
+      const { rows } = await db.query(
+        "SELECT * FROM t_audit_events WHERE target_type=$1 AND target_id=$2 AND action=$3",
+        ["APPLICANT", applicantId, "APPLICANT_DECIDED"],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].before_values).toEqual({
+        status: "INTERVIEWED",
+        version: String(detail.version - 1),
+      });
+      expect(rows[0].after_values).toEqual({
+        status: "HIRED",
+        version: String(detail.version),
+      });
+      expect(JSON.stringify(rows[0])).not.toContain("面接で入店に合意");
+    } finally {
+      await db.end();
+    }
+    expect(
+      (
+        await decide(request, applicantId, {
+          version: detail.version,
+          status: "REJECTED",
+          reason: "再確定",
+        })
+      ).status(),
+    ).toBe(409);
+  },
+);
+
+Then(
+  "面接前の応募者は不採用にでき面接なしの採用は拒否される",
+  async ({ request }) => {
+    const detail = await receive(request);
+    applicantId = detail.id;
+    const reject = { version: detail.version, status: "REJECTED" };
+    expect(
+      (await decide(request, applicantId, { ...reject, reason: " " })).status(),
+    ).toBe(400);
+    expect(
+      (
+        await decide(request, applicantId, {
+          version: detail.version,
+          status: "HIRED",
+          reason: "面接なしの採用",
+        })
+      ).status(),
+    ).toBe(400);
+    expect(
+      (
+        await decide(request, applicantId, {
+          ...reject,
+          version: detail.version + 1,
+          reason: "旧版",
+        })
+      ).status(),
+    ).toBe(409);
+    expect((await current(request)).status).toBe("RECEIVED");
+    const rejected = await decide(request, applicantId, {
+      ...reject,
+      reason: "書類で見送り",
+    });
+    expect(rejected.status(), await rejected.text()).toBe(200);
+    expect((await rejected.json()).status).toBe("REJECTED");
+    const history = await (
+      await request.get(`${path()}/history`, { headers: headers() })
+    ).json();
+    expect(history.content[0]).toMatchObject({
+      previous_status: "RECEIVED",
+      new_status: "REJECTED",
+      reason: "書類で見送り",
+    });
+  },
+);
+
+Then(
+  "採否確定は確定権限の無い者を拒否し他店舗の応募者を見つけない",
+  async ({ request }) => {
+    const detail = await receive(request);
+    const manager = await createRecruiter(request, [
+      "RECRUITMENT_VIEW",
+      "RECRUITMENT_MANAGE",
+      "STORE_VIEW",
+    ]);
+    const body = {
+      version: detail.version,
+      status: "REJECTED",
+      reason: "権限検証",
+    };
+    expect((await decide(request, detail.id, body, manager.token)).status()).toBe(
+      403,
+    );
+    const foreign = await foreignApplicant(request, detail.id);
+    expect((await decide(request, foreign.id, body)).status()).toBe(404);
+    applicantId = detail.id;
+    expect((await current(request)).status).toBe("RECEIVED");
   },
 );

@@ -175,25 +175,66 @@ class ApplicantServiceTest {
   }
 
   @Test
-  void finalDecisionsRemainUnconfiguredAndNormalTransitionCannotBypass() {
+  void decisionRecordsReasonHistoryAndStatusOnlyAudit() {
+    actor();
     lock();
-    for (var status : List.of(ApplicantStatus.HIRED, ApplicantStatus.REJECTED)) {
-      var request = new ApplicantTransitionRequest(0L, status, "判断理由");
-      assertThatThrownBy(() -> service.decide(STORE_ID, "a", request))
-          .isInstanceOf(ConflictException.class)
-          .hasMessageContaining("未設定");
-      assertThatThrownBy(() -> service.transition(STORE_ID, "a", request, "actor"))
-          .isInstanceOf(ServiceException.class);
-    }
+    ReflectionTestUtils.setField(applicant, "status", ApplicantStatus.INTERVIEWED);
+    var response =
+        service.decide(
+            STORE_ID,
+            "a",
+            new ApplicantTransitionRequest(0L, ApplicantStatus.HIRED, "  面接で合意  "),
+            "actor");
+    assertThat(response.status()).isEqualTo(ApplicantStatus.HIRED);
+    assertThat(applicant.getModifiedBy()).isEqualTo(9L);
+    var captor = ArgumentCaptor.forClass(ApplicantStatusHistory.class);
+    verify(histories).save(captor.capture());
+    var history = captor.getValue();
+    assertThat(history.getPreviousStatus()).isEqualTo(ApplicantStatus.INTERVIEWED);
+    assertThat(history.getNewStatus()).isEqualTo(ApplicantStatus.HIRED);
+    assertThat(history.getReason()).isEqualTo("面接で合意");
+    assertThat(history.getActorId()).isEqualTo(9L);
+    assertThat(history.getStoreId()).isEqualTo(STORE_ID);
+    verify(audit)
+        .recordCurrent(
+            STORE_ID,
+            "APPLICANT_DECIDED",
+            "APPLICANT",
+            "a",
+            Map.of("status", "INTERVIEWED", "version", "0"),
+            Map.of("status", "HIRED", "version", "0"));
+  }
+
+  @Test
+  void invalidOrStaleDecisionLeavesNoTrace() {
+    lock();
     assertThatThrownBy(
             () ->
                 service.decide(
                     STORE_ID,
                     "a",
-                    new ApplicantTransitionRequest(0L, ApplicantStatus.SCREENING, "確認")))
+                    new ApplicantTransitionRequest(0L, ApplicantStatus.HIRED, "面接なし"),
+                    "actor"))
         .isInstanceOf(ServiceException.class);
+    assertThatThrownBy(
+            () ->
+                service.decide(
+                    STORE_ID,
+                    "a",
+                    new ApplicantTransitionRequest(3L, ApplicantStatus.REJECTED, "旧版"),
+                    "actor"))
+        .isInstanceOf(ConflictException.class);
+    for (var status : List.of(ApplicantStatus.HIRED, ApplicantStatus.REJECTED))
+      assertThatThrownBy(
+              () ->
+                  service.transition(
+                      STORE_ID, "a", new ApplicantTransitionRequest(0L, status, "通常遷移"), "actor"))
+          .isInstanceOf(ServiceException.class);
     assertThat(applicant.getStatus()).isEqualTo(ApplicantStatus.RECEIVED);
+    assertThat(applicant.getEditSequence()).isZero();
     verify(histories, never()).save(any());
+    verify(applicants, never()).flush();
+    verifyNoInteractions(audit);
   }
 
   @Test

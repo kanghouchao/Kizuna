@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api';
-import { applicantApi, allowedApplicantTransitions } from '..';
+import { applicantApi, allowedApplicantDecisions, allowedApplicantTransitions } from '..';
 import type { ApplicantIntake } from '..';
 jest.mock('@/shared/api', () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), put: jest.fn() },
@@ -47,6 +47,12 @@ test('受付と面接と状態変更は明示した版を送る', async () => {
     status: 'WITHDRAWN',
     reason: '本人の辞退',
   });
+  await applicantApi.decide('a', 7, 'HIRED', '面接で合意');
+  expect(apiClient.post).toHaveBeenCalledWith('/applicants/a/decision', {
+    version: 7,
+    status: 'HIRED',
+    reason: '面接で合意',
+  });
 });
 test('一覧条件と履歴cursorを保持する', async () => {
   await applicantApi.list({ page: 2, size: 20, search: '応募者', status: 'SCREENING' });
@@ -67,4 +73,11 @@ test('通常操作は採否に遷移せず終了済みを再開しない', () =>
   expect(allowedApplicantTransitions('INTERVIEWED')).toEqual(['SCREENING', 'WITHDRAWN']);
   for (const status of ['HIRED', 'REJECTED', 'WITHDRAWN'] as const)
     expect(allowedApplicantTransitions(status)).toEqual([]);
+});
+test('採用は面接済だけ、不採用は未終了の全状態から選べる', () => {
+  expect(allowedApplicantDecisions('RECEIVED')).toEqual(['REJECTED']);
+  expect(allowedApplicantDecisions('SCREENING')).toEqual(['REJECTED']);
+  expect(allowedApplicantDecisions('INTERVIEWED')).toEqual(['HIRED', 'REJECTED']);
+  for (const status of ['HIRED', 'REJECTED', 'WITHDRAWN'] as const)
+    expect(allowedApplicantDecisions(status)).toEqual([]);
 });
