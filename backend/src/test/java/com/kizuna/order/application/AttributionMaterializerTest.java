@@ -122,6 +122,7 @@ class AttributionMaterializerTest {
               return attribution;
             });
     when(ledger.grantPlannedForOrder(7L, "o1", 3L, 90, 10L)).thenReturn(41L);
+    when(ranks.syncOnAttribution(7L, materializer, 88L, 41L)).thenReturn(true);
     when(benefits.grantVisitBenefits(7L, "o1", 3L, BUSINESS_DATE, 10L)).thenReturn(500L);
     var result =
         materializer.materialize(
@@ -133,7 +134,7 @@ class AttributionMaterializerTest {
             OCCURRED_AT,
             10L,
             new AttributionMaterializer.ReceiptClaim(90));
-    assertThat(result.rankChanged()).isFalse();
+    assertThat(result.rankChanged()).isTrue();
     assertThat(result.grantedPoints()).isEqualTo(90);
     assertThat(result.benefitPoints()).isEqualTo(500L);
     assertThat(result.attribution().getId()).isEqualTo(88L);
