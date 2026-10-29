@@ -26,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class MemberWithdrawalTest {
@@ -54,7 +55,17 @@ class MemberWithdrawalTest {
   private static Member member() {
     Member member = Member.builder().memberCode("123456789012").userId(10L).build();
     member.setId(77L);
+    ReflectionTestUtils.setField(member, "version", 3L);
     return member;
+  }
+
+  private void givenFlushBumpsVersion(Member member) {
+    when(memberRepository.saveAndFlush(member))
+        .thenAnswer(
+            call -> {
+              ReflectionTestUtils.setField(member, "version", 4L);
+              return member;
+            });
   }
 
   @Test
@@ -65,6 +76,8 @@ class MemberWithdrawalTest {
     when(userRepository.findById(10L)).thenReturn(Optional.of(user));
     when(memberRepository.findByUserIdForUpdate(10L)).thenReturn(Optional.of(member));
 
+    givenFlushBumpsVersion(member);
+
     var withdrawn = withdrawal.withdrawSelf(10L, "引っ越し");
 
     assertThat(withdrawn.memberId()).isEqualTo(77L);
@@ -74,7 +87,10 @@ class MemberWithdrawalTest {
     assertThat(member.getWithdrawnBy()).isEqualTo(10L);
     assertThat(member.getWithdrawnAt()).isEqualTo(withdrawn.withdrawnAt());
     verify(credentialOperations).withdraw(user, withdrawn.withdrawnAt());
-    verify(memberRepository).save(member);
+    verify(memberRepository).saveAndFlush(member);
+    assertThat(withdrawn.versionBefore()).isEqualTo(3L);
+    assertThat(withdrawn.versionAfter()).isEqualTo(4L);
+    assertThat(withdrawn.userEnabledBefore()).isTrue();
     verify(userRepository).save(user);
   }
 
@@ -112,6 +128,8 @@ class MemberWithdrawalTest {
     when(memberRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(member));
     when(userRepository.findById(10L)).thenReturn(Optional.of(user));
 
+    givenFlushBumpsVersion(member);
+
     var withdrawn = withdrawal.withdrawByStaff(77L, 42L, "電話依頼");
 
     assertThat(withdrawn.memberId()).isEqualTo(77L);
@@ -119,7 +137,10 @@ class MemberWithdrawalTest {
     assertThat(member.getWithdrawnBy()).isEqualTo(42L);
     assertThat(member.getWithdrawalReason()).isEqualTo("電話依頼");
     verify(credentialOperations).withdraw(user, withdrawn.withdrawnAt());
-    verify(memberRepository).save(member);
+    verify(memberRepository).saveAndFlush(member);
+    assertThat(withdrawn.versionBefore()).isEqualTo(3L);
+    assertThat(withdrawn.versionAfter()).isEqualTo(4L);
+    assertThat(withdrawn.userEnabledBefore()).isTrue();
     verify(userRepository).save(user);
   }
 

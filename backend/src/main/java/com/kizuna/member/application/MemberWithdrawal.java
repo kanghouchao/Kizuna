@@ -28,8 +28,14 @@ public class MemberWithdrawal {
   private final MemberRepository memberRepository;
   private final CredentialOperations credentialOperations;
 
-  /** 退会した会員と利用者の識別子。編排側がポイント消去・関連解除・申請取り下げの宛先と操作者に使う。 */
-  public record WithdrawnMember(long memberId, long userId, OffsetDateTime withdrawnAt) {}
+  /** 退会した会員と利用者の識別子。編排側がポイント消去・関連解除・申請取り下げの宛先と操作者に使い、版と資格停止の前後は監査の前後像になる。 版は flush 後の実値。 */
+  public record WithdrawnMember(
+      long memberId,
+      long userId,
+      OffsetDateTime withdrawnAt,
+      long versionBefore,
+      long versionAfter,
+      boolean userEnabledBefore) {}
 
   /**
    * 本人による退会。対象は検証済みトークンの利用者 ID で固定する（電子メールは退会で後継へ移りうる）。会員行を先に押さえて
@@ -46,12 +52,7 @@ public class MemberWithdrawal {
         memberRepository
             .findByUserIdForUpdate(user.getId())
             .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
-    OffsetDateTime now = OffsetDateTime.now();
-    member.withdraw(reason, user.getId(), now);
-    credentialOperations.withdraw(user, now);
-    memberRepository.save(member);
-    userRepository.save(user);
-    return new WithdrawnMember(member.getId(), user.getId(), now);
+    return terminate(member, user, user.getId(), reason);
   }
 
   /** 職員による代行退会。対象は会員 ID で名指しし、操作者は職員の利用者 ID で記録する。効果と直列化は本人退会と同じで、 存在しない会員は 404、退会済みは 409。 */
@@ -64,11 +65,18 @@ public class MemberWithdrawal {
         userRepository
             .findById(member.getUserId())
             .orElseThrow(() -> new NotFoundException("会員の利用者が見つかりません"));
+    return terminate(member, user, actorUserId, reason);
+  }
+
+  private WithdrawnMember terminate(Member member, User user, long actorUserId, String reason) {
     OffsetDateTime now = OffsetDateTime.now();
+    long versionBefore = member.getVersion();
+    boolean enabledBefore = user.getEnabled();
     member.withdraw(reason, actorUserId, now);
     credentialOperations.withdraw(user, now);
-    memberRepository.save(member);
+    Member saved = memberRepository.saveAndFlush(member);
     userRepository.save(user);
-    return new WithdrawnMember(member.getId(), user.getId(), now);
+    return new WithdrawnMember(
+        member.getId(), user.getId(), now, versionBefore, saved.getVersion(), enabledBefore);
   }
 }

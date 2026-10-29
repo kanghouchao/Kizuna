@@ -5,6 +5,9 @@ import com.kizuna.member.application.MemberWithdrawal;
 import com.kizuna.member.application.MemberWithdrawal.WithdrawnMember;
 import com.kizuna.order.withdrawal.MemberWithdrawalApplications;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.point.application.PointLedgerService.WithdrawalClearance;
+import com.kizuna.user.application.BusinessAudit;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +30,7 @@ public class MemberWithdrawalService {
   private final PointLedgerService pointLedgerService;
   private final CustomerMemberLinkWithdrawal linkWithdrawal;
   private final MemberWithdrawalApplications applicationWithdrawal;
+  private final BusinessAudit audit;
 
   /** 本人による退会。会員行のロックが先頭にあり、以後の台帳・関連・申請の書き込みはその直列化の下で進む。 */
   @Transactional
@@ -43,9 +47,32 @@ public class MemberWithdrawalService {
   }
 
   private void completeWithdrawal(WithdrawnMember withdrawn, long actorUserId) {
-    pointLedgerService.clearForWithdrawal(withdrawn.memberId(), actorUserId, CLEAR_REASON);
+    WithdrawalClearance cleared =
+        pointLedgerService.clearForWithdrawal(withdrawn.memberId(), actorUserId, CLEAR_REASON);
     linkWithdrawal.releaseAll(withdrawn.memberId(), actorUserId, withdrawn.withdrawnAt());
-    applicationWithdrawal.withdrawPending(
-        withdrawn.memberId(), actorUserId, withdrawn.withdrawnAt());
+    int withdrawnApplications =
+        applicationWithdrawal.withdrawPending(
+            withdrawn.memberId(), actorUserId, withdrawn.withdrawnAt());
+    // 理由の原文は写さない。関連解除は解除側が行ごとに記録済みなので、ここでは数えない。
+    audit.recordById(
+        actorUserId,
+        null,
+        "MEMBER_WITHDRAWN",
+        "MEMBER",
+        Long.toString(withdrawn.memberId()),
+        cleared.firstEntryId().map(id -> "POINT_LEDGER_ENTRY").orElse(null),
+        cleared.firstEntryId().map(Object::toString).orElse(null),
+        Map.of(
+            "status", "ACTIVE",
+            "version", Long.toString(withdrawn.versionBefore()),
+            "user_enabled", Boolean.toString(withdrawn.userEnabledBefore())),
+        Map.of(
+            "status", "WITHDRAWN",
+            "version", Long.toString(withdrawn.versionAfter()),
+            "withdrawn_at", withdrawn.withdrawnAt().toString(),
+            "user_enabled", "false",
+            "changed_fields", "withdrawn_at,withdrawn_by,withdrawal_reason",
+            "cleared_points", Long.toString(cleared.points()),
+            "withdrawn_applications", Integer.toString(withdrawnApplications)));
   }
 }
