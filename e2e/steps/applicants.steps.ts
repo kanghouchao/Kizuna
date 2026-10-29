@@ -8,6 +8,7 @@ import {
   STORE1_ID,
   STORE_HEADERS,
   createPermissionRole,
+  createStaffFixture,
   loginAsStoreAdmin,
   loginUser,
 } from "./store-api";
@@ -136,9 +137,9 @@ async function foreignApplicant(request: APIRequestContext, sourceId: string) {
       headers: { Authorization: `Bearer ${managerToken}` },
     })
   ).json();
-  const otherStore = (
-    Array.isArray(catalog) ? catalog : catalog.content
-  ).find((store: { id: number }) => String(store.id) !== storeId);
+  const otherStore = (Array.isArray(catalog) ? catalog : catalog.content).find(
+    (store: { id: number }) => String(store.id) !== storeId,
+  );
   expect(otherStore).toBeTruthy();
   const db = new Client();
   await db.connect();
@@ -165,10 +166,11 @@ async function loginAsRecruiter(
   });
   expect(ownerLogin.status()).toBe(200);
   ownerToken = (await ownerLogin.json()).token;
-  const { email, password, token: actorToken } = await createRecruiter(
-    request,
-    permissions,
-  );
+  const {
+    email,
+    password,
+    token: actorToken,
+  } = await createRecruiter(request, permissions);
   token = actorToken;
   await page.goto(`${APP_URL}/auth/login`);
   await page.getByLabel("メールアドレス", { exact: true }).fill(email);
@@ -264,9 +266,7 @@ Then(
         localStorage.setItem("theme", value);
         document.documentElement.classList.toggle("dark", value === "dark");
       }, theme);
-      await page.goto(
-        `${APP_URL}/store/applicants/${applicantId}`,
-      );
+      await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
       await page.setViewportSize({ width: 1280, height: 960 });
       await expect(
         page.getByRole("heading", { name: applicantName, exact: true }),
@@ -293,9 +293,7 @@ Then(
         path: $testInfo.outputPath(`applicant-list-${theme}.png`),
         fullPage: true,
       });
-      await page.goto(
-        `${APP_URL}/store/applicants/${applicantId}`,
-      );
+      await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(
@@ -465,7 +463,11 @@ Then(
     ).toBe(400);
     expect((await current(request)).status).toBe("SCREENING");
     for (const status of ["HIRED", "REJECTED"]) {
-      const body = { version: detail.version, status, reason: "通常遷移の検証" };
+      const body = {
+        version: detail.version,
+        status,
+        reason: "通常遷移の検証",
+      };
       expect(
         (
           await request.post(`${path()}/transitions`, {
@@ -639,42 +641,44 @@ Then(
 When(
   "面接済の応募者を画面で採用に確定する",
   async ({ page, request, $testInfo }) => {
-  await interviewed(request);
-  await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
-  await page.getByLabel("採否", { exact: true }).click();
-  await page.getByRole("option", { name: "採用", exact: true }).click();
-  await page.getByLabel("確定理由", { exact: true }).fill("面接で入店に合意");
-  const section = page.locator("section", {
-    has: page.getByRole("heading", { name: "採否の確定", exact: true }),
-  });
-  for (const [width, name] of [
-    [1280, "applicant-decision"],
-    [390, "applicant-decision-narrow"],
-  ] as const) {
-    await page.setViewportSize({ width, height: 900 });
-    await section.scrollIntoViewIfNeeded();
-    await expect(section).toBeInViewport();
-    await section.screenshot({ path: $testInfo.outputPath(`${name}.png`) });
-  }
-  await page.getByRole("button", { name: "採否を確定", exact: true }).click();
-  await page.getByRole("button", { name: "確定する", exact: true }).click();
-  await expect(
-    page.getByText("選考は終了しました。編集・再開はできません。"),
-  ).toBeVisible();
-  await expect(page.getByText("面接で入店に合意", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "採否の確定", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "受付情報を編集" }),
-  ).toHaveCount(0);
-  await page.getByRole("main").evaluate((element) => {
-    element.scrollTop = 0;
-  });
-  await page.screenshot({
-    path: $testInfo.outputPath("applicant-hired-narrow.png"),
-  });
-  await page.setViewportSize({ width: 1280, height: 960 });
+    await interviewed(request);
+    await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+    await page.getByLabel("採否", { exact: true }).click();
+    await page.getByRole("option", { name: "採用", exact: true }).click();
+    await page.getByLabel("確定理由", { exact: true }).fill("面接で入店に合意");
+    const section = page.locator("section", {
+      has: page.getByRole("heading", { name: "採否の確定", exact: true }),
+    });
+    for (const [width, name] of [
+      [1280, "applicant-decision"],
+      [390, "applicant-decision-narrow"],
+    ] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await section.scrollIntoViewIfNeeded();
+      await expect(section).toBeInViewport();
+      await section.screenshot({ path: $testInfo.outputPath(`${name}.png`) });
+    }
+    await page.getByRole("button", { name: "採否を確定", exact: true }).click();
+    await page.getByRole("button", { name: "確定する", exact: true }).click();
+    await expect(
+      page.getByText("選考は終了しました。編集・再開はできません。"),
+    ).toBeVisible();
+    await expect(
+      page.getByText("面接で入店に合意", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "採否の確定", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "受付情報を編集" }),
+    ).toHaveCount(0);
+    await page.getByRole("main").evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await page.screenshot({
+      path: $testInfo.outputPath("applicant-hired-narrow.png"),
+    });
+    await page.setViewportSize({ width: 1280, height: 960 });
   },
 );
 
@@ -782,9 +786,9 @@ Then(
       status: "REJECTED",
       reason: "権限検証",
     };
-    expect((await decide(request, detail.id, body, manager.token)).status()).toBe(
-      403,
-    );
+    expect(
+      (await decide(request, detail.id, body, manager.token)).status(),
+    ).toBe(403);
     const foreign = await foreignApplicant(request, detail.id);
     expect((await decide(request, foreign.id, body)).status()).toBe(404);
     applicantId = detail.id;
@@ -845,9 +849,7 @@ Then(
     });
     expect(configs.status()).toBe(200);
     const values = Object.fromEntries(
-      (
-        (await configs.json()) as { config_key: string; config_value: string }[]
-      )
+      ((await configs.json()) as { config_key: string; config_value: string }[])
         .filter((config) => RETENTION_KEYS.includes(config.config_key))
         .map((config) => [config.config_key, config.config_value ?? ""]),
     );
@@ -907,18 +909,273 @@ Then(
   },
 );
 
-// 保持期間を残すと、後続の匿名化処理が共有店舗の終端応募者を消しうる。既知の未設定へ戻すだけなので番兵は置かない。
-After({ tags: "@applicant-retention" }, async ({ request }) => {
-  const login = await request.post("/api/auth/login", {
-    data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD },
-  });
-  expect(login.status()).toBe(200);
-  const admin = (await login.json()).token as string;
-  for (const key of RETENTION_KEYS) {
-    const response = await putConfig(request, admin, key, "");
-    expect(response.status(), await response.text()).toBe(200);
-  }
+Given(
+  "添付も扱える採用担当者でログインしている",
+  async ({ page, request, $testInfo }) => {
+    $testInfo.setTimeout(120000);
+    await loginAsRecruiter(page, request, [
+      ...RECRUITER_PERMISSIONS,
+      "RECRUITMENT_ATTACHMENT_VIEW",
+      "RECRUITMENT_ATTACHMENT_MANAGE",
+    ]);
+  },
+);
+
+let anonymizeOperator = "";
+let anonymizeViewer = "";
+let anonymizeServiceId = 0;
+let incompleteServiceId = 0;
+const today = () =>
+  new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(
+    new Date(),
+  );
+const anonymization = (serviceUserId: number) => ({
+  task_name: "APPLICANT_ANONYMIZATION",
+  logical_key: randomUUID(),
+  service_user_id: serviceUserId,
+  store_id: null,
+  period_start: today(),
+  period_end: today(),
 });
+
+When(
+  "添付付きの応募者を面接後に不採用へ確定し不採用の保持期間を0か月にする",
+  async ({ page, request }) => {
+    let detail = await interviewed(request);
+    const image = Buffer.from(
+      await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 8;
+        canvas.height = 8;
+        return canvas.toDataURL("image/png").split(",")[1];
+      }),
+      "base64",
+    );
+    const uploaded = await request.post(`${path()}/attachments`, {
+      headers: {
+        ...headers(),
+        "Content-Type": "image/png",
+        "Idempotency-Key": randomUUID(),
+      },
+      data: image,
+    });
+    expect(uploaded.status(), await uploaded.text()).toBe(201);
+    detail = await current(request);
+    const rejected = await decide(request, applicantId, {
+      version: detail.version,
+      status: "REJECTED",
+      reason: "検証の不採用理由",
+    });
+    expect(rejected.status(), await rejected.text()).toBe(200);
+    for (const [key, value] of [
+      ["applicant_retention_rejected_months", "0"],
+      ["applicant_retention_withdrawn_months", ""],
+      ["applicant_retention_hired_months", ""],
+    ]) {
+      const response = await putConfig(request, ownerToken, key, value);
+      expect(response.status(), await response.text()).toBe(200);
+    }
+  },
+);
+
+Then(
+  "匿名化の手動実行は匿名化権限の無い運用者と権限の足りないサービスIDを拒否する",
+  async ({ request }) => {
+    const suffix = randomUUID();
+    const password = randomUUID();
+    const operatorRole = await createPermissionRole(
+      request,
+      ownerToken,
+      `匿名化運用-${suffix}`,
+      ["TASK_MANAGE", "APPLICANT_ANONYMIZE"],
+    );
+    const viewerRole = await createPermissionRole(
+      request,
+      ownerToken,
+      `匿名化閲覧-${suffix}`,
+      ["TASK_MANAGE"],
+    );
+    for (const [role, prefix] of [
+      [operatorRole, "operator"],
+      [viewerRole, "viewer"],
+    ] as const) {
+      const email = `anonymize-${prefix}-${suffix}@example.invalid`;
+      await createStaffFixture(request, ownerToken, email, password, [role]);
+      const login = await request.post("/api/auth/login", {
+        data: { email, password },
+      });
+      expect(login.status()).toBe(200);
+      if (role === operatorRole) anonymizeOperator = (await login.json()).token;
+      else anonymizeViewer = (await login.json()).token;
+    }
+    const completeRole = await createPermissionRole(
+      request,
+      ownerToken,
+      `匿名化処理-${suffix}`,
+      ["TASK_EXECUTE", "APPLICANT_ANONYMIZE"],
+    );
+    const incompleteRole = await createPermissionRole(
+      request,
+      ownerToken,
+      `実行のみ-${suffix}`,
+      ["TASK_EXECUTE"],
+    );
+    for (const roleId of [completeRole, incompleteRole]) {
+      const response = await request.post("/api/service-identities", {
+        headers: { ...STORE_HEADERS, Authorization: `Bearer ${ownerToken}` },
+        data: {
+          display_name: `匿名化サービス-${roleId}-${suffix}`,
+          role_ids: [roleId],
+          store_scope_type: "ALL_STORES",
+          store_ids: [],
+        },
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      const id = (await response.json()).id;
+      if (roleId === completeRole) anonymizeServiceId = id;
+      else incompleteServiceId = id;
+    }
+    const run = (authorization: string, serviceUserId: number) =>
+      request.post("/api/task-executions", {
+        headers: { ...STORE_HEADERS, Authorization: `Bearer ${authorization}` },
+        data: anonymization(serviceUserId),
+      });
+    expect((await run(anonymizeViewer, anonymizeServiceId)).status()).toBe(403);
+    expect((await run(anonymizeOperator, incompleteServiceId)).status()).toBe(
+      403,
+    );
+    expect((await current(request)).anonymized_at).toBeUndefined();
+  },
+);
+
+When(
+  "匿名化権限を持つ運用者がサービスIDで匿名化を手動実行する",
+  async ({ request }) => {
+    const response = await request.post("/api/task-executions", {
+      headers: {
+        ...STORE_HEADERS,
+        Authorization: `Bearer ${anonymizeOperator}`,
+      },
+      data: anonymization(anonymizeServiceId),
+    });
+    expect(response.status(), await response.text()).toBe(201);
+    const execution = (await response.json()).execution;
+    expect(execution.status).toBe("SUCCEEDED");
+    expect(execution.processed_count).toBeGreaterThanOrEqual(1);
+  },
+);
+
+Then(
+  "匿名化後の応募者詳細は個人情報と添付を返さず選考の経緯を残す",
+  async ({ request }) => {
+    const detail = await current(request);
+    expect(detail).toMatchObject({
+      id: applicantId,
+      name: "匿名化済み応募者",
+      status: "REJECTED",
+      assignee: "検証担当",
+      source_media: "検証媒体",
+      interview: {
+        interview_at: expect.any(String),
+        interviewer: "面接担当者",
+        checklist: {},
+      },
+    });
+    expect(detail.anonymized_at).toEqual(expect.any(String));
+    for (const field of [
+      "phone",
+      "email",
+      "address",
+      "experience",
+      "desired_conditions",
+      "referrer",
+    ])
+      expect(detail[field], field).toBeUndefined();
+    expect(detail.interview.notes).toBeUndefined();
+    expect(JSON.stringify(detail)).not.toContain(applicantName);
+    const attachments = await request.get(`${path()}/attachments`, {
+      headers: headers(),
+    });
+    expect(attachments.status()).toBe(200);
+    expect((await attachments.json()).content).toEqual([]);
+    const history = await request.get(`${path()}/history`, {
+      headers: headers(),
+    });
+    expect(history.status()).toBe(200);
+    expect(JSON.stringify(await history.json())).toContain("検証の不採用理由");
+    const db = new Client();
+    await db.connect();
+    try {
+      const audit = await db.query(
+        "SELECT before_values, after_values, source_type FROM t_audit_events WHERE action='APPLICANT_ANONYMIZED' AND target_id=$1",
+        [applicantId],
+      );
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0].source_type).toBe("TASK_EXECUTION");
+      expect(Object.keys(audit.rows[0].after_values).sort()).toEqual([
+        "status",
+        "version",
+      ]);
+    } finally {
+      await db.end();
+    }
+  },
+);
+
+Then(
+  "匿名化済みの応募者は一覧と詳細で分かり両テーマと狭幅で示す",
+  async ({ page, $testInfo }) => {
+    for (const [theme, width] of [
+      ["light", 1280],
+      ["dark", 1280],
+      ["light", 390],
+    ] as const) {
+      await page.evaluate((mode) => {
+        localStorage.setItem("theme", mode);
+        document.documentElement.classList.toggle("dark", mode === "dark");
+      }, theme);
+      await page.setViewportSize({ width, height: 960 });
+      await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+      await expect(
+        page.getByRole("heading", { name: "匿名化済み応募者", exact: true }),
+      ).toBeVisible();
+      await expect(page.getByText("匿名化済み", { exact: true })).toBeVisible();
+      await expect(
+        page.getByText(/保持期間の満了により .* に匿名化しました/),
+      ).toBeVisible();
+      await page.screenshot({
+        path: $testInfo.outputPath(
+          `applicant-anonymized-${theme}-${width}.png`,
+        ),
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize({ width: 1280, height: 960 });
+    await page.goto(`${APP_URL}/store/applicants`);
+    const row = page.getByRole("row").filter({
+      has: page.locator(`a[href$="/applicants/${applicantId}"]`),
+    });
+    await page.getByLabel("応募者氏名").fill("匿名化済み応募者");
+    await page.getByRole("button", { name: "検索", exact: true }).click();
+    await expect(row.getByText("匿名化済み", { exact: true })).toBeVisible();
+  },
+);
+
+// 保持期間を残すと、後続の匿名化処理が共有店舗の終端応募者を消しうる。既知の未設定へ戻すだけなので番兵は置かない。
+After(
+  { tags: "@applicant-retention or @applicant-anonymization" },
+  async ({ request }) => {
+    const login = await request.post("/api/auth/login", {
+      data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD },
+    });
+    expect(login.status()).toBe(200);
+    const admin = (await login.json()).token as string;
+    for (const key of RETENTION_KEYS) {
+      const response = await putConfig(request, admin, key, "");
+      expect(response.status(), await response.text()).toBe(200);
+    }
+  },
+);
 
 let stageName = "";
 let enrollmentId = "";
@@ -962,7 +1219,9 @@ When(
       ] as const) {
         await page.setViewportSize({ width, height: 900 });
         await page.screenshot({
-          path: $testInfo.outputPath(`applicant-enrollment-${theme}${suffix}.png`),
+          path: $testInfo.outputPath(
+            `applicant-enrollment-${theme}${suffix}.png`,
+          ),
           fullPage: true,
         });
       }
@@ -973,7 +1232,9 @@ When(
     });
     await page.setViewportSize({ width: 1280, height: 960 });
     await page.getByRole("button", { name: "保存する", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/store/applicants/${applicantId}$`));
+    await expect(page).toHaveURL(
+      new RegExp(`/store/applicants/${applicantId}$`),
+    );
     await expect(
       page.getByRole("link", { name: "在籍を開く", exact: true }),
     ).toBeVisible();
@@ -982,7 +1243,9 @@ When(
       .locator("section", {
         has: page.getByRole("heading", { name: "在籍", exact: true }),
       })
-      .screenshot({ path: $testInfo.outputPath("applicant-enrolled-narrow.png") });
+      .screenshot({
+        path: $testInfo.outputPath("applicant-enrolled-narrow.png"),
+      });
     await page.setViewportSize({ width: 1280, height: 960 });
   },
 );
@@ -1018,7 +1281,9 @@ Then(
     });
     expect(JSON.stringify(await cast.json())).not.toContain("非公開");
     await page.getByRole("link", { name: "在籍を開く", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/store/casts/${enrollmentId}/edit$`));
+    await expect(page).toHaveURL(
+      new RegExp(`/store/casts/${enrollmentId}/edit$`),
+    );
     await page.goto(`${APP_URL}/store/casts`);
     await page.getByPlaceholder("名前で検索...").fill(stageName);
     await page.getByRole("button", { name: "検索", exact: true }).click();
@@ -1073,7 +1338,10 @@ Then(
     const version = (await hired.json()).version;
     const recruiter = await createRecruiter(request, RECRUITER_PERMISSIONS);
     const body = { version, name: "権限検証", started_on: "2026-11-01" };
-    const stale = await enroll(request, detail.id, { ...body, version: version - 1 });
+    const stale = await enroll(request, detail.id, {
+      ...body,
+      version: version - 1,
+    });
     expect(stale.status(), await stale.text()).toBe(409);
     expect(
       (await enroll(request, detail.id, body, recruiter.token)).status(),
