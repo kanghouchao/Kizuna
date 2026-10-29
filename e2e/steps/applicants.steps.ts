@@ -580,7 +580,9 @@ Then(
   },
 );
 
-When("面接済の応募者を画面で採用に確定する", async ({ page, request }) => {
+When(
+  "面接済の応募者を画面で採用に確定する",
+  async ({ page, request, $testInfo }) => {
   let detail = await receive(request);
   applicantId = detail.id;
   const interview = await request.put(`${path()}/interview`, {
@@ -607,6 +609,18 @@ When("面接済の応募者を画面で採用に確定する", async ({ page, re
   await page.getByLabel("採否", { exact: true }).click();
   await page.getByRole("option", { name: "採用", exact: true }).click();
   await page.getByLabel("確定理由", { exact: true }).fill("面接で入店に合意");
+  const section = page.locator("section", {
+    has: page.getByRole("heading", { name: "採否の確定", exact: true }),
+  });
+  for (const [width, name] of [
+    [1280, "applicant-decision"],
+    [390, "applicant-decision-narrow"],
+  ] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await section.scrollIntoViewIfNeeded();
+    await expect(section).toBeInViewport();
+    await section.screenshot({ path: $testInfo.outputPath(`${name}.png`) });
+  }
   await page.getByRole("button", { name: "採否を確定", exact: true }).click();
   await page.getByRole("button", { name: "確定する", exact: true }).click();
   await expect(
@@ -619,7 +633,15 @@ When("面接済の応募者を画面で採用に確定する", async ({ page, re
   await expect(
     page.getByRole("button", { name: "受付情報を編集" }),
   ).toHaveCount(0);
-});
+  await page.getByRole("main").evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await page.screenshot({
+    path: $testInfo.outputPath("applicant-hired-narrow.png"),
+  });
+  await page.setViewportSize({ width: 1280, height: 960 });
+  },
+);
 
 Then(
   "採用は状態履歴と状態だけの監査を残し再確定できない",
