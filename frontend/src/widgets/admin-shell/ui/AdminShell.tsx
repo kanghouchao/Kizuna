@@ -22,8 +22,8 @@ export function AdminShell({ sidebar, header, children }: AdminShellProps) {
       <MeProvider>
         {/* 管理コンソールは下限幅を持つ。これより狭い窓では横スクロールへ倒し、
           はみ出した操作を切り落とさない（切り落とすと到達手段が消える）。
-          値はヘッダー全体の最悪所要幅 674px（見出し 90 + 操作行 520 + 左右余白 64。
-          操作行は店舗セレクタが上限まで伸びた場合）の上に取る。 */}
+          値はヘッダー全体の最悪所要幅 511px（見出し 90 + 操作行 357 + 左右余白 64。
+          操作行は表示名が上限まで伸びた場合）を上回る位置に取る。 */}
         <div className="flex h-screen bg-background overflow-x-auto">
           {sidebar}
 
