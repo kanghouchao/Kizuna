@@ -116,6 +116,12 @@ databaseChangeLog:
                   type: varchar(64)
                   constraints:
                     nullable: true
+              - column:
+                  # 保持期間の満了で個人情報を消した時刻。行・選考状態・状態履歴は残す。
+                  name: anonymized_at
+                  type: timestamptz
+                  constraints:
+                    nullable: true
         - addForeignKeyConstraint:
             baseTableName: t_applicants
             baseColumnNames: store_id
@@ -252,9 +258,10 @@ databaseChangeLog:
                 CHECK (status IN ('RECEIVED', 'SCREENING', 'INTERVIEWED', 'HIRED', 'REJECTED', 'WITHDRAWN'));
               ALTER TABLE t_applicants ADD CONSTRAINT ck_t_applicants_channel
                 CHECK (channel IN ('PHONE', 'WEB', 'MEDIA', 'OTHER'));
+              -- 匿名化は紹介者を消すが、応募元の種別は選考の記録として残す。
               ALTER TABLE t_applicants ADD CONSTRAINT ck_t_applicants_source
                 CHECK ((source_type = 'MEDIA' AND source_media IS NOT NULL AND referrer IS NULL)
-                  OR (source_type IN ('REFERRAL', 'SCOUT') AND source_media IS NULL AND referrer IS NOT NULL)
+                  OR (source_type IN ('REFERRAL', 'SCOUT') AND source_media IS NULL AND (referrer IS NOT NULL OR anonymized_at IS NOT NULL))
                   OR (source_type = 'DIRECT' AND source_media IS NULL AND referrer IS NULL));
         - createTable:
             tableName: t_applicant_attachment_uploads

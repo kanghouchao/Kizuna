@@ -37,6 +37,17 @@ public class AppProperties {
     private int maxLots = 10_000;
   }
 
+  private ApplicantAnonymization applicantAnonymization = new ApplicantAnonymization();
+
+  @Getter
+  @Setter
+  public static class ApplicantAnonymization {
+    private String cron = "0 15 0 * * *";
+    private boolean enabled = false;
+    private Long serviceUserId;
+    private int maxApplicants = 100;
+  }
+
   private Tasks tasks = new Tasks();
 
   @Getter

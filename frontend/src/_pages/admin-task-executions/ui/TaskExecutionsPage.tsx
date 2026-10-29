@@ -183,6 +183,7 @@ function taskLabel(name: string) {
       {
         SERVICE_IDENTITY_CHECK: 'サービスIDの実行確認',
         POINT_EXPIRY: '期限切れポイントの記帳',
+        APPLICANT_ANONYMIZATION: '保持期間を過ぎた応募者の匿名化',
         NOTIFICATION_DELIVER: '業務通知の送信',
       } as Record<string, string>
     )[name] ?? name
@@ -387,9 +388,11 @@ export default function TaskExecutionsPage() {
         <p className="text-sm text-muted-foreground">
           {taskName === 'POINT_EXPIRY'
             ? '対象日より前に期限を過ぎた未消費ポイントを記帳します。利用可能な残高は変わりません。本日以前の日付を指定してください。'
-            : taskName === 'NOTIFICATION_DELIVER'
-              ? '指定店舗の送信予定を過ぎた通知を最大100件、送信器へ引き渡します。対象日は実行記録の日付です。送信結果は店舗の業務通知で確認してください。'
-              : '選択したサービスIDの現在の権限を確認し、実行履歴に記録します。対象日は確認記録の対象日です。'}
+            : taskName === 'APPLICANT_ANONYMIZATION'
+              ? '対象日の時点で保持期間を過ぎた終端状態の応募者を全店舗から匿名化します。個人情報と添付は削除され、元に戻せません。本日以前の日付を指定してください。'
+              : taskName === 'NOTIFICATION_DELIVER'
+                ? '指定店舗の送信予定を過ぎた通知を最大100件、送信器へ引き渡します。対象日は実行記録の日付です。送信結果は店舗の業務通知で確認してください。'
+                : '選択したサービスIDの現在の権限を確認し、実行履歴に記録します。対象日は確認記録の対象日です。'}
         </p>
         {taskType?.scope === 'STORE' && !storeId ? (
           <p>対象店舗を選択してください。</p>
@@ -500,9 +503,11 @@ export default function TaskExecutionsPage() {
                   ? '実行中...'
                   : taskName === 'POINT_EXPIRY'
                     ? '期限切れポイントを記帳'
-                    : taskName === 'NOTIFICATION_DELIVER'
-                      ? '通知を送信器へ引き渡す'
-                      : '実行確認を記録'}
+                    : taskName === 'APPLICANT_ANONYMIZATION'
+                      ? '保持期間を過ぎた応募者を匿名化'
+                      : taskName === 'NOTIFICATION_DELIVER'
+                        ? '通知を送信器へ引き渡す'
+                        : '実行確認を記録'}
               </Button>
             </form>
           </Form>
@@ -535,13 +540,7 @@ export default function TaskExecutionsPage() {
               {list.rows.map(row => (
                 <TableRow key={row.id}>
                   <TableCell>
-                    <span className="block max-w-64 wrap-anywhere">
-                      {row.task_name === 'SERVICE_IDENTITY_CHECK'
-                        ? 'サービスIDの実行確認'
-                        : row.task_name === 'POINT_EXPIRY'
-                          ? '期限切れポイントの記帳'
-                          : row.task_name}
-                    </span>
+                    <span className="block max-w-64 wrap-anywhere">{taskLabel(row.task_name)}</span>
                     <span className="text-muted-foreground">{row.service_name}</span>
                   </TableCell>
                   <TableCell>

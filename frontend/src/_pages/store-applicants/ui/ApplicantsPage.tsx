@@ -5,6 +5,7 @@ import {
   applicantApi,
   applicantStatusLabels,
   applicantStatusClasses,
+  anonymizedBadgeClass,
   receptionChannelLabels,
   sourceTypeLabels,
   type ApplicantStatus,
@@ -111,9 +112,20 @@ export default function ApplicantsPage() {
             <TableRow key={row.id}>
               <TableCell className="max-w-48 truncate font-medium">{row.name}</TableCell>
               <TableCell>
-                <Badge variant="outline" className={applicantStatusClasses[row.status]}>
-                  {applicantStatusLabels[row.status]}
-                </Badge>
+                <div className="flex flex-wrap gap-1">
+                  <Badge variant="outline" className={applicantStatusClasses[row.status]}>
+                    {applicantStatusLabels[row.status]}
+                  </Badge>
+                  {row.anonymized_at && (
+                    <Badge
+                      variant="outline"
+                      className={anonymizedBadgeClass}
+                      title={`${new Date(row.anonymized_at).toLocaleDateString('ja-JP')} に匿名化`}
+                    >
+                      匿名化済み
+                    </Badge>
+                  )}
+                </div>
               </TableCell>
               <TableCell>{receptionChannelLabels[row.channel]}</TableCell>
               <TableCell className="max-w-48 truncate">

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -318,6 +319,27 @@ class PrivateAttachmentStorageTest {
     properties = configured();
     properties.getPrivateAttachments().setTemporaryDirectory(null);
     assertUnavailableWithoutClient(properties);
+  }
+
+  @Test
+  void deleteTreatsAMissingObjectAsDoneAndOtherFailuresAsUnavailable() throws Exception {
+    S3Client client = mock(S3Client.class);
+    AttachmentObject object = descriptor(new byte[] {1, 2, 3});
+    when(client.deleteObject(any(DeleteObjectRequest.class)))
+        .thenReturn(null)
+        .thenThrow(S3Exception.builder().statusCode(404).build())
+        .thenThrow(S3Exception.builder().statusCode(500).build());
+    try (PrivateAttachmentStorage storage =
+        new PrivateAttachmentStorage(configured(), () -> client)) {
+      storage.delete(object);
+      storage.delete(object);
+      assertThatThrownBy(() -> storage.delete(object))
+          .isInstanceOf(ServiceUnavailableException.class);
+    }
+    ArgumentCaptor<DeleteObjectRequest> delete = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+    verify(client, times(3)).deleteObject(delete.capture());
+    assertThat(delete.getValue().bucket()).isEqualTo("applicant-images");
+    assertThat(delete.getValue().key()).isEqualTo("applicant-images/" + object.id());
   }
 
   private static AttachmentObject descriptor(byte[] bytes) throws Exception {

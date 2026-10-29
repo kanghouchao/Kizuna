@@ -15,4 +15,5 @@ public record ApplicantSummaryResponse(
     String assignee,
     OffsetDateTime createdAt,
     Long version,
-    String enrollmentId) {}
+    String enrollmentId,
+    OffsetDateTime anonymizedAt) {}

@@ -209,3 +209,24 @@ test('採用前は在籍の欄を出さない', async () => {
   expect(await screen.findByRole('button', { name: '選考状態を変更' })).toBeVisible();
   expect(screen.queryByRole('heading', { name: '在籍' })).toBeNull();
 });
+test('匿名化済みなら匿名化の表示を出し、在籍登録の導線を出さない', async () => {
+  (applicantApi.get as jest.Mock).mockResolvedValue({
+    ...detail,
+    name: '匿名化済み応募者',
+    status: 'HIRED',
+    enrollment_id: null,
+    anonymized_at: '2026-10-30T00:15:00+09:00',
+  });
+  render(<ApplicantDetailPage />);
+  expect(await screen.findByText('匿名化済み')).toBeVisible();
+  expect(screen.getByText(/保持期間の満了により .* に匿名化しました/)).toBeVisible();
+  expect(
+    screen.getByText('在籍は未登録です。匿名化済みのため在籍登録はできません。')
+  ).toBeVisible();
+  expect(screen.queryByRole('link', { name: '在籍登録' })).toBeNull();
+});
+test('未匿名化なら匿名化の表示を出さない', async () => {
+  render(<ApplicantDetailPage />);
+  expect(await screen.findByRole('button', { name: '選考状態を変更' })).toBeVisible();
+  expect(screen.queryByText('匿名化済み')).toBeNull();
+});

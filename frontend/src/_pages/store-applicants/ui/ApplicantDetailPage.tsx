@@ -8,6 +8,7 @@ import {
   applicantApi,
   applicantStatusLabels,
   applicantStatusClasses,
+  anonymizedBadgeClass,
   receptionChannelLabels,
   sourceTypeLabels,
   type ApplicantDetail,
@@ -144,12 +145,25 @@ export default function ApplicantDetailPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold break-words">{applicant.name}</h2>
-            <Badge variant="outline" className={applicantStatusClasses[applicant.status]}>
-              {applicantStatusLabels[applicant.status]}
-            </Badge>
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="outline" className={applicantStatusClasses[applicant.status]}>
+                {applicantStatusLabels[applicant.status]}
+              </Badge>
+              {applicant.anonymized_at && (
+                <Badge variant="outline" className={anonymizedBadgeClass}>
+                  匿名化済み
+                </Badge>
+              )}
+            </div>
             {!open && (
               <p className="mt-2 text-sm text-muted-foreground">
                 選考は終了しました。編集・再開はできません。
+              </p>
+            )}
+            {applicant.anonymized_at && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                保持期間の満了により {new Date(applicant.anonymized_at).toLocaleString('ja-JP')}{' '}
+                に匿名化しました。氏名・連絡先・経歴・面接メモ・添付は削除済みで、選考の経緯だけを残しています。
               </p>
             )}
           </div>
@@ -295,8 +309,12 @@ export default function ApplicantDetailPage() {
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">在籍は未登録です。</p>
-              {canEnroll && (
+              <p className="text-sm text-muted-foreground">
+                {applicant.anonymized_at
+                  ? '在籍は未登録です。匿名化済みのため在籍登録はできません。'
+                  : '在籍は未登録です。'}
+              </p>
+              {canEnroll && !applicant.anonymized_at && (
                 <Button render={<Link href={storePath(`/applicants/${id}/enrollment`)} />}>
                   在籍登録
                 </Button>

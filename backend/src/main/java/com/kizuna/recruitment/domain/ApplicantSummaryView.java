@@ -22,4 +22,6 @@ public interface ApplicantSummaryView {
   Long getVersion();
 
   String getEnrollmentId();
+
+  OffsetDateTime getAnonymizedAt();
 }

@@ -220,6 +220,9 @@ public enum PermissionCode {
   /** 全会員の期限切れポイントの記帳。 */
   POINT_EXPIRE("期限切れポイントの記帳", PermissionGroup.OPERATION, SystemRole.ADMIN),
 
+  /** 保持期間を過ぎた応募者の匿名化。取り消せない消去なので、既定授与はせず運用者とサービス ID へ明示授与する。 */
+  APPLICANT_ANONYMIZE("保持期間を過ぎた応募者の匿名化", PermissionGroup.OPERATION),
+
   /** SERVICE による業務通知の配送と運営側からの手動実行。手動実行者として統括へ授与する。 */
   NOTIFICATION_DELIVER("業務通知の配送実行", PermissionGroup.OPERATION, SystemRole.ADMIN);
 
