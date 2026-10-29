@@ -93,7 +93,7 @@ class AttributionMaterializer implements MemberRankMetrics {
 
   record ReceiptClaim(int plannedPoints) implements Trigger {}
 
-  /** 退会済み会員で何も物化しなかったとき {@code attribution} は null。 */
+  /** 退会済み会員の完了で何も物化しなかったとき {@code attribution} は null。申領は退会済みなら例外で、null を返さない。 */
   record Result(
       int grantedPoints, long benefitPoints, OrderAttribution attribution, boolean rankChanged) {}
 
