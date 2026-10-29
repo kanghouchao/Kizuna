@@ -12,7 +12,7 @@ import {
   loginUser,
 } from "./store-api";
 
-const { Given, When, Then } = createBdd();
+const { Given, When, Then, After } = createBdd();
 let token = "";
 let managerToken = "";
 let ownerToken = "";
@@ -756,3 +756,131 @@ Then(
     expect((await current(request)).status).toBe("RECEIVED");
   },
 );
+
+const RETENTION_KEYS = [
+  "applicant_retention_rejected_months",
+  "applicant_retention_withdrawn_months",
+  "applicant_retention_hired_months",
+];
+async function putConfig(
+  request: APIRequestContext,
+  authorization: string,
+  key: string,
+  value: string,
+) {
+  return request.put(`/api/system-configs/${key}`, {
+    headers: { ...STORE_HEADERS, Authorization: `Bearer ${authorization}` },
+    data: { config_value: value },
+  });
+}
+
+When("管理者が応募者の保持期間を不採用だけ設定する", async ({ request }) => {
+  for (const [key, value] of [
+    ["applicant_retention_rejected_months", "6"],
+    ["applicant_retention_withdrawn_months", ""],
+    ["applicant_retention_hired_months", ""],
+  ]) {
+    const response = await putConfig(request, ownerToken, key, value);
+    expect(response.status(), await response.text()).toBe(200);
+  }
+});
+
+Then(
+  "保持期間の設定は負数と非整数と設定権限の無い者を拒否する",
+  async ({ request }) => {
+    for (const value of ["-1", "1201", "1.5", "abc"]) {
+      const response = await putConfig(
+        request,
+        ownerToken,
+        "applicant_retention_hired_months",
+        value,
+      );
+      expect(response.status(), value).toBe(400);
+    }
+    const denied = await putConfig(
+      request,
+      token,
+      "applicant_retention_hired_months",
+      "12",
+    );
+    expect(denied.status()).toBe(403);
+    const configs = await request.get("/api/system-configs", {
+      headers: { ...STORE_HEADERS, Authorization: `Bearer ${ownerToken}` },
+      params: { category: "RECRUITMENT" },
+    });
+    expect(configs.status()).toBe(200);
+    const values = Object.fromEntries(
+      (
+        (await configs.json()) as { config_key: string; config_value: string }[]
+      )
+        .filter((config) => RETENTION_KEYS.includes(config.config_key))
+        .map((config) => [config.config_key, config.config_value ?? ""]),
+    );
+    expect(values).toEqual({
+      applicant_retention_rejected_months: "6",
+      applicant_retention_withdrawn_months: "",
+      applicant_retention_hired_months: "",
+    });
+  },
+);
+
+Then(
+  "保持方針は設定済みの月数を返し未設定を自動匿名化しないと両テーマと狭幅で示す",
+  async ({ page, request, $testInfo }) => {
+    const policy = await request.get("/api/applicants/policy", {
+      headers: headers(),
+    });
+    expect(policy.status()).toBe(200);
+    expect(await policy.json()).toEqual({
+      retention_periods: {
+        rejected_months: 6,
+        withdrawn_months: null,
+        hired_months: null,
+      },
+    });
+    applicantId = (await receive(request)).id;
+    const value = (label: string) =>
+      page
+        .locator("section", {
+          has: page.getByRole("heading", { name: "情報保持方針" }),
+        })
+        .getByText(label, { exact: true })
+        .locator("xpath=following-sibling::dd");
+    for (const [theme, width] of [
+      ["light", 1280],
+      ["dark", 1280],
+      ["light", 390],
+    ] as const) {
+      await page.evaluate((mode) => {
+        localStorage.setItem("theme", mode);
+        document.documentElement.classList.toggle("dark", mode === "dark");
+      }, theme);
+      await page.setViewportSize({ width, height: 960 });
+      await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+      await expect(value("不採用")).toHaveText("6 か月後に匿名化");
+      await expect(value("辞退")).toHaveText("自動匿名化しない");
+      await expect(value("採用")).toHaveText("自動匿名化しない");
+      await page
+        .getByRole("heading", { name: "情報保持方針", exact: true })
+        .scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: $testInfo.outputPath(`applicant-retention-${theme}-${width}.png`),
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize({ width: 1280, height: 960 });
+  },
+);
+
+// 保持期間を残すと、後続の匿名化処理が共有店舗の終端応募者を消しうる。既知の未設定へ戻すだけなので番兵は置かない。
+After({ tags: "@applicant-retention" }, async ({ request }) => {
+  const login = await request.post("/api/auth/login", {
+    data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD },
+  });
+  expect(login.status()).toBe(200);
+  const admin = (await login.json()).token as string;
+  for (const key of RETENTION_KEYS) {
+    const response = await putConfig(request, admin, key, "");
+    expect(response.status(), await response.text()).toBe(200);
+  }
+});
