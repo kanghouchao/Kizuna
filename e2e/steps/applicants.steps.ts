@@ -1073,6 +1073,8 @@ Then(
     const version = (await hired.json()).version;
     const recruiter = await createRecruiter(request, RECRUITER_PERMISSIONS);
     const body = { version, name: "権限検証", started_on: "2026-11-01" };
+    const stale = await enroll(request, detail.id, { ...body, version: version - 1 });
+    expect(stale.status(), await stale.text()).toBe(409);
     expect(
       (await enroll(request, detail.id, body, recruiter.token)).status(),
     ).toBe(403);

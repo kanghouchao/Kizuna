@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { applicantApi } from '@/entities/applicant';
+import { hasPermission } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import ApplicantEnrollmentPage from '../ui/ApplicantEnrollmentPage';
 const push = jest.fn();
@@ -10,6 +11,11 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/entities/applicant', () => ({
   ...jest.requireActual('@/entities/applicant'),
   applicantApi: { get: jest.fn(), enroll: jest.fn() },
+}));
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  readTokenClaims: () => ({}),
+  hasPermission: jest.fn(),
 }));
 jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
 const hired = {
@@ -29,6 +35,7 @@ const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).forma
 beforeEach(() => {
   jest.clearAllMocks();
   (applicantApi.get as jest.Mock).mockResolvedValue(hired);
+  (hasPermission as jest.Mock).mockReturnValue(true);
 });
 test('源氏名は応募者の氏名から写さず、入店日は当日を既定とする', async () => {
   render(<ApplicantEnrollmentPage />);
@@ -81,5 +88,11 @@ test('登録済み・採用前の応募者にはフォームを出さない', as
   (applicantApi.get as jest.Mock).mockResolvedValue({ ...hired, status: 'INTERVIEWED' });
   render(<ApplicantEnrollmentPage />);
   expect(await screen.findByText('在籍登録は採用済みの応募者だけに行えます')).toBeVisible();
+  expect(screen.queryByLabelText('源氏名 *')).toBeNull();
+});
+test('キャスト管理権限が無ければフォームを出さない', async () => {
+  (hasPermission as jest.Mock).mockReturnValue(false);
+  render(<ApplicantEnrollmentPage />);
+  expect(await screen.findByText('在籍登録にはキャスト管理の権限が必要です')).toBeVisible();
   expect(screen.queryByLabelText('源氏名 *')).toBeNull();
 });
