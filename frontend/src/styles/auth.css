@@ -229,7 +229,8 @@
 .auth-field__input {
   width: 100%;
   padding: 14px 0 10px;
-  font-size: 15px;
+  /* iOS Safari は 16px 未満の入力欄へのフォーカスで画面を拡大する。キャストと会員は携帯で使う。 */
+  font-size: 16px;
   color: #1a1040;
   background: transparent;
   border: none;

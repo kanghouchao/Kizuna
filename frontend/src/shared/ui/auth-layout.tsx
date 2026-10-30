@@ -60,10 +60,10 @@ export default function AuthLayout({ children, title, subtitle }: AuthLayoutProp
       </div>
 
       {/* フォームエリア */}
-      <div className="flex-1 flex items-center justify-center auth-form-bg px-6 py-12 sm:px-12">
+      <div className="flex-1 flex items-center justify-center auth-form-bg px-6 py-8 sm:px-12 sm:py-12">
         <div className="w-full max-w-[420px]">
           {/* モバイル用ブランドバー */}
-          <div className="lg:hidden auth-mobile-brand flex items-center justify-center mb-12">
+          <div className="lg:hidden auth-mobile-brand flex items-center justify-center mb-8 sm:mb-12">
             <Image
               src="/images/logos/32.svg"
               alt="KIZUNA"
@@ -75,7 +75,7 @@ export default function AuthLayout({ children, title, subtitle }: AuthLayoutProp
           </div>
 
           {/* ページタイトル */}
-          <div className="mb-10">
+          <div className="mb-8 sm:mb-10">
             <h2 className="text-[26px] font-semibold text-[#1a1040] tracking-tight leading-tight">
               {title}
             </h2>
