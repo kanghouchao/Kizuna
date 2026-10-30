@@ -114,8 +114,10 @@ services:
         condition: service_healthy
       storage:
         condition: service_healthy
+      # 添付機能を無効にしている間も private-storage の不調で backend を止めない。有効時は backend の起動時検査が落とす
       private-storage:
         condition: service_healthy
+        required: false
     healthcheck:
       # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
       test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
