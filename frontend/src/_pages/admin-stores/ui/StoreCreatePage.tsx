@@ -9,12 +9,14 @@ import {
   storeShortNameError,
   adminStoreApi,
 } from '@/entities/store';
+import { useStoreContext } from '@/entities/user';
 import { getApiErrorMessage } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 
 export default function CreateStorePage() {
   const router = useRouter();
+  const { reload: reloadStores } = useStoreContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<CreateStoreRequest>({
     name: '',
@@ -64,6 +66,7 @@ export default function CreateStorePage() {
 
     try {
       await adminStoreApi.create({ ...formData, short_name: formData.short_name.trim() });
+      reloadStores();
       notify.success('店舗を作成しました。店舗一覧に戻ります');
       router.push('/admin/stores');
     } catch (error: unknown) {

@@ -105,6 +105,23 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       expect(result.current.currentStoreId).toBe('1');
     });
 
+    // 現在店舗が削除されると、取り直した一覧に cookie の店舗が居なくなる
+    it('取り直した一覧に現在店舗が無ければ先頭の店舗へ戻し、cookie へ書く', async () => {
+      const storeC: AuthorizedStore = { id: 3, name: '店舗C', status: 'ACTIVE' };
+      mockedStores.mockResolvedValue([storeA, storeB, storeC]);
+      mockedGetStoreId.mockReturnValue('2');
+      const { result } = renderHook(() => useStoreContext(), { wrapper });
+      await waitFor(() => expect(result.current.currentStoreId).toBe('2'));
+      mockedSetCurrentStore.mockClear();
+
+      mockedStores.mockResolvedValue([storeA, storeC]);
+      act(() => result.current.reload());
+
+      await waitFor(() => expect(result.current.currentStoreId).toBe('1'));
+      expect(result.current.currentStore).toEqual(storeA);
+      expect(mockedSetCurrentStore).toHaveBeenCalledWith('1');
+    });
+
     it('1つの provider 配下で複数の consumer が描画されても stores() は1回だけ呼ばれる', async () => {
       function Consumer({ label }: { label: string }) {
         const { stores } = useStoreContext();
