@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import type {
@@ -81,6 +81,7 @@ type EditOptions<T> = {
 };
 type Props<T> = StaffModalProps & {
   loadRoles: () => Promise<RoleSummaryResponse[]>;
+  rolesEmptyHint?: ReactNode;
   storeLabel?: string;
 } & (CreateOptions | EditOptions<T>);
 
@@ -317,6 +318,7 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
                     onReload={() => void refetchRoles()}
                     roleIds={field.value}
                     onChange={field.onChange}
+                    emptyHint={props.rolesEmptyHint}
                     ref={field.ref}
                   />
                 )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, type Ref } from 'react';
+import { useId, type ReactNode, type Ref } from 'react';
 import { RoleSummaryResponse } from '@/entities/user';
 import {
   FormControl,
@@ -20,6 +20,8 @@ interface RolePickerProps {
   onReload: () => void;
   roleIds: number[];
   onChange: (roleIds: number[]) => void;
+  /** 選択肢が 0 件のときに組の中へ出す案内。無ければ空の組のまま。 */
+  emptyHint?: ReactNode;
   /**
    * 検証で最初の問題になったときに焦点を受ける先。handleSubmit は登録済みの ref を焦点にするため、
    * 値だけを受け取った組は他の症状を出さずに焦点移動だけを失う。
@@ -42,6 +44,7 @@ export function RolePicker({
   onReload,
   roleIds,
   onChange,
+  emptyHint,
   ref,
 }: RolePickerProps) {
   const labelId = useId();
@@ -64,6 +67,8 @@ export function RolePicker({
             // 空の組を見せると「ロールが 1 つも無い」と読めてしまう。読めなかったことを名乗る。
             // 送信は塞がない — 選べないまま提出すれば、上の rules が欄の傍で止める。
             <RegionError message="ロール一覧の取得に失敗しました" onRetry={onReload} />
+          ) : firstId === undefined && emptyHint ? (
+            emptyHint
           ) : (
             roles.map(role => {
               const id = role.id;
