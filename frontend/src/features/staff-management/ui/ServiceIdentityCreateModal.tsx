@@ -1,5 +1,6 @@
 'use client';
 import { serviceIdentityApi } from '@/entities/user';
+import { CustomRoleRequiredHint } from './CustomRoleRequiredHint';
 import { StaffModal, type StaffCreateModalProps } from './StaffModal';
 export function ServiceIdentityCreateModal(props: StaffCreateModalProps) {
   return (
@@ -10,6 +11,7 @@ export function ServiceIdentityCreateModal(props: StaffCreateModalProps) {
       title="サービスIDを追加"
       initialScope="SPECIFIC_STORES"
       loadRoles={serviceIdentityApi.grantableRoles}
+      rolesEmptyHint={<CustomRoleRequiredHint />}
       create={serviceIdentityApi.create}
       displayName={{
         label: '用途名',
