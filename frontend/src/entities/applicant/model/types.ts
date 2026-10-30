@@ -112,6 +112,18 @@ export function allowedApplicantDecisions(status: ApplicantStatus): ApplicantDec
   return allowedApplicantTransitions(status).length > 0 ? ['REJECTED'] : [];
 }
 
+// 採用は面接済からしか確定できないため、面接済までに経由する状態を遷移規則から最短で辿る。
+// 面接済そのものは空配列、面接済に届かない終端状態は null。
+export function applicantPathToInterviewed(status: ApplicantStatus): ApplicantStatus[] | null {
+  const paths = new Map<ApplicantStatus, ApplicantStatus[]>([[status, []]]);
+  for (const [current, path] of paths) {
+    if (current === 'INTERVIEWED') return path;
+    for (const next of allowedApplicantTransitions(current))
+      if (!paths.has(next)) paths.set(next, [...path, next]);
+  }
+  return null;
+}
+
 export const applicantStatusClasses: Record<ApplicantStatus, string> = {
   RECEIVED: 'border-transparent bg-muted text-foreground',
   SCREENING: 'border-transparent bg-primary/10 text-primary-strong',
