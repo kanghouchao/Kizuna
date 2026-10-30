@@ -19,6 +19,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -28,24 +29,34 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.assertj.core.api.AbstractThrowableAssert;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetBucketPolicyRequest;
+import software.amazon.awssdk.services.s3.model.GetBucketPolicyResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutBucketPolicyRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 class PrivateAttachmentStorageTest {
+  private static final String NO_SUCH_BUCKET_POLICY =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>NoSuchBucketPolicy</Code>"
+          + "<Message>The bucket policy does not exist</Message></Error>";
   @TempDir Path temporary;
 
   @Test
@@ -53,7 +64,7 @@ class PrivateAttachmentStorageTest {
     var properties = configured();
     properties.getPrivateAttachments().setMaxFileBytes(2);
     properties.getPrivateAttachments().setTemporaryDirectory(temporary.toString());
-    var client = mock(S3Client.class);
+    var client = verifiedClient();
     byte[] bytes = {1, 2, 3};
     var object = descriptor(bytes);
     when(client.getObject(any(GetObjectRequest.class))).thenReturn(response(bytes));
@@ -70,14 +81,15 @@ class PrivateAttachmentStorageTest {
 
   @Test
   void storedDescriptorAboveAbsoluteSafetyLimitNeverReachesStorage() {
-    var client = mock(S3Client.class);
+    var client = verifiedClient();
     var object =
         new AttachmentObject(UUID.randomUUID(), "image/png", 10L * 1024 * 1024 + 1, "a".repeat(64));
     try (var storage = new PrivateAttachmentStorage(configured(), () -> client)) {
       assertThatThrownBy(() -> storage.verifyMetadata(object))
           .isInstanceOf(ConflictException.class);
       assertThatThrownBy(() -> storage.readVerified(object)).isInstanceOf(ConflictException.class);
-      verifyNoInteractions(client);
+      verify(client, never()).headObject(any(HeadObjectRequest.class));
+      verify(client, never()).getObject(any(GetObjectRequest.class));
     }
   }
 
@@ -89,6 +101,20 @@ class PrivateAttachmentStorageTest {
     server.createContext(
         "/",
         exchange -> {
+          if (exchange.getRequestMethod().equals("HEAD")) {
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+            return;
+          }
+          if ("policy".equals(exchange.getRequestURI().getQuery())) {
+            byte[] body = NO_SUCH_BUCKET_POLICY.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/xml");
+            exchange.sendResponseHeaders(404, body.length);
+            try (var output = exchange.getResponseBody()) {
+              output.write(body);
+            }
+            return;
+          }
           exchange.getResponseHeaders().set("Content-Type", "image/png");
           exchange.sendResponseHeaders(200, 100);
           try (var output = exchange.getResponseBody()) {
@@ -131,7 +157,7 @@ class PrivateAttachmentStorageTest {
     properties.getPrivateAttachments().setStorageTimeoutSeconds(1);
     properties.getPrivateAttachments().setStorageAttemptTimeoutSeconds(1);
     properties.getPrivateAttachments().setMaxConcurrentDownloads(1);
-    var client = mock(S3Client.class);
+    var client = verifiedClient();
     byte[] bytes = new byte[10000];
     var object = descriptor(bytes);
     @SuppressWarnings("unchecked")
@@ -180,7 +206,7 @@ class PrivateAttachmentStorageTest {
   void existingConditionalObjectIsVerifiedAndNeverOverwrittenOrDeleted() throws Exception {
     AppProperties properties = configured();
     properties.getPrivateAttachments().setTemporaryDirectory(temporary.toString());
-    S3Client client = mock(S3Client.class);
+    S3Client client = verifiedClient();
     byte[] bytes = new byte[] {1, 2, 3};
     AttachmentObject object = descriptor(bytes);
     Path source = Files.write(temporary.resolve("source"), bytes);
@@ -206,7 +232,7 @@ class PrivateAttachmentStorageTest {
   void sameSizeCorruptionIsRefusedBeforeDeliveryAndTemporaryFileIsRemoved() throws Exception {
     AppProperties properties = configured();
     properties.getPrivateAttachments().setTemporaryDirectory(temporary.toString());
-    S3Client client = mock(S3Client.class);
+    S3Client client = verifiedClient();
     AttachmentObject object = descriptor(new byte[] {1, 2, 3});
     when(client.getObject(any(GetObjectRequest.class))).thenReturn(response(new byte[] {3, 2, 1}));
     try (PrivateAttachmentStorage storage =
@@ -223,7 +249,7 @@ class PrivateAttachmentStorageTest {
   @Test
   void unknownPutResultNeverFallsBackToOverwriteOrDeletion() throws Exception {
     AppProperties properties = configured();
-    S3Client client = mock(S3Client.class);
+    S3Client client = verifiedClient();
     byte[] bytes = new byte[] {1, 2, 3};
     Path source = Files.write(temporary.resolve("source"), bytes);
     AttachmentObject object = descriptor(bytes);
@@ -245,7 +271,7 @@ class PrivateAttachmentStorageTest {
   void downloadSlotsAreBoundedAndReleasedWhenFilesAreClosed() throws Exception {
     AppProperties properties = configured();
     properties.getPrivateAttachments().setTemporaryDirectory(temporary.toString());
-    S3Client client = mock(S3Client.class);
+    S3Client client = verifiedClient();
     byte[] bytes = new byte[] {1, 2, 3};
     AttachmentObject object = descriptor(bytes);
     when(client.getObject(any(GetObjectRequest.class))).thenAnswer(invocation -> response(bytes));
@@ -270,7 +296,7 @@ class PrivateAttachmentStorageTest {
   void actualStreamSizeIsCheckedWhenStorageLiesAboutContentLength() throws Exception {
     AppProperties properties = configured();
     properties.getPrivateAttachments().setTemporaryDirectory(temporary.toString());
-    S3Client client = mock(S3Client.class);
+    S3Client client = verifiedClient();
     AttachmentObject object = descriptor(new byte[] {1, 2, 3});
     when(client.getObject(any(GetObjectRequest.class)))
         .thenReturn(
@@ -288,10 +314,10 @@ class PrivateAttachmentStorageTest {
 
   @ParameterizedTest
   @ValueSource(ints = {0, 21})
-  void applicantFileLimitsOutsideTheRecoveryPageBoundDisableStorage(int limit) {
+  void applicantFileLimitsOutsideTheRecoveryPageBoundRefuseStartup(int limit) {
     AppProperties properties = configured();
     properties.getPrivateAttachments().setMaxApplicantFiles(limit);
-    assertUnavailableWithoutClient(properties);
+    assertStartupRefusedWithoutClient(properties, "maxApplicantFiles が範囲外");
   }
 
   @ParameterizedTest
@@ -299,31 +325,32 @@ class PrivateAttachmentStorageTest {
   void applicantFileLimitsWithinTheRecoveryPageBoundRemainConfigured(int limit) {
     AppProperties properties = configured();
     properties.getPrivateAttachments().setMaxApplicantFiles(limit);
-    try (var storage = new PrivateAttachmentStorage(properties, () -> mock(S3Client.class))) {
+    try (var storage =
+        new PrivateAttachmentStorage(properties, PrivateAttachmentStorageTest::verifiedClient)) {
       assertThat(storage.isConfigured()).isTrue();
       storage.requireConfigured();
     }
   }
 
   @Test
-  void reusedPublicCredentialsAndIncompleteEnabledConfigurationAreUnavailable() {
+  void reusedPublicCredentialsAndIncompleteEnabledConfigurationRefuseStartup() {
     AppProperties properties = configured();
     properties.getPrivateAttachments().setSecretKey(properties.getUpload().getSecretKey());
-    assertUnavailableWithoutClient(properties);
+    assertStartupRefusedWithoutClient(properties, "secretKey が公開側と同じ");
     properties = configured();
     properties.getPrivateAttachments().setAccessKey(properties.getUpload().getAccessKey());
-    assertUnavailableWithoutClient(properties);
+    assertStartupRefusedWithoutClient(properties, "accessKey が公開側と同じ");
     properties = configured();
     properties.getPrivateAttachments().setEndpoint(null);
-    assertUnavailableWithoutClient(properties);
+    assertStartupRefusedWithoutClient(properties, "endpoint が未設定または不正");
     properties = configured();
     properties.getPrivateAttachments().setTemporaryDirectory(null);
-    assertUnavailableWithoutClient(properties);
+    assertStartupRefusedWithoutClient(properties, "temporaryDirectory が未設定");
   }
 
   @Test
   void deleteTreatsAMissingObjectAsDoneAndOtherFailuresAsUnavailable() throws Exception {
-    S3Client client = mock(S3Client.class);
+    S3Client client = verifiedClient();
     AttachmentObject object = descriptor(new byte[] {1, 2, 3});
     when(client.deleteObject(any(DeleteObjectRequest.class)))
         .thenReturn(null)
@@ -361,9 +388,11 @@ class PrivateAttachmentStorageTest {
 
   @Test
   void disabledOrMissingConfigurationNeverConstructsOrCallsClient() {
-    AppProperties properties = new AppProperties();
+    AppProperties properties = configured();
+    properties.getPrivateAttachments().setEnabled(false);
+    properties.getPrivateAttachments().setAccessKey(properties.getUpload().getAccessKey());
     AtomicInteger constructions = new AtomicInteger();
-    S3Client client = mock(S3Client.class);
+    S3Client client = verifiedClient();
     try (PrivateAttachmentStorage storage =
         new PrivateAttachmentStorage(
             properties,
@@ -383,26 +412,110 @@ class PrivateAttachmentStorageTest {
   void separateVariableNamesCannotReusePublicBucketOrEndpoint() {
     AppProperties properties = configured();
     properties.getPrivateAttachments().setBucket(properties.getUpload().getBucket());
-    assertUnavailableWithoutClient(properties);
+    assertStartupRefusedWithoutClient(properties, "bucket が公開側と同じ");
     properties = configured();
     properties.getPrivateAttachments().setEndpoint("http://STORAGE:8333/");
-    assertUnavailableWithoutClient(properties);
+    assertStartupRefusedWithoutClient(properties, "endpoint が公開側と同じ");
   }
 
-  private static void assertUnavailableWithoutClient(AppProperties properties) {
-    AtomicInteger constructions = new AtomicInteger();
-    try (PrivateAttachmentStorage storage =
-        new PrivateAttachmentStorage(
-            properties,
-            () -> {
-              constructions.incrementAndGet();
-              return mock(S3Client.class);
-            })) {
-      assertThat(storage.isConfigured()).isFalse();
-      assertThatThrownBy(storage::requireConfigured)
-          .isInstanceOf(ServiceUnavailableException.class);
+  @Test
+  void everyFailedIsolationItemIsNamedWithoutCredentialValues() {
+    AppProperties properties = configured();
+    var settings = properties.getPrivateAttachments();
+    settings.setAccessKey(properties.getUpload().getAccessKey());
+    settings.setMaxConcurrentDownloads(3);
+    assertStartupRefusedWithoutClient(properties, "accessKey が公開側と同じ")
+        .hasMessageContaining("maxConcurrentDownloads が範囲外")
+        .hasMessageNotContaining(settings.getAccessKey())
+        .hasMessageNotContaining(settings.getSecretKey());
+  }
+
+  @Test
+  void missingPrivateBucketRefusesStartupAndNeverCreatesIt() {
+    S3Client client = verifiedClient();
+    when(client.headBucket(any(HeadBucketRequest.class)))
+        .thenThrow(S3Exception.builder().statusCode(404).build());
+    assertThatThrownBy(() -> new PrivateAttachmentStorage(configured(), () -> client))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("非公開バケットが存在しない");
+    verify(client, never()).createBucket(any(CreateBucketRequest.class));
+    verify(client).close();
+  }
+
+  @Test
+  void anyBucketPolicyOnThePrivateBucketRefusesStartup() {
+    S3Client client = verifiedClient();
+    when(client.getBucketPolicy(any(GetBucketPolicyRequest.class)))
+        .thenReturn(GetBucketPolicyResponse.builder().policy("{}").build());
+    assertThatThrownBy(() -> new PrivateAttachmentStorage(configured(), () -> client))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("非公開バケットに policy が設定されている");
+    verify(client).close();
+  }
+
+  @Test
+  void bucketOrPolicyThatCannotBeConfirmedRefusesStartup() {
+    S3Client forbidden = verifiedClient();
+    when(forbidden.headBucket(any(HeadBucketRequest.class)))
+        .thenThrow(S3Exception.builder().statusCode(403).build());
+    assertThatThrownBy(() -> new PrivateAttachmentStorage(configured(), () -> forbidden))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("非公開バケットを確認できない");
+    S3Client unreadablePolicy = verifiedClient();
+    when(unreadablePolicy.getBucketPolicy(any(GetBucketPolicyRequest.class)))
+        .thenThrow(
+            S3Exception.builder()
+                .statusCode(403)
+                .awsErrorDetails(AwsErrorDetails.builder().errorCode("AccessDenied").build())
+                .build());
+    assertThatThrownBy(() -> new PrivateAttachmentStorage(configured(), () -> unreadablePolicy))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("非公開バケットの policy を確認できない");
+  }
+
+  @Test
+  void verifiedStartupOnlyReadsTheBucketState() {
+    S3Client client = verifiedClient();
+    try (var storage = new PrivateAttachmentStorage(configured(), () -> client)) {
+      assertThat(storage.isConfigured()).isTrue();
     }
+    var head = ArgumentCaptor.forClass(HeadBucketRequest.class);
+    verify(client).headBucket(head.capture());
+    assertThat(head.getValue().bucket()).isEqualTo("applicant-images");
+    var policy = ArgumentCaptor.forClass(GetBucketPolicyRequest.class);
+    verify(client).getBucketPolicy(policy.capture());
+    assertThat(policy.getValue().bucket()).isEqualTo("applicant-images");
+    verify(client, never()).createBucket(any(CreateBucketRequest.class));
+    verify(client, never()).putBucketPolicy(any(PutBucketPolicyRequest.class));
+  }
+
+  private static AbstractThrowableAssert<?, ? extends Throwable> assertStartupRefusedWithoutClient(
+      AppProperties properties, String failedItem) {
+    AtomicInteger constructions = new AtomicInteger();
+    var refused =
+        assertThatThrownBy(
+                () ->
+                    new PrivateAttachmentStorage(
+                        properties,
+                        () -> {
+                          constructions.incrementAndGet();
+                          return verifiedClient();
+                        }))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining(failedItem);
     assertThat(constructions).hasValue(0);
+    return refused;
+  }
+
+  private static S3Client verifiedClient() {
+    S3Client client = mock(S3Client.class);
+    when(client.getBucketPolicy(any(GetBucketPolicyRequest.class)))
+        .thenThrow(
+            S3Exception.builder()
+                .statusCode(404)
+                .awsErrorDetails(AwsErrorDetails.builder().errorCode("NoSuchBucketPolicy").build())
+                .build());
+    return client;
   }
 
   private static AppProperties configured() {
