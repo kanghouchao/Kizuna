@@ -283,6 +283,7 @@ export default function ApplicantDetailPage() {
           <ApplicantDecisionForm
             key={`decision:${id}:${applicant.version}`}
             applicant={applicant}
+            canManage={canManage}
             busy={saving}
             onDirtyChange={setDecisionDirty}
             onSave={(status, reason) =>

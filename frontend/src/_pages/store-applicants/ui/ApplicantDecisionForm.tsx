@@ -24,29 +24,33 @@ import {
   SelectValue,
   Textarea,
 } from '@/shared/ui';
-// 面接済への遷移は面接記録を前提とするため、未登録ならその登録を最初の手順に置く
-function hireStepsHint(applicant: ApplicantDetail): string {
+// 面接済への遷移は面接記録を前提とするため、未登録ならその登録を最初の手順に置く。
+// 手順の操作には管理権限が要るので、持たない利用者には依頼を促す
+function hireStepsHint(applicant: ApplicantDetail, canManage: boolean): string {
   const path = applicantPathToInterviewed(applicant.status);
   if (!path?.length) return '';
   const steps = [
     ...(applicant.interview ? [] : ['面接記録を登録']),
     `選考状態を${path.map(status => applicantStatusLabels[status]).join('→')}に変更`,
   ];
-  return `採用は面接済の応募者だけに確定できます。${steps.join('し、')}すると採用を選べます。`;
+  const request = canManage ? '' : 'これらの操作は採用の管理権限を持つ担当者に依頼してください。';
+  return `採用は面接済の応募者だけに確定できます。${steps.join('し、')}すると採用を選べます。${request}`;
 }
 export function ApplicantDecisionForm({
   applicant,
+  canManage,
   onSave,
   busy,
   onDirtyChange,
 }: {
   applicant: ApplicantDetail;
+  canManage: boolean;
   onSave: (status: ApplicantDecision, reason: string) => Promise<void>;
   busy: boolean;
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const allowed = allowedApplicantDecisions(applicant.status);
-  const hireHint = hireStepsHint(applicant);
+  const hireHint = hireStepsHint(applicant, canManage);
   const form = useForm<{ status: ApplicantDecision | ''; reason: string }>({
     defaultValues: { status: '', reason: '' },
   });
