@@ -25,13 +25,15 @@ const STORES = [
   { id: 2, name: '新宿店', short_name: '新宿店' },
 ];
 
-function withStores(stores: typeof STORES | null, currentStoreId = '1') {
+const reload = jest.fn();
+
+function withStores(stores: typeof STORES | null, currentStoreId = '1', loadFailed = false) {
   mockedUseStoreContext.mockReturnValue({
     stores,
     currentStoreId,
     currentStore: stores?.find(store => String(store.id) === currentStoreId),
-    loadFailed: false,
-    reload: jest.fn(),
+    loadFailed,
+    reload,
     switchStore,
   });
 }
@@ -100,20 +102,36 @@ describe('Sidebar', () => {
     expect(rail()).toBeNull();
   });
 
-  it('授権店舗の取得に失敗したらグループ級の項目だけで描く', async () => {
-    mockedUseStoreContext.mockReturnValue({
-      stores: null,
-      currentStoreId: undefined,
-      currentStore: undefined,
-      loadFailed: true,
-      reload: jest.fn(),
-      switchStore,
-    });
+  it('授権店舗の取得に失敗したらグループ級の項目だけで描き、失敗と再試行を出す', async () => {
+    withStores(null, undefined, true);
 
     render(<Sidebar />);
 
     expect(await screen.findByRole('link', { name: '受注照会' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '予約・案件管理' })).toBeNull();
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('店舗一覧の取得に失敗しました');
+    fireEvent.click(within(alert).getByRole('button', { name: '再試行' }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('取り直しに失敗したら直前の一覧のレールを残したまま、失敗と再試行を出す', async () => {
+    withStores(STORES, '1', true);
+
+    render(<Sidebar />);
+
+    expect(await screen.findByRole('button', { name: '新宿店' })).toBeInTheDocument();
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('店舗一覧の取得に失敗しました');
+    fireEvent.click(within(alert).getByRole('button', { name: '再試行' }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('取得に成功している間は失敗を出さない', async () => {
+    render(<Sidebar />);
+
+    expect(await screen.findByRole('link', { name: '予約・案件管理' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   describe('レール', () => {

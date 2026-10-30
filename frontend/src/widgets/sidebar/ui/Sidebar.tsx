@@ -30,6 +30,7 @@ import {
 import { menuApi, MenuVO } from '@/entities/menu';
 import { useStoreContext } from '@/entities/user';
 import { isStorePath } from '@/shared/lib';
+import { RegionError } from '@/shared/ui';
 import { ContextRail, type RailStore } from './ContextRail';
 
 // キーはメニュー API（seed データ）が返す icon 文字列との wire 契約。
@@ -115,7 +116,7 @@ function sectionsFor(navigation: NavigationSection[], storeLevel: boolean): Navi
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { stores, currentStoreId, loadFailed, switchStore } = useStoreContext();
+  const { stores, currentStoreId, loadFailed, reload, switchStore } = useStoreContext();
   const [navigation, setNavigation] = useState<NavigationSection[]>([]);
   // 利用者が選んだ文脈。未選択の間は既定（店舗級の項目を見られるなら現在店舗、無ければグループ）に従う。
   const [picked, setPicked] = useState<'group' | 'store' | undefined>(
@@ -206,6 +207,15 @@ export function Sidebar() {
           </span>
         </div>
         <div className="p-3 overflow-y-auto h-[calc(100vh-4rem)]">
+          {/* レールはこの領域の選択肢。取り直しの失敗では直前の一覧が残って古さが見えないため、
+              一覧の有無に関わらず失敗をここで名乗る */}
+          {loadFailed && (
+            <RegionError
+              message="店舗一覧の取得に失敗しました"
+              onRetry={reload}
+              className="mb-4 flex-wrap px-3"
+            />
+          )}
           <nav className="space-y-8">
             {dashboards.map(section => (
               <NavLink
