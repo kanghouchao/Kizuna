@@ -160,8 +160,11 @@ export function Sidebar() {
   }, []);
 
   // 授権店舗が解決する前に描くと、店舗の文脈が既定の利用者に一瞬グループのメニューを見せてしまう。
-  // 取得失敗は解決済みとして扱い、グループ級だけで描く。
-  const ready = navigation.length > 0 && (stores !== null || loadFailed);
+  // 取得失敗は解決済みとして扱い、グループ級だけで描く。一度解決したら戻さない —
+  // 失敗後の再試行で reload が loadFailed を下ろしても、描いた項目を応答まで消さないため。
+  const [storesSettled, setStoresSettled] = useState(false);
+  if (!storesSettled && (stores !== null || loadFailed)) setStoresSettled(true);
+  const ready = navigation.length > 0 && storesSettled;
 
   const groupSections = sectionsFor(navigation, false);
   const storeSections = sectionsFor(navigation, true);
