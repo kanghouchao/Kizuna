@@ -1,29 +1,11 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
-import { notFound, redirect } from 'next/navigation';
-import { loadTemplatePage } from '@/_pages/store-site';
+import { redirect } from 'next/navigation';
+import { StoreSitePage, storeSiteMetadata } from '@/_pages/store-site';
+import { resolveHost } from '@/shared/api/index.server';
 
-/**
- * ページメタデータの生成
- */
 export async function generateMetadata(): Promise<Metadata> {
-  const cookieStore = await cookies();
-  const role = cookieStore.get('x-mw-role')?.value;
-
-  if (role === 'store') {
-    const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
-    return {
-      title: storeName,
-      description: `${storeName}の公式サイトです。キャスト情報やキャンペーン情報をご覧いただけます。`,
-      openGraph: {
-        title: storeName,
-        description: `${storeName}の公式サイトです。`,
-        type: 'website',
-      },
-    };
-  }
-
-  return {};
+  return storeSiteMetadata();
 }
 
 /**
@@ -35,7 +17,6 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function Home() {
   const cookieStore = await cookies();
-  const role = cookieStore.get('x-mw-role')?.value;
 
   // セッションがあれば、セッション種別に応じて自動遷移する（cookie 値は admin/cast/member）
   const sessionKind = cookieStore.get('session-kind')?.value;
@@ -57,19 +38,11 @@ export default async function Home() {
   }
 
   // アプリドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
-  if (role === 'app') {
+  if ((await resolveHost()).kind === 'app') {
     const token = cookieStore.get('token')?.value;
     redirect(token ? '/admin/dashboard/' : '/auth/login');
   }
 
-  // Store ドメイン（店舗フロント側）の場合、模版を表示
-  if (role === 'store') {
-    const templateKey = cookieStore.get('x-mw-store-template')?.value || 'default';
-
-    // 読み込み失敗時は helper 内で default にフォールバックするため、ここでは 404 にしない
-    const TemplateComponent = await loadTemplatePage(templateKey);
-    return <TemplateComponent />;
-  }
-
-  notFound();
+  // 店舗ドメインなら店舗サイトのトップを描き、未登録のホストは 404 にする
+  return <StoreSitePage page="page" />;
 }

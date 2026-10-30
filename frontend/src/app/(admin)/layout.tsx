@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import '../globals.css';
 import { AuthProvider } from '@/entities/user';
 import { ThemeScope, ToastProvider } from '@/_app';
+import { AppDomainScope } from '@/_app/index.server';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -27,12 +28,14 @@ export default function AdminRootLayout({
         <link rel="icon" href="/images/favicon.ico" />
       </head>
       <body className={inter.className}>
-        <ThemeScope>
-          <AuthProvider>
-            {children}
-            <ToastProvider />
-          </AuthProvider>
-        </ThemeScope>
+        <AppDomainScope>
+          <ThemeScope>
+            <AuthProvider>
+              {children}
+              <ToastProvider />
+            </AuthProvider>
+          </ThemeScope>
+        </AppDomainScope>
       </body>
     </html>
   );

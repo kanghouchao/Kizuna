@@ -1,5 +1,6 @@
-import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { resolveHost } from '@/shared/api/index.server';
+import { storefrontService } from '../api/storefront';
 import { loadTemplatePage, type StoreSitePageName } from '../templates/loadTemplate';
 
 interface StoreSitePageProps {
@@ -10,17 +11,16 @@ interface StoreSitePageProps {
 /**
  * 公開站ページの共通殻 (Server Component)。
  *
- * proxy（middleware）が設定した x-mw-role cookie で store ドメインのみ許可し、
- * x-mw-store-template cookie の模版キーで templates/<key>/<page> を dispatch する。
- * app 配下の各公開ルートはこの殻を呼ぶだけの薄殻にする。
+ * リクエストの Host が店舗ドメインのときだけ描き、店舗の公開設定の模版キーで templates/<key>/<page> を
+ * dispatch する。解決した店舗は props で模版へ渡す。app 配下の各公開ルートはこの殻を呼ぶだけの薄殻にする。
  */
 export default async function StoreSitePage({ page, pageProps = {} }: StoreSitePageProps) {
-  const cookieStore = await cookies();
-  if (cookieStore.get('x-mw-role')?.value !== 'store') {
+  const host = await resolveHost();
+  if (host.kind !== 'store') {
     notFound();
   }
 
-  const templateKey = cookieStore.get('x-mw-store-template')?.value || 'default';
-  const PageComponent = await loadTemplatePage(templateKey, page);
-  return <PageComponent {...pageProps} />;
+  const { template_key } = await storefrontService.fetchSiteConfig(host.store.id);
+  const PageComponent = await loadTemplatePage(template_key || 'default', page);
+  return <PageComponent {...pageProps} store={host.store} />;
 }

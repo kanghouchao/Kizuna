@@ -6,9 +6,9 @@ For UI work, read [DESIGN.md](DESIGN.md) first. For endpoint additions/changes, 
 
 Feature-Sliced Design is checked by Steiger. Dependencies point downward: app → _pages → widgets → features → entities → shared. Import other slices through their index; use relative imports within a slice. Entities do not import each other; compose them in pages. Server-only exports use `index.server.ts`, separate from the client barrel.
 
-- `app/`: thin Next route shells exporting a page. The public root dispatches store templates and is the exception. `(admin)` owns theme wiring; `(public)` has none. Crossing root layouts reloads the page.
+- `app/`: thin Next route shells exporting a page. The public root is the exception: it redirects by session and app host before rendering `StoreSitePage`. `(admin)` owns theme wiring; `(public)` has none. Crossing root layouts reloads the page.
 - `_app/`: initialization/providers; `_pages/`: scope-prefixed page slices; `widgets/`: composite UI; `features/`: user actions; `entities/`: domain data/types/API; `shared/`: infrastructure and primitives.
-- `src/proxy.ts` delegates host resolution and routing to `shared/lib/proxy`; cross-cutting invariant tests live in `src/__tests__/`.
+- `src/proxy.ts` only runs the route guard in `shared/lib/proxy` for `/admin`, `/store`, `/cast`, `/member`; public pages never pass through it. Public Server Components resolve the store per request from the Host via `resolveHost()` (`shared/api/index.server`) and pass it down as props; the app domain reaches client components through `useAppDomain()`, provided by both root layouts. Cross-cutting invariant tests live in `src/__tests__/`.
 - `@/*` resolves to `src/*`; TypeScript and Jest must agree.
 
 ## Fetching and store context

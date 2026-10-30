@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getAppDomain } from '@/shared/lib';
+import { useAppDomain } from '@/shared/lib';
 
 interface HeaderProps {
   storeName: string;
@@ -22,6 +22,7 @@ const navLinks = [
 
 export default function Header({ storeName, logoUrl }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const appDomain = useAppDomain();
   // 会員ポータルはアプリドメイン側にあるため、自サイトのドメインを引き継いで店舗を伝える。
   // ポータル側はこのドメインを公開照会に突き合わせて店舗を解決するので、店舗 ID は URL に載せない。
   const [reservationHref, setReservationHref] = useState<string | null>(null);
@@ -29,9 +30,9 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
   useEffect(() => {
     const { protocol, hostname } = window.location;
     setReservationHref(
-      `${protocol}//${getAppDomain()}/member/reservations/new?store=${encodeURIComponent(hostname)}`
+      `${protocol}//${appDomain}/member/reservations/new?store=${encodeURIComponent(hostname)}`
     );
-  }, []);
+  }, [appDomain]);
 
   const closeMenu = () => setMenuOpen(false);
 

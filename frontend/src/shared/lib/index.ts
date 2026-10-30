@@ -1,4 +1,4 @@
-export * from './config';
+export { AppDomainProvider, useAppDomain } from './app-domain';
 export { default as redirectToLogin, loginPath } from './navigation';
 export {
   ClientDataError,

@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LineLoginButton } from '../LineLoginButton';
 import { lineApi } from '@/entities/user';
-import { startLineAuthorization } from '@/shared/lib';
+import { AppDomainProvider, startLineAuthorization } from '@/shared/lib';
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
@@ -23,6 +24,13 @@ jest.mock('@/shared/lib', () => {
 const mockedConfig = lineApi.config as jest.Mock;
 const mockedStart = startLineAuthorization as jest.Mock;
 
+// jsdom の location.hostname は localhost。アプリドメインと一致させるとアプリの画面として描く
+function onHost(appDomain: string) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <AppDomainProvider appDomain={appDomain}>{children}</AppDomainProvider>;
+  };
+}
+
 describe('LineLoginButton', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -31,27 +39,22 @@ describe('LineLoginButton', () => {
   it('公開設定が有効なときだけ入口を描画する', async () => {
     mockedConfig.mockResolvedValue({ enabled: true, channel_id: 'channel-1' });
 
-    render(<LineLoginButton />);
+    render(<LineLoginButton />, { wrapper: onHost('localhost') });
 
     expect(await screen.findByRole('button', { name: 'LINEでログイン' })).toBeInTheDocument();
   });
 
-  it('店舗ドメイン上（role=store cookie）では設定を照会せず何も描画しない', async () => {
-    document.cookie = 'x-mw-role=store';
-    try {
-      render(<LineLoginButton />);
+  it('店舗ドメイン上（アプリドメインと異なるホスト）では設定を照会せず何も描画しない', async () => {
+    render(<LineLoginButton />, { wrapper: onHost('app.example') });
 
-      await waitFor(() => expect(mockedConfig).not.toHaveBeenCalled());
-      expect(screen.queryByRole('button', { name: 'LINEでログイン' })).not.toBeInTheDocument();
-    } finally {
-      document.cookie = 'x-mw-role=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    }
+    await waitFor(() => expect(mockedConfig).not.toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'LINEでログイン' })).not.toBeInTheDocument();
   });
 
   it('公開設定が無効なら何も描画しない', async () => {
     mockedConfig.mockResolvedValue({ enabled: false });
 
-    render(<LineLoginButton />);
+    render(<LineLoginButton />, { wrapper: onHost('localhost') });
 
     await waitFor(() => expect(mockedConfig).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'LINEでログイン' })).not.toBeInTheDocument();
@@ -60,7 +63,7 @@ describe('LineLoginButton', () => {
   it('チャネル未設定なら何も描画しない', async () => {
     mockedConfig.mockResolvedValue({ enabled: true });
 
-    render(<LineLoginButton />);
+    render(<LineLoginButton />, { wrapper: onHost('localhost') });
 
     await waitFor(() => expect(mockedConfig).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'LINEでログイン' })).not.toBeInTheDocument();
@@ -69,7 +72,7 @@ describe('LineLoginButton', () => {
   it('設定の取得に失敗しても何も描画しない（パスワードログインは無傷）', async () => {
     mockedConfig.mockRejectedValue(new Error('network'));
 
-    render(<LineLoginButton />);
+    render(<LineLoginButton />, { wrapper: onHost('localhost') });
 
     await waitFor(() => expect(mockedConfig).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'LINEでログイン' })).not.toBeInTheDocument();
@@ -79,7 +82,7 @@ describe('LineLoginButton', () => {
     mockedConfig.mockResolvedValue({ enabled: true, channel_id: 'channel-1' });
     mockedStart.mockResolvedValue(undefined);
 
-    render(<LineLoginButton />);
+    render(<LineLoginButton />, { wrapper: onHost('localhost') });
     fireEvent.click(await screen.findByRole('button', { name: 'LINEでログイン' }));
 
     await waitFor(() => expect(mockedStart).toHaveBeenCalledWith('channel-1', 'login'));

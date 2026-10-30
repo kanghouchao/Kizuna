@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { storefrontService } from '../../api/storefront';
+import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import CastGrid from '../_sections/CastGrid';
 import Footer from '../_sections/Footer';
@@ -8,10 +8,9 @@ import PageHero from '../_sections/PageHero';
 import './theme.css';
 
 /** キャスト一覧ページ（default 模版）。 */
-export default async function DefaultCastsPage() {
-  const cookieStore = await cookies();
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
-  const { casts, siteConfig } = await storefrontService.getPageData();
+export default async function DefaultCastsPage({ store }: StoreSitePageProps) {
+  const storeName = store.name;
+  const { casts, siteConfig } = await storefrontService.getPageData(store.id);
 
   return (
     <div

@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { storefrontService } from '../../api/storefront';
+import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Advertisement from '../_sections/Advertisement';
 import Banner from '../_sections/Banner';
@@ -21,12 +21,10 @@ import './theme.css';
  * 6. Advertisement - キャンペーン情報
  * 7. Footer     - フッター
  */
-export default async function ModernTemplate() {
-  const cookieStore = await cookies();
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+export default async function ModernTemplate({ store }: StoreSitePageProps) {
+  const storeName = store.name;
 
-  // テナントIDは service 内部で解決されるため、引数不要
-  const { casts, siteConfig } = await storefrontService.getPageData();
+  const { casts, siteConfig } = await storefrontService.getPageData(store.id);
 
   return (
     <div

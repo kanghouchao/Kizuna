@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { storefrontService } from '../../api/storefront';
+import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Footer from '../_sections/Footer';
 import GuestReservationSection from '../_sections/GuestReservationSection';
@@ -8,10 +8,9 @@ import PageHero from '../_sections/PageHero';
 import './theme.css';
 
 /** ゲスト予約申請ページ（classic 模版）。 */
-export default async function ClassicReservationPage() {
-  const cookieStore = await cookies();
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
-  const siteConfig = await storefrontService.fetchSiteConfig();
+export default async function ClassicReservationPage({ store }: StoreSitePageProps) {
+  const storeName = store.name;
+  const siteConfig = await storefrontService.fetchSiteConfig(store.id);
 
   return (
     <div
@@ -22,7 +21,7 @@ export default async function ClassicReservationPage() {
       <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
       <main className="grow">
         <PageHero title="ご予約" subtitle="RESERVATION" />
-        <GuestReservationSection />
+        <GuestReservationSection storeId={store.id} />
       </main>
       <Footer
         storeName={storeName}

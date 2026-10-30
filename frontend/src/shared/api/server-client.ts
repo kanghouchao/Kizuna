@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { backendUrl } from '../lib/backend-url';
 
 /**
@@ -7,18 +6,12 @@ import { backendUrl } from '../lib/backend-url';
  *
  * 機能:
  * - バックエンドAPIのベースURLの自動解決
- * - 店舗コンテキスト (X-Store-ID) の自動注入
  * - 共通のエラーハンドリング
  */
 export const serverClient = {
-  /**
-   * GETリクエストを実行します
-   * @param path APIパス (例: '/casts/public')
-   * @param options fetchオプション
-   */
   async get<T>(path: string, options?: RequestInit): Promise<T> {
     const url = this.resolveUrl(path);
-    const headers = await this.getHeaders(options?.headers);
+    const headers = this.getHeaders(options?.headers);
 
     const response = await fetch(url, {
       ...options,
@@ -41,21 +34,10 @@ export const serverClient = {
     return `${backendUrl()}${normalizedPath}`;
   },
 
-  /**
-   * 必要なヘッダーを構築します
-   * Cookieから店舗IDを自動的に取得して注入します
-   */
-  async getHeaders(customHeaders?: HeadersInit): Promise<HeadersInit> {
-    const cookieStore = await cookies();
-    const storeId = cookieStore.get('x-mw-store-id')?.value;
-
+  getHeaders(customHeaders?: HeadersInit): HeadersInit {
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-
-    if (storeId) {
-      defaultHeaders['X-Store-ID'] = storeId;
-    }
 
     return {
       ...defaultHeaders,

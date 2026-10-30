@@ -1,5 +1,3 @@
-import { getAppDomain } from '@/shared/lib';
-
 /**
  * 伝票トークンの申領 URL（QR が運ぶ値）。
  *
@@ -13,7 +11,7 @@ import { getAppDomain } from '@/shared/lib';
  *
  * 末尾のスラッシュは付けない — 付けると 308 で落とされた URL を客の手元に配ることになる。
  */
-export function receiptClaimUrl(token: string): string {
+export function receiptClaimUrl(token: string, appDomain: string): string {
   const { protocol } = window.location;
-  return `${protocol}//${getAppDomain()}/member/receipts#${encodeURIComponent(token)}`;
+  return `${protocol}//${appDomain}/member/receipts#${encodeURIComponent(token)}`;
 }

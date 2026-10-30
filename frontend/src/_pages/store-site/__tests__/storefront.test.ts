@@ -18,9 +18,12 @@ describe('storefrontService', () => {
       const mockCasts = [{ id: '1', name: 'Cast 1' }];
       (serverClient.get as jest.Mock).mockResolvedValue(mockCasts);
 
-      const result = await storefrontService.fetchCasts();
+      const result = await storefrontService.fetchCasts('7');
 
-      expect(serverClient.get).toHaveBeenCalledWith('/casts/public', expect.any(Object));
+      expect(serverClient.get).toHaveBeenCalledWith('/casts/public', {
+        headers: { 'X-Store-ID': '7' },
+        next: { revalidate: 60 },
+      });
       expect(result).toEqual(mockCasts);
     });
 
@@ -28,7 +31,7 @@ describe('storefrontService', () => {
       (serverClient.get as jest.Mock).mockRejectedValue(new Error('Failed'));
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      const result = await storefrontService.fetchCasts();
+      const result = await storefrontService.fetchCasts('7');
 
       expect(result).toEqual([]);
       expect(consoleSpy).toHaveBeenCalled();
@@ -44,7 +47,7 @@ describe('storefrontService', () => {
       ];
       (serverClient.get as jest.Mock).mockResolvedValue(mockCasts);
 
-      const result = await storefrontService.fetchCast('2');
+      const result = await storefrontService.fetchCast('7', '2');
 
       expect(result?.name).toBe('Cast 2');
     });
@@ -52,7 +55,7 @@ describe('storefrontService', () => {
     it('存在しない id は null を返すこと', async () => {
       (serverClient.get as jest.Mock).mockResolvedValue([{ id: '1', name: 'Cast 1' }]);
 
-      const result = await storefrontService.fetchCast('missing');
+      const result = await storefrontService.fetchCast('7', 'missing');
 
       expect(result).toBeNull();
     });
@@ -63,9 +66,12 @@ describe('storefrontService', () => {
       const mockConfig = { mv_type: 'video', logo_url: 'logo.png' };
       (serverClient.get as jest.Mock).mockResolvedValue(mockConfig);
 
-      const result = await storefrontService.fetchSiteConfig();
+      const result = await storefrontService.fetchSiteConfig('7');
 
-      expect(serverClient.get).toHaveBeenCalledWith('/config/public', expect.any(Object));
+      expect(serverClient.get).toHaveBeenCalledWith('/config/public', {
+        headers: { 'X-Store-ID': '7' },
+        next: { revalidate: 60 },
+      });
       expect(result).toEqual(mockConfig);
     });
 
@@ -73,7 +79,7 @@ describe('storefrontService', () => {
       (serverClient.get as jest.Mock).mockRejectedValue(new Error('Failed'));
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      const result = await storefrontService.fetchSiteConfig();
+      const result = await storefrontService.fetchSiteConfig('7');
 
       expect(result).toEqual({ mv_type: 'image' });
       expect(consoleSpy).toHaveBeenCalled();
@@ -93,9 +99,10 @@ describe('storefrontService', () => {
       ];
       (serverClient.get as jest.Mock).mockResolvedValue(mockShifts);
 
-      const result = await storefrontService.fetchShifts();
+      const result = await storefrontService.fetchShifts('7');
 
       expect(serverClient.get).toHaveBeenCalledWith('/shifts/public', {
+        headers: { 'X-Store-ID': '7' },
         cache: 'no-store',
       });
       expect(result).toEqual(mockShifts);
@@ -105,7 +112,7 @@ describe('storefrontService', () => {
       (serverClient.get as jest.Mock).mockRejectedValue(new Error('Failed'));
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      const result = await storefrontService.fetchShifts();
+      const result = await storefrontService.fetchShifts('7');
 
       expect(result).toEqual([]);
       expect(consoleSpy).toHaveBeenCalled();
@@ -122,7 +129,7 @@ describe('storefrontService', () => {
         .mockResolvedValueOnce(mockCasts) // 1回目の呼び出し: キャスト
         .mockResolvedValueOnce(mockConfig); // 2回目の呼び出し: 設定
 
-      const result = await storefrontService.getPageData();
+      const result = await storefrontService.getPageData('7');
 
       expect(result.casts).toEqual(mockCasts);
       expect(result.siteConfig).toEqual(mockConfig);

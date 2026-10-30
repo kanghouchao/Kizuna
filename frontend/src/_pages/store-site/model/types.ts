@@ -1,5 +1,6 @@
 import { CastCustomFieldView } from '@/entities/cast';
 import { PartnerLink, SnsLink } from '@/entities/store-profile';
+import type { PublicStore } from '@/shared/api/index.server';
 
 /**
  * キャスト情報
@@ -21,6 +22,7 @@ export interface Cast {
  * サイト設定情報
  */
 export interface SiteConfig {
+  template_key?: string;
   logo_url?: string;
   banner_url?: string;
   description?: string;
@@ -53,4 +55,9 @@ export interface PublicShift {
   cast_photo_url?: string;
   start_time?: string;
   end_time?: string;
+}
+
+/** 模版ページが受け取る店舗。サーバがリクエストの Host から解決した値。 */
+export interface StoreSitePageProps {
+  store: PublicStore;
 }

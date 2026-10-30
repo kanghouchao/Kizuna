@@ -40,21 +40,12 @@ apiClient.interceptors.request.use(
     // 店舗文脈は X-Store-ID だけで名乗る。従業員の店舗級画面（/store 配下）からの要求には宛先を問わず現在店舗
     // （current-store-id cookie）を付け、現在店舗を受けない端点はこれを読まない。/admin 配下の画面は何も付けず、
     // /files は全店共有領域へ保存され、横断一覧が行の店舗を名指す X-Store-ID はそのまま届く。キャスト・会員の
-    // portal は cookie が残っていても付けない。公開店舗サイトでは proxy が焼いた x-mw-store-id を付ける。
+    // portal は cookie が残っていても付けない。公開店舗サイトの匿名要求は呼び出し元が店舗を明示して渡す。
     // 受け入れの可否はバックエンドが授権店舗集合で判定する。
     try {
-      const sessionKind = getSessionKind();
-      if (sessionKind) {
-        const storeId = getCurrentStoreId();
-        const pathname = window.location.pathname;
-        if (sessionKind === 'admin' && storeId && isStorePath(pathname)) {
-          (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
-        }
-      } else {
-        const storeId = Cookies.get('x-mw-store-id');
-        if (storeId) {
-          (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
-        }
+      const storeId = getCurrentStoreId();
+      if (getSessionKind() === 'admin' && storeId && isStorePath(window.location.pathname)) {
+        (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
       }
     } catch {
       // cookie が読めない環境ではヘッダ無しで送る（受け入れの可否はバックエンドが fail-closed に判定する）

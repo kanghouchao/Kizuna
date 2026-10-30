@@ -1,18 +1,17 @@
 import { Cast, PublicShift, SiteConfig, StorefrontData } from '../model/types';
 import { serverClient } from '@/shared/api/index.server';
 
-/**
- * ストアフロント用データサービス
- * serverClient を使用してバックエンドAPIと通信します。
- */
+function storeHeaders(storeId: string): HeadersInit {
+  return { 'X-Store-ID': storeId };
+}
+
+/** 公開店舗サイトのデータ取得。匿名の公開端点へ、呼び出し元が渡した店舗を X-Store-ID で名乗る。 */
 export const storefrontService = {
-  /**
-   * テナントページの表示に必要な全データを取得します
-   * テナントIDは serverClient 内部で Cookie から自動解決されます。
-   */
-  async getPageData(): Promise<StorefrontData> {
-    // データの並列取得
-    const [casts, siteConfig] = await Promise.all([this.fetchCasts(), this.fetchSiteConfig()]);
+  async getPageData(storeId: string): Promise<StorefrontData> {
+    const [casts, siteConfig] = await Promise.all([
+      this.fetchCasts(storeId),
+      this.fetchSiteConfig(storeId),
+    ]);
 
     return {
       casts,
@@ -20,13 +19,10 @@ export const storefrontService = {
     };
   },
 
-  /**
-   * キャスト一覧を取得します
-   */
-  async fetchCasts(): Promise<Cast[]> {
+  async fetchCasts(storeId: string): Promise<Cast[]> {
     try {
-      // serverClient が URL解決、ヘッダー注入を自動で行います
       return await serverClient.get<Cast[]>('/casts/public', {
+        headers: storeHeaders(storeId),
         next: { revalidate: 60 },
       });
     } catch (error) {
@@ -38,17 +34,18 @@ export const storefrontService = {
   /**
    * 公開キャスト一覧から 1 件を取得します（専用エンドポイントは持たない）。
    */
-  async fetchCast(id: string): Promise<Cast | null> {
-    const casts = await this.fetchCasts();
+  async fetchCast(storeId: string, id: string): Promise<Cast | null> {
+    const casts = await this.fetchCasts(storeId);
     return casts.find(cast => cast.id === id) ?? null;
   },
 
   /**
    * 本日の公開出勤シフト一覧を取得します（当日運用で変わるためキャッシュしない）
    */
-  async fetchShifts(): Promise<PublicShift[]> {
+  async fetchShifts(storeId: string): Promise<PublicShift[]> {
     try {
       return await serverClient.get<PublicShift[]>('/shifts/public', {
+        headers: storeHeaders(storeId),
         cache: 'no-store',
       });
     } catch (error) {
@@ -57,12 +54,10 @@ export const storefrontService = {
     }
   },
 
-  /**
-   * サイト設定を取得します
-   */
-  async fetchSiteConfig(): Promise<SiteConfig> {
+  async fetchSiteConfig(storeId: string): Promise<SiteConfig> {
     try {
       return await serverClient.get<SiteConfig>('/config/public', {
+        headers: storeHeaders(storeId),
         next: { revalidate: 60 },
       });
     } catch (error) {

@@ -3,6 +3,12 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { notify } from '@/shared/notify';
 import { OrderCompletionModal } from '../ui/OrderCompletionModal';
 import { Order, OrderWorkQueueRow, orderApi } from '@/entities/order';
+// 伝票 QR はアプリドメインの申領画面を指す。根 layout が渡す値をここで固定する
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  useAppDomain: () => 'kizuna.test',
+}));
+
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useStoreContext: () => ({

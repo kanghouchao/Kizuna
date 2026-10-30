@@ -1,17 +1,17 @@
 import type { Metadata } from 'next';
-import { cookies } from 'next/headers';
+import { resolveHost } from '@/shared/api/index.server';
 
 /**
  * 公開站各ページの SEO metadata を店名から生成する。
  * store ドメイン以外では title を持たず、根 layout の既定 title を継承する（ページ本体は notFound になる）。
  */
 export async function storeSiteMetadata(pageTitle?: string): Promise<Metadata> {
-  const cookieStore = await cookies();
-  if (cookieStore.get('x-mw-role')?.value !== 'store') {
+  const host = await resolveHost();
+  if (host.kind !== 'store') {
     return {};
   }
 
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+  const storeName = host.store.name;
   const title = pageTitle ? `${pageTitle}｜${storeName}` : storeName;
   const description = pageTitle
     ? `${storeName}の${pageTitle}ページです。`

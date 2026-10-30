@@ -20,6 +20,7 @@ jest.mock('@/entities/user', () => ({
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
   readTokenClaims: jest.fn(),
+  useAppDomain: () => 'kizuna.test',
 }));
 
 jest.mock('@/entities/order', () => ({

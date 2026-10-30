@@ -2,6 +2,7 @@
 
 import { QRCodeSVG } from 'qrcode.react';
 import { receiptClaimUrl } from '../lib/receiptClaimUrl';
+import { useAppDomain } from '@/shared/lib';
 import { Button } from '@/shared/ui';
 
 interface ReceiptTokenPanelProps {
@@ -20,11 +21,17 @@ interface ReceiptTokenPanelProps {
  * ESC と背景押下で閉じないようにしておくこと（この区画だけでは塞げない）。
  */
 export function ReceiptTokenPanel({ token, claimNote, onClose }: ReceiptTokenPanelProps) {
+  const appDomain = useAppDomain();
   return (
     <div className="px-6 py-5">
       <div className="flex flex-col items-center gap-4">
         <div className="rounded-xl border bg-card p-4">
-          <QRCodeSVG value={receiptClaimUrl(token)} size={192} aria-label="伝票QR" role="img" />
+          <QRCodeSVG
+            value={receiptClaimUrl(token, appDomain)}
+            size={192}
+            aria-label="伝票QR"
+            role="img"
+          />
         </div>
         {/* 生値はこの応答にしか現れない。閉じた後に出し直す経路が無いことを先に伝える */}
         <p className="text-sm text-foreground">
