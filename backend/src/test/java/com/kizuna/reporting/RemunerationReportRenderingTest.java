@@ -190,7 +190,7 @@ class RemunerationReportRenderingTest {
             10L,
             DAY,
             0,
-            "term",
+            "条件1",
             DAY,
             "ACTIVE",
             EXCEL_INTEGER + 1,
@@ -232,7 +232,7 @@ class RemunerationReportRenderingTest {
             10L,
             DAY,
             3000,
-            "term",
+            "条件1",
             DAY,
             "ACTIVE",
             8000L,
@@ -263,7 +263,7 @@ class RemunerationReportRenderingTest {
     assertThat(proof[27]).isEqualTo("'7時間30分15秒");
     assertThat(proof[28]).isEqualTo("'はい");
     assertThat(proof[29]).isEqualTo("'計算済み");
-    assertThat(ExportCells.letterRuns(csv)).containsExactlyInAnyOrder("ID", "order", "term");
+    assertThat(ExportCells.letterRuns(csv)).containsExactly("ID");
   }
 
   private byte[] render(OperationalReport report, String format) throws Exception {
@@ -291,7 +291,7 @@ class RemunerationReportRenderingTest {
   }
 
   private OperationalFacts.Order order(int amount) {
-    return new OperationalFacts.Order("order", 1L, DAY, 1, false, 10000, amount, 10L);
+    return new OperationalFacts.Order("受注1", 1L, DAY, 1, false, 10000, amount, 10L);
   }
 
   private RemunerationReportFacts.Day day(

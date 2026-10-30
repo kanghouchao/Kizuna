@@ -188,20 +188,18 @@ class AdvertisingReportTest {
     var costs =
         new AdvertisingReportFacts(
             IntStream.range(0, 2001)
-                .mapToObj(i -> cost(1, String.format("=cost%04d", i), "2026-09", "SALES", i))
+                .mapToObj(i -> cost(1, String.format("=費用%04d", i), "2026-09", "SALES", i))
                 .toList());
     var report = report("2026-09-01", "2026-09-30", "month", costs);
     var csv = new String(render(report, "csv"), StandardCharsets.UTF_8);
-    assertThat(csv)
-        .startsWith("\ufeff")
-        .contains("\"'=cost0000\"", "\"'=cost1000\"", "\"'=cost2000\"");
+    assertThat(csv).startsWith("\ufeff").contains("\"'=費用0000\"", "\"'=費用1000\"", "\"'=費用2000\"");
     assertThat(csv.lines().filter(line -> line.contains("'広告費根拠"))).hasSize(2001);
-    assertThat(ExportCells.letterRuns(csv)).containsExactlyInAnyOrder("ID", "cost");
+    assertThat(ExportCells.letterRuns(csv)).containsExactly("ID");
     try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(render(report, "xlsx")))) {
       var sheet = workbook.getSheet("広告費根拠");
       assertThat(sheet.getLastRowNum()).isEqualTo(2001);
-      assertThat(sheet.getRow(1).getCell(21).getStringCellValue()).isEqualTo("=cost0000");
-      assertThat(sheet.getRow(2001).getCell(21).getStringCellValue()).isEqualTo("=cost2000");
+      assertThat(sheet.getRow(1).getCell(21).getStringCellValue()).isEqualTo("=費用0000");
+      assertThat(sheet.getRow(2001).getCell(21).getStringCellValue()).isEqualTo("=費用2000");
       assertThat(sheet.getRow(2001).getCell(22).getStringCellValue()).isEqualTo("1");
       assertThat(sheet.getRow(2001).getCell(23).getStringCellValue()).isEqualTo("2026-09");
       assertThat(sheet.getRow(2001).getCell(24).getStringCellValue()).isEqualTo("営業広告");
