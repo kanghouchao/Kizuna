@@ -31,7 +31,7 @@
 
 カバレッジの正本は [Jest 設定](frontend/jest.config.cjs)と [Gradle 設定](backend/build.gradle)。単体テストが測定対象で、Jest は行／文 70%、分岐 60%、関数 55%、Jacoco は行 70% を要求する。生成 DTO・設定等の除外範囲も設定を参照する。
 
-実 PostgreSQL テスト層は、部分一意索引・ロック・トリガ・Liquibase の実適用など、モックでは確かめられない振る舞いを `src/test` 内の `*PostgresTest` クラスで検証する。かつての独立した `integrationTest` ソースセット（#975 で削除）の後継で、別のソースセットは作らない。各クラスは `@EnabledIfPostgres` を付け、接続は `PostgresTestDatabase` から取る（テストクラスごとに使い捨てスキーマを一つ切る）。`task test` では環境変数 `KIZUNA_POSTGRES_TEST_JDBC_URL` が無いため飛ばされ、`task test:postgres` が tmpfs 上の `dhi.io/postgres:18-alpine3.23`（と認証失効の検証用の使い捨て Redis）を立てて全クラスを実行し、一つでも skip されたら失敗にする。コンテナとネットワークは成功・失敗にかかわらず破棄され、ボリュームは作られない。カバレッジゲートの対象外。
+実 PostgreSQL テスト層は、部分一意索引・ロック・トリガ・Liquibase の実適用など、モックでは確かめられない振る舞いを `src/test` 内の `*PostgresTest` クラスで検証する。かつての独立した `integrationTest` ソースセット（#975 で削除）の後継で、別のソースセットは作らない。各クラスは `@EnabledIfPostgres` を付け、接続は `PostgresTestDatabase` から取る（テストクラスごとに使い捨てスキーマを一つ切る）。`task test` では環境変数 `KIZUNA_POSTGRES_TEST_JDBC_URL` が無いため飛ばされ（IDE などから個別に流す場合は `_JDBC_URL`・`_USERNAME`・`_PASSWORD` の三つを与える）、`task test:postgres` が tmpfs 上の `dhi.io/postgres:18-alpine3.23`（と認証失効の検証用の使い捨て Redis）を立てて全クラスを実行し、一つでも skip されたら失敗にする。コンテナとネットワークは成功・失敗にかかわらず破棄され、ボリュームは作られない。カバレッジゲートの対象外。
 
 判定はコマンドの **exit code のみ**を使う。実施していない検証は未実施と記載する。
 
