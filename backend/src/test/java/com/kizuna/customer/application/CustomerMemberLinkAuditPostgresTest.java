@@ -16,6 +16,8 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.domain.MemberIdentityView;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -41,7 +43,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -53,7 +54,6 @@ import org.springframework.dao.support.PersistenceExceptionTranslationIntercepto
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
@@ -69,7 +69,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 実PGの関連区間・一意制約・共通監査を同じ取引で確定し、失敗時に双方を戻す。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_MEMBER_LINK_AUDIT_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CustomerMemberLinkAuditPostgresTest {
   private static final AtomicLong MEMBERS = new AtomicLong(100);
@@ -410,8 +410,7 @@ class CustomerMemberLinkAuditPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      return new DriverManagerDataSource(
-          System.getenv("KIZUNA_MEMBER_LINK_AUDIT_TEST_JDBC_URL"), "postgres", "");
+      return PostgresTestDatabase.dataSource(CustomerMemberLinkAuditPostgresTest.class);
     }
 
     @Bean
@@ -420,7 +419,10 @@ class CustomerMemberLinkAuditPostgresTest {
       var f = new LocalContainerEntityManagerFactoryBean();
       f.setDataSource(source);
       f.setPackagesToScan(
-          "com.kizuna.customer.domain", "com.kizuna.audit.domain", "com.kizuna.user.domain");
+          "com.kizuna.customer.domain",
+          "com.kizuna.audit.domain",
+          "com.kizuna.user.domain",
+          "com.kizuna.store.domain");
       f.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
       f.setJpaPropertyMap(
           Map.of(
@@ -487,6 +489,8 @@ class CustomerMemberLinkAuditPostgresTest {
                       }
                     });
               });
+      when(r.lockIdForBalanceConfirmation(anyLong()))
+          .thenAnswer(call -> Optional.of(call.getArgument(0)));
       return r;
     }
 
