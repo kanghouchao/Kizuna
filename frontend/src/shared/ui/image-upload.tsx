@@ -3,10 +3,11 @@
 import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { ImageIcon, XIcon } from 'lucide-react';
-import { fileApi } from '@/shared/api';
+import { UploadPurpose, fileApi } from '@/shared/api';
 import { notify } from '@/shared/notify';
 
 interface ImageUploadProps {
+  purpose: UploadPurpose;
   value?: string;
   onChange: (url: string) => void;
   className?: string;
@@ -16,6 +17,7 @@ interface ImageUploadProps {
 
 /** 画像アップロードコンポーネント */
 export default function ImageUpload({
+  purpose,
   value,
   onChange,
   required = false,
@@ -38,7 +40,7 @@ export default function ImageUpload({
 
     try {
       setIsUploading(true);
-      const response = await fileApi.upload(file);
+      const response = await fileApi.upload(file, purpose);
       onChange(response.url ?? '');
       notify.success('画像をアップロードしました');
     } catch {

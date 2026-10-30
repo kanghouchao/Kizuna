@@ -103,9 +103,9 @@ class StoreProfileFileAuditIntegrationTest {
     jdbc.execute(
         "alter table t_audit_events add constraint fk_test_audit_actor foreign key(actor_id) references t_users(id)");
     FileStorageService storage =
-        (prefix, bucket, file) -> {
+        (prefix, bucket, purpose, file) -> {
           if (storeFails) throw new IllegalStateException("s3");
-          String path = bucket + "/" + prefix + "/" + file.getOriginalFilename();
+          String path = bucket + "/" + prefix + "/" + purpose + "/" + file.getOriginalFilename();
           stored.add(path);
           return path;
         };
@@ -179,11 +179,11 @@ class StoreProfileFileAuditIntegrationTest {
 
   @Test
   void uploadAuditsAfterStoreInIndependentTransaction() {
-    uploads.upload(STORE_ID, file("one.jpg"), "public");
+    uploads.upload(STORE_ID, file("one.jpg"), "store-logo", "public");
     // 外側の業務取引が巻き戻っても、保存済みファイルの監査は独立取引で確定している。
     transactions.executeWithoutResult(
         status -> {
-          uploads.upload(STORE_ID, file("two.jpg"), "public");
+          uploads.upload(STORE_ID, file("two.jpg"), "store-logo", "public");
           status.setRollbackOnly();
         });
 
@@ -192,13 +192,13 @@ class StoreProfileFileAuditIntegrationTest {
             "select target_id,store_id,actor_id,after_values ->> 'bucket' as bucket,after_values ->> 'size' as size,after_values ->> 'content_type' as type from t_audit_events where action='FILE_UPLOADED' order by id");
     assertThat(rows).hasSize(2);
     assertThat(rows.get(0))
-        .containsEntry("target_id", "public/11/one.jpg")
+        .containsEntry("target_id", "public/11/store-logo/one.jpg")
         .containsEntry("store_id", STORE_ID)
         .containsEntry("actor_id", ordinaryId)
         .containsEntry("bucket", "public")
         .containsEntry("size", "3")
         .containsEntry("type", "image/jpeg");
-    assertThat(rows.get(1)).containsEntry("target_id", "public/11/two.jpg");
+    assertThat(rows.get(1)).containsEntry("target_id", "public/11/store-logo/two.jpg");
     assertThat(
             jdbc.queryForObject(
                 "select string_agg(before_values::text || after_values::text, '') from t_audit_events where action='FILE_UPLOADED'",
@@ -210,24 +210,24 @@ class StoreProfileFileAuditIntegrationTest {
   void failedStoreWritesNoAudit() {
     storeFails = true;
 
-    assertThatThrownBy(() -> uploads.upload(STORE_ID, file("none.jpg"), "public"))
+    assertThatThrownBy(() -> uploads.upload(STORE_ID, file("none.jpg"), "store-logo", "public"))
         .isInstanceOf(IllegalStateException.class);
 
-    assertThat(auditedPaths()).doesNotContain("public/11/none.jpg");
+    assertThat(auditedPaths()).doesNotContain("public/11/store-logo/none.jpg");
   }
 
   @Test
   void auditFailureKeepsStoredFileAndResponse() {
     failAuditFor("FILE_UPLOADED");
     try {
-      var response = uploads.upload(STORE_ID, file("window.jpg"), "public");
+      var response = uploads.upload(STORE_ID, file("window.jpg"), "store-logo", "public");
       assertThat(response.getStatusCode().value()).isEqualTo(201);
     } finally {
       dropAuditFailure();
     }
 
-    assertThat(stored).containsExactly("public/11/window.jpg");
-    assertThat(auditedPaths()).doesNotContain("public/11/window.jpg");
+    assertThat(stored).containsExactly("public/11/store-logo/window.jpg");
+    assertThat(auditedPaths()).doesNotContain("public/11/store-logo/window.jpg");
   }
 
   @Test
@@ -241,10 +241,10 @@ class StoreProfileFileAuditIntegrationTest {
     var real = new S3FileStorage(Mockito.mock(S3Client.class), properties);
     var controller =
         new FileUploadController(real, properties, context.getBean(StoredFileAudit.class));
-    // "public/11/" (10) + UUID (36) + 拡張子（"." 込み）で key をちょうど 100 文字にする
-    String name = "x." + "e".repeat(100 - 10 - 36 - 1);
+    // "public/11/store-logo/" (21) + UUID (36) + 拡張子（"." 込み）で key をちょうど 100 文字にする
+    String name = "x." + "e".repeat(100 - 21 - 36 - 1);
 
-    controller.upload(STORE_ID, file(name), "public");
+    controller.upload(STORE_ID, file(name), "store-logo", "public");
 
     assertThat(auditedPaths()).anyMatch(path -> path.length() == 100);
   }

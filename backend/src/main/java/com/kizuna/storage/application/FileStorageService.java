@@ -6,5 +6,5 @@ import org.springframework.web.multipart.MultipartFile;
 public interface FileStorageService {
 
   /** ファイルを保存し、相対パスを返す */
-  String store(String prefix, String bucket, MultipartFile file);
+  String store(String prefix, String bucket, String purpose, MultipartFile file);
 }

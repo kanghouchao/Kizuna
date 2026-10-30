@@ -35,9 +35,10 @@ public class FileUploadController {
   public ResponseEntity<FileUploadResponse> upload(
       @CurrentStore(required = false) Long storeId,
       @RequestParam("file") MultipartFile file,
+      @RequestParam("purpose") String purpose,
       @RequestParam(value = "bucket", defaultValue = "public") String bucket) {
     String prefix = resolveStoragePrefix(storeId);
-    String relativePath = fileStorageService.store(prefix, bucket, file);
+    String relativePath = fileStorageService.store(prefix, bucket, purpose, file);
     storedFileAudit.recordUpload(
         storeId, relativePath, bucket, file.getSize(), file.getContentType());
 

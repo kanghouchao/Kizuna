@@ -18,7 +18,7 @@ When('店長が画像ファイルをアップロードする', async ({ request 
   expect(response.status()).toBe(201);
   const body = await response.json();
   expect(body.size).toBe(image.length);
-  expect(body.url).toMatch(/^\/static\/uploads\/public\//);
+  expect(body.url).toMatch(/^\/static\/uploads\/public\/\d+\/store-logo\/[0-9a-f-]{36}\.png$/);
   publicUrl = body.url;
 });
 
@@ -52,9 +52,23 @@ Then('店長が白名簿外の bucket を指定すると不正な要求として
   const response = await request.post('/api/files', {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     multipart: {
+      purpose: 'store-logo',
       bucket: 'private',
       file: { name: 'storage-probe.png', mimeType: 'image/png', buffer: image },
     },
   });
   expect(response.status()).toBe(400);
+});
+
+Then('店長が用途を指定しないか許可外の用途を指定すると不正な要求として拒否される', async ({ request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const file = { name: 'storage-probe.png', mimeType: 'image/png', buffer: image };
+  const missingAndOutside: Record<string, string | typeof file>[] = [{ file }, { purpose: 'avatar', file }];
+  for (const multipart of missingAndOutside) {
+    const response = await request.post('/api/files', {
+      headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
+      multipart,
+    });
+    expect(response.status()).toBe(400);
+  }
 });

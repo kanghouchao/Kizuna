@@ -235,7 +235,11 @@ export function CastForm({
             <div className="flex gap-8">
               <div className="grid gap-2">
                 <Label>写真</Label>
-                <ImageUpload value={photoUrl} onChange={url => setValue('photo_url', url)} />
+                <ImageUpload
+                  purpose="cast-photo"
+                  value={photoUrl}
+                  onChange={url => setValue('photo_url', url)}
+                />
               </div>
               <div className="flex-1 space-y-4">
                 <FormField

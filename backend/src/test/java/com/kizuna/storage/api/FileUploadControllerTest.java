@@ -66,15 +66,18 @@ class FileUploadControllerTest {
   @DisplayName("ASSET_MANAGE 能力のトークンは店舗を名乗らなくても platform 配下に保存すること")
   void upload_storesUnderPlatformForAssetManage() {
     authenticateWithAuthorities(PermissionCode.ASSET_MANAGE.authority());
-    when(fileStorageService.store("platform", "public", file)).thenReturn("public/platform/x.jpg");
+    when(fileStorageService.store("platform", "public", "partner-logo", file))
+        .thenReturn("public/platform/partner-logo/x.jpg");
     when(file.getOriginalFilename()).thenReturn("x.jpg");
     when(file.getSize()).thenReturn(3L);
 
-    ResponseEntity<FileUploadResponse> res = controller.upload(null, file, "public");
+    ResponseEntity<FileUploadResponse> res =
+        controller.upload(null, file, "partner-logo", "public");
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    verify(fileStorageService).store("platform", "public", file);
-    assertThat(res.getBody().getUrl()).isEqualTo("/static/uploads/public/platform/x.jpg");
+    verify(fileStorageService).store("platform", "public", "partner-logo", file);
+    assertThat(res.getBody().getUrl())
+        .isEqualTo("/static/uploads/public/platform/partner-logo/x.jpg");
   }
 
   @Test
@@ -82,49 +85,54 @@ class FileUploadControllerTest {
   void upload_rejectsWithoutAssetManageAndStore() {
     authenticateWithAuthorities("PERM_ORDER_MANAGE");
 
-    assertThatThrownBy(() -> controller.upload(null, file, "public"))
+    assertThatThrownBy(() -> controller.upload(null, file, "partner-logo", "public"))
         .isInstanceOf(AccessDeniedException.class);
 
-    verify(fileStorageService, never()).store(any(), any(), any());
+    verify(fileStorageService, never()).store(any(), any(), any(), any());
   }
 
   @Test
   @DisplayName("店舗を名乗ればその店舗配下に保存すること")
   void upload_storesUnderStorePrefixWhenStoreNamed() {
     authenticateWithAuthorities(PermissionCode.STORE_PROFILE_MANAGE.authority());
-    when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
+    when(fileStorageService.store("5", "public", "store-logo", file))
+        .thenReturn("public/5/store-logo/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");
     when(file.getSize()).thenReturn(4L);
 
-    ResponseEntity<FileUploadResponse> res = controller.upload(5L, file, "public");
+    ResponseEntity<FileUploadResponse> res = controller.upload(5L, file, "store-logo", "public");
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    verify(fileStorageService).store("5", "public", file);
+    verify(fileStorageService).store("5", "public", "store-logo", file);
   }
 
   @Test
   @DisplayName("保存が成功した後に、保存先の相対パス・bucket・サイズ・種別で監査を依頼すること")
   void upload_recordsAuditAfterStore() {
     authenticateWithAuthorities(PermissionCode.STORE_PROFILE_MANAGE.authority());
-    when(fileStorageService.store("5", "public", file)).thenReturn("public/5/y.jpg");
+    when(fileStorageService.store("5", "public", "store-logo", file))
+        .thenReturn("public/5/store-logo/y.jpg");
     when(file.getOriginalFilename()).thenReturn("y.jpg");
     when(file.getSize()).thenReturn(4L);
     when(file.getContentType()).thenReturn("image/jpeg");
 
-    controller.upload(5L, file, "public");
+    controller.upload(5L, file, "store-logo", "public");
 
     var order = inOrder(fileStorageService, storedFileAudit);
-    order.verify(fileStorageService).store("5", "public", file);
-    order.verify(storedFileAudit).recordUpload(5L, "public/5/y.jpg", "public", 4L, "image/jpeg");
+    order.verify(fileStorageService).store("5", "public", "store-logo", file);
+    order
+        .verify(storedFileAudit)
+        .recordUpload(5L, "public/5/store-logo/y.jpg", "public", 4L, "image/jpeg");
   }
 
   @Test
   @DisplayName("保存が失敗したら監査を依頼しないこと")
   void upload_doesNotRecordAuditWhenStoreFails() {
     authenticateWithAuthorities(PermissionCode.STORE_PROFILE_MANAGE.authority());
-    when(fileStorageService.store("5", "public", file)).thenThrow(new IllegalStateException("s3"));
+    when(fileStorageService.store("5", "public", "store-logo", file))
+        .thenThrow(new IllegalStateException("s3"));
 
-    assertThatThrownBy(() -> controller.upload(5L, file, "public"))
+    assertThatThrownBy(() -> controller.upload(5L, file, "store-logo", "public"))
         .isInstanceOf(IllegalStateException.class);
 
     verifyNoInteractions(storedFileAudit);
@@ -135,10 +143,10 @@ class FileUploadControllerTest {
   void upload_rejectsStoreWithoutProfileOrCastManage() {
     authenticateWithAuthorities(PermissionCode.ASSET_MANAGE.authority(), "PERM_ORDER_MANAGE");
 
-    assertThatThrownBy(() -> controller.upload(5L, file, "public"))
+    assertThatThrownBy(() -> controller.upload(5L, file, "store-logo", "public"))
         .isInstanceOf(AccessDeniedException.class);
 
-    verify(fileStorageService, never()).store(any(), any(), any());
+    verify(fileStorageService, never()).store(any(), any(), any(), any());
     verifyNoInteractions(storedFileAudit);
   }
 
@@ -146,9 +154,10 @@ class FileUploadControllerTest {
   @DisplayName("保存が要求誤りで拒否されたら監査を依頼しないこと")
   void upload_doesNotRecordAuditWhenStoreRejectsRequest() {
     authenticateWithAuthorities(PermissionCode.STORE_PROFILE_MANAGE.authority());
-    when(fileStorageService.store("5", "public", file)).thenThrow(new ServiceException("長すぎる"));
+    when(fileStorageService.store("5", "public", "store-logo", file))
+        .thenThrow(new ServiceException("長すぎる"));
 
-    assertThatThrownBy(() -> controller.upload(5L, file, "public"))
+    assertThatThrownBy(() -> controller.upload(5L, file, "store-logo", "public"))
         .isInstanceOf(ServiceException.class);
 
     verifyNoInteractions(storedFileAudit);
