@@ -49,6 +49,10 @@ tasks:
       STACK_ID:
         sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
       NAME: kizuna-pgtest-{{.STACK_ID}}
+    # 使い捨て DB の資格情報は実行ごとに乱数で作り、リポジトリに既定値を置かない。
+    env:
+      KIZUNA_POSTGRES_TEST_PASSWORD:
+        sh: od -An -N16 -tx1 /dev/urandom | tr -d ' \n'
     cmds:
       - echo "🐘  実 PostgreSQL テスト層を実行中..."
       - docker buildx build --target postgres-test -t {{.DOCKER_IMAGE}}-postgres-test:{{.DOCKER_TAG}} --load .
@@ -60,7 +64,7 @@ tasks:
       - |
         docker run -d --rm --name {{.NAME}}-db --network {{.NAME}} \
           --tmpfs /var/lib/postgresql:uid=70,gid=70 \
-          -e POSTGRES_PASSWORD="${KIZUNA_POSTGRES_TEST_PASSWORD:-postgres}" \
+          -e POSTGRES_PASSWORD="$KIZUNA_POSTGRES_TEST_PASSWORD" \
           dhi.io/postgres:18-alpine3.23 >/dev/null
       # 認証失効の検証が ACL を書き換えるための専用 Redis。閉じたネットワーク内だけで使う。
       - docker run -d --rm --name {{.NAME}}-redis --network {{.NAME}} dhi.io/redis:8-alpine3.23 redis-server --protected-mode no >/dev/null
@@ -79,9 +83,9 @@ tasks:
           -e KIZUNA_POSTGRES_TEST_JDBC_URL=jdbc:postgresql://{{.NAME}}-db:5432/postgres \
           -e KIZUNA_POSTGRES_TEST_USERNAME=postgres \
           -e KIZUNA_TEST_REDIS_HOST={{.NAME}}-redis \
-          -e KIZUNA_POSTGRES_TEST_PASSWORD="${KIZUNA_POSTGRES_TEST_PASSWORD:-postgres}" \
+          -e KIZUNA_POSTGRES_TEST_PASSWORD \
           --entrypoint sh {{.DOCKER_IMAGE}}-postgres-test:{{.DOCKER_TAG}} -c '
-            ./gradlew test --offline --no-daemon --tests "*PostgresTest" || exit 1
+            ./gradlew test --offline --rerun --no-daemon --tests "*PostgresTest" || exit 1
             expected=$(find src/test -name "*PostgresTest.java" | wc -l)
             ran=$(grep -L -e "tests=\"0\"" -e "skipped=\"[1-9]" build/test-results/test/TEST-*PostgresTest.xml | wc -l)
             echo "PostgresTest: ${ran}/${expected} クラスを実行"
