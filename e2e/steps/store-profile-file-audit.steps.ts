@@ -98,6 +98,7 @@ When(
     const upload = await request.post("/api/files", {
       headers: headers(operator),
       multipart: {
+        purpose: "store-logo",
         file: { name: fileName, mimeType: "image/png", buffer: SAMPLE_PNG },
       },
     });
@@ -106,6 +107,7 @@ When(
     const anonymous = await request.post("/api/files", {
       headers: STORE_HEADERS,
       multipart: {
+        purpose: "store-logo",
         file: { name: fileName, mimeType: "image/png", buffer: SAMPLE_PNG },
       },
     });

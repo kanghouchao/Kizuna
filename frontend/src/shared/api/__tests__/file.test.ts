@@ -6,7 +6,7 @@ import { apiClient, fileApi } from '@/shared/api';
 // アダプタは transformRequest の後に走るので、ここで config.data の型を検証すれば
 // 変換の有無をそのまま確認できる（境界付きヘッダは実 xhr アダプタでしか付かないため検証しない）。
 describe('fileApi.upload', () => {
-  it('multipart のまま送信する（FormData が JSON へ変換されない）', async () => {
+  it('用途を添えて multipart のまま送信する（FormData が JSON へ変換されない）', async () => {
     let capturedData: unknown;
     const original = apiClient.defaults.adapter;
     const adapter: AxiosAdapter = async config => {
@@ -22,11 +22,12 @@ describe('fileApi.upload', () => {
     apiClient.defaults.adapter = adapter;
 
     try {
-      await fileApi.upload(new File(['x'], 'a.png', { type: 'image/png' }));
+      await fileApi.upload(new File(['x'], 'a.png', { type: 'image/png' }), 'store-banner');
     } finally {
       apiClient.defaults.adapter = original;
     }
 
     expect(capturedData).toBeInstanceOf(FormData);
+    expect((capturedData as FormData).get('purpose')).toBe('store-banner');
   });
 });

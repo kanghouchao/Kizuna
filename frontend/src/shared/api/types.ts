@@ -28,6 +28,10 @@ export interface Page<T> {
   number: number;
 }
 
+// 公開画像の用途。保存先 key の一段になり、バックエンドが同じ許可リストで検証する
+export type UploadPurpose =
+  'cast-photo' | 'store-logo' | 'store-banner' | 'store-mv' | 'partner-logo';
+
 // ファイルアップロードレスポンス
 export interface FileUploadResponse {
   url?: string;

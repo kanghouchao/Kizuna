@@ -14,6 +14,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -54,11 +57,10 @@ class S3FileStorageTest {
     when(multipartFile.getOriginalFilename()).thenReturn("test.jpg");
     when(multipartFile.getBytes()).thenReturn(content);
 
-    String result = storageService.store("1", "public", multipartFile);
+    String result = storageService.store("1", "public", "cast-photo", multipartFile);
 
-    // 返り値（object key）は bucket/prefix/UUID.ext 形式になる
-    assertThat(result).startsWith("public/1/");
-    assertThat(result).endsWith(".jpg");
+    // 返り値（object key）は bucket/prefix/purpose/UUID.ext 形式になる
+    assertThat(result).matches("public/1/cast-photo/[0-9a-f-]{36}\\.jpg");
 
     ArgumentCaptor<PutObjectRequest> requestCaptor =
         ArgumentCaptor.forClass(PutObjectRequest.class);
@@ -76,10 +78,9 @@ class S3FileStorageTest {
     when(multipartFile.getOriginalFilename()).thenReturn("logo.png");
     when(multipartFile.getBytes()).thenReturn(content);
 
-    String result = storageService.store("platform", "public", multipartFile);
+    String result = storageService.store("platform", "public", "partner-logo", multipartFile);
 
-    assertThat(result).startsWith("public/platform/");
-    assertThat(result).endsWith(".png");
+    assertThat(result).matches("public/platform/partner-logo/[0-9a-f-]{36}\\.png");
 
     ArgumentCaptor<PutObjectRequest> requestCaptor =
         ArgumentCaptor.forClass(PutObjectRequest.class);
@@ -90,7 +91,8 @@ class S3FileStorageTest {
 
   @Test
   void store_throwsErrorOnInvalidPrefix() {
-    assertThatThrownBy(() -> storageService.store("../../../etc", "public", multipartFile))
+    assertThatThrownBy(
+            () -> storageService.store("../../../etc", "public", "cast-photo", multipartFile))
         .isInstanceOf(ServiceException.class)
         .hasMessage("不正なプレフィックスです");
     verifyNoInteractions(s3Client);
@@ -98,7 +100,7 @@ class S3FileStorageTest {
 
   @Test
   void store_throwsErrorOnNullPrefix() {
-    assertThatThrownBy(() -> storageService.store(null, "public", multipartFile))
+    assertThatThrownBy(() -> storageService.store(null, "public", "cast-photo", multipartFile))
         .isInstanceOf(ServiceException.class)
         .hasMessage("不正なプレフィックスです");
     verifyNoInteractions(s3Client);
@@ -106,9 +108,31 @@ class S3FileStorageTest {
 
   @Test
   void store_throwsErrorOnInvalidBucketName() {
-    assertThatThrownBy(() -> storageService.store("1", "../../../etc", multipartFile))
+    assertThatThrownBy(() -> storageService.store("1", "../../../etc", "cast-photo", multipartFile))
         .isInstanceOf(ServiceException.class)
         .hasMessage("不正なバケット名です");
+    verifyNoInteractions(s3Client);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"store-mv", "store-banner"})
+  void store_placesEachPurposeInItsOwnSegment(String purpose) throws IOException {
+    when(multipartFile.getSize()).thenReturn(1L);
+    when(multipartFile.getContentType()).thenReturn("image/webp");
+    when(multipartFile.getOriginalFilename()).thenReturn("a.webp");
+    when(multipartFile.getBytes()).thenReturn(new byte[1]);
+
+    assertThat(storageService.store("1", "public", purpose, multipartFile))
+        .startsWith("public/1/" + purpose + "/");
+  }
+
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {"avatar", "../cast-photo", "CAST-PHOTO", "cast-photo/x"})
+  void store_rejectsPurposeOutsideAllowList(String purpose) {
+    assertThatThrownBy(() -> storageService.store("1", "public", purpose, multipartFile))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("不正な用途です");
     verifyNoInteractions(s3Client);
   }
 
@@ -117,7 +141,7 @@ class S3FileStorageTest {
     when(multipartFile.getSize()).thenReturn(100L);
     when(multipartFile.getContentType()).thenReturn("application/pdf");
 
-    assertThatThrownBy(() -> storageService.store("1", "public", multipartFile))
+    assertThatThrownBy(() -> storageService.store("1", "public", "cast-photo", multipartFile))
         .isInstanceOf(ServiceException.class)
         .hasMessage("許可されていないファイル形式です");
     verifyNoInteractions(s3Client);
@@ -127,7 +151,7 @@ class S3FileStorageTest {
   void store_throwsErrorOnFileSizeExceeded() {
     when(multipartFile.getSize()).thenReturn(20_000_000L);
 
-    assertThatThrownBy(() -> storageService.store("1", "public", multipartFile))
+    assertThatThrownBy(() -> storageService.store("1", "public", "cast-photo", multipartFile))
         .isInstanceOf(ServiceException.class)
         .hasMessage("ファイルサイズが上限を超えています");
     verifyNoInteractions(s3Client);
@@ -157,7 +181,7 @@ class S3FileStorageTest {
 
   @Test
   void store_rejectsBucketOutsideAllowList() {
-    assertThatThrownBy(() -> storageService.store("1", "private", multipartFile))
+    assertThatThrownBy(() -> storageService.store("1", "private", "cast-photo", multipartFile))
         .isInstanceOf(ServiceException.class);
 
     verifyNoInteractions(s3Client);
@@ -168,13 +192,13 @@ class S3FileStorageTest {
     when(multipartFile.getSize()).thenReturn(1L);
     when(multipartFile.getContentType()).thenReturn("image/jpeg");
     when(multipartFile.getBytes()).thenReturn(new byte[1]);
-    // key = "public/1/" (9) + UUID (36) + 拡張子（"." 込み）
-    String atLimit = "x." + "e".repeat(100 - 9 - 36 - 1);
+    // key = "public/1/cast-photo/" (20) + UUID (36) + 拡張子（"." 込み）
+    String atLimit = "x." + "e".repeat(100 - 20 - 36 - 1);
     when(multipartFile.getOriginalFilename()).thenReturn(atLimit);
-    assertThat(storageService.store("1", "public", multipartFile)).hasSize(100);
+    assertThat(storageService.store("1", "public", "cast-photo", multipartFile)).hasSize(100);
 
     when(multipartFile.getOriginalFilename()).thenReturn(atLimit + "e");
-    assertThatThrownBy(() -> storageService.store("1", "public", multipartFile))
+    assertThatThrownBy(() -> storageService.store("1", "public", "cast-photo", multipartFile))
         .isInstanceOf(ServiceException.class);
   }
 }

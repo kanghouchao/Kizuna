@@ -1709,7 +1709,7 @@ export const SAMPLE_PNG = Buffer.from(
   "base64",
 );
 
-/** 店舗 1 の領域へ SAMPLE_PNG をアップロードする（POST /api/files）。 */
+/** 店舗 1 の領域へ SAMPLE_PNG を店舗ロゴとしてアップロードする（POST /api/files）。 */
 export function uploadStoreImage(
   request: APIRequestContext,
   token: string,
@@ -1717,6 +1717,7 @@ export function uploadStoreImage(
   return request.post("/api/files", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     multipart: {
+      purpose: "store-logo",
       file: { name: "storage-probe.png", mimeType: "image/png", buffer: SAMPLE_PNG },
     },
   });

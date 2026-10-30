@@ -271,7 +271,12 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                 control={control}
                 name="logo_url"
                 render={({ field: { value, onChange } }) => (
-                  <ImageUpload value={value} onChange={onChange} className="w-32 h-32" />
+                  <ImageUpload
+                    purpose="store-logo"
+                    value={value}
+                    onChange={onChange}
+                    className="w-32 h-32"
+                  />
                 )}
               />
             </div>
@@ -287,7 +292,12 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
               control={control}
               name="banner_url"
               render={({ field: { value, onChange } }) => (
-                <ImageUpload value={value} onChange={onChange} className="w-full h-40 max-w-2xl" />
+                <ImageUpload
+                  purpose="store-banner"
+                  value={value}
+                  onChange={onChange}
+                  className="w-full h-40 max-w-2xl"
+                />
               )}
             />
           </div>
@@ -331,7 +341,12 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
               control={control}
               name="mv_url"
               render={({ field: { value, onChange } }) => (
-                <ImageUpload value={value} onChange={onChange} className="w-full h-64" />
+                <ImageUpload
+                  purpose="store-mv"
+                  value={value}
+                  onChange={onChange}
+                  className="w-full h-64"
+                />
               )}
             />
           </div>
@@ -471,6 +486,7 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
                           name={`partner_links.${index}.logo_url`}
                           render={({ field: { value, onChange } }) => (
                             <ImageUpload
+                              purpose="partner-logo"
                               value={value}
                               onChange={onChange}
                               className="w-full h-10"

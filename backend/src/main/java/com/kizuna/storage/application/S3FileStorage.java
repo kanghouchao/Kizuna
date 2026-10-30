@@ -3,6 +3,7 @@ package com.kizuna.storage.application;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import java.io.IOException;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
@@ -24,6 +25,10 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
   /** 受け付ける唯一の bucket。object key の先頭になるので、自由入力を通さず固定する。 */
   private static final String PUBLIC_BUCKET = "public";
 
+  /** 用途は画像の置き場所ごとの区分で、object key の一段になるので許可リストに限る。 */
+  private static final Set<String> PURPOSES =
+      Set.of("cast-photo", "store-logo", "store-banner", "store-mv", "partner-logo");
+
   /** 完成形 key は監査の target_id（VARCHAR(100)）にそのまま入るので、これを超える key は保存しない。 */
   private static final int MAX_KEY_LENGTH = 100;
 
@@ -31,7 +36,7 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
   private final AppProperties appProperties;
 
   @Override
-  public String store(String prefix, String bucket, MultipartFile file) {
+  public String store(String prefix, String bucket, String purpose, MultipartFile file) {
     AppProperties.Upload upload = appProperties.getUpload();
 
     // prefix・bucket は object key に組み込まれるため、英数字類に絞ってパストラバーサルを防ぐ
@@ -41,6 +46,10 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
 
     if (!PUBLIC_BUCKET.equals(bucket)) {
       throw new ServiceException("不正なバケット名です");
+    }
+
+    if (purpose == null || !PURPOSES.contains(purpose)) {
+      throw new ServiceException("不正な用途です");
     }
 
     if (file.getSize() > upload.getMaxFileSize()) {
@@ -58,10 +67,10 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
       extension = originalFilename.substring(originalFilename.lastIndexOf("."));
     }
 
-    // UUIDでファイル名を生成。object key は bucket/prefix/UUID.ext 形式とする
+    // object key は bucket/prefix/purpose/UUID.ext 形式とする
     // （実 S3 bucket は固定値、リクエストの bucket 値は key の一部として扱う）
     String filename = UUID.randomUUID() + extension;
-    String key = bucket + "/" + prefix + "/" + filename;
+    String key = bucket + "/" + prefix + "/" + purpose + "/" + filename;
     if (key.length() > MAX_KEY_LENGTH) {
       throw new ServiceException("ファイル名の拡張子が長すぎます");
     }
