@@ -132,7 +132,7 @@ class RemunerationReportRenderingTest {
     assertThat(fields(unknownDay)[23]).isEmpty();
     assertThat(fields(unknownDay)[27]).isEqualTo("'4時間0分");
     assertThat(fields(unknownDay)[28]).isEqualTo("'いいえ");
-    assertThat(ExportCells.asciiWords(String.join("\r\n", lines))).isEmpty();
+    assertThat(ExportCells.letterRuns(String.join("\r\n", lines))).containsExactly("ID");
     var stoppedDay =
         List.of(lines).stream()
             .filter(line -> line.contains("'日別報酬根拠") && line.contains("'保証停止"))
@@ -263,7 +263,7 @@ class RemunerationReportRenderingTest {
     assertThat(proof[27]).isEqualTo("'7時間30分15秒");
     assertThat(proof[28]).isEqualTo("'はい");
     assertThat(proof[29]).isEqualTo("'計算済み");
-    assertThat(ExportCells.asciiWords(csv)).containsExactlyInAnyOrder("order", "term");
+    assertThat(ExportCells.letterRuns(csv)).containsExactlyInAnyOrder("ID", "order", "term");
   }
 
   private byte[] render(OperationalReport report, String format) throws Exception {

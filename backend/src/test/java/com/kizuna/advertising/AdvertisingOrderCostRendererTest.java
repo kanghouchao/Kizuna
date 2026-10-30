@@ -73,7 +73,7 @@ class AdvertisingOrderCostRendererTest {
             "\"'一件あたり記録費用（円）\"",
             "同月同名の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。");
     assertThat(csv.split("\r\n")).hasSize(2004);
-    assertThat(ExportCells.asciiWords(csv)).isEmpty();
+    assertThat(ExportCells.letterRuns(csv)).containsExactlyInAnyOrder("ID", "ROI");
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {
       assertThat(book.getNumberOfSheets()).isEqualTo(2);

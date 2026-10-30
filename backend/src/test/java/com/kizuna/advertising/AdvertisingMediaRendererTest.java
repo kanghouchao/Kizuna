@@ -74,12 +74,37 @@ class AdvertisingMediaRendererTest {
             "費用行に手入力された人数の合計（重複未除外）",
             "\"'全行未入力\"",
             "\"'全行入力済み\"");
-    assertThat(ExportCells.asciiWords(csv)).isEmpty();
+    assertThat(ExportCells.letterRuns(csv)).containsExactly("ID");
     assertThat(csv.split("\r\n")).hasSize(2005);
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {
       assertThat(book.getNumberOfSheets()).isEqualTo(2);
       var sheet = book.getSheet("媒体別集計");
+      assertThat(
+              IntStream.range(0, 16)
+                  .mapToObj(i -> sheet.getRow(0).getCell(i).getStringCellValue())
+                  .toList())
+          .containsExactly(
+              "行種別",
+              "生成日時",
+              "計算根拠",
+              "媒体の照合",
+              "問い合わせ人数の根拠",
+              "店舗ID",
+              "対象月",
+              "対象月版",
+              "区分",
+              "媒体",
+              "費用行数",
+              "登録額（円）",
+              "問い合わせ人数の入力済み行数",
+              "問い合わせ人数の未入力行数",
+              "入力済み人数の合計（重複未除外）",
+              "入力状況");
+      assertThat(sheet.getRow(1).getCell(2).getStringCellValue()).isEqualTo("媒体別の広告費登録の集計（第1版）");
+      assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("保存媒体名の完全一致");
+      assertThat(sheet.getRow(1).getCell(4).getStringCellValue())
+          .isEqualTo("費用行に手入力された人数の合計（重複未除外）");
       assertThat(sheet.getLastRowNum()).isEqualTo(2001);
       assertThat(sheet.getRow(1).getCell(9).getStringCellValue()).isEqualTo("00000");
       assertThat(sheet.getRow(1001).getCell(9).getStringCellValue()).isEqualTo("01000");
