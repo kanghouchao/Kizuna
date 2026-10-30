@@ -109,7 +109,9 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
 5. **翌日に定期実行を確かめる**：翌日、処理の実行履歴にその日の記録が増えていることを確かめる。定期実行の記録は実行キーが日付そのもの（例 `2026-10-31`）で、画面からの手動実行は無作為な実行キーになるので見分けられる。記録が無ければ、サービス ID の授権が足りないなどで実行前に拒否されているので、backend のログを見る。
 
    ```bash
-   task -d infrastructure/release logs service=backend
+   task -d infrastructure/<環境> logs service=backend
    ```
+
+   `<環境>` は `release` または `development`。
 
 止めるときは有効化フラグを `false` に戻して backend を作り直す。サービス ID はサービスID管理で停止すると実行を拒否されるが、行は残り、過去の実行記録から辿れる。
