@@ -33,6 +33,8 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
@@ -51,7 +53,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -63,7 +64,6 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
@@ -75,7 +75,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 実 PostgreSQL で、退会の同一取引（台帳・関連・申請・利用者）と退会後の不変量、識別子の部分一意を確かめる。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_MEMBER_WITHDRAWAL_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class MemberWithdrawalPostgresTest {
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
@@ -685,12 +685,7 @@ class MemberWithdrawalPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      var url = System.getenv("KIZUNA_MEMBER_WITHDRAWAL_TEST_JDBC_URL");
-      var source = new DriverManagerDataSource(url, "postgres", "");
-      var schema = "withdrawal_" + UUID.randomUUID().toString().replace("-", "");
-      new JdbcTemplate(source).execute("create schema " + schema);
-      source.setUrl(url + "?currentSchema=" + schema);
-      return source;
+      return PostgresTestDatabase.dataSource(MemberWithdrawalPostgresTest.class);
     }
 
     @Bean

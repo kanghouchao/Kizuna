@@ -8,6 +8,7 @@ import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -17,7 +18,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,7 +26,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 実DBの顧客・連絡先履歴・公共監査を同じ取引で確定し、拒否時の全rollbackを検証する。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_CONTACT_AUDIT_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CustomerAuditPostgresTest {
   private static final Long STORE_ID = 1L;

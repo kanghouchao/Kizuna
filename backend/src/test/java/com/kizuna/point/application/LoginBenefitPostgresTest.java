@@ -6,7 +6,8 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.point.domain.BenefitRuleRepository;
 import com.kizuna.point.domain.PointEntryRepository;
-import com.zaxxer.hikari.HikariDataSource;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -22,7 +23,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -40,7 +40,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // 明示指定した専用の使い捨て DB だけで、同日の並行ログインが部分一意索引で高々 1 件に収束することを二接続から検証する。
-@EnabledIfEnvironmentVariable(named = "KIZUNA_POINTS_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class LoginBenefitPostgresTest {
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
@@ -237,9 +237,7 @@ class LoginBenefitPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      var source = new HikariDataSource();
-      source.setJdbcUrl(System.getenv("KIZUNA_POINTS_TEST_JDBC_URL"));
-      source.setUsername("postgres");
+      var source = PostgresTestDatabase.pool(LoginBenefitPostgresTest.class);
       source.setMinimumIdle(0);
       source.setMaximumPoolSize(4);
       source.setConnectionTimeout(300);

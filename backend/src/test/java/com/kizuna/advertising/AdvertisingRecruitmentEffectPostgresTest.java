@@ -16,6 +16,8 @@ import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport.Status;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.recruitment.reporting.RecruitmentHireReader;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -34,7 +36,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -44,7 +45,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -52,7 +52,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /** 実 PG（Liquibase の baseline）で、採用効果の媒体名完全一致・入店月の判定・定着時点の境界を確かめる。今日は東京 2026-07-01。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_RECRUITMENT_EFFECT_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AdvertisingRecruitmentEffectPostgresTest {
   private static final ZoneId TOKYO = ZoneId.of("Asia/Tokyo");
@@ -64,18 +64,15 @@ class AdvertisingRecruitmentEffectPostgresTest {
 
   @BeforeAll
   void connect() {
-    String schema = "recruitment_effect_" + UUID.randomUUID().toString().replace("-", "");
-    String url = System.getenv("KIZUNA_RECRUITMENT_EFFECT_TEST_JDBC_URL");
-    new JdbcTemplate(new DriverManagerDataSource(url, "postgres", ""))
-        .execute("create schema " + schema);
     context =
         new SpringApplicationBuilder(Config.class)
             .web(WebApplicationType.NONE)
             .properties(
+                PostgresTestDatabase.springDataSourceProperties(
+                    AdvertisingRecruitmentEffectPostgresTest.class))
+            .properties(
                 Map.ofEntries(
                     Map.entry("spring.config.name", "recruitment-effect-test"),
-                    Map.entry("spring.datasource.url", url + "?currentSchema=" + schema),
-                    Map.entry("spring.datasource.username", "postgres"),
                     Map.entry(
                         "spring.liquibase.change-log",
                         "classpath:db/changelog/db.changelog-master.yaml"),

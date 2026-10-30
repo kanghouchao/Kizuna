@@ -17,6 +17,8 @@ import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.StoreShortNames;
@@ -42,7 +44,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -54,7 +55,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
@@ -68,7 +68,7 @@ import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 独立した検証DBで実サービスの読み取り取引と別接続の変更を交差させる。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_DAILY_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DailyRemunerationPostgresTest {
   private AnnotationConfigApplicationContext context;
@@ -300,8 +300,7 @@ class DailyRemunerationPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      return new DriverManagerDataSource(
-          System.getenv("KIZUNA_DAILY_TEST_JDBC_URL"), "postgres", "");
+      return PostgresTestDatabase.dataSource(DailyRemunerationPostgresTest.class);
     }
 
     @Bean

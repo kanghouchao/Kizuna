@@ -47,6 +47,8 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.task.application.ServiceIdentityCheckTask;
 import com.kizuna.task.application.TaskLifecycle;
@@ -71,7 +73,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -83,7 +84,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.modulith.events.IncompleteEventPublications;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.security.access.AccessDeniedException;
@@ -91,7 +91,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@EnabledIfEnvironmentVariable(named = "KIZUNA_NOTIFICATION_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NotificationPostgresTest {
   private ConfigurableApplicationContext context;
@@ -104,24 +104,14 @@ class NotificationPostgresTest {
 
   @BeforeAll
   void connect() {
-    String schema = "notification_" + UUID.randomUUID().toString().replace("-", "");
-    var source =
-        new DriverManagerDataSource(
-            System.getenv("KIZUNA_NOTIFICATION_TEST_JDBC_URL"), "postgres", "");
-    new JdbcTemplate(source).execute("create schema " + schema);
-
     context =
         new SpringApplicationBuilder(Config.class)
             .web(WebApplicationType.NONE)
             .properties(
+                PostgresTestDatabase.springDataSourceProperties(NotificationPostgresTest.class))
+            .properties(
                 Map.ofEntries(
                     Map.entry("spring.config.name", "notification-test"),
-                    Map.entry(
-                        "spring.datasource.url",
-                        System.getenv("KIZUNA_NOTIFICATION_TEST_JDBC_URL")
-                            + "?currentSchema="
-                            + schema),
-                    Map.entry("spring.datasource.username", "postgres"),
                     Map.entry(
                         "spring.liquibase.change-log",
                         "classpath:db/changelog/db.changelog-master.yaml"),

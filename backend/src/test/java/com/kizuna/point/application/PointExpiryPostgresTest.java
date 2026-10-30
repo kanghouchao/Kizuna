@@ -17,6 +17,8 @@ import com.kizuna.pointsexpiry.application.PointExpiryTask;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.application.TaskLifecycle;
@@ -46,7 +48,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -68,7 +69,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // 明示指定した専用の使い捨て DB だけで、実際の台帳・監査・授権を二接続から検証する。
-@EnabledIfEnvironmentVariable(named = "KIZUNA_POINTS_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PointExpiryPostgresTest {
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
@@ -750,9 +751,7 @@ class PointExpiryPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      var source = new HikariDataSource();
-      source.setJdbcUrl(System.getenv("KIZUNA_POINTS_TEST_JDBC_URL"));
-      source.setUsername("postgres");
+      var source = PostgresTestDatabase.pool(PointExpiryPostgresTest.class);
       source.setMinimumIdle(0);
       source.setMaximumPoolSize(4);
       source.setConnectionTimeout(300);

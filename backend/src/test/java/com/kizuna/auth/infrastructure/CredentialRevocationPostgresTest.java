@@ -11,6 +11,8 @@ import com.kizuna.auth.application.AuthSessionService;
 import com.kizuna.auth.application.LoginBenefitTrigger;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.config.RedisConfig;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -32,7 +34,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -47,7 +48,6 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
@@ -70,7 +70,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 専用 PostgreSQL と Redis の ACL 障害で、コミット後の失効反映漏れを再現する。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_AUTH_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CredentialRevocationPostgresTest {
   private AnnotationConfigApplicationContext context;
@@ -307,12 +307,7 @@ class CredentialRevocationPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      var url = System.getenv("KIZUNA_AUTH_TEST_JDBC_URL");
-      var source = new DriverManagerDataSource(url, "postgres", "");
-      var schema = "auth_" + UUID.randomUUID().toString().replace("-", "");
-      new JdbcTemplate(source).execute("create schema " + schema);
-      source.setUrl(url + "?currentSchema=" + schema);
-      return source;
+      return PostgresTestDatabase.dataSource(CredentialRevocationPostgresTest.class);
     }
 
     @Bean
@@ -350,8 +345,8 @@ class CredentialRevocationPostgresTest {
 
     @Bean
     LettuceConnectionFactory redisConnectionFactory() {
-      return new LettuceConnectionFactory(
-          "127.0.0.1", Integer.parseInt(System.getenv("KIZUNA_AUTH_TEST_REDIS_PORT")));
+      // ACL を書き換えるので、task test:postgres が立てる専用 Redis だけに向ける。
+      return new LettuceConnectionFactory(System.getenv("KIZUNA_TEST_REDIS_HOST"), 6379);
     }
 
     @Bean
