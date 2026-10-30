@@ -22,6 +22,8 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -80,19 +82,27 @@ public class ApplicantAnonymizationTask implements TaskHandler {
     periods.put(ApplicantStatus.REJECTED, retention.rejectedMonths());
     periods.put(ApplicantStatus.WITHDRAWN, retention.withdrawnMonths());
     periods.put(ApplicantStatus.HIRED, retention.hiredMonths());
-    int remaining = properties.getApplicantAnonymization().getMaxApplicants();
-    long count = 0;
+    // 状態ごとに古い順で上限まで取り、全状態を通して遷移の古い順に上限件だけ処理する。
+    // 一つの状態の滞留が上限を占め続けても、他の状態の古い対象が後回しにされ続けないようにするため。
+    int max = properties.getApplicantAnonymization().getMaxApplicants();
+    var targets = new ArrayList<ApplicantAnonymizationTarget>();
     for (var period : periods.entrySet()) {
-      if (period.getValue() == null || remaining <= 0) continue;
-      var targets =
+      if (period.getValue() == null || max <= 0) continue;
+      targets.addAll(
           applicants.findAnonymizationTargets(
               period.getKey(),
               transitionedBefore(asOf, period.getValue(), clock.getZone()),
-              Limit.of(remaining));
-      for (var target : targets) {
-        if (anonymize(target, actor, context)) count++;
-      }
-      remaining -= targets.size();
+              Limit.of(max)));
+    }
+    long count = 0;
+    for (var target :
+        targets.stream()
+            .sorted(
+                Comparator.comparing(ApplicantAnonymizationTarget::transitionedAt)
+                    .thenComparing(ApplicantAnonymizationTarget::id))
+            .limit(Math.max(max, 0))
+            .toList()) {
+      if (anonymize(target, actor, context)) count++;
     }
     requireIdentity(context);
     return count;
@@ -107,13 +117,14 @@ public class ApplicantAnonymizationTask implements TaskHandler {
 
   private boolean anonymize(
       ApplicantAnonymizationTarget target, AuditActor actor, TaskContext context) {
+    // 保存完了処理は添付行をロックしたまま実体を書くので、行を先に取って書き込みの終了を待ってから実体を消す。
+    var attachments = uploads.findByStoreIdAndApplicantIdForUpdate(target.storeId(), target.id());
     Applicant applicant =
         applicants
             .findByIdAndStoreIdForUpdate(target.id(), target.storeId())
             .orElseThrow(() -> new IllegalStateException("匿名化対象の応募者が見つかりません"));
     if (applicant.getAnonymizedAt() != null) return false;
     var before = auditValues(applicant);
-    var attachments = uploads.findByStoreIdAndApplicantId(target.storeId(), target.id());
     for (AttachmentUpload upload : attachments) storage.delete(object(upload));
     attachments.forEach(uploads::delete);
     applicant.anonymize(OffsetDateTime.now(clock));

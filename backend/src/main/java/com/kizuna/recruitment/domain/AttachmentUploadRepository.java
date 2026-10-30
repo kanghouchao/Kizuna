@@ -16,7 +16,11 @@ public interface AttachmentUploadRepository
   Optional<AttachmentUpload> findByStoreIdAndApplicantIdAndIdempotencyKey(
       Long storeId, String applicantId, UUID key);
 
-  List<AttachmentUpload> findByStoreIdAndApplicantId(Long storeId, String applicantId);
+  /** 保存完了処理と同じく添付行 → 応募者の順でロックするため、応募者より先に取る。 */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select u from AttachmentUpload u where u.storeId = :storeId and u.applicantId = :applicantId")
+  List<AttachmentUpload> findByStoreIdAndApplicantIdForUpdate(Long storeId, String applicantId);
 
   Optional<AttachmentUpload> findByIdAndStoreIdAndApplicantId(
       String id, Long storeId, String applicantId);
