@@ -66,3 +66,13 @@ Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/
 - `logback` — log4j2 is the logging backend and logback is explicitly excluded in `backend/build.gradle`.
 - ModelMapper / Dozer (MapStruct is the mapper), MyBatis (Spring Data JPA is the data layer), TestNG (JUnit 5 is the test framework).
 - `jjwt` or a hand-written JWT filter — authentication uses the Spring Security standard stack described in [backend/AGENTS.md](backend/AGENTS.md).
+
+## Code Review Rules
+
+Severity and scope for any reviewer, human or bot. The conventions themselves live in this file and the per-directory `AGENTS.md`; this section does not restate them.
+
+- **Important** only when the change can break behavior, expose a store's data outside the caller's store set (`StoreScope` in GLOSSARY.md), bypass authorization, race under concurrent requests, or lose data. Style and naming are at most Nit, and a review carries at most 3 Nits.
+- **Do not report**: anything `task lint` (Spotless / ESLint) already enforces, lockfiles, or pinned ids in Liquibase seed changesets for tables that only Liquibase writes.
+- **Always check**: an added or changed endpoint follows the [API contract](backend/AGENTS.md#api-contract); a cross-store read takes the caller's store set and a write verifies its single storeId; logs and list DTOs carry no PII the endpoint does not need.
+- **Evidence**: a claim about behavior cites the `file:line` that produces it; never infer behavior from names.
+- **Scope**: report what this diff introduces. Pre-existing problems go in a separate, non-blocking list. Do not repeat a finding already answered in the thread.
