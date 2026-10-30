@@ -73,7 +73,6 @@ describe('proxy integration', () => {
     mockResolveStore.mockResolvedValue({
       role: 'store',
       storeData: {
-        isValid: true,
         templateKey: 'dark',
         storeId: 't1',
         storeName: 'Shop',
@@ -89,6 +88,18 @@ describe('proxy integration', () => {
     expect(res.cookies.get('x-mw-store-id')?.value).toBe('t1');
     expect(res.cookies.get('x-mw-store-template')?.value).toBe('dark');
     expect(res.cookies.get('x-mw-store-domain')?.value).toBe('store.test');
+  });
+
+  it('未登録のホストには role=unknown だけを渡し、店舗の cookie を立てない', async () => {
+    mockResolveStore.mockResolvedValue({ role: 'unknown' });
+    mockHandleRouteProtection.mockReturnValue(null);
+
+    const res = (await proxy(createRequest('unknown.test')))!;
+
+    expect(res.cookies.get('x-mw-role')?.value).toBe('unknown');
+    expect(res.cookies.get('x-mw-store-id')?.value).toBeUndefined();
+    expect(res.cookies.get('x-mw-store-domain')?.value).toBeUndefined();
+    expect(res.cookies.get('x-mw-store-template')?.value).toBeUndefined();
   });
 
   it('アプリドメインを cookie でクライアントへ渡す', async () => {

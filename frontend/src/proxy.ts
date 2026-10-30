@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
   // 実行時に決まる値は proxy が cookie で運ぶ（role と同じ流儀）。
   response.cookies.set('x-mw-app-domain', APP_DOMAIN, cookieOptions);
 
-  if (role === 'store' && storeData?.isValid) {
+  if (role === 'store' && storeData) {
     // ドメインを保存して、後続リクエストで検証に使用
     const hostname = (
       request.headers.get('x-forwarded-host') ||

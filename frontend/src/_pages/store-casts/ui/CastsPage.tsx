@@ -145,6 +145,7 @@ export default function CastListPage() {
               <TableHead>スリーサイズ</TableHead>
               <TableHead>表示順</TableHead>
               <TableHead>在籍状態</TableHead>
+              <TableHead>公開状態</TableHead>
               <TableHead>入店日</TableHead>
               <TableHead>招待状態</TableHead>
               <TableHead className="text-right">アクション</TableHead>
@@ -187,6 +188,23 @@ export default function CastListPage() {
                     <Badge variant="outline" className={`border-transparent ${status.color}`}>
                       {status.text}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {cast.publication_status === 'PUBLISHED' ? (
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-success/10 text-success-strong"
+                      >
+                        公開
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-muted text-foreground"
+                      >
+                        非公開
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{cast.started_on ?? '-'}</TableCell>
                   <TableCell>

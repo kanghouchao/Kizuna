@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { consoleAreaOfPath, isPublicAuthPath, isSharedAdminPath } from '../app-area';
 import { MEMBER_RETURN_PATH_COOKIE, isSafeMemberReturnPath } from '../session';
+import type { HostRole } from './storeResolver';
 
 // セッション種別（ログイン時に保存した session-kind cookie）ごとの入場可能エリアとホーム。
 // 従業員の管理画面 admin は /admin と /store の両方を一つの画面として持つ。認可の根拠ではなく
@@ -22,7 +23,7 @@ function isMemberReceiptClaimPath(path: string): boolean {
   return path === '/member/receipts' || path === '/member/receipts/';
 }
 
-export function handleRouteProtection(request: NextRequest, _role: 'app' | 'store') {
+export function handleRouteProtection(request: NextRequest, _role: HostRole) {
   const path = request.nextUrl.pathname;
   const hasToken = request.cookies.has('token');
 

@@ -41,6 +41,8 @@ describe('storeResolver', () => {
 
   it('calls validation API for store domains', async () => {
     global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
       json: () =>
         Promise.resolve({
           id: 't1',
@@ -57,33 +59,38 @@ describe('storeResolver', () => {
       'http://backend:8080/stores/lookup?domain=store.test'
     );
     expect(result.role).toBe('store');
-    expect(result.storeData?.isValid).toBe(true);
+    expect(result.role).toBe('store');
     expect(result.storeData?.storeId).toBe('t1');
     expect(result.storeData?.storeName).toBe('Store 1');
     expect(result.storeData?.templateKey).toBe('custom');
   });
 
-  it('handles invalid store API response gracefully', async () => {
+  it('resolves an unregistered host to the unknown role on a lookup 404', async () => {
     global.fetch = jest.fn().mockResolvedValue({
-      json: () => Promise.resolve(null), // Empty response
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ status: 404, error: 'Not Found' }),
     });
 
-    const req = createRequest('unknown.test');
-    const result = await resolveStore(req);
+    const result = await resolveStore(createRequest('unknown.test'));
 
-    expect(result.role).toBe('store');
-    expect(result.storeData?.isValid).toBe(false);
-    expect(result.storeData?.templateKey).toBe('default');
+    expect(result).toEqual({ role: 'unknown' });
   });
 
-  it('handles API errors gracefully', async () => {
+  it('does not mistake a backend failure for an unregistered host', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve(null),
+    });
+
+    await expect(resolveStore(createRequest('store.test'))).rejects.toThrow('503');
+  });
+
+  it('propagates network errors instead of resolving to an empty store', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
 
-    const req = createRequest('error.test');
-    const result = await resolveStore(req);
-
-    expect(result.role).toBe('store');
-    expect(result.storeData?.isValid).toBe(false);
+    await expect(resolveStore(createRequest('error.test'))).rejects.toThrow('Network error');
   });
 
   it('resolves store from cookies when domain matches', async () => {
@@ -118,6 +125,8 @@ describe('storeResolver', () => {
 
     // ドメインが一致しないため fetch が呼び出されるはず
     global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
       json: () =>
         Promise.resolve({
           id: 'api-store-id',
@@ -143,6 +152,8 @@ describe('storeResolver', () => {
     const req = createRequest('store.test', cookies);
 
     global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
       json: () =>
         Promise.resolve({
           id: 'api-store-id',
@@ -162,10 +173,14 @@ describe('storeResolver', () => {
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('config/public')) {
         return Promise.resolve({
+          ok: true,
+          status: 200,
           json: () => Promise.resolve({ template_key: 'modern' }),
         });
       }
       return Promise.resolve({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve({
             id: 't1',
@@ -193,6 +208,8 @@ describe('storeResolver', () => {
     process.env.BACKEND_URL = 'http://other-backend:9000';
     global.fetch = jest.fn().mockImplementation((url: string) =>
       Promise.resolve({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve(
             String(url).includes('config/public')
@@ -219,6 +236,8 @@ describe('storeResolver', () => {
         return Promise.reject(new Error('config down'));
       }
       return Promise.resolve({
+        ok: true,
+        status: 200,
         json: () => Promise.resolve({ id: 't1', name: 'Store 1', domain: 'store.test' }),
       });
     });
@@ -226,7 +245,7 @@ describe('storeResolver', () => {
     const req = createRequest('store.test');
     const result = await resolveStore(req);
 
-    expect(result.storeData?.isValid).toBe(true);
+    expect(result.role).toBe('store');
     expect(result.storeData?.templateKey).toBe('default');
   });
 
@@ -240,10 +259,14 @@ describe('storeResolver', () => {
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('config/public')) {
         return Promise.resolve({
+          ok: true,
+          status: 200,
           json: () => Promise.resolve({ template_key: 'classic' }),
         });
       }
       return Promise.resolve({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve({ id: 'api-store-id', name: 'API Store', domain: 'store.test' }),
       });

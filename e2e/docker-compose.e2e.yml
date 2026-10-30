@@ -201,13 +201,14 @@ services:
       CI: ${CI:-}
     # gateway の healthcheck は traefik の ping しか見ず、ルーティング設定の読込失敗でも healthy になる。
     # 実際に router を通る経路で疎通を確かめ、到達しないなら原因を名指しして落ちる
-    # （全シナリオが理由不明で赤くなるのを避ける）。
+    # （全シナリオが理由不明で赤くなるのを避ける）。叩くのはログイン画面 — この時点で店舗は未登録で、
+    # 未登録ホストの公開サイト（/）は 404 を返すため。
     command:
       - sh
       - -c
       - |
         i=0
-        until curl -sf -o /dev/null http://store1.kizuna.test/; do
+        until curl -sf -o /dev/null http://store1.kizuna.test/auth/login; do
           i=$$((i + 1))
           if [ "$$i" -ge 60 ]; then
             echo "❌ gateway 経由で frontend に到達できません（dynamic.yml のルーティング未読込の可能性）"
