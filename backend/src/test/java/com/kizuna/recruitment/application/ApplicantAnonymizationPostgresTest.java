@@ -20,6 +20,8 @@ import com.kizuna.recruitment.infrastructure.PrivateAttachmentStorage;
 import com.kizuna.settings.application.ApplicantRetentionSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskRegistry;
@@ -41,7 +43,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -52,13 +53,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.access.AccessDeniedException;
 
 /** 実 PG（Liquibase の baseline）で、実行基盤から起動した匿名化の対象選定・一取引の確定・途中失敗後の再処理を確かめる。 */
-@EnabledIfEnvironmentVariable(
-    named = "KIZUNA_APPLICANT_ANONYMIZATION_TEST_JDBC_URL",
-    matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ApplicantAnonymizationPostgresTest {
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
@@ -75,18 +73,15 @@ class ApplicantAnonymizationPostgresTest {
 
   @BeforeAll
   void connect() {
-    String schema = "anonymization_" + UUID.randomUUID().toString().replace("-", "");
-    String url = System.getenv("KIZUNA_APPLICANT_ANONYMIZATION_TEST_JDBC_URL");
-    new JdbcTemplate(new DriverManagerDataSource(url, "postgres", ""))
-        .execute("create schema " + schema);
     context =
         new SpringApplicationBuilder(Config.class)
             .web(WebApplicationType.NONE)
             .properties(
+                PostgresTestDatabase.springDataSourceProperties(
+                    ApplicantAnonymizationPostgresTest.class))
+            .properties(
                 Map.ofEntries(
                     Map.entry("spring.config.name", "applicant-anonymization-test"),
-                    Map.entry("spring.datasource.url", url + "?currentSchema=" + schema),
-                    Map.entry("spring.datasource.username", "postgres"),
                     Map.entry(
                         "spring.liquibase.change-log",
                         "classpath:db/changelog/db.changelog-master.yaml"),
