@@ -76,4 +76,40 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
    ```
 
 4. **画面での追加・閲覧**：応募者詳細の「非公開の添付画像」で画像を一つ追加し、一覧に出ること、ダウンロードして開けることを確かめる。画面に添付を削除する操作は無く、添付の実体は保持期間を過ぎた応募者の匿名化で削除される。
-5. **保持期間の設定**：システム設定（分類 RECRUITMENT）で `applicant_retention_rejected_months`（不採用）・`applicant_retention_withdrawn_months`（辞退）・`applicant_retention_hired_months`（採用）の三つを設定する。未設定のままだと匿名化は何もせず、添付は無期限に残る。応募者詳細の「情報保持方針」に三つの期間が表示されることを確かめる。なお匿名化の定期実行は `app.applicant-anonymization.enabled` と実行主体のサービス ID で別に有効化するもので、現在の compose はこれらを backend に渡していない。
+5. **保持期間の設定**：システム設定（分類 RECRUITMENT）で `applicant_retention_rejected_months`（不採用）・`applicant_retention_withdrawn_months`（辞退）・`applicant_retention_hired_months`（採用）の三つを設定する。未設定のままだと匿名化は何もせず、添付は無期限に残る。応募者詳細の「情報保持方針」に三つの期間が表示されることを確かめる。保持期間を過ぎた応募者を実際に匿名化するには、続けて[定期処理の有効化](#定期処理の有効化)で応募者の匿名化を有効にする。
+
+## 定期処理の有効化
+
+応募者の匿名化（処理名 `APPLICANT_ANONYMIZATION`、毎日 0:15）とポイント失効（処理名 `POINT_EXPIRY`、毎日 0:05）は、どちらも既定で無効である。時刻は `APP_TIMEZONE` の業務タイムゾーンで決まる。実行主体は対話ログインできないサービス ID（[ADR 0025](../docs/adr/0025-service-identity-lives-in-t-users-without-credentials.md)）で、稼働中のシステムで作る行なので、id は compose ではなく `.env` に書く。
+
+| 処理 | 有効化フラグ | サービス ID | 処理固有の権限 |
+|---|---|---|---|
+| 応募者の匿名化 | `APP_APPLICANT_ANONYMIZATION_ENABLED` | `APP_APPLICANT_ANONYMIZATION_SERVICE_USER_ID` | `APPLICANT_ANONYMIZE` |
+| ポイント失効 | `APP_POINTS_EXPIRY_ENABLED` | `APP_POINTS_EXPIRY_SERVICE_USER_ID` | `POINT_EXPIRE` |
+
+有効にしたのにサービス ID が空、または 0 以下だと backend は起動に失敗する。サービス ID の授権が足りない場合は起動には成功し、実行の時点で拒否される。
+
+1. **ロールを作る**：ロール管理で、`TASK_EXECUTE` と処理固有の権限を持つロールを作る。システムロールはサービス ID に授けられないので、新しいロールにする。二つの処理を一つのサービス ID で動かすなら、一つのロールに三つの権限を持たせてよい。
+2. **サービス ID を作る**：サービスID管理で、1 のロールを授け、店舗集合を「全店舗」（`ALL_STORES`）にして作る。どちらの処理もグループ全体が対象で、個別店舗の授権では実行を拒否される。作成後の詳細に出る id を控える。
+3. **`.env` に書いて有効化する**：環境ディレクトリの `.env` に次を書き、その環境ディレクトリで backend を作り直す。`task restart` は古い環境変数のまま再起動するので使わない。
+
+   ```dotenv
+   APP_APPLICANT_ANONYMIZATION_ENABLED=true
+   APP_APPLICANT_ANONYMIZATION_SERVICE_USER_ID=<2 の id>
+   ```
+
+   ```bash
+   docker compose -p kizuna up -d --wait backend
+   ```
+
+   ポイント失効も同じく `APP_POINTS_EXPIRY_ENABLED` と `APP_POINTS_EXPIRY_SERVICE_USER_ID` を書く。
+
+4. **手動で実行して記録を確かめる**：処理の実行履歴で、処理を選び、実行主体に 2 のサービス ID、対象日に本日を指定して実行する。操作する担当者のアカウントには `TASK_MANAGE` に加えて処理固有の権限（`APPLICANT_ANONYMIZE` / `POINT_EXPIRE`）と全店舗の授権が要る。`APPLICANT_ANONYMIZE` は既定のロールのどれにも入っていないので、担当者のロールに足しておく（`POINT_EXPIRE` は既定ロール「統括」に入っている）。
+   成功の記録が一覧に残り、処理件数が出ることを確かめる。
+5. **翌日に定期実行を確かめる**：翌日、処理の実行履歴にその日の記録が増えていることを確かめる。定期実行の記録は実行キーが日付そのもの（例 `2026-10-31`）で、画面からの手動実行は無作為な実行キーになるので見分けられる。記録が無ければ、サービス ID の授権が足りないなどで実行前に拒否されているので、backend のログを見る。
+
+   ```bash
+   task -d infrastructure/release logs service=backend
+   ```
+
+止めるときは有効化フラグを `false` に戻して backend を作り直す。サービス ID はサービスID管理で停止すると実行を拒否されるが、行は残り、過去の実行記録から辿れる。
