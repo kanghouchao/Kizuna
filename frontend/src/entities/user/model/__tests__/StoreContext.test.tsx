@@ -92,6 +92,19 @@ describe('StoreContextProvider（店舗コンテキストの deep module）', ()
       expect(result.current.currentStore?.status).toBe('PREPARING');
     });
 
+    it('取り直しに失敗したら直前の一覧と現在店舗を保ったまま loadFailed を立てる', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      const { result } = renderHook(() => useStoreContext(), { wrapper });
+      await waitFor(() => expect(result.current.currentStoreId).toBe('1'));
+
+      mockedStores.mockRejectedValueOnce(new Error('network'));
+      act(() => result.current.reload());
+
+      await waitFor(() => expect(result.current.loadFailed).toBe(true));
+      expect(result.current.stores).toEqual([storeA, storeB]);
+      expect(result.current.currentStoreId).toBe('1');
+    });
+
     it('1つの provider 配下で複数の consumer が描画されても stores() は1回だけ呼ばれる', async () => {
       function Consumer({ label }: { label: string }) {
         const { stores } = useStoreContext();
