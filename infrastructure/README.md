@@ -8,7 +8,7 @@
 
 ### 構成の要点
 
-- 応募者添付は公開の `storage` とは別の SeaweedFS 実例 `private-storage` に保存する。独立したボリューム `private-seaweedfs-data` を持ち、Traefik のルートもホストポートも Admin UI も持たない。compose の内部ネットワークから backend だけが `http://private-storage:8333` で届く。
+- 応募者添付は公開の `storage` とは別の SeaweedFS 実例 `private-storage` に保存する。独立したボリューム `private-seaweedfs-data` を持ち、Traefik のルートもホストポートも Admin UI も持たない。backend とだけ共有する専用ネットワーク `private-network`（外部への出口なし）に置き、backend が `http://private-storage:8333` で使う。SeaweedFS の `mini` は S3 以外に認証の無い filer（8888）や master（9333）も開くので、他のサービスをこのネットワークに参加させてはならない。
 - バケット `applicant-images` は compose が `-bucket=applicant-images` で宣言する。backend はバケットを作らず、起動時に存在と policy が無いことを確かめるだけである。
 - 資格情報は `.env` の `PRIVATE_S3_ACCESS_KEY` / `PRIVATE_S3_SECRET_KEY` で、同じ値が `private-storage` と backend の両方に渡る。公開側の `S3_ACCESS_KEY` / `S3_SECRET_KEY` とは必ず別の値にする。endpoint・バケット名・アクセスキー・シークレットのどれかが公開側と同じだと backend は隔離が無いとみなす。
 - release は二つの資格情報が未設定なら compose が起動を拒否する（添付機能を無効にしていても同じ）。既存の本番 `.env` にも追記が必要である。
@@ -26,7 +26,7 @@
    docker compose -p kizuna up -d --wait private-storage backend
    ```
 
-3. 起動を待つ間の数秒、添付の追加・閲覧・削除は 503 を返す。それ以外の機能は止まらない。
+3. backend も作り直すため、healthy になるまでの数十秒は添付に限らず API 全体が応答しない。利用の少ない時間帯に行う。
 4. 画面で添付を一つ開き、閲覧できることを確かめる。
 
 ### バックアップしない理由
@@ -64,6 +64,16 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
    ```
 
    前者は接続失敗、後者は何も表示しないことを確かめる。
+
+   他のサービスからも届かないこと（`private-storage` が backend 以外とネットワークを共有していないこと）を、公開の `storage` コンテナから確かめる。どれも名前解決に失敗し、HTTP の応答が返らない。
+
+   ```bash
+   docker exec storage curl -sS -m 5 http://private-storage:8888/
+   ```
+
+   ```bash
+   docker exec storage curl -sS -m 5 http://private-storage:8333/
+   ```
 
 4. **画面での追加・閲覧**：応募者詳細の「非公開の添付画像」で画像を一つ追加し、一覧に出ること、ダウンロードして開けることを確かめる。画面に添付を削除する操作は無く、添付の実体は保持期間を過ぎた応募者の匿名化で削除される。
 5. **保持期間の設定**：システム設定（分類 RECRUITMENT）で `applicant_retention_rejected_months`（不採用）・`applicant_retention_withdrawn_months`（辞退）・`applicant_retention_hired_months`（採用）の三つを設定する。未設定のままだと匿名化は何もせず、添付は無期限に残る。応募者詳細の「情報保持方針」に三つの期間が表示されることを確かめる。なお匿名化の定期実行は `app.applicant-anonymization.enabled` と実行主体のサービス ID で別に有効化するもので、現在の compose はこれらを backend に渡していない。

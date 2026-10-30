@@ -47,6 +47,7 @@ services:
       - /tmp/kizuna-private-attachments:size=134217728,mode=0700,uid=65532,gid=65532
     networks:
       - network
+      - private-network
     environment:
       - POSTGRES_HOST=${POSTGRES_HOST:-database}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
@@ -143,7 +144,8 @@ services:
       retries: 5
     restart: on-failure:3
 
-  # 応募者添付の非公開 S3。Traefik のルートもホストポートも持たず、内部ネットワークからだけ届く。
+  # 応募者添付の非公開 S3。Traefik のルートもホストポートも持たず、backend とだけ共有する private-network に置く。
+  # mini は S3 以外に認証の無い filer（8888）や master も開くため、他のサービスと同じネットワークに置かない。
   # バケットはここで宣言し backend は作らない。ボリュームは意図してバックアップしない（infrastructure/README.md）
   private-storage:
     image: chrislusf/seaweedfs:4.50
@@ -155,7 +157,7 @@ services:
     volumes:
       - private-seaweedfs-data:/data
     networks:
-      - network
+      - private-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
       interval: 10s
@@ -214,6 +216,10 @@ services:
 networks:
   network:
     driver: bridge
+  # 外部への出口も持たない
+  private-network:
+    driver: bridge
+    internal: true
 
 volumes:
   db-data:
