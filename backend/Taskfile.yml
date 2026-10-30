@@ -49,13 +49,15 @@ tasks:
       STACK_ID:
         sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
       NAME: kizuna-pgtest-{{.STACK_ID}}
+      # 並行する別 worktree の構築でタグが差し替わり、他人のコードを検証しないよう worktree ごとに分ける。
+      IMAGE: '{{.DOCKER_IMAGE}}-postgres-test:{{.STACK_ID}}'
     # 使い捨て DB の資格情報は実行ごとに乱数で作り、リポジトリに既定値を置かない。
     env:
       KIZUNA_POSTGRES_TEST_PASSWORD:
         sh: od -An -N16 -tx1 /dev/urandom | tr -d ' \n'
     cmds:
       - echo "🐘  実 PostgreSQL テスト層を実行中..."
-      - docker buildx build --target postgres-test -t {{.DOCKER_IMAGE}}-postgres-test:{{.DOCKER_TAG}} --load .
+      - docker buildx build --target postgres-test -t {{.IMAGE}} --load .
       # 中断で残った前回分を先に回収する。データは tmpfs に置き、ボリュームは作らない。
       - docker rm -fv {{.NAME}}-runner {{.NAME}}-db {{.NAME}}-redis >/dev/null 2>&1 || true
       - docker network rm {{.NAME}} >/dev/null 2>&1 || true
@@ -84,7 +86,7 @@ tasks:
           -e KIZUNA_POSTGRES_TEST_USERNAME=postgres \
           -e KIZUNA_TEST_REDIS_HOST={{.NAME}}-redis \
           -e KIZUNA_POSTGRES_TEST_PASSWORD \
-          --entrypoint sh {{.DOCKER_IMAGE}}-postgres-test:{{.DOCKER_TAG}} -c '
+          --entrypoint sh {{.IMAGE}} -c '
             ./gradlew test --offline --rerun --no-daemon --tests "*PostgresTest" || exit 1
             expected=$(find src/test -name "*PostgresTest.java" | wc -l)
             ran=$(grep -L -e "tests=\"0\"" -e "skipped=\"[1-9]" build/test-results/test/TEST-*PostgresTest.xml | wc -l)
@@ -105,5 +107,4 @@ tasks:
       - echo "🗑️  バックエンドDockerイメージを削除中..."
       - docker rmi {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} 2>/dev/null || echo "イメージが存在しないか、既に削除されています"
       - docker rmi {{.DOCKER_IMAGE}}-test:{{.DOCKER_TAG}} 2>/dev/null || echo "テストイメージが存在しないか、既に削除されています"
-      - docker rmi {{.DOCKER_IMAGE}}-postgres-test:{{.DOCKER_TAG}} 2>/dev/null || echo "PostgreSQL テストイメージが存在しないか、既に削除されています"
       - docker rmi {{.DOCKER_IMAGE}}-lint:{{.DOCKER_TAG}} 2>/dev/null || echo "Lintイメージが存在しないか、既に削除されています"
