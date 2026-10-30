@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ExternalLinkIcon, PlusIcon, SquarePenIcon, StoreIcon, Trash2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Store, isStoreDomain, adminStoreApi } from '@/entities/store';
+import { useStoreContext } from '@/entities/user';
 import { useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -24,6 +25,7 @@ const PAGE_SIZE = 10;
 
 export default function StoresPage() {
   const router = useRouter();
+  const { reload: reloadStores } = useStoreContext();
   const [searchTerm, setSearchTerm] = useState('');
   const list = useListPage<Store, string>(
     (page, search) =>
@@ -40,7 +42,10 @@ export default function StoresPage() {
     remove: store => adminStoreApi.delete(store.id),
     successMessage: '店舗を削除しました',
     errorMessage: '店舗の削除に失敗しました',
-    onDeleted: list.reload,
+    onDeleted: () => {
+      list.reload();
+      reloadStores();
+    },
   });
 
   return (

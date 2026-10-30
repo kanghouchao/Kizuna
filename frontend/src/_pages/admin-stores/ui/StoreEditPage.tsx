@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, adminStoreApi, storeShortNameError } from '@/entities/store';
+import { useStoreContext } from '@/entities/user';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
@@ -10,6 +11,7 @@ import { notify } from '@/shared/notify';
 export default function EditStorePage() {
   const id = useParams<{ id: string }>()?.id;
   const router = useRouter();
+  const { reload: reloadStores } = useStoreContext();
 
   const [saving, setSaving] = useState(false);
   const {
@@ -52,6 +54,7 @@ export default function EditStorePage() {
         ...formData,
         short_name: formData.short_name.trim(),
       });
+      reloadStores();
       notify.success('店舗情報を更新しました');
       router.push('/admin/stores');
     } catch (err: unknown) {

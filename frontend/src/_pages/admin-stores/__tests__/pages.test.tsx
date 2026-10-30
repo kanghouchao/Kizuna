@@ -6,6 +6,7 @@ import StoreCreatePage from '../ui/StoreCreatePage';
 import StoreEditPage from '../ui/StoreEditPage';
 
 const mockPush = jest.fn();
+const mockReloadStores = jest.fn();
 
 jest.mock('@/entities/store', () => ({
   // ドメイン形式の判定は本物を使う（リンク化の可否そのものを検証したいため）
@@ -22,6 +23,12 @@ jest.mock('@/entities/store', () => ({
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useParams: () => ({ id: '1' }),
+}));
+
+// 店舗切替と従業員の店舗選択は StoreContext の一覧を共有する。店舗を作成・編集・削除したら取り直させる
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({ reload: mockReloadStores }),
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -232,11 +239,13 @@ describe('店舗管理 3 画面の挙動', () => {
     fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(mockedApi.delete).not.toHaveBeenCalled();
+    expect(mockReloadStores).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: '削除' }));
     fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
 
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('7'));
+    await waitFor(() => expect(mockReloadStores).toHaveBeenCalledTimes(1));
   });
 
   it('新規作成は name/short_name/domain だけを送信し一覧へ遷移すること', async () => {
@@ -257,6 +266,7 @@ describe('店舗管理 3 画面の挙動', () => {
       domain: 'gamma.example.com',
     });
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
+    expect(mockReloadStores).toHaveBeenCalledTimes(1);
   });
 
   it('新規作成はドメイン形式が不正なら送信せずエラーを表示すること', async () => {
@@ -313,6 +323,7 @@ describe('店舗管理 3 画面の挙動', () => {
       expect(mockedApi.update).toHaveBeenCalledWith('1', { name: 'デルタ本店', short_name: '本店' })
     );
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
+    expect(mockReloadStores).toHaveBeenCalledTimes(1);
   });
 
   it('作成・編集のどちらの画面にもメール欄が無いこと', async () => {
