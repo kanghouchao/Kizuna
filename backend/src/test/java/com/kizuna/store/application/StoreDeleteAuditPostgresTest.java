@@ -8,6 +8,8 @@ import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.api.dto.StoreCreateDTO;
 import com.kizuna.store.api.dto.StoreUpdateDTO;
@@ -34,7 +36,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -46,7 +47,6 @@ import org.springframework.dao.support.PersistenceExceptionTranslationIntercepto
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
@@ -60,7 +60,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 実PGで店舗登録の作成・更新・削除と監査を同じ取引で確定し、連鎖件数・FK 拒否・監査失敗時の巻戻しを確認する。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_STORE_AUDIT_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class StoreDeleteAuditPostgresTest {
   private static final String ORDINARY = "ordinary@example.test";
@@ -219,8 +219,7 @@ class StoreDeleteAuditPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      return new DriverManagerDataSource(
-          System.getenv("KIZUNA_STORE_AUDIT_TEST_JDBC_URL"), "postgres", "");
+      return PostgresTestDatabase.dataSource(StoreDeleteAuditPostgresTest.class);
     }
 
     @Bean

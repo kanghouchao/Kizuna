@@ -30,6 +30,8 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -59,7 +61,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -73,7 +74,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
@@ -85,7 +85,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@EnabledIfEnvironmentVariable(named = "KIZUNA_ATTACHMENT_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AttachmentPostgresTest {
   private static final Long STORE_ID = 1L;
@@ -693,8 +693,7 @@ class AttachmentPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      return new DriverManagerDataSource(
-          System.getenv("KIZUNA_ATTACHMENT_TEST_JDBC_URL"), "postgres", "");
+      return PostgresTestDatabase.dataSource(AttachmentPostgresTest.class);
     }
 
     @Bean

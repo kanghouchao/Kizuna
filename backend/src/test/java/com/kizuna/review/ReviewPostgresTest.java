@@ -23,6 +23,8 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.StoreShortNames;
@@ -48,7 +50,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -61,7 +62,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -76,7 +76,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
-@EnabledIfEnvironmentVariable(named = "KIZUNA_REVIEW_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ReviewPostgresTest {
   private ConfigurableApplicationContext context;
@@ -91,18 +91,13 @@ class ReviewPostgresTest {
 
   @BeforeAll
   void connect() {
-    String schema = "review_" + UUID.randomUUID().toString().replace("-", "");
-    String url = System.getenv("KIZUNA_REVIEW_TEST_JDBC_URL");
-    new JdbcTemplate(new DriverManagerDataSource(url, "postgres", ""))
-        .execute("create schema " + schema);
     context =
         new SpringApplicationBuilder(Config.class)
             .web(WebApplicationType.NONE)
+            .properties(PostgresTestDatabase.springDataSourceProperties(ReviewPostgresTest.class))
             .properties(
                 Map.ofEntries(
                     Map.entry("spring.config.name", "review-test"),
-                    Map.entry("spring.datasource.url", url + "?currentSchema=" + schema),
-                    Map.entry("spring.datasource.username", "postgres"),
                     Map.entry(
                         "spring.liquibase.change-log",
                         "classpath:db/changelog/db.changelog-master.yaml"),

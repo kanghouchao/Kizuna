@@ -25,6 +25,8 @@ import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
@@ -41,7 +43,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -53,13 +54,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.AopTestUtils;
 
 /** 実 PG（Liquibase の baseline）で、在籍登録の原子性と「一つの在籍を指す応募者は一つ」の部分唯一索引を確かめる。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_APPLICANT_ENROLLMENT_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ApplicantEnrollmentPostgresTest {
   private static final String ACTOR = "enroll@example.test";
@@ -73,18 +73,15 @@ class ApplicantEnrollmentPostgresTest {
 
   @BeforeAll
   void connect() {
-    String schema = "enrollment_" + UUID.randomUUID().toString().replace("-", "");
-    String url = System.getenv("KIZUNA_APPLICANT_ENROLLMENT_TEST_JDBC_URL");
-    new JdbcTemplate(new DriverManagerDataSource(url, "postgres", ""))
-        .execute("create schema " + schema);
     context =
         new SpringApplicationBuilder(Config.class)
             .web(WebApplicationType.NONE)
             .properties(
+                PostgresTestDatabase.springDataSourceProperties(
+                    ApplicantEnrollmentPostgresTest.class))
+            .properties(
                 Map.ofEntries(
                     Map.entry("spring.config.name", "applicant-enrollment-test"),
-                    Map.entry("spring.datasource.url", url + "?currentSchema=" + schema),
-                    Map.entry("spring.datasource.username", "postgres"),
                     Map.entry(
                         "spring.liquibase.change-log",
                         "classpath:db/changelog/db.changelog-master.yaml"),

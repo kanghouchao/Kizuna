@@ -24,6 +24,8 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -46,7 +48,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -55,7 +56,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
@@ -69,7 +69,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 専用の使い捨て DB で、申領の帰属・付与仕訳・ランク同期・監査が同じ取引で確定し、監査の失敗で全て巻き戻ることを検証する。
  * 仕訳とランクは補助表への書き込みで代用し、取引に参加していることだけを見る。
  */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_ORDER_AUDIT_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class MemberReceiptClaimAuditPostgresTest {
   private static final long STORE_ID = 1L;
@@ -194,8 +194,7 @@ class MemberReceiptClaimAuditPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      return new DriverManagerDataSource(
-          System.getenv("KIZUNA_ORDER_AUDIT_TEST_JDBC_URL"), "postgres", "");
+      return PostgresTestDatabase.dataSource(MemberReceiptClaimAuditPostgresTest.class);
     }
 
     @Bean

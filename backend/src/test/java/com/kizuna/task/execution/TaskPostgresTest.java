@@ -13,6 +13,8 @@ import com.kizuna.audit.recording.AuditReader;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskQuery;
@@ -36,7 +38,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -46,7 +47,6 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
@@ -55,7 +55,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 // 専用の使い捨て PostgreSQL で、二つの独立した JPA コンテキスト間の実ロックを検証する。
-@EnabledIfEnvironmentVariable(named = "KIZUNA_TASK_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class TaskPostgresTest {
   private AnnotationConfigApplicationContext first;
@@ -292,8 +292,7 @@ class TaskPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      return new DriverManagerDataSource(
-          System.getenv("KIZUNA_TASK_TEST_JDBC_URL"), "postgres", "");
+      return PostgresTestDatabase.dataSource(TaskPostgresTest.class);
     }
 
     @Bean

@@ -15,6 +15,8 @@ import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
@@ -41,7 +43,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mapstruct.factory.Mappers;
@@ -56,7 +57,6 @@ import org.springframework.dao.support.PersistenceExceptionTranslationIntercepto
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
@@ -72,7 +72,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 実PGの在籍・profile・履歴・監査を同じ取引で操作し、実版本と原子性を確認する。 */
-@EnabledIfEnvironmentVariable(named = "KIZUNA_CAST_AUDIT_TEST_JDBC_URL", matches = ".+")
+@EnabledIfPostgres
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CastAuditPostgresTest {
   private AnnotationConfigApplicationContext context;
@@ -516,8 +516,7 @@ class CastAuditPostgresTest {
   static class Config {
     @Bean
     DataSource dataSource() {
-      return new DriverManagerDataSource(
-          System.getenv("KIZUNA_CAST_AUDIT_TEST_JDBC_URL"), "postgres", "");
+      return PostgresTestDatabase.dataSource(CastAuditPostgresTest.class);
     }
 
     @Bean
