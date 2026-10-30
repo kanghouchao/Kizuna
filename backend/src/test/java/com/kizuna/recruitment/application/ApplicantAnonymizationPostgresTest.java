@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -25,12 +26,16 @@ import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
+import java.sql.Connection;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -262,6 +267,78 @@ class ApplicantAnonymizationPostgresTest {
     assertThat(row(due)).containsEntry("anonymized_at", null);
     assertThat(count("t_applicant_attachment_uploads")).isEqualTo(1);
     assertThat(executor.executeScheduled(command()).execution().processedCount()).isEqualTo(1);
+  }
+
+  @Test
+  void oldestTargetsAcrossStatesComeFirstSoOneBacklogCannotStarveTheOthers() {
+    when(systemConfigs.applicantRetentionSettings())
+        .thenReturn(new ApplicantRetentionSettings(6, 6, null));
+    var properties = context.getBean(AppProperties.class).getApplicantAnonymization();
+    properties.setMaxApplicants(2);
+    try {
+      String rejectedOld = applicant("REJECTED", TODAY.minusYears(2), null);
+      applicant("REJECTED", TODAY.minusYears(1), null);
+      applicant("REJECTED", TODAY.minusYears(1), null);
+      String withdrawnOldest = applicant("WITHDRAWN", TODAY.minusYears(3), null);
+
+      var run = executor.executeScheduled(command()).execution();
+
+      assertThat(run.processedCount()).isEqualTo(2);
+      assertThat(row(withdrawnOldest).get("anonymized_at")).isNotNull();
+      assertThat(row(rejectedOld).get("anonymized_at")).isNotNull();
+      assertThat(count("t_applicants where anonymized_at is null")).isEqualTo(2);
+    } finally {
+      properties.setMaxApplicants(100);
+    }
+  }
+
+  @Test
+  void waitsForAnInFlightAttachmentWriteWithoutHoldingTheApplicantLock() throws Exception {
+    String due = applicant("REJECTED", TODAY.minusYears(1), null);
+    attachment(due);
+    var source = context.getBean(DataSource.class);
+    try (Connection upload = source.getConnection();
+        var pool = Executors.newSingleThreadExecutor()) {
+      upload.setAutoCommit(false);
+      try (var statement = upload.createStatement()) {
+        statement.execute("set local lock_timeout = '3s'");
+      }
+      // 保存完了処理と同じく、添付行を握ったまま実体を書いている最中を再現する。
+      lock(
+          upload,
+          "select id from t_applicant_attachment_uploads where applicant_id=? for no key update",
+          due);
+      var run = pool.submit(() -> executor.executeScheduled(command()).execution());
+      awaitLockWait();
+      // 匿名化が応募者を先に握っていれば、ここで待ち合いになり lock_timeout で失敗する。
+      lock(upload, "select id from t_applicants where id=? for update", due);
+      verify(storage, never()).delete(any(AttachmentObject.class));
+      upload.commit();
+      assertThat(run.get(20, TimeUnit.SECONDS).status()).isEqualTo("SUCCEEDED");
+    }
+    assertThat(row(due).get("anonymized_at")).isNotNull();
+    assertThat(count("t_applicant_attachment_uploads")).isZero();
+    verify(storage).delete(any(AttachmentObject.class));
+  }
+
+  private static void lock(Connection connection, String sql, String id) throws Exception {
+    try (var statement = connection.prepareStatement(sql)) {
+      statement.setString(1, id);
+      statement.executeQuery().close();
+    }
+  }
+
+  private void awaitLockWait() throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (System.nanoTime() < deadline) {
+      Long waiting =
+          jdbc.queryForObject(
+              "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock'",
+              Long.class);
+      if (waiting != null && waiting > 0) return;
+      Thread.sleep(20);
+    }
+    throw new AssertionError("匿名化が添付行のロックを待っていません");
   }
 
   private TaskCommand command() {

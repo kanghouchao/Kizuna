@@ -21,9 +21,9 @@ public interface ApplicantRepository
   @Query("select a.enrollmentId from Applicant a where a.enrollmentId in :enrollmentIds")
   Set<String> findReferencedEnrollmentIds(Collection<String> enrollmentIds);
 
-  /** 店舗を跨ぐ照会。グループ全体の匿名化処理だけが使い、以後の操作は各行の店舗で引き直す。 */
+  /** 店舗を跨ぐ照会。グループ全体の匿名化処理だけが使い、以後の操作は各行の店舗で引き直す。終端は一度きりなので遷移履歴は一行に定まる。 */
   @Query(
-      "select new com.kizuna.recruitment.domain.ApplicantAnonymizationTarget(a.id, a.storeId) from Applicant a where a.status = :status and a.anonymizedAt is null and exists (select h.id from ApplicantStatusHistory h where h.storeId = a.storeId and h.applicantId = a.id and h.newStatus = a.status and h.createdAt < :before) order by a.id")
+      "select new com.kizuna.recruitment.domain.ApplicantAnonymizationTarget(a.id, a.storeId, h.createdAt) from Applicant a, ApplicantStatusHistory h where h.storeId = a.storeId and h.applicantId = a.id and h.newStatus = a.status and a.status = :status and a.anonymizedAt is null and h.createdAt < :before order by h.createdAt, a.id")
   List<ApplicantAnonymizationTarget> findAnonymizationTargets(
       ApplicantStatus status, OffsetDateTime before, Limit limit);
 
