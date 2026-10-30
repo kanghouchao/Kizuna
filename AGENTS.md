@@ -55,7 +55,7 @@ Forbidden operations are repository policy. This repository provides no local co
 - **Docker data wipes**: `docker volume rm`, `docker system prune`, `compose down -v` — dev DB volumes must survive.
 - **GitGuardian scans every commit**: even placeholder passwords written as literals in compose files or docs trigger alerts. Always write credentials as `${VAR:-default}`. `.env` is never committed or read.
 
-Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/pull_request_template.md`. All in Japanese.
+Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/pull_request_template.md`. All in Japanese. When opening a PR, check its human-review items against the criteria in CONTRIBUTING.md; if any applies, tell the user to run `/show-me` in this authoring session before merge. A show-me page for such a PR names the criteria met, the `file:line` to read for each, and what the tests do and do not prove.
 
 ## Do NOT introduce (unless explicitly requested)
 
@@ -75,4 +75,5 @@ Severity and scope for any reviewer, human or bot. The conventions themselves li
 - **Do not report**: anything `task lint` (Spotless / ESLint) already enforces, lockfiles, or pinned ids in Liquibase seed changesets for tables that only Liquibase writes.
 - **Always check**: an added or changed endpoint follows the [API contract](backend/AGENTS.md#api-contract); a cross-store read takes the caller's store set and a write verifies its single storeId; logs and list DTOs carry no PII the endpoint does not need.
 - **Evidence**: a claim about behavior cites the `file:line` that produces it; never infer behavior from names.
+- **Human review**: a diff that meets a criterion in [CONTRIBUTING.md](CONTRIBUTING.md) "人手レビューが必要な PR" while the PR body leaves that item unchecked is Important.
 - **Scope**: report what this diff introduces. Pre-existing problems go in a separate, non-blocking list. Do not repeat a finding already answered in the thread.
