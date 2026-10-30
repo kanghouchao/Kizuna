@@ -40,7 +40,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </Link>
       </p>
       {/* フッター */}
-      <p className="auth-footer mt-12 text-center">ご不明点はKIZUNAサポートまでご連絡ください</p>
+      <p className="auth-footer mt-8 sm:mt-12 text-center">
+        ご不明点はKIZUNAサポートまでご連絡ください
+      </p>
     </AuthLayout>
   );
 }
