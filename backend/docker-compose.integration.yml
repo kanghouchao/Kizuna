@@ -1,0 +1,55 @@
+# 統合テスト（*IntegrationTest）専用の使い捨てスタック
+#
+# 開発スタック・e2e とは何も共有しない：ホストポートを公開せず、DB / Redis は tmpfs に置く。
+# プロジェクト名は COMPOSE_PROJECT_NAME（backend Taskfile が worktree 名から導出する）で一意化される。
+# 実行は `task -d backend test:integration`。資格情報は実行ごとの乱数で、リポジトリに既定値を置かない。
+name: kizuna-integration
+
+services:
+  database:
+    image: dhi.io/postgres:18-alpine3.23
+    tmpfs:
+      # DHI の postgres は uid 70 で動き、root 所有の tmpfs では initdb できない
+      - /var/lib/postgresql:uid=70,gid=70
+    environment:
+      POSTGRES_PASSWORD: ${KIZUNA_POSTGRES_TEST_PASSWORD:?task test:integration 経由で実行すること}
+    healthcheck:
+      # 初期化中の一時サーバは TCP を開かないため、TCP で応答した時点を本起動とみなす
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -q"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  # 認証失効の検証が ACL を書き換えるための専用 Redis。このネットワークの内側だけで使う。
+  cache:
+    image: dhi.io/redis:8-alpine3.23
+    command: redis-server --protected-mode no
+    healthcheck:
+      test: ["CMD", "redis-cli", "-e", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  integration-test:
+    # backend/Dockerfile の integration-test ステージ（Gradle と依存を層へ写したもの）。
+    # タグは worktree ごとに分け、別 worktree のビルドで差し替わらないようにする。
+    image: kizuna-backend-integration-test:${INTEGRATION_IMAGE_TAG:-latest}
+    environment:
+      KIZUNA_POSTGRES_TEST_JDBC_URL: jdbc:postgresql://database:5432/postgres
+      KIZUNA_POSTGRES_TEST_USERNAME: postgres
+      KIZUNA_POSTGRES_TEST_PASSWORD: ${KIZUNA_POSTGRES_TEST_PASSWORD:?}
+      KIZUNA_TEST_REDIS_HOST: cache
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    # 環境変数が届かずに全クラスが skip されても Gradle は成功するため、全クラスが実行されたことを結果 XML で確かめる。
+    command:
+      - |
+        ./gradlew test --offline --rerun --no-daemon --tests "*IntegrationTest" || exit 1
+        expected=$$(find src/test -name "*IntegrationTest.java" | wc -l)
+        ran=$$(grep -L -e "tests=\"0\"" -e "skipped=\"[1-9]" build/test-results/test/TEST-*IntegrationTest.xml | wc -l)
+        echo "統合テスト: $${ran}/$${expected} クラスを実行"
+        [ "$$ran" -eq "$$expected" ]

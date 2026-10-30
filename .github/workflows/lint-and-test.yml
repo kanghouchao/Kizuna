@@ -158,8 +158,8 @@ jobs:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
 
-  postgres-test-backend:
-    name: PostgreSQL Test (backend)
+  integration-test-backend:
+    name: Integration Test (backend)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -198,7 +198,7 @@ jobs:
 
       - name: PostgreSQL test
         if: steps.diff.outputs.docs_only != 'true'
-        run: task -d backend test:postgres
+        run: task -d backend test:integration
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain

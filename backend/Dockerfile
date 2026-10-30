@@ -21,14 +21,14 @@ COPY src src
 RUN --mount=type=cache,id=gradle-cache,target=/home/gradle/.gradle,uid=1000,gid=1000,sharing=locked \
     ./gradlew clean test jacocoTestReport jacocoTestCoverageVerification --no-daemon --info
 
-# 実 PostgreSQL テスト層。DB コンテナと同じネットワークで docker run して実行時はオフラインで走らせるため、
+# 統合テスト層。DB コンテナと同じネットワークで実行時はオフラインで走らせるため、
 # キャッシュマウントで解決した依存と Gradle 本体を層へ写す。接続先が無いので全クラス skip されるが、
 # test タスクが要る依存（JaCoCo エージェント等）はここで解決される。
-FROM dependencies AS postgres-test
+FROM dependencies AS integration-test
 WORKDIR /app
 COPY src src
 RUN --mount=type=cache,id=gradle-cache,target=/gradle-cache,uid=1000,gid=1000,sharing=locked \
-    GRADLE_USER_HOME=/gradle-cache ./gradlew test --tests "*PostgresTest" --no-daemon \
+    GRADLE_USER_HOME=/gradle-cache ./gradlew test --tests "*IntegrationTest" --no-daemon \
     && mkdir -p /home/gradle/.gradle/caches \
     && cp -a /gradle-cache/wrapper /home/gradle/.gradle/ \
     && cp -a /gradle-cache/caches/modules-2 /home/gradle/.gradle/caches/
