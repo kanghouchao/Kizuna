@@ -16,27 +16,28 @@ import org.springframework.stereotype.Component;
 public class AdvertisingMediaRenderer {
   private static final List<Object> HEADER =
       List.of(
-          "record_type",
-          "generated_at",
-          "basis",
-          "media_matching",
-          "inquiry_basis",
-          "store_id",
-          "month",
-          "month_version",
-          "category",
-          "media_name",
-          "entry_count",
-          "recorded_amount",
-          "recorded_inquiry_entry_count",
-          "unrecorded_inquiry_entry_count",
-          "recorded_inquiry_count_sum",
-          "inquiry_status");
+          "行種別",
+          "生成日時",
+          "計算根拠",
+          "媒体の照合",
+          "問い合わせ人数の根拠",
+          "店舗ID",
+          "対象月",
+          "対象月版",
+          "区分",
+          "媒体",
+          "費用行数",
+          "登録額（円）",
+          "問い合わせ人数の入力済み行数",
+          "問い合わせ人数の未入力行数",
+          "入力済み人数の合計（重複未除外）",
+          "入力状況");
+  private static final String MEDIA = "媒体別集計";
 
   public byte[] render(Snapshot source, String format, DocumentBudget budget) throws IOException {
     var output = budget.output();
     var metadata = new ArrayList<List<Object>>();
-    var criteria = common(source, "criteria");
+    var criteria = common(source, AdvertisingLabels.CRITERIA);
     criteria.addAll(
         List.of(
             "",
@@ -49,10 +50,10 @@ public class AdvertisingMediaRenderer {
             ""));
     metadata.add(criteria);
     for (var category : source.report().categoryTotals()) {
-      var row = common(source, "category_total");
+      var row = common(source, "区分別総計");
       row.addAll(
           List.of(
-              category.category().name(),
+              AdvertisingLabels.category(category.category()),
               "",
               category.entryCount(),
               category.recordedAmount(),
@@ -70,8 +71,8 @@ public class AdvertisingMediaRenderer {
     } else {
       try (var book = new SXSSFWorkbook(100)) {
         book.setCompressTempFiles(true);
-        var totals = book.createSheet("条件と総計");
-        var media = book.createSheet("媒体別集計");
+        var totals = book.createSheet(AdvertisingLabels.CRITERIA);
+        var media = book.createSheet(MEDIA);
         writeXlsx(totals, HEADER, budget);
         writeXlsx(media, HEADER, budget);
         totals.createFreezePane(0, 1);
@@ -91,26 +92,34 @@ public class AdvertisingMediaRenderer {
         List.of(
             type,
             source.generatedAt().toString(),
-            AdvertisingMediaReport.BASIS,
-            AdvertisingMediaReport.MATCHING,
-            AdvertisingMediaReport.INQUIRY_BASIS,
+            "媒体別の広告費登録の集計（第1版）",
+            AdvertisingLabels.EXACT_NAME,
+            "費用行に手入力された人数の合計（重複未除外）",
             source.storeId(),
             source.month(),
             source.monthVersion()));
   }
 
   private List<Object> media(Snapshot source, AdvertisingMediaReport.Row value) {
-    var row = common(source, "media");
+    var row = common(source, MEDIA);
     row.addAll(
         List.of(
-            value.category().name(),
+            AdvertisingLabels.category(value.category()),
             value.mediaName(),
             value.entryCount(),
             value.recordedAmount(),
             value.recordedInquiryEntryCount(),
             value.unrecordedInquiryEntryCount(),
             value.recordedInquiryCountSum() == null ? "" : value.recordedInquiryCountSum(),
-            value.inquiryStatus().name()));
+            inquiryStatus(value.inquiryStatus())));
     return row;
+  }
+
+  private String inquiryStatus(AdvertisingMediaReport.InquiryStatus status) {
+    return switch (status) {
+      case UNRECORDED -> "全行未入力";
+      case PARTIAL -> "一部未入力";
+      case RECORDED -> "全行入力済み";
+    };
   }
 }

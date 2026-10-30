@@ -12,6 +12,7 @@ import com.kizuna.advertising.infrastructure.AdvertisingMediaRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.export.DocumentBudget;
+import com.kizuna.shared.export.ExportCells;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -62,7 +63,18 @@ class AdvertisingMediaRendererTest {
     String csv = new String(renderer.render(report, "csv", budget()), StandardCharsets.UTF_8);
     assertThat(csv)
         .startsWith("\ufeff")
-        .contains("'00000", "'01000", "'02000", "MANUAL_RECORDED_SUM_NOT_DEDUPLICATED");
+        .contains(
+            "'00000",
+            "'01000",
+            "'02000",
+            "\"'行種別\",\"'生成日時\",\"'計算根拠\",\"'媒体の照合\"",
+            "\"'区分別総計\"",
+            "\"'媒体別集計\"",
+            "\"'営業広告\"",
+            "費用行に手入力された人数の合計（重複未除外）",
+            "\"'全行未入力\"",
+            "\"'全行入力済み\"");
+    assertThat(ExportCells.asciiWords(csv)).isEmpty();
     assertThat(csv.split("\r\n")).hasSize(2005);
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {

@@ -347,6 +347,12 @@ Then(
     expect(text.split("\r\n").filter((l) => l.includes("'=媒体"))).toHaveLength(
       2001,
     );
+    const [header, criteria, cost] = text.split("\r\n");
+    expect(header).toContain("\"'広告登録額合計（円）\"");
+    expect(header).not.toContain("recorded_total_amount");
+    expect(criteria.startsWith("\"'条件と総計\",")).toBe(true);
+    expect(cost.startsWith("\"'広告費明細\",")).toBe(true);
+    expect(cost).toContain("\"'営業広告\"");
     const xlsx = await request.get(`${base}/exports`, {
       headers: h(),
       params: { month, format: "xlsx" },

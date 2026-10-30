@@ -231,7 +231,7 @@ Then('広告費帳票の四つの選択条件は旧形式と最小根拠を保�
         if (format === 'csv') {
           expect(bytes.subarray(0, 3).toString('hex')).toBe('efbbbf');
           expect(text.split('\r\n')[0].split(',')).toHaveLength(columns);
-          expect(text.split('\r\n').filter(line => line.startsWith('"\'advertising_cost"'))).toHaveLength(include_advertising ? 3 : 0);
+          expect(text.split('\r\n').filter(line => line.startsWith('"\'広告費根拠"'))).toHaveLength(include_advertising ? 3 : 0);
           if (include_advertising && include_remuneration) archivedCsv = text;
         } else {
           const workbook = zipEntry(bytes, 'xl/workbook.xml');
@@ -253,9 +253,9 @@ Then('広告費帳票の四つの選択条件は旧形式と最小根拠を保�
     const bytes = await response.body();
     if (format === 'csv') {
       const lines = bytes.toString().split('\r\n');
-      expect(lines[1]).toContain('NOT_APPLICABLE_DAY_GROUPING');
+      expect(lines[1]).toContain('対象外: 広告費は日別に配分しません。');
       expect(lines[1].split(',').slice(17, 21)).toEqual(['""', '""', '""', '""']);
-      expect(lines.filter(line => line.startsWith('"\'advertising_cost"'))).toHaveLength(0);
+      expect(lines.filter(line => line.startsWith('"\'広告費根拠"'))).toHaveLength(0);
     } else {
       expect(zipEntry(bytes, 'xl/worksheets/sheet4.xml').match(/<row /g)).toHaveLength(1);
     }
@@ -464,7 +464,7 @@ Then('広告費帳票の全件出力は2001行と精度と取得上限を守る'
       const bytes = await response.body();
       if (format === 'csv') {
         const text = bytes.toString();
-        expect(text.split('\r\n').filter(line => line.startsWith('"\'advertising_cost"'))).toHaveLength(2001);
+        expect(text.split('\r\n').filter(line => line.startsWith('"\'広告費根拠"'))).toHaveLength(2001);
         expect(text).toContain(`"'${prefix}02000"`);
         expect(text).not.toContain(secret);
       } else {

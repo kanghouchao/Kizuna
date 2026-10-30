@@ -11,6 +11,7 @@ import com.kizuna.advertising.infrastructure.AdvertisingRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.export.DocumentBudget;
+import com.kizuna.shared.export.ExportCells;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -56,6 +57,14 @@ class AdvertisingRendererTest {
     assertThat(text).contains("'00000", "'01000", "'02000", "'00001", "'=媒体,\"\"試験\"\"");
     assertThat(text.split("\r\n")).hasSize(2003);
     assertThat(text).contains("\"200100\"");
+    assertThat(text.split("\r\n")[0])
+        .isEqualTo(
+            "\ufeff\"'行種別\",\"'生成日時\",\"'計算根拠\",\"'店舗ID\",\"'対象月\",\"'広告費登録件数\","
+                + "\"'営業広告登録額（円）\",\"'採用広告登録額（円）\",\"'広告登録額合計（円）\",\"'広告費ID\","
+                + "\"'広告費版\",\"'区分\",\"'媒体\",\"'広告会社\",\"'プラン\",\"'問い合わせ人数\",\"'金額（円）\"");
+    assertThat(text.split("\r\n")[1]).startsWith("\"'条件と総計\",").contains("出力時点の有効な広告費登録");
+    assertThat(text.split("\r\n")[2]).startsWith("\"'広告費明細\",").contains("\"'営業広告\"");
+    assertThat(ExportCells.asciiWords(text)).isEmpty();
     try (var book =
         new XSSFWorkbook(
             new ByteArrayInputStream(

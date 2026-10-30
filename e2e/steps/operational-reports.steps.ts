@@ -86,7 +86,7 @@ When('運営帳票を画面とCSVとExcelで取得する', async ({ request, pag
       expect(text.startsWith('\ufeff')).toBeTruthy();
       expect(text).toContain(prefix + '0001'); expect(text).toContain(prefix + '1000'); expect(text).toContain(prefix + '2000');
       expect(text).not.toContain('出力禁止顧客氏名');
-      expect(text.split('\r\n').filter(line => line.startsWith('"\'order"'))).toHaveLength(2001);
+      expect(text.split('\r\n').filter(line => line.startsWith('"\'受注明細"'))).toHaveLength(2001);
      } else {
       const path = $testInfo.outputPath('operational-report.xlsx');
       await writeFile(path, bytes);

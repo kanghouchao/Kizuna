@@ -6,7 +6,9 @@ import static com.kizuna.shared.export.TabularCells.writeXlsx;
 import com.kizuna.reporting.application.ReportBudget;
 import com.kizuna.reporting.domain.AdvertisingAmounts;
 import com.kizuna.reporting.domain.OperationalReport;
+import com.kizuna.shared.exception.ServiceUnavailableException;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -88,6 +90,20 @@ public class ReportRenderer {
     }
   }
 
+  private enum RowType {
+    CRITERIA("条件と総計"),
+    SUMMARY("集計"),
+    ORDER("受注明細"),
+    REMUNERATION_DAY("日別報酬根拠"),
+    BONUS("ボーナス根拠"),
+    ADVERTISING_COST("広告費根拠");
+    private final String label;
+
+    RowType(String label) {
+      this.label = label;
+    }
+  }
+
   private List<Object> header(OperationalReport report) {
     var result = new ArrayList<>(HEADER);
     if (report.remuneration() != null)
@@ -109,23 +125,15 @@ public class ReportRenderer {
       try (var workbook = new SXSSFWorkbook(100)) {
         workbook.setCompressTempFiles(true);
         var sheets = new HashMap<String, Sheet>();
-        var types = new ArrayList<>(List.of("metadata", "summary", "order"));
-        if (report.remuneration() != null) types.addAll(List.of("remuneration_day", "bonus"));
-        if (report.advertising() != null) types.add("advertising_cost");
-        for (String name : types) {
-          var sheet =
-              workbook.createSheet(
-                  switch (name) {
-                    case "metadata" -> "条件と総計";
-                    case "summary" -> "集計";
-                    case "remuneration_day" -> "日別報酬根拠";
-                    case "bonus" -> "ボーナス根拠";
-                    case "advertising_cost" -> "広告費根拠";
-                    default -> "受注明細";
-                  });
+        var types = new ArrayList<>(List.of(RowType.CRITERIA, RowType.SUMMARY, RowType.ORDER));
+        if (report.remuneration() != null)
+          types.addAll(List.of(RowType.REMUNERATION_DAY, RowType.BONUS));
+        if (report.advertising() != null) types.add(RowType.ADVERTISING_COST);
+        for (var type : types) {
+          var sheet = workbook.createSheet(type.label);
           writeXlsx(sheet, header(report), budget);
           sheet.createFreezePane(0, 1);
-          sheets.put(name, sheet);
+          sheets.put(type.label, sheet);
         }
         rows(report, row -> writeXlsx(sheets.get(row.getFirst().toString()), row, budget));
         budget.check();
@@ -141,7 +149,7 @@ public class ReportRenderer {
         withAmounts(
             row(
                 report,
-                "metadata",
+                RowType.CRITERIA,
                 "",
                 "",
                 "",
@@ -160,7 +168,7 @@ public class ReportRenderer {
           withAmounts(
               row(
                   report,
-                  "summary",
+                  RowType.SUMMARY,
                   summary.storeId().toString(),
                   summary.storeName(),
                   summary.period(),
@@ -175,14 +183,15 @@ public class ReportRenderer {
               report,
               summary.advertising()));
     if (report.advertising() != null)
-      rows.accept(row(report, "metadata", "", "", "注記: " + report.advertising().explanation()));
+      rows.accept(
+          row(report, RowType.CRITERIA, "", "", "注記: " + report.advertising().explanation()));
     var names = new HashMap<Long, String>();
     for (var store : report.facts().stores()) {
       names.put(store.storeId(), store.storeName());
       rows.accept(
           row(
               report,
-              "metadata",
+              RowType.CRITERIA,
               store.storeId().toString(),
               store.storeName(),
               "",
@@ -198,13 +207,13 @@ public class ReportRenderer {
       rows.accept(
           row(
               report,
-              "order",
+              RowType.ORDER,
               order.storeId().toString(),
               names.get(order.storeId()),
               order.businessDate().toString(),
               order.orderId(),
               Long.toString(order.version()),
-              order.invalidated(),
+              yesNo(order.invalidated()),
               order.invalidated() ? 0 : 1,
               order.invalidated() ? 1 : 0,
               order.invalidated() ? 0 : order.totalFee(),
@@ -214,14 +223,14 @@ public class ReportRenderer {
         var values =
             row(
                 report,
-                "advertising_cost",
+                RowType.ADVERTISING_COST,
                 cost.storeId().toString(),
                 names.get(cost.storeId()),
                 cost.month());
         values.set(AdvertisingColumn.ID.index(report), cost.id());
         values.set(AdvertisingColumn.VERSION.index(report), Long.toString(cost.version()));
         values.set(AdvertisingColumn.MONTH.index(report), cost.month());
-        values.set(AdvertisingColumn.CATEGORY.index(report), cost.category());
+        values.set(AdvertisingColumn.CATEGORY.index(report), category(cost.category()));
         values.set(AdvertisingColumn.AMOUNT.index(report), cost.amount());
         rows.accept(values);
       }
@@ -231,7 +240,7 @@ public class ReportRenderer {
         var values =
             row(
                 report,
-                "remuneration_day",
+                RowType.REMUNERATION_DAY,
                 day.storeId().toString(),
                 names.get(day.storeId()),
                 day.businessDate().toString(),
@@ -258,18 +267,20 @@ public class ReportRenderer {
         values.set(
             ExtraColumn.EFFECTIVE_FROM.index(),
             day.effectiveFrom() == null ? "" : day.effectiveFrom().toString());
-        values.set(ExtraColumn.STATE.index(), blank(day.guaranteeState()));
+        values.set(
+            ExtraColumn.STATE.index(),
+            day.guaranteeState() == null ? "" : guaranteeState(day.guaranteeState()));
         values.set(ExtraColumn.DAILY_AMOUNT.index(), blank(day.dailyAmount()));
-        values.set(ExtraColumn.DURATION.index(), day.closedDuration());
-        values.set(ExtraColumn.INCOMPLETE.index(), day.attendanceIncomplete());
-        values.set(ExtraColumn.STATUS.index(), day.guaranteeStatus());
+        values.set(ExtraColumn.DURATION.index(), duration(day.closedDuration()));
+        values.set(ExtraColumn.INCOMPLETE.index(), yesNo(day.attendanceIncomplete()));
+        values.set(ExtraColumn.STATUS.index(), guaranteeStatus(day.guaranteeStatus()));
         rows.accept(values);
       }
       for (var bonus : report.remunerationFacts().bonuses()) {
         var values =
             row(
                 report,
-                "bonus",
+                RowType.BONUS,
                 bonus.storeId().toString(),
                 names.get(bonus.storeId()),
                 bonus.awardDate().toString(),
@@ -284,7 +295,7 @@ public class ReportRenderer {
         values.set(ExtraColumn.PERSON.index(), bonus.personId().toString());
         values.set(ExtraColumn.AWARD.index(), bonus.id());
         values.set(ExtraColumn.VERSION.index(), Long.toString(bonus.version()));
-        values.set(ExtraColumn.CANCELLED.index(), bonus.cancelled());
+        values.set(ExtraColumn.CANCELLED.index(), yesNo(bonus.cancelled()));
         rows.accept(values);
       }
     }
@@ -294,16 +305,16 @@ public class ReportRenderer {
     void accept(List<Object> values) throws IOException;
   }
 
-  private List<Object> row(OperationalReport report, String type, Object... values) {
+  private List<Object> row(OperationalReport report, RowType type, Object... values) {
     var row =
         new ArrayList<Object>(
             List.of(
-                type,
+                type.label,
                 report.criteria().from().toString(),
                 report.criteria().to().toString(),
-                report.criteria().groupBy(),
+                groupBy(report.criteria().groupBy()),
                 report.facts().generatedAt().toString(),
-                report.basis()));
+                basis(report.basis())));
     for (var value : values) row.add(blank(value));
     while (row.size() < header(report).size()) row.add("");
     return row;
@@ -327,12 +338,83 @@ public class ReportRenderer {
       row.set(ExtraColumn.NOT_CONFIGURED.index(), amounts.notConfiguredDays());
     }
     if (advertising != null) {
-      row.set(AdvertisingColumn.STATUS.index(report), advertising.status());
+      row.set(AdvertisingColumn.STATUS.index(report), advertisingStatus(advertising.status()));
       row.set(AdvertisingColumn.ENTRIES.index(report), blank(advertising.entryCount()));
       row.set(AdvertisingColumn.SALES.index(report), blank(advertising.salesAmount()));
       row.set(AdvertisingColumn.RECRUITMENT.index(report), blank(advertising.recruitmentAmount()));
       row.set(AdvertisingColumn.TOTAL.index(report), blank(advertising.recordedTotalAmount()));
     }
     return row;
+  }
+
+  // 値は他モジュールから文字列で届くため、未知の値は黙って英字を出さずに失敗させる。
+  private static String groupBy(String value) {
+    return switch (value) {
+      case "day" -> "日別";
+      case "month" -> "月別";
+      case "store" -> "店舗別";
+      default -> throw unknown();
+    };
+  }
+
+  private static String basis(String value) {
+    return switch (value) {
+      case OperationalReport.BASIS -> "完了受注の現在値（第1版）";
+      case "completed-orders-remuneration-current-v2" -> "完了受注と報酬の現在値（第2版）";
+      case "completed-orders-advertising-current-v3" -> "完了受注と広告費の現在値（第3版）";
+      case "completed-orders-remuneration-advertising-current-v3" -> "完了受注・報酬・広告費の現在値（第3版）";
+      default -> throw unknown();
+    };
+  }
+
+  private static String advertisingStatus(String value) {
+    return switch (value) {
+      case "RECORDED" -> "登録あり";
+      case "NO_RECORDS" -> "登録なし";
+      case "NOT_APPLICABLE_PARTIAL_MONTH" -> "対象外: 月初から月末までの完全な月を指定してください。";
+      case "NOT_APPLICABLE_DAY_GROUPING" -> "対象外: 広告費は日別に配分しません。月別または店舗別で照会してください。";
+      default -> throw unknown();
+    };
+  }
+
+  private static String category(String value) {
+    return switch (value) {
+      case "SALES" -> "営業広告";
+      case "RECRUITMENT" -> "採用広告";
+      default -> throw unknown();
+    };
+  }
+
+  private static String guaranteeStatus(String value) {
+    return switch (value) {
+      case "NOT_ELIGIBLE" -> "4時間未満・実績なし";
+      case "PENDING_ATTENDANCE" -> "退勤記録待ち";
+      case "NOT_CONFIGURED" -> "日額未設定";
+      case "STOPPED" -> "保証停止";
+      case "CALCULATED" -> "計算済み";
+      default -> throw unknown();
+    };
+  }
+
+  private static String guaranteeState(String value) {
+    return switch (value) {
+      case "ACTIVE" -> "有効";
+      case "STOPPED" -> "停止";
+      default -> throw unknown();
+    };
+  }
+
+  private static String yesNo(boolean value) {
+    return value ? "はい" : "いいえ";
+  }
+
+  private static String duration(String value) {
+    var duration = Duration.parse(value);
+    var text = duration.toHours() + "時間" + duration.toMinutesPart() + "分";
+    return duration.toSecondsPart() == 0 ? text : text + duration.toSecondsPart() + "秒";
+  }
+
+  private static ServiceUnavailableException unknown() {
+    return new ServiceUnavailableException("帳票の値を表示用に変換できません");
   }
 }
