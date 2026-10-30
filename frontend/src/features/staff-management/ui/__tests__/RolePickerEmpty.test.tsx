@@ -86,6 +86,13 @@ it('候補があれば案内を出さない', async () => {
   expect(screen.queryByText(HINT)).not.toBeInTheDocument();
 });
 
+it('候補の取得に失敗したら失敗を表示し、案内を出さない', async () => {
+  jest.mocked(serviceIdentityApi.grantableRoles).mockRejectedValue(new Error('boom'));
+  render(<ServiceIdentityCreateModal {...props} />);
+  expect(await screen.findByText('ロール一覧の取得に失敗しました')).toBeInTheDocument();
+  expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+});
+
 it('従業員追加には自作ロールの案内を出さない', async () => {
   render(<StaffCreateModal {...props} />);
   await screen.findByLabelText('氏名');
