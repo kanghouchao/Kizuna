@@ -95,11 +95,10 @@ class StoredFileAuditTest {
   }
 
   @Test
-  void requestWithoutStoreAndContentTypeRecordsNullStoreAndBlankType() {
-    audit.recordUpload(null, "public/platform/a.bin", "public", 0L, null);
+  void requestWithoutContentTypeRecordsBlankType() {
+    audit.recordUpload(5L, "public/5/cast-photo/a.bin", "public", 0L, null);
 
     var event = recorded.getFirst();
-    assertThat(event.getStoreId()).isNull();
     assertThat(event.getAfterValues()).containsEntry("content_type", "");
   }
 

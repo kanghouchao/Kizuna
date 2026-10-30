@@ -142,10 +142,6 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
-              - column: { name: code, value: ASSET_MANAGE }
-        - insert:
-            tableName: t_permissions
-            columns:
               - column: { name: code, value: BENEFIT_MANAGE }
         - insert:
             tableName: t_permissions
@@ -318,11 +314,6 @@ databaseChangeLog:
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'SYSTEM_CONFIG_MANAGE')" }
-        - insert:
-            tableName: t_role_permissions
-            columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ASSET_MANAGE')" }
         - insert:
             tableName: t_role_permissions
             columns:

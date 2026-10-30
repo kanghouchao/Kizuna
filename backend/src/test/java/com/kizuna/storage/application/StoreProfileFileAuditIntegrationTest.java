@@ -103,9 +103,9 @@ class StoreProfileFileAuditIntegrationTest {
     jdbc.execute(
         "alter table t_audit_events add constraint fk_test_audit_actor foreign key(actor_id) references t_users(id)");
     FileStorageService storage =
-        (prefix, bucket, purpose, file) -> {
+        (storeId, bucket, purpose, file) -> {
           if (storeFails) throw new IllegalStateException("s3");
-          String path = bucket + "/" + prefix + "/" + purpose + "/" + file.getOriginalFilename();
+          String path = bucket + "/" + storeId + "/" + purpose + "/" + file.getOriginalFilename();
           stored.add(path);
           return path;
         };

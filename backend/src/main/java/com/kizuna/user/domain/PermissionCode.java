@@ -205,9 +205,6 @@ public enum PermissionCode {
   /** 共通設定の閲覧・更新（SystemConfigController）。 */
   SYSTEM_CONFIG_MANAGE("システム設定の管理", PermissionGroup.OPERATION, SystemRole.ADMIN),
 
-  /** 全店共有領域への資産アップロード（登録・出力 — FileUploadController の店舗を名乗らない保存経路）。 */
-  ASSET_MANAGE("共有資産のアップロード", PermissionGroup.OPERATION, SystemRole.ADMIN),
-
   /** 登録済み処理の実行・再試行・中断記録と全体履歴の閲覧。 */
   TASK_MANAGE("処理の実行・履歴管理", PermissionGroup.OPERATION, SystemRole.ADMIN),
 
