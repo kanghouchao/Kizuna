@@ -9,6 +9,7 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.persistence.EnabledIfPostgres;
+import com.kizuna.shared.persistence.PostgresTestDatabase;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,7 +39,7 @@ class CustomerAuditPostgresTest {
 
   @BeforeAll
   void connect() {
-    context = new AnnotationConfigApplicationContext(CustomerContactAuditPostgresTest.Config.class);
+    context = new AnnotationConfigApplicationContext(Config.class);
     jdbc = new JdbcTemplate(context.getBean(DataSource.class));
     customers = context.getBean(CustomerService.class);
     transactions = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
@@ -232,5 +234,14 @@ class CustomerAuditPostgresTest {
     if (withContact)
       request.setContacts(List.of(new ContactRequest(ContactType.LINE, "秘密-" + UUID.randomUUID())));
     return request;
+  }
+
+  /** 連絡先監査と同じ構成を、このクラス専用のスキーマで立てる。 */
+  static class Config extends CustomerContactAuditPostgresTest.Config {
+    @Override
+    @Bean
+    DataSource dataSource() {
+      return PostgresTestDatabase.dataSource(CustomerAuditPostgresTest.class);
+    }
   }
 }
