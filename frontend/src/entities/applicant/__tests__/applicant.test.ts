@@ -1,5 +1,10 @@
 import { apiClient } from '@/shared/api';
-import { applicantApi, allowedApplicantDecisions, allowedApplicantTransitions } from '..';
+import {
+  applicantApi,
+  allowedApplicantDecisions,
+  allowedApplicantTransitions,
+  applicantPathToInterviewed,
+} from '..';
 import type { ApplicantIntake } from '..';
 jest.mock('@/shared/api', () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), put: jest.fn() },
@@ -88,4 +93,11 @@ test('採用は面接済だけ、不採用は未終了の全状態から選べ�
   expect(allowedApplicantDecisions('INTERVIEWED')).toEqual(['HIRED', 'REJECTED']);
   for (const status of ['HIRED', 'REJECTED', 'WITHDRAWN'] as const)
     expect(allowedApplicantDecisions(status)).toEqual([]);
+});
+test('面接済までに経由する状態を遷移規則から辿り、終端状態は届かないとする', () => {
+  expect(applicantPathToInterviewed('RECEIVED')).toEqual(['SCREENING', 'INTERVIEWED']);
+  expect(applicantPathToInterviewed('SCREENING')).toEqual(['INTERVIEWED']);
+  expect(applicantPathToInterviewed('INTERVIEWED')).toEqual([]);
+  for (const status of ['HIRED', 'REJECTED', 'WITHDRAWN'] as const)
+    expect(applicantPathToInterviewed(status)).toBeNull();
 });

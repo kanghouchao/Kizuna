@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import {
   allowedApplicantDecisions,
+  applicantPathToInterviewed,
   applicantStatusLabels,
   type ApplicantDecision,
   type ApplicantDetail,
@@ -23,6 +24,16 @@ import {
   SelectValue,
   Textarea,
 } from '@/shared/ui';
+// 面接済への遷移は面接記録を前提とするため、未登録ならその登録を最初の手順に置く
+function hireStepsHint(applicant: ApplicantDetail): string {
+  const path = applicantPathToInterviewed(applicant.status);
+  if (!path?.length) return '';
+  const steps = [
+    ...(applicant.interview ? [] : ['面接記録を登録']),
+    `選考状態を${path.map(status => applicantStatusLabels[status]).join('→')}に変更`,
+  ];
+  return `採用は面接済の応募者だけに確定できます。${steps.join('し、')}すると採用を選べます。`;
+}
 export function ApplicantDecisionForm({
   applicant,
   onSave,
@@ -35,6 +46,7 @@ export function ApplicantDecisionForm({
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const allowed = allowedApplicantDecisions(applicant.status);
+  const hireHint = hireStepsHint(applicant);
   const form = useForm<{ status: ApplicantDecision | ''; reason: string }>({
     defaultValues: { status: '', reason: '' },
   });
@@ -104,7 +116,7 @@ export function ApplicantDecisionForm({
               )}
             />
             <p className="text-sm text-muted-foreground">
-              採用は面接済の応募者だけに確定できます。確定後は編集・再開できません。
+              {hireHint}確定後は編集・再開できません。
             </p>
             <Button type="submit" disabled={busy || form.formState.isSubmitting}>
               採否を確定
