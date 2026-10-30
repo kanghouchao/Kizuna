@@ -16,23 +16,24 @@ import org.springframework.stereotype.Component;
 public class AdvertisingRenderer {
   private static final List<Object> HEADER =
       List.of(
-          "record_type",
-          "generated_at",
-          "basis",
-          "store_id",
-          "month",
-          "entry_count",
-          "sales_amount",
-          "recruitment_amount",
-          "recorded_total_amount",
-          "cost_id",
-          "version",
-          "category",
-          "media_name",
-          "agency_name",
-          "plan_name",
-          "inquiry_count",
-          "amount");
+          "行種別",
+          "生成日時",
+          "計算根拠",
+          "店舗ID",
+          "対象月",
+          "広告費登録件数",
+          "営業広告登録額（円）",
+          "採用広告登録額（円）",
+          "広告登録額合計（円）",
+          "広告費ID",
+          "広告費版",
+          "区分",
+          "媒体",
+          "広告会社",
+          "プラン",
+          "問い合わせ人数",
+          "金額（円）");
+  private static final String COSTS = "広告費明細";
 
   public byte[] render(ExportSnapshot report, String format, DocumentBudget budget)
       throws IOException {
@@ -45,8 +46,8 @@ public class AdvertisingRenderer {
     } else {
       try (var book = new SXSSFWorkbook(100)) {
         book.setCompressTempFiles(true);
-        var totals = book.createSheet("条件と総計");
-        var costs = book.createSheet("広告費明細");
+        var totals = book.createSheet(AdvertisingLabels.CRITERIA);
+        var costs = book.createSheet(COSTS);
         writeXlsx(totals, HEADER, budget);
         writeXlsx(costs, HEADER, budget);
         totals.createFreezePane(0, 1);
@@ -66,9 +67,9 @@ public class AdvertisingRenderer {
     var row =
         new ArrayList<Object>(
             List.of(
-                cost == null ? "metadata" : "cost",
+                cost == null ? AdvertisingLabels.CRITERIA : COSTS,
                 s.generatedAt().toString(),
-                "advertising-cost-current-v1",
+                "出力時点の有効な広告費登録（第1版）",
                 s.storeId().toString(),
                 s.month()));
     row.addAll(
@@ -81,7 +82,7 @@ public class AdvertisingRenderer {
           List.of(
               cost.id(),
               Long.toString(cost.version()),
-              cost.category().name(),
+              AdvertisingLabels.category(cost.category()),
               cost.mediaName(),
               blank(cost.agencyName()),
               blank(cost.planName()),

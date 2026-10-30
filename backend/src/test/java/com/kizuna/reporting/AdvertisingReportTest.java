@@ -13,6 +13,7 @@ import com.kizuna.reporting.domain.ReportCriteria;
 import com.kizuna.reporting.infrastructure.ReportRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
+import com.kizuna.shared.export.ExportCells;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -194,7 +195,10 @@ class AdvertisingReportTest {
     assertThat(csv)
         .startsWith("\ufeff")
         .contains("\"'=cost0000\"", "\"'=cost1000\"", "\"'=cost2000\"");
-    assertThat(csv.lines().filter(line -> line.contains("'advertising_cost"))).hasSize(2001);
+    assertThat(csv.lines().filter(line -> line.contains("'広告費根拠"))).hasSize(2001);
+    assertThat(ExportCells.asciiWords(csv))
+        .hasSize(2001)
+        .allMatch(word -> word.startsWith("=cost"));
     try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(render(report, "xlsx")))) {
       var sheet = workbook.getSheet("広告費根拠");
       assertThat(sheet.getLastRowNum()).isEqualTo(2001);
@@ -202,7 +206,7 @@ class AdvertisingReportTest {
       assertThat(sheet.getRow(2001).getCell(21).getStringCellValue()).isEqualTo("=cost2000");
       assertThat(sheet.getRow(2001).getCell(22).getStringCellValue()).isEqualTo("1");
       assertThat(sheet.getRow(2001).getCell(23).getStringCellValue()).isEqualTo("2026-09");
-      assertThat(sheet.getRow(2001).getCell(24).getStringCellValue()).isEqualTo("SALES");
+      assertThat(sheet.getRow(2001).getCell(24).getStringCellValue()).isEqualTo("営業広告");
       assertThat(sheet.getRow(2001).getCell(25).getNumericCellValue()).isEqualTo(2000);
       assertThat(sheet.getRow(1).getCell(20).getStringCellValue()).isEmpty();
       assertThat(workbook.getExternalLinksTables()).isEmpty();
@@ -217,9 +221,9 @@ class AdvertisingReportTest {
     var report = report("2026-09-02", "2026-09-30", "month", costs());
     var csv = new String(render(report, "csv"), StandardCharsets.UTF_8);
     var total = fields(csv.split("\r\n")[1]);
-    assertThat(total[16]).isEqualTo("'NOT_APPLICABLE_PARTIAL_MONTH");
+    assertThat(total[16]).isEqualTo("'対象外: 月初から月末までの完全な月を指定してください。");
     for (int i = 17; i <= 20; i++) assertThat(total[i]).isEmpty();
-    assertThat(csv).doesNotContain("'advertising_cost");
+    assertThat(csv).doesNotContain("'広告費根拠\",");
     try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(render(report, "xlsx")))) {
       assertThat(workbook.getSheet("広告費根拠").getLastRowNum()).isZero();
       assertThat(workbook.getSheet("条件と総計").getRow(1).getCell(20).getStringCellValue()).isEmpty();

@@ -12,6 +12,7 @@ import com.kizuna.advertising.infrastructure.AdvertisingOrderCostRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.export.DocumentBudget;
+import com.kizuna.shared.export.ExportCells;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -65,11 +66,14 @@ class AdvertisingOrderCostRendererTest {
             "'00000",
             "'01000",
             "'02000",
-            "NO_COST_RECORDS",
-            "NO_VALID_ORDERS",
-            "HALF_UP_2_DECIMAL_YEN",
+            "\"'営業広告費が未登録\"",
+            "\"'有効完了受注が0件\"",
+            "\"'記録値から算出\"",
+            "\"'小数第3位を四捨五入（円）\"",
+            "\"'一件あたり記録費用（円）\"",
             "同月同名の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。");
     assertThat(csv.split("\r\n")).hasSize(2004);
+    assertThat(ExportCells.asciiWords(csv)).isEmpty();
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {
       assertThat(book.getNumberOfSheets()).isEqualTo(2);

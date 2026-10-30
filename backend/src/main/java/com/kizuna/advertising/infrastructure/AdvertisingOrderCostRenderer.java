@@ -16,28 +16,29 @@ import org.springframework.stereotype.Component;
 public class AdvertisingOrderCostRenderer {
   private static final List<Object> HEADER =
       List.of(
-          "record_type",
-          "generated_at",
-          "basis",
-          "media_matching",
-          "order_basis",
-          "rounding",
-          "store_id",
-          "month",
-          "month_version",
-          "media_name",
-          "cost_entry_count",
-          "recorded_sales_amount",
-          "valid_completed_order_count",
-          "zero_amount_order_count",
-          "unnamed_media_order_count",
-          "cost_per_order",
-          "calculation_status",
-          "interpretation");
+          "行種別",
+          "生成日時",
+          "計算根拠",
+          "媒体の照合",
+          "受注の根拠",
+          "端数処理",
+          "店舗ID",
+          "対象月",
+          "対象月版",
+          "媒体",
+          "費用行数",
+          "登録営業広告費（円）",
+          "有効完了受注件数",
+          "うち0円の受注件数",
+          "媒体未入力の有効完了受注件数",
+          "一件あたり記録費用（円）",
+          "算出状況",
+          "解釈");
+  private static final String MEDIA = "受注あたり記録広告費";
 
   public byte[] render(Snapshot source, String format, DocumentBudget budget) throws IOException {
     var output = budget.output();
-    var criteria = common(source, "criteria");
+    var criteria = common(source, AdvertisingLabels.CRITERIA);
     var report = source.report();
     criteria.addAll(
         List.of(
@@ -58,8 +59,8 @@ public class AdvertisingOrderCostRenderer {
     } else {
       try (var book = new SXSSFWorkbook(100)) {
         book.setCompressTempFiles(true);
-        var totals = book.createSheet("条件と総計");
-        var media = book.createSheet("受注あたり記録広告費");
+        var totals = book.createSheet(AdvertisingLabels.CRITERIA);
+        var media = book.createSheet(MEDIA);
         writeXlsx(totals, HEADER, budget);
         writeXlsx(media, HEADER, budget);
         totals.createFreezePane(0, 1);
@@ -79,17 +80,17 @@ public class AdvertisingOrderCostRenderer {
         List.of(
             type,
             source.generatedAt().toString(),
-            AdvertisingOrderCostReport.BASIS,
-            AdvertisingOrderCostReport.MATCHING,
-            AdvertisingOrderCostReport.ORDER_BASIS,
-            AdvertisingOrderCostReport.ROUNDING,
+            "登録営業広告費 ÷ 有効完了受注件数（第1版）",
+            AdvertisingLabels.EXACT_NAME,
+            "原営業日が対象月の有効完了受注（0円を含む）",
+            "小数第3位を四捨五入（円）",
             source.storeId(),
             source.month(),
             source.monthVersion()));
   }
 
   private List<Object> media(Snapshot source, AdvertisingOrderCostReport.Row value) {
-    var row = common(source, "media");
+    var row = common(source, MEDIA);
     row.addAll(
         List.of(
             value.mediaName(),
@@ -99,12 +100,20 @@ public class AdvertisingOrderCostRenderer {
             value.zeroAmountOrderCount(),
             "",
             value(value.costPerOrder()),
-            value.calculationStatus().name(),
+            status(value.calculationStatus()),
             ""));
     return row;
   }
 
   private Object value(Object nullable) {
     return nullable == null ? "" : nullable;
+  }
+
+  private String status(AdvertisingOrderCostReport.Status status) {
+    return switch (status) {
+      case CALCULATED -> "記録値から算出";
+      case NO_COST_RECORDS -> "営業広告費が未登録";
+      case NO_VALID_ORDERS -> "有効完了受注が0件";
+    };
   }
 }

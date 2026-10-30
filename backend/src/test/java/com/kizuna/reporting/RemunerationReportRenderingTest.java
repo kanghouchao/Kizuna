@@ -11,6 +11,7 @@ import com.kizuna.reporting.domain.ReportCriteria;
 import com.kizuna.reporting.infrastructure.ReportRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
+import com.kizuna.shared.export.ExportCells;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -124,14 +125,17 @@ class RemunerationReportRenderingTest {
     assertThat(total[21]).isEqualTo("1");
     var unknownDay =
         List.of(lines).stream()
-            .filter(line -> line.contains("'remuneration_day") && line.contains("'NOT_CONFIGURED"))
+            .filter(line -> line.contains("'日別報酬根拠") && line.contains("'日額未設定"))
             .findFirst()
             .orElseThrow();
     assertThat(fields(unknownDay)[17]).isEmpty();
     assertThat(fields(unknownDay)[23]).isEmpty();
+    assertThat(fields(unknownDay)[27]).isEqualTo("'4時間0分");
+    assertThat(fields(unknownDay)[28]).isEqualTo("'いいえ");
+    assertThat(ExportCells.asciiWords(String.join("\r\n", lines))).isEmpty();
     var stoppedDay =
         List.of(lines).stream()
-            .filter(line -> line.contains("'remuneration_day") && line.contains("'STOPPED"))
+            .filter(line -> line.contains("'日別報酬根拠") && line.contains("'保証停止"))
             .findFirst()
             .orElseThrow();
     assertThat(fields(stoppedDay)[17]).isEqualTo("0");
@@ -216,8 +220,50 @@ class RemunerationReportRenderingTest {
       assertThat(row.getCell(22).getStringCellValue()).isEqualTo("10");
       assertThat(row.getCell(30).getStringCellValue()).isEqualTo("0007");
       assertThat(row.getCell(31).getStringCellValue()).isEqualTo("4");
-      assertThat(row.getCell(32).getBooleanCellValue()).isTrue();
+      assertThat(row.getCell(32).getStringCellValue()).isEqualTo("はい");
     }
+  }
+
+  @Test
+  void csvWritesCodesAsScreenLabels() throws Exception {
+    var day =
+        new RemunerationReportFacts.Day(
+            1L,
+            10L,
+            DAY,
+            3000,
+            "term",
+            DAY,
+            "ACTIVE",
+            8000L,
+            "PT7H30M15S",
+            true,
+            "CALCULATED",
+            5000L,
+            0);
+    var report =
+        OperationalReport.aggregate(
+            ReportCriteria.parse("2026-09-01", "2026-09-30", "month"),
+            facts(List.of(order(3000))),
+            new RemunerationReportFacts(List.of(day), List.of()));
+    var csv = new String(render(report, "csv"), StandardCharsets.UTF_8);
+    var lines = csv.split("\r\n");
+    assertThat(fields(lines[1])[0]).isEqualTo("'条件と総計");
+    assertThat(fields(lines[1])[3]).isEqualTo("'月別");
+    assertThat(fields(lines[1])[5]).isEqualTo("'完了受注と報酬の現在値（第2版）");
+    var order = List.of(lines).stream().filter(line -> line.startsWith("\"'受注明細\"")).findFirst();
+    assertThat(fields(order.orElseThrow())[11]).isEqualTo("'いいえ");
+    var proof =
+        fields(
+            List.of(lines).stream()
+                .filter(line -> line.startsWith("\"'日別報酬根拠\""))
+                .findFirst()
+                .orElseThrow());
+    assertThat(proof[25]).isEqualTo("'有効");
+    assertThat(proof[27]).isEqualTo("'7時間30分15秒");
+    assertThat(proof[28]).isEqualTo("'はい");
+    assertThat(proof[29]).isEqualTo("'計算済み");
+    assertThat(ExportCells.asciiWords(csv)).containsExactlyInAnyOrder("order", "term");
   }
 
   private byte[] render(OperationalReport report, String format) throws Exception {

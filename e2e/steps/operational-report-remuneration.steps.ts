@@ -158,7 +158,7 @@ Then('旧帳票の権限と形式を保ち報酬額の追加参照を守る', as
     expect(csv.status(), await csv.text()).toBe(200);
     const text = (await csv.body()).toString('utf8');
     expect(text.split('\r\n')[0].split(',')).toHaveLength(16);
-    expect(text).not.toContain('remuneration_day');
+    expect(text).not.toContain('日別報酬根拠');
     expect(text).not.toContain(bonus.id);
   }
   expect((await request.get('/api/operational-reports', {
@@ -178,8 +178,8 @@ Then('報酬込みCSVとExcelは最小根拠と未知金額を一致させる', 
       [1, 2, 3, 4, 5].map(n => zipEntry(bytes, `xl/worksheets/sheet${n}.xml`)).join('\n');
     expect(text).toContain(bonus.id);
     expect(text).toContain(movedBonus.id);
-    expect(text).toContain('PENDING_ATTENDANCE');
-    expect(text).toContain('NOT_CONFIGURED');
+    expect(text).toContain('退勤記録待ち');
+    expect(text).toContain('日額未設定');
     expect(text).not.toContain(privateName);
     expect(text).not.toContain(privateReason);
     expect(text).not.toContain('出力禁止顧客名');
@@ -187,9 +187,9 @@ Then('報酬込みCSVとExcelは最小根拠と未知金額を一致させる', 
     expect(text).not.toContain(`${year}-08-30`);
     if (format === 'csv') {
       expect(text.startsWith('\ufeff')).toBe(true);
-      expect(text).toContain('completed-orders-remuneration-current-v2');
-      expect(text.split('\r\n').filter(line => line.startsWith('"\'remuneration_day"'))).toHaveLength(5);
-      expect(text.split('\r\n').filter(line => line.startsWith('"\'bonus"'))).toHaveLength(2);
+      expect(text).toContain('完了受注と報酬の現在値（第2版）');
+      expect(text.split('\r\n').filter(line => line.startsWith('"\'日別報酬根拠"'))).toHaveLength(5);
+      expect(text.split('\r\n').filter(line => line.startsWith('"\'ボーナス根拠"'))).toHaveLength(2);
       const totals = text.split('\r\n')[1].split(',');
       expect(totals.slice(16, 22)).toEqual(['\"13000\"', '\"\"', '\"2000\"', '\"\"', '\"1\"', '\"1\"']);
     } else {
