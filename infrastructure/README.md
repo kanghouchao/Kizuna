@@ -23,7 +23,7 @@
 2. `infrastructure/release` で `private-storage` と backend を同時に作り直す。`docker compose restart`（`task restart`）は古い環境変数のまま再起動するので使わない。
 
    ```bash
-   docker compose -p kizuna up -d private-storage backend
+   docker compose -p kizuna up -d --wait private-storage backend
    ```
 
 3. 起動を待つ間の数秒、添付の追加・閲覧・削除は 503 を返す。それ以外の機能は止まらない。
