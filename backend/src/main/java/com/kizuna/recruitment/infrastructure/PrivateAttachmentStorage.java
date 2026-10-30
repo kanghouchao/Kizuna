@@ -15,8 +15,10 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -35,8 +37,10 @@ import software.amazon.awssdk.http.apache5.Apache5HttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetBucketPolicyRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -56,11 +60,28 @@ public class PrivateAttachmentStorage implements AutoCloseable {
     this(properties, () -> createClient(properties.getPrivateAttachments()));
   }
 
+  // 有効なのに検査を満たさない構成は、黙って 503 に落とさず起動を失敗させる。
+  // 非公開バケットは基盤が宣言するので、ここでは存在と policy の不在を読むだけで、作成も policy の書き込みもしない。
   PrivateAttachmentStorage(AppProperties properties, Supplier<S3Client> factory) {
-    boolean configured = isolated(properties);
+    boolean configured = properties.getPrivateAttachments().isEnabled();
+    if (configured) {
+      List<String> violations = isolationViolations(properties);
+      if (!violations.isEmpty()) {
+        deadlines.shutdownNow();
+        throw startupRefused(String.join("、", violations));
+      }
+    }
     storageTimeoutSeconds = properties.getPrivateAttachments().getStorageTimeoutSeconds();
     client = configured ? Objects.requireNonNull(factory.get()) : null;
     bucket = configured ? properties.getPrivateAttachments().getBucket() : null;
+    if (configured) {
+      try {
+        verifyPrivateBucket();
+      } catch (RuntimeException failure) {
+        close();
+        throw failure;
+      }
+    }
     temporaryDirectory =
         configured ? Path.of(properties.getPrivateAttachments().getTemporaryDirectory()) : null;
     downloadPermits =
@@ -249,38 +270,83 @@ public class PrivateAttachmentStorage implements AutoCloseable {
     if (client != null) client.close();
   }
 
-  private static boolean isolated(AppProperties properties) {
+  private void verifyPrivateBucket() {
+    try {
+      client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+    } catch (S3Exception exception) {
+      if (exception.statusCode() == 404) throw startupRefused("非公開バケットが存在しない");
+      throw startupRefused("非公開バケットを確認できない（HTTP " + exception.statusCode() + "）");
+    } catch (SdkException exception) {
+      throw startupRefused("非公開バケットを確認できない（接続失敗）");
+    }
+    // SeaweedFS は policy 未設定もバケット不在も 404 で返すため、エラーコードで判定する。
+    try {
+      client.getBucketPolicy(GetBucketPolicyRequest.builder().bucket(bucket).build());
+    } catch (S3Exception exception) {
+      if (exception.awsErrorDetails() != null
+          && "NoSuchBucketPolicy".equals(exception.awsErrorDetails().errorCode())) return;
+      throw startupRefused("非公開バケットの policy を確認できない（HTTP " + exception.statusCode() + "）");
+    } catch (SdkException exception) {
+      throw startupRefused("非公開バケットの policy を確認できない（接続失敗）");
+    }
+    throw startupRefused("非公開バケットに policy が設定されている");
+  }
+
+  private static IllegalStateException startupRefused(String reason) {
+    return new IllegalStateException("非公開添付ストレージの起動時検査を満たしません: " + reason);
+  }
+
+  private static List<String> isolationViolations(AppProperties properties) {
     var privateStorage = properties.getPrivateAttachments();
     var publicStorage = properties.getUpload();
-    if (!privateStorage.isEnabled()
-        || blank(privateStorage.getBucket())
-        || blank(privateStorage.getAccessKey())
-        || blank(privateStorage.getSecretKey())) return false;
+    List<String> violations = new ArrayList<>();
+    URI privateEndpoint = endpointOrNull(privateStorage.getEndpoint());
+    URI publicEndpoint = endpointOrNull(publicStorage.getEndpoint());
+    if (privateEndpoint == null) violations.add("endpoint が未設定または不正");
+    if (publicEndpoint == null) violations.add("公開側 endpoint が未設定または不正");
+    if (privateEndpoint != null && privateEndpoint.equals(publicEndpoint))
+      violations.add("endpoint が公開側と同じ");
+    String privateBucket = privateStorage.getBucket();
+    if (blank(privateBucket)) violations.add("bucket が未設定");
+    else {
+      if (privateBucket.equalsIgnoreCase(publicStorage.getBucket()))
+        violations.add("bucket が公開側と同じ");
+      if (!privateBucket.matches("[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]")) violations.add("bucket 名が不正");
+    }
+    if (blank(privateStorage.getAccessKey())) violations.add("accessKey が未設定");
+    else if (privateStorage.getAccessKey().equals(publicStorage.getAccessKey()))
+      violations.add("accessKey が公開側と同じ");
+    if (blank(privateStorage.getSecretKey())) violations.add("secretKey が未設定");
+    else if (privateStorage.getSecretKey().equals(publicStorage.getSecretKey()))
+      violations.add("secretKey が公開側と同じ");
+    if (!within(privateStorage.getMaxFileBytes(), 10L * 1024 * 1024))
+      violations.add("maxFileBytes が範囲外");
+    if (!within(privateStorage.getMaxApplicantFiles(), 20))
+      violations.add("maxApplicantFiles が範囲外");
+    if (!within(privateStorage.getMaxApplicantBytes(), 200L * 1024 * 1024))
+      violations.add("maxApplicantBytes が範囲外");
+    if (!within(privateStorage.getMaxConcurrentDownloads(), 2))
+      violations.add("maxConcurrentDownloads が範囲外");
+    if (blank(privateStorage.getTemporaryDirectory())) violations.add("temporaryDirectory が未設定");
+    if (!within(privateStorage.getStorageTimeoutSeconds(), 15))
+      violations.add("storageTimeoutSeconds が範囲外");
+    if (!within(privateStorage.getStorageAttemptTimeoutSeconds(), 5))
+      violations.add("storageAttemptTimeoutSeconds が範囲外");
+    if (privateStorage.getStorageAttemptTimeoutSeconds()
+        > privateStorage.getStorageTimeoutSeconds())
+      violations.add("storageAttemptTimeoutSeconds が storageTimeoutSeconds を超える");
+    return violations;
+  }
+
+  private static boolean within(long value, long max) {
+    return value > 0 && value <= max;
+  }
+
+  private static URI endpointOrNull(String endpoint) {
     try {
-      URI privateEndpoint = normalizedEndpoint(privateStorage.getEndpoint());
-      URI publicEndpoint = normalizedEndpoint(publicStorage.getEndpoint());
-      return !privateEndpoint.equals(publicEndpoint)
-          && !privateStorage.getBucket().equalsIgnoreCase(publicStorage.getBucket())
-          && !privateStorage.getAccessKey().equals(publicStorage.getAccessKey())
-          && !privateStorage.getSecretKey().equals(publicStorage.getSecretKey())
-          && privateStorage.getBucket().matches("[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]")
-          && privateStorage.getMaxFileBytes() > 0
-          && privateStorage.getMaxFileBytes() <= 10L * 1024 * 1024
-          && privateStorage.getMaxApplicantFiles() > 0
-          && privateStorage.getMaxApplicantFiles() <= 20
-          && privateStorage.getMaxApplicantBytes() > 0
-          && privateStorage.getMaxApplicantBytes() <= 200L * 1024 * 1024
-          && privateStorage.getMaxConcurrentDownloads() > 0
-          && privateStorage.getMaxConcurrentDownloads() <= 2
-          && !blank(privateStorage.getTemporaryDirectory())
-          && privateStorage.getStorageTimeoutSeconds() > 0
-          && privateStorage.getStorageTimeoutSeconds() <= 15
-          && privateStorage.getStorageAttemptTimeoutSeconds() > 0
-          && privateStorage.getStorageAttemptTimeoutSeconds() <= 5
-          && privateStorage.getStorageAttemptTimeoutSeconds()
-              <= privateStorage.getStorageTimeoutSeconds();
+      return normalizedEndpoint(endpoint);
     } catch (IllegalArgumentException exception) {
-      return false;
+      return null;
     }
   }
 
