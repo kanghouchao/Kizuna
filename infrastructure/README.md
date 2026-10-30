@@ -65,5 +65,5 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
 
    前者は接続失敗、後者は何も表示しないことを確かめる。
 
-4. **画面での追加・閲覧・削除**：応募者詳細の添付パネルで画像を一つ追加し、開いて表示できること、削除できることを確かめる。
-5. **保持期間の設定**：システム設定（分類 RECRUITMENT）で `applicant_retention_rejected_months`（不採用）・`applicant_retention_withdrawn_months`（辞退）・`applicant_retention_hired_months`（採用）の三つを設定する。未設定のままだと匿名化は何もせず、添付は無期限に残る。応募者詳細の「情報保持方針」に三つの期間が表示されることを確かめる。
+4. **画面での追加・閲覧**：応募者詳細の「非公開の添付画像」で画像を一つ追加し、一覧に出ること、ダウンロードして開けることを確かめる。画面に添付を削除する操作は無く、添付の実体は保持期間を過ぎた応募者の匿名化で削除される。
+5. **保持期間の設定**：システム設定（分類 RECRUITMENT）で `applicant_retention_rejected_months`（不採用）・`applicant_retention_withdrawn_months`（辞退）・`applicant_retention_hired_months`（採用）の三つを設定する。未設定のままだと匿名化は何もせず、添付は無期限に残る。応募者詳細の「情報保持方針」に三つの期間が表示されることを確かめる。なお匿名化の定期実行は `app.applicant-anonymization.enabled` と実行主体のサービス ID で別に有効化するもので、現在の compose はこれらを backend に渡していない。
