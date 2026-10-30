@@ -66,10 +66,10 @@ tasks:
           echo "✅テスト完了"
         fi
 
-  test:postgres:
-    desc: バックエンドの実 PostgreSQL テスト層を使い捨て DB で実行
+  test:integration:
+    desc: バックエンドの統合テストを使い捨ての PostgreSQL・Redis で実行
     cmds:
-      - task -d backend test:postgres
+      - task -d backend test:integration
 
   e2e:
     desc: E2E（playwright-bdd）を専用の使い捨てスタックで実行（build → 実行 → 破棄。shard=1/4・grep=正規表現 で対象を限定可）
