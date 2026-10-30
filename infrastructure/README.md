@@ -13,7 +13,7 @@
 - 資格情報は `.env` の `PRIVATE_S3_ACCESS_KEY` / `PRIVATE_S3_SECRET_KEY` で、同じ値が `private-storage` と backend の両方に渡る。公開側の `S3_ACCESS_KEY` / `S3_SECRET_KEY` とは必ず別の値にする。endpoint・バケット名・アクセスキー・シークレットのどれかが公開側と同じだと backend は隔離が無いとみなす。
 - release は二つの資格情報が未設定なら compose が起動を拒否する（添付機能を無効にしていても同じ）。既存の本番 `.env` にも追記が必要である。
 - 有効化フラグ `APP_PRIVATE_ATTACHMENTS_ENABLED` は release では既定で無効、development では常に有効。有効なときに隔離・バケットの存在・policy の不在のどれかが満たされなければ backend は起動に失敗する。
-- backend は添付の一時ファイルを tmpfs の `/tmp/kizuna-private-attachments`（0700、所有者は実行ユーザー 65532）に書く。ディスクには残らない。
+- backend は添付の一時ファイルを tmpfs の `/tmp/kizuna-private-attachments`（0700、所有者は実行ユーザー 65532）に書く。コンテナの書き込み層やボリュームには残らないが、ホストで swap が有効だとメモリ上の内容が swap 領域へ書き出されうる。
 
 ### 資格情報のローテーション
 
