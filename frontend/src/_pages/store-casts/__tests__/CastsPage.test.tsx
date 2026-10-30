@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CastListPage from '../ui/CastsPage';
 import { CastResponse, castApi } from '@/entities/cast';
 import { TokenClaims, readTokenClaims } from '@/shared/lib';
@@ -200,6 +200,23 @@ describe('キャスト一覧ページ固有の要素', () => {
       'href',
       '/store/casts/create'
     );
+  });
+
+  it('各行の公開状態を公開・非公開で示すこと', async () => {
+    mockedCastApi.list.mockResolvedValue(
+      toPage([
+        { ...cast, id: 'cast-1', name: '花子', publication_status: 'PUBLISHED' },
+        { ...cast, id: 'cast-2', name: '桃子', publication_status: 'UNPUBLISHED' },
+      ])
+    );
+    render(<CastListPage />);
+
+    expect(await screen.findByRole('columnheader', { name: '公開状態' })).toBeInTheDocument();
+    const rowOf = (name: string) =>
+      screen.getAllByRole('row').find(row => row.textContent?.includes(name))!;
+    expect(within(rowOf('花子')).getByText('公開', { exact: true })).toBeInTheDocument();
+    expect(within(rowOf('桃子')).getByText('非公開', { exact: true })).toBeInTheDocument();
+    expect(within(rowOf('花子')).queryByText('非公開', { exact: true })).not.toBeInTheDocument();
   });
 });
 

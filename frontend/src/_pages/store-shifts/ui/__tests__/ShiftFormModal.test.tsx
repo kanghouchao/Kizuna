@@ -186,6 +186,43 @@ describe('シフトフォームのセレクト配線と送信ペイロード', (
     expect(description).toContain('内密の出勤はここで外してから追加します');
   });
 
+  it('未確定のあいだは公開サイトに出ない旨をステータス欄に紐づけて示すこと', async () => {
+    renderModal();
+
+    const hint = await screen.findByText('未確定のシフトは公開サイトに表示されません');
+    expect(selectAt(STATUS_SELECT).getAttribute('aria-describedby')).toContain(hint.id);
+
+    await pickOption(STATUS_SELECT, '確定');
+    await waitFor(() =>
+      expect(
+        screen.queryByText('未確定のシフトは公開サイトに表示されません')
+      ).not.toBeInTheDocument()
+    );
+  });
+
+  it('編集でも未確定のシフトには案内を出し、確定のシフトには出さないこと', async () => {
+    const { rerender } = renderModal({ editing: EDITING });
+    await waitFor(() => expect(selectedLabel(STATUS_SELECT)).toBe('確定'));
+    expect(
+      screen.queryByText('未確定のシフトは公開サイトに表示されません')
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <ShiftFormModal
+        open
+        onClose={jest.fn()}
+        casts={CASTS}
+        editing={{ ...EDITING, id: 'shift-2', status: 'TENTATIVE' }}
+        hasAttendance={false}
+        defaultDate="2026-08-01"
+        onSaved={jest.fn()}
+      />
+    );
+    expect(
+      await screen.findByText('未確定のシフトは公開サイトに表示されません')
+    ).toBeInTheDocument();
+  });
+
   it('編集では公開の切替を出さないこと', async () => {
     // 既にタイムラインの目玉と公開パネルという二つの入口がある
     renderModal({ editing: EDITING });

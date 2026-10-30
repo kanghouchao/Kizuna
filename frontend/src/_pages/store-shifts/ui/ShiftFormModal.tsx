@@ -275,6 +275,11 @@ export function ShiftFormModal({
                     ))}
                   </SelectContent>
                 </Select>
+                {field.value === 'TENTATIVE' && (
+                  <FormDescription className="text-xs">
+                    未確定のシフトは公開サイトに表示されません
+                  </FormDescription>
+                )}
               </FormItem>
             )}
           />
@@ -290,7 +295,7 @@ export function ShiftFormModal({
                   <div>
                     <FormLabel>公式サイトに公開する</FormLabel>
                     <FormDescription className="mt-1 text-xs">
-                      確定シフトだけが出勤表に出ます。内密の出勤はここで外してから追加します。
+                      内密の出勤はここで外してから追加します。
                     </FormDescription>
                   </div>
                   <FormControl>
