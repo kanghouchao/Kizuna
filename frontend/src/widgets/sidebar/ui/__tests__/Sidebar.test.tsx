@@ -115,6 +115,17 @@ describe('Sidebar', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  it('初回の失敗後に再試行している間も、描いたグループ級の項目を消さない', async () => {
+    withStores(null, undefined, true);
+    const { rerender } = render(<Sidebar />);
+    expect(await screen.findByRole('link', { name: '受注照会' })).toBeInTheDocument();
+
+    withStores(null, undefined, false);
+    rerender(<Sidebar />);
+
+    expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
+  });
+
   it('取り直しに失敗したら直前の一覧のレールを残したまま、失敗と再試行を出す', async () => {
     withStores(STORES, '1', true);
 
