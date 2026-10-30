@@ -42,6 +42,9 @@ services:
   backend:
     image: kizuna-backend:latest
     container_name: backend
+    tmpfs:
+      # backend は非 root（65532）で動くため、所有者を合わせないと mode=0700 で書けない
+      - /tmp/kizuna-private-attachments:size=134217728,mode=0700,uid=65532,gid=65532
     networks:
       - network
     environment:
@@ -57,6 +60,11 @@ services:
       - S3_BUCKET=${S3_BUCKET:-uploads}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY:-kizuna-storage}
       - S3_SECRET_KEY=${S3_SECRET_KEY:-changeme}
+      - APP_PRIVATE_ATTACHMENTS_ENABLED=true
+      - APP_PRIVATE_ATTACHMENTS_ENDPOINT=http://private-storage:8333
+      - APP_PRIVATE_ATTACHMENTS_BUCKET=applicant-images
+      - APP_PRIVATE_ATTACHMENTS_ACCESS_KEY=${PRIVATE_S3_ACCESS_KEY:-kizuna-private-storage}
+      - APP_PRIVATE_ATTACHMENTS_SECRET_KEY=${PRIVATE_S3_SECRET_KEY:-private-changeme}
       - SPRING_PROFILE
       - SERVER_PORT
       - APP_NAME
@@ -105,6 +113,8 @@ services:
         condition: service_healthy
       storage:
         condition: service_healthy
+      private-storage:
+        condition: service_healthy
     healthcheck:
       # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
       test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
@@ -126,6 +136,26 @@ services:
       - seaweedfs-data:/data
     ports:
       - "127.0.0.1:23646:23646"
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure:3
+
+  # 応募者添付の非公開 S3。Traefik のルートもホストポートも持たず、内部ネットワークからだけ届く。
+  # バケットはここで宣言し backend は作らない。ボリュームは意図してバックアップしない（infrastructure/README.md）
+  private-storage:
+    image: chrislusf/seaweedfs:4.50
+    container_name: private-storage
+    command: mini -dir=/data -admin.ui=false -webdav=false -bucket=applicant-images
+    environment:
+      AWS_ACCESS_KEY_ID: ${PRIVATE_S3_ACCESS_KEY:-kizuna-private-storage}
+      AWS_SECRET_ACCESS_KEY: ${PRIVATE_S3_SECRET_KEY:-private-changeme}
+    volumes:
+      - private-seaweedfs-data:/data
     networks:
       - network
     healthcheck:
@@ -191,4 +221,6 @@ volumes:
   redis-data:
     driver: local
   seaweedfs-data:
+    driver: local
+  private-seaweedfs-data:
     driver: local
