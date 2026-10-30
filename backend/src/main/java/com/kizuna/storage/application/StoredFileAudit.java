@@ -27,7 +27,7 @@ public class StoredFileAudit {
   }
 
   public void recordUpload(
-      Long storeId, String relativePath, String bucket, long size, String contentType) {
+      long storeId, String relativePath, String bucket, long size, String contentType) {
     try {
       independent.executeWithoutResult(
           status ->

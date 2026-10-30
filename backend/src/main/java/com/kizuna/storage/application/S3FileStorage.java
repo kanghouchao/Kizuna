@@ -36,13 +36,8 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
   private final AppProperties appProperties;
 
   @Override
-  public String store(String prefix, String bucket, String purpose, MultipartFile file) {
+  public String store(long storeId, String bucket, String purpose, MultipartFile file) {
     AppProperties.Upload upload = appProperties.getUpload();
-
-    // prefix・bucket は object key に組み込まれるため、英数字類に絞ってパストラバーサルを防ぐ
-    if (prefix == null || !prefix.matches("^[a-zA-Z0-9_-]+$")) {
-      throw new ServiceException("不正なプレフィックスです");
-    }
 
     if (!PUBLIC_BUCKET.equals(bucket)) {
       throw new ServiceException("不正なバケット名です");
@@ -67,10 +62,10 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
       extension = originalFilename.substring(originalFilename.lastIndexOf("."));
     }
 
-    // object key は bucket/prefix/purpose/UUID.ext 形式とする
+    // object key は bucket/storeId/purpose/UUID.ext 形式とする
     // （実 S3 bucket は固定値、リクエストの bucket 値は key の一部として扱う）
     String filename = UUID.randomUUID() + extension;
-    String key = bucket + "/" + prefix + "/" + purpose + "/" + filename;
+    String key = bucket + "/" + storeId + "/" + purpose + "/" + filename;
     if (key.length() > MAX_KEY_LENGTH) {
       throw new ServiceException("ファイル名の拡張子が長すぎます");
     }

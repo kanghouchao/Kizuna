@@ -72,3 +72,15 @@ Then('店長が用途を指定しないか許可外の用途を指定すると�
     expect(response.status()).toBe(400);
   }
 });
+
+Then('店長が店舗を指定しないと不正な要求として拒否される', async ({ request }) => {
+  const token = await loginAsStoreAdmin(request);
+  const response = await request.post('/api/files', {
+    headers: { Authorization: `Bearer ${token}` },
+    multipart: {
+      purpose: 'store-logo',
+      file: { name: 'storage-probe.png', mimeType: 'image/png', buffer: image },
+    },
+  });
+  expect(response.status()).toBe(400);
+});
