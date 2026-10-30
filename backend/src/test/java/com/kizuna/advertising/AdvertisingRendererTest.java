@@ -64,7 +64,7 @@ class AdvertisingRendererTest {
                 + "\"'広告費版\",\"'区分\",\"'媒体\",\"'広告会社\",\"'プラン\",\"'問い合わせ人数\",\"'金額（円）\"");
     assertThat(text.split("\r\n")[1]).startsWith("\"'条件と総計\",").contains("出力時点の有効な広告費登録");
     assertThat(text.split("\r\n")[2]).startsWith("\"'広告費明細\",").contains("\"'営業広告\"");
-    assertThat(ExportCells.asciiWords(text)).isEmpty();
+    assertThat(ExportCells.letterRuns(text)).containsExactly("ID");
     try (var book =
         new XSSFWorkbook(
             new ByteArrayInputStream(

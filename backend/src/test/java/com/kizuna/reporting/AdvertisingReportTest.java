@@ -196,9 +196,7 @@ class AdvertisingReportTest {
         .startsWith("\ufeff")
         .contains("\"'=cost0000\"", "\"'=cost1000\"", "\"'=cost2000\"");
     assertThat(csv.lines().filter(line -> line.contains("'広告費根拠"))).hasSize(2001);
-    assertThat(ExportCells.asciiWords(csv))
-        .hasSize(2001)
-        .allMatch(word -> word.startsWith("=cost"));
+    assertThat(ExportCells.letterRuns(csv)).containsExactlyInAnyOrder("ID", "cost");
     try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(render(report, "xlsx")))) {
       var sheet = workbook.getSheet("広告費根拠");
       assertThat(sheet.getLastRowNum()).isEqualTo(2001);
