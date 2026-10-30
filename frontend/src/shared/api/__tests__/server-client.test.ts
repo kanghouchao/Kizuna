@@ -1,13 +1,5 @@
 import { serverClient } from '../server-client';
 
-// クッキーのモック
-const mockCookieStore = {
-  get: jest.fn(),
-};
-jest.mock('next/headers', () => ({
-  cookies: jest.fn(() => Promise.resolve(mockCookieStore)),
-}));
-
 // fetchのモック
 global.fetch = jest.fn();
 
@@ -34,35 +26,25 @@ describe('serverClient', () => {
 
   describe('getHeaders', () => {
     it('デフォルトヘッダーを返すこと', async () => {
-      mockCookieStore.get.mockReturnValue(undefined);
       const headers = await serverClient.getHeaders();
       expect(headers).toEqual({
         'Content-Type': 'application/json',
       });
     });
 
-    it('CookieからX-Store-IDを注入すること', async () => {
-      mockCookieStore.get.mockReturnValue({ value: '123' });
-      const headers = await serverClient.getHeaders();
-      expect(headers).toHaveProperty('X-Store-ID', '123');
-    });
-
     it('カスタムヘッダーをマージすること', async () => {
-      mockCookieStore.get.mockReturnValue(undefined);
       const headers = await serverClient.getHeaders({ 'Custom-Header': 'value' });
       expect(headers).toHaveProperty('Custom-Header', 'value');
     });
   });
 
   describe('get', () => {
-    it('正しいURLとヘッダーでfetchを呼び出すこと', async () => {
+    it('呼び出し元が渡したヘッダーを付けて fetch を呼び出すこと', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         json: async () => ({ data: 'ok' }),
       });
-      mockCookieStore.get.mockReturnValue({ value: '123' });
-
-      const result = await serverClient.get('/test');
+      const result = await serverClient.get('/test', { headers: { 'X-Store-ID': '123' } });
 
       expect(global.fetch).toHaveBeenCalledWith(
         'http://test-backend/test',

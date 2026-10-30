@@ -4,5 +4,5 @@
 export const BASE_URL = process.env.BASE_URL ?? 'http://store1.kizuna.test';
 
 // アプリドメインの既定値（compose の環境変数 APP_URL で上書き可能）。
-// store/app の判別は Host で行われる（storeResolver.ts）ため、baseURL（store1）とは別ドメイン。
+// store/app の判別は Host で行われる（frontend の shared/api/host.ts）ため、baseURL（store1）とは別ドメイン。
 export const APP_URL = process.env.APP_URL ?? 'http://kizuna.test';

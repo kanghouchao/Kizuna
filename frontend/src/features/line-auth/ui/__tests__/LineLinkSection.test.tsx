@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LineLinkSection } from '../LineLinkSection';
 import { authApi, lineApi } from '@/entities/user';
-import { startLineAuthorization } from '@/shared/lib';
+import { AppDomainProvider, startLineAuthorization } from '@/shared/lib';
 import type { MeResponse } from '@/entities/user';
 
 jest.mock('@/shared/notify', () => ({
@@ -36,6 +37,13 @@ function meResponse(lineLinked: boolean): MeResponse {
   };
 }
 
+// jsdom の location.hostname は localhost。アプリドメインと一致させるとアプリの画面として描く
+function onHost(appDomain: string) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <AppDomainProvider appDomain={appDomain}>{children}</AppDomainProvider>;
+  };
+}
+
 describe('LineLinkSection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -45,7 +53,7 @@ describe('LineLinkSection', () => {
   it('未連携なら連携ボタンを表示する', async () => {
     mockedMe.mockResolvedValue(meResponse(false));
 
-    render(<LineLinkSection />);
+    render(<LineLinkSection />, { wrapper: onHost('localhost') });
 
     expect(await screen.findByRole('button', { name: 'LINEを連携する' })).toBeInTheDocument();
     expect(screen.queryByText('連携済み')).not.toBeInTheDocument();
@@ -54,7 +62,7 @@ describe('LineLinkSection', () => {
   it('連携済みなら状態のみ表示し、解除の導線は出さない', async () => {
     mockedMe.mockResolvedValue(meResponse(true));
 
-    render(<LineLinkSection />);
+    render(<LineLinkSection />, { wrapper: onHost('localhost') });
 
     expect(await screen.findByText('連携済み')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'LINEを連携する' })).not.toBeInTheDocument();
@@ -64,7 +72,7 @@ describe('LineLinkSection', () => {
     mockedMe.mockResolvedValue(meResponse(false));
     mockedStart.mockResolvedValue(undefined);
 
-    render(<LineLinkSection />);
+    render(<LineLinkSection />, { wrapper: onHost('localhost') });
     fireEvent.click(await screen.findByRole('button', { name: 'LINEを連携する' }));
 
     await waitFor(() =>
@@ -72,23 +80,18 @@ describe('LineLinkSection', () => {
     );
   });
 
-  it('店舗ドメイン上（role=store cookie）ではブロックごと描画しない', async () => {
-    document.cookie = 'x-mw-role=store';
-    try {
-      render(<LineLinkSection />);
+  it('店舗ドメイン上（アプリドメインと異なるホスト）ではブロックごと描画しない', async () => {
+    render(<LineLinkSection />, { wrapper: onHost('app.example') });
 
-      await waitFor(() => expect(mockedConfig).not.toHaveBeenCalled());
-      expect(screen.queryByText('LINE連携')).not.toBeInTheDocument();
-    } finally {
-      document.cookie = 'x-mw-role=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    }
+    await waitFor(() => expect(mockedConfig).not.toHaveBeenCalled());
+    expect(screen.queryByText('LINE連携')).not.toBeInTheDocument();
   });
 
   it('公開設定が無効ならブロックごと描画しない', async () => {
     mockedConfig.mockResolvedValue({ enabled: false });
     mockedMe.mockResolvedValue(meResponse(false));
 
-    render(<LineLinkSection />);
+    render(<LineLinkSection />, { wrapper: onHost('localhost') });
 
     await waitFor(() => expect(mockedConfig).toHaveBeenCalled());
     expect(screen.queryByText('LINE連携')).not.toBeInTheDocument();

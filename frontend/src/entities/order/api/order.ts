@@ -426,16 +426,19 @@ export const orderApplicationApi = {
 };
 
 /**
- * 公開店面からのゲスト予約申請 API（匿名）。店舗は proxy が焼いた x-mw cookie 由来の
- * 店舗文脈ヘッダで決まるため、申請本体では名乗らない。
+ * 公開店面からのゲスト予約申請 API（匿名）。申請は呼び出し元が渡した店舗を名乗り、
+ * 同意文面は全店共通で店舗を名乗らない。
  */
 export const guestOrderApplicationApi = {
   consent: async (): Promise<GuestContactConsentText> =>
     (await apiClient.get('/order-applications/public/contact-consent')).data,
   request: async (
+    storeId: string,
     data: GuestOrderApplicationCreateRequest
   ): Promise<GuestOrderApplicationResponse> => {
-    const response = await apiClient.post('/order-applications/public', data);
+    const response = await apiClient.post('/order-applications/public', data, {
+      headers: { 'X-Store-ID': storeId },
+    });
     return response.data;
   },
 };

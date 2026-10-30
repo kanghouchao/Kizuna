@@ -93,7 +93,7 @@ E2E は**開発スタック（project `kizuna`）を使いません**。専用�
 ブラウザの `baseURL` は環境変数 `BASE_URL`（既定 `http://store1.kizuna.test`）で
 切り替えます。アプリドメイン側は `APP_URL`（既定 `http://kizuna.test`）です。
 スイートは共有店舗の状態を扱うため、`workers: 1`・`fullyParallel: false` で直列実行します。
-store / app の判別は Host ヘッダで frontend proxy が行うため、
+store / app の判別は Host ヘッダで frontend のサーバが行うため、
 gateway サービスに network alias `store1.kizuna.test` / `kizuna.test` を付与しています。
 alias はネットワーク単位なので、スタックを複数立てても互いに干渉しません。
 

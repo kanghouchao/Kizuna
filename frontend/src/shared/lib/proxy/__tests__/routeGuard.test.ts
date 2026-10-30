@@ -41,7 +41,7 @@ describe('routeGuard', () => {
 
   it('redirects to /auth/login when accessing /admin without token', () => {
     const req = createRequest('/admin/dashboard', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/auth/login' })
@@ -51,14 +51,14 @@ describe('routeGuard', () => {
 
   it('allows access to /admin with token', () => {
     const req = createRequest('/admin/dashboard', true);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(res).toBeNull();
   });
 
   it('allows access to /auth/login without token (public route)', () => {
     const req = createRequest('/auth/login', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -66,7 +66,7 @@ describe('routeGuard', () => {
 
   it('allows access to /auth/invite without token (public route)', () => {
     const req = createRequest('/auth/invite', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -75,7 +75,7 @@ describe('routeGuard', () => {
   it('allows access to the legacy /auth/invite/:token without token (public route)', () => {
     // 配布済みリンクの受け口。守衛に弾かれるとフラグメント形式へ送り直す前に落ちる
     const req = createRequest('/auth/invite/abc123', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -83,7 +83,7 @@ describe('routeGuard', () => {
 
   it('allows access to /auth/line/callback without token (public route)', () => {
     const req = createRequest('/auth/line/callback', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -91,7 +91,7 @@ describe('routeGuard', () => {
 
   it('allows a member-console session on /auth/line/callback (link flow)', () => {
     const req = createRequest('/auth/line/callback', true, { 'session-kind': 'member' });
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -99,7 +99,7 @@ describe('routeGuard', () => {
 
   it('redirects to / when accessing /store without token', () => {
     const req = createRequest('/store/orders', false);
-    const res = handleRouteProtection(req, 'store');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/' }));
     expect(res).not.toBeNull();
@@ -107,7 +107,7 @@ describe('routeGuard', () => {
 
   it('allows access to an id-less /store route with token', () => {
     const req = createRequest('/store/orders', true, { 'session-kind': 'admin' });
-    const res = handleRouteProtection(req, 'store');
+    const res = handleRouteProtection(req);
 
     expect(res).toBeNull();
   });
@@ -115,7 +115,7 @@ describe('routeGuard', () => {
   it('treats /platform/** as an ordinary unknown path without redirecting', () => {
     for (const path of ['/platform', '/platform/login', '/platform/dashboard']) {
       for (const hasToken of [false, true]) {
-        expect(handleRouteProtection(createRequest(path, hasToken), 'app')).toBeNull();
+        expect(handleRouteProtection(createRequest(path, hasToken))).toBeNull();
       }
     }
     expect(NextResponse.redirect).not.toHaveBeenCalled();
@@ -124,10 +124,7 @@ describe('routeGuard', () => {
   it.each(['/store/entry', '/store/5', '/store/5/orders', '/store/5/settings/account'])(
     'treats %s as an ordinary /store path without redirecting',
     path => {
-      const res = handleRouteProtection(
-        createRequest(path, true, { 'session-kind': 'admin' }),
-        'store'
-      );
+      const res = handleRouteProtection(createRequest(path, true, { 'session-kind': 'admin' }));
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       expect(res).toBeNull();
@@ -136,7 +133,7 @@ describe('routeGuard', () => {
 
   it('redirects to /auth/login when accessing /cast without token', () => {
     const req = createRequest('/cast/schedule', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/auth/login' })
@@ -146,7 +143,7 @@ describe('routeGuard', () => {
 
   it('allows access to /cast with token', () => {
     const req = createRequest('/cast/schedule', true);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -154,7 +151,7 @@ describe('routeGuard', () => {
 
   it('redirects to /auth/login when accessing /member without token', () => {
     const req = createRequest('/member', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/auth/login' })
@@ -166,7 +163,7 @@ describe('routeGuard', () => {
     // 差し戻しはサーバ側で起きるため、クライアントの画面は戻り先を覚えられない。
     // リダイレクト応答の cookie が唯一の持ち越し手段であることを固定する。
     const req = createRequest('/member/reservations/new', false, {}, '?store=demo.kizuna.test');
-    const res = handleRouteProtection(req, 'app') as unknown as {
+    const res = handleRouteProtection(req) as unknown as {
       cookies: { set: jest.Mock };
     };
 
@@ -182,14 +179,13 @@ describe('routeGuard', () => {
 
   it('does not persist a return path that fails the whitelist', () => {
     // /member 単独は白名単（/member/ 配下）を通らない。危険な文字を含むクエリも保存しない。
-    const bare = handleRouteProtection(createRequest('/member', false), 'app') as unknown as {
+    const bare = handleRouteProtection(createRequest('/member', false)) as unknown as {
       cookies: { set: jest.Mock };
     };
     expect(bare.cookies.set).not.toHaveBeenCalled();
 
     const unsafe = handleRouteProtection(
-      createRequest('/member/reservations/new', false, {}, '?store=<script>'),
-      'app'
+      createRequest('/member/reservations/new', false, {}, '?store=<script>')
     ) as unknown as { cookies: { set: jest.Mock } };
     expect(unsafe.cookies.set).not.toHaveBeenCalled();
   });
@@ -199,7 +195,7 @@ describe('routeGuard', () => {
     path => {
       // 伝票トークンは QR の URL のフラグメントで届き、サーバへは送られない。ここで差し戻すと
       // 画面が一度も描かれないままトークンが失われ、ログイン後に戻っても申領できない。
-      const res = handleRouteProtection(createRequest(path, false), 'app');
+      const res = handleRouteProtection(createRequest(path, false));
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       expect(res).toBeNull();
@@ -212,8 +208,7 @@ describe('routeGuard', () => {
       // 別コンソールのセッションが残ったまま QR を開く場面。ここでコンソール整合で差し戻すと、
       // 免除の目的（フラグメントをブラウザで受け取ってから預ける）が果たせない
       const res = handleRouteProtection(
-        createRequest('/member/receipts', true, { 'session-kind': consoleValue }),
-        'app'
+        createRequest('/member/receipts', true, { 'session-kind': consoleValue })
       );
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
@@ -223,8 +218,7 @@ describe('routeGuard', () => {
 
   it('still redirects an admin session away from other /member paths', () => {
     const res = handleRouteProtection(
-      createRequest('/member/visits', true, { 'session-kind': 'admin' }),
-      'app'
+      createRequest('/member/visits', true, { 'session-kind': 'admin' })
     );
 
     expect(NextResponse.redirect).toHaveBeenCalled();
@@ -233,7 +227,7 @@ describe('routeGuard', () => {
 
   it('still bounces other /member paths without a token', () => {
     // 免除は申領画面ちょうどだけ。前綴で緩めると会員ポータル全体が未認証で描かれる
-    const res = handleRouteProtection(createRequest('/member/receipts/other', false), 'app');
+    const res = handleRouteProtection(createRequest('/member/receipts/other', false));
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/auth/login' })
@@ -243,7 +237,7 @@ describe('routeGuard', () => {
 
   it('allows access to /member with token', () => {
     const req = createRequest('/member', true);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -251,7 +245,7 @@ describe('routeGuard', () => {
 
   it('allows access to /auth/register without token (public route)', () => {
     const req = createRequest('/auth/register', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -259,7 +253,7 @@ describe('routeGuard', () => {
 
   it('allows access to /auth/initial-setup without token', () => {
     const req = createRequest('/auth/initial-setup', false);
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -267,7 +261,7 @@ describe('routeGuard', () => {
 
   it('allows /auth/initial-setup with a token left over from a rebuilt database', () => {
     const req = createRequest('/auth/initial-setup', true, { 'session-kind': 'admin' });
-    const res = handleRouteProtection(req, 'app');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -275,7 +269,7 @@ describe('routeGuard', () => {
 
   it('does not redirect the public /casts route without token', () => {
     const req = createRequest('/casts', false);
-    const res = handleRouteProtection(req, 'store');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -283,7 +277,7 @@ describe('routeGuard', () => {
 
   it('does not redirect the public /casts/:id route without token', () => {
     const req = createRequest('/casts/abc', false);
-    const res = handleRouteProtection(req, 'store');
+    const res = handleRouteProtection(req);
 
     expect(NextResponse.redirect).not.toHaveBeenCalled();
     expect(res).toBeNull();
@@ -292,7 +286,7 @@ describe('routeGuard', () => {
   describe('console/area alignment', () => {
     it('redirects an admin session on /cast/* to /admin/dashboard', () => {
       const req = createRequest('/cast/schedule', true, { 'session-kind': 'admin' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/admin/dashboard' })
@@ -302,7 +296,7 @@ describe('routeGuard', () => {
 
     it('redirects a cast-console session on /admin/* to /cast/schedule', () => {
       const req = createRequest('/admin/dashboard', true, { 'session-kind': 'cast' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/cast/schedule' })
@@ -312,7 +306,7 @@ describe('routeGuard', () => {
 
     it('redirects a cast-console session on /store/* to /cast/schedule', () => {
       const req = createRequest('/store/orders', true, { 'session-kind': 'cast' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/cast/schedule' })
@@ -322,7 +316,7 @@ describe('routeGuard', () => {
 
     it('redirects a member-console session on /admin/* to /member', () => {
       const req = createRequest('/admin/dashboard', true, { 'session-kind': 'member' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/member' })
@@ -332,7 +326,7 @@ describe('routeGuard', () => {
 
     it('redirects a member-console session on an id-bearing /store/* path to /member', () => {
       const req = createRequest('/store/5/orders', true, { 'session-kind': 'member' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/member' })
@@ -342,7 +336,7 @@ describe('routeGuard', () => {
 
     it('allows a member-console session on /member', () => {
       const req = createRequest('/member', true, { 'session-kind': 'member' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       expect(res).toBeNull();
@@ -350,7 +344,7 @@ describe('routeGuard', () => {
 
     it('redirects a cast-console session on /member/* to /cast/schedule', () => {
       const req = createRequest('/member', true, { 'session-kind': 'cast' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/cast/schedule' })
@@ -361,10 +355,7 @@ describe('routeGuard', () => {
     it.each(['/admin/dashboard', '/store/orders'])(
       'allows an admin session on %s (one admin screen spans both prefixes)',
       path => {
-        const res = handleRouteProtection(
-          createRequest(path, true, { 'session-kind': 'admin' }),
-          'app'
-        );
+        const res = handleRouteProtection(createRequest(path, true, { 'session-kind': 'admin' }));
 
         expect(NextResponse.redirect).not.toHaveBeenCalled();
         expect(res).toBeNull();
@@ -373,7 +364,7 @@ describe('routeGuard', () => {
 
     it('allows a cast-console session on the public /auth/login route', () => {
       const req = createRequest('/auth/login', true, { 'session-kind': 'cast' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       expect(res).toBeNull();
@@ -381,7 +372,7 @@ describe('routeGuard', () => {
 
     it('does not guard when the console cookie is absent (legacy session)', () => {
       const req = createRequest('/admin/dashboard', true);
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       expect(res).toBeNull();
@@ -391,7 +382,7 @@ describe('routeGuard', () => {
       'does not guard a retired console cookie value (%s)',
       consoleValue => {
         const req = createRequest('/cast/schedule', true, { 'session-kind': consoleValue });
-        const res = handleRouteProtection(req, 'app');
+        const res = handleRouteProtection(req);
 
         expect(NextResponse.redirect).not.toHaveBeenCalled();
         expect(res).toBeNull();
@@ -400,7 +391,7 @@ describe('routeGuard', () => {
 
     it('does not crash or guard on a prototype-chain cookie value', () => {
       const req = createRequest('/admin/dashboard', true, { 'session-kind': 'constructor' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       expect(res).toBeNull();
@@ -408,7 +399,7 @@ describe('routeGuard', () => {
 
     it('allows a cast-console session on the shared /admin/settings/account route', () => {
       const req = createRequest('/admin/settings/account', true, { 'session-kind': 'cast' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).not.toHaveBeenCalled();
       expect(res).toBeNull();
@@ -416,7 +407,7 @@ describe('routeGuard', () => {
 
     it('still guards a cast-console session on the non-shared /admin/settings hub', () => {
       const req = createRequest('/admin/settings', true, { 'session-kind': 'cast' });
-      const res = handleRouteProtection(req, 'app');
+      const res = handleRouteProtection(req);
 
       expect(NextResponse.redirect).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: '/cast/schedule' })
@@ -427,7 +418,7 @@ describe('routeGuard', () => {
 
   it('ignores other routes', () => {
     const req = createRequest('/public/page', false);
-    const res = handleRouteProtection(req, 'store'); // Role doesn't strictly matter for non-protected routes in current implementation
+    const res = handleRouteProtection(req);
 
     expect(res).toBeNull();
   });

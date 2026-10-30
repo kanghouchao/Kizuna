@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, Cormorant_Garamond } from 'next/font/google';
 import '../globals.css';
 import { ToastProvider } from '@/_app';
+import { AppDomainScope } from '@/_app/index.server';
 
 const inter = Inter({ subsets: ['latin'] });
 const cormorant = Cormorant_Garamond({
@@ -32,8 +33,10 @@ export default function PublicRootLayout({
         <link rel="icon" href="/images/favicon.ico" />
       </head>
       <body className={`${inter.className} ${cormorant.variable}`}>
-        {children}
-        <ToastProvider />
+        <AppDomainScope>
+          {children}
+          <ToastProvider />
+        </AppDomainScope>
       </body>
     </html>
   );

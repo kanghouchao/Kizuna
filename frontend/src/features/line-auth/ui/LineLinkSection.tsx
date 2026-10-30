@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { authApi, lineApi } from '@/entities/user';
-import { isLineAppHost, startLineAuthorization } from '@/shared/lib';
+import { isLineAppHost, startLineAuthorization, useAppDomain } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -23,10 +23,11 @@ export function LineLinkSection() {
   const [linked, setLinked] = useState(false);
   const [subject, setSubject] = useState('');
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const appDomain = useAppDomain();
 
   useEffect(() => {
     // 店舗ドメイン上ではコールバック URL がチャネル登録のアプリ origin と食い違い認可が成立しないため、入口を出さない
-    if (!isLineAppHost()) return;
+    if (!isLineAppHost(appDomain)) return;
     const load = async () => {
       try {
         const [config, me] = await Promise.all([lineApi.config(), authApi.me()]);
@@ -40,7 +41,7 @@ export function LineLinkSection() {
       }
     };
     void load();
-  }, []);
+  }, [appDomain]);
 
   if (!channelId) return null;
 

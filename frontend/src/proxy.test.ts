@@ -1,115 +1,35 @@
+import type { NextRequest } from 'next/server';
 import { proxy } from './proxy';
-import { resolveStore } from './shared/lib/proxy/storeResolver';
 import { handleRouteProtection } from './shared/lib/proxy/routeGuard';
-import { NextRequest } from 'next/server';
-
-// Mock dependencies BEFORE importing proxy
-jest.mock('./shared/lib/proxy/storeResolver', () => ({
-  resolveStore: jest.fn(),
-  // 既定値と異なる値にして、cookie が proxy 内の literal ではなく実行時 env 由来の
-  // 定数から来ていることを断言できるようにする
-  APP_DOMAIN: 'app.example',
-}));
 
 jest.mock('./shared/lib/proxy/routeGuard', () => ({
   handleRouteProtection: jest.fn(),
 }));
 
-jest.mock('next/server', () => {
-  class MockCookies {
-    private store = new Map<string, string>();
-    set(name: string, value: string) {
-      this.store.set(name, value);
-    }
-    get(name: string) {
-      return { value: this.store.get(name) };
-    }
-  }
+const passThrough = { kind: 'next' };
+jest.mock('next/server', () => ({
+  NextResponse: { next: () => passThrough },
+}));
 
-  class MockNextResponse {
-    public cookies = new MockCookies();
-    public status = 200;
-    static next() {
-      return new MockNextResponse();
-    }
-  }
+const mockHandleRouteProtection = handleRouteProtection as jest.Mock;
 
-  return {
-    NextResponse: MockNextResponse,
-    NextRequest: class {},
-  };
-});
-
-describe('proxy integration', () => {
-  const mockResolveStore = resolveStore as jest.Mock;
-  const mockHandleRouteProtection = handleRouteProtection as jest.Mock;
-
-  const createRequest = (hostname = 'store.test') =>
-    ({
-      nextUrl: { protocol: 'http:', hostname },
-      headers: {
-        get: (name: string) => (name === 'host' ? hostname : null),
-      },
-    }) as unknown as NextRequest;
-
+describe('proxy', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('delegates to routeGuard and returns redirect if needed', async () => {
-    mockResolveStore.mockResolvedValue({ role: 'app' });
-    const redirectResponse = { status: 307 };
-    mockHandleRouteProtection.mockReturnValue(redirectResponse);
+  it('守衛が差し戻すときはそのリダイレクトを返す', () => {
+    const redirect = { status: 307 };
+    mockHandleRouteProtection.mockReturnValue(redirect);
+    const request = {} as NextRequest;
 
-    const req = createRequest();
-    const res = await proxy(req);
-
-    expect(mockResolveStore).toHaveBeenCalledWith(req);
-    expect(mockHandleRouteProtection).toHaveBeenCalledWith(req, 'app');
-    expect(res).toBe(redirectResponse);
+    expect(proxy(request)).toBe(redirect);
+    expect(mockHandleRouteProtection).toHaveBeenCalledWith(request);
   });
 
-  it('sets cookies and proceeds if routeGuard allows', async () => {
-    mockResolveStore.mockResolvedValue({
-      role: 'store',
-      storeData: {
-        templateKey: 'dark',
-        storeId: 't1',
-        storeName: 'Shop',
-      },
-    });
+  it('守衛を通過したリクエストはそのまま進める', () => {
     mockHandleRouteProtection.mockReturnValue(null);
 
-    const req = createRequest();
-    const res = (await proxy(req))!;
-
-    expect(res.status).toBe(200);
-    expect(res.cookies.get('x-mw-role')?.value).toBe('store');
-    expect(res.cookies.get('x-mw-store-id')?.value).toBe('t1');
-    expect(res.cookies.get('x-mw-store-template')?.value).toBe('dark');
-    expect(res.cookies.get('x-mw-store-domain')?.value).toBe('store.test');
-  });
-
-  it('未登録のホストには role=unknown だけを渡し、店舗の cookie を立てない', async () => {
-    mockResolveStore.mockResolvedValue({ role: 'unknown' });
-    mockHandleRouteProtection.mockReturnValue(null);
-
-    const res = (await proxy(createRequest('unknown.test')))!;
-
-    expect(res.cookies.get('x-mw-role')?.value).toBe('unknown');
-    expect(res.cookies.get('x-mw-store-id')?.value).toBeUndefined();
-    expect(res.cookies.get('x-mw-store-domain')?.value).toBeUndefined();
-    expect(res.cookies.get('x-mw-store-template')?.value).toBeUndefined();
-  });
-
-  it('アプリドメインを cookie でクライアントへ渡す', async () => {
-    // NEXT_PUBLIC_* はビルド時インライン置換のため実行時 env が届かない。
-    // 店舗ドメインから会員ポータルへ渡す絶対 URL の根拠はこの cookie だけ
-    mockResolveStore.mockResolvedValue({ role: 'app' });
-    mockHandleRouteProtection.mockReturnValue(null);
-
-    const res = (await proxy(createRequest()))!;
-
-    expect(res.cookies.get('x-mw-app-domain')?.value).toBe('app.example');
+    expect(proxy({} as NextRequest)).toBe(passThrough);
   });
 });

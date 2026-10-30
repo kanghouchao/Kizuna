@@ -85,15 +85,9 @@ describe('line-oauth', () => {
   });
 
   describe('isLineAppHost', () => {
-    it('店舗ドメイン（proxy が立てる role=store cookie）でのみ false', () => {
-      expect(isLineAppHost()).toBe(true);
-      document.cookie = 'x-mw-role=store';
-      try {
-        expect(isLineAppHost()).toBe(false);
-      } finally {
-        document.cookie = 'x-mw-role=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      }
-      expect(isLineAppHost()).toBe(true);
+    it('今のホストがアプリドメインのときだけ true（jsdom のホストは localhost）', () => {
+      expect(isLineAppHost('localhost')).toBe(true);
+      expect(isLineAppHost('app.example')).toBe(false);
     });
   });
 

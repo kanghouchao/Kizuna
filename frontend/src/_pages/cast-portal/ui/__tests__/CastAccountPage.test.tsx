@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CastAccountPage } from '../CastAccountPage';
 import { authApi, lineApi, useAuth } from '@/entities/user';
+import { AppDomainProvider } from '@/shared/lib';
 
 jest.mock('@/entities/user', () => ({
   authApi: { me: jest.fn() },
@@ -13,6 +15,11 @@ const mockedLineConfig = lineApi.config as jest.Mock;
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockLogout = jest.fn();
 
+// jsdom の location.hostname（localhost）をアプリドメインとして渡し、アプリの画面として描く
+function OnAppHost({ children }: { children: ReactNode }) {
+  return <AppDomainProvider appDomain="localhost">{children}</AppDomainProvider>;
+}
+
 describe('CastAccountPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -23,7 +30,7 @@ describe('CastAccountPage', () => {
   it('表示名を取得して表示する', async () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
 
-    render(<CastAccountPage />);
+    render(<CastAccountPage />, { wrapper: OnAppHost });
 
     expect(await screen.findByText('田中一郎')).toBeInTheDocument();
   });
@@ -31,7 +38,7 @@ describe('CastAccountPage', () => {
   it('ログアウトボタンは useAuth().logout を呼ぶ', async () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
 
-    render(<CastAccountPage />);
+    render(<CastAccountPage />, { wrapper: OnAppHost });
     await screen.findByText('田中一郎');
     fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }));
 
@@ -42,7 +49,7 @@ describe('CastAccountPage', () => {
     // LINE 連携ブロックも同じ me() を叩くため、Once では意図しない側が消費する
     mockedMe.mockRejectedValue(new Error('boom'));
 
-    render(<CastAccountPage />);
+    render(<CastAccountPage />, { wrapper: OnAppHost });
 
     const region = await screen.findByRole('alert');
     expect(within(region).getByText('表示名を取得できませんでした')).toBeInTheDocument();
@@ -58,7 +65,7 @@ describe('CastAccountPage', () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎', line_linked: false });
     mockedLineConfig.mockResolvedValue({ enabled: true, channel_id: 'channel-1' });
 
-    render(<CastAccountPage />);
+    render(<CastAccountPage />, { wrapper: OnAppHost });
 
     expect(await screen.findByRole('heading', { name: 'LINE連携' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'LINEを連携する' })).toBeInTheDocument();

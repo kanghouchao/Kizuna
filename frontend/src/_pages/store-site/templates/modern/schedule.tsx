@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { storefrontService } from '../../api/storefront';
+import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Footer from '../_sections/Footer';
 import Header from '../_sections/Header';
@@ -8,12 +8,11 @@ import ScheduleSection from '../_sections/ScheduleSection';
 import './theme.css';
 
 /** 出勤表ページ（modern 模版）。 */
-export default async function ModernSchedulePage() {
-  const cookieStore = await cookies();
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+export default async function ModernSchedulePage({ store }: StoreSitePageProps) {
+  const storeName = store.name;
   const [siteConfig, shifts] = await Promise.all([
-    storefrontService.fetchSiteConfig(),
-    storefrontService.fetchShifts(),
+    storefrontService.fetchSiteConfig(store.id),
+    storefrontService.fetchShifts(store.id),
   ]);
 
   return (

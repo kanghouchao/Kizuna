@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { storefrontService } from '../../api/storefront';
+import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Advertisement from '../_sections/Advertisement';
 import Banner from '../_sections/Banner';
@@ -10,12 +10,10 @@ import MVSection from '../_sections/MVSection';
 import './theme.css';
 
 /** 既定模版の店舗トップページ（Server Component）。 */
-export default async function DefaultTemplate() {
-  const cookieStore = await cookies();
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+export default async function DefaultTemplate({ store }: StoreSitePageProps) {
+  const storeName = store.name;
 
-  // テナントIDは service 内部で解決されるため、引数不要
-  const { casts, siteConfig } = await storefrontService.getPageData();
+  const { casts, siteConfig } = await storefrontService.getPageData(store.id);
 
   return (
     <div

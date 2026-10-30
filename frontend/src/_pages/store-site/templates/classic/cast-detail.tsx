@@ -1,6 +1,6 @@
-import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { storefrontService } from '../../api/storefront';
+import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import CastDetailSection from '../_sections/CastDetailSection';
 import Footer from '../_sections/Footer';
@@ -8,17 +8,16 @@ import Header from '../_sections/Header';
 import PageHero from '../_sections/PageHero';
 import './theme.css';
 
-interface ClassicCastDetailPageProps {
+interface ClassicCastDetailPageProps extends StoreSitePageProps {
   castId: string;
 }
 
 /** キャスト詳細ページ（classic 模版）。 */
-export default async function ClassicCastDetailPage({ castId }: ClassicCastDetailPageProps) {
-  const cookieStore = await cookies();
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+export default async function ClassicCastDetailPage({ store, castId }: ClassicCastDetailPageProps) {
+  const storeName = store.name;
   const [cast, siteConfig] = await Promise.all([
-    storefrontService.fetchCast(castId),
-    storefrontService.fetchSiteConfig(),
+    storefrontService.fetchCast(store.id, castId),
+    storefrontService.fetchSiteConfig(store.id),
   ]);
 
   if (!cast) {

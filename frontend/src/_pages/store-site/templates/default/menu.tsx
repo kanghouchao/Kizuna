@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { storefrontService } from '../../api/storefront';
+import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Footer from '../_sections/Footer';
 import Header from '../_sections/Header';
@@ -8,10 +8,9 @@ import PricingSection from '../_sections/PricingSection';
 import './theme.css';
 
 /** 料金ページ（default 模版）。 */
-export default async function DefaultMenuPage() {
-  const cookieStore = await cookies();
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
-  const siteConfig = await storefrontService.fetchSiteConfig();
+export default async function DefaultMenuPage({ store }: StoreSitePageProps) {
+  const storeName = store.name;
+  const siteConfig = await storefrontService.fetchSiteConfig(store.id);
 
   return (
     <div

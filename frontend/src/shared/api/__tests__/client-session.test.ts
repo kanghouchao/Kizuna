@@ -128,15 +128,11 @@ describe('apiClient session branch', () => {
     expect(Cookies.set).not.toHaveBeenCalled();
   });
 
-  it('uses the proxy store cookie (x-mw-store-id) when no session is active', async () => {
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
-      if (key === 'x-mw-role') return 'store';
-      if (key === 'x-mw-store-id') return '7';
-      if (key === 'current-store-id') return '2';
-      return undefined;
-    });
+  it('does not take a store from cookies when no session is active', async () => {
+    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'session-kind' ? undefined : '7'
+    );
     const headers = await requestTo('/casts/public');
-    expect(headers['X-Store-ID']).toBe('7');
+    expect(headers['X-Store-ID']).toBeUndefined();
   });
 });

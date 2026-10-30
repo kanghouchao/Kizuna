@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { storefrontService } from '../../api/storefront';
+import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Advertisement from '../_sections/Advertisement';
 import Banner from '../_sections/Banner';
@@ -13,12 +13,10 @@ import './theme.css';
  * classic 模版の店舗トップページ（Server Component）。
  * 既定模版との排布差: キャッチコピー帯を Banner の直上に置き、明るい第一印象を作る。
  */
-export default async function ClassicTemplate() {
-  const cookieStore = await cookies();
-  const storeName = cookieStore.get('x-mw-store-name')?.value || 'Store';
+export default async function ClassicTemplate({ store }: StoreSitePageProps) {
+  const storeName = store.name;
 
-  // テナントIDは service 内部で解決されるため、引数不要
-  const { casts, siteConfig } = await storefrontService.getPageData();
+  const { casts, siteConfig } = await storefrontService.getPageData(store.id);
 
   return (
     <div

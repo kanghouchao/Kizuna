@@ -26,27 +26,4 @@ describe('apiClient request interceptor', () => {
 
     apiClient.defaults.adapter = original;
   });
-
-  it('propagates store headers when cookies exist', async () => {
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
-      if (key === 'x-mw-store-id') return '42';
-      return undefined;
-    });
-
-    const original = apiClient.defaults.adapter;
-    apiClient.defaults.adapter = (async (config: InternalAxiosRequestConfig) => ({
-      data: {},
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config,
-    })) as AxiosAdapter;
-
-    const res = await apiClient.get('/me');
-    expect(res.config.headers.get('X-Store-ID')).toBe('42');
-    expect(res.config.headers.get('X-XSRF-TOKEN')).toBeUndefined();
-
-    apiClient.defaults.adapter = original;
-  });
 });

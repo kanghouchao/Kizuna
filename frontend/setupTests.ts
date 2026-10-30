@@ -25,14 +25,17 @@ class ResizeObserverStub {
 }
 globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 
-// Select は popup のマウント時 effect で選択済み項目をビューへスクロールする。
-// jsdom には scrollIntoView が無く、開き方に依らず同じ effect で落ちるため空実装を与える。
-Element.prototype.scrollIntoView = jest.fn();
+// 以下の 2 つは DOM の補完で、@jest-environment node のテスト（DOM が無い）では不要かつ参照できない。
+if (typeof window !== 'undefined') {
+  // Select は popup のマウント時 effect で選択済み項目をビューへスクロールする。
+  // jsdom には scrollIntoView が無く、開き方に依らず同じ effect で落ちるため空実装を与える。
+  Element.prototype.scrollIntoView = jest.fn();
 
-// Switch / Checkbox は引き金のクリックを隠し input へ PointerEvent として中継する
-// （修飾キーの状態を運ぶため click() ではなく構築したイベントを使う）。jsdom は
-// PointerEvent を実装しないので、構築だけ通るよう MouseEvent で代用する。
-if (!globalThis.PointerEvent) {
-  globalThis.PointerEvent =
-    class PointerEventStub extends MouseEvent {} as unknown as typeof PointerEvent;
+  // Switch / Checkbox は引き金のクリックを隠し input へ PointerEvent として中継する
+  // （修飾キーの状態を運ぶため click() ではなく構築したイベントを使う）。jsdom は
+  // PointerEvent を実装しないので、構築だけ通るよう MouseEvent で代用する。
+  if (!globalThis.PointerEvent) {
+    globalThis.PointerEvent =
+      class PointerEventStub extends MouseEvent {} as unknown as typeof PointerEvent;
+  }
 }

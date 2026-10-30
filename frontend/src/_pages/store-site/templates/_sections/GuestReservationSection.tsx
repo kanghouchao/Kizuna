@@ -27,12 +27,12 @@ interface GuestReservationFormValues {
 
 /**
  * 公開店面のゲスト予約申請フォーム。未ログインの来訪者が連絡先と希望内容を送る唯一の入口で、
- * 送信先は匿名の端点。店舗は訪問された域名から解決されるため、画面は店舗を名乗らない。
+ * 送信先は匿名の端点で、店舗はサーバが訪問されたドメインから解決した id を受け取って名乗る。
  *
  * 申請は予約の成立ではない。店舗が折返し連絡で内容を詰めてから確定するため、送信後は
  * 折返しを待つことだけを伝える（申請を読み返す口は匿名の来訪者には無い）。
  */
-export default function GuestReservationSection() {
+export default function GuestReservationSection({ storeId }: { storeId: string }) {
   const consent = useResource(guestOrderApplicationApi.consent);
   const [acceptedId, setAcceptedId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -64,7 +64,7 @@ export default function GuestReservationSection() {
       return;
     }
     try {
-      const accepted = await guestOrderApplicationApi.request({
+      const accepted = await guestOrderApplicationApi.request(storeId, {
         contact_consent: {
           version: consent.data.version,
           business_allowed: values.business_allowed,

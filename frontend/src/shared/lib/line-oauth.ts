@@ -1,5 +1,3 @@
-import Cookies from 'js-cookie';
-
 /** LINE の認可エンドポイント（認可コードフロー + PKCE）。 */
 export const LINE_AUTHORIZE_ENDPOINT = 'https://access.line.me/oauth2/v2.1/authorize';
 
@@ -22,10 +20,10 @@ interface LineAuthorizationRecord {
 
 /**
  * この host で LINE 入口を出してよいか。コールバック URL はチャネルに登録したアプリ origin だけが有効なため、
- * 店舗ドメイン（公開専用、proxy が role=store の cookie を立てる）では入口ごと出さない。
+ * アプリドメイン以外（店舗ドメインなど）では入口ごと出さない。
  */
-export function isLineAppHost(): boolean {
-  return Cookies.get('x-mw-role') !== 'store';
+export function isLineAppHost(appDomain: string): boolean {
+  return window.location.hostname === appDomain;
 }
 
 function toBase64Url(bytes: Uint8Array): string {
