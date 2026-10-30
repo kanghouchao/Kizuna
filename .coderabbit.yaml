@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# 規約は各ディレクトリの AGENTS.md を CodeRabbit が既定で読むため、path_instructions には重ねて書かない。
+language: ja-JP
+tone_instructions: >-
+  簡潔かつ直接的に。整形・import 順・命名の好みは Spotless/ESLint が担うので指摘しない。
+  正しさ・並行性・店舗間のデータ分離・セキュリティを優先する。
+reviews:
+  profile: chill
