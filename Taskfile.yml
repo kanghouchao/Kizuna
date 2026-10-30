@@ -66,6 +66,11 @@ tasks:
           echo "✅テスト完了"
         fi
 
+  test:postgres:
+    desc: バックエンドの実 PostgreSQL テスト層を使い捨て DB で実行
+    cmds:
+      - task -d backend test:postgres DOCKER_TAG="{{.DOCKER_TAG}}"
+
   e2e:
     desc: E2E（playwright-bdd）を専用の使い捨てスタックで実行（build → 実行 → 破棄。shard=1/4・grep=正規表現 で対象を限定可）
     cmds:

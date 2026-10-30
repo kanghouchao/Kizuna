@@ -43,6 +43,51 @@ tasks:
           --load \
           .
 
+  test:postgres:
+    desc: 実 PostgreSQL テスト層（*PostgresTest）を本番と同じ DHI イメージの使い捨て DB で実行（コンテナ・ボリュームを残さない）
+    vars:
+      STACK_ID:
+        sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
+      NAME: kizuna-pgtest-{{.STACK_ID}}
+    cmds:
+      - echo "🐘  実 PostgreSQL テスト層を実行中..."
+      - docker buildx build --target postgres-test -t {{.DOCKER_IMAGE}}-postgres-test:{{.DOCKER_TAG}} --load .
+      # 中断で残った前回分を先に回収する。データは tmpfs に置き、ボリュームは作らない。
+      - docker rm -fv {{.NAME}}-runner {{.NAME}}-db {{.NAME}}-redis >/dev/null 2>&1 || true
+      - docker network rm {{.NAME}} >/dev/null 2>&1 || true
+      - defer: docker rm -fv {{.NAME}}-runner {{.NAME}}-db {{.NAME}}-redis >/dev/null 2>&1; docker network rm {{.NAME}} >/dev/null 2>&1 || true
+      - docker network create {{.NAME}} >/dev/null
+      - |
+        docker run -d --rm --name {{.NAME}}-db --network {{.NAME}} \
+          --tmpfs /var/lib/postgresql:uid=70,gid=70 \
+          -e POSTGRES_PASSWORD="${KIZUNA_POSTGRES_TEST_PASSWORD:-postgres}" \
+          dhi.io/postgres:18-alpine3.23 >/dev/null
+      # 認証失効の検証が ACL を書き換えるための専用 Redis。閉じたネットワーク内だけで使う。
+      - docker run -d --rm --name {{.NAME}}-redis --network {{.NAME}} dhi.io/redis:8-alpine3.23 redis-server --protected-mode no >/dev/null
+      # 初期化中の一時サーバは TCP を開かないため、TCP で応答した時点を本起動とみなす。
+      - |
+        for i in $(seq 1 60); do
+          docker exec {{.NAME}}-db pg_isready -h 127.0.0.1 -U postgres -q && exit 0
+          sleep 1
+        done
+        docker logs {{.NAME}}-db
+        echo "❌ PostgreSQL が 60 秒以内に起動しませんでした"
+        exit 1
+      # 環境変数が届かずに全クラスが skip されても Gradle は成功するため、全クラスが実行されたことを結果 XML で確かめる。
+      - |
+        docker run --rm --name {{.NAME}}-runner --network {{.NAME}} \
+          -e KIZUNA_POSTGRES_TEST_JDBC_URL=jdbc:postgresql://{{.NAME}}-db:5432/postgres \
+          -e KIZUNA_POSTGRES_TEST_USERNAME=postgres \
+          -e KIZUNA_TEST_REDIS_HOST={{.NAME}}-redis \
+          -e KIZUNA_POSTGRES_TEST_PASSWORD="${KIZUNA_POSTGRES_TEST_PASSWORD:-postgres}" \
+          --entrypoint sh {{.DOCKER_IMAGE}}-postgres-test:{{.DOCKER_TAG}} -c '
+            ./gradlew test --offline --no-daemon --tests "*PostgresTest" || exit 1
+            expected=$(find src/test -name "*PostgresTest.java" | wc -l)
+            ran=$(grep -L -e "tests=\"0\"" -e "skipped=\"[1-9]" build/test-results/test/TEST-*PostgresTest.xml | wc -l)
+            echo "PostgresTest: ${ran}/${expected} クラスを実行"
+            [ "$ran" -eq "$expected" ]
+          '
+
   build:
     desc: バックエンドDockerイメージをビルド
     cmds:
@@ -56,4 +101,5 @@ tasks:
       - echo "🗑️  バックエンドDockerイメージを削除中..."
       - docker rmi {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} 2>/dev/null || echo "イメージが存在しないか、既に削除されています"
       - docker rmi {{.DOCKER_IMAGE}}-test:{{.DOCKER_TAG}} 2>/dev/null || echo "テストイメージが存在しないか、既に削除されています"
+      - docker rmi {{.DOCKER_IMAGE}}-postgres-test:{{.DOCKER_TAG}} 2>/dev/null || echo "PostgreSQL テストイメージが存在しないか、既に削除されています"
       - docker rmi {{.DOCKER_IMAGE}}-lint:{{.DOCKER_TAG}} 2>/dev/null || echo "Lintイメージが存在しないか、既に削除されています"
