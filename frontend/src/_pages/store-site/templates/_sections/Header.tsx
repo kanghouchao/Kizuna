@@ -14,6 +14,7 @@ const navLinks = [
   { href: '/', label: 'TOP' },
   { href: '/casts', label: 'キャスト' },
   { href: '/schedule', label: '出勤表' },
+  { href: '/reviews', label: '口コミ' },
   { href: '/menu', label: '料金' },
   { href: '/about', label: '店舗情報' },
   // 未ログインの来訪者の申請入口。会員は右の WEB予約（会員ポータル）から入る

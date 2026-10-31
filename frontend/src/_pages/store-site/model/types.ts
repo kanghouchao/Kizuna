@@ -57,6 +57,15 @@ export interface PublicShift {
   end_time?: string;
 }
 
+/**
+ * 公式サイトに掲出中の口コミ。received_on は店舗の現地日付（YYYY-MM-DD）
+ */
+export interface PublicReview {
+  display_name?: string | null;
+  body: string;
+  received_on: string;
+}
+
 /** 模版ページが受け取る店舗。サーバがリクエストの Host から解決した値。 */
 export interface StoreSitePageProps {
   store: PublicStore;

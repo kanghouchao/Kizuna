@@ -43,6 +43,7 @@ public class ExemptingBearerTokenResolver implements BearerTokenResolver {
     PathPatternRequestMatcher.withDefaults().matcher("/shifts/public"),
     PathPatternRequestMatcher.withDefaults()
         .matcher(HttpMethod.GET, "/order-applications/public/contact-consent"),
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/reviews/public"),
     // 公開サイトからの匿名 POST（ゲスト予約申請）。公開サイトを見ている来訪者は会員・キャストの陳腐な
     // token cookie を持ちうるため、免除しないと申請そのものが 401 で通らなくなる。
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/order-applications/public"),

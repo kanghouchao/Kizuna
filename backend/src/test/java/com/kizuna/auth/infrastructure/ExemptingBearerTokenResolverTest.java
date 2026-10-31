@@ -89,6 +89,23 @@ class ExemptingBearerTokenResolverTest {
   }
 
   @Test
+  @DisplayName("公開口コミ一覧の GET は免除対象で、壊れた Bearer があっても null を返すこと")
+  void resolvesNullForPublicReviewList() {
+    MockHttpServletRequest request = requestWithBearer("GET", "/reviews/public");
+
+    assertThat(resolver.resolve(request)).isNull();
+  }
+
+  @Test
+  @DisplayName("公開口コミ一覧の免除は GET 限定で、同一パスの他メソッドや個別の口コミには及ばないこと")
+  void doesNotExemptOtherReviewRequests() {
+    assertThat(resolver.resolve(requestWithBearer("POST", "/reviews/public")))
+        .isEqualTo("broken-token-value");
+    assertThat(resolver.resolve(requestWithBearer("GET", "/reviews/1")))
+        .isEqualTo("broken-token-value");
+  }
+
+  @Test
   @DisplayName("初期設定の登録 POST は免除対象で、壊れた Bearer があっても null を返すこと")
   void resolvesNullForInitialSetupPost() {
     MockHttpServletRequest request = requestWithBearer("POST", "/auth/initial-setup");

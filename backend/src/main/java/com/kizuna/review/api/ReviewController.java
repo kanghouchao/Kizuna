@@ -7,6 +7,7 @@ import com.kizuna.review.api.dto.ReviewDecisionRequest;
 import com.kizuna.review.api.dto.ReviewHistoryResponse;
 import com.kizuna.review.api.dto.ReviewPermissionRequest;
 import com.kizuna.review.api.dto.ReviewPermissionRevocationRequest;
+import com.kizuna.review.api.dto.ReviewPublicResponse;
 import com.kizuna.review.api.dto.ReviewPublicationRequest;
 import com.kizuna.review.api.dto.ReviewResponse;
 import com.kizuna.review.api.dto.ReviewSummaryResponse;
@@ -19,6 +20,7 @@ import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
+import jakarta.annotation.security.PermitAll;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -147,6 +149,15 @@ public class ReviewController {
         storeId,
         auth.getName(),
         new ReviewSearch(pageable, q, reviewId, status, permissionStatus, sort));
+  }
+
+  @GetMapping("/public")
+  @PermitAll
+  public Page<ReviewPublicResponse> listPublic(
+      @CurrentStore Long storeId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return reviews.listPublic(storeId, page, size);
   }
 
   @GetMapping("/{id}")

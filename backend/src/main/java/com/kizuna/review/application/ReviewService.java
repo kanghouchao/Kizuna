@@ -3,6 +3,7 @@ package com.kizuna.review.application;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.order.revieworigin.ReviewOriginLookup;
 import com.kizuna.review.api.dto.ReviewHistoryResponse;
+import com.kizuna.review.api.dto.ReviewPublicResponse;
 import com.kizuna.review.api.dto.ReviewResponse;
 import com.kizuna.review.api.dto.ReviewSummaryResponse;
 import com.kizuna.review.api.dto.ReviewWriteResponse;
@@ -18,6 +19,7 @@ import com.kizuna.review.domain.ReviewOperation;
 import com.kizuna.review.domain.ReviewOperationRepository;
 import com.kizuna.review.domain.ReviewPermission;
 import com.kizuna.review.domain.ReviewPermissionRepository;
+import com.kizuna.review.domain.ReviewPublicView;
 import com.kizuna.review.domain.ReviewRecord;
 import com.kizuna.review.domain.ReviewRepository;
 import com.kizuna.review.domain.ReviewSearch;
@@ -25,6 +27,7 @@ import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
@@ -317,6 +320,23 @@ public class ReviewService {
             search.specification(storeId),
             q -> q.as(ReviewSummaryView.class).page(search.pageable()))
         .map(r -> ReviewSummaryResponse.of(r, OffsetDateTime.now(clock)));
+  }
+
+  @Transactional(readOnly = true)
+  public Page<ReviewPublicResponse> listPublic(Long storeId, int page, int size) {
+    if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
+      throw new ServiceException("一覧のページ条件を確認してください");
+    return reviews
+        .findBy(
+            ReviewSummaryView.displayed(storeId, OffsetDateTime.now(clock)),
+            q ->
+                q.as(ReviewPublicView.class)
+                    .page(
+                        PageRequest.of(
+                            page,
+                            size,
+                            Publication.order(ReviewRecord::getPublication, ReviewRecord::getId))))
+        .map(r -> ReviewPublicResponse.of(r, clock.getZone()));
   }
 
   private ReviewDetailsView find(Long storeId, String id) {
