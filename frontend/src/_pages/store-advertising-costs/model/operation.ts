@@ -24,32 +24,33 @@ export async function submitOperation(
   onChange: (p: Pending | null) => void
 ) {
   const key = operationKey(operation.subject, operation.store, operation.month);
-  const blocked = () => {
-    if (active.has(key)) return true;
-    const existing = readPending(key);
-    if (existing && (!replay || JSON.stringify(existing.operation) !== JSON.stringify(operation)))
-      return true;
-    return replay && !existing;
-  };
-  if (blocked()) return false;
-  // 操作者は画面の /me（layout の生存期間）で、token は別タブのログインで差し替わる。送る前に今の
-  // token の持ち主を確かめ、前の操作者の入力を別の利用者の操作として送らない（何も預けずに止める）。
-  if ((await authApi.me()).email !== operation.subject)
-    throw new ClientDataError('ログイン中のアカウントが変わりました。画面を開き直してください。');
-  if (blocked()) return false;
-  // 送信前にタブ内へ保存できなければ送らない。応答消失後も同一内容・同一キーで回復する。
-  sessionStorage.setItem(key, JSON.stringify(operation));
+  if (active.has(key)) return false;
+  const existing = readPending(key);
+  if (existing && (!replay || JSON.stringify(existing.operation) !== JSON.stringify(operation)))
+    return false;
+  if (replay && !existing) return false;
+  // 本人確認を待つ間も作用域を押さえる。押さえないと確認中の二度目の保存が、先の送信の完了後に別の
+  // request_id で送られる。
   active.add(key);
-  window.dispatchEvent(new Event('advertising-operation'));
-  onChange({ operation, phase: 'submitting' });
+  let sent = false;
   let completed = false;
   try {
+    // 操作者は画面の /me（layout の生存期間）で、token は別タブのログインで差し替わる。送る前に今の
+    // token の持ち主を確かめ、前の操作者の入力を別の利用者の操作として送らない（何も預けずに止める）。
+    if ((await authApi.me()).email !== operation.subject)
+      throw new ClientDataError('ログイン中のアカウントが変わりました。画面を開き直してください。');
+    // 送信前にタブ内へ保存できなければ送らない。応答消失後も同一内容・同一キーで回復する。
+    sessionStorage.setItem(key, JSON.stringify(operation));
+    sent = true;
+    window.dispatchEvent(new Event('advertising-operation'));
+    onChange({ operation, phase: 'submitting' });
     await advertisingApi.mutate(operation);
     completed = true;
     sessionStorage.removeItem(key);
     onChange(null);
     return true;
   } catch (error) {
+    if (!sent) throw error;
     const status = (error as { response?: { status?: number } }).response?.status;
     // 成功受領を先に照会する API の業務拒否は未成功を確定する。認可拒否では確定できない。
     if (
@@ -62,7 +63,10 @@ export async function submitOperation(
     throw error;
   } finally {
     active.delete(key);
-    window.dispatchEvent(new CustomEvent('advertising-operation', { detail: { key, completed } }));
+    if (sent)
+      window.dispatchEvent(
+        new CustomEvent('advertising-operation', { detail: { key, completed } })
+      );
   }
 }
 export function requestId() {

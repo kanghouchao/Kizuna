@@ -45,6 +45,18 @@ it('応答不明の内容を保持し、再読込後も同じ要求だけを再�
   expect(mutate.mock.calls).toEqual([[op], [op]]);
   expect(readPending(key)).toBeNull();
 });
+it('本人確認を待つ間の二重送信も、先の送信が終わった後に送らない', async () => {
+  // 確認中に作用域を押さえないと、先の送信が終わってから後の確認が返り、別の request_id で二度書く
+  let answer!: (v: { email: string; line_linked: boolean }) => void;
+  me.mockImplementationOnce(() => new Promise(r => (answer = r)));
+  mutate.mockResolvedValue({} as never);
+  const first = submitOperation(op, false, jest.fn());
+  const second = submitOperation({ ...op, request_id: requestId() }, false, jest.fn());
+  answer({ email: 'user', line_linked: false });
+  expect(await first).toBe(true);
+  expect(await second).toBe(false);
+  expect(mutate).toHaveBeenCalledTimes(1);
+});
 it('送信中の閉じる・再表示・二重送信でも一度だけ送信する', async () => {
   let resolve!: (v: never) => void;
   mutate.mockImplementationOnce(
