@@ -2,9 +2,11 @@
 
 import React, { createContext, useContext } from 'react';
 import { authApi } from '../api/auth';
+import { isAxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
 import { broadcastLogout, clearSessionToken, getSessionUserId } from '@/shared/api';
 import { clearSession, loginPath } from '@/shared/lib';
+import { notify } from '@/shared/notify';
 
 interface AuthContextType {
   /**
@@ -38,12 +40,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await authApi.logout();
     } catch (error) {
       console.error('Logout failed:', error);
-    } finally {
-      clearSessionToken();
-      clearSession();
-      if (userId !== undefined) broadcastLogout(userId);
-      router.push(loginPath(reason));
+      // 401 はセッションがすでに無いので畳んでよい。それ以外は失効したか分からず、リフレッシュ cookie が残ったまま
+      // ログイン画面へ移ると自動着地で元のセッションへ戻る。知らせて、この画面でやり直させる。
+      if (!isAxiosError(error) || error.response?.status !== 401) {
+        notify.error('ログアウトできませんでした。もう一度お試しください');
+        return;
+      }
     }
+    clearSessionToken();
+    clearSession();
+    if (userId !== undefined) broadcastLogout(userId);
+    router.push(loginPath(reason));
   };
 
   const value: AuthContextType = {
