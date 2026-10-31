@@ -516,4 +516,21 @@ class AuthServiceTest {
             RefreshTokenRejectedException.class,
             ex -> assertThat(ex.getReason()).isEqualTo(Reason.INVALID));
   }
+
+  @Test
+  void refresh_issuanceGuardRejection_isInvalidRatherThanABare401() {
+    when(sessionTokenDecoder.decodeRefresh("cookie")).thenReturn(refreshJwt(1L, 0L));
+    // 版を進めずに停止した行（版の照合を擦り抜けて発行の守衛に届く経路）。
+    User user = mock(User.class);
+    when(user.getCredentialVersion()).thenReturn(0L);
+    when(user.getUserType()).thenReturn(UserType.STAFF);
+    when(user.getEnabled()).thenReturn(false);
+    when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+    assertThatThrownBy(() -> authService.refresh("cookie", null))
+        .isInstanceOfSatisfying(
+            RefreshTokenRejectedException.class,
+            ex -> assertThat(ex.getReason()).isEqualTo(Reason.INVALID));
+    verifyNoInteractions(jwtIssuer);
+  }
 }

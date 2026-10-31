@@ -32,6 +32,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -108,7 +109,12 @@ public class AuthService {
     if (user.getCredentialVersion() != version) {
       throw new RefreshTokenRejectedException(Reason.CREDENTIAL_CHANGED);
     }
-    return issueSession(user, jwt.getClaimAsString(TokenType.SESSION_ID_CLAIM));
+    try {
+      return issueSession(user, jwt.getClaimAsString(TokenType.SESSION_ID_CLAIM));
+    } catch (AuthenticationException ex) {
+      // 停止・SERVICE は版の照合で先に止まるはずだが、発行の守衛に届いても契約どおり cookie を消す 401 にする。
+      throw new RefreshTokenRejectedException(Reason.INVALID);
+    }
   }
 
   private IssuedSession issueSession(User user, String sessionId) {
