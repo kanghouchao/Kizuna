@@ -6,6 +6,7 @@ import {
   completeAgreedOrder, correctOrderExtension, createAgreedOrder, createCast, createCourse,
   getAuthorizedStores, getOrder, invalidateOrder, issueCastInvitation,
   loginAsStoreAdmin, loginUser, STORE1_ID, suspendCast, switchStoreOnRail, withdrawCast,
+  openLoginForm,
 } from './store-api';
 
 const { Given, When, Then } = createBdd();
@@ -121,7 +122,7 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
 });
 
 When('横断照会者が受注照会から現在店舗の月次給与明細で本人と原月を選択する', async ({ page }) => {
-  await page.goto(APP_URL + '/auth/login');
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(readerEmail);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

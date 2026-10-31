@@ -23,10 +23,7 @@ describe('apiClient session branch', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
-      return undefined;
-    });
+    (Cookies.get as jest.Mock).mockReturnValue(undefined);
     (Cookies.set as jest.Mock).mockImplementation(() => undefined);
     (Cookies.remove as jest.Mock).mockImplementation(() => undefined);
   });
@@ -37,7 +34,6 @@ describe('apiClient session branch', () => {
 
   const session = (storeId?: string, kind = 'admin') =>
     (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 't';
       if (key === 'session-kind') return kind;
       if (key === 'current-store-id') return storeId;
       return undefined;

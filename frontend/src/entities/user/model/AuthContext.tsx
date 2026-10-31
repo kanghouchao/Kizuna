@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext } from 'react';
 import { authApi } from '../api/auth';
-import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
+import { broadcastLogout, clearSessionToken, getSessionUserId } from '@/shared/api';
 import { clearSession, loginPath } from '@/shared/lib';
 
 interface AuthContextType {
@@ -33,13 +33,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const router = useRouter();
 
   const logout = async (reason?: string) => {
+    const userId = getSessionUserId();
     try {
       await authApi.logout();
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
-      Cookies.remove('token');
+      clearSessionToken();
       clearSession();
+      if (userId !== undefined) broadcastLogout(userId);
       router.push(loginPath(reason));
     }
   };

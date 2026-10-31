@@ -3,7 +3,7 @@ import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { APP_URL } from "../base-url";
-import { ADMIN_PASSWORD, STORE1_ID, STORE_HEADERS, createPermissionRole, loginAsStoreAdmin, loginUser } from "./store-api";
+import { ADMIN_PASSWORD, STORE1_ID, STORE_HEADERS, createPermissionRole, loginAsStoreAdmin, loginUser, openLoginForm } from "./store-api";
 const { Given, When, Then } = createBdd();
 let token = "";
 let managerToken = "";
@@ -42,7 +42,7 @@ Given("添付検証専用の担当者と応募者が存在する", async ({ page
   const applicant = await request.post("/api/applicants", { headers: headers(), data: { name: `画像検証-${suffix}`, channel: "WEB", source_type: "DIRECT" } });
   expect(applicant.status(), await applicant.text()).toBe(201);
   applicantId = (await applicant.json()).id;
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス", { exact: true }).fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

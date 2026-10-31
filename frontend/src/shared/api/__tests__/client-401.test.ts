@@ -1,5 +1,3 @@
-import Cookies from 'js-cookie';
-
 // mock navigation helper before importing client so that interceptor uses the mock
 const redirectMock = jest.fn();
 const clearSessionMock = jest.fn();
@@ -13,21 +11,17 @@ jest.mock('@/shared/lib', () => ({
     rememberMemberReturnPathMock(value, fragment),
   getSessionKind: () => sessionKindValue,
   getCurrentStoreId: () => undefined,
+  startSession: jest.fn(),
 }));
 
-import { apiClient } from '@/shared/api';
-
-jest.mock('js-cookie');
+import { apiClient, getSessionUserId, storeSessionToken } from '@/shared/api';
 
 describe('apiClient 401/403 interceptor', () => {
   const originalHref = window.location.href;
   beforeEach(() => {
     jest.clearAllMocks();
     sessionKindValue = undefined;
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'token') return 'tkn';
-      return undefined;
-    });
+    storeSessionToken({ token: 'tkn', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
   });
   afterEach(() => {
     // restore any spies/mocks on location.assign
@@ -40,9 +34,12 @@ describe('apiClient 401/403 interceptor', () => {
     }
   });
 
+  const sentUrls: string[] = [];
   const withRejectingAdapter = async (status: number, request: () => Promise<unknown>) => {
     const original = apiClient.defaults.adapter;
-    apiClient.defaults.adapter = (async (config: unknown) => {
+    sentUrls.length = 0;
+    apiClient.defaults.adapter = (async (config: { url?: string }) => {
+      sentUrls.push(config.url ?? '');
       const error: Error & { response?: { status: number }; config?: unknown } = new Error(
         `HTTP ${status}`
       );
@@ -54,61 +51,21 @@ describe('apiClient 401/403 interceptor', () => {
     apiClient.defaults.adapter = original;
   };
 
-  it('clears token and redirects on 401', async () => {
-    const removeSpy = jest.spyOn(Cookies, 'remove');
-
-    await withRejectingAdapter(401, () => apiClient.get('/me'));
-
-    expect(removeSpy).toHaveBeenCalledWith('token');
-    // assert that our navigation helper was called (no real navigation in jsdom)
-    // 何も言わずに送り返すと、締め出されたのか自分が何かしたのか分からないまま再入力になる。
-    expect(redirectMock).toHaveBeenCalledWith('expired');
-  });
-
-  it('401 でログインへ差し戻す前に、会員ポータルの現在地を戻り先として覚える', async () => {
-    // 失効した MEMBER token は画面の入口を通ってしまうため、差し戻しがここで初めて起きる。
-    // 覚えないとログイン後に店舗つきの申請画面へ戻れない。
-    window.history.pushState({}, '', '/member/reservations/new?store=store1.kizuna.test');
-
-    await withRejectingAdapter(401, () => apiClient.get('/me/orders'));
-
-    expect(rememberMemberReturnPathMock).toHaveBeenCalledWith(
-      '/member/reservations/new?store=store1.kizuna.test',
-      ''
-    );
-    expect(redirectMock).toHaveBeenCalled();
-  });
-
-  it('未ログイン（token が無い）の 401 は失効を名乗らずにログインへ送り、会員の戻り先は預ける', async () => {
-    // 画面遷移の守衛は無く、未ログインで開いた画面の最初の API がここへ来る。失効を名乗ると、
-    // まだログインしていない利用者に「状態が無効になった」と読ませてしまう。
-    (Cookies.get as jest.Mock).mockReturnValue(undefined);
-    window.history.pushState({}, '', '/member/receipts#tok3n');
-
-    await withRejectingAdapter(401, () => apiClient.post('/me/receipts', { token: 'tok3n' }));
-
-    expect(rememberMemberReturnPathMock).toHaveBeenCalledWith('/member/receipts', '#tok3n');
-    expect(redirectMock).toHaveBeenCalledWith(undefined);
-  });
-
-  it('does not clear token or redirect on 401 when the request config sets skipAuthRedirect (招待受諾のインラインログインはグローバル401処理をバイパスする必要がある)', async () => {
-    const removeSpy = jest.spyOn(Cookies, 'remove');
-
+  it('skipAuthRedirect の要求の 401 はリフレッシュもトークンの破棄も差し戻しもしない（呼び出し元が失敗を自前で扱う）', async () => {
     await withRejectingAdapter(401, () =>
       apiClient.post('/auth/login', {}, { skipAuthRedirect: true } as never)
     );
 
-    expect(removeSpy).not.toHaveBeenCalledWith('token');
+    expect(sentUrls).toEqual(['/auth/login']);
+    expect(getSessionUserId()).toBe(7);
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
   it('clears session and redirects on 403 when the session-kind cookie holds a legacy role value (旧トークンのデッドロック回避)', async () => {
     sessionKindValue = 'MANAGER';
-    const removeSpy = jest.spyOn(Cookies, 'remove');
-
     await withRejectingAdapter(403, () => apiClient.get('/orders'));
 
-    expect(removeSpy).toHaveBeenCalledWith('token');
+    expect(getSessionUserId()).toBeUndefined();
     expect(clearSessionMock).toHaveBeenCalled();
     // 401 と同じ理由コード。こちらのトークンは期限内で、古いのは cookie の形式である。
     expect(redirectMock).toHaveBeenCalledWith('expired');
@@ -118,33 +75,27 @@ describe('apiClient 401/403 interceptor', () => {
     'clears session on 403 when the session-kind cookie holds the retired console value %s',
     async value => {
       sessionKindValue = value;
-      const removeSpy = jest.spyOn(Cookies, 'remove');
-
       await withRejectingAdapter(403, () => apiClient.get('/orders'));
 
-      expect(removeSpy).toHaveBeenCalledWith('token');
+      expect(getSessionUserId()).toBeUndefined();
       expect(clearSessionMock).toHaveBeenCalled();
     }
   );
 
   it('does nothing on 403 when the session-kind cookie holds the admin session value (正当な権限不足はセッションを壊さない)', async () => {
     sessionKindValue = 'admin';
-    const removeSpy = jest.spyOn(Cookies, 'remove');
-
     await withRejectingAdapter(403, () => apiClient.get('/stores'));
 
-    expect(removeSpy).not.toHaveBeenCalledWith('token');
+    expect(getSessionUserId()).toBe(7);
     expect(clearSessionMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
   it('does nothing on 403 when the session-kind cookie holds the member session value (会員の正当な 403 はセッションを壊さない)', async () => {
     sessionKindValue = 'member';
-    const removeSpy = jest.spyOn(Cookies, 'remove');
-
     await withRejectingAdapter(403, () => apiClient.get('/staff'));
 
-    expect(removeSpy).not.toHaveBeenCalledWith('token');
+    expect(getSessionUserId()).toBe(7);
     expect(clearSessionMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
   });

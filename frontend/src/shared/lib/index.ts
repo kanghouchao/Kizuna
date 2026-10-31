@@ -16,6 +16,7 @@ export { useResource } from './hooks/useResource';
 export { useDeleteAction } from './hooks/useDeleteAction';
 export {
   clearSession,
+  hasMemberReturnPath,
   isSafeMemberReturnPath,
   rememberMemberReturnPath,
   takeMemberReturnPath,

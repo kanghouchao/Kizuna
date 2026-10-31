@@ -11,6 +11,7 @@ import {
   createStaffFixture,
   loginAsStoreAdmin,
   loginUser,
+  openLoginForm,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -172,7 +173,7 @@ async function loginAsRecruiter(
     token: actorToken,
   } = await createRecruiter(request, permissions);
   token = actorToken;
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス", { exact: true }).fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

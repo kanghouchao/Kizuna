@@ -16,7 +16,7 @@ let testValue = '';
 
 Given('店舗 {string} の管理画面にログインしている', async ({ page }, _store: string) => {
   // 統一ログイン（/auth/login）は アプリドメイン（kizuna.test）で提供され、店舗業務画面も
-  // アプリドメイン上で操作する。token cookie はオリジン別に分離されるため、以降の遷移も APP_URL を用いる。
+  // アプリドメイン上で操作する。リフレッシュ cookie はホスト限定のため、以降の遷移も APP_URL を用いる。
   await loginViaUiAndEnterStore(page);
 });
 
@@ -29,7 +29,7 @@ Given('店舗設定の現在値を退避する', async ({ request }) => {
 
 When('店舗情報ページでアクセス補足を一意な検証値に変更して保存する', async ({ page }) => {
   testValue = `E2E設定保存-${Date.now()}`;
-  // ログイン済みセッション（token cookie）は アプリドメインにあるため管理画面も APP_URL で開く。
+  // ログイン済みセッション（リフレッシュ cookie）はアプリドメインにあるため管理画面も APP_URL で開く。
   await page.goto(`${APP_URL}/store/settings/profile`);
   await accessNoteTextarea(page).fill(testValue);
   await page.getByRole('button', { name: '設定を保存する', exact: true }).click();

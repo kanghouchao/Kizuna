@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import { authApi, initialSetupApi } from '@/entities/user';
 import { completeLogin } from '@/features/login';
@@ -31,7 +30,12 @@ const mockedComplete = completeLogin as jest.MockedFunction<typeof completeLogin
 const mockedNotifyError = notify.error as jest.Mock;
 const mockedNotifySuccess = notify.success as jest.Mock;
 
-const LOGIN_RESPONSE = { token: 'jwt-token', expires_at: Date.now() + 3_600_000 };
+const LOGIN_RESPONSE = {
+  token: 'jwt-token',
+  expires_at: Date.now() + 900_000,
+  user_id: 7,
+  refresh_expires_at: Date.now() + 1_209_600_000,
+};
 
 function fillAndSubmit(confirmPassword = 'password1234') {
   render(<InitialSetupForm />);
@@ -53,10 +57,6 @@ describe('InitialSetupForm', () => {
     jest.clearAllMocks();
   });
 
-  afterEach(() => {
-    Cookies.remove('token');
-  });
-
   it('確認欄がパスワードと一致しなければ送信せず、欄の傍に理由を出す', async () => {
     fillAndSubmit('password9999');
 
@@ -66,28 +66,22 @@ describe('InitialSetupForm', () => {
   });
 
   it('登録後にそのままログインし、着地先へ遷移する（確認欄は送らない）', async () => {
-    // 旧 DB のトークンが残っていても、登録とログインには持ち込まない
-    Cookies.set('token', 'stale-token');
-    let tokenAtRegister: string | undefined = 'not-called';
-    mockedRegister.mockImplementation(async () => {
-      tokenAtRegister = Cookies.get('token');
-    });
+    mockedRegister.mockResolvedValue(undefined);
     mockedLogin.mockResolvedValue(LOGIN_RESPONSE);
     mockedComplete.mockResolvedValue({ status: 'ok', path: '/admin/dashboard/' });
 
     fillAndSubmit();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/dashboard/'));
-    expect(tokenAtRegister).toBeUndefined();
     expect(mockedRegister).toHaveBeenCalledWith({
       email: 'admin@kizuna.test',
       password: 'password1234',
       display_name: '管理者',
     });
-    expect(mockedLogin).toHaveBeenCalledWith(
-      { email: 'admin@kizuna.test', password: 'password1234' },
-      { skipAuthRedirect: true }
-    );
+    expect(mockedLogin).toHaveBeenCalledWith({
+      email: 'admin@kizuna.test',
+      password: 'password1234',
+    });
     expect(mockedComplete).toHaveBeenCalledWith(LOGIN_RESPONSE);
     expect(mockedNotifyError).not.toHaveBeenCalled();
     expect(mockedNotifySuccess).not.toHaveBeenCalled();

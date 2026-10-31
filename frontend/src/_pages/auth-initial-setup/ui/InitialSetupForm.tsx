@@ -2,7 +2,6 @@
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import { authApi, initialSetupApi, InitialSetupRequest } from '@/entities/user';
 import { completeLogin } from '@/features/login';
@@ -24,7 +23,6 @@ export function InitialSetupForm() {
   });
 
   const submit = async (values: InitialSetupFormValues) => {
-    Cookies.remove('token');
     const { email, password, display_name } = values;
     try {
       await initialSetupApi.register({ email, password, display_name });
@@ -39,9 +37,7 @@ export function InitialSetupForm() {
       return;
     }
     try {
-      const completion = await completeLogin(
-        await authApi.login({ email, password }, { skipAuthRedirect: true })
-      );
+      const completion = await completeLogin(await authApi.login({ email, password }));
       if (completion.status === 'ok') {
         router.push(completion.path);
         return;

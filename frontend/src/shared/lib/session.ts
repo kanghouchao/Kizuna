@@ -14,7 +14,7 @@ export function getCurrentStoreId(): string | undefined {
   return Cookies.get(CURRENT_STORE_ID_COOKIE);
 }
 
-/** expiresAt（epoch millis）を渡すと token cookie と同じ有効期限を設定し、cookie 間の失効ズレを防ぐ。 */
+/** expiresAt（epoch millis）にはリフレッシュトークンの期限を渡し、ログインが続く間だけ session-kind を残す。 */
 export function startSession(sessionKind: string, expiresAt?: number): void {
   Cookies.set(
     SESSION_KIND_COOKIE,
@@ -133,6 +133,11 @@ export function rememberMemberReturnPath(value: string, fragment?: string): void
   // そのまま遷移に渡るため — 断片であることが形から明らかな値以外は載せない
   // （`#` 以降はホストにもパスにもなり得ない）。
   writeTarget(fragment?.startsWith('#') ? `${value}${fragment}` : null);
+}
+
+/** 会員の戻り先が預けられているか。取り出さずに見るだけ（ログイン画面の自動着地の判断に使う）。 */
+export function hasMemberReturnPath(): boolean {
+  return isSafeMemberReturnPath(Cookies.get(MEMBER_RETURN_PATH_COOKIE));
 }
 
 /**

@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, loginUser, loginViaUiAndEnterStore, STORE_HEADERS } from './store-api';
+import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, loginUser, loginViaUiAndEnterStore, STORE_HEADERS, openLoginForm } from './store-api';
 const { Given, When, Then } = createBdd();
 let email = '';
 let password = '';
@@ -38,7 +38,7 @@ Given('業務通知の担当者とサービス主体と同意済みゲスト申�
 
 When('担当者が通知を作成して内容を確認し送信待ちにする', async ({ page, request, $testInfo }) => {
   await page.context().clearCookies();
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

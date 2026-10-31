@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LineLoginButton } from '@/features/line-auth';
-import { LoginForm } from '@/features/login';
+import { LoginForm, SessionResume } from '@/features/login';
 import { AuthLayout } from '@/shared/ui';
 import { resolveLoginReason } from '../model/loginReason';
 
@@ -22,27 +22,30 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const notice = resolveLoginReason(reason);
 
   return (
-    <AuthLayout title="統一ログイン" subtitle="メールアドレスとパスワードでログインしてください">
-      {/* 領域内エラー態と違い role="alert" は要らない。この文言は最初の描画に含まれており、
+    // ログイン済みならフォームを出さずに着地先へ移る（リフレッシュの失敗でだけ画面を描く）
+    <SessionResume>
+      <AuthLayout title="統一ログイン" subtitle="メールアドレスとパスワードでログインしてください">
+        {/* 領域内エラー態と違い role="alert" は要らない。この文言は最初の描画に含まれており、
           読み上げは画面を頭から読むときに拾う（後から差し込まれる知らせではない）。 */}
-      {notice && <div className="auth-alert auth-alert--neutral mb-6">{notice}</div>}
-      <LoginForm />
-      {/* LINE ログインの入口（公開設定が無効なら何も描画されない） */}
-      <LineLoginButton />
-      {/* 新規会員登録の入口（登録入口から生まれる身分は会員のみ） */}
-      <p className="mt-6 text-center text-xs text-[#9a958e]">
-        はじめての方は{' '}
-        <Link
-          href="/auth/register"
-          className="text-[#7c3aed] hover:underline focus:underline focus:outline-none"
-        >
-          新規会員登録
-        </Link>
-      </p>
-      {/* フッター */}
-      <p className="auth-footer mt-8 sm:mt-12 text-center">
-        ご不明点はKIZUNAサポートまでご連絡ください
-      </p>
-    </AuthLayout>
+        {notice && <div className="auth-alert auth-alert--neutral mb-6">{notice}</div>}
+        <LoginForm />
+        {/* LINE ログインの入口（公開設定が無効なら何も描画されない） */}
+        <LineLoginButton />
+        {/* 新規会員登録の入口（登録入口から生まれる身分は会員のみ） */}
+        <p className="mt-6 text-center text-xs text-[#9a958e]">
+          はじめての方は{' '}
+          <Link
+            href="/auth/register"
+            className="text-[#7c3aed] hover:underline focus:underline focus:outline-none"
+          >
+            新規会員登録
+          </Link>
+        </p>
+        {/* フッター */}
+        <p className="auth-footer mt-8 sm:mt-12 text-center">
+          ご不明点はKIZUNAサポートまでご連絡ください
+        </p>
+      </AuthLayout>
+    </SessionResume>
   );
 }

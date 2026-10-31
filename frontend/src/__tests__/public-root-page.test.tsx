@@ -36,7 +36,6 @@ describe('公開ルート /', () => {
   it('未登録の Host はセッションがあっても遷移せず 404 にする', async () => {
     jest.mocked(resolveHost).mockResolvedValue({ kind: 'unknown' });
     cookieValues.set('session-kind', 'member');
-    cookieValues.set('token', 't');
 
     await expect(Home()).rejects.toThrow('NEXT_NOT_FOUND');
     expect(redirect).not.toHaveBeenCalled();
@@ -47,7 +46,6 @@ describe('公開ルート /', () => {
       .mocked(resolveHost)
       .mockResolvedValue({ kind: 'store', store: { id: '7', name: '店舗A' } });
     cookieValues.set('session-kind', 'member');
-    cookieValues.set('token', 't');
 
     await expect(Home()).rejects.toThrow('NEXT_REDIRECT /member/');
     expect(notFound).not.toHaveBeenCalled();

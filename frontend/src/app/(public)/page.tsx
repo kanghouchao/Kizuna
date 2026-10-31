@@ -24,13 +24,9 @@ export default async function Home() {
   }
 
   // セッションがあれば、セッション種別に応じて自動遷移する（cookie 値は admin/cast/member）
+  // session-kind の期限はリフレッシュトークンに揃えてあり、ログインの継続はその先の画面がリフレッシュで確かめる。
   const sessionKind = cookieStore.get('session-kind')?.value;
   if (sessionKind) {
-    const sessionToken = cookieStore.get('token')?.value;
-    if (!sessionToken) {
-      // token 失効後も session-kind cookie が残っていると /store・/admin のガードと無限リダイレクトになるため、先に検出する
-      redirect('/auth/login');
-    }
     if (sessionKind === 'admin') {
       redirect('/admin/dashboard/');
     }
@@ -42,10 +38,9 @@ export default async function Home() {
     }
   }
 
-  // アプリドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
+  // アプリドメイン（管理画面側）でセッション種別が無ければログイン画面へ（ログイン済みならそこで着地先へ移る）
   if (host.kind === 'app') {
-    const token = cookieStore.get('token')?.value;
-    redirect(token ? '/admin/dashboard/' : '/auth/login');
+    redirect('/auth/login');
   }
 
   // 店舗ドメインなら店舗サイトのトップを描く

@@ -23,6 +23,7 @@ import {
   switchStoreOnRail,
   createEnrolledHire,
   withdrawCast,
+  openLoginForm,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const base = "/api/advertising-costs",
@@ -80,7 +81,7 @@ async function selectMonth(page: Page, m: string) {
   ).toBeVisible();
 }
 async function login(page: Page, address = email) {
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス", { exact: true }).fill(address);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

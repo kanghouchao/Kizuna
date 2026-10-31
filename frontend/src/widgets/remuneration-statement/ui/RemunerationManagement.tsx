@@ -30,7 +30,7 @@ export function RemunerationManagement({
     [bonusPage, setBonusPage] = useState(0),
     [revision, setRevision] = useState(0);
   const { me } = useMe();
-  const scope = operationScope(me?.email);
+  const scope = operationScope();
   const outstanding = usePendingOperation(scope);
   const blocked = !scope || outstanding !== null;
   const [editor, setEditor] = useState<{

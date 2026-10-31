@@ -3,6 +3,7 @@ import Cookies from 'js-cookie';
 import LineCallbackPage from '../ui/LineCallbackPage';
 import { authApi, lineApi } from '@/entities/user';
 import { completeLogin } from '@/features/login';
+import { clearSessionToken, getSessionUserId } from '@/shared/api';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -56,7 +57,7 @@ describe('LineCallbackPage', () => {
   });
 
   afterEach(() => {
-    Cookies.remove('token');
+    clearSessionToken();
     Cookies.remove('session-kind');
     Cookies.remove('member-return-path');
   });
@@ -67,7 +68,9 @@ describe('LineCallbackPage', () => {
       mockedLineApi.login.mockResolvedValue({
         registered: true,
         token: 'jwt-token',
-        expires_at: Date.now() + 3_600_000,
+        expires_at: Date.now() + 900_000,
+        user_id: 7,
+        refresh_expires_at: Date.now() + 1_209_600_000,
       });
       mockedComplete.mockResolvedValue({ status: 'ok', path: '/member/' });
 
@@ -110,7 +113,9 @@ describe('LineCallbackPage', () => {
       });
       mockedLineApi.register.mockResolvedValue({
         token: 'jwt-token',
-        expires_at: Date.now() + 3_600_000,
+        expires_at: Date.now() + 900_000,
+        user_id: 7,
+        refresh_expires_at: Date.now() + 1_209_600_000,
       });
 
       render(<LineCallbackPage />);
@@ -129,7 +134,7 @@ describe('LineCallbackPage', () => {
         })
       );
       await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/'));
-      expect(Cookies.get('token')).toBe('jwt-token');
+      expect(getSessionUserId()).toBe(7);
       expect(Cookies.get('session-kind')).toBe('member');
     });
 
@@ -146,7 +151,9 @@ describe('LineCallbackPage', () => {
       });
       mockedLineApi.register.mockResolvedValue({
         token: 'jwt-token',
-        expires_at: Date.now() + 3_600_000,
+        expires_at: Date.now() + 900_000,
+        user_id: 7,
+        refresh_expires_at: Date.now() + 1_209_600_000,
       });
 
       render(<LineCallbackPage />);
@@ -186,7 +193,9 @@ describe('LineCallbackPage', () => {
       mockedLineApi.login.mockResolvedValue({
         registered: true,
         token: 'jwt-token',
-        expires_at: Date.now() + 3_600_000,
+        expires_at: Date.now() + 900_000,
+        user_id: 7,
+        refresh_expires_at: Date.now() + 1_209_600_000,
       });
       mockedComplete.mockResolvedValue({ status: 'unsupported' });
 

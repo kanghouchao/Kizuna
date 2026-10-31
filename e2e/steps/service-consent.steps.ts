@@ -10,6 +10,7 @@ import {
   issueCastInvitation,
   loginAsStoreAdmin,
   reviseSpecialService,
+  openLoginForm,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -41,7 +42,7 @@ Given(
   },
 );
 When("本人がサービス条件を開く", async ({ page }) => {
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス", { exact: true }).fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

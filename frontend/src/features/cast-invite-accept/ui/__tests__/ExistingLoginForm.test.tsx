@@ -4,6 +4,7 @@ import Cookies from 'js-cookie';
 import { ExistingLoginForm } from '../ExistingLoginForm';
 import { castInvitationAcceptanceApi } from '@/entities/cast';
 import { authApi } from '@/entities/user';
+import { clearSessionToken, getSessionUserId, storeSessionToken } from '@/shared/api';
 import { getSessionKind, getCurrentStoreId, setCurrentStore, startSession } from '@/shared/lib';
 
 jest.mock('@/entities/cast', () => {
@@ -42,7 +43,7 @@ function submitForm(password = 'pass') {
 }
 
 function expectPreviousSessionIntact() {
-  expect(Cookies.get('token')).toBe('previous-token');
+  expect(getSessionUserId()).toBe(3);
   expect(getSessionKind()).toBe('admin');
   expect(getCurrentStoreId()).toBe('7');
 }
@@ -51,7 +52,12 @@ describe('ExistingLoginForm', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // 招待を開く前に別のアカウントでログイン済みだった状況を再現する
-    Cookies.set('token', 'previous-token');
+    storeSessionToken({
+      token: 'previous-token',
+      expires_at: 1,
+      user_id: 3,
+      refresh_expires_at: 2,
+    });
     startSession('admin');
     setCurrentStore('7');
   });
@@ -59,7 +65,7 @@ describe('ExistingLoginForm', () => {
   afterEach(() => {
     Cookies.remove('session-kind');
     Cookies.remove('current-store-id');
-    Cookies.remove('token');
+    clearSessionToken();
   });
 
   it('資格情報と招待トークンを一回の受諾要求で送り、ログインは呼ばない', async () => {

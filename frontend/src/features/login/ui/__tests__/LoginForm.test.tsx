@@ -3,6 +3,7 @@ import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import LoginForm from '../LoginForm';
 import { authApi } from '@/entities/user';
+import { clearSessionToken, getSessionUserId } from '@/shared/api';
 import type { MeResponse } from '@/entities/user';
 
 const mockPush = jest.fn();
@@ -52,12 +53,14 @@ describe('LoginForm の利用者種別による分岐', () => {
     jest.clearAllMocks();
     mockedAuthApi.login.mockResolvedValue({
       token: 'jwt-token',
-      expires_at: Date.now() + 60 * 60 * 1000,
+      expires_at: Date.now() + 15 * 60 * 1000,
+      user_id: 7,
+      refresh_expires_at: Date.now() + 14 * 24 * 60 * 60 * 1000,
     });
   });
 
   afterEach(() => {
-    Cookies.remove('token');
+    clearSessionToken();
     Cookies.remove('session-kind');
     Cookies.remove('current-store-id');
   });
@@ -69,7 +72,7 @@ describe('LoginForm の利用者種別による分岐', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/dashboard/'));
     expect(Cookies.get('session-kind')).toBe('admin');
-    expect(Cookies.get('token')).toBe('jwt-token');
+    expect(getSessionUserId()).toBe(7);
   });
 
   it('user_type が想定外ならセッションを破棄し遷移しない', async () => {
@@ -80,7 +83,7 @@ describe('LoginForm の利用者種別による分岐', () => {
     await waitFor(() => expect(mockedNotifyError).toHaveBeenCalled());
     expect(mockPush).not.toHaveBeenCalled();
     expect(Cookies.get('session-kind')).toBeUndefined();
-    expect(Cookies.get('token')).toBeUndefined();
+    expect(getSessionUserId()).toBeUndefined();
   });
 
   it('user_type=CAST は cast セッションを開始し /cast/schedule/ へ遷移する', async () => {
@@ -90,7 +93,7 @@ describe('LoginForm の利用者種別による分岐', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/schedule/'));
     expect(Cookies.get('session-kind')).toBe('cast');
-    expect(Cookies.get('token')).toBe('jwt-token');
+    expect(getSessionUserId()).toBe(7);
     expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 
@@ -164,7 +167,7 @@ describe('LoginForm の利用者種別による分岐', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
     expect(Cookies.get('session-kind')).toBe('member');
-    expect(Cookies.get('token')).toBe('jwt-token');
+    expect(getSessionUserId()).toBe(7);
     expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 });

@@ -2,8 +2,8 @@
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
+import { storeSessionToken } from '@/shared/api';
 import { memberApi, MemberRegisterRequest } from '@/entities/member';
 import { authApi } from '@/entities/user';
 import {
@@ -36,14 +36,9 @@ export function MemberRegisterForm() {
       return;
     }
     try {
-      // 登録直後のログインは本フローがセッションを扱うため、グローバルな 401 リダイレクトから除外する。
-      const { token, expires_at } = await authApi.login(
-        { email: values.email, password: values.password },
-        { skipAuthRedirect: true }
-      );
-      // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
-      Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
-      startSession('member', expires_at);
+      const issued = await authApi.login({ email: values.email, password: values.password });
+      storeSessionToken(issued);
+      startSession('member', issued.refresh_expires_at);
       // 会員ポータルで弾かれた人がこの登録画面へ回ってくる経路がある（伝票の QR を未登録で開いた等）。
       // 預かった戻り先は会員セッションが立った時点で必ず消費する — 残すと、同じタブで後からログインした
       // 別の会員がその戻り先へ運ばれる。

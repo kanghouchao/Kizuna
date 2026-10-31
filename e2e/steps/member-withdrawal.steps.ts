@@ -10,6 +10,7 @@ import {
   loginUser,
   registerMember,
   STORE_HEADERS,
+  openLoginForm,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -189,7 +190,7 @@ Then(
 );
 
 Then("新しい会員の資格情報でログインできる", async ({ page }) => {
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス", { exact: true }).fill(memberEmail);
   await page.getByLabel("パスワード", { exact: true }).fill(MEMBER_PASSWORD);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

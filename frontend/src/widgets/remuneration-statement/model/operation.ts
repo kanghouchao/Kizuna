@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { remunerationApi } from '../api';
 import type { Bonus, Guarantee } from './types';
-import { authApi } from '@/entities/user';
+import { getSessionUserId } from '@/shared/api';
 import { ClientDataError, getCurrentStoreId } from '@/shared/lib';
 
 export type EditTarget =
@@ -46,11 +46,15 @@ function update(scope: string, value: PendingOperation | null) {
   if (pending.size) window.addEventListener('beforeunload', preventUnload);
   listeners.forEach(listener => listener());
 }
-/** 操作者（/me の email）と現在店舗の組。どちらかが未確定なら null。 */
-export function operationScope(email: string | undefined): string | null {
+/**
+ * 操作者（このタブのトークンの利用者 ID）と現在店舗の組。どちらかが未確定なら null。電子メールは退会後に
+ * 再利用されうるため、操作者は利用者 ID で表す。
+ */
+export function operationScope(): string | null {
   if (typeof window === 'undefined') return null;
+  const userId = getSessionUserId();
   const store = getCurrentStoreId();
-  return email && store ? JSON.stringify([email, store]) : null;
+  return userId !== undefined && store ? JSON.stringify([userId, store]) : null;
 }
 export function usePendingOperation(scope: string | null) {
   return useSyncExternalStore(
@@ -63,21 +67,12 @@ export async function submitOperation(operation: Operation, replay = false): Pro
   const existing = pending.get(operation.scope);
   if (replay ? existing?.phase !== 'unknown' || existing.operation !== operation : !!existing)
     return false;
-  // 本人確認を待つ間も作用域を押さえる。押さえないと確認中の二度目の保存が、先の保存の完了後に別の
-  // requestId で送られ二重計上になる。
-  update(operation.scope, { operation, phase: 'submitting' });
-  // 操作者は画面の /me（layout の生存期間）で、token は別タブのログインで差し替わる。送る前に今の
-  // token の持ち主と現在店舗を確かめ、元の作用域でない操作は押さえる前の状態へ戻して止める。
-  let confirmed = false;
-  try {
-    confirmed = operationScope((await authApi.me()).email) === operation.scope;
-  } finally {
-    if (!confirmed) update(operation.scope, existing ?? null);
-  }
-  if (!confirmed)
+  // 現在店舗は全タブ共有の cookie で、別タブの切替で変わる。元の作用域でない操作は送らずに止める。
+  if (operationScope() !== operation.scope)
     throw new ClientDataError(
       'ログイン中のアカウントか店舗が変わりました。画面を開き直してください。'
     );
+  update(operation.scope, { operation, phase: 'submitting' });
   try {
     await send(operation);
   } catch (error) {

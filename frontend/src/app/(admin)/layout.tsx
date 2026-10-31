@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import '../globals.css';
 import { AuthProvider } from '@/entities/user';
-import { ThemeScope, ToastProvider } from '@/_app';
+import { SessionGate, ThemeScope, ToastProvider } from '@/_app';
 import { AppDomainScope } from '@/_app/index.server';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -13,7 +13,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * 管理コンソール（トークン層）の根 layout。公開側とは根 layout を分けているため、
+ * ログイン後の画面（従業員・キャスト・会員）の根 layout。SessionGate が文書ごとに 1 回リフレッシュしてから
+ * 各シェルを描く。公開側とは根 layout を分けているため、
  * 世界を跨ぐ遷移はフルページ読み込みになり、next-themes のブロッキング script が必ず先に走る。
  * テーマ配線（ThemeScope）はこの世界だけが持つ。
  */
@@ -31,7 +32,7 @@ export default function AdminRootLayout({
         <AppDomainScope>
           <ThemeScope>
             <AuthProvider>
-              {children}
+              <SessionGate>{children}</SessionGate>
               <ToastProvider />
             </AuthProvider>
           </ThemeScope>
