@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -247,6 +248,9 @@ class RoleServiceTest {
     assertThat(serviceIdentity.getCredentialVersion()).isEqualTo(1L);
     assertThat(events).containsExactly(new UserCredentialsChanged(41L, 1L));
     verify(userRepository).saveAllAndFlush(List.of(staff, serviceIdentity));
+    var order = inOrder(roleManageHolderGuard, roleRepository);
+    order.verify(roleManageHolderGuard).lockRoleHolders(7L);
+    order.verify(roleRepository).saveAndFlush(existing);
   }
 
   @Test
