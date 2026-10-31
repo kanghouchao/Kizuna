@@ -1,3 +1,5 @@
+import { authApi } from '@/entities/user';
+import { ClientDataError } from '@/shared/lib';
 import { advertisingApi, type Operation } from '../api/advertising';
 const prefix = 'pending-operation:advertising:';
 export interface Pending {
@@ -22,11 +24,19 @@ export async function submitOperation(
   onChange: (p: Pending | null) => void
 ) {
   const key = operationKey(operation.subject, operation.store, operation.month);
-  if (active.has(key)) return false;
-  const existing = readPending(key);
-  if (existing && (!replay || JSON.stringify(existing.operation) !== JSON.stringify(operation)))
-    return false;
-  if (replay && !existing) return false;
+  const blocked = () => {
+    if (active.has(key)) return true;
+    const existing = readPending(key);
+    if (existing && (!replay || JSON.stringify(existing.operation) !== JSON.stringify(operation)))
+      return true;
+    return replay && !existing;
+  };
+  if (blocked()) return false;
+  // 操作者は画面の /me（layout の生存期間）で、token は別タブのログインで差し替わる。送る前に今の
+  // token の持ち主を確かめ、前の操作者の入力を別の利用者の操作として送らない（何も預けずに止める）。
+  if ((await authApi.me()).email !== operation.subject)
+    throw new ClientDataError('ログイン中のアカウントが変わりました。画面を開き直してください。');
+  if (blocked()) return false;
   // 送信前にタブ内へ保存できなければ送らない。応答消失後も同一内容・同一キーで回復する。
   sessionStorage.setItem(key, JSON.stringify(operation));
   active.add(key);

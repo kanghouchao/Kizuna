@@ -1,7 +1,10 @@
+import { authApi } from '@/entities/user';
 import { advertisingApi, type Operation } from '../api/advertising';
 import { operationKey, readPending, requestId, submitOperation } from './operation';
 jest.mock('../api/advertising', () => ({ advertisingApi: { mutate: jest.fn() } }));
+jest.mock('@/entities/user', () => ({ authApi: { me: jest.fn() } }));
 const mutate = jest.mocked(advertisingApi.mutate);
+const me = jest.mocked(authApi.me);
 const op: Operation = {
   subject: 'user',
   store: '1',
@@ -23,6 +26,15 @@ const key = operationKey(op.subject, op.store, op.month);
 beforeEach(() => {
   sessionStorage.clear();
   jest.clearAllMocks();
+  me.mockResolvedValue({ email: 'user', line_linked: false });
+});
+it('別タブで別のアカウントに切り替わっていたら送らず、何も預けない', async () => {
+  // 画面が持つ操作者は layout の生存期間の値で、token は別タブのログインで差し替わる。送る直前に
+  // 今の token の持ち主を確かめないと、前の操作者の入力が別の利用者の操作として記録される。
+  me.mockResolvedValue({ email: 'other', line_linked: false });
+  await expect(submitOperation(op, false, jest.fn())).rejects.toThrow('アカウント');
+  expect(mutate).not.toHaveBeenCalled();
+  expect(readPending(key)).toBeNull();
 });
 it('応答不明の内容を保持し、再読込後も同じ要求だけを再送する', async () => {
   mutate.mockRejectedValueOnce(new Error('通信断')).mockResolvedValueOnce({} as never);
@@ -42,6 +54,8 @@ it('送信中の閉じる・再表示・二重送信でも一度だけ送信す�
       })
   );
   const first = submitOperation(op, false, jest.fn());
+  // 送る前の本人確認（/me）を待ってから送信中になる
+  await new Promise(process.nextTick);
   expect(readPending(key)?.phase).toBe('submitting');
   expect(await submitOperation(op, true, jest.fn())).toBe(false);
   expect(await submitOperation(op, false, jest.fn())).toBe(false);

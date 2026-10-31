@@ -9,7 +9,6 @@ import {
   type EditValues,
   type Operation,
 } from '../model/operation';
-import { useMe } from '@/entities/user';
 import { getApiErrorMessage } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
@@ -50,7 +49,6 @@ export function RemunerationEditor({
 }) {
   const [confirm, setConfirm] = useState(false);
   const [pending, setPending] = useState<EditValues | null>(null);
-  const email = useMe().me?.email;
   const outstanding = usePendingOperation(scope);
   const sending = outstanding?.phase === 'submitting';
   const locked = outstanding !== null;
@@ -80,7 +78,7 @@ export function RemunerationEditor({
       requestId: createRequestId(),
     };
     try {
-      if (!(await submitOperation(operation, email, !!original))) return;
+      if (!(await submitOperation(operation, !!original))) return;
       notify.success(target.cancel ? '記録を取り消しました' : '記録を保存しました');
       onSaved();
       onClose();
