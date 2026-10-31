@@ -8,7 +8,6 @@ import com.kizuna.cast.api.dto.CastInvitationTokenRequest;
 import com.kizuna.cast.application.CastInvitationAcceptanceService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -52,11 +51,10 @@ public class CastInvitationController {
   @PermitAll
   public ResponseEntity<CastAcceptanceResponse> acceptAsExistingUser(
       @Valid @RequestBody CastInvitationExistingAcceptRequest request) {
-    // User は email を小文字へ正規化して保存するため、照合前に同じ正規化をする。
     Authentication authentication =
         authenticationManager.authenticate(
             UsernamePasswordAuthenticationToken.unauthenticated(
-                request.getEmail().toLowerCase(Locale.ROOT), request.getPassword()));
+                request.getEmail(), request.getPassword()));
     return ResponseEntity.ok(
         acceptanceService.acceptAsExistingUser(request.getToken(), authentication.getName()));
   }

@@ -49,6 +49,26 @@ class UserPrincipalServiceTest {
   }
 
   @Test
+  void loadUserByUsername_mixedCaseEmail_looksUpLowercaseEmail() {
+    // User は email を小文字で保存する。入力の大小文字の違いで本人を引き損ねてはならない
+    User user =
+        User.builder()
+            .email("cast@kizuna.test")
+            .password("stored-hash")
+            .displayName("キャスト")
+            .enabled(true)
+            .userType(UserType.CAST)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of(1L))
+            .build();
+    when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(user));
+
+    UserDetails result = service.loadUserByUsername("Cast@Kizuna.TEST");
+
+    assertThat(result.getUsername()).isEqualTo("cast@kizuna.test");
+  }
+
+  @Test
   void loadUserByUsername_missingEmail_throwsUsernameNotFoundException() {
     when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
 

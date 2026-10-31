@@ -3,7 +3,6 @@ package com.kizuna.cast.api;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -110,18 +109,6 @@ class CastInvitationControllerTest {
         .andExpect(jsonPath("$.store_name").value("渋谷店"))
         .andExpect(jsonPath("$.token").doesNotExist())
         .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
-  }
-
-  @Test
-  @DisplayName("メールアドレスは大文字が混じっていても小文字へ正規化して照合すること")
-  void normalizesEmailBeforeAuthentication() throws Exception {
-    givenAccount(true);
-    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL))
-        .thenReturn(new CastAcceptanceResponse("渋谷店"));
-
-    mockMvc.perform(acceptExisting("Cast@Kizuna.TEST", PASSWORD)).andExpect(status().isOk());
-
-    verify(acceptanceService).acceptAsExistingUser("invite-token", EMAIL);
   }
 
   @Test
