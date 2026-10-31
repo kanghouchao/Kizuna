@@ -94,7 +94,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
   /**
    * 指定ロールの保持者全員（停止中・SERVICE を含む）を id 昇順で押さえる。ロールの権限集合の変更で版を進める対象で、全行を書くので実体で返す。
-   * 呼ぶ前に同じ利用者の実体を読み込まないこと — 読み込み済みだとロックの昇格が版の照合を伴い、無関係な更新で 409 に落ちる。
+   * 呼ぶ前に同じ利用者の実体を読み込まないこと — 読み込み済みだとロックの昇格が版の照合を伴い、無関係な更新で 409 に落ちる。 直接呼ばず、目録行を先に取る {@code
+   * RoleManageHolderGuard.lockRoleHolders} を通す。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select u from User u where :roleId member of u.roleIds order by u.id")
