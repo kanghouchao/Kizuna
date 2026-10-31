@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Review, ReviewCommand, ReviewInput, ReceivedVia, Basis } from '@/entities/review';
+import { Review, ReviewCommand, ReviewInput, ReceivedVia, Basis } from '@/entities/content/review';
 import {
   Button,
   ConfirmDialog,
@@ -17,8 +17,12 @@ import {
   SelectContent,
   SelectItem,
   SelectValue,
-  Switch,
 } from '@/shared/ui';
+import {
+  PublicationFields,
+  fromPublicationFormValues,
+  toPublicationFormValues,
+} from '@/features/publication-form';
 export type Editor = (
   | { action: 'CREATE'; row?: undefined }
   | {
@@ -43,18 +47,6 @@ function localInput(value: string | null | undefined) {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
-// 公開期間は店舗の現地日時（Asia/Tokyo）で入出力する。夏時間が無いので +09:00 固定で変換できる。
-function storeInput(value: string | null | undefined) {
-  if (!value) return '';
-  return new Date(new Date(value).getTime() + 9 * 3600000).toISOString().slice(0, 16);
-}
-function fromStoreInput(value: string) {
-  return value === '' ? null : new Date(`${value}:00+09:00`).toISOString();
-}
-const optionalDate = (value: string) =>
-  value === '' ||
-  Number.isFinite(new Date(`${value}:00+09:00`).getTime()) ||
-  '日時を正しく入力してください';
 export const dateRule = (value: string) => {
   const date = new Date(value).getTime();
   return (
@@ -91,10 +83,7 @@ export function ReviewEditor({
       basis_type: 'WRITTEN' as Basis,
       event_at: '',
       evidence_note: '',
-      published: publication?.published ?? false,
-      publish_from: storeInput(publication?.publish_from),
-      publish_until: storeInput(publication?.publish_until),
-      display_order: publication?.display_order ?? (null as number | null),
+      ...toPublicationFormValues(publication),
     },
   });
   const create = editor.action === 'CREATE';
@@ -125,10 +114,7 @@ export function ReviewEditor({
           input: {
             version: base.version,
             dedupe_key: base.dedupe_key,
-            published: values.published,
-            publish_from: fromStoreInput(values.publish_from),
-            publish_until: fromStoreInput(values.publish_until),
-            display_order: values.display_order,
+            ...fromPublicationFormValues(values),
           },
         });
       else if (editor.action === 'GRANT')
@@ -365,98 +351,7 @@ export function ReviewEditor({
               />
             </>
           )}
-          {editor.action === 'PUBLISH' && (
-            <>
-              <FormField
-                control={form.control}
-                name="published"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between gap-3">
-                    <FormLabel>公式サイトで公開する</FormLabel>
-                    <FormControl>
-                      <Switch
-                        ref={field.ref}
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={busy}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="publish_from"
-                rules={{ validate: optionalDate }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>公開開始（任意・店舗の現地時刻）</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="datetime-local" disabled={busy} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="publish_until"
-                rules={{
-                  validate: (value, values) => {
-                    const valid = optionalDate(value);
-                    if (valid !== true) return valid;
-                    return (
-                      value === '' ||
-                      values.publish_from === '' ||
-                      values.publish_from < value ||
-                      '公開終了は公開開始より後にしてください'
-                    );
-                  },
-                }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      公開終了（任意・店舗の現地時刻。この時刻に掲出を終えます）
-                    </FormLabel>
-                    <FormControl>
-                      <Input {...field} type="datetime-local" disabled={busy} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="display_order"
-                rules={{
-                  validate: value =>
-                    value === null ||
-                    (Number.isInteger(value) && Math.abs(value) <= 2147483647) ||
-                    '表示順は整数で入力してください（空欄は末尾）',
-                }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>表示順（任意・小さいほど先頭。空欄は末尾に新しい順）</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        step={1}
-                        disabled={busy}
-                        value={field.value === null || Number.isNaN(field.value) ? '' : field.value}
-                        onChange={event =>
-                          field.onChange(
-                            event.target.value === '' ? null : event.target.valueAsNumber
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </>
-          )}
+          {editor.action === 'PUBLISH' && <PublicationFields busy={busy} />}
           {!create && editor.action !== 'GRANT' && editor.action !== 'PUBLISH' && (
             <FormField
               control={form.control}

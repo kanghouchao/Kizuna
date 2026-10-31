@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { reviewApi, type ReviewHistory as Row } from '@/entities/review';
+import { reviewApi, type ReviewHistory as Row } from '@/entities/content/review';
 import { ReviewHistory } from '../ui/ReviewHistory';
 
-jest.mock('@/entities/review', () => ({
-  ...jest.requireActual('@/entities/review'),
+jest.mock('@/entities/content/review', () => ({
+  ...jest.requireActual('@/entities/content/review'),
   reviewApi: { history: jest.fn() },
 }));
 

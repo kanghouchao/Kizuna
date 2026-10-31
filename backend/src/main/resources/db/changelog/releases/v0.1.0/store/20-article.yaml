@@ -1,0 +1,85 @@
+databaseChangeLog:
+  - changeSet:
+      id: store-v0100-020-article
+      author: kanghouchao
+      changes:
+        - createTable:
+            tableName: t_articles
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_articles
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: body
+                  type: VARCHAR(10000)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: published
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: publish_from
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: publish_until
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: display_order
+                  type: INTEGER
+        - sql:
+            sql: ALTER TABLE t_articles ADD CONSTRAINT ck_t_articles_publication_period CHECK (publish_from < publish_until)
+        # 記事はどの業務記録からも参照されない店舗所有のデータなので、店舗の削除に従って消える。
+        - addForeignKeyConstraint:
+            baseTableName: t_articles
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_articles_store
+            onDelete: CASCADE
+        - createIndex:
+            tableName: t_articles
+            indexName: idx_t_articles_store_updated
+            columns:
+              - column:
+                  name: store_id
+              - column:
+                  name: updated_at
+                  descending: true
+              - column:
+                  name: id
+                  descending: true

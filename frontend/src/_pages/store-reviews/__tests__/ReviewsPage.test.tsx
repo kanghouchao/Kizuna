@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReviewsPage } from '../ui/ReviewsPage';
-import { reviewApi, Review } from '@/entities/review';
+import { reviewApi, Review } from '@/entities/content/review';
 import { notify } from '@/shared/notify';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
@@ -16,7 +16,7 @@ jest.mock('@/entities/user', () => ({
     switchStore: jest.fn(),
   }),
 }));
-jest.mock('@/entities/review', () => ({
+jest.mock('@/entities/content/review', () => ({
   reviewApi: { list: jest.fn(), get: jest.fn(), history: jest.fn(), write: jest.fn() },
 }));
 jest.mock('@/entities/user/model/MeContext', () => ({
@@ -637,4 +637,56 @@ test('訂正404の対象確認が旧店舗から遅れて戻っても新店舗�
   await act(async () => resolveLookup(row));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(notify.error).not.toHaveBeenCalled();
+});
+test('公開設定は店舗の現地時刻で入出力し、空欄の表示順を null として版付きで送る', async () => {
+  permission('REVIEW_VIEW', 'REVIEW_MODERATE');
+  api.get.mockResolvedValue({
+    ...row,
+    version: 4,
+    publication: {
+      published: false,
+      publish_from: '2026-03-01T11:00:00Z',
+      publish_until: null,
+      display_order: 2,
+    },
+  });
+  api.write.mockResolvedValue({
+    review: { ...row, version: 5 },
+    operation: {
+      id: '30',
+      type: 'PUBLICATION_CHANGED',
+      review_id: row.id,
+      committed_version: 5,
+      replayed: false,
+    },
+  });
+  render(<ReviewsPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
+  fireEvent.click(await screen.findByRole('button', { name: '公開設定を変更' }));
+  const editor = await screen.findByRole('dialog', { name: '公開設定を変更' });
+  const from = within(editor).getByLabelText(/公開開始/);
+  expect(from).toHaveValue('2026-03-01T20:00');
+  const until = within(editor).getByLabelText(/公開終了/);
+  fireEvent.change(until, { target: { value: '2026-03-01T20:00' } });
+  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
+  expect(await within(editor).findByText('公開終了は公開開始より後にしてください')).toBeVisible();
+  fireEvent.change(until, { target: { value: '2026-03-02T09:30' } });
+  fireEvent.change(within(editor).getByLabelText(/表示順/), { target: { value: '' } });
+  fireEvent.click(within(editor).getByRole('switch', { name: '公式サイトで公開する' }));
+  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
+  const confirmation = await screen.findByRole('alertdialog');
+  fireEvent.click(within(confirmation).getByRole('button', { name: '確定する' }));
+  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
+  expect(api.write).toHaveBeenCalledWith({
+    kind: 'PUBLISH',
+    id: row.id,
+    input: {
+      version: 4,
+      dedupe_key: expect.any(String),
+      published: true,
+      publish_from: '2026-03-01T11:00:00.000Z',
+      publish_until: '2026-03-02T00:30:00.000Z',
+      display_order: null,
+    },
+  });
 });

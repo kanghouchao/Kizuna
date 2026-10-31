@@ -6,6 +6,7 @@ import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_SET_EXPORT;
 import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_SET_VIEW;
 import static com.kizuna.user.domain.PermissionCode.ADVERTISING_COST_VIEW;
 import static com.kizuna.user.domain.PermissionCode.APPLICANT_ANONYMIZE;
+import static com.kizuna.user.domain.PermissionCode.ARTICLE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.AUDIT_VIEW;
 import static com.kizuna.user.domain.PermissionCode.BENEFIT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.BONUS_AWARD;
@@ -109,6 +110,7 @@ class DefaultGrantApprovalTests {
           Map.entry(CAST_FIELD_DEF_VIEW, Set.of(MANAGER, STAFF)),
           Map.entry(CAST_FIELD_DEF_MANAGE, Set.of(MANAGER)),
           Map.entry(STORE_PROFILE_MANAGE, Set.of(MANAGER, STAFF)),
+          Map.entry(ARTICLE_MANAGE, Set.of(MANAGER)),
           Map.entry(ADVERTISING_COST_VIEW, Set.of(MANAGER)),
           Map.entry(ADVERTISING_COST_MANAGE, Set.of(MANAGER)),
           Map.entry(ADVERTISING_COST_EXPORT, Set.of(MANAGER)),

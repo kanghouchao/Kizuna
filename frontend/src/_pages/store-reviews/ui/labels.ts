@@ -1,4 +1,4 @@
-import { ReviewStatus, PermissionStatus, ReviewHistory, Publication } from '@/entities/review';
+import { ReviewStatus, PermissionStatus, ReviewHistory } from '@/entities/content/review';
 export const statuses: Record<ReviewStatus, string> = {
   PENDING: '審査待ち',
   APPROVED: '内部承認済み',
@@ -25,15 +25,4 @@ export const viaLabels = { PAPER: '書面', VERBAL: '口頭', ELECTRONIC: '電�
 export const basisLabels = { WRITTEN: '書面', VERBAL: '口頭', ELECTRONIC_RECORD: '電子記録' };
 export function time(value: string) {
   return new Date(value).toLocaleString('ja-JP');
-}
-export function publicationSummary(p: Publication) {
-  const period =
-    p.publish_from || p.publish_until
-      ? `${p.publish_from ? storeTime(p.publish_from) : '開始指定なし'} 〜 ${p.publish_until ? storeTime(p.publish_until) : '終了指定なし'}`
-      : '期間指定なし';
-  const order = p.display_order === null ? '表示順指定なし' : `表示順 ${p.display_order}`;
-  return `${p.published ? '公開' : '非公開'} / ${period} / ${order}`;
-}
-function storeTime(value: string) {
-  return new Date(value).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 }

@@ -1,3 +1,4 @@
+import type { Publication } from '@/shared/api';
 export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
 export type PermissionStatus = 'NOT_GRANTED' | 'GRANTED' | 'REVOKED';
 export type ReceivedVia = 'PAPER' | 'VERBAL' | 'ELECTRONIC';
@@ -5,12 +6,6 @@ export type Basis = 'WRITTEN' | 'VERBAL' | 'ELECTRONIC_RECORD';
 export interface Actor {
   id: string;
   display_name: string;
-}
-export interface Publication {
-  published: boolean;
-  publish_from: string | null;
-  publish_until: string | null;
-  display_order: number | null;
 }
 export interface ReviewSummary {
   id: string;
