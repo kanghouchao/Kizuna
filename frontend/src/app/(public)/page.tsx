@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { StoreSitePage, storeSiteMetadata } from '@/_pages/store-site';
 import { resolveHost } from '@/shared/api/index.server';
 
@@ -17,6 +17,11 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function Home() {
   const cookieStore = await cookies();
+  // 未登録の Host（削除した店舗を含む）は、セッションの有無に依らず 404 にする
+  const host = await resolveHost();
+  if (host.kind === 'unknown') {
+    notFound();
+  }
 
   // セッションがあれば、セッション種別に応じて自動遷移する（cookie 値は admin/cast/member）
   const sessionKind = cookieStore.get('session-kind')?.value;
@@ -38,11 +43,11 @@ export default async function Home() {
   }
 
   // アプリドメイン（管理画面側）の場合、ログイン状態に応じてリダイレクト
-  if ((await resolveHost()).kind === 'app') {
+  if (host.kind === 'app') {
     const token = cookieStore.get('token')?.value;
     redirect(token ? '/admin/dashboard/' : '/auth/login');
   }
 
-  // 店舗ドメインなら店舗サイトのトップを描き、未登録のホストは 404 にする
+  // 店舗ドメインなら店舗サイトのトップを描く
   return <StoreSitePage page="page" />;
 }
