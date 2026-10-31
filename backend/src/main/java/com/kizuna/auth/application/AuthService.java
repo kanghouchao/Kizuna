@@ -17,7 +17,6 @@ import com.kizuna.user.domain.UserType;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -60,11 +59,9 @@ public class AuthService {
    * （接続を握ったまま別取引を開くと、接続枯渇時に認証済みの要求同士で待ち合う）。
    */
   public Token login(String email, String password) {
-    // User は email を小文字へ正規化して保存するため、照合前に同じ正規化をする。
-    String normalizedEmail = email.toLowerCase(Locale.ROOT);
     Authentication authentication =
         authenticationManager.authenticate(
-            UsernamePasswordAuthenticationToken.unauthenticated(normalizedEmail, password));
+            UsernamePasswordAuthenticationToken.unauthenticated(email, password));
     // principal は認証成功時に自作 UserDetails が保持する User（二次クエリを避ける）。
     User user = ((UserPrincipal) authentication.getPrincipal()).getUser();
 

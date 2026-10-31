@@ -258,23 +258,6 @@ class AuthServiceTest {
   }
 
   @Test
-  void login_mixedCaseEmail_resolvesToLowercaseUser() {
-    stubSuccessfulAuthentication("admin@kizuna.test", "pass", hqAdmin());
-    stubHqRole();
-    when(jwtIssuer.issue(eq("admin@kizuna.test"), any()))
-        .thenReturn(new Token("issued_token", 12345L));
-
-    Token res = authService.login("ADMIN@Kizuna.TEST", "pass");
-
-    assertThat(res.token()).isEqualTo("issued_token");
-    // 照合は小文字正規化後の email を AuthenticationManager へ渡す（User は小文字で保存する）。
-    ArgumentCaptor<UsernamePasswordAuthenticationToken> tokenCaptor =
-        ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
-    verify(authenticationManager).authenticate(tokenCaptor.capture());
-    assertThat(tokenCaptor.getValue().getPrincipal()).isEqualTo("admin@kizuna.test");
-  }
-
-  @Test
   void me_staff_returnsPermissions() {
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
     stubHqRole();
