@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
-import { Review, ReviewCommand, ReviewSearch, reviewApi } from '@/entities/review';
+import { Review, ReviewCommand, ReviewSearch, reviewApi } from '@/entities/content/review';
 import {
   useListPage,
   getApiErrorMessage,

@@ -1,4 +1,4 @@
-import { ReviewSearch } from '@/entities/review';
+import { ReviewSearch } from '@/entities/content/review';
 import {
   Button,
   Input,

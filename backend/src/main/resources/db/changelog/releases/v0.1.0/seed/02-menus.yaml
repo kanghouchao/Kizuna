@@ -261,10 +261,20 @@ databaseChangeLog:
         - insert:
             tableName: t_menus
             columns:
+              - column: { name: id, value: store-articles }
+              - column: { name: parent_id, value: section-operation }
+              - column: { name: label, value: 記事管理 }
+              - column: { name: path, value: /store/articles }
+              - column: { name: icon, value: NewspaperIcon }
+              - column: { name: permission, value: ARTICLE_MANAGE }
+              - column: { name: sort_order, valueNumeric: 4 }
+        - insert:
+            tableName: t_menus
+            columns:
               - column: { name: id, value: platform-config }
               - column: { name: parent_id, value: section-operation }
               - column: { name: label, value: システム設定 }
               - column: { name: path, value: /admin/settings }
               - column: { name: icon, value: SettingsIcon }
               - column: { name: permission, value: SYSTEM_CONFIG_MANAGE }
-              - column: { name: sort_order, valueNumeric: 4 }
+              - column: { name: sort_order, valueNumeric: 5 }

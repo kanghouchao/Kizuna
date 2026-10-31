@@ -92,6 +92,9 @@ databaseChangeLog:
       file: store/19-advertising.yaml
       relativeToChangelogFile: true
   - include:
+      file: store/20-article.yaml
+      relativeToChangelogFile: true
+  - include:
       file: seed/01-roles.yaml
       relativeToChangelogFile: true
   - include:

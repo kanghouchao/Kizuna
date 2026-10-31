@@ -1,7 +1,8 @@
-import { reviewApi } from '@/entities/review';
+import { reviewApi } from '@/entities/content/review';
 import { useListPage } from '@/shared/lib';
 import { Pager, RegionError } from '@/shared/ui';
-import { operations, time, publicationSummary } from './labels';
+import { publicationSummary } from '@/features/publication-form';
+import { operations, time } from './labels';
 export function ReviewHistory({ id }: { id: string }) {
   const history = useListPage(page => reviewApi.history(id, page));
   return (

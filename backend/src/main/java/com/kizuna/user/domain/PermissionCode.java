@@ -202,6 +202,9 @@ public enum PermissionCode {
   STORE_PROFILE_MANAGE(
       "店舗公開プロフィールの管理", PermissionGroup.OPERATION, SystemRole.MANAGER, SystemRole.STAFF),
 
+  /** 公式サイトの記事の作成・編集・公開設定・削除。 */
+  ARTICLE_MANAGE("記事の管理", PermissionGroup.OPERATION, SystemRole.MANAGER),
+
   /** 共通設定の閲覧・更新（SystemConfigController）。 */
   SYSTEM_CONFIG_MANAGE("システム設定の管理", PermissionGroup.OPERATION, SystemRole.ADMIN),
 

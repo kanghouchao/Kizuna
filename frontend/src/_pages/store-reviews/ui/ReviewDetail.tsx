@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
-import { Review, reviewApi } from '@/entities/review';
+import { Review, reviewApi } from '@/entities/content/review';
 import { useResource } from '@/shared/lib';
 import { Badge, Button, RegionError } from '@/shared/ui';
-import { statuses, permissions, viaLabels, basisLabels, time, publicationSummary } from './labels';
+import { publicationSummary } from '@/features/publication-form';
+import { statuses, permissions, viaLabels, basisLabels, time } from './labels';
 import { ReviewHistory } from './ReviewHistory';
 import { accessError } from './reviewErrors';
 import { Editor } from './ReviewEditor';
