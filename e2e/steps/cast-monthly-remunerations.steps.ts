@@ -104,8 +104,9 @@ Given(
     const second = await createCast(request, manager, `本人月次新名-${suffix}`);
     await acceptExistingCastInvitation(
       request,
-      token,
       await issueCastInvitation(request, manager, second),
+      email,
+      password,
     );
     secondOrder = await createAgreedOrder(
       request,
@@ -151,8 +152,9 @@ Given(
     );
     await acceptExistingCastInvitation(
       request,
-      token,
       await issueCastInvitation(request, manager, other, secondStore),
+      email,
+      password,
     );
     const otherCourse = await createCourse(
       request,

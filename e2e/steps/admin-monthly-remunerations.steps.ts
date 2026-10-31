@@ -67,7 +67,7 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
   expect((await getOrder(request, manager, STORE1_ID, originalOrder)).completed_at!.slice(0, 7) > originalMonth).toBeTruthy();
   await withdrawCast(request, manager, first);
   const second = await createCast(request, manager, name + '-新名');
-  await acceptExistingCastInvitation(request, castToken, await issueCastInvitation(request, manager, second));
+  await acceptExistingCastInvitation(request, await issueCastInvitation(request, manager, second), email, password);
   secondOrder = await createAgreedOrder(request, manager, second, course, '再入店後', { businessDate: originalDate });
   await completeAgreedOrder(request, manager, secondOrder);
   await createAgreedOrder(request, manager, second, course, '未完了', { businessDate: originalDate });
@@ -77,7 +77,7 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
   await completeAgreedOrder(request, manager, next);
   await withdrawCast(request, manager, second);
   const foreign = await createCast(request, manager, name + '-他店', secondStore);
-  await acceptExistingCastInvitation(request, castToken, await issueCastInvitation(request, manager, foreign, secondStore));
+  await acceptExistingCastInvitation(request, await issueCastInvitation(request, manager, foreign, secondStore), email, password);
   const foreignCourse = await createCourse(request, manager, '他店月次コース', secondStore);
   foreignOrder = await createAgreedOrder(request, manager, foreign, foreignCourse, '他店', { storeId: secondStore, businessDate: originalDate });
   await completeAgreedOrder(request, manager, foreignOrder, secondStore);

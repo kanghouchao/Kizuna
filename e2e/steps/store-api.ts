@@ -825,17 +825,16 @@ export async function getAuthorizedStores(
   return response.json();
 }
 
+/** 既存の CAST アカウントの資格情報を添えて招待を受諾する（匿名の一回の要求で、トークンは発行されない）。 */
 export async function acceptExistingCastInvitation(
   request: APIRequestContext,
-  token: string,
   invitation: string,
+  email: string,
+  password: string,
 ): Promise<void> {
   const response = await request.post(
     "/api/cast-invitations/acceptance/existing",
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { token: invitation },
-    },
+    { data: { token: invitation, email, password } },
   );
   expect(response.ok()).toBeTruthy();
 }

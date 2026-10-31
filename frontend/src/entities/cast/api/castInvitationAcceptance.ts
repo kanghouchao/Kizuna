@@ -3,6 +3,7 @@ import {
   CastAcceptanceResponse,
   CastInvitationAcceptRequest,
   CastInvitationDetailResponse,
+  CastInvitationExistingAcceptRequest,
 } from '../model/types';
 
 /**
@@ -30,11 +31,19 @@ export const castInvitationAcceptanceApi = {
     });
     return response.data;
   },
-  /** 既存アカウント（CAST ロール限定）で招待を受諾する */
-  acceptAsExistingUser: async (token: string): Promise<CastAcceptanceResponse> => {
-    const response = await apiClient.post('/cast-invitations/acceptance/existing', {
-      token,
-    });
+  /**
+   * 既存の CAST アカウントの資格情報を添えて招待を受諾する。訪問者が別のアカウントでログイン中でも
+   * その Bearer は送られるため、資格情報の誤りの 401 でそのセッションを捨てないよう skipAuthRedirect を付ける
+   */
+  acceptAsExistingUser: async (
+    token: string,
+    credentials: CastInvitationExistingAcceptRequest
+  ): Promise<CastAcceptanceResponse> => {
+    const response = await apiClient.post(
+      '/cast-invitations/acceptance/existing',
+      { ...credentials, token },
+      { skipAuthRedirect: true }
+    );
     return response.data;
   },
 };

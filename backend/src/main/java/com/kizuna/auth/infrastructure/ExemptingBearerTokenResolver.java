@@ -24,11 +24,13 @@ public class ExemptingBearerTokenResolver implements BearerTokenResolver {
 
   private static final RequestMatcher[] BEARER_EXEMPT_MATCHERS = {
     PathPatternRequestMatcher.withDefaults().matcher("/auth/login"),
-    // 招待閲覧と新規登録受諾。既存ユーザーの /acceptance/existing は ROLE_CAST を要求するため対象外
-    // （2 セグメントなのでここのどの matcher にも当たらない）。
+    // 招待閲覧と受諾（新規登録・既存の利用者）。既存の利用者の受諾は本文の資格情報で本人を確かめるため、
+    // 別アカウントでログイン中のブラウザが送る Bearer は見ない。
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/cast-invitations/view"),
     PathPatternRequestMatcher.withDefaults()
         .matcher(HttpMethod.POST, "/cast-invitations/acceptance"),
+    PathPatternRequestMatcher.withDefaults()
+        .matcher(HttpMethod.POST, "/cast-invitations/acceptance/existing"),
     // 会員の自助登録（POST）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/members"),
     // LINE ログインの公開端点（設定照会・ログイン・登録確定）。統一ログイン画面からの遷移で陳腐な token cookie が付きうる。

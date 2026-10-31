@@ -149,8 +149,12 @@ When(
       second.enrollment,
       otherStore,
     );
-    const person = await loginUser(request, personEmail, password);
-    await acceptExistingCastInvitation(request, person, second.token);
+    await acceptExistingCastInvitation(
+      request,
+      second.token,
+      personEmail,
+      password,
+    );
   },
 );
 

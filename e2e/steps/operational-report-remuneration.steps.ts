@@ -60,13 +60,12 @@ Given('帳票用の歴史在籍に日跨ぎ出勤と受注のない保証日と�
   const first = await createCast(request, manager, privateName + '旧');
   const castEmail = `report-cast-${suffix}@example.test`;
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, first), castEmail, password, privateName);
-  const castToken = await loginUser(request, castEmail, password);
   await recordAttendance(request, manager, {
     cast_id: first, actual_start_at: `${year}-08-31T22:00:00`, actual_end_at: `${year}-09-01T01:00:00`,
   });
   await withdrawCast(request, manager, first);
   const second = await createCast(request, manager, privateName);
-  await acceptExistingCastInvitation(request, castToken, await issueCastInvitation(request, manager, second));
+  await acceptExistingCastInvitation(request, await issueCastInvitation(request, manager, second), castEmail, password);
   await recordAttendance(request, manager, {
     cast_id: second, actual_start_at: `${year}-08-31T23:00:00`, actual_end_at: `${year}-09-01T02:00:00`,
   });

@@ -150,6 +150,12 @@ export interface CastInvitationAcceptRequest {
   display_name: string;
 }
 
+// 既存の利用者による招待受諾の資格情報。バックエンドが照合して受諾まで済ませ、トークンは発行しない
+export interface CastInvitationExistingAcceptRequest {
+  email: string;
+  password: string;
+}
+
 // 招待受諾の完了応答
 export interface CastAcceptanceResponse {
   store_name?: string;

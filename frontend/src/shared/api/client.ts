@@ -61,7 +61,7 @@ apiClient.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401) {
-      // 招待受諾のインラインログイン等、呼び出し元が独自にセッションを扱う経路は
+      // 登録直後のログインや資格情報つきの招待受諾等、呼び出し元が失敗を自前で扱う経路は
       // config.skipAuthRedirect でグローバルな token 除去/リダイレクトから除外する
       if (error.config?.skipAuthRedirect) {
         return Promise.reject(error);

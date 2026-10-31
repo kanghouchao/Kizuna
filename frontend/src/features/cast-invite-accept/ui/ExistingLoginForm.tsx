@@ -1,20 +1,13 @@
 'use client';
 
-import Cookies from 'js-cookie';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
-import { LoginRequest, authApi } from '@/entities/user';
 import {
-  EMAIL_PATTERN,
-  EMAIL_PATTERN_MESSAGE,
-  clearSession,
-  getApiErrorMessage,
-  getSessionKind,
-  getCurrentStoreId,
-  setCurrentStore,
-  startSession,
-} from '@/shared/lib';
+  CastAcceptanceResponse,
+  CastInvitationExistingAcceptRequest,
+  castInvitationAcceptanceApi,
+} from '@/entities/cast';
+import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
 
 interface ExistingLoginFormProps {
   token: string;
@@ -23,56 +16,20 @@ interface ExistingLoginFormProps {
 }
 
 /**
- * 既存アカウント（CAST ロール限定）での招待受諾。
- * インラインでログインしてから acceptance/existing を呼ぶ（自動ログイン状態のまま完了画面へは遷移しない）。
+ * 既存アカウント（CAST 限定）での招待受諾。資格情報を受諾要求に添えて送り、バックエンドが照合から受諾まで
+ * 済ませる。トークンを受け取らないので、訪問者が別のアカウントでログイン中でもそのセッションには触れない。
  */
 export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFormProps) {
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginRequest>({ defaultValues: { email: '', password: '' } });
+  } = useForm<CastInvitationExistingAcceptRequest>({ defaultValues: { email: '', password: '' } });
 
-  const submit = async (values: LoginRequest) => {
-    let newTokenWritten = false;
-    // ログイン成功で旧セッションを消す前に退避しておく。受諾API失敗時にこれが無いと、
-    // clearSession() 済みの旧 session-kind(セッション種別)/current-store-id に戻れず訪問者がログアウト状態に落ちる。
-    const previousSessionKind = getSessionKind();
-    const previousStoreId = getCurrentStoreId();
-    const previousToken = Cookies.get('token');
+  const submit = async (values: CastInvitationExistingAcceptRequest) => {
     try {
-      // グローバル401ハンドラ（apiClient）に token 除去+リダイレクトをやらせない。ここでの401（パスワード誤り/
-      // アカウント無効化）は下の catch 節で自前のセッション退避・復元を行うため、先に画面遷移されると無意味になる。
-      const { token: authToken, expires_at } = await authApi.login(values, {
-        skipAuthRedirect: true,
-      });
-      // 招待を開く前に別ロールでログイン済みだった場合、旧セッションの session-kind/current-store-id が
-      // 残ったままだと apiClient やルート遷移が旧ロールの文脈を CAST の token に対して使ってしまう。
-      clearSession();
-      Cookies.set('token', authToken ?? '', { expires: new Date(expires_at) });
-      newTokenWritten = true;
-      const response = await castInvitationAcceptanceApi.acceptAsExistingUser(token);
-      // 受諾はここで完了し、ポータルセッションは開始しない。一時的に張った CAST token を
-      // 残すと token 単独の存在チェックで管理画面へ誤って通されるため必ず消去する。
-      Cookies.remove('token');
-      onSuccess(response);
+      onSuccess(await castInvitationAcceptanceApi.acceptAsExistingUser(token, values));
     } catch (error) {
-      // login 自体が失敗した場合は新 token を書き込んでいないため、既存セッションの token には触れない
-      // （書き込み後の失敗のみ後始末する）
-      if (newTokenWritten) {
-        Cookies.remove('token');
-        // 受諾APIの失敗（招待の失効/競合、通信断など）。旧セッションが存在した場合はここで復元する。
-        // 未ログイン訪問者だった場合（退避値が無い）は何もしない
-        if (previousSessionKind) {
-          startSession(previousSessionKind);
-        }
-        if (previousStoreId) {
-          setCurrentStore(previousStoreId);
-        }
-        if (previousToken) {
-          Cookies.set('token', previousToken);
-        }
-      }
       notify.error(getApiErrorMessage(error, 'ログインまたは受諾に失敗しました'));
     }
   };

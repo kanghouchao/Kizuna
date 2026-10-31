@@ -13,7 +13,7 @@ export const authApi = {
     credentials: LoginRequest,
     options?: { skipAuthRedirect?: boolean }
   ): Promise<LoginResponse> => {
-    // 招待受諾のインラインログイン等、呼び出し元が独自にセッションを扱う経路は
+    // 登録直後のログイン等、呼び出し元が独自にセッションを扱う経路は
     // skipAuthRedirect でグローバルな 401 ハンドリング（token 除去/リダイレクト）から除外する
     const response = await apiClient.post('/auth/login', credentials, {
       skipAuthRedirect: options?.skipAuthRedirect,

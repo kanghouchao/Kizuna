@@ -33,10 +33,25 @@ const mockedAcceptanceApi = castInvitationAcceptanceApi as jest.Mocked<
 >;
 const mockedAuthApi = authApi as jest.Mocked<typeof authApi>;
 
-describe('ExistingLoginForm 旧セッションのcookie消去', () => {
+function submitForm(password = 'pass') {
+  fireEvent.change(screen.getByLabelText('メールアドレス'), {
+    target: { value: 'cast@kizuna.test' },
+  });
+  fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: password } });
+  fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
+}
+
+function expectPreviousSessionIntact() {
+  expect(Cookies.get('token')).toBe('previous-token');
+  expect(getSessionKind()).toBe('admin');
+  expect(getCurrentStoreId()).toBe('7');
+}
+
+describe('ExistingLoginForm', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // 招待を開く前に別ロールでログイン済みだった状況を再現する
+    // 招待を開く前に別のアカウントでログイン済みだった状況を再現する
+    Cookies.set('token', 'previous-token');
     startSession('admin');
     setCurrentStore('7');
   });
@@ -47,156 +62,69 @@ describe('ExistingLoginForm 旧セッションのcookie消去', () => {
     Cookies.remove('token');
   });
 
-  it('authApi.login を skipAuthRedirect: true で呼び、招待ログインの401をグローバルセッション処理から除外する', async () => {
-    mockedAuthApi.login.mockResolvedValue({
-      token: 'cast-jwt',
-      expires_at: Date.now() + 60 * 60 * 1000,
-    });
+  it('資格情報と招待トークンを一回の受諾要求で送り、ログインは呼ばない', async () => {
     mockedAcceptanceApi.acceptAsExistingUser.mockResolvedValue({ store_name: '渋谷店' });
+    const onSuccess = jest.fn();
 
-    render(<ExistingLoginForm token="tok-1" onSuccess={jest.fn()} onBack={jest.fn()} />);
+    render(<ExistingLoginForm token="tok-1" onSuccess={onSuccess} onBack={jest.fn()} />);
+    submitForm();
 
-    fireEvent.change(screen.getByLabelText('メールアドレス'), {
-      target: { value: 'cast@kizuna.test' },
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith({ store_name: '渋谷店' }));
+    expect(mockedAcceptanceApi.acceptAsExistingUser).toHaveBeenCalledTimes(1);
+    expect(mockedAcceptanceApi.acceptAsExistingUser).toHaveBeenCalledWith('tok-1', {
+      email: 'cast@kizuna.test',
+      password: 'pass',
     });
-    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'pass' } });
-    fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
+    expect(mockedAuthApi.login).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => expect(mockedAuthApi.login).toHaveBeenCalledTimes(1));
+  it('受諾に成功しても、訪問者の元のセッションをそのまま残す', async () => {
+    mockedAcceptanceApi.acceptAsExistingUser.mockResolvedValue({ store_name: '渋谷店' });
+    const onSuccess = jest.fn();
 
-    expect(mockedAuthApi.login).toHaveBeenCalledWith(
-      { email: 'cast@kizuna.test', password: 'pass' },
-      { skipAuthRedirect: true }
+    render(<ExistingLoginForm token="tok-1" onSuccess={onSuccess} onBack={jest.fn()} />);
+    submitForm();
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expectPreviousSessionIntact();
+  });
+
+  it('資格情報の誤り(401)では理由を通知し、元のセッションを残す', async () => {
+    const error = jest.spyOn(notify, 'error').mockReturnValue('notification-id');
+    mockedAcceptanceApi.acceptAsExistingUser.mockRejectedValue({
+      response: {
+        status: 401,
+        data: { error: 'メールアドレスまたはパスワードが正しくありません' },
+      },
+    });
+    const onSuccess = jest.fn();
+
+    render(<ExistingLoginForm token="tok-1" onSuccess={onSuccess} onBack={jest.fn()} />);
+    submitForm('wrong');
+
+    await waitFor(() =>
+      expect(error).toHaveBeenCalledWith('メールアドレスまたはパスワードが正しくありません')
     );
-  });
-
-  it('ログイン成功時、新しい token を設定する前に旧セッションの session-kind / current-store-id を消去する', async () => {
-    let tokenDuringAcceptance: string | undefined;
-    mockedAuthApi.login.mockResolvedValue({
-      token: 'cast-jwt',
-      expires_at: Date.now() + 60 * 60 * 1000,
-    });
-    mockedAcceptanceApi.acceptAsExistingUser.mockImplementation(async () => {
-      // 受諾 API 呼び出し時点では一時 CAST token が設定されている必要がある
-      tokenDuringAcceptance = Cookies.get('token');
-      return { store_name: '渋谷店' };
-    });
-    const onSuccess = jest.fn();
-
-    render(<ExistingLoginForm token="tok-1" onSuccess={onSuccess} onBack={jest.fn()} />);
-
-    fireEvent.change(screen.getByLabelText('メールアドレス'), {
-      target: { value: 'cast@kizuna.test' },
-    });
-    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'pass' } });
-    fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
-
-    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
-
-    expect(getSessionKind()).toBeUndefined();
-    expect(getCurrentStoreId()).toBeUndefined();
-    expect(tokenDuringAcceptance).toBe('cast-jwt');
-  });
-
-  it('受諾成功後、一時的に設定した CAST token を消去する（token だけが残ると /admin・/store へ誤誘導される）', async () => {
-    mockedAuthApi.login.mockResolvedValue({
-      token: 'cast-jwt',
-      expires_at: Date.now() + 60 * 60 * 1000,
-    });
-    mockedAcceptanceApi.acceptAsExistingUser.mockResolvedValue({ store_name: '渋谷店' });
-    const onSuccess = jest.fn();
-
-    render(<ExistingLoginForm token="tok-1" onSuccess={onSuccess} onBack={jest.fn()} />);
-
-    fireEvent.change(screen.getByLabelText('メールアドレス'), {
-      target: { value: 'cast@kizuna.test' },
-    });
-    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'pass' } });
-    fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
-
-    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
-
-    expect(Cookies.get('token')).toBeUndefined();
-    expect(getSessionKind()).toBeUndefined();
-    expect(getCurrentStoreId()).toBeUndefined();
-  });
-
-  it('ログイン自体が失敗した場合、新 token を書き込んでいないので既存の token cookie を消去しない', async () => {
-    Cookies.set('token', 'existing-jwt');
-    mockedAuthApi.login.mockRejectedValue(new Error('invalid credentials'));
-
-    render(<ExistingLoginForm token="tok-1" onSuccess={jest.fn()} onBack={jest.fn()} />);
-
-    fireEvent.change(screen.getByLabelText('メールアドレス'), {
-      target: { value: 'cast@kizuna.test' },
-    });
-    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'wrong' } });
-    fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
-
-    await waitFor(() => expect(mockedAuthApi.login).toHaveBeenCalledTimes(1));
-
-    expect(mockedAcceptanceApi.acceptAsExistingUser).not.toHaveBeenCalled();
-    expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(getSessionKind()).toBe('admin');
-    expect(getCurrentStoreId()).toBe('7');
-  });
-
-  it('ログイン成功後に受諾APIが失敗した場合、消去済みの旧セッション（session-kind/current-store-id/token）を復元する（でないと訪問者がログアウト状態に落ちる）', async () => {
-    Cookies.set('token', 'existing-jwt');
-    mockedAuthApi.login.mockResolvedValue({
-      token: 'cast-jwt',
-      expires_at: Date.now() + 60 * 60 * 1000,
-    });
-    mockedAcceptanceApi.acceptAsExistingUser.mockRejectedValue(new Error('invite expired'));
-    const onSuccess = jest.fn();
-
-    render(<ExistingLoginForm token="tok-1" onSuccess={onSuccess} onBack={jest.fn()} />);
-
-    fireEvent.change(screen.getByLabelText('メールアドレス'), {
-      target: { value: 'cast@kizuna.test' },
-    });
-    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'pass' } });
-    fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
-
-    // 'cast-jwt' はログイン成功直後に一時的に張られる token。catch 節の復元処理が完了して
-    // 'existing-jwt' に戻るまで待つ（acceptAsExistingUser 呼び出しだけでは復元完了を保証しないため）
-    await waitFor(() => {
-      expect(mockedAcceptanceApi.acceptAsExistingUser).toHaveBeenCalledTimes(1);
-      expect(Cookies.get('token')).not.toBe('cast-jwt');
-    });
-
     expect(onSuccess).not.toHaveBeenCalled();
-    expect(Cookies.get('token')).toBe('existing-jwt');
-    expect(getSessionKind()).toBe('admin');
-    expect(getCurrentStoreId()).toBe('7');
+    expectPreviousSessionIntact();
+    error.mockRestore();
   });
-});
 
-it('同店の重複受諾409では理由を通知して入力と旧セッションを維持する', async () => {
-  const error = jest.spyOn(notify, 'error').mockReturnValue('notification-id');
-  Cookies.set('token', 'previous-token');
-  startSession('admin');
-  setCurrentStore('7');
-  mockedAuthApi.login.mockResolvedValue({ token: 'cast-token', expires_at: Date.now() + 3600000 });
-  mockedAcceptanceApi.acceptAsExistingUser.mockRejectedValue({
-    response: { status: 409, data: { message: 'この店舗には既に有効な在籍があります' } },
+  it('同店の重複受諾409では理由を通知して入力と元のセッションを維持する', async () => {
+    const error = jest.spyOn(notify, 'error').mockReturnValue('notification-id');
+    mockedAcceptanceApi.acceptAsExistingUser.mockRejectedValue({
+      response: { status: 409, data: { message: 'この店舗には既に有効な在籍があります' } },
+    });
+    const onSuccess = jest.fn();
+
+    render(<ExistingLoginForm token="invite-token" onSuccess={onSuccess} onBack={jest.fn()} />);
+    submitForm('input-value');
+
+    await waitFor(() => expect(error).toHaveBeenCalledWith('この店舗には既に有効な在籍があります'));
+    expect(screen.getByLabelText('メールアドレス')).toHaveValue('cast@kizuna.test');
+    expect(screen.getByRole('button', { name: 'ログインして受諾する' })).toBeEnabled();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expectPreviousSessionIntact();
+    error.mockRestore();
   });
-  const onSuccess = jest.fn();
-  render(<ExistingLoginForm token="invite-token" onSuccess={onSuccess} onBack={jest.fn()} />);
-  fireEvent.change(screen.getByLabelText('メールアドレス'), {
-    target: { value: 'cast@kizuna.test' },
-  });
-  fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'input-value' } });
-  fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
-  await waitFor(() => expect(error).toHaveBeenCalledWith('この店舗には既に有効な在籍があります'));
-  expect(screen.getByLabelText('メールアドレス')).toHaveValue('cast@kizuna.test');
-  expect(screen.getByRole('button', { name: 'ログインして受諾する' })).toBeEnabled();
-  expect(Cookies.get('token')).toBe('previous-token');
-  expect(getSessionKind()).toBe('admin');
-  expect(getCurrentStoreId()).toBe('7');
-  expect(onSuccess).not.toHaveBeenCalled();
-  error.mockRestore();
-  Cookies.remove('token');
-  Cookies.remove('session-kind');
-  Cookies.remove('current-store-id');
 });

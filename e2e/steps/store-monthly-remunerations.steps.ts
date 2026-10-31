@@ -166,8 +166,9 @@ Given(
     const second = await createCast(request, managerToken, `${name}-新名`);
     await acceptExistingCastInvitation(
       request,
-      castToken,
       await issueCastInvitation(request, managerToken, second),
+      email,
+      password,
     );
     orderIds = [originalOrderId];
     for (let i = 0; i < 20; i++) {
@@ -221,8 +222,9 @@ Given(
     );
     await acceptExistingCastInvitation(
       request,
-      castToken,
       await issueCastInvitation(request, managerToken, other, otherStoreId),
+      email,
+      password,
     );
     const otherCourse = await createCourse(
       request,

@@ -135,8 +135,9 @@ Given(
     secondEnrollment = await createCast(request, manager, name);
     await acceptExistingCastInvitation(
       request,
-      castToken,
       await issueCastInvitation(request, manager, secondEnrollment),
+      castEmail,
+      password,
     );
     await recordAttendance(request, manager, {
       cast_id: secondEnrollment,
