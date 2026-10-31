@@ -67,6 +67,7 @@ class CastInvitationAuditTest {
             stores,
             encoder,
             audit);
+    when(encoder.matches(any(), any())).thenReturn(true);
     when(people.save(any()))
         .thenAnswer(
             call -> {
@@ -207,7 +208,7 @@ class CastInvitationAuditTest {
     when(users.findById(7L)).thenReturn(Optional.of(actor));
     when(enrollments.findIdsByUserIdAndStoreId(7L, STORE_ID)).thenReturn(List.of());
 
-    accepting.acceptAsExistingUser(SECRET, "cast@example.test");
+    accepting.acceptAsExistingUser(SECRET, "cast@example.test", "pw");
 
     var event = recorded.getFirst();
     assertThat(event.getActorId()).isEqualTo(7L);
@@ -223,7 +224,7 @@ class CastInvitationAuditTest {
     when(users.findById(8L)).thenReturn(Optional.of(actor));
     when(enrollments.findIdsByUserIdAndStoreId(8L, STORE_ID)).thenReturn(List.of());
 
-    accepting.acceptAsExistingUser(SECRET, "cast@example.test");
+    accepting.acceptAsExistingUser(SECRET, "cast@example.test", "pw");
 
     assertThat(recorded.getFirst().getAfterValues())
         .containsEntry("store_membership_added", "false");
@@ -234,11 +235,11 @@ class CastInvitationAuditTest {
     var actor = actor(7L, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
     when(users.findByEmailForUpdate("cast@example.test")).thenReturn(Optional.of(actor));
     when(enrollments.findIdsByUserIdAndStoreId(7L, STORE_ID)).thenReturn(List.of("other"));
-    assertThatThrownBy(() -> accepting.acceptAsExistingUser(SECRET, "cast@example.test"))
+    assertThatThrownBy(() -> accepting.acceptAsExistingUser(SECRET, "cast@example.test", "pw"))
         .isInstanceOf(ConflictException.class);
 
     when(invitations.claimPending(any(), anyLong(), any(), any(), any())).thenReturn(0);
-    assertThatThrownBy(() -> accepting.acceptAsExistingUser(SECRET, "cast@example.test"))
+    assertThatThrownBy(() -> accepting.acceptAsExistingUser(SECRET, "cast@example.test", "pw"))
         .isInstanceOf(CastInvitationStateException.class);
 
     invitation =
@@ -249,7 +250,7 @@ class CastInvitationAuditTest {
             .build();
     invitation.setStoreId(STORE_ID);
     when(invitations.findByToken("expired")).thenReturn(Optional.of(invitation));
-    assertThatThrownBy(() -> accepting.acceptAsExistingUser("expired", "cast@example.test"))
+    assertThatThrownBy(() -> accepting.acceptAsExistingUser("expired", "cast@example.test", "pw"))
         .isInstanceOf(CastInvitationStateException.class);
     assertThat(recorded).isEmpty();
   }

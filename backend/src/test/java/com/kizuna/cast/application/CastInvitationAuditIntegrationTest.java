@@ -251,7 +251,7 @@ class CastInvitationAuditIntegrationTest {
 
     rejectAudit("CAST_INVITATION_ACCEPTED");
     try {
-      assertThatThrownBy(() -> accepting.acceptAsExistingUser(token, email))
+      assertThatThrownBy(() -> accepting.acceptAsExistingUser(token, email, "password-123"))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       allowAudit();
@@ -263,7 +263,7 @@ class CastInvitationAuditIntegrationTest {
         .isEqualTo("PENDING");
     assertThat(audits("CAST_INVITATION_ACCEPTED")).isEqualTo(acceptedAudits);
 
-    accepting.acceptAsExistingUser(token, email);
+    accepting.acceptAsExistingUser(token, email, "password-123");
 
     assertThat(storeIds(email)).containsExactlyInAnyOrder(storeId, otherStoreId);
     var event =

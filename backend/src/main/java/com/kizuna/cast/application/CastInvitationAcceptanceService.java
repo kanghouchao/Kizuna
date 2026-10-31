@@ -33,6 +33,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -106,7 +107,7 @@ public class CastInvitationAcceptanceService {
    * は全店アクセス権をそのまま保持する（降格しない）。 いずれも档案へ紐づけて招待を受諾済みにする。
    */
   @Transactional
-  public CastAcceptanceResponse acceptAsExistingUser(String token, String email) {
+  public CastAcceptanceResponse acceptAsExistingUser(String token, String email, String password) {
     CastInvitation invitation = findByToken(token);
     storeRepository.lockAgainstDeletion(invitation.getStoreId());
     CastEnrollment cast = requireCastForUpdate(invitation);
@@ -122,9 +123,13 @@ public class CastInvitationAcceptanceService {
     if (user.getUserType() != UserType.CAST) {
       throw new AccessDeniedException("CAST アカウントのみ既存受諾できます");
     }
-    // 資格情報の照合は取引の外で済んでいるため、照合後の停止はロックした行でしか見えない。
+    // 取引の外の照合は、受諾に触れずに誤りを返すため。照合後の停止・パスワード変更は同じ行を書くので、
+    // ロックした行でもう一度確かめる（成功時だけ照合が二回になる）。
     if (!Boolean.TRUE.equals(user.getEnabled())) {
       throw new DisabledException("アカウントが無効化されています");
+    }
+    if (!passwordEncoder.matches(password, user.getPassword())) {
+      throw new BadCredentialsException("パスワードが一致しません");
     }
     if (!castRepository
         .findIdsByUserIdAndStoreId(user.getId(), invitation.getStoreId())
