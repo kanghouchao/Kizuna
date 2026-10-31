@@ -1,13 +1,18 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createCast, deleteCast, loginAsStoreAdmin, switchStoreOnRail } from './store-api';
+import {
+  createCast,
+  deleteCast,
+  loginAsStoreAdmin,
+  openLoginForm,
+  switchStoreOnRail,
+} from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
 // 統一ログインは アプリドメイン（kizuna.test）で提供され、店舗業務画面も同じドメイン上で
 // X-Store-ID 注入により操作する。cookie はオリジン別に分離されるため、遷移先は常に APP_URL を用いる。
-const LOGIN_URL = `${APP_URL}/auth/login`;
 
 // 店舗業務 URL は店舗 id を持たず、表示店舗はサイドバーのレールが決める。
 const CASTS_URL = `${APP_URL}/store/casts`;
@@ -17,7 +22,7 @@ let createdCastId = '';
 let createdCastName = '';
 
 Given('統一ログイン画面を開く', async ({ page }) => {
-  await page.goto(LOGIN_URL);
+  await openLoginForm(page);
   await expect(page.getByRole('button', { name: 'ログイン', exact: true })).toBeVisible();
 });
 

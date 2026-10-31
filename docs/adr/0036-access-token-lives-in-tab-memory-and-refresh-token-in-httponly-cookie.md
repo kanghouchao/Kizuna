@@ -1,6 +1,6 @@
 # アクセストークンはタブのメモリに、リフレッシュトークンは HttpOnly cookie に置く
 
-Status: Proposed
+Status: Accepted
 
 フロントはアクセストークンを JS から読める cookie に置かず、タブのメモリ（ページの生存期間）だけに持つ。継続ログインはバックエンドが HttpOnly cookie で発行するリフレッシュトークンが担い、タブは開いたときと 401 を受けたときに `POST /auth/refresh` でアクセストークンを取り直す。
 

@@ -16,6 +16,7 @@ import {
   registerMember,
   createCourse,
   STORE_HEADERS,
+  openLoginForm,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -226,7 +227,7 @@ When("店舗管理者が受付箱で予約を確定する", async ({ page, reque
 
 When("予約一覧を開き直す", async ({ page }) => {
   // 管理画面へ入った後は会員セッションが失われるため、会員として入り直す。
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス", { exact: true }).fill(memberEmail);
   await page.getByLabel("パスワード", { exact: true }).fill(MEMBER_PASSWORD);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

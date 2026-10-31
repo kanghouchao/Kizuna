@@ -12,6 +12,7 @@ import {
   getAuthorizedStores,
   acceptExistingCastInvitation,
   withdrawCast,
+  openLoginForm,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -184,7 +185,7 @@ When(
 
 async function portalStores(page: Page) {
   await page.context().clearCookies();
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス").fill(email);
   await page.getByLabel("パスワード").fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

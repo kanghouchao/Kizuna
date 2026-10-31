@@ -6,7 +6,9 @@ import { writeFile } from 'node:fs/promises';
 import { APP_URL } from '../base-url';
 import { createCast, createCourse, createAgreedOrder, completeAgreedOrder, correctOrderExtension,
   invalidateOrder, cancelOrder, loginAsStoreAdmin, loginUser, getAuthorizedStores,
-  STORE1_ID, STORE_HEADERS } from './store-api';
+  STORE1_ID, STORE_HEADERS,
+  openLoginForm,
+} from './store-api';
 
 const { Given, When, Then } = createBdd();
 const base = '/api/operational-reports/cross-store';
@@ -65,7 +67,7 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
   } finally { await db.end(); }
 });
 When('運営帳票を画面とCSVとExcelで取得する', async ({ request, page, $testInfo }) => {
-  await page.goto(APP_URL + '/auth/login');
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

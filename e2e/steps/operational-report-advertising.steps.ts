@@ -11,6 +11,7 @@ import {
   createCast, issueCastInvitation, acceptCastInvitation, recordAttendance,
   createCourse, createAgreedOrder, completeAgreedOrder, createBonusAward, cancelBonusAward, deleteService,
   getRemunerationCandidates, createRemunerationGuarantee, type AdvertisingCostValues,
+  openLoginForm,
 } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
@@ -263,7 +264,7 @@ Then('広告費帳票の四つの選択条件は旧形式と最小根拠を保�
 });
 
 Then('広告費帳票の画面は条件切替と連打と遅延応答を安全に扱う', async ({ page, $testInfo }) => {
-  await page.goto(APP_URL + '/auth/login');
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

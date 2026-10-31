@@ -4,6 +4,7 @@ import { notify } from '@/shared/notify';
 import { MemberRegisterForm } from '../MemberRegisterForm';
 import { memberApi } from '@/entities/member';
 import { authApi } from '@/entities/user';
+import { clearSessionToken, getSessionUserId } from '@/shared/api';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -48,7 +49,7 @@ describe('MemberRegisterForm', () => {
   });
 
   afterEach(() => {
-    Cookies.remove('token');
+    clearSessionToken();
     Cookies.remove('session-kind');
     Cookies.remove('member-return-path');
     sessionStorage.clear();
@@ -56,7 +57,12 @@ describe('MemberRegisterForm', () => {
 
   it('登録成功後にそのままログインし、member セッションで /member/ へ遷移する', async () => {
     mockedRegister.mockResolvedValue({ member_code: '123456789012' });
-    mockedLogin.mockResolvedValue({ token: 'jwt-token', expires_at: Date.now() + 3600_000 });
+    mockedLogin.mockResolvedValue({
+      token: 'jwt-token',
+      expires_at: Date.now() + 900_000,
+      user_id: 7,
+      refresh_expires_at: Date.now() + 1_209_600_000,
+    });
 
     await submitForm();
 
@@ -66,11 +72,11 @@ describe('MemberRegisterForm', () => {
       password: 'password1234',
       display_name: '会員花子',
     });
-    expect(mockedLogin).toHaveBeenCalledWith(
-      { email: 'member@example.com', password: 'password1234' },
-      { skipAuthRedirect: true }
-    );
-    expect(Cookies.get('token')).toBe('jwt-token');
+    expect(mockedLogin).toHaveBeenCalledWith({
+      email: 'member@example.com',
+      password: 'password1234',
+    });
+    expect(getSessionUserId()).toBe(7);
     expect(Cookies.get('session-kind')).toBe('member');
     expect(mockedNotifyError).not.toHaveBeenCalled();
   });
@@ -82,7 +88,12 @@ describe('MemberRegisterForm', () => {
     Cookies.set('member-return-path', '/member/receipts');
     sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
     mockedRegister.mockResolvedValue({ member_code: '123456789012' });
-    mockedLogin.mockResolvedValue({ token: 'jwt-token', expires_at: Date.now() + 3600_000 });
+    mockedLogin.mockResolvedValue({
+      token: 'jwt-token',
+      expires_at: Date.now() + 900_000,
+      user_id: 7,
+      refresh_expires_at: Date.now() + 1_209_600_000,
+    });
 
     await submitForm();
 

@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createPermissionRole, createStaffFixture, loginUser } from './store-api';
+import { createPermissionRole, createStaffFixture, loginUser, openLoginForm } from './store-api';
 const { Given, When, Then } = createBdd();
 let operator = '';
 let viewer = '';
@@ -65,7 +65,7 @@ When('失効処理の候補と再送と未来日の拒否を確認する', async
 });
 
 Then('失効処理を画面から選択して結果を確認できる', async ({ page, $testInfo }) => {
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { remunerationApi, type Statement } from '../../api';
 import { setCurrentStore } from '@/shared/lib';
-import { authApi, useMe } from '@/entities/user';
+import { useMe } from '@/entities/user';
+import { storeSessionToken } from '@/shared/api';
 import type { PermissionCode } from '@/entities/user';
 import { RemunerationStatementPanel } from '../RemunerationStatementPanel';
 import { RemunerationEditor } from '../RemunerationEditor';
@@ -20,13 +21,12 @@ jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
 }));
-jest.mock('@/entities/user/api/auth', () => ({ authApi: { me: jest.fn() } }));
 const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
-// 画面の /me と、送信直前に確かめる今の token の持ち主を同じ利用者に揃える
-const meAs = (email: string, permissions: PermissionCode[]) => {
-  jest.mocked(authApi.me).mockResolvedValue({ email, line_linked: false });
+// 画面の /me と、このタブのトークンの利用者を同じ利用者に揃える
+const meAs = (userId: number, permissions: PermissionCode[]) => {
+  storeSessionToken({ token: 't', expires_at: 1, user_id: userId, refresh_expires_at: 2 });
   mockedUseMe.mockReturnValue({
-    me: { email, user_type: 'STAFF', permissions, line_linked: false },
+    me: { email: `user${userId}@kizuna.test`, user_type: 'STAFF', permissions, line_linked: false },
     isLoading: false,
     failure: null,
     reload: jest.fn(),
@@ -65,7 +65,7 @@ const data: Statement = {
 beforeEach(() => {
   jest.clearAllMocks();
   setCurrentStore('1');
-  meAs('actor', []);
+  meAs(7, []);
   statement.mockResolvedValue(data);
 });
 it('未終了時は既知小計を示し完全合計を捏造しない', async () => {
@@ -119,7 +119,7 @@ it('参照権限のない店舗利用者に追加金額の導線を出さない'
 it.each([[true], [false]])(
   '店舗の明細は受注の担当者（canManage=%s）にだけ保証・ボーナスの管理を出す',
   async manages => {
-    meAs('actor', ['BONUS_AWARD']);
+    meAs(7, ['BONUS_AWARD']);
     jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
     jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
     render(
@@ -165,7 +165,7 @@ it('HTTP環境でもボーナス保存に帰属日と理由とUUIDを送信す�
       open
       personId={2}
       personName="本人"
-      scope={JSON.stringify(['actor', '1'])}
+      scope={JSON.stringify([7, '1'])}
       target={{ kind: 'bonus' }}
       onClose={jest.fn()}
       onSaved={saved}
@@ -186,15 +186,15 @@ it('HTTP環境でもボーナス保存に帰属日と理由とUUIDを送信す�
   });
 });
 
-it('別タブで別のアカウントに切り替わっていたら送らない', async () => {
-  // 画面の操作者は layout の生存期間の値で、token は別タブのログインで差し替わる
-  jest.mocked(authApi.me).mockResolvedValue({ email: 'other', line_linked: false });
+it('別タブで現在店舗が切り替わっていたら送らない', async () => {
+  // 現在店舗は全タブ共有の cookie で、開いた時点の店舗の操作を別の店舗へ送らない
+  setCurrentStore('2');
   render(
     <RemunerationEditor
       open
       personId={2}
       personName="本人"
-      scope={JSON.stringify(['actor', '1'])}
+      scope={JSON.stringify([7, '1'])}
       target={{ kind: 'bonus' }}
       onClose={jest.fn()}
       onSaved={jest.fn()}
@@ -204,36 +204,8 @@ it('別タブで別のアカウントに切り替わっていたら送らない'
   fireEvent.change(screen.getByLabelText('付与額（円）'), { target: { value: '1000' } });
   fireEvent.change(screen.getByLabelText('理由・説明'), { target: { value: '付与理由' } });
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await waitFor(() => expect(authApi.me).toHaveBeenCalled());
   await act(async () => {});
   expect(remunerationApi.createBonus).not.toHaveBeenCalled();
-});
-
-it('本人確認を待つ間の二重保存も、先の保存が終わった後に送らない', async () => {
-  // 確認中に作用域を押さえないと、先の保存が終わってから後の確認が返り、別の requestId で二重計上する
-  let answer!: (v: { email: string; line_linked: boolean }) => void;
-  jest.mocked(authApi.me).mockImplementationOnce(() => new Promise(r => (answer = r)));
-  jest.mocked(remunerationApi.createBonus).mockResolvedValue();
-  const operation = (requestId: string): Operation => ({
-    scope: JSON.stringify(['actor', '1']),
-    personId: 2,
-    personName: '本人',
-    target: { kind: 'bonus' },
-    values: {
-      date: '2026-09-30',
-      amount: 1000,
-      stopped: false,
-      reason: '理由',
-      correction_reason: '',
-    },
-    requestId,
-  });
-  const first = submitOperation(operation('a'));
-  const second = submitOperation(operation('b'));
-  answer({ email: 'actor', line_linked: false });
-  expect(await first).toBe(true);
-  expect(await second).toBe(false);
-  expect(remunerationApi.createBonus).toHaveBeenCalledTimes(1);
 });
 
 it('必須入力の不足をブラウザの吹き出しではなく日本語で示す', async () => {
@@ -242,7 +214,7 @@ it('必須入力の不足をブラウザの吹き出しではなく日本語で�
       open
       personId={2}
       personName="本人"
-      scope={JSON.stringify(['actor', '1'])}
+      scope={JSON.stringify([7, '1'])}
       target={{ kind: 'bonus' }}
       onClose={jest.fn()}
       onSaved={jest.fn()}
@@ -298,7 +270,7 @@ const fillBonus = () => {
   fireEvent.change(screen.getByLabelText('理由・説明'), { target: { value: '付与理由' } });
 };
 const allowBonus = () => {
-  meAs('actor', ['BONUS_AWARD']);
+  meAs(7, ['BONUS_AWARD']);
   jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
   jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
 };
@@ -469,7 +441,7 @@ it('別の操作者や店舗には未確認内容を見せず、元の作用域�
   const unload = new Event('beforeunload', { cancelable: true });
   window.dispatchEvent(unload);
   expect(unload.defaultPrevented).toBe(true);
-  meAs('other', ['BONUS_AWARD']);
+  meAs(8, ['BONUS_AWARD']);
   view.rerender(
     <RemunerationManagement
       key="actor"

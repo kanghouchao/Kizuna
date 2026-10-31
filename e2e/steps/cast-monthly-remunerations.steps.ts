@@ -20,6 +20,7 @@ import {
   STORE1_ID,
   suspendCast,
   withdrawCast,
+  openLoginForm,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
@@ -195,7 +196,7 @@ Given(
 );
 
 When("本人が月次給与明細で退店店舗と原月を選ぶ", async ({ page }) => {
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス").fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

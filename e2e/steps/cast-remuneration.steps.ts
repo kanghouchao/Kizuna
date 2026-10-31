@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { acceptCastInvitation, createAgreedOrder, completeAgreedOrder, createCast, createCourse, invalidateOrder, issueCastInvitation, loginAsStoreAdmin, loginUser, withdrawCast, STORE1_ID } from './store-api';
+import { acceptCastInvitation, createAgreedOrder, completeAgreedOrder, createCast, createCourse, invalidateOrder, issueCastInvitation, loginAsStoreAdmin, loginUser, withdrawCast, STORE1_ID, openLoginForm } from './store-api';
 
 const { Given, When, Then } = createBdd();
 let email = '';
@@ -31,7 +31,7 @@ Given('本人と他人の受注を作成し本人の完了受注を無効化し�
 });
 
 When('退店した本人がログインして報酬明細を開く', async ({ page }) => {
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス').fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

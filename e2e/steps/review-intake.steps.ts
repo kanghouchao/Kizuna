@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, createStaffFixture, loginUser, loginViaUiAndEnterStore } from './store-api';
+import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, createStaffFixture, loginUser, loginViaUiAndEnterStore, openLoginForm } from './store-api';
 const { Given, When, Then } = createBdd();
 let email = '';
 let password = '';
@@ -33,7 +33,7 @@ async function confirm(page: Page) {
 
 When('担当者が口コミを受付し公開許可なしで内部承認する', async ({ page, request, $testInfo }) => {
   await page.context().clearCookies();
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

@@ -1,3 +1,5 @@
+import type { TokenResponse } from '@/shared/api';
+
 // パスワード変更リクエスト
 export interface PasswordChangeRequest {
   current_password: string;
@@ -5,11 +7,7 @@ export interface PasswordChangeRequest {
 }
 
 // 認証レスポンス
-export interface LoginResponse {
-  token?: string;
-  // Java 側が primitive の long のため、キーは必ず応答に含まれる
-  expires_at: number;
-}
+export type LoginResponse = TokenResponse;
 
 // 本人種別。バックエンド user/domain/UserType.java には SERVICE（対話ログイン不可の
 // サービスID）もあるが、ログイン応答・/me には現れないため意図的に載せない（fail-closed）。

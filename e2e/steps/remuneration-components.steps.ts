@@ -21,6 +21,7 @@ import {
   loginAsStoreAdmin,
   loginUser,
   getAuthorizedStores,
+  openLoginForm,
 } from "./store-api";
 const { Given, When, Then, After } = createBdd();
 let token = "",
@@ -155,7 +156,7 @@ Given(
 When(
   "権限のある担当が画面で日額とボーナスを記録する",
   async ({ page, request, $testInfo }) => {
-    await page.goto(APP_URL + "/auth/login");
+    await openLoginForm(page);
     await page.getByLabel("メールアドレス", { exact: true }).fill(staffEmail);
     await page.getByLabel("パスワード", { exact: true }).fill(password);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
@@ -342,7 +343,7 @@ Then(
       viewport: { width: 390, height: 844 },
     });
     const page = await context.newPage();
-    await page.goto(APP_URL + "/auth/login");
+    await openLoginForm(page);
     await page.getByLabel("メールアドレス", { exact: true }).fill(castEmail);
     await page.getByLabel("パスワード", { exact: true }).fill(password);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
@@ -479,7 +480,7 @@ After({ tags: "@remuneration-components" }, async ({ request }) => {
 });
 
 When("ボーナスが保存された直後に応答を失う", async ({ page, request }) => {
-  await page.goto(APP_URL + "/auth/login");
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス", { exact: true }).fill(staffEmail);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();

@@ -9,15 +9,9 @@ import {
 } from '../model/types';
 
 export const authApi = {
-  login: async (
-    credentials: LoginRequest,
-    options?: { skipAuthRedirect?: boolean }
-  ): Promise<LoginResponse> => {
-    // 登録直後のログイン等、呼び出し元が独自にセッションを扱う経路は
-    // skipAuthRedirect でグローバルな 401 ハンドリング（token 除去/リダイレクト）から除外する
-    const response = await apiClient.post('/auth/login', credentials, {
-      skipAuthRedirect: options?.skipAuthRedirect,
-    });
+  login: async (credentials: LoginRequest): Promise<LoginResponse> => {
+    // 資格情報の誤りはセッションの失効ではない。401 経路（リフレッシュ・差し戻し）に乗せず、呼び出し元が扱う。
+    const response = await apiClient.post('/auth/login', credentials, { skipAuthRedirect: true });
     return response.data;
   },
   me: async (): Promise<MeResponse> => {
@@ -36,9 +30,7 @@ export const authApi = {
     await apiClient.put('/me/password', data);
   },
   logout: async (): Promise<void> => {
-    // 失効済みトークンでの退出は 401 になる（パスワード変更が直前にセッションを畳んだ場合など。
-    // 端点は @PermitAll だが Bearer 免除の対象外で、resource-server が controller の手前で弾く）。
-    // グローバルな 401 差し戻しに乗せると、退出処理が自分で決めた行き先とログイン画面への
+    // 退出の失敗は 401 経路に乗せない。乗せると、退出処理が自分で決めた行き先とログイン画面への
     // 全画面遷移が競合する。会話の畳み方はこの呼び出し元が持っているので除外する。
     await apiClient.post('/auth/logout', undefined, { skipAuthRedirect: true });
   },

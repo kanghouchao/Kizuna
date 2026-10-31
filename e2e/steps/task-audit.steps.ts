@@ -8,6 +8,7 @@ import {
   loginUser,
   revealSidebarLink,
   STORE1_ID,
+  openLoginForm,
 } from './store-api';
 const { Given, When, Then } = createBdd();
 let admin = '';
@@ -55,7 +56,7 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   }
   const restrictedPage = await browser.newPage();
   try {
-    await restrictedPage.goto(`${APP_URL}/auth/login`);
+    await openLoginForm(restrictedPage);
     await restrictedPage.getByLabel('メールアドレス', { exact: true }).fill(limitedEmail);
     await restrictedPage.getByLabel('パスワード', { exact: true }).fill(password);
     await restrictedPage.getByRole('button', { name: 'ログイン', exact: true }).click();
@@ -128,7 +129,7 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
 });
 
 Then('実行履歴と変更前後の監査を画面で確認できる', async ({ page, request, $testInfo }) => {
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

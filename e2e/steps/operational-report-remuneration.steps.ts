@@ -10,6 +10,7 @@ import {
   completeAgreedOrder, correctOrderExtension, invalidateOrder, deleteService, createBonusAward, cancelBonusAward,
   issueCastInvitation, withdrawCast, recordAttendance, createPermissionRole,
   createStaffFixture, loginAsStoreAdmin, loginUser, getAuthorizedStores,
+  openLoginForm,
 } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
@@ -204,7 +205,7 @@ Then('報酬込みCSVとExcelは最小根拠と未知金額を一致させる', 
 });
 
 Then('報酬込み画面は条件切替と連打と遅延応答を安全に扱う', async ({ page, $testInfo }) => {
-  await page.goto(APP_URL + '/auth/login');
+  await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(readerEmail);
   await page.getByLabel('パスワード', { exact: true }).fill(readerPassword);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();

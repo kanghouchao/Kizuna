@@ -3,7 +3,7 @@ import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/use
 import { useEffect, useRef, useState } from 'react';
 import { advertisingApi, validMonth, type Cost, type Mutation } from '../api/advertising';
 import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
-import { fromSpringPage } from '@/shared/api';
+import { fromSpringPage, getSessionUserId } from '@/shared/api';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -39,14 +39,15 @@ export default function AdvertisingCostsPage() {
   const storeId = useStoreContext().currentStoreId;
   const { me } = useMe();
   if (me === null) return <MePending />;
-  // 未確認の操作は操作者（/me の email）と店舗ごとにタブ内へ預ける。
-  if (!me.email || !hasPermission(me, 'ADVERTISING_COST_VIEW'))
+  // 未確認の操作は操作者（このタブのトークンの利用者 ID）と店舗ごとにタブ内へ預ける。
+  const userId = getSessionUserId();
+  if (userId === undefined || !hasPermission(me, 'ADVERTISING_COST_VIEW'))
     return <p role="alert">広告費を閲覧する権限がありません。</p>;
   return (
     <StorePage
-      key={JSON.stringify([me.email, storeId])}
+      key={JSON.stringify([userId, storeId])}
       store={storeId ?? ''}
-      subject={me.email}
+      subject={String(userId)}
       manage={hasPermission(me, 'ADVERTISING_COST_MANAGE')}
       canExport={hasPermission(me, 'ADVERTISING_COST_EXPORT')}
       canReadOrders={hasPermission(me, 'ORDER_MANAGE')}

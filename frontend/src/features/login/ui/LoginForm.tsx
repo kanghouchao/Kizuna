@@ -2,7 +2,6 @@
 
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import { authApi, LoginRequest } from '@/entities/user';
 import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
@@ -18,7 +17,6 @@ export default function LoginForm() {
   } = useForm<LoginRequest>({ defaultValues: { email: '', password: '' } });
 
   const onSubmit = async (data: LoginRequest) => {
-    Cookies.remove('token');
     try {
       const completion = await completeLogin(await authApi.login(data));
       if (completion.status === 'unsupported') {

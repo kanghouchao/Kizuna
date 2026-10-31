@@ -8,6 +8,7 @@ import {
   createStaffFixture,
   loginUser,
   loginViaUiAndEnterStore,
+  openLoginForm,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const questionPrompt =
@@ -82,7 +83,7 @@ When(
   "設問を作成し通信結果不明から同じ要求で復帰して受付を開始する",
   async ({ page, $testInfo }) => {
     await page.context().clearCookies();
-    await page.goto(`${APP_URL}/auth/login`);
+    await openLoginForm(page);
     await page.getByLabel("メールアドレス", { exact: true }).fill(email);
     await page.getByLabel("パスワード", { exact: true }).fill(secret);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();

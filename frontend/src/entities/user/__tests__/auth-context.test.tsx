@@ -1,11 +1,14 @@
 import React from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../model/AuthContext';
-import Cookies from 'js-cookie';
-
 import { authApi } from '../api/auth';
+import { getSessionUserId, storeSessionToken } from '@/shared/api';
 
-jest.mock('js-cookie');
+const mockBroadcastLogout = jest.fn();
+jest.mock('@/shared/api/session', () => ({
+  ...jest.requireActual('@/shared/api/session'),
+  broadcastLogout: (userId: number) => mockBroadcastLogout(userId),
+}));
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -28,13 +31,15 @@ function Consumer({ reason }: { reason?: string } = {}) {
 describe('AuthProvider', () => {
   afterEach(() => {
     jest.clearAllMocks();
-    (Cookies.get as jest.Mock).mockReset?.();
   });
 
-  it('logout calls api and removes token and navigates', async () => {
-    (Cookies.get as jest.Mock).mockReturnValue('tkn');
-    (authApi.logout as jest.Mock).mockResolvedValueOnce({});
-    const removeSpy = jest.spyOn(Cookies, 'remove');
+  it('ログアウトは端点を呼んでからメモリのトークンとセッションを消し、同じ利用者の他のタブへ知らせてログインへ移る', async () => {
+    storeSessionToken({ token: 'tkn', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
+    let tokenAtLogout: number | undefined;
+    (authApi.logout as jest.Mock).mockImplementationOnce(async () => {
+      // 端点は Bearer から失効させるセッションを取るので、消すのは呼んだ後
+      tokenAtLogout = getSessionUserId();
+    });
     const { getByText } = render(
       <AuthProvider>
         <Consumer />
@@ -42,8 +47,10 @@ describe('AuthProvider', () => {
     );
     getByText('out').click();
     await waitFor(() => expect(authApi.logout).toHaveBeenCalled());
-    expect(removeSpy).toHaveBeenCalledWith('token');
+    expect(tokenAtLogout).toBe(7);
+    expect(getSessionUserId()).toBeUndefined();
     expect(mockClearSession).toHaveBeenCalled();
+    expect(mockBroadcastLogout).toHaveBeenCalledWith(7);
     expect(mockPush).toHaveBeenCalledWith('/auth/login');
   });
 

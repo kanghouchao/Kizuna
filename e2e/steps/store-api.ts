@@ -35,12 +35,23 @@ export async function loginAsStoreAdmin(
 }
 
 /**
+ * ログインフォームを開く。ログイン画面はリフレッシュ cookie が生きていれば着地先へ移ってフォームを出さないため、
+ * 同じブラウザで別の利用者に入り直す前にその cookie を捨てる。先に空のページへ移るのは、着地直後の画面が
+ * 投げたリフレッシュの応答が、消した後の cookie を書き戻さないよう在途の要求を打ち切るため。
+ */
+export async function openLoginForm(page: Page): Promise<void> {
+  await page.goto("about:blank");
+  await page.context().clearCookies({ name: "refresh_token" });
+  await page.goto(`${APP_URL}/auth/login`);
+}
+
+/**
  * 統一ログイン UI から店長（ADMIN_EMAIL・2 店舗授権）で入り、ダッシュボードへの着地を待つ共通手順。
  * 店舗業務 URL は店舗 id を持たず、現在店舗は授権店舗の先頭（Sample = STORE1_ID）が自動選択されるため、
  * UI と API（STORE_HEADERS）の店舗文脈を揃える id として STORE1_ID を返す。
  */
 export async function loginViaUiAndEnterStore(page: Page): Promise<string> {
-  await page.goto(`${APP_URL}/auth/login`);
+  await openLoginForm(page);
   await page.getByLabel("メールアドレス", { exact: true }).fill(ADMIN_EMAIL);
   await page.getByLabel("パスワード", { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
@@ -811,6 +822,32 @@ export async function loginUser(
   });
   expect(response.ok()).toBeTruthy();
   return (await response.json()).token;
+}
+
+/**
+ * ブラウザ文脈と cookie を共有する要求でログインし、リフレッシュ cookie をそのブラウザに置く。
+ * ログイン画面はログイン済みなら着地先へ移るため、同じブラウザで別のアカウントにログインした状況はこれで作る。
+ */
+export async function loginInBrowser(page: Page, email: string, password: string): Promise<void> {
+  const res = await page.context().request.post(`${APP_URL}/api/auth/login`, {
+    data: { email, password },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
+/** 本人のパスワードを変更する（PUT /api/me/password）。資格情報の版が増え、既存のセッションはすべて失効する。 */
+export async function changeOwnPassword(
+  request: APIRequestContext,
+  email: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const token = await loginUser(request, email, currentPassword);
+  const res = await request.put("/api/me/password", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { current_password: currentPassword, new_password: newPassword },
+  });
+  expect(res.status(), await res.text()).toBeLessThan(300);
 }
 
 export async function getAuthorizedStores(

@@ -14,9 +14,9 @@ describe('auth api', () => {
     const res = await authApi.login({ email: 'a@example.com', password: 'pass' });
     expect(res).toEqual({ ok: true, url: '/auth/login' });
   });
-  it('login は options.skipAuthRedirect を渡すと config に skipAuthRedirect を積む（招待受諾のインラインログインをグローバル401処理から除外する）', async () => {
+  it('login の 401（資格情報の誤り）は 401 経路に乗せない', async () => {
     const client = jest.requireMock('@/shared/api/client').default;
-    await authApi.login({ email: 'a@example.com', password: 'pass' }, { skipAuthRedirect: true });
+    await authApi.login({ email: 'a@example.com', password: 'pass' });
     const config = client.post.mock.calls[client.post.mock.calls.length - 1][2];
     expect(config).toMatchObject({ skipAuthRedirect: true });
   });

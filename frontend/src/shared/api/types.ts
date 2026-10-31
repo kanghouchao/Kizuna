@@ -39,3 +39,13 @@ export interface FileUploadResponse {
   // Java 側が primitive の long のため、キーは必ず応答に含まれる
   size: number;
 }
+
+// トークンを返す端点（ログイン系と /auth/refresh）の応答。リフレッシュトークン自体は HttpOnly cookie で届く。
+// Java 側が primitive の long のため、数値のキーは必ず応答に含まれる。
+export interface TokenResponse {
+  token: string;
+  expires_at: number;
+  user_id: number;
+  // リフレッシュトークンの期限（epoch ミリ秒）。session-kind cookie の期限をこれに揃える。
+  refresh_expires_at: number;
+}

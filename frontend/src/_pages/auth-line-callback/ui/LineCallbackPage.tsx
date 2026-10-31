@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
+import { storeSessionToken } from '@/shared/api';
 import { LineAuthorizationRequest, authApi, lineApi } from '@/entities/user';
 import { completeLogin } from '@/features/login';
 import {
@@ -128,14 +128,13 @@ export default function LineCallbackPage() {
 
   const submitRegistration = async (values: LineRegisterValues) => {
     try {
-      const { token, expires_at } = await lineApi.register({
+      const issued = await lineApi.register({
         registration_ticket: registrationTicket,
         display_name: values.display_name,
         email: values.email,
       });
-      // epoch millis を Date に変換する（expires_at をそのまま日数として解釈すると不正な有効期限になる）
-      Cookies.set('token', token ?? '', { expires: new Date(expires_at) });
-      startSession('member', expires_at);
+      storeSessionToken(issued);
+      startSession('member', issued.refresh_expires_at);
       // 会員ポータルで弾かれた人が LINE 登録へ回ってくる経路がある（伝票の QR を未登録で開いた等）。
       // 預かった戻り先は会員セッションが立った時点で必ず消費する — 残すと、同じタブで後からログインした
       // 別の会員がその戻り先へ運ばれる。
