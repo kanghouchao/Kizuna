@@ -139,6 +139,22 @@ describe('apiClient のリフレッシュ経路', () => {
     expect(server.calls('/customers').map(c => c.headers['X-Store-ID'])).toEqual(['1', '1']);
   });
 
+  it('再送は変換済みの本文をそのまま送り、呼び出し元の transformRequest を二度かけない', async () => {
+    storeSessionToken({ token: 'old', expires_at: 1, user_id: 7, refresh_expires_at: 1_000 });
+    const server = serve({
+      '/advertising': [{ status: 401 }, { status: 200 }],
+      '/auth/refresh': [issued('new')],
+    });
+
+    await apiClient.post(
+      '/advertising',
+      { amount: 1 },
+      { transformRequest: [d => JSON.stringify(d)] }
+    );
+
+    expect(server.calls('/advertising').map(c => c.data)).toEqual(['{"amount":1}', '{"amount":1}']);
+  });
+
   it('再ログインを促している間は、後から届いた 401 でリフレッシュも差し戻しもしない', async () => {
     // credential_changed の応答はリフレッシュ cookie も消すので、取り直すと missing で自動遷移してしまう。
     storeSessionToken({ token: 'old', expires_at: 1, user_id: 7, refresh_expires_at: 1_000 });

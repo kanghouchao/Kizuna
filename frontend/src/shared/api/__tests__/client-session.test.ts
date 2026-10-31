@@ -87,10 +87,21 @@ describe('apiClient session branch', () => {
   );
 
   it.each(['cast', 'member'])(
-    'does not inject a stale current-store cookie for a %s session',
+    'injects X-Store-ID from a store page even when the shared session-kind cookie reads %s (another tab rewrote it)',
     async kind => {
+      // session-kind は全タブ共有で、別タブのログインが書き換える。このタブの画面（/store 配下は従業員のシェルだけ）で決める。
       window.history.pushState({}, '', '/store/orders');
       session('2', kind);
+      const headers = await requestTo('/customers');
+      expect(headers['X-Store-ID']).toBe('2');
+    }
+  );
+
+  it.each(['/cast/schedule', '/member/'])(
+    'does not inject a leftover current-store cookie from the portal page %s',
+    async pathname => {
+      window.history.pushState({}, '', pathname);
+      session('2', 'admin');
       const headers = await requestTo('/me');
       expect(headers['X-Store-ID']).toBeUndefined();
     }
