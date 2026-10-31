@@ -98,17 +98,17 @@ public class RoleService {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
     }
     var before = snapshot(role);
-    boolean permissionsChanged = !role.getPermissionIds().equals(codesById.keySet());
-    role.rename(req.getName());
-    role.replacePermissions(codesById.keySet());
-    save(role);
     // トークンの権限は発行時にロールから写したものなので、保持者全員を再ログインさせる（操作者本人も含む）。
-    // ロール行の保存で同一ロールの並行更新を先に撥ねてから、保持者を押さえて版の増分を直列化する。
-    if (permissionsChanged) {
+    // ロール行より先に押さえる: 改名は一意列の更新でロール行を FOR UPDATE にし、目録行を先に取る付与の外部キー検査
+    // （KEY SHARE）と待ちが環になる。同一ロールの並行更新は保存時の @Version が撥ねる。
+    if (!role.getPermissionIds().equals(codesById.keySet())) {
       List<User> holders = roleManageHolderGuard.lockRoleHolders(role.getId());
       holders.forEach(credentialOperations::invalidateSessions);
       userRepository.saveAllAndFlush(holders);
     }
+    role.rename(req.getName());
+    role.replacePermissions(codesById.keySet());
+    save(role);
     if (!before.equals(snapshot(role)))
       businessAudit.recordCurrent(
           null, "ROLE_CHANGED", "ROLE", role.getId().toString(), before, snapshot(role));
