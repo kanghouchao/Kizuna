@@ -28,6 +28,11 @@ Then('受注一覧が権限エラーなく表示される', async ({ page }) => 
 });
 
 When('管理画面のシェルの取得要求を数え始める', async ({ page }) => {
+  // ログイン直後の文書のシェルはまだ取得中でありうる。数え始める前に終わらせないと、
+  // reload で打ち切られる直前の旧文書の要求まで数えてしまう。ヘッダーの本人表示は /me、
+  // サイドバーの項目は授権店舗とメニューの両方が応答してから描かれる。
+  await expect(page.locator('header').getByText(/@/)).toBeVisible();
+  await expect(page.locator('aside').getByRole('link').first()).toBeVisible();
   shellRequests = [];
   page.on('request', request => {
     const path = new URL(request.url()).pathname;
