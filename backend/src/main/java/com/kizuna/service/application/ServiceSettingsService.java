@@ -52,10 +52,10 @@ public class ServiceSettingsService {
             cb.and(cb.equal(root.get("storeId"), storeId), cb.equal(root.get("deleted"), deleted));
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
-    // Snowflake ID は作成順に増えるため、降順で作成直後のサービスが先頭ページに並ぶ
-    return items
-        .findAll(filter, PageRequest.of(page, size, Sort.by(ServiceItem::getId).descending()))
-        .map(mapper::summary);
+    // 作成直後のサービスを先頭ページに出す。ID は文字列で桁が増えると辞書順が作成順と
+    // ずれるため作成日時で並べ、ID は同時刻の順序を固定する第 2 キーにとどめる。
+    var newestFirst = Sort.by(Sort.Direction.DESC, ServiceItem::getCreatedAt, ServiceItem::getId);
+    return items.findAll(filter, PageRequest.of(page, size, newestFirst)).map(mapper::summary);
   }
 
   @Transactional(readOnly = true)

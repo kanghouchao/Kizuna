@@ -40,6 +40,7 @@ class ServiceSettingsServiceTest {
 
     var pageable = ArgumentCaptor.forClass(Pageable.class);
     verify(items).findAll(any(Specification.class), pageable.capture());
-    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "id"));
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
   }
 }
