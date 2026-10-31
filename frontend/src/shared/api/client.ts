@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AxiosError, AxiosHeaders } from 'axios';
+import type { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
 import {
   clearSession,
   getSessionKind,
@@ -47,17 +47,13 @@ apiClient.interceptors.request.use(
     // 店舗文脈は X-Store-ID だけで名乗る。従業員の店舗級画面（/store 配下）からの要求には宛先を問わず現在店舗
     // （current-store-id cookie）を付け、現在店舗を受けない端点はこれを読まない。/admin 配下の画面は何も付けず、
     // /files は全店共有領域へ保存され、横断一覧が行の店舗を名指す X-Store-ID はそのまま届く。キャスト・会員の
-    // portal は cookie が残っていても付けない。公開店舗サイトの匿名要求は呼び出し元が店舗を明示して渡す。
+    // portal は cookie が残っていても付けない。判定はこのタブの画面だけで行い、別タブのログインが書き換える
+    // session-kind cookie は見ない（/store 配下を描くのは従業員のシェルだけ）。公開店舗サイトの匿名要求は呼び出し元が店舗を明示して渡す。
     // 受け入れの可否はバックエンドが授権店舗集合で判定する。
     try {
       // 再送は最初の要求の店舗のまま送る。待つ間に別タブで切り替わった現在店舗を付け直すと、別の店舗へ書き込む。
       const storeId = getCurrentStoreId();
-      if (
-        !config.authRetried &&
-        getSessionKind() === 'admin' &&
-        storeId &&
-        isStorePath(window.location.pathname)
-      ) {
+      if (!config.authRetried && storeId && isStorePath(window.location.pathname)) {
         (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
       }
     } catch {
@@ -152,6 +148,14 @@ export function restoreSession(): Promise<RefreshResult> {
   return inFlight;
 }
 
+/**
+ * 最初の要求の設定のまま 1 回だけ送り直す。本文は最初の送信で変換済みなので、呼び出し元の transformRequest を
+ * もう一度かけない（JSON.stringify する変換は文字列を二重に包む）。
+ */
+function resend(config: InternalAxiosRequestConfig) {
+  return apiClient({ ...config, authRetried: true, transformRequest: [data => data] });
+}
+
 apiClient.interceptors.response.use(
   response => response,
   async error => {
@@ -164,9 +168,9 @@ apiClient.interceptors.response.use(
         sendToLogin();
       } else if (current && config.headers?.Authorization !== `Bearer ${current}`) {
         // 旧トークンで出た要求の 401 が、別の要求のリフレッシュが済んだ後に届いた。取り直さずに再送する。
-        return apiClient({ ...config, authRetried: true });
+        return resend(config);
       } else if ((await restoreSession()).status === 'ok') {
-        return apiClient({ ...config, authRetried: true });
+        return resend(config);
       }
     }
     if (error.response?.status === 403) {
