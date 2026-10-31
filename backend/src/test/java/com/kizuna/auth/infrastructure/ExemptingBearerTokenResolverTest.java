@@ -39,8 +39,14 @@ class ExemptingBearerTokenResolverTest {
   }
 
   @ParameterizedTest(name = "POST {0} は免除対象で Bearer を解決しない(null)こと")
-  @ValueSource(strings = {"/cast-invitations/view", "/cast-invitations/acceptance", "/members"})
-  @DisplayName("招待の照会・新規受諾と会員の自助登録の POST は、壊れた Bearer があっても null を返すこと")
+  @ValueSource(
+      strings = {
+        "/cast-invitations/view",
+        "/cast-invitations/acceptance",
+        "/cast-invitations/acceptance/existing",
+        "/members"
+      })
+  @DisplayName("招待の照会・受諾と会員の自助登録の POST は、壊れた Bearer があっても null を返すこと")
   void resolvesNullForAnonymousPosts(String uri) {
     MockHttpServletRequest request = requestWithBearer("POST", uri);
 
@@ -48,7 +54,13 @@ class ExemptingBearerTokenResolverTest {
   }
 
   @ParameterizedTest(name = "GET {0} は免除対象でなく Bearer を解決すること")
-  @ValueSource(strings = {"/cast-invitations/view", "/cast-invitations/acceptance", "/members"})
+  @ValueSource(
+      strings = {
+        "/cast-invitations/view",
+        "/cast-invitations/acceptance",
+        "/cast-invitations/acceptance/existing",
+        "/members"
+      })
   @DisplayName("匿名 POST の免除は同一パスの他メソッドに及ばないこと")
   void doesNotExemptOtherMethodsOnAnonymousPostPaths(String uri) {
     // 接頭辞の無い /members などは認証付きの一覧を足しやすく、パスだけで免除するとその Bearer まで捨てる
@@ -93,16 +105,7 @@ class ExemptingBearerTokenResolverTest {
   }
 
   @Test
-  @DisplayName("既存ユーザーの招待受諾(/acceptance/existing)は免除対象でなく Bearer を解決すること")
-  void resolvesTokenForAcceptAsExistingUser() {
-    MockHttpServletRequest request =
-        requestWithBearer("POST", "/cast-invitations/acceptance/existing");
-
-    assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
-  }
-
-  @Test
-  @DisplayName("招待の免除は view/acceptance の 2 端点限定で、トークンを載せたパスには及ばないこと")
+  @DisplayName("招待の免除は照会・受諾の端点限定で、トークンを載せたパスには及ばないこと")
   void doesNotExemptArbitraryCastInvitationPath() {
     // 招待トークンはパスでなく本文で運ぶ。トークンらしき 1 セグメントが免除に当たると、
     // トークンをパスに載せる handler が紛れ込んでも気付けない。

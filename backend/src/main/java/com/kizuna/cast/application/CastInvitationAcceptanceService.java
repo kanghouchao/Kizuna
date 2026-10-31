@@ -33,6 +33,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,7 +102,7 @@ public class CastInvitationAcceptanceService {
   }
 
   /**
-   * 既存の CAST アカウントで受諾する。SPECIFIC_STORES は所属店舗集合に招待店舗を冪等 union し、ALL_STORES
+   * 資格情報を照合済みの既存の CAST アカウントで受諾する。SPECIFIC_STORES は所属店舗集合に招待店舗を冪等 union し、ALL_STORES
    * は全店アクセス権をそのまま保持する（降格しない）。 いずれも档案へ紐づけて招待を受諾済みにする。
    */
   @Transactional
@@ -120,6 +121,10 @@ public class CastInvitationAcceptanceService {
             .orElseThrow(() -> new AccessDeniedException("アクセス権限がありません"));
     if (user.getUserType() != UserType.CAST) {
       throw new AccessDeniedException("CAST アカウントのみ既存受諾できます");
+    }
+    // 資格情報の照合は取引の外で済んでいるため、照合後の停止はロックした行でしか見えない。
+    if (!Boolean.TRUE.equals(user.getEnabled())) {
+      throw new DisabledException("アカウントが無効化されています");
     }
     if (!castRepository
         .findIdsByUserIdAndStoreId(user.getId(), invitation.getStoreId())

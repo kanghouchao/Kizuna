@@ -10,7 +10,6 @@ import {
   loginViaUiAndEnterStore,
   deleteCast,
   getAuthorizedStores,
-  loginUser,
   acceptExistingCastInvitation,
   withdrawCast,
 } from "./store-api";
@@ -128,7 +127,6 @@ Given(
       password,
       "店舗選択キャスト",
     );
-    const token = await loginUser(request, email, password);
     const second = await createCast(
       request,
       adminToken,
@@ -142,7 +140,7 @@ Given(
       second,
       secondStoreId,
     );
-    await acceptExistingCastInvitation(request, token, secondInvite);
+    await acceptExistingCastInvitation(request, secondInvite, email, password);
     const duplicate = await createCast(
       request,
       adminToken,
@@ -159,8 +157,8 @@ Given(
   },
 );
 
-async function acceptThroughUi(page: Page) {
-  await page.context().clearCookies();
+async function acceptThroughUi(page: Page, { keepSession = false } = {}) {
+  if (!keepSession) await page.context().clearCookies();
   await page.goto(
     `${APP_URL}/auth/invite#${encodeURIComponent(invitation)}`,
   );
@@ -219,11 +217,26 @@ Then(
   },
 );
 
-Then("同じ招待を受諾するとポータルで二店舗を選択できる", async ({ page }) => {
-  await acceptThroughUi(page);
-  await expect(
-    page.getByRole("heading", { name: "連携が完了しました", exact: true }),
-  ).toBeVisible();
+Then(
+  "管理者でログイン中のブラウザで同じ招待を受諾しても管理画面をそのまま使える",
+  async ({ page }) => {
+    await page.context().clearCookies();
+    await loginViaUiAndEnterStore(page);
+    await acceptThroughUi(page, { keepSession: true });
+    await expect(
+      page.getByRole("heading", { name: "連携が完了しました", exact: true }),
+    ).toBeVisible();
+    // 受諾がトークンを発行・消去しないこと: 管理者の token のままで GET /me と授権店舗が通り、
+    // ログイン画面へ差し戻されない
+    await page.goto(`${APP_URL}/admin/dashboard`);
+    await expect(
+      page.locator("aside").locator('a[href="/admin/dashboard"]'),
+    ).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(/\/admin\/dashboard\/?$/);
+  },
+);
+
+Then("ポータルで二店舗を選択できる", async ({ page }) => {
   await portalStores(page);
   await expect(page.getByRole("option")).toHaveCount(2);
   await page

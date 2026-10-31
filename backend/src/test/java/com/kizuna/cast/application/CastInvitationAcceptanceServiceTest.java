@@ -49,6 +49,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
@@ -447,6 +448,31 @@ class CastInvitationAcceptanceServiceTest {
     assertThat(existing.getStoreIds()).isEmpty();
     assertThat(cast.getCastId()).isEqualTo(7L);
     // 授権に変更がないため User は永続化しない（档案の紐づけのみ）。
+    verify(userRepository, never()).save(any());
+  }
+
+  @Test
+  void acceptAsExistingUser_rejectsAccountStoppedAfterAuthentication() {
+    CastInvitation invitation =
+        invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+    CastEnrollment enrollment = cast("c2", "花子档案");
+    User stopped = user(7L, UserType.CAST, Set.of(1L));
+    stopped.stop();
+    when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
+    when(castRepository.findByIdAndStoreIdForUpdate("c2", 2L)).thenReturn(Optional.of(enrollment));
+    when(castInvitationRepository.claimPending(
+            any(),
+            eq(2L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED)))
+        .thenReturn(1);
+    // 資格情報の照合は取引の外で済んでいる。ロックした行が停止済みなら、照合後に停止されたことになる。
+    when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(stopped));
+
+    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
+        .isInstanceOf(DisabledException.class);
+    assertThat(enrollment.getCastId()).isNull();
     verify(userRepository, never()).save(any());
   }
 
