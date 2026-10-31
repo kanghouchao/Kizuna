@@ -38,10 +38,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/**
- * 既存の利用者による招待受諾の契約。本番の SecurityConfig と AuthenticationManager を載せ、資格情報の照合・CSRF・陳腐な Bearer
- * の扱いまで確かめる。
- */
+/** 既存の利用者による招待受諾の契約。本番の SecurityConfig と AuthenticationManager を載せ、資格情報の照合・陳腐な Bearer の扱いまで確かめる。 */
 @WebMvcTest(CastInvitationController.class)
 @Import({
   SecurityConfig.class,
@@ -87,7 +84,7 @@ class CastInvitationControllerTest {
         .loadUserByUsername(EMAIL);
   }
 
-  /** 匿名の受諾を模す。CSRF トークンも認証主体も載せない。 */
+  /** 匿名の受諾を模す。認証主体を載せない。 */
   private static MockHttpServletRequestBuilder acceptExisting(String email, String password) {
     return post("/cast-invitations/acceptance/existing")
         .contentType(MediaType.APPLICATION_JSON)
@@ -97,7 +94,7 @@ class CastInvitationControllerTest {
   }
 
   @Test
-  @DisplayName("正しい資格情報なら CSRF トークンなしの匿名要求で受諾でき、トークンも cookie も発行しないこと")
+  @DisplayName("正しい資格情報なら匿名要求で受諾でき、トークンも cookie も発行しないこと")
   void acceptsWithCredentialsAndIssuesNoCookie() throws Exception {
     givenAccount(true);
     when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL, PASSWORD))
