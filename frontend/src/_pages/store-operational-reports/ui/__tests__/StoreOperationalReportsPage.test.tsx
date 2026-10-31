@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { fetchReport, type OperationalReport } from '@/entities/operational-report';
 import { ReportExport } from '@/features/operational-report-export';
-import { readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import StoreOperationalReportsPage from '../StoreOperationalReportsPage';
 
 let mockStoreId = '1';
@@ -20,14 +21,23 @@ jest.mock('@/entities/operational-report', () => ({
   ...jest.requireActual('@/entities/operational-report'),
   fetchReport: jest.fn(),
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/features/operational-report-export', () => ({
   ReportExport: jest.fn(() => <button>CSV 全件出力</button>),
 }));
 const fetch = jest.mocked(fetchReport);
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 function report(total: number): OperationalReport {
   return {
     from: '2026-09-01',
@@ -56,10 +66,7 @@ function report(total: number): OperationalReport {
 beforeEach(() => {
   jest.clearAllMocks();
   mockStoreId = '1';
-  jest.mocked(readTokenClaims).mockReturnValue({
-    authorities: ['PERM_ORDER_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
-    userType: 'STAFF',
-  });
+  meWith(['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW']);
 });
 test('view permission does not show export and failures clear totals before retry', async () => {
   fetch
@@ -108,15 +115,12 @@ test('invalid period is shown next to fields without sending request', async () 
 });
 
 function grantRemuneration() {
-  jest.mocked(readTokenClaims).mockReturnValue({
-    authorities: [
-      'PERM_ORDER_MANAGE',
-      'PERM_OPERATIONAL_REPORT_VIEW',
-      'PERM_OPERATIONAL_REPORT_EXPORT',
-      'PERM_REMUNERATION_VIEW',
-    ],
-    userType: 'STAFF',
-  });
+  meWith([
+    'ORDER_MANAGE',
+    'OPERATIONAL_REPORT_VIEW',
+    'OPERATIONAL_REPORT_EXPORT',
+    'REMUNERATION_VIEW',
+  ]);
 }
 function remunerationReport(): OperationalReport {
   const data = report(0);
@@ -249,15 +253,12 @@ test('known zero guarantee and total remain zero on repeated remuneration querie
 
 function grantAdvertising(output = true) {
   grantRemuneration();
-  const claims = jest.mocked(readTokenClaims)();
-  jest.mocked(readTokenClaims).mockReturnValue({
-    ...claims!,
-    authorities: [
-      ...claims!.authorities,
-      'PERM_ADVERTISING_COST_VIEW',
-      ...(output ? ['PERM_ADVERTISING_COST_EXPORT'] : []),
-    ],
-  });
+  const granted = mockedUseMe().me?.permissions ?? [];
+  meWith([
+    ...granted,
+    'ADVERTISING_COST_VIEW',
+    ...(output ? (['ADVERTISING_COST_EXPORT'] as const) : []),
+  ]);
 }
 function advertisingReport(
   status: NonNullable<OperationalReport['advertising']>['status'] = 'RECORDED'
@@ -361,14 +362,7 @@ test('advertising view requires its export permission even when not applicable',
   expect(await screen.findByRole('button', { name: 'CSV 全件出力' })).toBeInTheDocument();
 });
 test('store advertising does not pair order management with the cross-store advertising permission', async () => {
-  jest.mocked(readTokenClaims).mockReturnValue({
-    authorities: [
-      'PERM_ORDER_MANAGE',
-      'PERM_OPERATIONAL_REPORT_VIEW',
-      'PERM_ADVERTISING_COST_SET_VIEW',
-    ],
-    userType: 'STAFF',
-  });
+  meWith(['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW', 'ADVERTISING_COST_SET_VIEW']);
   fetch.mockResolvedValue(report(0));
   render(<StoreOperationalReportsPage />);
   expect(screen.queryByRole('checkbox', { name: '広告費を含める' })).not.toBeInTheDocument();
@@ -377,14 +371,7 @@ test('store advertising does not pair order management with the cross-store adve
   expect(fetch.mock.calls[0][1]).not.toHaveProperty('include_advertising');
 });
 test('cross-store viewer reads the current store with its own advertising permission', async () => {
-  jest.mocked(readTokenClaims).mockReturnValue({
-    authorities: [
-      'PERM_ORDER_SET_VIEW',
-      'PERM_OPERATIONAL_REPORT_VIEW',
-      'PERM_ADVERTISING_COST_SET_VIEW',
-    ],
-    userType: 'STAFF',
-  });
+  meWith(['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_VIEW', 'ADVERTISING_COST_SET_VIEW']);
   fetch.mockResolvedValue(report(0));
   render(<StoreOperationalReportsPage />);
   fireEvent.click(await screen.findByRole('checkbox', { name: '広告費を含める' }));

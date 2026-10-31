@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { adminStoreApi } from '@/entities/store';
-import { useStoreContext } from '@/entities/user';
-import { readTokenClaims } from '@/shared/lib';
+import { useMe, useStoreContext } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import DashboardPage from '../ui/DashboardPage';
 
 jest.mock('@/entities/store', () => ({
@@ -11,20 +11,28 @@ jest.mock('@/entities/store', () => ({
 }));
 
 jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
   useAuth: () => ({ logout: jest.fn() }),
   useStoreContext: jest.fn(),
 }));
 
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 
 const mockedApi = adminStoreApi as jest.Mocked<typeof adminStoreApi>;
-const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
 
-const claimsWith = (...authorities: string[]) => ({ authorities, userType: 'STAFF' });
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 
 type StoreContextValue = ReturnType<typeof useStoreContext>;
 const storeContext = (overrides: Partial<StoreContextValue>): StoreContextValue => ({
@@ -38,7 +46,7 @@ const storeContext = (overrides: Partial<StoreContextValue>): StoreContextValue 
 });
 
 beforeEach(() => {
-  mockedReadClaims.mockReturnValue(claimsWith('PERM_STORE_MANAGE'));
+  meWith(['STORE_MANAGE']);
   mockedUseStoreContext.mockReturnValue(storeContext({}));
 });
 
@@ -79,7 +87,7 @@ describe('ダッシュボード', () => {
 describe('店舗管理の権限が無い者のダッシュボード', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedReadClaims.mockReturnValue(claimsWith('PERM_ORDER_MANAGE'));
+    meWith(['ORDER_MANAGE']);
   });
 
   it('集計を取りに行かず、現在店舗とその稼働状態を出すこと', async () => {

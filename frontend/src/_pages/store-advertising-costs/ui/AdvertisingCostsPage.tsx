@@ -1,14 +1,8 @@
 'use client';
-import { useStoreContext } from '@/entities/user';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { advertisingApi, validMonth, type Cost, type Mutation } from '../api/advertising';
-import {
-  getApiErrorMessage,
-  hasPermission,
-  readTokenClaims,
-  useListPage,
-  useResource,
-} from '@/shared/lib';
+import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
 import { fromSpringPage } from '@/shared/api';
 import { notify } from '@/shared/notify';
 import {
@@ -43,24 +37,20 @@ import { OrderCostPage } from './OrderCostPage';
 import { RecruitmentEffectPage } from './RecruitmentEffectPage';
 export default function AdvertisingCostsPage() {
   const storeId = useStoreContext().currentStoreId;
-  const [claims, setClaims] = useState<ReturnType<typeof readTokenClaims>>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setClaims(readTokenClaims());
-    setReady(true);
-  }, [storeId]);
-  if (!ready) return <p>読み込み中...</p>;
-  if (!claims?.subject || !hasPermission(claims, 'ADVERTISING_COST_VIEW'))
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  // 未確認の操作は操作者（/me の email）と店舗ごとにタブ内へ預ける。
+  if (!me.email || !hasPermission(me, 'ADVERTISING_COST_VIEW'))
     return <p role="alert">広告費を閲覧する権限がありません。</p>;
   return (
     <StorePage
-      key={JSON.stringify([claims.subject, storeId])}
+      key={JSON.stringify([me.email, storeId])}
       store={storeId ?? ''}
-      subject={claims.subject}
-      manage={hasPermission(claims, 'ADVERTISING_COST_MANAGE')}
-      canExport={hasPermission(claims, 'ADVERTISING_COST_EXPORT')}
-      canReadOrders={hasPermission(claims, 'ORDER_MANAGE')}
-      canReadRecruitment={hasPermission(claims, 'RECRUITMENT_VIEW')}
+      subject={me.email}
+      manage={hasPermission(me, 'ADVERTISING_COST_MANAGE')}
+      canExport={hasPermission(me, 'ADVERTISING_COST_EXPORT')}
+      canReadOrders={hasPermission(me, 'ORDER_MANAGE')}
+      canReadRecruitment={hasPermission(me, 'RECRUITMENT_VIEW')}
     />
   );
 }

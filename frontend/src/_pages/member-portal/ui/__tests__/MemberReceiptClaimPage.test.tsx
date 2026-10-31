@@ -2,9 +2,16 @@ import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemberReceiptClaimPage } from '../MemberReceiptClaimPage';
 import { memberReceiptApi } from '@/entities/order';
+import { redirectToLogin, rememberMemberReturnPath } from '@/shared/lib';
 
 jest.mock('@/entities/order', () => ({
   memberReceiptApi: { claim: jest.fn() },
+}));
+
+jest.mock('@/shared/lib', () => ({
+  ...jest.requireActual('@/shared/lib'),
+  redirectToLogin: jest.fn(),
+  rememberMemberReturnPath: jest.fn(),
 }));
 
 const mockedClaim = memberReceiptApi.claim as jest.Mock;
@@ -31,6 +38,18 @@ describe('MemberReceiptClaimPage', () => {
 
     expect(await screen.findByText('+120 pt')).toBeInTheDocument();
     expect(mockedClaim).toHaveBeenCalledWith('tok3n');
+  });
+
+  it('別コンソールのセッション（403）ではトークンごと戻り先を預けてログインへ送る', async () => {
+    // 会員以外のセッションが残ったまま QR を開いた場面。ここで失敗を出すと、フラグメントの
+    // トークンはログインの往復で失われ、申領する手段が無くなる。
+    mockedClaim.mockRejectedValue(httpError(403, 'Forbidden'));
+
+    render(<MemberReceiptClaimPage />);
+
+    await waitFor(() => expect(redirectToLogin).toHaveBeenCalledTimes(1));
+    expect(rememberMemberReturnPath).toHaveBeenCalledWith('/member/receipts', '#tok3n');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('付与の無い伝票でも来店を取り込めたことを伝える', async () => {

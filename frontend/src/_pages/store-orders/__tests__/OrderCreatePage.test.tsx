@@ -1,3 +1,5 @@
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { chooseCourse, confirmPreview } from '../lib/orderTestSupport';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CreateOrderPage from '../ui/OrderCreatePage';
@@ -19,6 +21,21 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
   useParams: () => ({}),
 }));
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
+}));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+// 顧客管理の権限を持たない利用者として描く。
+beforeEach(() => meWith([]));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useStoreContext: () => ({

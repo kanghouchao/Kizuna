@@ -16,8 +16,7 @@ import { ModeToggle } from './ModeToggle';
 export function Header() {
   const { logout } = useAuth();
 
-  // 表示名は token claim に無い（wire 契約は authorities / userType のみ）ため、
-  // /me の共有 seam（管理画面シェルに搭載）から読む。アカウント設定ページの
+  // 表示名は /me の共有 seam（管理画面シェルに搭載）から読む。アカウント設定ページの
   // プロフィール更新は同じ seam の setMe で差し替わるため、この表示も再取得なしで追随する。
   const { me, failure: meFailure, reload: reloadMe } = useMe();
 

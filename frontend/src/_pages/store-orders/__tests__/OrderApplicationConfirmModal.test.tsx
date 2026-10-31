@@ -1,4 +1,5 @@
-import { hasPermission } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { chooseCourse, confirmPreview } from '../lib/orderTestSupport';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -14,10 +15,20 @@ jest.mock('@/entities/user', () => ({
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { OrderApplicationConfirmModal } from '../ui/OrderApplicationConfirmModal';
 import { OrderApplicationRow, orderApi, orderApplicationApi } from '@/entities/order';
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  hasPermission: jest.fn(() => true),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+const allPermissions: PermissionCode[] = ['ORDER_MANAGE', 'CUSTOMER_MANAGE'];
 
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
@@ -88,7 +99,7 @@ async function pickCustomerMode(optionName: string) {
 describe('OrderApplicationConfirmModal の顧客化', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.mocked(hasPermission).mockReturnValue(true);
+    meWith(allPermissions);
     (orderApi.listReceptionists as jest.Mock).mockResolvedValue([]);
     jest.mocked(orderApplicationApi.detail).mockResolvedValue({
       ...guestApplication(),
@@ -196,7 +207,7 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
   });
 
   it('顧客管理権限がなくても既存選択と連絡先入力ができ、新規登録は表示しない', async () => {
-    jest.mocked(hasPermission).mockReturnValue(false);
+    meWith([]);
     renderModal(guestApplication());
     fireEvent.change(await screen.findByLabelText('メール'), {
       target: { value: 'once@example.com' },
@@ -406,7 +417,7 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
 describe('確定対象と受付候補の取得', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.mocked(hasPermission).mockReturnValue(true);
+    meWith(allPermissions);
   });
 
   it.each(['同じ申請を開き直す', '開いたまま別申請へ切り替える'])(

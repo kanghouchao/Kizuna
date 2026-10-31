@@ -1,7 +1,8 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CastListPage from '../ui/CastsPage';
 import { CastResponse, castApi } from '@/entities/cast';
-import { TokenClaims, readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -15,10 +16,9 @@ jest.mock('@/entities/user', () => ({
   }),
 }));
 
-// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 
 jest.mock('@/entities/cast', () => {
@@ -35,15 +35,16 @@ jest.mock('@/entities/cast', () => {
 });
 
 const mockedCastApi = castApi as jest.Mocked<typeof castApi>;
-const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
-/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim を返すヘルパ（UI 出し分けは権限ベース）。 */
-function claimsWith(permissions: string[]): TokenClaims {
-  return {
-    authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
-  };
-}
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 
 const cast: CastResponse = {
   id: 'cast-1',
@@ -65,7 +66,7 @@ const toPage = (rows: CastResponse[]) => ({
 describe('招待発行モーダルが一覧の再取得中もアンマウントされない', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
+    meWith(['CAST_MANAGE', 'CAST_INVITE']);
   });
 
   it('発行成功直後、一覧の再取得が isLoading=true を経ても発行成功モーダルが表示され続けること', async () => {
@@ -110,7 +111,7 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
   });
 
   it('CAST_INVITE 能力があれば行内に「招待を発行」ボタンが表示されること', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
+    meWith(['CAST_MANAGE', 'CAST_INVITE']);
 
     render(<CastListPage />);
     await screen.findByText('花子');
@@ -122,7 +123,7 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
   it.each(['NOT_INVITED', 'INVITED', 'EXPIRED', 'UNAVAILABLE'] as const)(
     '退店済みでは招待状態 %s でも発行・再発行を表示しないこと',
     async invitation_status => {
-      mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
+      meWith(['CAST_MANAGE', 'CAST_INVITE']);
       mockedCastApi.list.mockResolvedValue(
         toPage([{ ...cast, status: 'WITHDRAWN', invitation_status }])
       );
@@ -139,14 +140,14 @@ describe('招待発行ボタンの表示は CAST_INVITE 能力限定', () => {
   );
 
   it('停止中でも招待を発行できること', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_INVITE']));
+    meWith(['CAST_MANAGE', 'CAST_INVITE']);
     mockedCastApi.list.mockResolvedValue(toPage([{ ...cast, status: 'SUSPENDED' }]));
     render(<CastListPage />);
     expect(await screen.findByRole('button', { name: '招待を発行' })).toBeInTheDocument();
   });
 
   it('CAST_INVITE 能力が無ければ「招待を発行」ボタンが表示されず、招待状態バッジは表示されること', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
+    meWith(['CAST_MANAGE']);
 
     render(<CastListPage />);
     await screen.findByText('花子');
@@ -164,7 +165,7 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
   });
 
   it('CAST_FIELD_DEF_MANAGE 能力があれば定義管理ページ(/store/casts/fields)への入口リンクが表示されること', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE', 'CAST_FIELD_DEF_MANAGE']));
+    meWith(['CAST_MANAGE', 'CAST_FIELD_DEF_MANAGE']);
 
     render(<CastListPage />);
     await screen.findByText('花子');
@@ -174,7 +175,7 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
   });
 
   it('CAST_FIELD_DEF_MANAGE 能力が無ければ定義管理ページへの入口リンクが表示されないこと', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
+    meWith(['CAST_MANAGE']);
 
     render(<CastListPage />);
     await screen.findByText('花子');
@@ -187,7 +188,7 @@ describe('キャスト一覧ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedCastApi.list.mockResolvedValue(toPage([]));
-    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
+    meWith(['CAST_MANAGE']);
   });
 
   it('見出し（h1）・副題・主アクションのリンク先を備えること', async () => {
@@ -223,7 +224,7 @@ describe('キャスト一覧ページ固有の要素', () => {
 describe('キャスト一覧のページ送りと検索', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedReadClaims.mockReturnValue(claimsWith(['CAST_MANAGE']));
+    meWith(['CAST_MANAGE']);
   });
 
   // 1 ページ 20 件で、101 人目以降にもページ送りで到達できることを固定する

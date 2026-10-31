@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AdminMemberDetail, adminMemberApi } from '@/entities/member';
-import { hasPermission } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import { AdminMemberDetailPage } from '../ui/AdminMemberDetailPage';
 
@@ -9,17 +10,24 @@ jest.mock('@/entities/member', () => ({
   ...jest.requireActual('@/entities/member'),
   adminMemberApi: { get: jest.fn(), pointEntries: jest.fn(), withdraw: jest.fn() },
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(() => null),
-  hasPermission: jest.fn(() => false),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const api = jest.mocked(adminMemberApi);
-const mockedHasPermission = jest.mocked(hasPermission);
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 
 const detail = (override: Partial<AdminMemberDetail>): AdminMemberDetail => ({
   id: 7,
@@ -52,7 +60,7 @@ const detail = (override: Partial<AdminMemberDetail>): AdminMemberDetail => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockedHasPermission.mockReturnValue(false);
+  meWith([]);
   api.get.mockResolvedValue(detail({}));
   api.pointEntries.mockResolvedValue({
     rows: [
@@ -97,11 +105,10 @@ it('MEMBER_WITHDRAW が無ければ退会操作を出さない', async () => {
   await screen.findByText('会員 花子');
 
   expect(screen.queryByRole('button', { name: '退会させる' })).not.toBeInTheDocument();
-  expect(mockedHasPermission).toHaveBeenCalledWith(null, 'MEMBER_WITHDRAW');
 });
 
 it('退会済みは操作の代わりに退会情報（日時・理由・操作者）を読み取り専用で出す', async () => {
-  mockedHasPermission.mockReturnValue(true);
+  meWith(['MEMBER_WITHDRAW']);
   api.get.mockResolvedValue(
     detail({
       withdrawal: {
@@ -124,7 +131,7 @@ it('退会済みは操作の代わりに退会情報（日時・理由・操作�
 });
 
 it('MEMBER_WITHDRAW を持つ職員は理由を入力し「退会」と打って初めて実行でき、成功で取り直す', async () => {
-  mockedHasPermission.mockReturnValue(true);
+  meWith(['MEMBER_WITHDRAW']);
   api.withdraw.mockResolvedValue(undefined);
   render(<AdminMemberDetailPage />);
   await screen.findByText('会員 花子');
@@ -148,7 +155,7 @@ it('MEMBER_WITHDRAW を持つ職員は理由を入力し「退会」と打って
 });
 
 it('理由が空のまま「退会」と打って押すと入力横に不備を出し、送らない', async () => {
-  mockedHasPermission.mockReturnValue(true);
+  meWith(['MEMBER_WITHDRAW']);
   render(<AdminMemberDetailPage />);
   await screen.findByText('会員 花子');
 

@@ -1,22 +1,22 @@
 import { render, screen } from '@testing-library/react';
-import { staffApi, serviceIdentityApi } from '@/entities/user';
-import type { ServiceIdentityResponse } from '@/entities/user';
-import { readTokenClaims, useKeyedResource } from '@/shared/lib';
+import { staffApi, serviceIdentityApi, useMe } from '@/entities/user';
+import type { PermissionCode, ServiceIdentityResponse } from '@/entities/user';
+import { useKeyedResource } from '@/shared/lib';
 import { StaffCreateModal } from '../StaffCreateModal';
 import { ServiceIdentityCreateModal } from '../ServiceIdentityCreateModal';
 import { ServiceIdentityEditModal } from '../ServiceIdentityEditModal';
 
 jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
   staffApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
   serviceIdentityApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
 }));
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
-// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 
 const HINT = /先にロール管理で自作ロールを作成してください/;
@@ -30,11 +30,17 @@ const props = {
   onUpdated: jest.fn(),
 };
 
-function grant(...permissions: string[]) {
-  jest.mocked(readTokenClaims).mockReturnValue({
-    authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
   });
+function grant(...permissions: PermissionCode[]) {
+  meWith(permissions);
 }
 
 function ServiceEditHarness() {

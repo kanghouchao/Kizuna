@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -10,7 +9,6 @@ import {
   ListChecksIcon,
   ReceiptTextIcon,
 } from 'lucide-react';
-import { readTokenClaims, redirectToLogin } from '@/shared/lib';
 
 interface CastPortalShellProps {
   children: React.ReactNode;
@@ -26,29 +24,11 @@ const TABS = [
 
 /**
  * キャストポータルの共通シェル。モバイル優先の下タブバー構成で、桌面向け Sidebar shell とは別系統。
- * mount 時に token claim の userType で本人確認し、CAST 以外（未認証・壊れた token 含む）は
- * ログイン画面へ差し戻す（fail-closed）。失効・偽造はここでは見えないが、最初の API 呼び出しの
- * サーバ検証（401）が最終防衛線。ルーティングはサーバ側の @PreAuthorize と独立した UI 側の防御線。
+ * 本人確認はしない — 未ログインは各画面の最初の API の 401 が全域の 401 経路でログインへ差し戻し、
+ * 別種別のセッションはサーバの認可が 403 で拒む。
  */
 export function CastPortalShell({ children }: CastPortalShellProps) {
   const pathname = usePathname();
-  const [authorized, setAuthorized] = useState(false);
-
-  useEffect(() => {
-    if (readTokenClaims()?.userType !== 'CAST') {
-      redirectToLogin();
-      return;
-    }
-    setAuthorized(true);
-  }, []);
-
-  if (!authorized) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">読み込み中...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

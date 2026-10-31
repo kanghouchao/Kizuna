@@ -1,44 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { readTokenClaims, redirectToLogin, rememberMemberReturnPath } from '@/shared/lib';
-
 interface MemberPortalShellProps {
   children: React.ReactNode;
 }
 
 /**
- * 会員ポータルの共通シェル。モバイル優先の単画面構成（現状はホームのみ）で、桌面向け Sidebar shell とは別系統。
- * mount 時に token claim の userType で本人確認し、MEMBER 以外（未認証・壊れた token 含む）は
- * ログイン画面へ差し戻す（fail-closed）。失効・偽造はここでは見えないが、最初の API 呼び出しの
- * サーバ検証（401）が最終防衛線。ルーティングはサーバ側の @PreAuthorize と独立した UI 側の防御線。
+ * 会員ポータルの共通シェル。モバイル優先の単画面構成で、桌面向け Sidebar shell とは別系統。
+ * 本人確認はしない — 未ログインは各画面の最初の API の 401 が全域の 401 経路でログインへ差し戻し、
+ * 戻り先（店舗つきの予約導線・申領画面のフラグメント）もそこで預ける。
  */
 export function MemberPortalShell({ children }: MemberPortalShellProps) {
-  const [authorized, setAuthorized] = useState(false);
-
-  useEffect(() => {
-    if (readTokenClaims()?.userType !== 'MEMBER') {
-      // 公式サイトの予約導線から未ログインで来た場合、ログイン後に元の画面（店舗つき）へ戻せるようにする。
-      // フラグメントも一緒に預ける — 伝票の QR から開いた申領画面では、申領に要るトークンがそこにしか
-      // 無く、ログインへ送った時点で失われる（フラグメントはサーバへ送られないので他に持ち越す口が無い）。
-      rememberMemberReturnPath(
-        `${window.location.pathname}${window.location.search}`,
-        window.location.hash
-      );
-      redirectToLogin();
-      return;
-    }
-    setAuthorized(true);
-  }, []);
-
-  if (!authorized) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">読み込み中...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <main className="flex-1 overflow-y-auto">{children}</main>

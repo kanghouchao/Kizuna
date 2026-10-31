@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { MePending } from '@/entities/user';
 import { storePath } from '@/shared/lib';
 import { Button, Form } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
@@ -10,7 +11,7 @@ export default function AdminOperationalReportsPage() {
 function ReportPage() {
   const model = useOperationalReportPage('admin');
   const { form, access, query, report, result, paging, submit, setQuery } = model;
-  if (!access.ready) return <p>読み込み中...</p>;
+  if (!access.ready) return <MePending />;
   if (!access.view) return <p role="alert">運営金額集計を閲覧する権限がありません。</p>;
   // 集合全体を読める者は店舗級の集計も必ず読める（店舗級の端点が ORDER_SET_VIEW の族を受け入れる）ので、
   // 入口の可視条件はこの画面の閲覧条件と同じでよい。

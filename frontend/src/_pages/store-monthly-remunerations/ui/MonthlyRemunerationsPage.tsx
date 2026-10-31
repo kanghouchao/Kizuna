@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useStoreContext } from '@/entities/user';
-import { useEffect, useState } from 'react';
+import { hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   MonthlyRemunerationCast,
@@ -13,7 +13,7 @@ import {
 import { RemunerationStatementPanel } from '@/widgets/remuneration-statement';
 import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { fromSpringPage } from '@/shared/api';
-import { hasPermission, readTokenClaims, storePath, useResource } from '@/shared/lib';
+import { storePath, useResource } from '@/shared/lib';
 import {
   Button,
   Form,
@@ -66,8 +66,8 @@ function MonthlyStatement() {
   const [query, setQuery] = useState<Query | null>(null);
   const [mode, setMode] = useState<'month' | 'day'>('month');
   // 横断照会者（ORDER_SET_VIEW のみ）は月次の照会だけを持つ。日別・受注の画面は受注の担当者の権限で開く。
-  const [manages, setManages] = useState(false);
-  useEffect(() => setManages(hasPermission(readTokenClaims(), 'ORDER_MANAGE')), []);
+  const { me } = useMe();
+  const manages = hasPermission(me, 'ORDER_MANAGE');
   const ordersLink = manages
     ? { href: storePath('/orders'), label: '受注一覧' }
     : { href: '/admin/orders', label: '受注照会' };
@@ -311,6 +311,8 @@ function MonthlyStatement() {
         <RemunerationStatementPanel
           scope={{ scope: 'store', personId: query.personId }}
           month={query.period}
+          canView={hasPermission(me, 'REMUNERATION_VIEW')}
+          canManage={manages}
         />
       )}
       {history && (

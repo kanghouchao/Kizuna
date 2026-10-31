@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   fetchReport,
@@ -10,7 +10,8 @@ import {
 } from '@/entities/operational-report';
 import { ReportExport } from '@/features/operational-report-export';
 import { fromSpringPage } from '@/shared/api';
-import { hasPermission, readTokenClaims, useKeyedResource } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { useKeyedResource } from '@/shared/lib';
 import {
   Button,
   Checkbox,
@@ -41,36 +42,26 @@ interface Fields {
   include_advertising: boolean;
 }
 export function useOperationalReportPage(scope: 'store' | 'admin') {
-  const [access, setAccess] = useState({
-    ready: false,
-    view: false,
-    output: false,
-    remuneration: false,
-    advertising: false,
-    advertisingOutput: false,
-  });
-  useEffect(() => {
-    const claims = readTokenClaims();
-    // 店舗の集計は担当者と横断照会者の両方が読み、広告費はそれぞれ対になる権限で開く（端点と同じ組合せ）。
-    const families = (
-      [
-        ['ORDER_MANAGE', 'ADVERTISING_COST_VIEW', 'ADVERTISING_COST_EXPORT'],
-        ['ORDER_SET_VIEW', 'ADVERTISING_COST_SET_VIEW', 'ADVERTISING_COST_SET_EXPORT'],
-      ] as const
-    )
-      .filter(([order]) => scope === 'store' || order === 'ORDER_SET_VIEW')
-      .filter(([order]) => hasPermission(claims, order));
-    setAccess({
-      ready: true,
-      view: hasPermission(claims, 'OPERATIONAL_REPORT_VIEW') && families.length > 0,
-      output: hasPermission(claims, 'OPERATIONAL_REPORT_EXPORT'),
-      remuneration: hasPermission(claims, 'REMUNERATION_VIEW'),
-      advertising: families.some(([, view]) => hasPermission(claims, view)),
-      advertisingOutput: families.some(
-        ([, view, output]) => hasPermission(claims, view) && hasPermission(claims, output)
-      ),
-    });
-  }, [scope]);
+  const { me } = useMe();
+  // 店舗の集計は担当者と横断照会者の両方が読み、広告費はそれぞれ対になる権限で開く（端点と同じ組合せ）。
+  const families = (
+    [
+      ['ORDER_MANAGE', 'ADVERTISING_COST_VIEW', 'ADVERTISING_COST_EXPORT'],
+      ['ORDER_SET_VIEW', 'ADVERTISING_COST_SET_VIEW', 'ADVERTISING_COST_SET_EXPORT'],
+    ] as const
+  )
+    .filter(([order]) => scope === 'store' || order === 'ORDER_SET_VIEW')
+    .filter(([order]) => hasPermission(me, order));
+  const access = {
+    ready: me !== null,
+    view: hasPermission(me, 'OPERATIONAL_REPORT_VIEW') && families.length > 0,
+    output: hasPermission(me, 'OPERATIONAL_REPORT_EXPORT'),
+    remuneration: hasPermission(me, 'REMUNERATION_VIEW'),
+    advertising: families.some(([, view]) => hasPermission(me, view)),
+    advertisingOutput: families.some(
+      ([, view, output]) => hasPermission(me, view) && hasPermission(me, output)
+    ),
+  };
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
   const form = useForm<Fields>({
     defaultValues: {

@@ -2,19 +2,11 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useStoreContext } from '@/entities/user';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { orderApi, type OrderCorrectionHistoryEntry } from '@/entities/order';
-import {
-  getApiErrorMessage,
-  hasPermission,
-  isConflict,
-  isForbidden,
-  readTokenClaims,
-  storePath,
-  useResource,
-} from '@/shared/lib';
+import { getApiErrorMessage, isConflict, isForbidden, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -34,19 +26,32 @@ export default function OrderCompletionInvalidationPage() {
   const params = useParams();
   const storeId = useStoreContext().currentStoreId;
   const id = params.id as string;
-  return <Invalidation key={`${storeId}:${id}`} id={id} />;
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  return (
+    <Invalidation
+      key={`${storeId}:${id}`}
+      id={id}
+      permitted={hasPermission(me, 'ORDER_MANAGE')}
+      canCorrect={hasPermission(me, 'ORDER_CORRECT')}
+      canAdjust={hasPermission(me, 'POINT_ADJUST')}
+    />
+  );
 }
 
-function Invalidation({ id }: { id: string }) {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [canCorrect, setCanCorrect] = useState(false);
-  const [canAdjust, setCanAdjust] = useState(false);
-  useEffect(() => {
-    const claims = readTokenClaims();
-    setAllowed(hasPermission(claims, 'ORDER_MANAGE'));
-    setCanCorrect(hasPermission(claims, 'ORDER_CORRECT'));
-    setCanAdjust(hasPermission(claims, 'POINT_ADJUST'));
-  }, []);
+function Invalidation({
+  id,
+  permitted,
+  canCorrect,
+  canAdjust,
+}: {
+  id: string;
+  permitted: boolean;
+  canCorrect: boolean;
+  canAdjust: boolean;
+}) {
+  // 取得・送信の 403 でも閉じる（権限が後から外れた場合）。
+  const [allowed, setAllowed] = useState(permitted);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -124,7 +129,7 @@ function Invalidation({ id }: { id: string }) {
       if (active.current) setSubmitting(false);
     }
   };
-  if (allowed === false)
+  if (!allowed)
     return (
       <RegionError
         message="ORDER_MANAGE と ORDER_CORRECT を持つ訂正担当者へ依頼してください。"
@@ -134,7 +139,7 @@ function Invalidation({ id }: { id: string }) {
   return (
     <div className="space-y-6">
       <h1 className="text-foreground text-2xl font-bold">誤完了の無効化</h1>
-      {(allowed === null || isLoading) && <p>読み込み中...</p>}
+      {isLoading && <p>読み込み中...</p>}
       {failure === 'error' && (
         <RegionError message="受注を取得できませんでした。" onRetry={() => void reload()} />
       )}

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { remunerationApi } from '../api';
 import type { Bonus, Guarantee } from './types';
-import { getCurrentStoreId, readTokenClaims } from '@/shared/lib';
+import { getCurrentStoreId } from '@/shared/lib';
 
 export type EditTarget =
   | { kind: 'guarantee'; item?: Guarantee; version: number; cancel?: boolean }
@@ -45,11 +45,11 @@ function update(scope: string, value: PendingOperation | null) {
   if (pending.size) window.addEventListener('beforeunload', preventUnload);
   listeners.forEach(listener => listener());
 }
-export function currentOperationScope(): string | null {
+/** 操作者（/me の email）と現在店舗の組。どちらかが未確定なら null。 */
+export function operationScope(email: string | undefined): string | null {
   if (typeof window === 'undefined') return null;
-  const subject = readTokenClaims()?.subject;
   const store = getCurrentStoreId();
-  return subject && store ? JSON.stringify([subject, store]) : null;
+  return email && store ? JSON.stringify([email, store]) : null;
 }
 export function usePendingOperation(scope: string | null) {
   return useSyncExternalStore(
@@ -58,10 +58,14 @@ export function usePendingOperation(scope: string | null) {
     () => null
   );
 }
-export async function submitOperation(operation: Operation, replay = false): Promise<boolean> {
+export async function submitOperation(
+  operation: Operation,
+  email: string | undefined,
+  replay = false
+): Promise<boolean> {
   const existing = pending.get(operation.scope);
   if (
-    currentOperationScope() !== operation.scope ||
+    operationScope(email) !== operation.scope ||
     (replay ? existing?.phase !== 'unknown' || existing.operation !== operation : !!existing)
   )
     return false;

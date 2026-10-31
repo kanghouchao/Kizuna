@@ -4,19 +4,14 @@ import { contactLabels } from '../lib/contactLabels';
 
 import Link from 'next/link';
 import { CopyIcon, PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   CustomerMergeComparisonResponse,
   CustomerSummaryResponse,
   customerApi,
 } from '@/entities/customer';
-import {
-  hasPermission,
-  readTokenClaims,
-  storePath,
-  useDeleteAction,
-  useListPage,
-} from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import { CustomerMergePanel } from './CustomerMergePanel';
 import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
@@ -66,14 +61,9 @@ export default function CustomersPage() {
   const [classification, setClassification] = useState('');
   const [sort, setSort] = useState(SORT_OPTIONS[0].value);
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
-  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
-  const [canMerge, setCanMerge] = useState(false);
-  useEffect(() => {
-    const claims = readTokenClaims();
-    setCanMerge(
-      hasPermission(claims, 'CUSTOMER_MERGE') && hasPermission(claims, 'CUSTOMER_MANAGE')
-    );
-  }, []);
+  // /me の取得前・失敗時は導線を出さない（fail-closed）。
+  const { me } = useMe();
+  const canMerge = hasPermission(me, 'CUSTOMER_MERGE') && hasPermission(me, 'CUSTOMER_MANAGE');
 
   const list = useListPage<CustomerSummaryResponse, CustomerCriteria>(
     (page, criteria) =>

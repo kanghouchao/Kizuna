@@ -1,5 +1,5 @@
 /**
- * サーバ側（proxy・Server Component）からバックエンドへ直接届く基底 URL。env はホストまでを持ち、
+ * サーバ側（Server Component）からバックエンドへ直接届く基底 URL。env はホストまでを持ち、
  * 端点のパスはコードが持つ（パスを改めても各環境の .env を書き換えずに済む）。
  */
 export function backendUrl(): string {

@@ -1,8 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useStoreContext } from '@/entities/user';
-import { useEffect, useState } from 'react';
+import { hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { useState } from 'react';
 import {
   allowedApplicantTransitions,
   applicantApi,
@@ -13,13 +13,7 @@ import {
   sourceTypeLabels,
   type ApplicantDetail,
 } from '@/entities/applicant';
-import {
-  getApiErrorMessage,
-  hasPermission,
-  readTokenClaims,
-  storePath,
-  useResource,
-} from '@/shared/lib';
+import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Badge, Button, ConfirmDialog, RegionError } from '@/shared/ui';
 import { ApplicantAttachmentsPanel } from './ApplicantAttachmentsPanel';
@@ -33,10 +27,16 @@ export default function ApplicantDetailPage() {
   const storeId = useStoreContext().currentStoreId;
   const resource = useResource(() => applicantApi.get(id), [id]);
   const policy = useResource(() => applicantApi.policy());
-  const [canManage, setCanManage] = useState(false);
-  const [canDecide, setCanDecide] = useState(false);
-  const [canEnroll, setCanEnroll] = useState(false);
-  const [attachments, setAttachments] = useState({ read: false, write: false });
+  const { me } = useMe();
+  const canView = hasPermission(me, 'RECRUITMENT_VIEW');
+  const canManage = canView && hasPermission(me, 'RECRUITMENT_MANAGE');
+  const canDecide = canView && hasPermission(me, 'RECRUITMENT_DECIDE');
+  const canEnroll = canView && hasPermission(me, 'CAST_MANAGE');
+  const canReadAttachments = canView && hasPermission(me, 'RECRUITMENT_ATTACHMENT_VIEW');
+  const attachments = {
+    read: canReadAttachments,
+    write: canReadAttachments && hasPermission(me, 'RECRUITMENT_ATTACHMENT_MANAGE'),
+  };
   const [saving, setSaving] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const [decisionDirty, setDecisionDirty] = useState(false);
@@ -49,20 +49,6 @@ export default function ApplicantDetailPage() {
     'intake' | 'interview' | 'close' | 'reload' | null
   >(null);
   const [mode, setMode] = useState<'intake' | 'interview' | null>(null);
-  useEffect(() => {
-    const claims = readTokenClaims();
-    const read =
-      hasPermission(claims, 'RECRUITMENT_VIEW') &&
-      hasPermission(claims, 'RECRUITMENT_ATTACHMENT_VIEW');
-    setAttachments({ read, write: read && hasPermission(claims, 'RECRUITMENT_ATTACHMENT_MANAGE') });
-    setCanManage(
-      hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'RECRUITMENT_MANAGE')
-    );
-    setCanDecide(
-      hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'RECRUITMENT_DECIDE')
-    );
-    setCanEnroll(hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'CAST_MANAGE'));
-  }, []);
   const move = (next: 'intake' | 'interview' | 'close' | 'reload') => {
     if (saving) return;
     if (dirty) {

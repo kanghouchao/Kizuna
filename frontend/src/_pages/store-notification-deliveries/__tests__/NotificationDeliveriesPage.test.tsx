@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { renderToString } from 'react-dom/server';
 import { NotificationDeliveriesPage } from '../ui/NotificationDeliveriesPage';
 import { Delivery, notificationApi } from '@/entities/notification-delivery';
-import { readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
@@ -26,13 +27,12 @@ jest.mock('@/entities/notification-delivery', () => ({
     history: jest.fn(),
   },
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
 const api = jest.mocked(notificationApi);
-const claims = jest.mocked(readTokenClaims);
 const row: Delivery = {
   id: '10',
   source_type: 'ORDER',
@@ -51,10 +51,14 @@ const row: Delivery = {
   transport_availability: 'AVAILABLE',
   scheduling_availability: 'MANUAL_TASK_ONLY',
 };
-const permission = (...names: string[]) =>
-  claims.mockReturnValue({
-    userType: 'STAFF',
-    authorities: names.map(p => `PERM_${p}`),
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const permission = (...permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
   });
 beforeEach(() => {
   jest.resetAllMocks();
@@ -214,7 +218,14 @@ test('不明な作成結果の再照会が拒否されても元のキーを保�
   expect(api.create.mock.calls[2][0]).toEqual(api.create.mock.calls[0][0]);
 });
 
-test('サーバー描画ではブラウザーの認証情報に依存した本文を返さない', () => {
+test('本人情報が未取得のサーバー描画では権限に依存した本文を返さない', () => {
+  mockedUseMe.mockReturnValue({
+    me: null,
+    isLoading: true,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
   const html = renderToString(<NotificationDeliveriesPage />);
   expect(html).toContain('読み込み中');
   expect(html).not.toContain('業務通知はありません');

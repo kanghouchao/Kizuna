@@ -3,16 +3,11 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon, SettingsIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
-import {
-  hasPermission,
-  readTokenClaims,
-  storePath,
-  useDeleteAction,
-  useListPage,
-} from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -37,14 +32,10 @@ export default function CastListPage() {
   const [issuedInvitationOpen, setIssuedInvitationOpen] = useState(false);
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
-  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
-  const [canInvite, setCanInvite] = useState(false);
-  const [canManageFieldDefs, setCanManageFieldDefs] = useState(false);
-  useEffect(() => {
-    const claims = readTokenClaims();
-    setCanInvite(hasPermission(claims, 'CAST_INVITE'));
-    setCanManageFieldDefs(hasPermission(claims, 'CAST_FIELD_DEF_MANAGE'));
-  }, []);
+  // /me の取得前・失敗時は導線を出さない（fail-closed）。
+  const { me } = useMe();
+  const canInvite = hasPermission(me, 'CAST_INVITE');
+  const canManageFieldDefs = hasPermission(me, 'CAST_FIELD_DEF_MANAGE');
   const list = useListPage<CastResponse, string>(
     (page, criteria) =>
       castApi.list({

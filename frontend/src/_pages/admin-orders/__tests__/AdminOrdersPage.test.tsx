@@ -1,19 +1,29 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import AdminOrdersPage from '../ui/AdminOrdersPage';
 import { orderApi } from '@/entities/order';
-import { hasPermission } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  hasPermission: jest.fn(() => true),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   orderApi: { adminList: jest.fn(), correctionHistory: jest.fn() },
 }));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(hasPermission).mockReturnValue(true);
+  meWith(['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_VIEW']);
 });
 it('参照権限だけで一覧と履歴を開き、訂正操作は表示しない', async () => {
   jest.mocked(orderApi.adminList).mockResolvedValue({
@@ -61,16 +71,14 @@ it('参照権限だけで一覧と履歴を開き、訂正操作は表示しな�
   expect(screen.queryByRole('button', { name: '訂正する' })).not.toBeInTheDocument();
 });
 it('権限のない利用者には一覧を取得せず拒否を示す', async () => {
-  jest.mocked(hasPermission).mockReturnValue(false);
+  meWith([]);
   render(<AdminOrdersPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('受注を閲覧する権限がありません');
   expect(orderApi.adminList).not.toHaveBeenCalled();
 });
 
 it('帳票閲覧権限のない注文参照者には帳票入口を表示しない', async () => {
-  jest
-    .mocked(hasPermission)
-    .mockImplementation((_claims, permission) => permission === 'ORDER_SET_VIEW');
+  meWith(['ORDER_SET_VIEW']);
   jest.mocked(orderApi.adminList).mockResolvedValue({ rows: [], total: 0, page: 0, pageCount: 0 });
   render(<AdminOrdersPage />);
   await screen.findByText('受注はありません。');

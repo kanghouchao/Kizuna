@@ -9,7 +9,8 @@ import {
   orderApi,
   orderApplicationApi,
 } from '@/entities/order';
-import { TokenClaims, readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
 const mockPush = jest.fn();
@@ -38,10 +39,9 @@ jest.mock('@/entities/order', () => ({
   },
 }));
 
-// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 
 jest.mock('next/navigation', () => ({
@@ -67,7 +67,6 @@ jest.mock('@/shared/notify', () => ({
 
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 const mockedApplicationApi = orderApplicationApi as jest.Mocked<typeof orderApplicationApi>;
-const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
 /** 確定済みの受注 1 件。fixture は手書きで、OrderWorkQueueRow 型との照合は tsc の側で効く（jest は型検査しない）。 */
 function confirmedOrder(overrides: Partial<OrderWorkQueueRow> = {}): OrderWorkQueueRow {
@@ -165,13 +164,15 @@ function stubArchive(status: OrderArchiveRow['status'], ...rows: OrderArchiveRow
   );
 }
 
-/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim。UI の出し分けは権限ベース。 */
-function claimsWith(permissions: string[]): TokenClaims {
-  return {
-    authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
-  };
-}
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -179,7 +180,7 @@ beforeEach(() => {
   mockedOrderApi.listArchive.mockResolvedValue(EMPTY_ARCHIVE);
   mockedApplicationApi.list.mockResolvedValue({ rows: [], nextCursor: null });
   mockedOrderApi.listReceptionists.mockResolvedValue([]);
-  mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE']));
+  meWith(['ORDER_MANAGE']);
 });
 
 describe('作業キューの描画', () => {
@@ -520,7 +521,7 @@ describe('アーカイブ', () => {
   it('完了後訂正の導線は ORDER_CORRECT を持つ人にだけ出ること', async () => {
     // 押せない導線を描くと、訂正の内容を入力し終えてから 403 を受け取ることになる
     stubArchive('COMPLETED', archivedOrder({ id: 'x3', status: 'COMPLETED', total_fee: 28000 }));
-    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE']));
+    meWith(['ORDER_MANAGE']);
     const withoutPermission = render(<OrderListPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
@@ -532,7 +533,7 @@ describe('アーカイブ', () => {
     );
 
     withoutPermission.unmount();
-    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'ORDER_CORRECT']));
+    meWith(['ORDER_MANAGE', 'ORDER_CORRECT']);
     render(<OrderListPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
@@ -545,7 +546,7 @@ describe('アーカイブ', () => {
   it('取消済みの行には訂正の導線を出さないこと', async () => {
     // 誤取消の救済は同内容で受注を起こし直すこと。門そのものが取消を受け付けない
     stubArchive('CANCELLED', archivedOrder({ id: 'x4', status: 'CANCELLED' }));
-    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'ORDER_CORRECT']));
+    meWith(['ORDER_MANAGE', 'ORDER_CORRECT']);
     render(<OrderListPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: /取消 \d+ 件/ }));
@@ -653,17 +654,17 @@ it('受注確定の退出中は入力を保ち、同じ申請を開き直すと�
 });
 
 describe('運営帳票の入口', () => {
-  it.each([['ORDER_MANAGE'], ['OPERATIONAL_REPORT_VIEW']])(
+  it.each<[PermissionCode]>([['ORDER_MANAGE'], ['OPERATIONAL_REPORT_VIEW']])(
     '片方の権限だけでは入口を表示しない: %s',
     async permission => {
-      mockedReadClaims.mockReturnValue(claimsWith([permission]));
+      meWith([permission]);
       render(<OrderListPage />);
       await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
       expect(screen.queryByRole('link', { name: '運営金額集計' })).not.toBeInTheDocument();
     }
   );
   it('両方の権限で現在店舗の入口を表示する', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW']));
+    meWith(['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW']);
     render(<OrderListPage />);
     expect(await screen.findByRole('link', { name: '運営金額集計' })).toHaveAttribute(
       'href',

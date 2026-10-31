@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
-import { StaffResponse, staffApi, useStoreContext } from '@/entities/user';
-import { TokenClaims, readTokenClaims } from '@/shared/lib';
+import { StaffResponse, staffApi, useMe, useStoreContext } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import StaffPage from '../ui/StaffPage';
 
 jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
   staffApi: {
     list: jest.fn(),
     get: jest.fn(),
@@ -16,10 +17,9 @@ jest.mock('@/entities/user', () => ({
   useStoreContext: jest.fn(),
 }));
 
-// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 
 // モーダルは開くまで mount されないため、mock は mount = 表示として描画する
@@ -60,13 +60,16 @@ jest.mock('@/shared/notify', () => ({
 
 const mockedStaffApi = staffApi as jest.Mocked<typeof staffApi>;
 const mockedStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
-const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
-const claimsWith = (...permissions: string[]) =>
-  ({
-    authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
-  }) as TokenClaims;
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 
 /** 店舗コンテキストの授権店舗を差し替える。reload は再試行導線の検証に使う。 */
 const givenStores = (
@@ -127,7 +130,7 @@ describe('従業員管理ページ', () => {
       staff({ id, display_name: id === 2 ? '鈴木花子' : '山田太郎' })
     );
     givenStores([]);
-    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE'));
+    meWith(['STAFF_MANAGE']);
     mockedStaffApi.list.mockResolvedValue(
       paginated([
         staff({ id: 1, display_name: '山田太郎', email: 'yamada@example.com', enabled: true }),
@@ -364,7 +367,13 @@ describe('従業員管理ページ固有の要素', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     givenStores([]);
-    mockedReadClaims.mockReturnValue(null);
+    mockedUseMe.mockReturnValue({
+      me: null,
+      isLoading: true,
+      failure: null,
+      reload: jest.fn(),
+      setMe: jest.fn(),
+    });
     mockedStaffApi.list.mockResolvedValue(paginated([]));
   });
 
@@ -385,7 +394,7 @@ describe('行の操作可否', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     givenStores([]);
-    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE'));
+    meWith(['STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE']);
   });
 
   // editable=false の行は見えるが編集・停止・再設定のいずれもできない（委譲守衛の判定）
@@ -404,7 +413,7 @@ describe('行の操作可否', () => {
 
   // アカウント操作は一覧とは別の権限。持たない行使者には導線ごと出さない（fail-closed）
   it('STAFF_CREDENTIAL_MANAGE を持たなければ編集だけを出すこと', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE'));
+    meWith(['STAFF_MANAGE']);
     mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
 
     render(<StaffPage />);
@@ -420,7 +429,7 @@ describe('停止・再開', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     givenStores([]);
-    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE'));
+    meWith(['STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE']);
     mockedStaffApi.suspend.mockResolvedValue(undefined);
     mockedStaffApi.resume.mockResolvedValue(undefined);
     mockedStaffApi.list.mockResolvedValue(
@@ -511,7 +520,7 @@ describe('パスワード再設定', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     givenStores([]);
-    mockedReadClaims.mockReturnValue(claimsWith('STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE'));
+    meWith(['STAFF_MANAGE', 'STAFF_CREDENTIAL_MANAGE']);
     mockedStaffApi.resetPassword.mockResolvedValue({
       temporary_password: 'test-temporary-password',
     });

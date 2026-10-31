@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { SurveysPage } from '../ui/SurveysPage';
 import { surveyApi, Revision, Answer, Survey } from '@/entities/survey';
-import { readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -27,17 +28,20 @@ jest.mock('@/entities/survey', () => ({
     write: jest.fn(),
   },
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
 const api = jest.mocked(surveyApi);
-const claims = jest.mocked(readTokenClaims);
-const permission = (...names: string[]) =>
-  claims.mockReturnValue({
-    userType: 'STAFF',
-    authorities: names.map(p => `PERM_${p}`),
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const permission = (...permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
   });
 const revision: Revision = {
   id: '20',
@@ -131,6 +135,36 @@ test('閲覧権限なしでは取得せず、閲覧のみでは設問作成を�
   view.rerender(<SurveysPage />);
   expect(await screen.findByText('アンケートはありません')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'アンケートを作成' })).not.toBeInTheDocument();
+});
+
+test('本人情報の取得中は読み込み中だけを出し、一覧を取得しない', () => {
+  mockedUseMe.mockReturnValue({
+    me: null,
+    isLoading: true,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+  render(<SurveysPage />);
+  expect(screen.getByRole('status')).toHaveTextContent('読み込み中...');
+  expect(screen.queryByText('アンケートはありません')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'アンケートを作成' })).not.toBeInTheDocument();
+  expect(api.list).not.toHaveBeenCalled();
+});
+
+test('本人情報の取得に失敗したら再試行だけを出し、一覧を取得しない', () => {
+  mockedUseMe.mockReturnValue({
+    me: null,
+    isLoading: false,
+    failure: 'error',
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+  render(<SurveysPage />);
+  expect(screen.getByText('権限を確認できませんでした')).toBeVisible();
+  expect(screen.queryByText('アンケートはありません')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'アンケートを作成' })).not.toBeInTheDocument();
+  expect(api.list).not.toHaveBeenCalled();
 });
 
 test('閲覧のみでは設問版・回答・記録件数を確認し、管理操作を持たない', async () => {

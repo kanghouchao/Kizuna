@@ -1,15 +1,8 @@
 'use client';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useStoreContext } from '@/entities/user';
+import { useEffect, useRef, useState } from 'react';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { surveyApi, SurveyCommand, Revision } from '@/entities/survey';
-import {
-  readTokenClaims,
-  hasPermission,
-  getApiErrorMessage,
-  isBadRequest,
-  isConflict,
-  isNotFound,
-} from '@/shared/lib';
+import { getApiErrorMessage, isBadRequest, isConflict, isNotFound } from '@/shared/lib';
 import { Button } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 import {
@@ -20,23 +13,17 @@ import {
 } from './SurveyViews';
 import { SurveyEditor, Editor } from './SurveyEditor';
 import { accessError, View } from './surveyUi';
-const subscribe = () => () => {};
 export function SurveysPage() {
-  const mounted = useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false
-  );
+  const { me } = useMe();
   const storeId = useStoreContext().currentStoreId;
-  if (!mounted) return <p>読み込み中...</p>;
-  const claims = readTokenClaims();
-  if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'SURVEY_VIEW'))
+  if (me === null) return <MePending />;
+  if (me.user_type !== 'STAFF' || !hasPermission(me, 'SURVEY_VIEW'))
     return <div role="alert">アンケートの閲覧権限がありません</div>;
   return (
     <Surveys
       key={storeId}
-      canManage={hasPermission(claims, 'SURVEY_MANAGE')}
-      canRecord={hasPermission(claims, 'SURVEY_RECORD')}
+      canManage={hasPermission(me, 'SURVEY_MANAGE')}
+      canRecord={hasPermission(me, 'SURVEY_RECORD')}
     />
   );
 }

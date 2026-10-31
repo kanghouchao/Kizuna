@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { adminStoreApi } from '@/entities/store';
-import { useStoreContext } from '@/entities/user';
-import { hasPermission, readTokenClaims, useResource } from '@/shared/lib';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { useResource } from '@/shared/lib';
 import { Badge, Card, CardContent, RegionError, Skeleton } from '@/shared/ui';
 
 /**
@@ -11,16 +10,15 @@ import { Badge, Card, CardContent, RegionError, Skeleton } from '@/shared/ui';
  * それ以外には現在店舗とその稼働状態を出す。
  */
 export default function AdminDashboard() {
-  // token claim は cookie 由来でサーバ描画では読めないため、mount 後に確定させる（null = 未確定）。
-  const [canManageStores, setCanManageStores] = useState<boolean | null>(null);
-  useEffect(() => setCanManageStores(hasPermission(readTokenClaims(), 'STORE_MANAGE')), []);
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  const canManageStores = hasPermission(me, 'STORE_MANAGE');
 
   return (
     // 外殻（サイドバー・ヘッダー・幅制約・余白）は (admin) の layout が供給するため、
     // このページは中身だけを描く
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {canManageStores === true && <StoreStatsCard />}
-      {canManageStores === false && <CurrentStoreCard />}
+      {canManageStores ? <StoreStatsCard /> : <CurrentStoreCard />}
     </div>
   );
 }

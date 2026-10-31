@@ -2,19 +2,11 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useStoreContext } from '@/entities/user';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { OrderPointRollbackResult, orderApi } from '@/entities/order';
-import {
-  getApiErrorMessage,
-  hasPermission,
-  isConflict,
-  isForbidden,
-  readTokenClaims,
-  storePath,
-  useResource,
-} from '@/shared/lib';
+import { getApiErrorMessage, isConflict, isForbidden, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -57,15 +49,20 @@ export default function OrderPointRollbackPage() {
   const params = useParams();
   const storeId = useStoreContext().currentStoreId;
   const orderId = params.id as string;
-  return <RollbackPage key={`${storeId}:${orderId}`} orderId={orderId} />;
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  return (
+    <RollbackPage
+      key={`${storeId}:${orderId}`}
+      orderId={orderId}
+      permitted={hasPermission(me, 'ORDER_MANAGE') && hasPermission(me, 'POINT_ADJUST')}
+    />
+  );
 }
 
-function RollbackPage({ orderId }: { orderId: string }) {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  useEffect(() => {
-    const claims = readTokenClaims();
-    setAllowed(hasPermission(claims, 'ORDER_MANAGE') && hasPermission(claims, 'POINT_ADJUST'));
-  }, []);
+function RollbackPage({ orderId, permitted }: { orderId: string; permitted: boolean }) {
+  // 送信の 403 でも閉じる（権限が後から外れた場合）。
+  const [allowed, setAllowed] = useState(permitted);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -123,7 +120,7 @@ function RollbackPage({ orderId }: { orderId: string }) {
     }
   };
 
-  if (allowed === false || data?.denied)
+  if (!allowed || data?.denied)
     return (
       <RegionError
         message="受注管理（ORDER_MANAGE）と POINT_ADJUST を持つポイント救済担当者へ依頼してください。この画面が専用のポイント巻き戻し入口です。"
@@ -141,9 +138,7 @@ function RollbackPage({ orderId }: { orderId: string }) {
           </p>
         )}
       </div>
-      {(allowed === null || isLoading) && (
-        <p className="text-muted-foreground text-sm">読み込み中...</p>
-      )}
+      {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
       {failure === 'error' && (
         <RegionError message="受注を取得できませんでした。" onRetry={() => void reload()} />
       )}

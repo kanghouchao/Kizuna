@@ -268,6 +268,8 @@ export function CastMonthlyRemunerationsPage() {
             <RemunerationStatementPanel
               scope={{ scope: 'self', storeId: query.storeId }}
               month={query.period}
+              canView
+              canManage={false}
             />
           )}
         </Form>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { customerApi } from '@/entities/customer';
 import {
@@ -6,7 +6,8 @@ import {
   GuestContactImportInput,
   OrderApplicationDetail,
 } from '@/entities/order';
-import { hasPermission, readTokenClaims, useCursorList } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { useCursorList } from '@/shared/lib';
 import {
   Button,
   Checkbox,
@@ -29,10 +30,7 @@ export function GuestContactImportsField({ detail }: { detail: OrderApplicationD
   const { watch, setValue } = useFormContext();
   const selection: CustomerSelection = watch('customer_selection');
   const customerId = selection.mode === 'EXISTING' ? selection.customer_id : undefined;
-  const [allowed, setAllowed] = useState(false);
-  useEffect(() => {
-    setAllowed(hasPermission(readTokenClaims(), 'CUSTOMER_MANAGE'));
-  }, []);
+  const allowed = hasPermission(useMe().me, 'CUSTOMER_MANAGE');
   useEffect(() => {
     setValue('contact_imports', []);
   }, [selection.mode, customerId, setValue]);

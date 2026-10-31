@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useStoreContext } from '@/entities/user';
+import { useEffect, useRef, useState } from 'react';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import {
   Delivery,
@@ -15,8 +15,6 @@ import {
   isForbidden,
   isNotFound,
   isConflict,
-  hasPermission,
-  readTokenClaims,
   useCursorList,
   useResource,
 } from '@/shared/lib';
@@ -598,16 +596,11 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
 }
 export function NotificationDeliveriesPage() {
   const storeId = useStoreContext().currentStoreId;
-  const hydrated = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
-  const claims = hydrated ? readTokenClaims() : null;
-  if (!hydrated) return <p>読み込み中...</p>;
-  if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'NOTIFICATION_VIEW'))
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  if (me.user_type !== 'STAFF' || !hasPermission(me, 'NOTIFICATION_VIEW'))
     return <p role="alert">業務通知の閲覧権限がありません</p>;
-  const manage = hasPermission(claims, 'NOTIFICATION_MANAGE'),
-    send = hasPermission(claims, 'NOTIFICATION_SEND');
+  const manage = hasPermission(me, 'NOTIFICATION_MANAGE'),
+    send = hasPermission(me, 'NOTIFICATION_SEND');
   return <Workspace key={`${storeId}:${manage}:${send}`} canManage={manage} canSend={send} />;
 }

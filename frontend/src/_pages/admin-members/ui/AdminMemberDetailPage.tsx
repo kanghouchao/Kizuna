@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -11,7 +11,8 @@ import {
   adminMemberApi,
 } from '@/entities/member';
 import { POINT_ENTRY_TYPE_LABELS, PointEntryType } from '@/entities/point';
-import { hasPermission, readTokenClaims, useCursorList, useResource } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { useCursorList, useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -49,11 +50,8 @@ export function AdminMemberDetailPage() {
 
 function MemberDetail({ id }: { id: number }) {
   const member = useResource(() => adminMemberApi.get(id), [id]);
-  // 退会操作は MEMBER_WITHDRAW 保持者にだけ見せる。cookie はクライアントでしか読めないので effect で判定する
-  const [canWithdraw, setCanWithdraw] = useState(false);
-  useEffect(() => {
-    setCanWithdraw(hasPermission(readTokenClaims(), 'MEMBER_WITHDRAW'));
-  }, []);
+  // 退会操作は MEMBER_WITHDRAW 保持者にだけ見せる。
+  const canWithdraw = hasPermission(useMe().me, 'MEMBER_WITHDRAW');
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
 
   if (member.isLoading) return <p role="status">読み込み中...</p>;

@@ -3,11 +3,22 @@ import { notify } from '@/shared/notify';
 import OrderPointRollbackPage from '../ui/OrderPointRollbackPage';
 import { Order, OrderPointRollbackPreview, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
-import { hasPermission } from '@/shared/lib';
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  hasPermission: jest.fn(() => true),
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+const allPermissions: PermissionCode[] = ['ORDER_MANAGE', 'POINT_ADJUST'];
 
 jest.mock('@/entities/order', () => ({
   orderApi: {
@@ -102,14 +113,14 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockStoreId = '1';
   mockParams = { id: 'o1' };
-  (hasPermission as jest.Mock).mockReturnValue(true);
+  meWith(allPermissions);
   mockedGet.mockResolvedValue(completedOrder);
   mockedPreview.mockResolvedValue(preview());
 });
 
 describe('ポイント巻き戻しのページ', () => {
   it('権限不足では担当者と専用入口を示し会員情報を取得しないこと', async () => {
-    (hasPermission as jest.Mock).mockReturnValue(false);
+    meWith([]);
     render(<OrderPointRollbackPage />);
     expect(await screen.findByText(/ポイント救済担当者へ依頼/)).toBeInTheDocument();
     expect(mockedGet).not.toHaveBeenCalled();

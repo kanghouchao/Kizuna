@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { applicantApi, applicantAttachmentApi } from '@/entities/applicant';
-import { hasPermission } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import ApplicantDetailPage from '../ui/ApplicantDetailPage';
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: 'a' }) }));
 jest.mock('@/entities/user', () => ({
@@ -26,12 +27,28 @@ jest.mock('@/entities/applicant', () => ({
     decide: jest.fn(),
   },
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: () => ({}),
-  hasPermission: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+const allPermissions: PermissionCode[] = [
+  'RECRUITMENT_VIEW',
+  'RECRUITMENT_MANAGE',
+  'RECRUITMENT_DECIDE',
+  'CAST_MANAGE',
+  'RECRUITMENT_ATTACHMENT_VIEW',
+  'RECRUITMENT_ATTACHMENT_MANAGE',
+];
 const detail = {
   id: 'a',
   name: '応募者',
@@ -51,7 +68,7 @@ beforeEach(() => {
     retention_periods: { rejected_months: null, withdrawn_months: null, hired_months: null },
   });
   (applicantApi.history as jest.Mock).mockResolvedValue({ rows: [], nextCursor: null });
-  (hasPermission as jest.Mock).mockReturnValue(true);
+  meWith(allPermissions);
 });
 test('保持方針は終端状態ごとの月数を示し、未設定は自動匿名化しないと示す', async () => {
   (applicantApi.policy as jest.Mock).mockResolvedValue({
@@ -135,9 +152,7 @@ test('状態変更の応答待ちに別の編集を開けず失敗時も理由�
 });
 
 test('採否の確定は RECRUITMENT_DECIDE 保持者にだけ出す', async () => {
-  (hasPermission as jest.Mock).mockImplementation(
-    (_claims: unknown, code: string) => code !== 'RECRUITMENT_DECIDE'
-  );
+  meWith(allPermissions.filter(code => code !== 'RECRUITMENT_DECIDE'));
   render(<ApplicantDetailPage />);
   expect(await screen.findByRole('button', { name: '選考状態を変更' })).toBeVisible();
   expect(screen.queryByRole('heading', { name: '採否の確定' })).toBeNull();
@@ -184,9 +199,7 @@ test('採用済みで未登録なら CAST_MANAGE 保持者にだけ在籍登録�
     '/store/applicants/a/enrollment'
   );
   unmount();
-  (hasPermission as jest.Mock).mockImplementation(
-    (_claims: unknown, code: string) => code !== 'CAST_MANAGE'
-  );
+  meWith(allPermissions.filter(code => code !== 'CAST_MANAGE'));
   render(<ApplicantDetailPage />);
   expect(await screen.findByText('在籍は未登録です。')).toBeVisible();
   expect(screen.queryByRole('link', { name: '在籍登録' })).toBeNull();
