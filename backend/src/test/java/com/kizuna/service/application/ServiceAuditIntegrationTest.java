@@ -51,6 +51,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -367,8 +368,14 @@ class ServiceAuditIntegrationTest {
     assertThat(jdbc.queryForObject("select version from t_services where id=?", Long.class, id))
         .isEqualTo(3L);
     for (var event : audits()) {
-      assertThat(event.getBeforeValues().toString() + event.getAfterValues())
-          .doesNotContain("秘密", "2000", "3000", "1500", "hash");
+      var copied =
+          Stream.of(event.getBeforeValues(), event.getAfterValues())
+              .flatMap(values -> Stream.concat(values.keySet().stream(), values.values().stream()))
+              .toList();
+      // 値には十進の採番 ID も入るため、料金は部分一致ではなく値の完全一致で見る。
+      assertThat(copied)
+          .doesNotContain("2000", "3000", "1500")
+          .noneMatch(text -> text.contains("秘密") || text.contains("hash"));
       String table =
           event.getSourceType().equals("SERVICE_REVISION")
               ? "t_service_revisions"
