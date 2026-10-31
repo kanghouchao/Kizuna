@@ -7,8 +7,8 @@ import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useStoreContext } from '@/entities/user';
-import { useEffect, useState } from 'react';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   Order,
@@ -22,9 +22,7 @@ import {
 import { ExternalLinkIcon } from 'lucide-react';
 import {
   getApiErrorMessage,
-  hasPermission,
   isConflict,
-  readTokenClaims,
   storePath,
   useKeyedResource,
   useResourceInitialization,
@@ -116,13 +114,10 @@ function CorrectionOutcome({ outcome }: { outcome: CorrectionOutcomeState }) {
  * 実績時刻の省略は値なし、編集可能明細は全量で保存する。凍結項目の欄は持たない。
  */
 export default function OrderCorrectionPage() {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  useEffect(() => {
-    const claims = readTokenClaims();
-    setAllowed(hasPermission(claims, 'ORDER_MANAGE') && hasPermission(claims, 'ORDER_CORRECT'));
-  }, []);
-  if (allowed === null) return <p role="status">権限を確認中...</p>;
-  if (!allowed) return <p role="alert">完了後訂正を行う権限がありません。</p>;
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  if (!hasPermission(me, 'ORDER_MANAGE') || !hasPermission(me, 'ORDER_CORRECT'))
+    return <p role="alert">完了後訂正を行う権限がありません。</p>;
   return <CorrectionEditor />;
 }
 
@@ -147,11 +142,8 @@ function CorrectionEditor() {
     outcomeState?.orderId === orderId && outcomeState.storeId === storeId ? outcomeState : null;
 
   // 巻き戻しは POINT_ADJUST（店長）限定。押せない導線を描くと、理由を入力し終えてから 403 を受け取る。
-  // 強制はサーバ側 @PreAuthorize で、ここは導線の表示制御のみ（token 無し・壊れは出さない）。
-  const [canRollback, setCanRollback] = useState(false);
-  useEffect(() => {
-    setCanRollback(hasPermission(readTokenClaims(), 'POINT_ADJUST'));
-  }, []);
+  // 強制はサーバ側 @PreAuthorize で、ここは導線の表示制御のみ。
+  const canRollback = hasPermission(useMe().me, 'POINT_ADJUST');
 
   // 取得の到着はレンダーより後なので、初期値ではなく効果で播く（開いた最初のフレームが空欄になる）。
   const initialized = useResourceInitialization(resource.success, current => {

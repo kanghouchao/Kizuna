@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   applicantApi,
   applicantStatusLabels,
@@ -11,7 +11,8 @@ import {
   type ApplicantStatus,
   type ApplicantSummary,
 } from '@/entities/applicant';
-import { hasPermission, readTokenClaims, storePath, useListPage } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { storePath, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -33,13 +34,9 @@ import {
 export default function ApplicantsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<ApplicantStatus | ''>('');
-  const [canManage, setCanManage] = useState(false);
-  useEffect(() => {
-    const claims = readTokenClaims();
-    setCanManage(
-      hasPermission(claims, 'RECRUITMENT_VIEW') && hasPermission(claims, 'RECRUITMENT_MANAGE')
-    );
-  }, []);
+  const { me } = useMe();
+  const canManage =
+    hasPermission(me, 'RECRUITMENT_VIEW') && hasPermission(me, 'RECRUITMENT_MANAGE');
   const list = useListPage<ApplicantSummary, { search: string; status: ApplicantStatus | '' }>(
     (page, criteria) =>
       applicantApi.list({

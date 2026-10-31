@@ -3,7 +3,8 @@ import { notify } from '@/shared/notify';
 import CustomerEditPage from '../ui/CustomerEditPage';
 import { customerApi } from '@/entities/customer';
 import { orderApi } from '@/entities/order';
-import { TokenClaims, readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 
 const mockPush = jest.fn();
 
@@ -22,10 +23,9 @@ jest.mock('@/entities/customer', () => ({
   },
 }));
 
-// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 
 jest.mock('@/entities/order', () => ({
@@ -58,15 +58,18 @@ jest.mock('@/shared/notify', () => ({
 
 const mockedCustomerApi = customerApi as jest.Mocked<typeof customerApi>;
 const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
-const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
-/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim を返すヘルパ（UI 出し分けは権限ベース）。 */
-function claimsWith(permissions: string[]): TokenClaims {
-  return {
-    authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
-  };
-}
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+
+beforeEach(() => meWith([]));
 
 const customer = {
   preferred_contacts: [],
@@ -235,7 +238,7 @@ describe('顧客編集ページを統合済みの旧 ID で開いたとき', () 
     mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
     mockedCustomerApi.mergeHistory.mockResolvedValue({ rows: [], nextCursor: null });
-    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE', 'CUSTOMER_MERGE']));
+    meWith(['CUSTOMER_MANAGE', 'CUSTOMER_MERGE']);
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
 
@@ -277,7 +280,7 @@ describe('顧客編集ページの統合履歴区画', () => {
   });
 
   it('統合権限があれば区画が出て、統合の無い顧客でもその旨が読めること', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MERGE']));
+    meWith(['CUSTOMER_MERGE']);
 
     render(<CustomerEditPage />);
 
@@ -286,7 +289,7 @@ describe('顧客編集ページの統合履歴区画', () => {
   });
 
   it('統合権限が無ければ区画ごと出さず、必ず 403 になる読み口も叩かないこと', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE']));
+    meWith(['CUSTOMER_MANAGE']);
 
     render(<CustomerEditPage />);
 
@@ -312,6 +315,7 @@ describe('顧客編集ページの顧客切り替え', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    meWith(['CUSTOMER_MANAGE']);
     currentParams.id = 'cus-1';
     mockedCustomerApi.get.mockResolvedValue(customer);
     mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });

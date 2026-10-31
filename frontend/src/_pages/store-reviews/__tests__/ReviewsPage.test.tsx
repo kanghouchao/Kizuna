@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { ReviewsPage } from '../ui/ReviewsPage';
 import { reviewApi, Review } from '@/entities/review';
 import { notify } from '@/shared/notify';
-import { readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -18,15 +19,14 @@ jest.mock('@/entities/user', () => ({
 jest.mock('@/entities/review', () => ({
   reviewApi: { list: jest.fn(), get: jest.fn(), history: jest.fn(), write: jest.fn() },
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 const api = jest.mocked(reviewApi);
-const claims = jest.mocked(readTokenClaims);
 const row: Review = {
   id: '10',
   intake_source: 'STAFF_RECORDED',
@@ -49,10 +49,14 @@ const row: Review = {
   publication_blockers: ['NOT_APPROVED', 'NO_PERMISSION'],
   publication_connection: 'NOT_CONFIGURED',
 };
-const permission = (...names: string[]) =>
-  claims.mockReturnValue({
-    userType: 'STAFF',
-    authorities: names.map(p => `PERM_${p}`),
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const permission = (...permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
   });
 beforeEach(() => {
   jest.resetAllMocks();

@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { remunerationApi, type StatementScope, type Day } from '../api';
-import { hasPermission, readTokenClaims, useResource } from '@/shared/lib';
+import { useResource } from '@/shared/lib';
 import {
   Button,
   RegionError,
@@ -24,37 +24,51 @@ const labels: Record<Day['guarantee_status'], string> = {
   STOPPED: '保証停止',
   CALCULATED: '計算済み',
 };
+/**
+ * キャストポータルにも載るため本人情報の seam（管理画面シェル専用）を読まず、出し分けは呼出側が渡す。
+ * canManage は受注の担当者（ORDER_MANAGE）— 保証・ボーナスの管理はその端点を読み、横断照会者には明細だけを見せる。
+ */
 export function RemunerationStatementPanel({
   scope,
   month,
+  canView,
+  canManage,
 }: {
   scope: StatementScope;
   month: string;
+  canView: boolean;
+  canManage: boolean;
 }) {
-  const [allowed, setAllowed] = useState(false);
   const [open, setOpen] = useState(false);
-  useEffect(
-    () =>
-      setAllowed(scope.scope === 'self' || hasPermission(readTokenClaims(), 'REMUNERATION_VIEW')),
-    [scope.scope]
-  );
-  if (!allowed) return null;
+  if (!canView) return null;
   return (
     <section className="mt-6 space-y-4" aria-label="保証とボーナス">
       <Button type="button" variant="outline" aria-expanded={open} onClick={() => setOpen(!open)}>
         保証・ボーナスを含む月次明細
       </Button>
-      {open && <Statement key={JSON.stringify(scope) + month} scope={scope} month={month} />}
+      {open && (
+        <Statement
+          key={JSON.stringify(scope) + month}
+          scope={scope}
+          month={month}
+          manages={canManage}
+        />
+      )}
     </section>
   );
 }
-function Statement({ scope, month }: { scope: StatementScope; month: string }) {
+function Statement({
+  scope,
+  month,
+  manages,
+}: {
+  scope: StatementScope;
+  month: string;
+  manages: boolean;
+}) {
   const [orderPage, setOrderPage] = useState(0),
     [bonusPage, setBonusPage] = useState(0),
     [revision, setRevision] = useState(0);
-  // 保証・ボーナスの管理は受注の担当者（ORDER_MANAGE）の端点を読む。横断照会者には明細だけを見せる。
-  const [manages, setManages] = useState(false);
-  useEffect(() => setManages(hasPermission(readTokenClaims(), 'ORDER_MANAGE')), []);
   const result = useResource(
     () => remunerationApi.statement(scope, month, orderPage, bonusPage),
     [

@@ -4,7 +4,20 @@ import ServiceIdentitiesPage from '@/_pages/admin-service-identities/ui/ServiceI
 import { staffApi, serviceIdentityApi, authApi, useStoreContext } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
+// 権限は持たない利用者として描く。MePending と同じく相対 import で useMe を読む箇所も覆うため、
+// 定義元のモジュールごと差し替える（resetAllMocks に消されないよう固定の関数で返す）。
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: () => ({
+    me: null,
+    isLoading: true,
+    failure: null,
+    reload: () => Promise.resolve(),
+    setMe: () => {},
+  }),
+}));
 jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
   staffApi: {
     list: jest.fn(),
     get: jest.fn(),

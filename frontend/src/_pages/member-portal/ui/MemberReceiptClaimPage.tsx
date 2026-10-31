@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { memberReceiptApi } from '@/entities/order';
-import { getApiErrorMessage, isNotFound } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  isForbidden,
+  isNotFound,
+  redirectToLogin,
+  rememberMemberReturnPath,
+} from '@/shared/lib';
 import { Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
 
 /**
@@ -20,8 +26,8 @@ type ClaimFailure = { message: string; retryable: boolean; verifyInHistory?: boo
  * リクエストターゲットとして送られ、リバースプロキシとアプリのアクセスログに 90 日有効の生値が残るため、
  * サーバへ送られないフラグメントで受け取り、この画面が申領要求の本体へ載せ替える。
  *
- * 未ログインで開いた場合はシェルがログインへ送り、フラグメントごと戻り先を預ける（`rememberMemberReturnPath`）。
- * この画面自身は認証を判定しない — 戻ってきた時点では常にログイン済みで、フラグメントも復元されている。
+ * 未ログインなら申領の 401 を全域の 401 経路が拾い、フラグメントごと戻り先を預けてログインへ送る。
+ * 会員以外のセッションが残っている場合の 403 はここで同じように送る — 失敗を出すとトークンが失われる。
  */
 export function MemberReceiptClaimPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -45,6 +51,14 @@ export function MemberReceiptClaimPage() {
       const claimed = await memberReceiptApi.claim(raw);
       setGrantedPoints(claimed.granted_points);
     } catch (error) {
+      if (isForbidden(error)) {
+        rememberMemberReturnPath(
+          `${window.location.pathname}${window.location.search}`,
+          window.location.hash
+        );
+        redirectToLogin();
+        return;
+      }
       // 応答だけを取り落とした要求（サーバは申領済み）の再試行は、使用済みとして同形の 404 で返る。
       // 不在・期限切れと区別が付かないのはサーバの意図（受注の存在を漏らさない）なので、区別できない
       // ことを引き受けて「確かめる先」を出す — 言い切ると、取り込めている来店を失敗と読ませてしまう。

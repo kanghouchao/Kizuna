@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { CustomerSelection, OrderCustomerCandidate, orderApi } from '@/entities/order';
-import { hasPermission, readTokenClaims, useCursorList } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { useCursorList } from '@/shared/lib';
 import {
   Button,
   FormControl,
@@ -40,10 +41,7 @@ export function OrderCustomerField({
   customerName?: string | null;
 }) {
   const { control } = useFormContext();
-  const [canCreate, setCanCreate] = useState(false);
-  useEffect(() => {
-    setCanCreate(hasPermission(readTokenClaims(), 'CUSTOMER_MANAGE'));
-  }, []);
+  const canCreate = hasPermission(useMe().me, 'CUSTOMER_MANAGE');
   if (locked)
     return (
       <p className="rounded-lg border p-4 text-sm">

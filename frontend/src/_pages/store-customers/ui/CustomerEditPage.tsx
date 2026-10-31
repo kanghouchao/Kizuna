@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { CustomerContactsSection } from './CustomerContactsSection';
@@ -9,7 +9,8 @@ import { MergeHistorySection } from './MergeHistorySection';
 import { customerApi } from '@/entities/customer';
 import { ORDER_STATUS_LABELS, orderApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
-import { hasPermission, readTokenClaims, storePath, useResource } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { storePath, useResource } from '@/shared/lib';
 import {
   RegionError,
   Table,
@@ -53,11 +54,8 @@ export default function CustomerEditPage() {
   const orders = ordersData ?? [];
   const [isSubmitting, setIsSubmitting] = useState(false);
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
-  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
-  const [canMerge, setCanMerge] = useState(false);
-  useEffect(() => {
-    setCanMerge(hasPermission(readTokenClaims(), 'CUSTOMER_MERGE'));
-  }, []);
+  // /me の取得前・失敗時は導線を出さない（fail-closed）。
+  const canMerge = hasPermission(useMe().me, 'CUSTOMER_MERGE');
 
   const handleSubmit = async (data: CustomerFormData) => {
     try {

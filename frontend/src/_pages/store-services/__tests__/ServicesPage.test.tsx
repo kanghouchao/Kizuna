@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ServicesPage from '../ui/ServicesPage';
 import { serviceApi } from '@/entities/service';
-import { readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/entities/service', () => ({
   serviceApi: {
@@ -33,15 +34,23 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 const api = jest.mocked(serviceApi);
-const claims = jest.mocked(readTokenClaims);
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 beforeEach(() => {
   jest.clearAllMocks();
-  claims.mockReturnValue({ authorities: ['PERM_SERVICE_MANAGE'] } as never);
+  meWith(['SERVICE_MANAGE']);
   api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
   api.create.mockResolvedValue({ id: '10' });
 });
 it('権限がない利用者には設定値も操作も取得しない', async () => {
-  claims.mockReturnValue({ authorities: ['PERM_ORDER_MANAGE'] } as never);
+  meWith(['ORDER_MANAGE']);
   render(<ServicesPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('サービス設定の権限がありません');
   expect(api.list).not.toHaveBeenCalled();

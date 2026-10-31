@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useStoreContext } from '@/entities/user';
+import { hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import {
@@ -10,13 +10,7 @@ import {
   OrderAttributionSource,
   orderApi,
 } from '@/entities/order';
-import {
-  getApiErrorMessage,
-  hasPermission,
-  readTokenClaims,
-  useKeyedResource,
-  useResourceInitialization,
-} from '@/shared/lib';
+import { getApiErrorMessage, useKeyedResource, useResourceInitialization } from '@/shared/lib';
 import { customerHeadingText } from '../lib/customerLabel';
 import { AttributionCorrectionStep } from './AttributionCorrectionStep';
 import { ReceiptTokenPanel } from './ReceiptTokenPanel';
@@ -141,12 +135,8 @@ export function OrderAttributionModal({
   const [isCorrectingBusy, setIsCorrectingBusy] = useState(false);
 
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
-  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
-  // レンダー期ではなく効果で読むのは、claim が描画前に読めない環境で出し分けが揺れないようにするため。
-  const [canAdjust, setCanAdjust] = useState(false);
-  useEffect(() => {
-    setCanAdjust(hasPermission(readTokenClaims(), 'POINT_ADJUST'));
-  }, []);
+  // /me の取得前・失敗時は導線を出さない（fail-closed）。
+  const canAdjust = hasPermission(useMe().me, 'POINT_ADJUST');
 
   useEffect(() => {
     // 発行済みの QR も一緒に戻す。「今だけ表示できる」と書いた画面が、開き直しで前の QR を出し直さない

@@ -1,15 +1,13 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { useStoreContext } from '@/entities/user';
+import { useStoreContext, MePending, hasPermission, useMe } from '@/entities/user';
 import { serviceApi, ServiceSummary, ServiceKind, serviceKindLabels } from '@/entities/service';
 import {
   getApiErrorMessage,
-  hasPermission,
   isConflict,
   isBadRequest,
   isNotFound,
   isForbidden,
-  readTokenClaims,
   useListPage,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -37,12 +35,9 @@ export default function ServicesPage() {
   return <AuthorizedServices key={storeId} />;
 }
 function AuthorizedServices() {
-  const [permitted, setPermitted] = useState<boolean | null>(null);
-  useEffect(() => {
-    setPermitted(hasPermission(readTokenClaims(), 'SERVICE_MANAGE'));
-  }, []);
-  if (permitted === null) return <p>読み込み中...</p>;
-  if (!permitted)
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  if (!hasPermission(me, 'SERVICE_MANAGE'))
     return <p role="alert">サービス設定の権限がありません。店長に確認してください。</p>;
   return <Services />;
 }

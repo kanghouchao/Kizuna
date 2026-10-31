@@ -1,3 +1,5 @@
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MonthlyRemunerationsPage } from '@/_pages/store-monthly-remunerations';
 import { CastMonthlyRemunerationsPage } from '@/_pages/cast-portal/ui/CastMonthlyRemunerationsPage';
@@ -18,11 +20,27 @@ jest.mock('@/entities/user', () => ({
     switchStore: jest.fn(),
   }),
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  hasPermission: () => true,
-  readTokenClaims: () => ({}),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+const grantMe = () =>
+  meWith([
+    'ORDER_MANAGE',
+    'REMUNERATION_VIEW',
+    'GUARANTEE_MANAGE',
+    'BONUS_AWARD',
+    'REMUNERATION_CORRECT',
+  ]);
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   fetchMonthlyPdf: jest.fn(),
@@ -79,6 +97,7 @@ const scopes = [
 ] as const;
 beforeEach(() => {
   jest.resetAllMocks();
+  grantMe();
   URL.createObjectURL = jest.fn(() => 'blob:statement');
   URL.revokeObjectURL = jest.fn();
   jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});

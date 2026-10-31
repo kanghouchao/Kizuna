@@ -4,9 +4,10 @@ import { contactLabels } from '../lib/contactLabels';
 
 import Link from 'next/link';
 import { ChevronLeftIcon } from 'lucide-react';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { ContactType, CustomerMergeComparisonResponse, customerApi } from '@/entities/customer';
-import { storePath, useCursorList, hasPermission, readTokenClaims } from '@/shared/lib';
+import { MePending, hasPermission, useMe } from '@/entities/user';
+import { storePath, useCursorList } from '@/shared/lib';
 import { CustomerMergeComparison } from './CustomerMergeComparison';
 import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
 import {
@@ -43,13 +44,10 @@ interface Selection {
 }
 
 export default function CustomerDuplicatesPage() {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  useEffect(() => {
-    const claims = readTokenClaims();
-    setAllowed(hasPermission(claims, 'CUSTOMER_MANAGE') && hasPermission(claims, 'CUSTOMER_MERGE'));
-  }, []);
-  if (allowed === null) return <p>読み込み中...</p>;
-  if (!allowed) return <p role="alert">顧客の管理と統合の権限が必要です。</p>;
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  if (!hasPermission(me, 'CUSTOMER_MANAGE') || !hasPermission(me, 'CUSTOMER_MERGE'))
+    return <p role="alert">顧客の管理と統合の権限が必要です。</p>;
   return <CustomerDuplicatesContent />;
 }
 

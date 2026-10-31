@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
   ORDER_SORT_KEY_LABELS,
@@ -14,7 +14,8 @@ import {
   orderApi,
   orderApplicationApi,
 } from '@/entities/order';
-import { hasPermission, readTokenClaims, storePath, useCursorList } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { storePath, useCursorList } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
 import { OrderApplicationCard } from './OrderApplicationCard';
 import { OrderApplicationConfirmModal } from './OrderApplicationConfirmModal';
@@ -69,16 +70,10 @@ function toCriteria(draft: SearchDraft, sortKey: OrderSortKey, desc: boolean): O
 
 export default function OrderListPage() {
   // 完了後訂正は ORDER_CORRECT（店長）限定。導線の表示制御だけで、強制はサーバ側 @PreAuthorize。
-  // token claim を効果で読むのは、claim が描画前に読めない環境で出し分けが揺れないようにするため。
-  const [canCorrect, setCanCorrect] = useState(false);
-  const [canReport, setCanReport] = useState(false);
-  useEffect(() => {
-    setCanCorrect(hasPermission(readTokenClaims(), 'ORDER_CORRECT'));
-    setCanReport(
-      hasPermission(readTokenClaims(), 'OPERATIONAL_REPORT_VIEW') &&
-        hasPermission(readTokenClaims(), 'ORDER_MANAGE')
-    );
-  }, []);
+  const { me } = useMe();
+  const canCorrect = hasPermission(me, 'ORDER_CORRECT');
+  const canReport =
+    hasPermission(me, 'OPERATIONAL_REPORT_VIEW') && hasPermission(me, 'ORDER_MANAGE');
 
   // 入力中の値と「適用済み」の条件を分ける。取得は適用済みだけを読む（DESIGN.md）
   const [draft, setDraft] = useState<SearchDraft>(EMPTY_DRAFT);

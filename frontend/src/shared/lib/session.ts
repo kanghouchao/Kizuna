@@ -3,8 +3,7 @@ import Cookies from 'js-cookie';
 // 値はセッション種別（admin / cast / member — ログイン時に /me の user_type から決める）。
 const SESSION_KIND_COOKIE = 'session-kind';
 const CURRENT_STORE_ID_COOKIE = 'current-store-id';
-// proxy 側（routeGuard）はサーバ応答の Set-Cookie で書き、クライアント側は js-cookie で読み書きする。
-export const MEMBER_RETURN_PATH_COOKIE = 'member-return-path';
+const MEMBER_RETURN_PATH_COOKIE = 'member-return-path';
 
 /** セッションの cookie 読み書きの唯一の入口。 */
 export function getSessionKind(): string | undefined {

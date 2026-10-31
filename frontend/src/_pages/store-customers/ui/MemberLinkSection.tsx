@@ -1,18 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { isAxiosError } from 'axios';
 import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { customerApi } from '@/entities/customer';
 import { PointAdjustmentDialog } from './PointAdjustmentDialog';
-import {
-  getApiErrorMessage,
-  hasPermission,
-  readTokenClaims,
-  useCursorList,
-  useResource,
-} from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { getApiErrorMessage, useCursorList, useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -50,10 +45,7 @@ function actorCell(name?: string, at?: string) {
 
 /** 顧客編集ページの会員紐づけ区画。紐づけ・変更・解除と、その履歴を扱う。 */
 export function MemberLinkSection({ customerId }: MemberLinkSectionProps) {
-  const [canManage, setCanManage] = useState(false);
-  useEffect(() => {
-    setCanManage(hasPermission(readTokenClaims(), 'CUSTOMER_MANAGE'));
-  }, []);
+  const canManage = hasPermission(useMe().me, 'CUSTOMER_MANAGE');
   return canManage ? <MemberLinkContent key={customerId} customerId={customerId} /> : null;
 }
 
@@ -91,11 +83,8 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
   const [isConfirmingUnlink, setIsConfirmingUnlink] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
-  // token claim の authorities から読む。token 無し・壊れは導線を出さない（fail-closed）。
-  const [canAdjust, setCanAdjust] = useState(false);
-  useEffect(() => {
-    setCanAdjust(hasPermission(readTokenClaims(), 'POINT_ADJUST'));
-  }, []);
+  // /me の取得前・失敗時は導線を出さない（fail-closed）。
+  const canAdjust = hasPermission(useMe().me, 'POINT_ADJUST');
 
   // 現況と履歴の理由を確認できるまで書き込みを止める。現況の 404 は未紐づけを表す。
   const isLinkReady = !isLinkLoading && (linkFailure === null || linkFailure === 'notFound');

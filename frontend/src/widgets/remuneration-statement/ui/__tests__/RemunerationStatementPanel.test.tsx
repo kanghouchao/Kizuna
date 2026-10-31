@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { remunerationApi, type Statement } from '../../api';
-import { readTokenClaims, setCurrentStore } from '@/shared/lib';
+import { setCurrentStore } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { RemunerationStatementPanel } from '../RemunerationStatementPanel';
 import { RemunerationEditor } from '../RemunerationEditor';
 import { RemunerationManagement } from '../RemunerationManagement';
@@ -13,10 +15,19 @@ jest.mock('../../api', () => ({
     changes: jest.fn(),
   },
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meAs = (email: string, permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email, user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 const originalRandomUUID = crypto.randomUUID;
 afterEach(() => {
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID });
@@ -49,13 +60,18 @@ const data: Statement = {
 beforeEach(() => {
   jest.clearAllMocks();
   setCurrentStore('1');
-  jest
-    .mocked(readTokenClaims)
-    .mockReturnValue({ subject: 'actor', authorities: [], userType: 'STAFF' });
+  meAs('actor', []);
   statement.mockResolvedValue(data);
 });
 it('未終了時は既知小計を示し完全合計を捏造しない', async () => {
-  render(<RemunerationStatementPanel scope={{ scope: 'self', storeId: 1 }} month="2026-09" />);
+  render(
+    <RemunerationStatementPanel
+      scope={{ scope: 'self', storeId: 1 }}
+      month="2026-09"
+      canView
+      canManage={false}
+    />
+  );
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
   expect(await screen.findByText('退勤記録待ち')).toBeInTheDocument();
   expect(screen.getByText(/現在計算できる保証の小計/)).toBeInTheDocument();
@@ -69,7 +85,14 @@ it('停止日の未終了表示はゼロの保証合計と両立する', async (
     total: 8000,
     days: [{ ...data.days[0], guarantee_status: 'STOPPED', guarantee_amount: 0 }],
   });
-  render(<RemunerationStatementPanel scope={{ scope: 'self', storeId: 1 }} month="2026-09" />);
+  render(
+    <RemunerationStatementPanel
+      scope={{ scope: 'self', storeId: 1 }}
+      month="2026-09"
+      canView
+      canManage={false}
+    />
+  );
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
   expect(await screen.findByText('保証停止')).toBeInTheDocument();
   expect(screen.getByText('未終了の記録あり')).toBeInTheDocument();
@@ -77,22 +100,31 @@ it('停止日の未終了表示はゼロの保証合計と両立する', async (
   expect(screen.queryByText(/現在計算できる保証の小計/)).not.toBeInTheDocument();
 });
 it('参照権限のない店舗利用者に追加金額の導線を出さない', async () => {
-  render(<RemunerationStatementPanel scope={{ scope: 'store', personId: 2 }} month="2026-09" />);
+  render(
+    <RemunerationStatementPanel
+      scope={{ scope: 'store', personId: 2 }}
+      month="2026-09"
+      canView={false}
+      canManage={false}
+    />
+  );
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(statement).not.toHaveBeenCalled();
 });
-it.each([
-  [['PERM_ORDER_MANAGE', 'PERM_REMUNERATION_VIEW', 'PERM_BONUS_AWARD'], true],
-  [['PERM_ORDER_SET_VIEW', 'PERM_REMUNERATION_VIEW', 'PERM_BONUS_AWARD'], false],
-])(
-  '店舗の明細は受注の担当者 %j にだけ保証・ボーナスの管理を出す（%s）',
-  async (authorities, manages) => {
-    jest
-      .mocked(readTokenClaims)
-      .mockReturnValue({ subject: 'actor', authorities, userType: 'STAFF' });
+it.each([[true], [false]])(
+  '店舗の明細は受注の担当者（canManage=%s）にだけ保証・ボーナスの管理を出す',
+  async manages => {
+    meAs('actor', ['BONUS_AWARD']);
     jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
     jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
-    render(<RemunerationStatementPanel scope={{ scope: 'store', personId: 2 }} month="2026-09" />);
+    render(
+      <RemunerationStatementPanel
+        scope={{ scope: 'store', personId: 2 }}
+        month="2026-09"
+        canView
+        canManage={manages}
+      />
+    );
     fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
     await screen.findByText('退勤記録待ち');
     if (manages) await waitFor(() => expect(remunerationApi.guarantees).toHaveBeenCalled());
@@ -104,7 +136,14 @@ it.each([
   }
 );
 it('取得失敗時は旧合計を残さず領域内で再試行する', async () => {
-  render(<RemunerationStatementPanel scope={{ scope: 'self', storeId: 1 }} month="2026-09" />);
+  render(
+    <RemunerationStatementPanel
+      scope={{ scope: 'self', storeId: 1 }}
+      month="2026-09"
+      canView
+      canManage={false}
+    />
+  );
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
   await screen.findByText('退勤記録待ち');
   statement.mockRejectedValueOnce(new Error('failed'));
@@ -204,11 +243,7 @@ const fillBonus = () => {
   fireEvent.change(screen.getByLabelText('理由・説明'), { target: { value: '付与理由' } });
 };
 const allowBonus = () => {
-  jest.mocked(readTokenClaims).mockReturnValue({
-    subject: 'actor',
-    authorities: ['PERM_BONUS_AWARD'],
-    userType: 'STAFF',
-  });
+  meAs('actor', ['BONUS_AWARD']);
   jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
   jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
 };
@@ -379,11 +414,7 @@ it('別の操作者や店舗には未確認内容を見せず、元の作用域�
   const unload = new Event('beforeunload', { cancelable: true });
   window.dispatchEvent(unload);
   expect(unload.defaultPrevented).toBe(true);
-  jest.mocked(readTokenClaims).mockReturnValue({
-    subject: 'other',
-    authorities: ['PERM_BONUS_AWARD'],
-    userType: 'STAFF',
-  });
+  meAs('other', ['BONUS_AWARD']);
   view.rerender(
     <RemunerationManagement
       key="actor"

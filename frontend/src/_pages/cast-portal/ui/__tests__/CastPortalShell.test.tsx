@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { CastPortalShell } from '../CastPortalShell';
-import { readTokenClaims, redirectToLogin } from '@/shared/lib';
+import { redirectToLogin } from '@/shared/lib';
 
 let mockPathname = '/cast/schedule';
 jest.mock('next/navigation', () => ({
@@ -9,14 +9,10 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
   redirectToLogin: jest.fn(),
 }));
 
-const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 const mockedRedirect = redirectToLogin as jest.Mock;
-
-const castClaims = { authorities: ['ROLE_CAST'], userType: 'CAST' };
 
 describe('CastPortalShell', () => {
   beforeEach(() => {
@@ -24,9 +20,8 @@ describe('CastPortalShell', () => {
     mockPathname = '/cast/schedule';
   });
 
-  it('userType=CAST なら children と本人ポータルのタブを表示する', async () => {
-    mockedReadClaims.mockReturnValue(castClaims);
-
+  // 未ログイン・別種別の差し戻しは API 応答（401 / 403）に任せ、シェル自身は本人を判定しない
+  it('セッションを判定せず、children と本人ポータルのタブを表示する', async () => {
     render(
       <CastPortalShell>
         <p>子要素</p>
@@ -55,8 +50,6 @@ describe('CastPortalShell', () => {
 
   it('現在のパスに一致するタブを aria-current=page でハイライトする', async () => {
     mockPathname = '/cast/account';
-    mockedReadClaims.mockReturnValue(castClaims);
-
     render(
       <CastPortalShell>
         <p>子要素</p>
@@ -70,34 +63,5 @@ describe('CastPortalShell', () => {
       'page'
     );
     expect(screen.getByRole('link', { name: /スケジュール/ })).not.toHaveAttribute('aria-current');
-  });
-
-  it('userType が CAST 以外ならログイン画面へ差し戻す', async () => {
-    mockedReadClaims.mockReturnValue({
-      authorities: ['ROLE_MEMBER'],
-      userType: 'MEMBER',
-    });
-
-    render(
-      <CastPortalShell>
-        <p>子要素</p>
-      </CastPortalShell>
-    );
-
-    await waitFor(() => expect(mockedRedirect).toHaveBeenCalledTimes(1));
-    expect(screen.queryByText('子要素')).not.toBeInTheDocument();
-  });
-
-  it('token が無い・壊れている（claims=null）ならログイン画面へ差し戻す', async () => {
-    mockedReadClaims.mockReturnValue(null);
-
-    render(
-      <CastPortalShell>
-        <p>子要素</p>
-      </CastPortalShell>
-    );
-
-    await waitFor(() => expect(mockedRedirect).toHaveBeenCalledTimes(1));
-    expect(screen.queryByText('子要素')).not.toBeInTheDocument();
   });
 });

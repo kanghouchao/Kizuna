@@ -1,20 +1,30 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { fetchReport, type OperationalReport } from '@/entities/operational-report';
-import { readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import AdminOperationalReportsPage from '../AdminOperationalReportsPage';
 
 jest.mock('@/entities/operational-report', () => ({
   ...jest.requireActual('@/entities/operational-report'),
   fetchReport: jest.fn(),
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 jest.mock('@/features/operational-report-export', () => ({
   ReportExport: () => <button>CSV 全件出力</button>,
 }));
 const fetch = jest.mocked(fetchReport);
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 function report(total: number): OperationalReport {
   return {
     from: '2026-09-01',
@@ -42,10 +52,7 @@ function report(total: number): OperationalReport {
 }
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(readTokenClaims).mockReturnValue({
-    authorities: ['PERM_ORDER_SET_VIEW', 'PERM_OPERATIONAL_REPORT_VIEW'],
-    userType: 'STAFF',
-  });
+  meWith(['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_VIEW']);
 });
 test('view permission does not show export and failures clear totals before retry', async () => {
   fetch
@@ -100,18 +107,13 @@ test.each([
 ] as const)(
   'admin permission %s export %s controls selected advertising',
   async (permission, exportAllowed, visible) => {
-    jest.mocked(readTokenClaims).mockReturnValue({
-      authorities: [
-        'PERM_ORDER_SET_VIEW',
-        'PERM_OPERATIONAL_REPORT_VIEW',
-        'PERM_OPERATIONAL_REPORT_EXPORT',
-        `PERM_${permission}`,
-        ...(exportAllowed
-          ? ['PERM_ADVERTISING_COST_SET_EXPORT']
-          : ['PERM_ADVERTISING_COST_EXPORT']),
-      ],
-      userType: 'STAFF',
-    });
+    meWith([
+      'ORDER_SET_VIEW',
+      'OPERATIONAL_REPORT_VIEW',
+      'OPERATIONAL_REPORT_EXPORT',
+      permission,
+      exportAllowed ? 'ADVERTISING_COST_SET_EXPORT' : 'ADVERTISING_COST_EXPORT',
+    ]);
     const data = report(0);
     if (visible)
       data.advertising = {
@@ -148,10 +150,7 @@ test('集合全体を読める者には現在店舗の集計への入口を出�
 });
 
 test('閲覧権限の無い者には現在店舗の集計への入口を出さない', async () => {
-  jest.mocked(readTokenClaims).mockReturnValue({
-    authorities: ['PERM_ORDER_MANAGE', 'PERM_OPERATIONAL_REPORT_VIEW'],
-    userType: 'STAFF',
-  });
+  meWith(['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW']);
   render(<AdminOperationalReportsPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('閲覧する権限がありません');
   expect(screen.queryByRole('link', { name: '現在店舗の集計' })).not.toBeInTheDocument();

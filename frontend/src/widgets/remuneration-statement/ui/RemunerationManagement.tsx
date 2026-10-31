@@ -1,11 +1,12 @@
 'use client';
 import { useState } from 'react';
 import { remunerationApi } from '../api';
-import { hasPermission, readTokenClaims, useResource } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
+import { useResource } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
 import { RemunerationEditor } from './RemunerationEditor';
 import {
-  currentOperationScope,
+  operationScope,
   usePendingOperation,
   type EditTarget,
   type Operation,
@@ -28,7 +29,8 @@ export function RemunerationManagement({
   const [guaranteePage, setGuaranteePage] = useState(0),
     [bonusPage, setBonusPage] = useState(0),
     [revision, setRevision] = useState(0);
-  const scope = currentOperationScope();
+  const { me } = useMe();
+  const scope = operationScope(me?.email);
   const outstanding = usePendingOperation(scope);
   const blocked = !scope || outstanding !== null;
   const [editor, setEditor] = useState<{
@@ -72,10 +74,9 @@ export function RemunerationManagement({
   } | null>(null);
   const showHistory = (kind: 'guarantee' | 'bonus', id: string) =>
     setHistory(current => ({ kind, id, open: true, key: (current?.key ?? 0) + 1 }));
-  const [claims] = useState(readTokenClaims);
-  const canGuarantee = hasPermission(claims, 'GUARANTEE_MANAGE'),
-    canBonus = hasPermission(claims, 'BONUS_AWARD'),
-    canCorrect = hasPermission(claims, 'REMUNERATION_CORRECT');
+  const canGuarantee = hasPermission(me, 'GUARANTEE_MANAGE'),
+    canBonus = hasPermission(me, 'BONUS_AWARD'),
+    canCorrect = hasPermission(me, 'REMUNERATION_CORRECT');
   const guarantees = useResource(
     () => remunerationApi.guarantees(personId, guaranteePage),
     [personId, guaranteePage, revision, refreshKey]

@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { orderApi, ORDER_STATUS_LABELS, type AdminOrder } from '@/entities/order';
-import { hasPermission, readTokenClaims, storePath, useListPage } from '@/shared/lib';
+import { MePending, hasPermission, useMe } from '@/entities/user';
+import { storePath, useListPage } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -23,17 +24,16 @@ import { ListPage } from '@/widgets/list-page';
 import { OrderCorrectionHistoryModal } from '@/widgets/order-correction-history';
 
 export default function AdminOrdersPage() {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  useEffect(() => setAllowed(hasPermission(readTokenClaims(), 'ORDER_SET_VIEW')), []);
-  if (allowed === null) return <p role="status">権限を確認中...</p>;
-  if (!allowed) return <p role="alert">受注を閲覧する権限がありません。</p>;
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  if (!hasPermission(me, 'ORDER_SET_VIEW'))
+    return <p role="alert">受注を閲覧する権限がありません。</p>;
   return <OrderList />;
 }
 
 function OrderList() {
   const list = useListPage(orderApi.adminList);
-  const [canReport, setCanReport] = useState(false);
-  useEffect(() => setCanReport(hasPermission(readTokenClaims(), 'OPERATIONAL_REPORT_VIEW')), []);
+  const canReport = hasPermission(useMe().me, 'OPERATIONAL_REPORT_VIEW');
   const [details, setDetails] = useState<AdminOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);

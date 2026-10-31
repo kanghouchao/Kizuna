@@ -2,16 +2,16 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { notify } from '@/shared/notify';
 import { MemberLinkSection } from '../ui/MemberLinkSection';
 import { customerApi } from '@/entities/customer';
-import { TokenClaims, readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
 
 jest.mock('@/entities/customer', () => ({
@@ -27,15 +27,16 @@ jest.mock('@/entities/customer', () => ({
 
 const mockedApi = customerApi as jest.Mocked<typeof customerApi>;
 const mockedNotify = notify as unknown as { error: jest.Mock; success: jest.Mock };
-const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
-/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim を返すヘルパ（UI 出し分けは権限ベース）。 */
-function claimsWith(permissions: string[]): TokenClaims {
-  return {
-    authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
-  };
-}
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 
 /** 未紐づけはサーバが 404 で返す（本体で表さない）。 */
 const notLinked = { response: { status: 404 } };
@@ -79,7 +80,7 @@ describe('MemberLinkSection', () => {
     mockedApi.memberLink.mockRejectedValue(notLinked);
     mockedApi.memberLinkHistory.mockResolvedValue(historyPage([]));
     mockedApi.memberPointBalance.mockResolvedValue({ linked: false });
-    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE']));
+    meWith(['CUSTOMER_MANAGE']);
   });
 
   it('変更理由がなければ変更できず、確認した区間と理由を送ること', async () => {
@@ -107,7 +108,7 @@ describe('MemberLinkSection', () => {
   });
 
   it('権限がない場合は関連情報を照会せず操作を出さないこと', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['POINT_ADJUST']));
+    meWith(['POINT_ADJUST']);
     render(<MemberLinkSection customerId="c1" />);
     expect(screen.queryByText('会員紐づけ')).not.toBeInTheDocument();
     expect(mockedApi.memberLink).not.toHaveBeenCalled();
@@ -410,7 +411,7 @@ describe('MemberLinkSection', () => {
   });
 
   it('紐づけが無ければ、権限があっても調整の導線を出さないこと', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE', 'POINT_ADJUST']));
+    meWith(['CUSTOMER_MANAGE', 'POINT_ADJUST']);
 
     render(<MemberLinkSection customerId="c1" />);
 
@@ -419,7 +420,7 @@ describe('MemberLinkSection', () => {
   });
 
   it('調整に成功したら、取り直さずに残高の表示を差し替えること', async () => {
-    mockedReadClaims.mockReturnValue(claimsWith(['CUSTOMER_MANAGE', 'POINT_ADJUST']));
+    meWith(['CUSTOMER_MANAGE', 'POINT_ADJUST']);
     mockedApi.memberLink.mockResolvedValue(currentLink);
     mockedApi.memberLinkHistory.mockResolvedValue(historyPage([activeRow]));
     mockedApi.memberPointBalance.mockResolvedValue({ linked: true, balance: 120 });

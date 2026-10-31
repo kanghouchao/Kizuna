@@ -3,7 +3,8 @@ import { notify } from '@/shared/notify';
 import { AttributionCorrectionStep } from '../ui/AttributionCorrectionStep';
 import { OrderAttributionModal } from '../ui/OrderAttributionModal';
 import { OrderArchiveRow, OrderAttribution, orderApi } from '@/entities/order';
-import { TokenClaims, readTokenClaims } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useStoreContext: () => ({
@@ -16,10 +17,12 @@ jest.mock('@/entities/user', () => ({
   }),
 }));
 
-// hasPermission は実物のまま（PERM_ 接頭辞の対応も検証対象に含める）
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
+}));
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: jest.fn(),
   useAppDomain: () => 'kizuna.test',
 }));
 
@@ -49,15 +52,16 @@ const mockedInvalidate = orderApi.invalidateAttribution as jest.Mock;
 const mockedReissue = orderApi.reissueReceiptToken as jest.Mock;
 const mockedCorrectionStatus = orderApi.attributionCorrection as jest.Mock;
 const mockedCorrect = orderApi.correctAttributionPoints as jest.Mock;
-const mockedReadClaims = readTokenClaims as jest.MockedFunction<typeof readTokenClaims>;
 
-/** 指定権限を claim（PERM_ 接頭辞）として持つ token claim を返すヘルパ（UI 出し分けは権限ベース）。 */
-function claimsWith(permissions: string[]): TokenClaims {
-  return {
-    authorities: permissions.map(permission => `PERM_${permission}`),
-    userType: 'STAFF',
-  };
-}
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
 
 const completedOrder: OrderArchiveRow = {
   completion_invalidated: false,
@@ -125,7 +129,7 @@ describe('OrderAttributionModal', () => {
     jest.clearAllMocks();
     mockedAttribution.mockResolvedValue(attributed);
     mockedCorrectionStatus.mockResolvedValue({ granted_points: 100, corrected_points: 0 });
-    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE', 'POINT_ADJUST']));
+    meWith(['ORDER_MANAGE', 'POINT_ADJUST']);
   });
 
   it('閉じている間は帰属の現況を取りに行かない', () => {
@@ -404,7 +408,7 @@ describe('OrderAttributionModal', () => {
   it('ポイント調整の権限が無ければ無効化の導線も差し引きの導線も出さないこと', async () => {
     // 無効化はこの PR で POINT_ADJUST 限定になった。押せる導線として描くと、理由を入力し終えてから
     // 拒否されることになる
-    mockedReadClaims.mockReturnValue(claimsWith(['ORDER_MANAGE']));
+    meWith(['ORDER_MANAGE']);
     mockedAttribution.mockResolvedValue(reclaimedByOther);
     renderModal();
 
@@ -481,7 +485,7 @@ test('帰属記録の複合キーが変わったら旧上限と理由を隠す',
 
 test('旧対象の無効化応答は別対象の現況・通知・訂正段階へ反映しない', async () => {
   let resolve!: (value: OrderAttribution) => void;
-  mockedReadClaims.mockReturnValue(claimsWith(['POINT_ADJUST']));
+  meWith(['POINT_ADJUST']);
   mockedAttribution.mockResolvedValue(attributed);
   mockedInvalidate.mockReturnValueOnce(
     new Promise(done => {

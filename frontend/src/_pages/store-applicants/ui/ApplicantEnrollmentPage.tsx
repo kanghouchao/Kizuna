@@ -1,17 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { applicantApi, type ApplicantEnrollmentInput } from '@/entities/applicant';
 import type { CastCreateRequest } from '@/entities/cast';
 import { CastForm, type CastFormData, toCastCreateRequest } from '@/features/cast-form';
-import {
-  getApiErrorMessage,
-  hasPermission,
-  readTokenClaims,
-  storePath,
-  useResource,
-} from '@/shared/lib';
+import { MePending, hasPermission, useMe } from '@/entities/user';
+import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Button, RegionError } from '@/shared/ui';
 // 在籍登録とキャスト直接登録の本文は同じ項目を持つ（entities 同士は参照できないので、両方を使うここで型を突き合わせる）。
@@ -29,10 +24,8 @@ export default function ApplicantEnrollmentPage() {
   const router = useRouter();
   const resource = useResource(() => applicantApi.get(id), [id]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [canEnroll, setCanEnroll] = useState<boolean | null>(null);
-  useEffect(() => {
-    setCanEnroll(hasPermission(readTokenClaims(), 'CAST_MANAGE'));
-  }, []);
+  const { me } = useMe();
+  const canEnroll = hasPermission(me, 'CAST_MANAGE');
   const detailPath = storePath(`/applicants/${id}`);
   const applicant = resource.data;
   const submit = async (data: CastFormData) => {
@@ -48,7 +41,8 @@ export default function ApplicantEnrollmentPage() {
     }
   };
   const body = () => {
-    if (resource.isLoading || canEnroll === null) return <p>読み込み中...</p>;
+    if (me === null) return <MePending />;
+    if (resource.isLoading) return <p>読み込み中...</p>;
     if (resource.failure !== null || !applicant)
       return resource.failure === 'notFound' ? (
         <RegionError

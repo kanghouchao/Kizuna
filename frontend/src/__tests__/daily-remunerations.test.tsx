@@ -1,3 +1,5 @@
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MonthlyRemunerationsPage from '@/_pages/store-monthly-remunerations/ui/MonthlyRemunerationsPage';
 import { CastMonthlyRemunerationsPage } from '@/_pages/cast-portal/ui/CastMonthlyRemunerationsPage';
@@ -18,12 +20,26 @@ jest.mock('@/entities/user', () => ({
     switchStore: jest.fn(),
   }),
 }));
-let granted = new Set(['ORDER_MANAGE']);
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  hasPermission: (_claims: unknown, permission: string) => granted.has(permission),
-  readTokenClaims: () => ({}),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
+let granted = new Set<PermissionCode>(['ORDER_MANAGE']);
+// 描画ごとに granted の現在値を読む。
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const grantMe = () =>
+  mockedUseMe.mockImplementation(() => ({
+    me: {
+      email: 'staff@example.com',
+      user_type: 'STAFF',
+      permissions: [...granted],
+      line_linked: false,
+    },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  }));
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   dailyRemunerationApi: { store: jest.fn(), self: jest.fn() },
@@ -101,6 +117,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  grantMe();
   granted = new Set(['ORDER_MANAGE']);
   jest.mocked(dailyRemunerationApi.store).mockResolvedValue(daily);
   jest.mocked(dailyRemunerationApi.self).mockResolvedValue(daily);

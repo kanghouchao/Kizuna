@@ -68,7 +68,7 @@ apiClient.interceptors.response.use(
       }
       Cookies.remove('token');
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        // 失効した MEMBER token でも画面の入口は通るため、差し戻しはここが初めてになりうる。
+        // 画面遷移の守衛は無く、未ログイン・失効の差し戻しはここが唯一の経路。
         // 会員ポータルの現在地（店舗つき）を覚えないと、ログイン後の戻り先を失う。
         // 白名単の外（店舗コンソール等）は rememberMemberReturnPath が黙って捨てる。
         // フラグメントも預ける — 申領画面のように、画面が読み取る値がそこにしか無い経路がある。
@@ -76,7 +76,9 @@ apiClient.interceptors.response.use(
           `${window.location.pathname}${window.location.search}`,
           window.location.hash
         );
-        redirectToLogin('expired');
+        // 失効を名乗るのは token を載せた要求が拒まれたときだけ（未ログインの来訪者には言わない）。
+        // cookie ではなく要求で見るのは、並行する要求の先の 401 が cookie を消しているため。
+        redirectToLogin(error.config?.headers?.Authorization ? 'expired' : undefined);
       }
     }
     if (error.response?.status === 403) {

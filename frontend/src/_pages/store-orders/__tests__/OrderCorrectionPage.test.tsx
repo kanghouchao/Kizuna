@@ -4,11 +4,27 @@ import { notify } from '@/shared/notify';
 import OrderCorrectionPage from '../ui/OrderCorrectionPage';
 import { Order, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
-import { hasPermission } from '@/shared/lib';
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  hasPermission: jest.fn(() => true),
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+const allPermissions: PermissionCode[] = [
+  'ORDER_MANAGE',
+  'ORDER_CORRECT',
+  'POINT_ADJUST',
+  'CUSTOMER_MANAGE',
+];
 
 const mockPush = jest.fn();
 let mockStoreId = '1';
@@ -108,7 +124,7 @@ const ATTRIBUTED = { id: 1, attributed: true, member_code: '123456789012' };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(hasPermission).mockReturnValue(true);
+  meWith(allPermissions);
   mockStoreId = '1';
   mockParams = { id: 'o1' };
   mockedOrderApi.attribution.mockResolvedValue(ATTRIBUTED);
@@ -519,7 +535,7 @@ test('帰属取得が未着でも訂正成功を通知し、詳細を更新し�
 });
 
 it('訂正権限がない利用者には詳細も編集フォームも取得・表示しない', async () => {
-  jest.mocked(hasPermission).mockReturnValue(false);
+  meWith([]);
   render(<OrderCorrectionPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('完了後訂正を行う権限がありません');
   expect(mockedOrderApi.get).not.toHaveBeenCalled();

@@ -9,9 +9,21 @@ import {
 } from '@/entities/customer';
 import { CursorPageResult } from '@/shared/api';
 
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  readTokenClaims: () => ({ authorities: ['PERM_CUSTOMER_MANAGE', 'PERM_CUSTOMER_MERGE'] }),
+// describe の resetAllMocks に消されないよう、jest.fn ではなく固定の関数で返す。
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: () => ({
+    me: {
+      email: 'staff@example.com',
+      user_type: 'STAFF',
+      permissions: ['CUSTOMER_MANAGE', 'CUSTOMER_MERGE'],
+      line_linked: false,
+    },
+    isLoading: false,
+    failure: null,
+    reload: () => Promise.resolve(),
+    setMe: () => {},
+  }),
 }));
 
 jest.mock('@/entities/customer', () => ({

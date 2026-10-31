@@ -1,17 +1,10 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { StaffResponse, staffApi, useStoreContext } from '@/entities/user';
+import { useRef, useState } from 'react';
+import { StaffResponse, staffApi, useStoreContext, hasPermission, useMe } from '@/entities/user';
 import { StaffCreateModal, StaffEditModal, roleSetLabel } from '@/features/staff-management';
-import {
-  getApiErrorMessage,
-  hasPermission,
-  readTokenClaims,
-  useDeleteAction,
-  useKeyedResource,
-  useListPage,
-} from '@/shared/lib';
+import { getApiErrorMessage, useDeleteAction, useKeyedResource, useListPage } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -78,10 +71,7 @@ export default function StaffPage() {
   };
 
   // 停止・再開・パスワード再設定は一覧とは別の権限。強制はサーバ側で、ここは導線を出すかだけを決める。
-  const [canManageAccounts, setCanManageAccounts] = useState(false);
-  useEffect(() => {
-    setCanManageAccounts(hasPermission(readTokenClaims(), 'STAFF_CREDENTIAL_MANAGE'));
-  }, []);
+  const canManageAccounts = hasPermission(useMe().me, 'STAFF_CREDENTIAL_MANAGE');
 
   const [modal, setModal] = useState<
     { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; id: number }

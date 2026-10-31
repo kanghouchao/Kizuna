@@ -1,15 +1,26 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { orderApi } from '@/entities/order';
-import { hasPermission } from '@/shared/lib';
+import { useMe } from '@/entities/user';
+import type { PermissionCode } from '@/entities/user';
 import OrderCompletionInvalidationPage from '../ui/OrderCompletionInvalidationPage';
 
 jest.mock('@/entities/order', () => ({
   orderApi: { get: jest.fn(), invalidateCompletion: jest.fn(), correctionHistory: jest.fn() },
 }));
-jest.mock('@/shared/lib', () => ({
-  ...jest.requireActual('@/shared/lib'),
-  hasPermission: jest.fn(() => true),
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: jest.fn(),
 }));
+const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
+const meWith = (permissions: PermissionCode[]) =>
+  mockedUseMe.mockReturnValue({
+    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    isLoading: false,
+    failure: null,
+    reload: jest.fn(),
+    setMe: jest.fn(),
+  });
+const allPermissions: PermissionCode[] = ['ORDER_MANAGE', 'ORDER_CORRECT', 'POINT_ADJUST'];
 let mockStoreId = '1';
 let mockParams = { id: 'o1' };
 jest.mock('next/navigation', () => ({ useParams: () => mockParams }));
@@ -49,7 +60,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockStoreId = '1';
   mockParams = { id: 'o1' };
-  (hasPermission as jest.Mock).mockReturnValue(true);
+  meWith(allPermissions);
   (orderApi.get as jest.Mock).mockResolvedValue(order);
   (orderApi.invalidateCompletion as jest.Mock).mockResolvedValue(change);
   (orderApi.correctionHistory as jest.Mock).mockResolvedValue({ rows: [change], nextCursor: null });
@@ -73,7 +84,7 @@ test('未提供と理由を確認し、表示した版で無効化する', async
 });
 
 test('利用が残る場合は救済担当者を示し無効化を送れない', async () => {
-  (hasPermission as jest.Mock).mockImplementation((_, code) => code !== 'POINT_ADJUST');
+  meWith(allPermissions.filter(code => code !== 'POINT_ADJUST'));
   (orderApi.get as jest.Mock).mockResolvedValue({
     ...order,
     fee_lines: [{ kind: 'POINT_REDEMPTION', amount: 3000, remuneration: 0 }],
@@ -85,7 +96,7 @@ test('利用が残る場合は救済担当者を示し無効化を送れない',
 });
 
 test('権限不足で受注を取得せず必要な担当者を示す', async () => {
-  (hasPermission as jest.Mock).mockReturnValue(false);
+  meWith([]);
   render(<OrderCompletionInvalidationPage />);
   expect(await screen.findByText(/ORDER_CORRECT を持つ訂正担当者/)).toBeInTheDocument();
   expect(orderApi.get).not.toHaveBeenCalled();
@@ -125,7 +136,7 @@ test('競合では自動再送せず更新された版を再確認する', async
 });
 
 test('ORDER_MANAGE だけでも無効化済み受注から再提供できる', async () => {
-  (hasPermission as jest.Mock).mockImplementation((_, code) => code === 'ORDER_MANAGE');
+  meWith(['ORDER_MANAGE']);
   (orderApi.get as jest.Mock).mockResolvedValue({
     ...order,
     completion_invalidated: true,

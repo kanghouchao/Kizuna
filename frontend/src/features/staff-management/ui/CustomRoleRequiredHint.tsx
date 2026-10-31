@@ -1,8 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { hasPermission, readTokenClaims } from '@/shared/lib';
+import { hasPermission, useMe } from '@/entities/user';
 
 /**
  * サービスID に授与できるのは自作ロールだけで、既定ロールしか無い環境では候補が必ず空になる。
@@ -10,8 +9,7 @@ import { hasPermission, readTokenClaims } from '@/shared/lib';
  * リンクは遷移先を開ける ROLE_MANAGE の保持者にだけ出す。
  */
 export function CustomRoleRequiredHint() {
-  const [canManageRoles, setCanManageRoles] = useState(false);
-  useEffect(() => setCanManageRoles(hasPermission(readTokenClaims(), 'ROLE_MANAGE')), []);
+  const canManageRoles = hasPermission(useMe().me, 'ROLE_MANAGE');
   return (
     <p className="text-sm text-muted-foreground">
       サービスIDに付与できるロールがありません。先にロール管理で自作ロールを作成してください。

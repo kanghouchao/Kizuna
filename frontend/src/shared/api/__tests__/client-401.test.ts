@@ -79,6 +79,18 @@ describe('apiClient 401/403 interceptor', () => {
     expect(redirectMock).toHaveBeenCalled();
   });
 
+  it('未ログイン（token が無い）の 401 は失効を名乗らずにログインへ送り、会員の戻り先は預ける', async () => {
+    // 画面遷移の守衛は無く、未ログインで開いた画面の最初の API がここへ来る。失効を名乗ると、
+    // まだログインしていない利用者に「状態が無効になった」と読ませてしまう。
+    (Cookies.get as jest.Mock).mockReturnValue(undefined);
+    window.history.pushState({}, '', '/member/receipts#tok3n');
+
+    await withRejectingAdapter(401, () => apiClient.post('/me/receipts', { token: 'tok3n' }));
+
+    expect(rememberMemberReturnPathMock).toHaveBeenCalledWith('/member/receipts', '#tok3n');
+    expect(redirectMock).toHaveBeenCalledWith(undefined);
+  });
+
   it('does not clear token or redirect on 401 when the request config sets skipAuthRedirect (招待受諾のインラインログインはグローバル401処理をバイパスする必要がある)', async () => {
     const removeSpy = jest.spyOn(Cookies, 'remove');
 

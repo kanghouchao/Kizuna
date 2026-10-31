@@ -1,10 +1,8 @@
 'use client';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useStoreContext } from '@/entities/user';
+import { useEffect, useRef, useState } from 'react';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { Review, ReviewCommand, ReviewSearch, reviewApi } from '@/entities/review';
 import {
-  readTokenClaims,
-  hasPermission,
   useListPage,
   getApiErrorMessage,
   isBadRequest,
@@ -32,24 +30,18 @@ import { ReviewDetail } from './ReviewDetail';
 import { Editor, ReviewEditor, editorTitle } from './ReviewEditor';
 import { accessError } from './reviewErrors';
 import { notify } from '@/shared/notify';
-const subscribe = () => () => {};
 export function ReviewsPage() {
-  const mounted = useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false
-  );
+  const { me } = useMe();
   const storeId = useStoreContext().currentStoreId;
-  if (!mounted) return <p>読み込み中...</p>;
-  const claims = readTokenClaims();
-  if (claims?.userType !== 'STAFF' || !hasPermission(claims, 'REVIEW_VIEW'))
+  if (me === null) return <MePending />;
+  if (me.user_type !== 'STAFF' || !hasPermission(me, 'REVIEW_VIEW'))
     return <div role="alert">口コミの閲覧権限がありません</div>;
   return (
     <Reviews
       key={storeId}
-      canModerate={hasPermission(claims, 'REVIEW_MODERATE')}
-      canManage={hasPermission(claims, 'REVIEW_MANAGE')}
-      canOrder={hasPermission(claims, 'ORDER_MANAGE')}
+      canModerate={hasPermission(me, 'REVIEW_MODERATE')}
+      canManage={hasPermission(me, 'REVIEW_MANAGE')}
+      canOrder={hasPermission(me, 'ORDER_MANAGE')}
     />
   );
 }
