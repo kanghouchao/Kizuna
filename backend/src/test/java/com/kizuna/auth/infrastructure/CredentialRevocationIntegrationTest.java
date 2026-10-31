@@ -13,8 +13,11 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.config.RedisConfig;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
+import com.kizuna.user.api.dto.RoleUpdateRequest;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.application.RoleManageHolderGuard;
+import com.kizuna.user.application.RoleService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -333,6 +336,50 @@ class CredentialRevocationIntegrationTest {
     assertThat(users.findCredentialVersionById(second.getId())).contains(2L);
   }
 
+  @Test
+  void grantCommittedDuringAPermissionChangeLeavesNoStaleTokenAlive() throws Exception {
+    long other = createRole();
+    long changed = createRole();
+    var grantee = createStaff(other);
+    long roleVersion = roles.findById(changed).orElseThrow().getVersion();
+    var executor = Executors.newFixedThreadPool(2);
+    try {
+      var shared = new CountDownLatch(1);
+      var proceed = new CountDownLatch(1);
+      // 従業員編集と同じく、付与するロール行を押さえてから利用者行を書く。押さえた所で止めて権限変更を割り込ませる。
+      Future<?> grant =
+          executor.submit(
+              () ->
+                  transaction.executeWithoutResult(
+                      status -> {
+                        Set<Long> next = Set.of(other, changed);
+                        roles.lockIdsForGrant(next);
+                        shared.countDown();
+                        await(proceed);
+                        User user = users.findById(grantee.getId()).orElseThrow();
+                        credentials.reassignGrants(user, next, StoreScopeType.ALL_STORES, Set.of());
+                        users.saveAndFlush(user);
+                      }));
+      assertThat(shared.await(10, TimeUnit.SECONDS)).isTrue();
+      var request = new RoleUpdateRequest();
+      request.setName("失効検証-" + UUID.randomUUID());
+      request.setPermissions(Set.of(PermissionCode.CUSTOMER_MANAGE.name()));
+      request.setVersion(roleVersion);
+      Future<?> change =
+          executor.submit(() -> context.getBean(RoleService.class).update(changed, request));
+      awaitLockWait();
+      proceed.countDown();
+      grant.get(10, TimeUnit.SECONDS);
+      change.get(10, TimeUnit.SECONDS);
+    } finally {
+      executor.shutdownNow();
+    }
+
+    // 付与の確定と権限変更の確定の間にログインしたトークン（版 1）は旧い権限を載せているので通してはならない。
+    assertThat(meStatus(token(grantee, 1))).isEqualTo(401);
+    assertThat(meStatus(token(grantee, 2))).isEqualTo(200);
+  }
+
   /** RoleService.update が権限集合を変えたときに保持者に対して行うことと同じ（RoleService はこの試験の文脈に載せない）。 */
   private void invalidateHolders(long roleId) {
     List<User> holders = guard.lockRoleHolders(roleId);
@@ -496,6 +543,7 @@ class CredentialRevocationIntegrationTest {
     AuthService.class,
     CredentialOperations.class,
     RoleManageHolderGuard.class,
+    RoleService.class,
     AuthSessionService.class,
     CredentialVersionService.class,
     CredentialVersionValidator.class,
@@ -559,6 +607,12 @@ class CredentialRevocationIntegrationTest {
     @Bean
     PasswordEncoder passwordEncoder() {
       return new BCryptPasswordEncoder();
+    }
+
+    /** 監査の記録は操作者の解決を伴い、この試験の対象（失効）の外にある。 */
+    @Bean
+    BusinessAudit businessAudit() {
+      return mock(BusinessAudit.class);
     }
 
     /** ログイン特典の発火は認証の外側の関心で、この試験の対象ではない。 */

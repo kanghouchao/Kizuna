@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -293,7 +294,9 @@ class AdminStaffServiceTest {
         service.create(
             createRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
 
-    verify(repository).saveAndFlush(userCaptor.capture());
+    var order = inOrder(roleRepository, repository);
+    order.verify(roleRepository).lockIdsForGrant(Set.of(MANAGER_ROLE));
+    order.verify(repository).saveAndFlush(userCaptor.capture());
     assertThat(userCaptor.getValue().getPassword()).isEqualTo("ENCODED");
     assertThat(userCaptor.getValue().getRoleIds()).containsExactly(MANAGER_ROLE);
     assertThat(res.editable()).isTrue();
@@ -462,7 +465,10 @@ class AdminStaffServiceTest {
     service.update(
         2L, updateRequest(Set.of(MANAGER_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
 
-    verify(roleManageHolderGuard).requireAfterGrantChange(target, Set.of(MANAGER_ROLE));
+    var order = inOrder(roleRepository, roleManageHolderGuard, repository);
+    order.verify(roleRepository).lockIdsForGrant(Set.of(MANAGER_ROLE));
+    order.verify(roleManageHolderGuard).requireAfterGrantChange(target, Set.of(MANAGER_ROLE));
+    order.verify(repository).saveAndFlush(target);
   }
 
   @Test

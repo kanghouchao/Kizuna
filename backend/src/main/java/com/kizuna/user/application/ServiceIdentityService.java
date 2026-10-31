@@ -217,8 +217,12 @@ public class ServiceIdentityService {
         .orElseThrow(() -> new NotFoundException("サービスIDが見つかりません: " + id));
   }
 
-  /** 指定 id のロールが全て実在する自作ロールであることを検証し、id→名称の対応を返す（応答組立にも使う）。 */
+  /**
+   * 付与するロールを押さえ（{@link RoleRepository#lockIdsForGrant}）、全て実在する自作ロールであることを検証して
+   * id→名称の対応を返す（応答組立にも使う）。
+   */
   private Map<Long, String> requireCustomRoles(Set<Long> roleIds) {
+    roleRepository.lockIdsForGrant(roleIds);
     List<Role> roles = roleRepository.findAllById(roleIds);
     if (roles.size() != roleIds.size()) {
       throw new ServiceException("指定されたロールが存在しません");

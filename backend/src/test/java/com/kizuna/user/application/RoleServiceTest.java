@@ -221,7 +221,7 @@ class RoleServiceTest {
     Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
-    when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
     RoleResponse res = service.update(7L, updateRequest("受付リーダー", Set.of("CUSTOMER_MANAGE"), 0L));
@@ -238,7 +238,7 @@ class RoleServiceTest {
     User serviceIdentity = holder(42L, UserType.SERVICE);
     when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
-    when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
     when(roleManageHolderGuard.lockRoleHolders(7L)).thenReturn(List.of(staff, serviceIdentity));
 
@@ -249,6 +249,7 @@ class RoleServiceTest {
     assertThat(events).containsExactly(new UserCredentialsChanged(41L, 1L));
     verify(userRepository).saveAllAndFlush(List.of(staff, serviceIdentity));
     var order = inOrder(roleManageHolderGuard, roleRepository);
+    order.verify(roleRepository).findByIdForUpdate(7L);
     order.verify(roleManageHolderGuard).lockRoleHolders(7L);
     order.verify(roleRepository).saveAndFlush(existing);
   }
@@ -258,7 +259,7 @@ class RoleServiceTest {
     Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("ORDER_MANAGE")))
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE)));
-    when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
     service.update(7L, updateRequest("受付リーダー", Set.of("ORDER_MANAGE"), 0L));
@@ -286,7 +287,7 @@ class RoleServiceTest {
   void update_unknownId_throwsNotFound() {
     when(permissionRepository.findByCodeIn(Set.of("ORDER_MANAGE")))
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE)));
-    when(roleRepository.findById(404L)).thenReturn(Optional.empty());
+    when(roleRepository.findByIdForUpdate(404L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.update(404L, updateRequest("受付", Set.of("ORDER_MANAGE"), 0L)))
         .isInstanceOf(NotFoundException.class);
@@ -298,7 +299,7 @@ class RoleServiceTest {
     ReflectionTestUtils.setField(existing, "version", 3L);
     when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
-    when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existing));
 
     assertThatThrownBy(
             () -> service.update(7L, updateRequest("受付リーダー", Set.of("CUSTOMER_MANAGE"), 2L)))
@@ -313,7 +314,7 @@ class RoleServiceTest {
     Role existing = role(1L, "統括", true, Set.of(ORDER_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
-    when(roleRepository.findById(1L)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(existing));
 
     assertThatThrownBy(() -> service.update(1L, updateRequest("別名", Set.of("CUSTOMER_MANAGE"), 0L)))
         .isInstanceOf(SystemRoleImmutableException.class);
@@ -327,7 +328,7 @@ class RoleServiceTest {
     Role existing = role(1L, "統括", true, Set.of(ORDER_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
-    when(roleRepository.findById(1L)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of());
     when(roleRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -343,7 +344,7 @@ class RoleServiceTest {
     Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("STORE_MANAGE")))
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.STORE_MANAGE)));
-    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
         .thenReturn(Set.of(GUARDED_ROLE));
     doThrow(new LastRoleManageHolderException("最後の管理権限保持者が居なくなるため、このロールから管理権限を外すことはできません"))
@@ -364,7 +365,7 @@ class RoleServiceTest {
     Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("STORE_MANAGE")))
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.STORE_MANAGE)));
-    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
         .thenReturn(Set.of(GUARDED_ROLE, OTHER_ROLE_MANAGE_ROLE));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
@@ -372,7 +373,9 @@ class RoleServiceTest {
     service.update(GUARDED_ROLE, updateRequest("IT管理", Set.of("STORE_MANAGE"), 0L));
 
     assertThat(existing.getPermissionIds()).containsExactly(ORDER_MANAGE_ID);
-    verify(roleManageHolderGuard).requireAfterRolePermissionRemoval(GUARDED_ROLE);
+    var order = inOrder(roleRepository, roleManageHolderGuard);
+    order.verify(roleRepository).findByIdForUpdate(GUARDED_ROLE);
+    order.verify(roleManageHolderGuard).requireAfterRolePermissionRemoval(GUARDED_ROLE);
   }
 
   @Test
@@ -381,7 +384,7 @@ class RoleServiceTest {
     Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("ROLE_MANAGE")))
         .thenReturn(List.of(permission(ROLE_MANAGE_ID, PermissionCode.ROLE_MANAGE)));
-    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
     service.update(GUARDED_ROLE, updateRequest("IT管理（改名）", Set.of("ROLE_MANAGE"), 0L));
@@ -395,7 +398,7 @@ class RoleServiceTest {
     Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("STORE_MANAGE")))
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.STORE_MANAGE)));
-    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode(PermissionCode.ROLE_MANAGE.name()))
         .thenReturn(Set.of(GUARDED_ROLE));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
@@ -508,7 +511,7 @@ class RoleServiceTest {
     Role existing = role(GUARDED_ROLE, "受付", false, Set.of(ORDER_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
-    when(roleRepository.findById(GUARDED_ROLE)).thenReturn(Optional.of(existing));
+    when(roleRepository.findByIdForUpdate(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of());
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 

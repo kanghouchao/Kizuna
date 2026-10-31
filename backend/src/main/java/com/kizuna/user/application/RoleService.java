@@ -85,22 +85,22 @@ public class RoleService {
   @Transactional
   public RoleResponse update(Long id, RoleUpdateRequest req) {
     Map<Long, String> codesById = requirePermissions(req.getPermissions());
-    Role role = roleRepository.findById(id).orElseThrow(() -> notFound(id));
+    // ロックはロール行から取る（順序は RoleRepository#findByIdForUpdate）。
+    Role role = roleRepository.findByIdForUpdate(id).orElseThrow(() -> notFound(id));
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
     // ため、応答で往復させた version を明示比対して 409 で拒否する。
     if (!role.getVersion().equals(req.getVersion())) {
       throw new StaleRoleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
-    // 同一ロールへの並行する権限追加は、そのロール行の @Version が保存時に検出する。既定ロールも権限を編集できるので
-    // ROLE_MANAGE 保持者をゼロにしない検査から外さない。
+    // 既定ロールも権限を編集できるので ROLE_MANAGE 保持者をゼロにしない検査から外さない。
     if (!req.getPermissions().contains(ROLE_MANAGE)
         && roleRepository.findIdsByPermissionCode(ROLE_MANAGE).contains(role.getId())) {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
     }
     var before = snapshot(role);
     // トークンの権限は発行時にロールから写したものなので、保持者全員を再ログインさせる（操作者本人も含む）。
-    // ロール行より先に押さえる: 改名は一意列の更新でロール行を FOR UPDATE にし、目録行を先に取る付与の外部キー検査
-    // （KEY SHARE）と待ちが環になる。同一ロールの並行更新は保存時の @Version が撥ねる。
+    // ロール行を最初に押さえたので、並行する付与は確定して保持者に入るか、この確定を待つ。改名の保存は一意列の更新で
+    // ロール行を FOR UPDATE に上げて外部キー検査の KEY SHARE を締め出すが、付与はその前の FOR SHARE で既に待っている。
     if (!role.getPermissionIds().equals(codesById.keySet())) {
       List<User> holders = roleManageHolderGuard.lockRoleHolders(role.getId());
       holders.forEach(credentialOperations::invalidateSessions);
