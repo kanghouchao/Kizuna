@@ -18,8 +18,9 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
    * <b>経路を問わずまず ROLE_MANAGE の行をここで押さえてから</b>、母集団（ROLE_MANAGE を含むロール集合と保持者）を取り直す。
    * 減らしうるかの発火判定を押さえる前のロール集合に依らせてはならない（集合は並行する追加で増える）。 増やすだけの操作は押さえない。後から足す停止経路も同じ前提に従うこと。
    *
-   * <p>押さえる前に読んだ集合で数えると、ロール定義の編集と授権の変更が双方とも検査を通り母集団が 0 になる。押さえるのが 1 行なので、行使点が増えても待ちは環にならない —
-   * 目録は外部キーの連鎖の最上流で、この向きは ADR 0016 に沿う。実体でなく id を返すのは、実体で受けるとロックの獲得が版の照合を伴うためである。
+   * <p>押さえる前に読んだ集合で数えると、ロール定義の編集と授権の変更が双方とも検査を通り母集団が 0 になる。押さえるのが 1 行なので、行使点が増えても待ちは環にならない。
+   * ロール行の後・利用者行の前に取る（順序は {@link RoleRepository#findByIdForUpdate}）。実体でなく id
+   * を返すのは、実体で受けるとロックの獲得が版の照合を伴うためである。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select p.id from com.kizuna.user.domain.Permission p where p.code = :code")

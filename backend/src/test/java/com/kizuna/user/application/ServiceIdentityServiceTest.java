@@ -3,6 +3,7 @@ package com.kizuna.user.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -112,6 +113,9 @@ class ServiceIdentityServiceTest {
     ServiceIdentityResponse res = service.create(createRequest(Set.of(CUSTOM_ROLE)));
 
     User saved = userCaptor.getValue();
+    var order = inOrder(roleRepository, repository);
+    order.verify(roleRepository).lockIdsForGrant(Set.of(CUSTOM_ROLE));
+    order.verify(repository).saveAndFlush(saved);
     assertThat(saved.getUserType()).isEqualTo(UserType.SERVICE);
     assertThat(saved.getEmail()).isNull();
     assertThat(saved.getPassword()).isNull();
@@ -156,6 +160,9 @@ class ServiceIdentityServiceTest {
 
     assertThat(existing.getStoreIds()).containsExactly(2L);
     assertThat(res.storeIds()).containsExactly(2L);
+    var order = inOrder(roleRepository, repository);
+    order.verify(roleRepository).lockIdsForGrant(Set.of(CUSTOM_ROLE));
+    order.verify(repository).saveAndFlush(existing);
   }
 
   @Test

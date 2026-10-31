@@ -419,8 +419,9 @@ public class AdminStaffService {
     return roleIds.stream().anyMatch(targetRoleIds::contains);
   }
 
-  /** 指定 id のロールが全て実在することを検証し、id→ロールの対応を返す（応答組立にも使う）。 */
+  /** 付与するロールを押さえ（{@link RoleRepository#lockIdsForGrant}）、全て実在することを検証して id→ロールの対応を返す（応答組立にも使う）。 */
   private Map<Long, Role> requireRoles(Set<Long> roleIds) {
+    roleRepository.lockIdsForGrant(roleIds);
     Map<Long, Role> roles = rolesOf(roleIds);
     if (roles.size() != roleIds.size()) {
       throw new ServiceException("指定されたロールが存在しません");
