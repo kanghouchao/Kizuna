@@ -45,8 +45,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * ログイン・リフレッシュ・ログアウトの HTTP 契約（cookie の属性、401 の原因ヘッダ、403・409・415）を固定する。本番の SecurityConfig を載せ、 CSRF
- * トークンの無い POST と期限切れの Bearer が手前で止まらないことまで確かめる。
+ * ログイン・リフレッシュ・ログアウトの HTTP 契約（cookie の属性、401 の原因ヘッダ、403・409・415）を固定する。SecurityFilterChain は載らないので、
+ * 期限切れの Bearer が手前で止まらないことは CredentialRevocationIntegrationTest が確かめる。
  */
 @WebMvcTest(AuthController.class)
 @Import({AuthControllerTest.Config.class, CommonExceptionHandler.class, StoreScopeHolder.class})
