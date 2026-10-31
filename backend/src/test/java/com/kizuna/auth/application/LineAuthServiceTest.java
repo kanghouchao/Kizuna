@@ -11,15 +11,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.LineAuthorizationRequest;
-import com.kizuna.auth.api.dto.LineLoginResponse;
 import com.kizuna.auth.api.dto.LineRegistrationRequest;
-import com.kizuna.auth.api.dto.Token;
+import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.LineApiClient;
 import com.kizuna.auth.infrastructure.LineChannel;
 import com.kizuna.auth.infrastructure.LineChannelResolver;
 import com.kizuna.auth.infrastructure.LineIdentity;
 import com.kizuna.auth.infrastructure.LineRegistrationTicketStore;
+import com.kizuna.auth.infrastructure.SessionTokenDecoder;
 import com.kizuna.member.application.MemberRegistrationService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
@@ -33,6 +33,7 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
@@ -54,7 +55,11 @@ class LineAuthServiceTest {
 
   private static final LineChannel CHANNEL = new LineChannel("channel-id", "channel-secret");
   private static final LineIdentity IDENTITY = new LineIdentity("U-line-1", "LINE太郎");
-  private static final Token TOKEN = new Token("issued-token", 1_700_000_000_000L);
+  private static final IssuedSession SESSION =
+      new IssuedSession(
+          7L,
+          new IssuedJwt("issued-token", Instant.ofEpochMilli(1_700_000_000_000L)),
+          new IssuedJwt("refresh-token", Instant.ofEpochMilli(1_800_000_000_000L)));
 
   @Mock private LineChannelResolver channelResolver;
   @Mock private LineApiClient lineApiClient;
@@ -125,13 +130,11 @@ class LineAuthServiceTest {
     stubVerifiedIdentity();
     User user = member("member@kizuna.test");
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(user));
-    when(authService.issueTokenFor(user)).thenReturn(TOKEN);
+    when(authService.issueSessionFor(user)).thenReturn(SESSION);
 
-    LineLoginResponse response = lineAuthService.login(authorizationRequest());
+    LineLogin response = lineAuthService.login(authorizationRequest());
 
-    assertThat(response.registered()).isTrue();
-    assertThat(response.token()).isEqualTo("issued-token");
-    assertThat(response.expiresAt()).isEqualTo(1_700_000_000_000L);
+    assertThat(response.session()).isEqualTo(SESSION);
     assertThat(response.registrationTicket()).isNull();
     // 認証方式を問わず同一の発火事象。パスワードログインと同じ契機で同じ引き金を引く。
     verify(loginBenefitTrigger).onAuthenticated(user);
@@ -155,13 +158,12 @@ class LineAuthServiceTest {
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.empty());
     when(ticketStore.issue("U-line-1")).thenReturn("ticket-1");
 
-    LineLoginResponse response = lineAuthService.login(authorizationRequest());
+    LineLogin response = lineAuthService.login(authorizationRequest());
 
-    assertThat(response.registered()).isFalse();
+    assertThat(response.session()).isNull();
     assertThat(response.registrationTicket()).isEqualTo("ticket-1");
     assertThat(response.displayName()).isEqualTo("LINE太郎");
-    assertThat(response.token()).isNull();
-    verify(authService, never()).issueTokenFor(any());
+    verify(authService, never()).issueSessionFor(any());
     verifyNoInteractions(loginBenefitTrigger);
   }
 
@@ -207,9 +209,9 @@ class LineAuthServiceTest {
     User created = member("member@kizuna.test");
     when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
         .thenReturn(created);
-    when(authService.issueTokenFor(created)).thenReturn(TOKEN);
+    when(authService.issueSessionFor(created)).thenReturn(SESSION);
 
-    assertThat(lineAuthService.register(registrationRequest())).isEqualTo(TOKEN);
+    assertThat(lineAuthService.register(registrationRequest())).isEqualTo(SESSION);
     verify(ticketStore).consume("ticket-1");
     // 登録直後の自動ログインは認証成功ではなく登録の一部。発火事象に数えない。
     verifyNoInteractions(loginBenefitTrigger);
@@ -321,6 +323,7 @@ class LineAuthServiceTest {
             mock(PermissionRepository.class),
             mock(PasswordEncoder.class),
             jwtIssuer,
+            mock(SessionTokenDecoder.class),
             mock(AuthenticationManager.class),
             mock(CredentialOperations.class),
             loginBenefitTrigger);

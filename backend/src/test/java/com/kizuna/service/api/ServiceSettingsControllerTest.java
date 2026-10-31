@@ -3,7 +3,6 @@ package com.kizuna.service.api;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -68,7 +67,6 @@ class ServiceSettingsControllerTest {
             delete("/services/s1")
                 .param("expected_version", "2")
                 .principal(() -> "operator@example.test")
-                .with(csrf())
                 .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isNoContent());
 

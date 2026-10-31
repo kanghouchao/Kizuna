@@ -1,8 +1,10 @@
 package com.kizuna.auth.application;
 
 import com.kizuna.auth.infrastructure.CredentialVersionService;
+import com.kizuna.auth.infrastructure.SessionTokenDecoder;
 import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.user.domain.UserCredentialsChanged;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,6 +34,7 @@ public class AuthSessionService {
 
   private final TokenBlacklistService tokenBlacklistService;
   private final CredentialVersionService credentialVersionService;
+  private final SessionTokenDecoder sessionTokenDecoder;
 
   /**
    * 資格情報の版の変更イベントを受けて、確定済みの版を版キャッシュへ反映する（commit 後）。
@@ -48,18 +51,21 @@ public class AuthSessionService {
   }
 
   /**
-   * 現在のセッションを失効させる（トークンをブラックリスト登録し、SecurityContext をクリア）。
+   * ログアウト。Bearer のトークンと、要求が名乗る本人のセッション（sid）を失効させる。sid は Bearer から取り（期限切れでも読む）、Bearer が 無いときだけ
+   * cookie から取る — 別タブで別アカウントにログインした後の旧タブのログアウトで、cookie に入っている新しいアカウントのセッションを止めないため。
    *
-   * <p>進行中のトランザクション内から呼ばれた場合は commit 後に実行する — 資格情報の変更が rollback されたのにセッションだけ失効する事故を防ぐ。
-   *
-   * @param authHeaderOrToken Authorization ヘッダ値または生トークン（null 可 — その場合はコンテキストのみクリア）
+   * @return cookie を消してよいか（cookie の sid が失効させた sid と同じとき）
    */
-  public void invalidate(String authHeaderOrToken) {
-    afterCommit(
-        () -> {
-          tokenBlacklistService.blacklist(authHeaderOrToken);
-          SecurityContextHolder.clearContext();
-        });
+  public boolean logout(String authHeader, String refreshToken) {
+    Optional<String> cookieSessionId = sessionTokenDecoder.sessionIdOf(refreshToken);
+    Optional<String> sessionId =
+        authHeader != null && authHeader.startsWith("Bearer ")
+            ? sessionTokenDecoder.sessionIdOf(authHeader.substring(7))
+            : cookieSessionId;
+    tokenBlacklistService.blacklist(authHeader);
+    sessionId.ifPresent(tokenBlacklistService::blacklistSession);
+    SecurityContextHolder.clearContext();
+    return sessionId.isPresent() && sessionId.equals(cookieSessionId);
   }
 
   /**

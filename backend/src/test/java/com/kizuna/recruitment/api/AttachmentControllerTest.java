@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
@@ -94,7 +93,6 @@ class AttachmentControllerTest {
         .thenThrow(new ServiceException("選考が終了した応募者には画像を追加できません"));
     mvc.perform(
             post("/applicants/a/attachments")
-                .with(csrf())
                 .header("X-Store-ID", "1")
                 .header("Idempotency-Key", key)
                 .contentType("image/svg+xml")
@@ -125,7 +123,6 @@ class AttachmentControllerTest {
     var started =
         mvc.perform(
                 post("/applicants/a/attachments")
-                    .with(csrf())
                     .header("X-Store-ID", "7")
                     .header("Idempotency-Key", key.toString())
                     .contentType("image/png")
@@ -224,7 +221,6 @@ class AttachmentControllerTest {
               put("/applicants/a/attachment-uploads/x/content"))) {
         mvc.perform(
                 request
-                    .with(csrf())
                     .header("X-Store-ID", "1")
                     .contentType("image/png")
                     .content(new byte[] {1})

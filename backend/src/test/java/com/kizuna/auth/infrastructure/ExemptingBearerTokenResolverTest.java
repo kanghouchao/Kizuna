@@ -131,11 +131,10 @@ class ExemptingBearerTokenResolverTest {
   }
 
   @Test
-  @DisplayName("logout は免除対象でなく Bearer を解決すること(controller が自前でヘッダを読むため無害)")
-  void resolvesTokenForLogout() {
-    MockHttpServletRequest request = requestWithBearer("POST", "/auth/logout");
-
-    assertThat(resolver.resolve(request)).isEqualTo("broken-token-value");
+  @DisplayName("refresh と logout は壊れた Bearer を解決しないこと(期限切れのアクセストークンで手前の 401 にしない)")
+  void ignoresBrokenTokenForRefreshAndLogout() {
+    assertThat(resolver.resolve(requestWithBearer("POST", "/auth/refresh"))).isNull();
+    assertThat(resolver.resolve(requestWithBearer("POST", "/auth/logout"))).isNull();
   }
 
   @Test

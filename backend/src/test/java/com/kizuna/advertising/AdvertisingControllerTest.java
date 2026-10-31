@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -136,7 +135,6 @@ class AdvertisingControllerTest {
                 post("/advertising-costs")
                     .header("X-Store-ID", "1")
                     .with(permissions("VIEW", "MANAGE"))
-                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body()))
             .andExpect(status().isCreated())
@@ -176,7 +174,6 @@ class AdvertisingControllerTest {
             post("/advertising-costs")
                 .header("X-Store-ID", "7")
                 .with(permissions("VIEW", "MANAGE"))
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body()))
         .andExpect(status().isCreated());
@@ -207,7 +204,6 @@ class AdvertisingControllerTest {
             post("/advertising-costs")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW"))
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body()))
         .andExpect(status().isForbidden());
@@ -215,7 +211,6 @@ class AdvertisingControllerTest {
             post("/advertising-costs")
                 .header("X-Store-ID", "1")
                 .with(permissions("MANAGE"))
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body()))
         .andExpect(status().isForbidden());
@@ -236,7 +231,6 @@ class AdvertisingControllerTest {
               post("/advertising-costs")
                   .header("X-Store-ID", "1")
                   .with(permissions("VIEW", "MANAGE"))
-                  .with(csrf())
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(body().replace("\"amount\":0", "\"amount\":" + amount)))
           .andExpect(status().isBadRequest());
@@ -244,7 +238,6 @@ class AdvertisingControllerTest {
             put("/advertising-costs/c")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW", "MANAGE"))
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     "{\"category\":\"SALES\",\"media_name\":\"媒体\",\"amount\":0,\"version\":0,\"reason\":\"修正\",\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}"))
@@ -333,7 +326,6 @@ class AdvertisingControllerTest {
             delete("/advertising-costs/c")
                 .header("X-Store-ID", "1")
                 .with(permissions("VIEW", "MANAGE"))
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     "{\"version\":0,\"reason\":\"誤入力\",\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}"))

@@ -1,10 +1,15 @@
 package com.kizuna.auth.application;
 
 import com.kizuna.auth.api.dto.MeResponse;
-import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.CredentialVersionService;
+import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.JwtIssuer;
+import com.kizuna.auth.infrastructure.RefreshTokenRejectedException;
+import com.kizuna.auth.infrastructure.RefreshTokenRejectedException.Reason;
+import com.kizuna.auth.infrastructure.SessionTokenDecoder;
+import com.kizuna.auth.infrastructure.TokenType;
 import com.kizuna.auth.infrastructure.UserPrincipal;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.CredentialOperations;
@@ -20,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -27,6 +33,7 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +57,7 @@ public class AuthService {
   private final PermissionRepository permissionRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtIssuer jwtIssuer;
+  private final SessionTokenDecoder sessionTokenDecoder;
   private final AuthenticationManager authenticationManager;
   private final CredentialOperations credentialOperations;
   private final LoginBenefitTrigger loginBenefitTrigger;
@@ -58,23 +66,65 @@ public class AuthService {
    * 取引を張らない — 認証も発行も EAGER に載った利用者を読むだけで、ログイン特典の評価は認証の接続を返却してから走らせる必要がある
    * （接続を握ったまま別取引を開くと、接続枯渇時に認証済みの要求同士で待ち合う）。
    */
-  public Token login(String email, String password) {
+  public IssuedSession login(String email, String password) {
     Authentication authentication =
         authenticationManager.authenticate(
             UsernamePasswordAuthenticationToken.unauthenticated(email, password));
     // principal は認証成功時に自作 UserDetails が保持する User（二次クエリを避ける）。
     User user = ((UserPrincipal) authentication.getPrincipal()).getUser();
 
-    Token token = issueTokenFor(user);
+    IssuedSession session = issueSessionFor(user);
     // 発行の後に引く — 停止中の身分や SERVICE は発行側が先に拒むので、認証成功だけが発火事象になる。
     loginBenefitTrigger.onAuthenticated(user);
-    return token;
+    return session;
   }
 
-  /** 本人性を確認済みの身分に通常トークンを発行する。呼び出し側はパスワード照合や LINE の id_token 検証を済ませていること。 */
+  /** 本人性を確認済みの身分に新しいセッションを発行する。呼び出し側はパスワード照合や LINE の id_token 検証を済ませていること。 */
   @Transactional(readOnly = true)
-  public Token issueTokenFor(User user) {
-    return jwtIssuer.issue(user.getEmail(), baseClaims(user, permissionsOf(user)));
+  public IssuedSession issueSessionFor(User user) {
+    return issueSession(user, UUID.randomUUID().toString());
+  }
+
+  /**
+   * リフレッシュトークンで同じセッションのトークンを発行し直す。権限・利用者種別は DB から組み立て、旧いトークンの claim を写さない。
+   *
+   * <p>{@code sessionUserId} はタブが名乗る本人で、cookie の本人と違えば 409（別タブで別アカウントにログインされた）。
+   */
+  @Transactional(readOnly = true)
+  public IssuedSession refresh(String refreshToken, Long sessionUserId) {
+    Jwt jwt = sessionTokenDecoder.decodeRefresh(refreshToken);
+    // 検証の連鎖が両 claim の型を確かめ済み。
+    long userId =
+        ((Number) jwt.getClaims().get(CredentialVersionService.USER_ID_CLAIM)).longValue();
+    long version = ((Number) jwt.getClaims().get(CredentialVersionService.CLAIM)).longValue();
+    if (sessionUserId != null && sessionUserId != userId) {
+      throw new ConflictException("別のアカウントでログインされました。画面を開き直してください。");
+    }
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new RefreshTokenRejectedException(Reason.INVALID));
+    // 検証の後に版を進める commit が挟まると、新しい版のトークンが失効を擦り抜ける。読んだ行の版で照合し直す。
+    if (user.getCredentialVersion() != version) {
+      throw new RefreshTokenRejectedException(Reason.CREDENTIAL_CHANGED);
+    }
+    return issueSession(user, jwt.getClaimAsString(TokenType.SESSION_ID_CLAIM));
+  }
+
+  private IssuedSession issueSession(User user, String sessionId) {
+    Map<String, Object> claims = baseClaims(user, permissionsOf(user));
+    IssuedJwt access = jwtIssuer.issue(TokenType.ACCESS, user.getEmail(), claims, sessionId);
+    IssuedJwt refresh =
+        jwtIssuer.issue(
+            TokenType.REFRESH,
+            user.getEmail(),
+            Map.of(
+                CredentialVersionService.CLAIM,
+                claims.get(CredentialVersionService.CLAIM),
+                CredentialVersionService.USER_ID_CLAIM,
+                claims.get(CredentialVersionService.USER_ID_CLAIM)),
+            sessionId);
+    return new IssuedSession(user.getId(), access, refresh);
   }
 
   /**

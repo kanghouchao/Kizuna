@@ -115,7 +115,12 @@ public class AppProperties {
   @Setter
   public static class Jwt {
     private String secret;
+
+    /** 資格情報の版キャッシュの TTL。トークンの有効期間には使わない。 */
     private long expiration;
+
+    private long accessExpiration;
+    private long refreshExpiration;
   }
 
   @Getter

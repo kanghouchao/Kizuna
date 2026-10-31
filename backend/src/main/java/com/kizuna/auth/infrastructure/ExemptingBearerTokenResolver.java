@@ -16,8 +16,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@link #BEARER_EXEMPT_MATCHERS} に列挙した「未認証で叩かれることが前提の公開端点」では Bearer を一切解決せず {@code null}
  * を返し、resource-server に匿名リクエストとして継続させる（decoder/validator に到達しないため壊れた token の内容は一切見ない）。それ以外は {@link
- * DefaultBearerTokenResolver} の既定動作に委譲し、保護端点では従来どおり 壊れた Bearer が 401 になる。{@code /auth/logout}
- * は対象に含めない（controller が自前でヘッダを読むため resource-server の認証成否に依存せず、401 になっても実害がない）。
+ * DefaultBearerTokenResolver} の既定動作に委譲し、保護端点では従来どおり 壊れた Bearer が 401 になる。
  */
 @Component
 public class ExemptingBearerTokenResolver implements BearerTokenResolver {
@@ -49,6 +48,10 @@ public class ExemptingBearerTokenResolver implements BearerTokenResolver {
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/order-applications/public"),
     // 初期設定の登録（POST）。開発 DB を作り直した後もブラウザに旧 DB の token cookie が残りうる。
     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/initial-setup"),
+    // リフレッシュとログアウトはアクセストークンの期限切れ後に呼ばれるのが普通で、期限切れの Bearer で手前の 401 に
+    // されると働かない。ログアウトは Authorization を自分で読んで sid を取る。
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/refresh"),
+    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/logout"),
   };
 
   private final BearerTokenResolver delegate = new DefaultBearerTokenResolver();

@@ -66,6 +66,12 @@ class JwtDecoderConfigTest {
   }
 
   private String issueToken(String issuer, long expirationMillis, boolean withCredentialVersion) {
+    return issueToken(
+        issuer, expirationMillis, withCredentialVersion, TokenType.ACCESS.claimValue());
+  }
+
+  private String issueToken(
+      String issuer, long expirationMillis, boolean withCredentialVersion, String type) {
     JwtEncoder encoder = new JwtEncoderConfig().jwtEncoder(appProperties);
     Instant now = Instant.now();
     // 期限切れケース（expirationMillis 負値）でも exp が iat より後になるよう、iat を固定で過去へ置く
@@ -82,6 +88,9 @@ class JwtDecoderConfigTest {
       claims.claim(CredentialVersionService.CLAIM, 0L);
     }
     claims.claim(CredentialVersionService.USER_ID_CLAIM, 42L);
+    if (type != null) {
+      claims.claim(TokenType.CLAIM, type);
+    }
     JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
     return encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
   }
@@ -151,5 +160,23 @@ class JwtDecoderConfigTest {
     String token = issueToken(JwtIssuer.ISSUER, 3_600_000L, false);
 
     assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
+  }
+
+  @Test
+  @DisplayName("種別 claim を欠く token は Bearer として拒否されること")
+  void rejectsTokenWithoutType() {
+    String token = issueToken(JwtIssuer.ISSUER, 3_600_000L, true, null);
+
+    assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
+    verifyNoInteractions(tokenBlacklistService, credentialVersionService);
+  }
+
+  @Test
+  @DisplayName("リフレッシュトークンは Bearer として拒否されること")
+  void rejectsRefreshTokenAsBearer() {
+    String token = issueToken(JwtIssuer.ISSUER, 3_600_000L, true, TokenType.REFRESH.claimValue());
+
+    assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
+    verifyNoInteractions(tokenBlacklistService, credentialVersionService);
   }
 }

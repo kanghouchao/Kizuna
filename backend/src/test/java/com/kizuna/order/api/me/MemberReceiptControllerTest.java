@@ -2,7 +2,6 @@ package com.kizuna.order.api.me;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -78,7 +77,6 @@ class MemberReceiptControllerTest {
         .perform(
             post(PATH)
                 .principal(() -> "member@kizuna.test")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"token\":\" \"}"))
         .andExpect(status().isBadRequest());
@@ -92,7 +90,6 @@ class MemberReceiptControllerTest {
         .perform(
             post(PATH)
                 .principal(() -> "staff@kizuna.test")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(BODY))
         .andExpect(status().isForbidden());
@@ -103,7 +100,7 @@ class MemberReceiptControllerTest {
   @WithAnonymousUser
   void anonymousIsRejected() throws Exception {
     mockMvc
-        .perform(post(PATH).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(BODY))
+        .perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(BODY))
         .andExpect(status().isUnauthorized());
   }
 
@@ -111,7 +108,6 @@ class MemberReceiptControllerTest {
   private MockHttpServletRequestBuilder memberPost() {
     return post(PATH)
         .principal(() -> "member@kizuna.test")
-        .with(csrf())
         .contentType(MediaType.APPLICATION_JSON)
         .content(BODY);
   }

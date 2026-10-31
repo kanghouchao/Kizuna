@@ -4,13 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import com.jayway.jsonpath.JsonPath;
 import com.kizuna.auth.api.auth.AuthController;
 import com.kizuna.auth.application.AuthService;
 import com.kizuna.auth.application.AuthSessionService;
 import com.kizuna.auth.application.LoginBenefitTrigger;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.config.RedisConfig;
+import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.user.api.dto.RoleUpdateRequest;
@@ -26,8 +29,10 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManagerFactory;
+import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -59,6 +64,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
@@ -69,7 +75,12 @@ import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationConverter;
@@ -129,7 +140,10 @@ class CredentialRevocationIntegrationTest {
     http =
         MockMvcBuilders.standaloneSetup(
                 new AuthController(
-                    context.getBean(AuthService.class), context.getBean(AuthSessionService.class)))
+                    context.getBean(AuthService.class),
+                    context.getBean(AuthSessionService.class),
+                    context.getBean(RefreshTokenCookies.class)))
+            .setControllerAdvice(new CommonExceptionHandler())
             .addFilters(bearer, principal)
             .build();
   }
@@ -380,6 +394,163 @@ class CredentialRevocationIntegrationTest {
     assertThat(meStatus(token(grantee, 2))).isEqualTo(200);
   }
 
+  @Test
+  void refreshSlidesTheSessionAndKeepsTheOlderTokenUsable() throws Exception {
+    var session = authService().issueSessionFor(createUser(UserType.MEMBER));
+
+    var first = refresh(session.refresh().value(), null);
+    assertThat(first.getStatus()).isEqualTo(200);
+    // 期限をその時点から取り直した cookie で差し替える（同じ秒の中なら JWT は旧いものと同一の文字列になる）。
+    assertThat(first.getCookie(RefreshTokenCookies.NAME).getMaxAge())
+        .isBetween(1_209_600 - 60, 1_209_600);
+    String extended = first.getCookie(RefreshTokenCookies.NAME).getValue();
+    assertThat(meStatus(accessTokenOf(first))).isEqualTo(200);
+
+    // 旧いトークンは失効させない（複数タブの同時リフレッシュが衝突しない）。
+    assertThat(refresh(session.refresh().value(), null).getStatus()).isEqualTo(200);
+    assertThat(refresh(extended, null).getStatus()).isEqualTo(200);
+  }
+
+  @Test
+  void refreshedAccessTokenCarriesPermissionsReadFromTheDatabase() throws Exception {
+    long roleId = createRole(PermissionCode.ORDER_MANAGE);
+    var session = authService().issueSessionFor(createStaff(roleId));
+    // 版を進めずに権限を差し替える — 旧トークンの claim を写していれば ORDER_MANAGE のまま残る。
+    jdbc.update(
+        "update t_role_permissions set permission_id = (select id from t_permissions where code = ?)"
+            + " where role_id = ?",
+        PermissionCode.STORE_VIEW.name(),
+        roleId);
+
+    var response = refresh(session.refresh().value(), null);
+
+    assertThat(decoder.decode(accessTokenOf(response)).getClaimAsStringList("authorities"))
+        .containsExactly(PermissionCode.STORE_VIEW.authority());
+  }
+
+  @Test
+  void accessAndRefreshTokensAreNotInterchangeable() throws Exception {
+    var session = authService().issueSessionFor(createUser(UserType.MEMBER));
+
+    assertThat(meStatus(session.refresh().value())).isEqualTo(401);
+    assertRefreshRejected(session.access().value(), "invalid");
+  }
+
+  @Test
+  void credentialChangesRejectExistingRefreshTokens() throws Exception {
+    var stopped = createUser(UserType.STAFF);
+    var stoppedSession = authService().issueSessionFor(stopped);
+    var changed = createUser(UserType.MEMBER);
+    var changedSession = authService().issueSessionFor(changed);
+    var regranted = createUser(UserType.STAFF);
+    var regrantedSession = authService().issueSessionFor(regranted);
+
+    mutate(stopped, credentials::stop);
+    mutate(changed, user -> credentials.changePassword(user, UUID.randomUUID().toString()));
+    // 実効権限の変更（ロールの権限集合・保持ロール）が保持者に行うことと同じ。
+    mutate(regranted, credentials::invalidateSessions);
+
+    assertRefreshRejected(stoppedSession.refresh().value(), "credential_changed");
+    assertRefreshRejected(changedSession.refresh().value(), "credential_changed");
+    assertRefreshRejected(regrantedSession.refresh().value(), "credential_changed");
+  }
+
+  @Test
+  void logoutRevokesEveryRefreshTokenOfTheSession() throws Exception {
+    var session = authService().issueSessionFor(createUser(UserType.MEMBER));
+    String extended =
+        refresh(session.refresh().value(), null).getCookie(RefreshTokenCookies.NAME).getValue();
+
+    var logout = logout("Bearer " + session.access().value(), session.refresh().value());
+
+    assertThat(logout.getStatus()).isEqualTo(204);
+    assertThat(logout.getCookie(RefreshTokenCookies.NAME).getMaxAge()).isZero();
+    assertRefreshRejected(extended, "invalid");
+    assertRefreshRejected(session.refresh().value(), "invalid");
+  }
+
+  @Test
+  void logoutStopsTheBearerUsersSessionAndLeavesAnotherUsersCookie() throws Exception {
+    var oldTab = authService().issueSessionFor(createUser(UserType.MEMBER));
+    var newLogin = authService().issueSessionFor(createUser(UserType.MEMBER));
+
+    var logout = logout("Bearer " + oldTab.access().value(), newLogin.refresh().value());
+
+    assertThat(logout.getStatus()).isEqualTo(204);
+    assertThat(logout.getCookie(RefreshTokenCookies.NAME)).isNull();
+    assertRefreshRejected(oldTab.refresh().value(), "invalid");
+    assertThat(refresh(newLogin.refresh().value(), null).getStatus()).isEqualTo(200);
+  }
+
+  @Test
+  void expiredAccessTokenDoesNotBlockRefreshOrLogout() throws Exception {
+    var user = createUser(UserType.MEMBER);
+    var session = authService().issueSessionFor(user);
+    String sessionId =
+        decoder.decode(session.access().value()).getClaimAsString(TokenType.SESSION_ID_CLAIM);
+    String expired = expiredAccessToken(user, sessionId);
+
+    assertThat(refresh(session.refresh().value(), "Bearer " + expired).getStatus()).isEqualTo(200);
+    assertThat(logout("Bearer " + expired, null).getStatus()).isEqualTo(204);
+    assertRefreshRejected(session.refresh().value(), "invalid");
+  }
+
+  private AuthService authService() {
+    return context.getBean(AuthService.class);
+  }
+
+  private MockHttpServletResponse refresh(String refreshToken, String authHeader) throws Exception {
+    var request = post("/auth/refresh").header("X-Requested-With", "XMLHttpRequest");
+    if (refreshToken != null) request.cookie(new Cookie(RefreshTokenCookies.NAME, refreshToken));
+    if (authHeader != null) request.header("Authorization", authHeader);
+    try {
+      return http.perform(request).andReturn().getResponse();
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
+  }
+
+  private MockHttpServletResponse logout(String authHeader, String refreshToken) throws Exception {
+    var request = post("/auth/logout").header("X-Requested-With", "XMLHttpRequest");
+    if (refreshToken != null) request.cookie(new Cookie(RefreshTokenCookies.NAME, refreshToken));
+    if (authHeader != null) request.header("Authorization", authHeader);
+    try {
+      return http.perform(request).andReturn().getResponse();
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
+  }
+
+  private void assertRefreshRejected(String refreshToken, String reason) throws Exception {
+    var response = refresh(refreshToken, null);
+    assertThat(response.getStatus()).isEqualTo(401);
+    assertThat(response.getHeader("X-Auth-Failure")).isEqualTo(reason);
+    assertThat(response.getCookie(RefreshTokenCookies.NAME).getMaxAge()).isZero();
+  }
+
+  private static String accessTokenOf(MockHttpServletResponse response) throws Exception {
+    return JsonPath.read(response.getContentAsString(), "$.token");
+  }
+
+  private String expiredAccessToken(User user, String sessionId) {
+    Instant now = Instant.now();
+    JwtClaimsSet claims =
+        JwtClaimsSet.builder()
+            .issuer(JwtIssuer.ISSUER)
+            .subject(user.getEmail())
+            .issuedAt(now.minusSeconds(20))
+            .expiresAt(now.minusSeconds(10))
+            .claim(CredentialVersionService.CLAIM, 0L)
+            .claim(CredentialVersionService.USER_ID_CLAIM, user.getId())
+            .claim(TokenType.CLAIM, TokenType.ACCESS.claimValue())
+            .claim(TokenType.SESSION_ID_CLAIM, sessionId)
+            .build();
+    return context
+        .getBean(JwtEncoder.class)
+        .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+        .getTokenValue();
+  }
+
   /** RoleService.update が権限集合を変えたときに保持者に対して行うことと同じ（RoleService はこの試験の文脈に載せない）。 */
   private void invalidateHolders(long roleId) {
     List<User> holders = guard.lockRoleHolders(roleId);
@@ -479,6 +650,7 @@ class CredentialRevocationIntegrationTest {
     return context
         .getBean(JwtIssuer.class)
         .issue(
+            TokenType.ACCESS,
             user.getEmail(),
             Map.of(
                 CredentialVersionService.CLAIM,
@@ -486,8 +658,9 @@ class CredentialRevocationIntegrationTest {
                 CredentialVersionService.USER_ID_CLAIM,
                 user.getId(),
                 "authorities",
-                List.of("PERM_TEST")))
-        .token();
+                List.of("PERM_TEST")),
+            "integration-session")
+        .value();
   }
 
   private void mutate(User user, Consumer<User> mutation) {
@@ -552,6 +725,9 @@ class CredentialRevocationIntegrationTest {
     JwtDecoderConfig.class,
     JwtEncoderConfig.class,
     JwtIssuer.class,
+    SessionTokenDecoder.class,
+    SessionBlacklistValidator.class,
+    RefreshTokenCookies.class,
     RedisConfig.class
   })
   static class Config {
@@ -632,6 +808,8 @@ class CredentialRevocationIntegrationTest {
       var jwt = new AppProperties.Jwt();
       jwt.setSecret(UUID.randomUUID().toString());
       jwt.setExpiration(3_600_000L);
+      jwt.setAccessExpiration(900_000L);
+      jwt.setRefreshExpiration(1_209_600_000L);
       properties.setJwt(jwt);
       return properties;
     }

@@ -2,7 +2,6 @@ package com.kizuna.auth.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.auth.api.dto.Token;
 import com.kizuna.shared.config.AppProperties;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -10,10 +9,10 @@ import java.util.List;
 import java.util.Map;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
@@ -25,52 +24,69 @@ class JwtIssuerTest {
 
   private static final String SECRET = "jwtissuertestsecretjwtissuertestsecret1234567890ab";
 
-  @Test
-  void issuedTokenRoundTripsThroughHs256Decoder() {
+  private JwtIssuer issuer;
+  private NimbusJwtDecoder decoder;
+
+  @BeforeEach
+  void setUp() {
     AppProperties appProperties = new AppProperties();
     AppProperties.Jwt jwt = new AppProperties.Jwt();
     jwt.setSecret(SECRET);
     jwt.setExpiration(3_600_000L);
+    jwt.setAccessExpiration(900_000L);
+    jwt.setRefreshExpiration(1_209_600_000L);
     appProperties.setJwt(jwt);
-
-    JwtEncoder encoder = new JwtEncoderConfig().jwtEncoder(appProperties);
-    JwtIssuer issuer = new JwtIssuer(encoder, appProperties);
-
-    Token token =
-        issuer.issue(
-            "user@kizuna.test", Map.of("authorities", List.of("PERM_TEST"), "userType", "STAFF"));
+    issuer = new JwtIssuer(new JwtEncoderConfig().jwtEncoder(appProperties), appProperties);
 
     SecretKey key = new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-    NimbusJwtDecoder decoder =
-        NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
+    decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
     decoder.setJwtValidator(new JwtIssuerValidator(JwtIssuer.ISSUER));
+  }
 
-    Jwt decoded = decoder.decode(token.token());
+  @Test
+  void issuedTokenRoundTripsThroughHs256Decoder() {
+    IssuedJwt issued =
+        issuer.issue(
+            TokenType.ACCESS,
+            "user@kizuna.test",
+            Map.of("authorities", List.of("PERM_TEST"), "userType", "STAFF"),
+            "session-1");
+
+    Jwt decoded = decoder.decode(issued.value());
 
     // iss = "Kizuna" は非 URL のため getIssuer()（内部で URL 変換する）ではなく
     // getClaimAsString で読む（JwtIssuerValidator 自身も内部で同様に生クレーム文字列を比較する）。
     assertThat(decoded.getSubject()).isEqualTo("user@kizuna.test");
     assertThat(decoded.getClaimAsString("iss")).isEqualTo(JwtIssuer.ISSUER);
     assertThat(decoded.getClaimAsStringList("authorities")).containsExactly("PERM_TEST");
-    // exp クレームは JWT 仕様上 秒精度（NumericDate）のため、Token DTO のミリ秒値を秒へ切り捨てて比較する。
-    assertThat(decoded.getExpiresAt().getEpochSecond()).isEqualTo(token.expiresAt() / 1000);
+    // exp クレームは JWT 仕様上 秒精度（NumericDate）のため、ミリ秒値を秒へ切り捨てて比較する。
+    assertThat(decoded.getExpiresAt().getEpochSecond())
+        .isEqualTo(issued.expiresAt().getEpochSecond());
   }
 
   @Test
-  void explicitExpiryOverridesGlobalDefault() {
-    AppProperties appProperties = new AppProperties();
-    AppProperties.Jwt jwt = new AppProperties.Jwt();
-    jwt.setSecret(SECRET);
-    jwt.setExpiration(3_600_000L);
-    appProperties.setJwt(jwt);
+  void stampsTypeAndSessionId() {
+    Jwt access = decoder.decode(issuer.issue(TokenType.ACCESS, "u", Map.of(), "session-1").value());
+    Jwt refresh =
+        decoder.decode(issuer.issue(TokenType.REFRESH, "u", Map.of(), "session-1").value());
 
-    JwtIssuer issuer =
-        new JwtIssuer(new JwtEncoderConfig().jwtEncoder(appProperties), appProperties);
-    Instant exp = Instant.now().plusSeconds(60);
+    assertThat(access.getClaimAsString(TokenType.CLAIM)).isEqualTo("access");
+    assertThat(refresh.getClaimAsString(TokenType.CLAIM)).isEqualTo("refresh");
+    assertThat(access.getClaimAsString(TokenType.SESSION_ID_CLAIM)).isEqualTo("session-1");
+    assertThat(refresh.getClaimAsString(TokenType.SESSION_ID_CLAIM)).isEqualTo("session-1");
+  }
 
-    Token token = issuer.issue("user@kizuna.test", Map.of("userType", "STAFF"), exp);
+  @Test
+  void eachTypeUsesItsOwnLifetime() {
+    Instant before = Instant.now();
 
-    // 大域既定（1 時間）ではなく渡した期限で発行される。秒への切り捨ては JWT 仕様側の丸めである。
-    assertThat(token.expiresAt()).isEqualTo(exp.toEpochMilli());
+    IssuedJwt access = issuer.issue(TokenType.ACCESS, "u", Map.of(), "s");
+    IssuedJwt refresh = issuer.issue(TokenType.REFRESH, "u", Map.of(), "s");
+
+    // 大域の app.jwt.expiration（1 時間）ではなく、種別ごとの有効期間で発行される。
+    assertThat(access.expiresAt())
+        .isBetween(before.plusMillis(900_000L), Instant.now().plusMillis(900_000L));
+    assertThat(refresh.expiresAt())
+        .isBetween(before.plusMillis(1_209_600_000L), Instant.now().plusMillis(1_209_600_000L));
   }
 }

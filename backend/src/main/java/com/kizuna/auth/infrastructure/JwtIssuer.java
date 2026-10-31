@@ -1,6 +1,5 @@
 package com.kizuna.auth.infrastructure;
 
-import com.kizuna.auth.api.dto.Token;
 import com.kizuna.shared.config.AppProperties;
 import java.time.Instant;
 import java.util.Map;
@@ -13,7 +12,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
 
-/** Bearer トークン発行。署名は HS256 に固定し、{@link JwtDecoderConfig} の decoder と揃える。 */
+/**
+ * トークン発行。署名は HS256 に固定し、{@link JwtDecoderConfig} の decoder と揃える。有効期間は種別ごとの設定で決め、大域の {@code
+ * app.jwt.expiration} は使わない（資格情報の版キャッシュの TTL を兼ねるため、アクセストークンに合わせて短くできない）。
+ */
 @Component
 @RequiredArgsConstructor
 public class JwtIssuer {
@@ -24,18 +26,10 @@ public class JwtIssuer {
   private final JwtEncoder jwtEncoder;
   private final AppProperties appProperties;
 
-  /** 大域既定の有効期間（{@code app.jwt.expiration}）で発行する。通常のログイン経路はこちらを使う。 */
-  public Token issue(String subject, Map<String, Object> claims) {
-    return issue(subject, claims, Instant.now().plusMillis(appProperties.getJwtExpiration()));
-  }
-
-  /**
-   * 期限を明示して発行する。トークンの exp を発行元の記録が持つ期限と同一の値に揃えるための口で、 大域既定とは独立に短命なトークンを作る経路（緊急昇格）が使う。
-   *
-   * <p>大域既定を短くして代用はできない。{@code app.jwt.expiration} は資格情報の版キャッシュの TTL も兼ねる。
-   */
-  public Token issue(String subject, Map<String, Object> claims, Instant exp) {
+  public IssuedJwt issue(
+      TokenType type, String subject, Map<String, Object> claims, String sessionId) {
     Instant now = Instant.now();
+    Instant exp = now.plusMillis(type.lifetimeMillis(appProperties));
     JwtClaimsSet claimsSet =
         JwtClaimsSet.builder()
             .issuer(ISSUER)
@@ -43,9 +37,11 @@ public class JwtIssuer {
             .issuedAt(now)
             .expiresAt(exp)
             .claims(c -> c.putAll(claims))
+            .claim(TokenType.CLAIM, type.claimValue())
+            .claim(TokenType.SESSION_ID_CLAIM, sessionId)
             .build();
     JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
     Jwt jwt = jwtEncoder.encode(JwtEncoderParameters.from(header, claimsSet));
-    return new Token(jwt.getTokenValue(), exp.toEpochMilli());
+    return new IssuedJwt(jwt.getTokenValue(), exp);
   }
 }

@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -113,7 +112,6 @@ class CastControllerTest {
     mockMvc
         .perform(
             post("/casts/cast-1/invitation")
-                .with(csrf())
                 .principal(() -> "operator@example.test")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isCreated());
@@ -130,7 +128,6 @@ class CastControllerTest {
     mockMvc
         .perform(
             delete("/casts/cast-1")
-                .with(csrf())
                 .principal(() -> "operator@example.test")
                 .header("X-Store-ID", "1"))
         .andExpect(status().isNoContent());
@@ -146,7 +143,6 @@ class CastControllerTest {
     mockMvc
         .perform(
             MockMvcRequestBuilders.patch("/casts/cast-1/publication")
-                .with(csrf())
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"publication_status\":\"PUBLISHED\"}"))
@@ -163,7 +159,6 @@ class CastControllerTest {
       mockMvc
           .perform(
               MockMvcRequestBuilders.patch("/casts/cast-1/publication")
-                  .with(csrf())
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body))
@@ -178,7 +173,6 @@ class CastControllerTest {
     mockMvc
         .perform(
             MockMvcRequestBuilders.patch("/casts/cast-1/publication")
-                .with(csrf())
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"publication_status\":\"PUBLISHED\"}"))
@@ -193,7 +187,6 @@ class CastControllerTest {
     mockMvc
         .perform(
             post("/casts")
-                .with(csrf())
                 .principal(() -> "operator@example.test")
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
@@ -211,7 +204,6 @@ class CastControllerTest {
     mockMvc
         .perform(
             post("/casts")
-                .with(csrf())
                 .principal(() -> "operator@example.test")
                 .header("X-Store-ID", "1")
                 .contentType("application/json")

@@ -12,7 +12,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -427,7 +426,6 @@ class OrderApplicationControllerTest {
   private MockHttpServletRequestBuilder guestPost(String body) {
     return post("/order-applications/public")
         .header("X-Store-ID", STORE_ID.toString())
-        .with(csrf())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body);
   }
@@ -479,7 +477,6 @@ class OrderApplicationControllerTest {
     return post(path)
         .header("X-Store-ID", STORE_ID.toString())
         .principal(staff())
-        .with(csrf())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body);
   }

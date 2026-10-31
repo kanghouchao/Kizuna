@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -96,10 +95,7 @@ class BenefitRuleControllerTest {
 
     mockMvc
         .perform(
-            post("/benefit-rules")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(VISIT_RULE_BODY))
+            post("/benefit-rules").contentType(MediaType.APPLICATION_JSON).content(VISIT_RULE_BODY))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value(9));
 
@@ -116,7 +112,6 @@ class BenefitRuleControllerTest {
     mockMvc
         .perform(
             post("/benefit-rules")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
@@ -135,7 +130,6 @@ class BenefitRuleControllerTest {
     mockMvc
         .perform(
             put("/benefit-rules/1")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
@@ -153,7 +147,6 @@ class BenefitRuleControllerTest {
     mockMvc
         .perform(
             put("/benefit-rules/1")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
@@ -174,7 +167,6 @@ class BenefitRuleControllerTest {
     mockMvc
         .perform(
             put("/benefit-rules/1")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
@@ -197,7 +189,6 @@ class BenefitRuleControllerTest {
     mockMvc
         .perform(
             post("/benefit-rules/1/deactivation")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"version\":0}"))
         .andExpect(status().isNoContent());
@@ -209,7 +200,6 @@ class BenefitRuleControllerTest {
     mockMvc
         .perform(
             post("/benefit-rules/1/deactivation")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"version\":0}"))
         .andExpect(status().isBadRequest());
@@ -221,7 +211,6 @@ class BenefitRuleControllerTest {
     mockMvc
         .perform(
             post("/benefit-rules/1/deactivation")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
         .andExpect(status().isBadRequest());
@@ -249,15 +238,11 @@ class BenefitRuleControllerTest {
     mockMvc.perform(get("/benefit-rules/1")).andExpect(status().isForbidden());
     mockMvc
         .perform(
-            post("/benefit-rules")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(VISIT_RULE_BODY))
+            post("/benefit-rules").contentType(MediaType.APPLICATION_JSON).content(VISIT_RULE_BODY))
         .andExpect(status().isForbidden());
     mockMvc
         .perform(
             put("/benefit-rules/1")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
@@ -268,7 +253,6 @@ class BenefitRuleControllerTest {
     mockMvc
         .perform(
             post("/benefit-rules/1/deactivation")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"version\":0}"))
         .andExpect(status().isForbidden());

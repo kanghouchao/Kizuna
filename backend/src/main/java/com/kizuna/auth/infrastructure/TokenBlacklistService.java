@@ -10,21 +10,23 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Component;
 
 /**
- * トークン単位の JWT ブラックリストの読み書き（Redis、ログアウト用）。TTL は token 自身の exp まで。
- * 書き込みはセッション失効、判定は認証フィルタから使う。アカウント単位の失効は資格情報の版（{@link CredentialVersionService}、ADR 0022）が担う —
- * トークン単位は版で表現できないため、この機構だけが存続する。
+ * ログアウト用の JWT ブラックリストの読み書き（Redis）。トークン単位（TTL は token 自身の exp まで）とセッション単位（sid）の二つを持つ。
+ * アカウント単位の失効は資格情報の版（{@link CredentialVersionService}、ADR 0022）が担い、トークン・セッション単位は版で表現できないため ここに残る。
  */
 @Component
 public class TokenBlacklistService {
 
   private static final String KEY_PREFIX = "blacklist:tokens:";
+  private static final String SESSION_KEY_PREFIX = "blacklist:sessions:";
 
   private final RedisTemplate<String, Object> redisTemplate;
+  private final AppProperties appProperties;
   private final JwtDecoder expDecoder;
 
   public TokenBlacklistService(
       RedisTemplate<String, Object> redisTemplate, AppProperties appProperties) {
     this.redisTemplate = redisTemplate;
+    this.appProperties = appProperties;
     // 主 JwtDecoder bean（JwtDecoderConfig）は本クラス（TokenBlacklistValidator 経由）に依存するため、
     // ここで注入すると循環参照になる。token の exp を読むためだけの decoder を自前で組み立てる
     // （issuer・ブラックリスト検証は不要 — 失効判定は blacklist() 自身が担う）。
@@ -64,5 +66,22 @@ public class TokenBlacklistService {
   /** 生トークンがブラックリスト登録済みかを返す。 */
   public boolean isBlacklisted(String token) {
     return Boolean.TRUE.equals(redisTemplate.hasKey(KEY_PREFIX + token));
+  }
+
+  /**
+   * ログアウトしたセッションを失効させる。TTL はリフレッシュトークンの有効期間で、同じ sid でそれ以前に発行されたトークンは全てその間に期限が切れる。 トークン文字列ではなく sid
+   * で失効させるのは、延長前に盗まれた旧いリフレッシュトークンも同じセッションとして止めるため。
+   */
+  public void blacklistSession(String sessionId) {
+    redisTemplate
+        .opsForValue()
+        .set(
+            SESSION_KEY_PREFIX + sessionId,
+            "1",
+            Duration.ofMillis(appProperties.getJwt().getRefreshExpiration()));
+  }
+
+  public boolean isSessionBlacklisted(String sessionId) {
+    return Boolean.TRUE.equals(redisTemplate.hasKey(SESSION_KEY_PREFIX + sessionId));
   }
 }

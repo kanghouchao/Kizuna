@@ -17,7 +17,7 @@ export const ADMIN_PASSWORD = "pass1234";
 /**
  * 店長（store1/store2 双方に授権。initial-setup プロジェクトが作成する）でログインし
  * JWT を返す。返却トークンは STORE_HEADERS（X-Store-ID）と併用することで
- * 店舗を要する API に店舗文脈を確立できる。/auth/login は CSRF 免除。
+ * 店舗を要する API に店舗文脈を確立できる。
  */
 export async function loginAsStoreAdmin(
   request: APIRequestContext,
@@ -120,7 +120,6 @@ export async function expectSidebarLinkAbsentEverywhere(
 /**
  * template_key を変更する（PUT /config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。
  * backend は Jackson SNAKE_CASE 設定のため JSON キーは template_key。
- * Bearer トークン付きリクエストは CSRF 免除。
  */
 export async function setTemplateKey(
   request: APIRequestContext,
@@ -545,7 +544,7 @@ export async function approveShiftRequest(
   return res.json();
 }
 
-/** 会員を自助登録し会員コードを返す（POST /api/members, 匿名・CSRF 免除）。 */
+/** 会員を自助登録し会員コードを返す（POST /api/members, 匿名）。 */
 export async function registerMember(
   request: APIRequestContext,
   email: string,

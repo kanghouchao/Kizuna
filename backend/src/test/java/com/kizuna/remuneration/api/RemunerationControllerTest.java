@@ -8,7 +8,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -167,7 +166,6 @@ class RemunerationControllerTest {
     mvc.perform(
             post("/bonus-awards")
                 .principal(() -> "person@example.test")
-                .with(csrf())
                 .header("X-Store-ID", "7")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
@@ -224,7 +222,6 @@ class RemunerationControllerTest {
       mvc.perform(
               post(base + "/corrections")
                   .principal(() -> "person@example.test")
-                  .with(csrf())
                   .header("X-Store-ID", "1")
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(
@@ -235,7 +232,6 @@ class RemunerationControllerTest {
       mvc.perform(
               post(base + "/cancellation")
                   .principal(() -> "person@example.test")
-                  .with(csrf())
                   .header("X-Store-ID", "1")
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(
@@ -260,7 +256,6 @@ class RemunerationControllerTest {
   void readingDoesNotGrantBonusWrite() throws Exception {
     mvc.perform(
             post("/bonus-awards")
-                .with(csrf())
                 .header("X-Store-ID", "1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(

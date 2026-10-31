@@ -2,9 +2,7 @@ package com.kizuna.auth.application;
 
 import com.kizuna.auth.api.dto.LineAuthorizationRequest;
 import com.kizuna.auth.api.dto.LineConfigResponse;
-import com.kizuna.auth.api.dto.LineLoginResponse;
 import com.kizuna.auth.api.dto.LineRegistrationRequest;
-import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.LineApiClient;
 import com.kizuna.auth.infrastructure.LineChannel;
 import com.kizuna.auth.infrastructure.LineChannelResolver;
@@ -31,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>なりすまし防止の不変条件: ログイン経路は LINE ユーザー ID でしか身分を引かない。LINE 側の検証済みメールアドレスが 既存アカウントと一致しても自動連携はせず、未知の
  * LINE ユーザー ID は必ず登録チケット経路へ落とす（メール一致は本人性の 証明にならず、自動連携を許すと LINE 側でメールを詐称できる限りアカウント乗っ取りになる）。
  *
- * <p>発行するトークンはパスワードログインと同一の {@link AuthService#issueTokenFor} を通す（認証手段による claim の齟齬を作らない）。
+ * <p>発行するトークンはパスワードログインと同一の {@link AuthService#issueSessionFor} を通す（認証手段による claim の齟齬を作らない）。
  */
 @Service
 @RequiredArgsConstructor
@@ -62,20 +60,20 @@ public class LineAuthService {
    * LINE ログイン。連携済みならトークンを、未登録なら 1 度きりの登録チケットを返す。取引を張らないのはパスワードログインと同じ理由 （特典の評価は認証の接続を返却してから。LINE
    * との往復中に接続を握らない利点もある）。
    */
-  public LineLoginResponse login(LineAuthorizationRequest request) {
+  public LineLogin login(LineAuthorizationRequest request) {
     LineIdentity identity = verify(request);
     return userRepository
         .findByLineUserId(identity.lineUserId())
-        .map(this::issueTokenForLinkedUser)
+        .map(this::issueSessionForLinkedUser)
         .orElseGet(
             () ->
-                LineLoginResponse.unregistered(
-                    ticketStore.issue(identity.lineUserId()), identity.displayName()));
+                new LineLogin(
+                    null, ticketStore.issue(identity.lineUserId()), identity.displayName()));
   }
 
   /** 登録チケットで会員身分を作成し、そのままログイン状態にする（自動ログイン）。 */
   @Transactional
-  public Token register(LineRegistrationRequest request) {
+  public IssuedSession register(LineRegistrationRequest request) {
     String lineUserId =
         ticketStore
             .peek(request.getRegistrationTicket())
@@ -85,7 +83,7 @@ public class LineAuthService {
             request.getEmail(), request.getDisplayName(), lineUserId);
     // 消費は登録成功後 — 重複メールなどの失敗でチケットを失うと、入力を直すだけのやり直しに OAuth の再実行を強いるため。
     ticketStore.consume(request.getRegistrationTicket());
-    return authService.issueTokenFor(user);
+    return authService.issueSessionFor(user);
   }
 
   /** 認証済みの本人に LINE アカウントを連携する。連携の解除・付け替えは提供しない。 */
@@ -121,9 +119,9 @@ public class LineAuthService {
   }
 
   /** 連携済み身分へのトークン発行。停止済みアカウントはパスワードログインと同じく 401 で拒否する。 認証成功はパスワードログインと同一の発火事象なので、同じ引き金を発行の後に引く。 */
-  private LineLoginResponse issueTokenForLinkedUser(User user) {
-    Token token = authService.issueTokenFor(user);
+  private LineLogin issueSessionForLinkedUser(User user) {
+    IssuedSession session = authService.issueSessionFor(user);
     loginBenefitTrigger.onAuthenticated(user);
-    return LineLoginResponse.registered(token);
+    return new LineLogin(session, null, null);
   }
 }

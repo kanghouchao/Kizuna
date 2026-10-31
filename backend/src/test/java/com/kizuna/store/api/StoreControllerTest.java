@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -80,7 +79,6 @@ class StoreControllerTest {
     mockMvc
         .perform(
             put("/stores/1")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"店舗\", \"short_name\": \"店\"}"))
         .andExpect(status().isNoContent());
@@ -96,7 +94,6 @@ class StoreControllerTest {
     mockMvc
         .perform(
             put("/stores/1")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"店舗\", \"short_name\": \"" + shortName + "\"}"))
         .andExpect(status().isBadRequest())
@@ -109,10 +106,7 @@ class StoreControllerTest {
   void rejectsMissingShortName() throws Exception {
     mockMvc
         .perform(
-            put("/stores/1")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"店舗\"}"))
+            put("/stores/1").contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"店舗\"}"))
         .andExpect(status().isBadRequest());
   }
 
@@ -124,7 +118,6 @@ class StoreControllerTest {
     mockMvc
         .perform(
             put("/stores/1")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"店舗\", \"short_name\": \"" + shortName + "\"}"))
         .andExpect(status().isNoContent());
@@ -140,7 +133,6 @@ class StoreControllerTest {
     mockMvc
         .perform(
             post("/stores")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     "{\"name\": \"新店舗\", \"short_name\": \"新店\", \"domain\": \"new-store.kizuna.test\"}"))
@@ -155,10 +147,7 @@ class StoreControllerTest {
   void createRejectsInvalidShortName(String shortName) throws Exception {
     mockMvc
         .perform(
-            post("/stores")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody(shortName)))
+            post("/stores").contentType(MediaType.APPLICATION_JSON).content(createBody(shortName)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.details.short_name").value(containsString("略称")));
   }
@@ -172,10 +161,7 @@ class StoreControllerTest {
 
     mockMvc
         .perform(
-            post("/stores")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody(shortName)))
+            post("/stores").contentType(MediaType.APPLICATION_JSON).content(createBody(shortName)))
         .andExpect(status().isCreated());
   }
 
