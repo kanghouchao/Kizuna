@@ -52,8 +52,9 @@ public class ServiceSettingsService {
             cb.and(cb.equal(root.get("storeId"), storeId), cb.equal(root.get("deleted"), deleted));
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
+    // Snowflake ID は作成順に増えるため、降順で作成直後のサービスが先頭ページに並ぶ
     return items
-        .findAll(filter, PageRequest.of(page, size, Sort.by(ServiceItem::getId)))
+        .findAll(filter, PageRequest.of(page, size, Sort.by(ServiceItem::getId).descending()))
         .map(mapper::summary);
   }
 
