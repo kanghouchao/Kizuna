@@ -15,6 +15,11 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
 jest.mock('../api/auth', () => ({ authApi: { logout: jest.fn() } }));
 
+const mockNotifyError = jest.fn();
+jest.mock('@/shared/notify', () => ({
+  notify: { error: (message: string) => mockNotifyError(message) },
+}));
+
 const mockClearSession = jest.fn();
 jest.mock('@/shared/lib', () => ({
   // loginPath は本物を使う。差し替えると着地先の組み立てを試験が自前で持つことになり、
@@ -52,6 +57,25 @@ describe('AuthProvider', () => {
     expect(mockClearSession).toHaveBeenCalled();
     expect(mockBroadcastLogout).toHaveBeenCalledWith(7);
     expect(mockPush).toHaveBeenCalledWith('/auth/login');
+  });
+
+  it('ログアウト要求が通信の失敗で届かなければ、セッションを残して知らせ、ログイン画面へは移らない', async () => {
+    // リフレッシュ cookie が残ったまま移ると、ログイン画面の自動着地で元のセッションへ戻ってしまう。
+    storeSessionToken({ token: 'tkn', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
+    (authApi.logout as jest.Mock).mockRejectedValueOnce(new Error('Network Error'));
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { getByText } = render(
+      <AuthProvider>
+        <Consumer />
+      </AuthProvider>
+    );
+    getByText('out').click();
+    await waitFor(() => expect(mockNotifyError).toHaveBeenCalled());
+    expect(getSessionUserId()).toBe(7);
+    expect(mockClearSession).not.toHaveBeenCalled();
+    expect(mockBroadcastLogout).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   // 利用者が自分で押したログアウトが、身に覚えのない説明の書かれた画面に着地しないこと。

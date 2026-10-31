@@ -37,17 +37,18 @@ Then('ヘッダーに {string} が表示される', async ({ page }, email: stri
 });
 
 When('ログイン画面を開き直す', async ({ page }) => {
-  // フォームが一瞬でも描かれたかを、読み込みの最初から見張る。
+  // フォームが一瞬でも描かれたかを、読み込みの最初から見張る。着地は根 layout を跨ぐ文書の読み直しで window の値が
+  // 消えるので、同じタブの間は残る sessionStorage に記録する。
   await page.addInitScript(() => {
     new MutationObserver(() => {
-      if (document.getElementById('email')) (window as { loginFormSeen?: boolean }).loginFormSeen = true;
+      if (document.getElementById('email')) sessionStorage.setItem('e2e-login-form-seen', '1');
     }).observe(document, { childList: true, subtree: true });
   });
   await page.goto(LOGIN_URL);
 });
 
 Then('ログインフォームは一度も表示されていない', async ({ page }) => {
-  expect(await page.evaluate(() => (window as { loginFormSeen?: boolean }).loginFormSeen)).toBeFalsy();
+  expect(await page.evaluate(() => sessionStorage.getItem('e2e-login-form-seen'))).toBeNull();
 });
 
 When('ブラウザの cookie をすべて消す', async ({ page }) => {
