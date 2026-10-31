@@ -100,6 +100,11 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
     const original = await current.json();
     const changed = await request.put(`/api/roles/${id}`, { headers: headers(admin), data: { name: original.name, permissions: replacement, version: original.version } });
     expect(changed.status(), await changed.text()).toBe(200);
+    if (callerRevoked) {
+      // 保持ロールの権限が変わると資格情報の版が進み、変更前のトークンは失効する。
+      expect((await request.post('/api/task-executions', { headers: headers(operator), data: body })).status()).toBe(401);
+      operator = await loginUser(request, email, password);
+    }
     const replayWithRevocation = await request.post('/api/task-executions', { headers: headers(operator), data: body });
     expect(replayWithRevocation.status()).toBe(callerRevoked ? 403 : 200);
     if (!callerRevoked) {
@@ -108,6 +113,7 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
     }
     const restored = await request.put(`/api/roles/${id}`, { headers: headers(admin), data: { name: original.name, permissions: original.permissions, version: (await changed.json()).version } });
     expect(restored.status(), await restored.text()).toBe(200);
+    if (callerRevoked) operator = await loginUser(request, email, password);
   }
   const audit = await request.get('/api/audit-events', { headers: headers(operator), params: { action: 'SERVICE_ID_SUSPENDED' } });
   expect(audit.status()).toBe(200);
