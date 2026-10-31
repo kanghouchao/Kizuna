@@ -29,8 +29,10 @@ import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +47,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -76,7 +79,8 @@ class AdminStaffServiceTest {
   @Mock private RoleRepository roleRepository;
   @Mock private RoleManageHolderGuard roleManageHolderGuard;
   @Mock private PasswordEncoder encoder;
-  @Mock private CredentialOperations credentialOperations;
+  private final List<Object> events = new ArrayList<>();
+  @Spy private CredentialOperations credentialOperations = new CredentialOperations(events::add);
   private final StoreScopeHolder holder = new StoreScopeHolder();
 
   private AdminStaffService service;
@@ -442,6 +446,8 @@ class AdminStaffServiceTest {
 
     assertThat(target.getRoleIds()).containsExactly(MANAGER_ROLE);
     assertThat(target.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
+    assertThat(target.getCredentialVersion()).as("ロール集合の変更で再ログインさせる").isEqualTo(1L);
+    assertThat(events).containsExactly(new UserCredentialsChanged(2L, 1L));
     verify(businessAudit)
         .recordCurrent(
             eq(null), eq("STAFF_GRANTS_CHANGED"), eq("USER_GRANTS"), eq("2"), any(), any());

@@ -53,8 +53,8 @@ public class User extends BaseEntity {
   @Column private String password;
 
   /**
-   * 資格情報の版（ADR 0022）。パスワード変更・再設定・停止で単調に増え、発行済みトークンの claim との 相等比較でセッションを即時失効させる。楽観ロックの version
-   * とは別物（あちらは無関係な更新でも増える）。
+   * 資格情報の版（ADR 0022）。パスワード変更・再設定・停止・実効権限の変更で単調に増え、発行済みトークンの claim との相等比較でセッションを即時失効させる。楽観ロックの
+   * version とは別物（あちらは無関係な更新でも増える）。
    */
   @Column(name = "credential_version", nullable = false)
   private Long credentialVersion = 0L;
@@ -129,12 +129,18 @@ public class User extends BaseEntity {
     this.storeIds = new HashSet<>(stores);
   }
 
-  /** 授権（ロール・担当店舗集合）を再割当てする。構築時と同一の不変条件を検証する（本人属性は変更しない）。 */
+  /**
+   * 授権（ロール・担当店舗集合）を再割当てする。構築時と同一の不変条件を検証する（本人属性は変更しない）。ロール集合が変わると版を進める —
+   * トークンの権限はロールから発行時に写したものだから。店舗集合は毎要求 DB から解決されるので進めない。{@code CredentialOperations} だけが呼ぶ。
+   */
   public void reassignGrants(Set<Long> roleIds, StoreScopeType storeScopeType, Set<Long> storeIds) {
     Set<Long> roles = roleIds == null ? Set.of() : roleIds;
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(this.userType, roles);
     validateScope(this.userType, storeScopeType, stores);
+    if (!this.roleIds.equals(roles)) {
+      this.credentialVersion++;
+    }
     this.roleIds = new HashSet<>(roles);
     this.storeScopeType = storeScopeType;
     this.storeIds = new HashSet<>(stores);

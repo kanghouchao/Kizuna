@@ -217,7 +217,8 @@ public class AdminStaffService {
       roleManageHolderGuard.requireAfterGrantChange(user, req.getRoleIds());
     }
     var before = BusinessAudit.grants(user);
-    user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
+    credentialOperations.reassignGrants(
+        user, req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
       businessAudit.recordCurrent(

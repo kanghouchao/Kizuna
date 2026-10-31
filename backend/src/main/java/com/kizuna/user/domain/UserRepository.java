@@ -92,6 +92,14 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
           + " order by u.id")
   List<Long> lockEnabledRoleHolderIds(@Param("roleIds") Collection<Long> roleIds);
 
+  /**
+   * 指定ロールの保持者全員（停止中・SERVICE を含む）を id 昇順で押さえる。ロールの権限集合の変更で版を進める対象で、全行を書くので実体で返す。
+   * 呼ぶ前に同じ利用者の実体を読み込まないこと — 読み込み済みだとロックの昇格が版の照合を伴い、無関係な更新で 409 に落ちる。
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select u from User u where :roleId member of u.roleIds order by u.id")
+  List<User> lockRoleHolders(@Param("roleId") Long roleId);
+
   /** 同じ母集団を押さえずに読む。{@link #lockEnabledRoleHolderIds} の後に呼ぶと、新しいスナップショットで実際の顔ぶれが返る。 */
   @Query(
       "select u.id from User u where u.enabled = true"

@@ -172,6 +172,27 @@ class UserTest {
   }
 
   @Test
+  @DisplayName("reassignGrants はロール集合が変わると資格情報の版を 1 つ進める（実効権限の変更 — ADR 0022）")
+  void reassignGrantsWithChangedRolesBumpsCredentialVersion() {
+    User user = staffBuilder().build();
+
+    user.reassignGrants(Set.of(1L, 2L), StoreScopeType.ALL_STORES, Set.of());
+
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("reassignGrants は店舗範囲だけの変更や同じロール集合の再提出では版を進めない")
+  void reassignGrantsWithSameRolesKeepsCredentialVersion() {
+    User user = staffBuilder().build();
+
+    user.reassignGrants(Set.of(1L), StoreScopeType.SPECIFIC_STORES, Set.of(5L));
+    user.reassignGrants(Set.of(1L), StoreScopeType.SPECIFIC_STORES, Set.of(5L));
+
+    assertThat(user.getCredentialVersion()).isZero();
+  }
+
+  @Test
   @DisplayName("reassignGrants は STAFF のロール空集合を不変条件違反で拒否する")
   void reassignGrantsWithEmptyRolesThrows() {
     User user = staffBuilder().build();

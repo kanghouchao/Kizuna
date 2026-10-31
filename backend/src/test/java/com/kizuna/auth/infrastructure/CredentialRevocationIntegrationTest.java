@@ -14,6 +14,8 @@ import com.kizuna.shared.config.RedisConfig;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.user.application.CredentialOperations;
+import com.kizuna.user.domain.Role;
+import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -27,6 +29,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import javax.sql.DataSource;
 import liquibase.integration.spring.SpringLiquibase;
@@ -48,6 +54,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
@@ -75,6 +82,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class CredentialRevocationIntegrationTest {
   private AnnotationConfigApplicationContext context;
   private UserRepository users;
+  private RoleRepository roles;
   private CredentialOperations credentials;
   private CredentialVersionService versions;
   private RedisTemplate<String, Object> redis;
@@ -88,6 +96,7 @@ class CredentialRevocationIntegrationTest {
   void connect() throws Exception {
     context = new AnnotationConfigApplicationContext(Config.class);
     users = context.getBean(UserRepository.class);
+    roles = context.getBean(RoleRepository.class);
     credentials = context.getBean(CredentialOperations.class);
     versions = context.getBean(CredentialVersionService.class);
     redis = context.getBean(RedisTemplate.class);
@@ -200,6 +209,138 @@ class CredentialRevocationIntegrationTest {
     assertThat(meStatus(oldToken)).as("退会者の旧トークンは後継として通らない").isEqualTo(401);
     assertThat(users.findByEmail(withdrawn.getEmail()).map(User::getId))
         .contains(successor.getId());
+  }
+
+  @Test
+  void concurrentRoleFanOutsOverTheSameHolderBothAdvanceItsVersion() throws Exception {
+    long role = createRole();
+    var holder = createStaff(role);
+    var token = token(holder, 0);
+    assertThat(meStatus(token)).isEqualTo(200);
+    var executor = Executors.newFixedThreadPool(2);
+    try {
+      var locked = new CountDownLatch(1);
+      var release = new CountDownLatch(1);
+      Future<?> first =
+          executor.submit(
+              () ->
+                  transaction.executeWithoutResult(
+                      status -> {
+                        invalidateHolders(role);
+                        locked.countDown();
+                        await(release);
+                      }));
+      assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
+      Future<?> second =
+          executor.submit(
+              () -> transaction.executeWithoutResult(status -> invalidateHolders(role)));
+      awaitLockWait();
+      release.countDown();
+      first.get(10, TimeUnit.SECONDS);
+      second.get(10, TimeUnit.SECONDS);
+    } finally {
+      executor.shutdownNow();
+    }
+
+    assertThat(users.findCredentialVersionById(holder.getId())).contains(2L);
+    assertThat(meStatus(token)).isEqualTo(401);
+    assertThat(meStatus(token(holder, 1))).isEqualTo(401);
+    assertThat(meStatus(token(holder, 2))).isEqualTo(200);
+  }
+
+  @Test
+  void grantEditReadBeforeARoleFanOutIsRejectedInsteadOfOverwritingTheVersion() throws Exception {
+    long role = createRole();
+    long otherRole = createRole();
+    var holder = createStaff(role);
+    var executor = Executors.newSingleThreadExecutor();
+    try {
+      var read = new CountDownLatch(1);
+      var proceed = new CountDownLatch(1);
+      // 従業員編集と同じく、版の照合だけを頼りに素の読みで実体を載せてから書く。
+      Future<?> edit =
+          executor.submit(
+              () ->
+                  transaction.executeWithoutResult(
+                      status -> {
+                        User stale = users.findById(holder.getId()).orElseThrow();
+                        read.countDown();
+                        await(proceed);
+                        credentials.reassignGrants(
+                            stale, Set.of(otherRole), StoreScopeType.ALL_STORES, Set.of());
+                        users.saveAndFlush(stale);
+                      }));
+      assertThat(read.await(10, TimeUnit.SECONDS)).isTrue();
+      transaction.executeWithoutResult(status -> invalidateHolders(role));
+      proceed.countDown();
+      assertThatThrownBy(() -> edit.get(10, TimeUnit.SECONDS))
+          .hasCauseInstanceOf(ObjectOptimisticLockingFailureException.class);
+    } finally {
+      executor.shutdownNow();
+    }
+
+    assertThat(users.findCredentialVersionById(holder.getId())).contains(1L);
+    assertThat(users.findById(holder.getId()).orElseThrow().getRoleIds()).containsExactly(role);
+  }
+
+  /** ロールの権限集合を変えた更新が保持者に対して行うことと同じ（RoleService はこの試験の文脈に載せない）。 */
+  private void invalidateHolders(long roleId) {
+    List<User> holders = users.lockRoleHolders(roleId);
+    holders.forEach(credentials::invalidateSessions);
+    users.saveAllAndFlush(holders);
+  }
+
+  private long createRole() {
+    return transaction.execute(
+        status ->
+            roles
+                .saveAndFlush(
+                    Role.builder()
+                        .name("失効検証-" + UUID.randomUUID())
+                        .systemRole(false)
+                        .permissionIds(
+                            Set.of(
+                                jdbc.queryForObject(
+                                    "select min(id) from t_permissions", Long.class)))
+                        .build())
+                .getId());
+  }
+
+  private User createStaff(long roleId) {
+    return transaction.execute(
+        status ->
+            users.saveAndFlush(
+                User.builder()
+                    .email(UUID.randomUUID() + "@revocation.test")
+                    .password(UUID.randomUUID().toString())
+                    .displayName("失効検証")
+                    .enabled(true)
+                    .userType(UserType.STAFF)
+                    .roleIds(Set.of(roleId))
+                    .storeScopeType(StoreScopeType.ALL_STORES)
+                    .build()));
+  }
+
+  private void awaitLockWait() throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (System.nanoTime() < deadline) {
+      Long waiting =
+          jdbc.queryForObject(
+              "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock'",
+              Long.class);
+      if (waiting != null && waiting > 0) return;
+      Thread.sleep(20);
+    }
+    throw new AssertionError("後続の失効が保持者の行ロックを待っていません");
+  }
+
+  private static void await(CountDownLatch latch) {
+    try {
+      if (!latch.await(10, TimeUnit.SECONDS)) throw new AssertionError("待ち合わせが時間切れです");
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new AssertionError(ex);
+    }
   }
 
   private User createUser(UserType type) {

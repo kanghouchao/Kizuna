@@ -24,9 +24,14 @@ import com.kizuna.user.domain.RoleInUseException;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
 import com.kizuna.user.domain.StaleRoleUpdateException;
+import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.SystemRoleImmutableException;
+import com.kizuna.user.domain.User;
+import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
+import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +42,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -59,6 +65,8 @@ class RoleServiceTest {
   @Mock private UserRepository userRepository;
 
   @Mock private RoleManageHolderGuard roleManageHolderGuard;
+  private final List<Object> events = new ArrayList<>();
+  @Spy private CredentialOperations credentialOperations = new CredentialOperations(events::add);
 
   @InjectMocks private RoleService service;
 
@@ -220,6 +228,54 @@ class RoleServiceTest {
     assertThat(existing.getName()).isEqualTo("受付リーダー");
     assertThat(existing.getPermissionIds()).containsExactly(CUSTOMER_MANAGE_ID);
     assertThat(res.permissions()).containsExactly("CUSTOMER_MANAGE");
+  }
+
+  @Test
+  void update_changingPermissions_advancesEveryHoldersCredentialVersion() {
+    Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
+    User staff = holder(41L, UserType.STAFF);
+    User serviceIdentity = holder(42L, UserType.SERVICE);
+    when(permissionRepository.findByCodeIn(Set.of("CUSTOMER_MANAGE")))
+        .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
+    when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
+    when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
+    when(userRepository.lockRoleHolders(7L)).thenReturn(List.of(staff, serviceIdentity));
+
+    service.update(7L, updateRequest("受付", Set.of("CUSTOMER_MANAGE"), 0L));
+
+    assertThat(staff.getCredentialVersion()).isEqualTo(1L);
+    assertThat(serviceIdentity.getCredentialVersion()).isEqualTo(1L);
+    assertThat(events).containsExactly(new UserCredentialsChanged(41L, 1L));
+    verify(userRepository).saveAllAndFlush(List.of(staff, serviceIdentity));
+  }
+
+  @Test
+  void update_renameOnly_leavesHoldersUntouched() {
+    Role existing = role(7L, "受付", false, Set.of(ORDER_MANAGE_ID));
+    when(permissionRepository.findByCodeIn(Set.of("ORDER_MANAGE")))
+        .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE)));
+    when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
+    when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
+
+    service.update(7L, updateRequest("受付リーダー", Set.of("ORDER_MANAGE"), 0L));
+
+    verifyNoInteractions(userRepository);
+    assertThat(events).isEmpty();
+  }
+
+  private static User holder(long id, UserType type) {
+    User user =
+        User.builder()
+            .email(type == UserType.SERVICE ? null : "holder" + id + "@kizuna.test")
+            .password(type == UserType.SERVICE ? null : "hash")
+            .displayName("保持者")
+            .enabled(true)
+            .userType(type)
+            .roleIds(Set.of(7L))
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .build();
+    user.setId(id);
+    return user;
   }
 
   @Test
