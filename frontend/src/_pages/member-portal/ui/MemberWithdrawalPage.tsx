@@ -6,7 +6,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { memberApi } from '@/entities/member';
 import { useAuth } from '@/entities/user';
-import { getApiErrorMessage } from '@/shared/lib';
+import { getApiErrorMessage, useResource } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -40,6 +40,9 @@ interface WithdrawalFormValues {
  */
 export function MemberWithdrawalPage() {
   const { logout } = useAuth();
+  // 取り消せない操作なので、どのアカウントが退会するかを先に名乗る。開いた時点のこの GET は、未ログインを
+  // 401 の経路でログインへ送る入口も兼ねる（退会の POST は未ログインだと CSRF の 403 で止まり、そこへ届かない）。
+  const { data: home } = useResource(() => memberApi.home());
   const form = useForm<WithdrawalFormValues>({
     defaultValues: { reason: '', confirmation: '' },
   });
@@ -72,7 +75,12 @@ export function MemberWithdrawalPage() {
             退会すると
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {home && (
+            <p className="text-sm text-foreground">
+              退会するアカウント：{home.display_name}（会員コード {home.member_code}）
+            </p>
+          )}
           <ul className="list-disc space-y-2 pl-5 text-sm text-foreground">
             <li>保有しているポイントはすべて消去され、元に戻せません。</li>
             <li>店舗との紐づけは解除され、申請中の予約は取り下げられます。</li>

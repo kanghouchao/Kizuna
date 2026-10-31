@@ -6,6 +6,7 @@ import type { PermissionCode } from '@/entities/user';
 import { RemunerationStatementPanel } from '../RemunerationStatementPanel';
 import { RemunerationEditor } from '../RemunerationEditor';
 import { RemunerationManagement } from '../RemunerationManagement';
+import { submitOperation, type Operation } from '../../model/operation';
 jest.mock('../../api', () => ({
   remunerationApi: {
     statement: jest.fn(),
@@ -206,6 +207,33 @@ it('別タブで別のアカウントに切り替わっていたら送らない'
   await waitFor(() => expect(authApi.me).toHaveBeenCalled());
   await act(async () => {});
   expect(remunerationApi.createBonus).not.toHaveBeenCalled();
+});
+
+it('本人確認を待つ間の二重保存も、先の保存が終わった後に送らない', async () => {
+  // 確認中に作用域を押さえないと、先の保存が終わってから後の確認が返り、別の requestId で二重計上する
+  let answer!: (v: { email: string; line_linked: boolean }) => void;
+  jest.mocked(authApi.me).mockImplementationOnce(() => new Promise(r => (answer = r)));
+  jest.mocked(remunerationApi.createBonus).mockResolvedValue();
+  const operation = (requestId: string): Operation => ({
+    scope: JSON.stringify(['actor', '1']),
+    personId: 2,
+    personName: '本人',
+    target: { kind: 'bonus' },
+    values: {
+      date: '2026-09-30',
+      amount: 1000,
+      stopped: false,
+      reason: '理由',
+      correction_reason: '',
+    },
+    requestId,
+  });
+  const first = submitOperation(operation('a'));
+  const second = submitOperation(operation('b'));
+  answer({ email: 'actor', line_linked: false });
+  expect(await first).toBe(true);
+  expect(await second).toBe(false);
+  expect(remunerationApi.createBonus).toHaveBeenCalledTimes(1);
 });
 
 it('必須入力の不足をブラウザの吹き出しではなく日本語で示す', async () => {

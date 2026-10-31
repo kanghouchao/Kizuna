@@ -4,7 +4,7 @@ import { memberApi } from '@/entities/member';
 import { notify } from '@/shared/notify';
 
 jest.mock('@/entities/member', () => ({
-  memberApi: { withdraw: jest.fn() },
+  memberApi: { withdraw: jest.fn(), home: jest.fn() },
 }));
 
 const mockLogout = jest.fn();
@@ -27,6 +27,21 @@ const typeReason = (value: string) =>
 describe('MemberWithdrawalPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // 名乗りを見ない検証では取得を決着させない（決着後の再描画を各検証で待たずに済む）
+    jest.mocked(memberApi.home).mockReturnValue(new Promise(() => {}));
+  });
+
+  it('開いた時点で本人を取得し、退会するアカウントを名乗る', async () => {
+    // 退会の送信（POST）は未ログインだと CSRF の 403 で止まり、401 のログイン導線へ届かない。
+    // 開いた時点の GET が 401 の経路でログインへ送る入口を兼ねる。
+    jest
+      .mocked(memberApi.home)
+      .mockResolvedValue({ member_code: 'M-0001', display_name: '会員 太郎' });
+    render(<MemberWithdrawalPage />);
+
+    expect(memberApi.home).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/会員 太郎/)).toBeInTheDocument();
+    expect(screen.getByText(/M-0001/)).toBeInTheDocument();
   });
 
   it('退会で起きることを説明し、確認欄に「退会」と打つまで実行ボタンを開かない', () => {
