@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import { remunerationApi } from '../api';
 import type { Bonus, Guarantee } from './types';
-import { getCurrentStoreId } from '@/shared/lib';
+import { authApi } from '@/entities/user';
+import { ClientDataError, getCurrentStoreId } from '@/shared/lib';
 
 export type EditTarget =
   | { kind: 'guarantee'; item?: Guarantee; version: number; cancel?: boolean }
@@ -58,17 +59,19 @@ export function usePendingOperation(scope: string | null) {
     () => null
   );
 }
-export async function submitOperation(
-  operation: Operation,
-  email: string | undefined,
-  replay = false
-): Promise<boolean> {
-  const existing = pending.get(operation.scope);
-  if (
-    operationScope(email) !== operation.scope ||
-    (replay ? existing?.phase !== 'unknown' || existing.operation !== operation : !!existing)
-  )
-    return false;
+export async function submitOperation(operation: Operation, replay = false): Promise<boolean> {
+  const blocked = () => {
+    const existing = pending.get(operation.scope);
+    return replay ? existing?.phase !== 'unknown' || existing.operation !== operation : !!existing;
+  };
+  if (blocked()) return false;
+  // 操作者は画面の /me（layout の生存期間）で、token は別タブのログインで差し替わる。送る前に今の
+  // token の持ち主と現在店舗を確かめ、元の作用域でない操作は何も預けずに止める。
+  if (operationScope((await authApi.me()).email) !== operation.scope)
+    throw new ClientDataError(
+      'ログイン中のアカウントか店舗が変わりました。画面を開き直してください。'
+    );
+  if (blocked()) return false;
   update(operation.scope, { operation, phase: 'submitting' });
   try {
     await send(operation);

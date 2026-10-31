@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { remunerationApi, type Statement } from '../../api';
 import { setCurrentStore } from '@/shared/lib';
-import { useMe } from '@/entities/user';
+import { authApi, useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { RemunerationStatementPanel } from '../RemunerationStatementPanel';
 import { RemunerationEditor } from '../RemunerationEditor';
@@ -19,8 +19,11 @@ jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
 }));
+jest.mock('@/entities/user/api/auth', () => ({ authApi: { me: jest.fn() } }));
 const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
-const meAs = (email: string, permissions: PermissionCode[]) =>
+// 画面の /me と、送信直前に確かめる今の token の持ち主を同じ利用者に揃える
+const meAs = (email: string, permissions: PermissionCode[]) => {
+  jest.mocked(authApi.me).mockResolvedValue({ email, line_linked: false });
   mockedUseMe.mockReturnValue({
     me: { email, user_type: 'STAFF', permissions, line_linked: false },
     isLoading: false,
@@ -28,6 +31,7 @@ const meAs = (email: string, permissions: PermissionCode[]) =>
     reload: jest.fn(),
     setMe: jest.fn(),
   });
+};
 const originalRandomUUID = crypto.randomUUID;
 afterEach(() => {
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID });
@@ -179,6 +183,29 @@ it('HTTP環境でもボーナス保存に帰属日と理由とUUIDを送信す�
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     ),
   });
+});
+
+it('別タブで別のアカウントに切り替わっていたら送らない', async () => {
+  // 画面の操作者は layout の生存期間の値で、token は別タブのログインで差し替わる
+  jest.mocked(authApi.me).mockResolvedValue({ email: 'other', line_linked: false });
+  render(
+    <RemunerationEditor
+      open
+      personId={2}
+      personName="本人"
+      scope={JSON.stringify(['actor', '1'])}
+      target={{ kind: 'bonus' }}
+      onClose={jest.fn()}
+      onSaved={jest.fn()}
+    />
+  );
+  fireEvent.change(screen.getByLabelText('帰属日'), { target: { value: '2026-09-30' } });
+  fireEvent.change(screen.getByLabelText('付与額（円）'), { target: { value: '1000' } });
+  fireEvent.change(screen.getByLabelText('理由・説明'), { target: { value: '付与理由' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+  await waitFor(() => expect(authApi.me).toHaveBeenCalled());
+  await act(async () => {});
+  expect(remunerationApi.createBonus).not.toHaveBeenCalled();
 });
 
 it('必須入力の不足をブラウザの吹き出しではなく日本語で示す', async () => {
