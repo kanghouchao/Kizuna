@@ -5,7 +5,9 @@ import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
+import com.kizuna.shared.publication.Publication;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -66,6 +68,8 @@ public class ReviewRecord extends StoreScopedEntity {
   @Column(length = 32)
   private String supersededById;
 
+  @Embedded private Publication publication;
+
   public static ReviewRecord receive(
       Long storeId,
       ReviewInput input,
@@ -86,6 +90,7 @@ public class ReviewRecord extends StoreScopedEntity {
             .recorderName(actorName)
             .status(Status.PENDING)
             .permissionStatus(PermissionStatus.NOT_GRANTED)
+            .publication(Publication.HIDDEN)
             .build();
     row.setStoreId(storeId);
     return row;
@@ -144,6 +149,10 @@ public class ReviewRecord extends StoreScopedEntity {
   public void revokePermission() {
     if (permissionStatus != PermissionStatus.GRANTED) throw new ConflictException("有効な公開許可がありません");
     permissionStatus = PermissionStatus.REVOKED;
+  }
+
+  public void changePublication(Publication next) {
+    publication = next;
   }
 
   private void requirePending() {

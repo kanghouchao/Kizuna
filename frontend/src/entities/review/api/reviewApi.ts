@@ -20,6 +20,7 @@ const children = {
   WITHDRAW: 'withdrawals',
   GRANT: 'permissions',
   REVOKE: 'permission-revocations',
+  PUBLISH: 'publication',
 };
 export const reviewApi = {
   list: async (page: number, search: ReviewSearch): Promise<PageResult<ReviewSummary>> =>
@@ -30,10 +31,10 @@ export const reviewApi = {
       (await apiClient.get(`${path}/${id}/history`, { params: { cursor, size: 20 } })).data
     ),
   write: async (command: ReviewCommand): Promise<ReviewWriteResponse> =>
-    (
-      await apiClient.post(
-        command.kind === 'CREATE' ? path : `${path}/${command.id}/${children[command.kind]}`,
-        command.input
-      )
-    ).data,
+    command.kind === 'CREATE'
+      ? (await apiClient.post(path, command.input)).data
+      : command.kind === 'PUBLISH'
+        ? (await apiClient.put(`${path}/${command.id}/${children.PUBLISH}`, command.input)).data
+        : (await apiClient.post(`${path}/${command.id}/${children[command.kind]}`, command.input))
+            .data,
 };

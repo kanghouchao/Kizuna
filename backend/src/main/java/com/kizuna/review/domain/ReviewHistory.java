@@ -4,7 +4,10 @@ import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.persistence.StoreScopedEntity;
+import com.kizuna.shared.publication.Publication;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -66,9 +69,25 @@ public class ReviewHistory extends StoreScopedEntity {
   @Column(updatable = false, length = 32)
   private String permissionRecordId;
 
-  public record Before(Long version, Status status, PermissionStatus permissionStatus) {
+  @Embedded
+  @AttributeOverride(
+      name = "published",
+      column = @Column(name = "after_published", updatable = false, nullable = false))
+  @AttributeOverride(
+      name = "publishFrom",
+      column = @Column(name = "after_publish_from", updatable = false))
+  @AttributeOverride(
+      name = "publishUntil",
+      column = @Column(name = "after_publish_until", updatable = false))
+  @AttributeOverride(
+      name = "displayOrder",
+      column = @Column(name = "after_display_order", updatable = false))
+  private Publication afterPublication;
+
+  public record Before(
+      Long version, Status status, PermissionStatus permissionStatus, Publication publication) {
     public static Before of(ReviewRecord r) {
-      return new Before(r.getVersion(), r.getStatus(), r.getPermissionStatus());
+      return new Before(r.getVersion(), r.getStatus(), r.getPermissionStatus(), r.getPublication());
     }
   }
 
@@ -93,6 +112,7 @@ public class ReviewHistory extends StoreScopedEntity {
             .afterVersion(r.getVersion())
             .afterStatus(r.getStatus())
             .afterPermissionStatus(r.getPermissionStatus())
+            .afterPublication(r.getPublication())
             .reason(reason)
             .relatedReviewId(relatedId)
             .permissionRecordId(permissionId)

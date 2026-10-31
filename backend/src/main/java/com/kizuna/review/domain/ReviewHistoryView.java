@@ -3,6 +3,7 @@ package com.kizuna.review.domain;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
+import com.kizuna.shared.publication.Publication;
 import java.time.OffsetDateTime;
 
 public interface ReviewHistoryView {
@@ -33,4 +34,6 @@ public interface ReviewHistoryView {
   String getRelatedReviewId();
 
   String getPermissionRecordId();
+
+  Publication getAfterPublication();
 }

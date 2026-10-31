@@ -6,6 +6,7 @@ import com.kizuna.review.domain.ReviewPermissionView;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.review.domain.ReviewValues.Status;
+import com.kizuna.shared.publication.Publication;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -29,10 +30,13 @@ public record ReviewResponse(
     ReviewPermissionResponse permission,
     boolean publicationEligible,
     List<String> publicationBlockers,
-    String publicationConnection) {
+    String publicationConnection,
+    Publication publication,
+    boolean displayed) {
   public record Actor(String id, String displayName) {}
 
-  public static ReviewResponse of(ReviewDetailsView r, ReviewPermissionView permission) {
+  public static ReviewResponse of(
+      ReviewDetailsView r, ReviewPermissionView permission, OffsetDateTime now) {
     return new ReviewResponse(
         r.getId(),
         "STAFF_RECORDED",
@@ -53,6 +57,8 @@ public record ReviewResponse(
         ReviewPermissionResponse.of(permission),
         r.publicationBlockers().isEmpty(),
         r.publicationBlockers(),
-        "NOT_CONFIGURED");
+        "NOT_CONFIGURED",
+        r.getPublication(),
+        r.displayedAt(now));
   }
 }

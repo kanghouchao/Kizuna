@@ -40,6 +40,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
+import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
@@ -190,6 +191,35 @@ class ReviewApplicationTest {
         .require(STORE_ID, "actor", PermissionCode.REVIEW_MANAGE);
     assertThatThrownBy(() -> service.create(STORE_ID, "actor", input(), "create"))
         .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void moderatorPublicationIsDisplayedOnlyOnceApprovedAndPermitted() {
+    String id = create();
+    var publish = ReviewChange.publication(id, 0L, new Publication(true, AT, null, 1), "publish");
+    var hidden = service.change(STORE_ID, "actor", publish);
+    verify(actors).require(STORE_ID, "actor", PermissionCode.REVIEW_MODERATE);
+    assertThat(hidden.review().publication().published()).isTrue();
+    assertThat(hidden.review().displayed()).isFalse();
+    service.change(
+        STORE_ID, "actor", new ReviewChange(id, 0L, Operation.APPROVED, "審査理由", "approve"));
+    var shown =
+        service.change(
+            STORE_ID,
+            "actor",
+            new ReviewChange(
+                id, 0L, Operation.PERMISSION_GRANTED, null, "grant", Basis.WRITTEN, AT, "根拠"));
+    assertThat(shown.review().displayed()).isTrue();
+    assertThat(service.change(STORE_ID, "actor", publish).operation().replayed()).isTrue();
+    assertThatThrownBy(
+            () ->
+                service.change(
+                    STORE_ID,
+                    "actor",
+                    ReviewChange.publication(id, 0L, Publication.HIDDEN, "publish")))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> ReviewChange.publication(id, 0L, null, "missing"))
+        .isInstanceOf(ServiceException.class);
   }
 
   @Test

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Review, reviewApi } from '@/entities/review';
 import { useResource } from '@/shared/lib';
 import { Badge, Button, RegionError } from '@/shared/ui';
-import { statuses, permissions, viaLabels, basisLabels, time } from './labels';
+import { statuses, permissions, viaLabels, basisLabels, time, publicationSummary } from './labels';
 import { ReviewHistory } from './ReviewHistory';
 import { accessError } from './reviewErrors';
 import { Editor } from './ReviewEditor';
@@ -118,6 +118,25 @@ export function ReviewDetail({
           )}
         </section>
       )}
+      <section className="space-y-3 rounded-lg border p-4">
+        <h2 className="text-lg font-semibold">公開設定</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">{row.displayed ? '掲出対象' : '掲出対象外'}</Badge>
+          <span className="text-sm text-muted-foreground">
+            内部承認・公開許可・公開設定の期間がすべて揃ったときだけ掲出対象になります。
+          </span>
+        </div>
+        <p>{publicationSummary(row.publication)}</p>
+        {canModerate && (
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => onEdit({ action: 'PUBLISH', row })}
+          >
+            公開設定を変更
+          </Button>
+        )}
+      </section>
       {canModerate && row.status === 'PENDING' && (
         <div className="flex flex-wrap gap-3">
           <Button disabled={busy} onClick={() => onEdit({ action: 'APPROVE', row })}>

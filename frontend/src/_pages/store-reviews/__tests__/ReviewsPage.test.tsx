@@ -48,6 +48,8 @@ const row: Review = {
   publication_eligible: false,
   publication_blockers: ['NOT_APPROVED', 'NO_PERMISSION'],
   publication_connection: 'NOT_CONFIGURED',
+  publication: { published: false, publish_from: null, publish_until: null, display_order: null },
+  displayed: false,
 };
 const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
 const permission = (...permissions: PermissionCode[]) =>

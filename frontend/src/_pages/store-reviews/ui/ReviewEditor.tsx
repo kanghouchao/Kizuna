@@ -17,10 +17,14 @@ import {
   SelectContent,
   SelectItem,
   SelectValue,
+  Switch,
 } from '@/shared/ui';
 export type Editor = (
   | { action: 'CREATE'; row?: undefined }
-  | { action: 'APPROVE' | 'REJECT' | 'GRANT' | 'REVOKE' | 'WITHDRAW' | 'CORRECT'; row: Review }
+  | {
+      action: 'APPROVE' | 'REJECT' | 'GRANT' | 'REVOKE' | 'WITHDRAW' | 'CORRECT' | 'PUBLISH';
+      row: Review;
+    }
 ) & { draft?: ReviewInput & { reason?: string } };
 export function editorTitle(editor: Editor) {
   return {
@@ -31,8 +35,16 @@ export function editorTitle(editor: Editor) {
     REVOKE: '公開許可を撤回',
     WITHDRAW: '口コミを取り下げ',
     CORRECT: '訂正再受付',
+    PUBLISH: '公開設定を変更',
   }[editor.action];
 }
+function localInput(value: string | null | undefined) {
+  if (!value) return '';
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+const optionalDate = (value: string) =>
+  value === '' || Number.isFinite(new Date(value).getTime()) || '日時を正しく入力してください';
 export const dateRule = (value: string) => {
   const date = new Date(value).getTime();
   return (
@@ -57,21 +69,22 @@ export function ReviewEditor({
   onSubmit: (command: ReviewCommand) => Promise<void>;
 }) {
   const seed = editor.draft ?? (editor.action === 'CORRECT' ? editor.row : undefined);
-  const received = seed ? new Date(seed.received_at) : null;
-  const localReceived = received
-    ? new Date(received.getTime() - received.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-    : '';
+  const publication = editor.action === 'PUBLISH' ? editor.row.publication : undefined;
   const form = useForm({
     defaultValues: {
       reason: editor.draft?.reason ?? '',
       body: seed?.body ?? '',
       display_name: seed?.display_name ?? '',
       received_via: seed?.received_via ?? ('PAPER' as ReceivedVia),
-      received_at: localReceived,
+      received_at: localInput(seed?.received_at),
       origin_order_id: canOrder ? (seed?.origin_order_id ?? '') : '',
       basis_type: 'WRITTEN' as Basis,
       event_at: '',
       evidence_note: '',
+      published: publication?.published ?? false,
+      publish_from: localInput(publication?.publish_from),
+      publish_until: localInput(publication?.publish_until),
+      display_order: publication?.display_order?.toString() ?? '',
     },
   });
   const create = editor.action === 'CREATE';
@@ -95,7 +108,22 @@ export function ReviewEditor({
         });
     } else {
       const base = { version: editor.row.version, reason: values.reason, dedupe_key: requestKey() };
-      if (editor.action === 'GRANT')
+      if (editor.action === 'PUBLISH')
+        setConfirmation({
+          kind: 'PUBLISH',
+          id: editor.row.id,
+          input: {
+            version: base.version,
+            dedupe_key: base.dedupe_key,
+            published: values.published,
+            publish_from:
+              values.publish_from === '' ? null : new Date(values.publish_from).toISOString(),
+            publish_until:
+              values.publish_until === '' ? null : new Date(values.publish_until).toISOString(),
+            display_order: values.display_order === '' ? null : Number(values.display_order),
+          },
+        });
+      else if (editor.action === 'GRANT')
         setConfirmation({
           kind: 'GRANT',
           id: editor.row.id,
@@ -140,6 +168,10 @@ export function ReviewEditor({
         <p>公開許可を撤回します。内部承認の記録は保持します。再取得は訂正再受付から行います。</p>
       ) : editor.action === 'WITHDRAW' ? (
         <p>この口コミを取り下げ、公開候補から除外します。元に戻すことはできません。</p>
+      ) : editor.action === 'PUBLISH' ? (
+        <p>
+          公式サイトでの公開／非公開・公開期間・表示順を決めます。内部承認と公開許可が揃わない間は、公開にしても掲出されません。非公開にしても期間と表示順は保持します。
+        </p>
       ) : (
         <p>内部承認のみ。公開には別途許可と公開設定が必要です。</p>
       )}
@@ -325,7 +357,87 @@ export function ReviewEditor({
               />
             </>
           )}
-          {!create && editor.action !== 'GRANT' && (
+          {editor.action === 'PUBLISH' && (
+            <>
+              <FormField
+                control={form.control}
+                name="published"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-3">
+                    <FormLabel>公式サイトで公開する</FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={busy}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="publish_from"
+                rules={{ validate: optionalDate }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>公開開始（任意・この端末の時刻）</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="datetime-local" disabled={busy} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="publish_until"
+                rules={{
+                  validate: (value, values) => {
+                    const valid = optionalDate(value);
+                    if (valid !== true) return valid;
+                    return (
+                      value === '' ||
+                      values.publish_from === '' ||
+                      new Date(values.publish_from).getTime() < new Date(value).getTime() ||
+                      '公開終了は公開開始より後にしてください'
+                    );
+                  },
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      公開終了（任意・この端末の時刻。この時刻に掲出を終えます）
+                    </FormLabel>
+                    <FormControl>
+                      <Input {...field} type="datetime-local" disabled={busy} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="display_order"
+                rules={{
+                  validate: value =>
+                    value === '' ||
+                    (/^-?[0-9]{1,9}$/.test(value.trim()) && Number.isSafeInteger(Number(value))) ||
+                    '表示順は整数で入力してください（空欄は末尾）',
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>表示順（任意・小さいほど先頭。空欄は末尾に新しい順）</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" step={1} disabled={busy} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
+          {!create && editor.action !== 'GRANT' && editor.action !== 'PUBLISH' && (
             <FormField
               control={form.control}
               name="reason"
@@ -364,7 +476,9 @@ export function ReviewEditor({
                 ? '記録後は公開候補から除外します。撤回を取り消すことはできません。'
                 : editor.action === 'WITHDRAW'
                   ? '口コミを取り下げます。再度扱う場合は訂正再受付が必要です。'
-                  : 'この判断を記録します。本文や公開許可は変更しません。'
+                  : editor.action === 'PUBLISH'
+                    ? '公開設定を保存し、履歴に記録します。本文や公開許可は変更しません。'
+                    : 'この判断を記録します。本文や公開許可は変更しません。'
         }
         confirmLabel="確定する"
         onClose={() => setConfirmation(null)}
