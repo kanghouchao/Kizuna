@@ -18,17 +18,22 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CredentialVersionValidator implements OAuth2TokenValidator<Jwt> {
 
+  /** 失敗コード。リフレッシュの拒否原因の区別に使い、Bearer の 401 応答には載らない。 */
+  static final String CREDENTIAL_CHANGED = "credential_changed";
+
+  private static final OAuth2Error STALE = new OAuth2Error(CREDENTIAL_CHANGED);
   private static final OAuth2Error INVALID_TOKEN = new OAuth2Error("invalid_token");
 
   private final CredentialVersionService credentialVersionService;
 
   @Override
   public OAuth2TokenValidatorResult validate(Jwt jwt) {
-    if (jwt.getClaims().get(CredentialVersionService.CLAIM) instanceof Number claimed
-        && jwt.getClaims().get(CredentialVersionService.USER_ID_CLAIM) instanceof Number userId
-        && credentialVersionService.isCurrent(userId.longValue(), claimed.longValue())) {
-      return OAuth2TokenValidatorResult.success();
+    if (!(jwt.getClaims().get(CredentialVersionService.CLAIM) instanceof Number claimed
+        && jwt.getClaims().get(CredentialVersionService.USER_ID_CLAIM) instanceof Number userId)) {
+      return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
     }
-    return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
+    return credentialVersionService.isCurrent(userId.longValue(), claimed.longValue())
+        ? OAuth2TokenValidatorResult.success()
+        : OAuth2TokenValidatorResult.failure(STALE);
   }
 }

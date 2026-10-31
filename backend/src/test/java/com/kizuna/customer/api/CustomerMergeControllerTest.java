@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -168,7 +167,6 @@ class CustomerMergeControllerTest {
     body.putObject("preferred_contacts").putNull("phone").putNull("email").putNull("line");
     return post("/customers/c1/merges")
         .principal(() -> "tanaka.hanako@kizuna.test")
-        .with(csrf())
         .header("X-Store-ID", STORE_ID.toString())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body.toString());

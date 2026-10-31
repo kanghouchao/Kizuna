@@ -3,8 +3,6 @@ package com.kizuna.auth.infrastructure;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -16,10 +14,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
-import org.springframework.security.web.util.matcher.RequestMatcher;
-import org.springframework.util.StringUtils;
 
 @Configuration
 @EnableWebSecurity
@@ -32,39 +26,11 @@ public class SecurityConfig {
   private final JwtAuthenticationEntryPoint authenticationEntryPoint;
   private final ExemptingBearerTokenResolver bearerTokenResolver;
 
-  private static final RequestMatcher[] CSRF_IGNORED_MATCHERS = {
-    PathPatternRequestMatcher.withDefaults().matcher("/auth/login"),
-    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/files"),
-    // 匿名 POST の招待照会と受諾（Bearer なしのため Bearer 免除に該当しない）。
-    // 照会はトークンをパスに載せないため POST であり、読み取りでも CSRF 免除が要る。
-    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/cast-invitations/view"),
-    PathPatternRequestMatcher.withDefaults()
-        .matcher(HttpMethod.POST, "/cast-invitations/acceptance"),
-    PathPatternRequestMatcher.withDefaults()
-        .matcher(HttpMethod.POST, "/cast-invitations/acceptance/existing"),
-    // 匿名 POST の会員自助登録（同上: Bearer なしのため Bearer 免除に該当しない）。
-    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/members"),
-    // 匿名 POST の LINE ログインと LINE 登録確定（同上）。連携(/me/line)は Bearer 付きで既存免除に該当する。
-    PathPatternRequestMatcher.withDefaults().matcher("/auth/line/login"),
-    PathPatternRequestMatcher.withDefaults().matcher("/auth/line/register"),
-    // 公開サイトからの匿名 POST（ゲスト予約申請）。@CurrentStore を宣言する handler で唯一の匿名の書き込みで、
-    // 店舗は X-Store-ID で名乗る。同一パス上に他のメソッドの handler を作らないよう
-    // メソッドまで指定する。
-    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/order-applications/public"),
-    // 匿名 POST の初期設定（最初の管理者の登録）。Bearer を持たない要求は末尾の Bearer ヘッダ免除に該当しない。
-    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/initial-setup"),
-    request -> {
-      String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-      return StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ");
-    }
-  };
-
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    http.csrf(
-            csrf ->
-                csrf.ignoringRequestMatchers(CSRF_IGNORED_MATCHERS)
-                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
+    // 認証は Bearer だけで、cookie では認証しない。cookie を読む端点（リフレッシュ・ログアウト）は
+    // X-Requested-With を自分で要求し、ログイン系は JSON 本文を要求するのでフォームの偽装送信は 415 で止まる。
+    http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
         // 公開端点が保護対象パスの内側に混在するため securityMatcher で受限域を絞らず、全域を単一チェーンで扱う。

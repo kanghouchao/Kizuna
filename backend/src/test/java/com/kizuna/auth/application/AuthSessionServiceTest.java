@@ -7,10 +7,13 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.infrastructure.CredentialVersionService;
+import com.kizuna.auth.infrastructure.SessionTokenDecoder;
 import com.kizuna.auth.infrastructure.TokenBlacklistService;
 import com.kizuna.user.domain.UserCredentialsChanged;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +33,8 @@ class AuthSessionServiceTest {
   @Mock private TokenBlacklistService tokenBlacklistService;
 
   @Mock private CredentialVersionService credentialVersionService;
+
+  @Mock private SessionTokenDecoder sessionTokenDecoder;
 
   @InjectMocks private AuthSessionService service;
 
@@ -52,51 +57,51 @@ class AuthSessionServiceTest {
   }
 
   @Test
-  void invalidate_blacklistsTokenAndClearsContext() {
+  @DisplayName("ログアウト: Bearer の sid を失効させ、cookie が同じセッションなら消してよいと答える")
+  void logout_revokesBearerSessionAndClearsMatchingCookie() {
+    when(sessionTokenDecoder.sessionIdOf("access")).thenReturn(Optional.of("s-1"));
+    when(sessionTokenDecoder.sessionIdOf("refresh")).thenReturn(Optional.of("s-1"));
     SecurityContextHolder.getContext()
         .setAuthentication(new TestingAuthenticationToken("user", "n/a"));
 
-    service.invalidate("Bearer some-token");
+    assertThat(service.logout("Bearer access", "refresh")).isTrue();
 
-    verify(tokenBlacklistService).blacklist("Bearer some-token");
+    verify(tokenBlacklistService).blacklist("Bearer access");
+    verify(tokenBlacklistService).blacklistSession("s-1");
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
   }
 
   @Test
-  void invalidate_withinTransaction_defersUntilAfterCommit() {
-    TransactionSynchronizationManager.initSynchronization();
-    try {
-      SecurityContextHolder.getContext()
-          .setAuthentication(new TestingAuthenticationToken("user", "n/a"));
+  @DisplayName("ログアウト: cookie が別の利用者のセッションなら、Bearer の本人だけを止めて cookie は残す")
+  void logout_keepsAnotherUsersCookie() {
+    when(sessionTokenDecoder.sessionIdOf("access")).thenReturn(Optional.of("s-old"));
+    when(sessionTokenDecoder.sessionIdOf("refresh")).thenReturn(Optional.of("s-new"));
 
-      service.invalidate("Bearer some-token");
+    assertThat(service.logout("Bearer access", "refresh")).isFalse();
 
-      // commit 前は失効しない（rollback 時にセッションだけ失効する事故の防止）
-      verify(tokenBlacklistService, never()).blacklist(anyString());
-      assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
-
-      TransactionSynchronizationManager.getSynchronizations()
-          .forEach(TransactionSynchronization::afterCommit);
-
-      verify(tokenBlacklistService).blacklist("Bearer some-token");
-      assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-    } finally {
-      TransactionSynchronizationManager.clearSynchronization();
-      SecurityContextHolder.clearContext();
-    }
+    verify(tokenBlacklistService).blacklistSession("s-old");
+    verify(tokenBlacklistService, never()).blacklistSession("s-new");
   }
 
   @Test
-  void invalidate_withinTransaction_rollbackDoesNotBlacklist() {
-    TransactionSynchronizationManager.initSynchronization();
-    try {
-      service.invalidate("Bearer some-token");
-      // rollback: afterCommit は発火しないまま同期が破棄される
-    } finally {
-      TransactionSynchronizationManager.clearSynchronization();
-    }
+  @DisplayName("ログアウト: Bearer が無ければ cookie の sid を失効させて cookie を消す")
+  void logout_withoutBearerUsesCookie() {
+    when(sessionTokenDecoder.sessionIdOf("refresh")).thenReturn(Optional.of("s-1"));
 
-    verify(tokenBlacklistService, never()).blacklist(anyString());
+    assertThat(service.logout(null, "refresh")).isTrue();
+
+    verify(tokenBlacklistService).blacklistSession("s-1");
+  }
+
+  @Test
+  @DisplayName("ログアウト: 署名の通らない Bearer なら cookie へ切り替えず、どのセッションも止めない")
+  void logout_brokenBearerDoesNotFallBackToCookie() {
+    when(sessionTokenDecoder.sessionIdOf("broken")).thenReturn(Optional.empty());
+    when(sessionTokenDecoder.sessionIdOf("refresh")).thenReturn(Optional.of("s-1"));
+
+    assertThat(service.logout("Bearer broken", "refresh")).isFalse();
+
+    verify(tokenBlacklistService, never()).blacklistSession(anyString());
   }
 
   @Test

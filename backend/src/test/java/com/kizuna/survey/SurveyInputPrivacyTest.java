@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -82,7 +81,6 @@ class SurveyInputPrivacyTest {
         var response =
             mvc.perform(
                     post("/surveys")
-                        .with(csrf())
                         .header("X-Store-ID", "1")
                         .with(
                             request -> {
@@ -99,7 +97,6 @@ class SurveyInputPrivacyTest {
       var actionResponse =
           mvc.perform(
                   post("/surveys/1/revisions/2/openings")
-                      .with(csrf())
                       .header("X-Store-ID", "1")
                       .with(
                           request -> {
@@ -130,7 +127,6 @@ class SurveyInputPrivacyTest {
                   : "\"revision_version\":1,";
           mvc.perform(
                   post(endpoint)
-                      .with(csrf())
                       .header("X-Store-ID", "1")
                       .with(
                           request -> {

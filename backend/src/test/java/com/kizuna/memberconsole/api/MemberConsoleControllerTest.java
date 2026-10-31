@@ -10,7 +10,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -227,10 +226,7 @@ class MemberConsoleControllerTest {
 
   private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
       withdrawal(String body) {
-    return post("/members/7/withdrawal")
-        .with(csrf())
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(body);
+    return post("/members/7/withdrawal").contentType(MediaType.APPLICATION_JSON).content(body);
   }
 
   /** 検証済み Bearer トークンの職員。認可（SecurityContext）と handler の Principal の両方へ同じ認証を置く。 */

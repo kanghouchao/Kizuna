@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -81,7 +80,6 @@ class SystemConfigControllerTest {
     mockMvc
         .perform(
             put("/system-configs/site_name")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"config_value\":\"新しい名前\"}"))
         .andExpect(status().isForbidden());
@@ -99,7 +97,6 @@ class SystemConfigControllerTest {
     mockMvc
         .perform(
             put("/system-configs/unknown_key")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"config_value\":\"v\"}"))
         .andExpect(status().isBadRequest())
@@ -121,7 +118,6 @@ class SystemConfigControllerTest {
     mockMvc
         .perform(
             put("/system-configs/line_channel_id")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"config_value\":\"1234567890\"}"))
         .andExpect(status().isOk())

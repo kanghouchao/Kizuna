@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -120,7 +119,6 @@ class CustomerControllerTest {
     mockMvc
         .perform(
             post("/customers")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"山田太郎\"}")
                 .header("X-Store-ID", STORE_ID.toString()))
@@ -169,7 +167,7 @@ class CustomerControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(delete("/customers/c1").with(csrf()).header("X-Store-ID", STORE_ID.toString()))
+        .perform(delete("/customers/c1").header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isNoContent());
 
     verify(customerService).delete(STORE_ID, "c1");
@@ -197,7 +195,6 @@ class CustomerControllerTest {
     mockMvc
         .perform(
             post("/customers")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"山田太郎\"}")
                 .header("X-Store-ID", STORE_ID.toString()))

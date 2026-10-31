@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -148,7 +147,6 @@ class ApplicantControllerTest {
   void writePassesTheNamedStoreToTheService() throws Exception {
     mvc.perform(
             post("/applicants")
-                .with(csrf())
                 .header("X-Store-ID", "7")
                 .contentType("application/json")
                 .content("{\"name\":\"応募者\",\"channel\":\"WEB\",\"source_type\":\"DIRECT\"}")
@@ -180,7 +178,6 @@ class ApplicantControllerTest {
         List.of("PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_MANAGE", "PERM_CAST_MANAGE")) {
       mvc.perform(
               post("/applicants")
-                  .with(csrf())
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body)
@@ -189,7 +186,6 @@ class ApplicantControllerTest {
     }
     mvc.perform(
             post("/applicants")
-                .with(csrf())
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content(body)
@@ -209,7 +205,6 @@ class ApplicantControllerTest {
             List.of("PERM_RECRUITMENT_DECIDE"))) {
       mvc.perform(
               post("/applicants/a/decision")
-                  .with(csrf())
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content("{\"version\":0,\"status\":\"HIRED\",\"reason\":\"確認\"}")
@@ -222,7 +217,6 @@ class ApplicantControllerTest {
     verifyNoInteractions(service);
     mvc.perform(
             post("/applicants/a/decision")
-                .with(csrf())
                 .header("X-Store-ID", "7")
                 .contentType("application/json")
                 .content("{\"version\":0,\"status\":\"HIRED\",\"reason\":\"確認\"}")
@@ -244,7 +238,6 @@ class ApplicantControllerTest {
             List.of("PERM_CAST_MANAGE"))) {
       mvc.perform(
               post("/applicants/a/enrollment")
-                  .with(csrf())
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body)
@@ -257,7 +250,6 @@ class ApplicantControllerTest {
     verifyNoInteractions(service);
     mvc.perform(
             post("/applicants/a/enrollment")
-                .with(csrf())
                 .header("X-Store-ID", "7")
                 .contentType("application/json")
                 .content(body)
@@ -282,7 +274,6 @@ class ApplicantControllerTest {
             "{\"version\":0,\"name\":\"花\",\"started_on\":\"2026-11-01\",\"status\":\"WITHDRAWN\"}"))
       mvc.perform(
               post("/applicants/a/enrollment")
-                  .with(csrf())
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body)
@@ -299,7 +290,6 @@ class ApplicantControllerTest {
   void decisionRequiresReason() throws Exception {
     mvc.perform(
             post("/applicants/a/decision")
-                .with(csrf())
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"version\":0,\"status\":\"REJECTED\",\"reason\":\" \"}")
@@ -342,7 +332,6 @@ class ApplicantControllerTest {
   void updateRequiresVersion() throws Exception {
     mvc.perform(
             put("/applicants/a")
-                .with(csrf())
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content(

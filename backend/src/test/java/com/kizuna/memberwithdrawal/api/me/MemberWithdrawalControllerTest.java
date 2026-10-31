@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -121,6 +120,6 @@ class MemberWithdrawalControllerTest {
   }
 
   private static MockHttpServletRequestBuilder request(String body) {
-    return post(PATH).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body);
+    return post(PATH).contentType(MediaType.APPLICATION_JSON).content(body);
   }
 }

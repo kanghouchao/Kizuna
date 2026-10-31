@@ -13,10 +13,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.MeResponse;
-import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.infrastructure.CredentialVersionService;
+import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.JwtIssuer;
+import com.kizuna.auth.infrastructure.RefreshTokenRejectedException;
+import com.kizuna.auth.infrastructure.RefreshTokenRejectedException.Reason;
+import com.kizuna.auth.infrastructure.SessionTokenDecoder;
+import com.kizuna.auth.infrastructure.TokenType;
 import com.kizuna.auth.infrastructure.UserPrincipal;
+import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.CredentialOperations;
@@ -29,6 +34,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,6 +55,7 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,12 +63,14 @@ class AuthServiceTest {
 
   private static final long HQ_ROLE_ID = 10L;
   private static final long STORE_ROLE_ID = 20L;
+  private static final long EXPIRES_AT = 1_700_000_000_000L;
 
   @Mock private UserRepository userRepository;
   @Mock private RoleRepository roleRepository;
   @Mock private PermissionRepository permissionRepository;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private JwtIssuer jwtIssuer;
+  @Mock private SessionTokenDecoder sessionTokenDecoder;
   @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
   @Mock private AuthenticationManager authenticationManager;
   @Mock private Authentication authentication;
@@ -70,6 +79,16 @@ class AuthServiceTest {
   @Captor private ArgumentCaptor<Map<String, Object>> claimsCaptor;
 
   @InjectMocks private AuthService authService;
+
+  /** 種別名の付いたトークン文字列を返す発行を配線する。 */
+  private void stubIssuer() {
+    when(jwtIssuer.issue(any(), any(), any(), anyString()))
+        .thenAnswer(
+            inv ->
+                new IssuedJwt(
+                    inv.<TokenType>getArgument(0).claimValue() + "-token",
+                    Instant.ofEpochMilli(EXPIRES_AT)));
+  }
 
   /** authenticationManager.authenticate が指定ユーザーを principal に持つ成功済み Authentication を返すよう配線する。 */
   private void stubSuccessfulAuthentication(String email, String password, User user) {
@@ -126,29 +145,36 @@ class AuthServiceTest {
   }
 
   private User storeStaff(String email, String displayName, StoreScopeType scopeType) {
-    return User.builder()
-        .email(email)
-        .password("stored-hash")
-        .displayName(displayName)
-        .enabled(true)
-        .userType(UserType.STAFF)
-        .roleIds(Set.of(STORE_ROLE_ID))
-        .storeScopeType(scopeType)
-        .storeIds(scopeType == StoreScopeType.ALL_STORES ? Set.of() : Set.of(1L))
-        .build();
+    return persisted(
+        User.builder()
+            .email(email)
+            .password("stored-hash")
+            .displayName(displayName)
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .roleIds(Set.of(STORE_ROLE_ID))
+            .storeScopeType(scopeType)
+            .storeIds(scopeType == StoreScopeType.ALL_STORES ? Set.of() : Set.of(1L))
+            .build());
+  }
+
+  /** 発行される利用者は必ず保存済みで ID を持つ。 */
+  private static User persisted(User user) {
+    user.setId(2L);
+    return user;
   }
 
   @Test
   void login_staff_issuesSortedPermAuthoritiesWithoutRoleClaim() {
     stubSuccessfulAuthentication("admin@kizuna.test", "pass", hqAdmin());
     stubHqRole();
-    Token mockToken = new Token("issued_token", 12345L);
-    when(jwtIssuer.issue(eq("admin@kizuna.test"), any())).thenReturn(mockToken);
+    stubIssuer();
 
-    Token res = authService.login("admin@kizuna.test", "pass");
+    IssuedSession res = authService.login("admin@kizuna.test", "pass");
 
-    assertThat(res.token()).isEqualTo("issued_token");
-    verify(jwtIssuer).issue(eq("admin@kizuna.test"), claimsCaptor.capture());
+    assertThat(res.access().value()).isEqualTo("access-token");
+    verify(jwtIssuer)
+        .issue(eq(TokenType.ACCESS), eq("admin@kizuna.test"), claimsCaptor.capture(), anyString());
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
@@ -176,11 +202,12 @@ class AuthServiceTest {
     stubSuccessfulAuthentication("staff@kizuna.test", "pass", staff);
     stubRolePermissions(
         STORE_ROLE_ID, "スタッフ", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
-    when(jwtIssuer.issue(eq("staff@kizuna.test"), any())).thenReturn(new Token("t", 1L));
+    stubIssuer();
 
     authService.login("staff@kizuna.test", "pass");
 
-    verify(jwtIssuer).issue(eq("staff@kizuna.test"), claimsCaptor.capture());
+    verify(jwtIssuer)
+        .issue(eq(TokenType.ACCESS), eq("staff@kizuna.test"), claimsCaptor.capture(), anyString());
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
@@ -190,24 +217,27 @@ class AuthServiceTest {
   @Test
   void login_member_firesTheLoginBenefitTriggerAfterIssuingTheToken() {
     User member =
-        User.builder()
-            .email("member@kizuna.test")
-            .password("stored-hash")
-            .displayName("会員")
-            .enabled(true)
-            .userType(UserType.MEMBER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of())
-            .build();
+        persisted(
+            User.builder()
+                .email("member@kizuna.test")
+                .password("stored-hash")
+                .displayName("会員")
+                .enabled(true)
+                .userType(UserType.MEMBER)
+                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeIds(Set.of())
+                .build());
     stubSuccessfulAuthentication("member@kizuna.test", "pass", member);
-    when(jwtIssuer.issue(eq("member@kizuna.test"), any())).thenReturn(new Token("t", 1L));
+    stubIssuer();
 
-    Token token = authService.login("member@kizuna.test", "pass");
+    IssuedSession token = authService.login("member@kizuna.test", "pass");
 
-    assertThat(token.token()).isEqualTo("t");
+    assertThat(token.access().value()).isEqualTo("access-token");
     // 発火事象は認証成功 1 回。停止中の身分は発行側で先に拒まれるので、発行の後に 1 度だけ渡す。
     InOrder inOrder = inOrder(jwtIssuer, loginBenefitTrigger);
-    inOrder.verify(jwtIssuer).issue(eq("member@kizuna.test"), any());
+    inOrder
+        .verify(jwtIssuer)
+        .issue(eq(TokenType.ACCESS), eq("member@kizuna.test"), any(), anyString());
     inOrder.verify(loginBenefitTrigger).onAuthenticated(member);
   }
 
@@ -223,11 +253,11 @@ class AuthServiceTest {
   }
 
   @Test
-  void issueTokenFor_doesNotCountAsALogin() {
+  void issueSessionFor_doesNotCountAsALogin() {
     stubHqRole();
-    when(jwtIssuer.issue(eq("admin@kizuna.test"), any())).thenReturn(new Token("t", 1L));
+    stubIssuer();
 
-    authService.issueTokenFor(hqAdmin());
+    authService.issueSessionFor(hqAdmin());
 
     verifyNoInteractions(loginBenefitTrigger);
   }
@@ -235,21 +265,23 @@ class AuthServiceTest {
   @Test
   void login_cast_issuesRoleCastOnly() {
     User cast =
-        User.builder()
-            .email("cast@kizuna.test")
-            .password("stored-hash")
-            .displayName("キャスト")
-            .enabled(true)
-            .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+        persisted(
+            User.builder()
+                .email("cast@kizuna.test")
+                .password("stored-hash")
+                .displayName("キャスト")
+                .enabled(true)
+                .userType(UserType.CAST)
+                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeIds(Set.of(1L))
+                .build());
     stubSuccessfulAuthentication("cast@kizuna.test", "pass", cast);
-    when(jwtIssuer.issue(eq("cast@kizuna.test"), any())).thenReturn(new Token("t", 1L));
+    stubIssuer();
 
     authService.login("cast@kizuna.test", "pass");
 
-    verify(jwtIssuer).issue(eq("cast@kizuna.test"), claimsCaptor.capture());
+    verify(jwtIssuer)
+        .issue(eq(TokenType.ACCESS), eq("cast@kizuna.test"), claimsCaptor.capture(), anyString());
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
@@ -352,13 +384,14 @@ class AuthServiceTest {
   }
 
   @Test
-  void issueTokenFor_disabledUser_isRejectedWithoutIssuingToken() {
+  void issueSessionFor_disabledUser_isRejectedWithoutIssuingToken() {
     User user = hqAdmin();
     user.stop();
 
-    assertThatThrownBy(() -> authService.issueTokenFor(user)).isInstanceOf(DisabledException.class);
+    assertThatThrownBy(() -> authService.issueSessionFor(user))
+        .isInstanceOf(DisabledException.class);
 
-    verify(jwtIssuer, never()).issue(any(), any());
+    verify(jwtIssuer, never()).issue(any(), any(), any(), any());
   }
 
   @Test
@@ -369,7 +402,7 @@ class AuthServiceTest {
 
     assertThatThrownBy(() -> authService.login("admin@kizuna.test", "pass"))
         .isInstanceOf(DisabledException.class);
-    verify(jwtIssuer, never()).issue(any(), any());
+    verify(jwtIssuer, never()).issue(any(), any(), any(), any());
   }
 
   @Test
@@ -381,6 +414,106 @@ class AuthServiceTest {
         // 観測面を資格情報の不一致に揃える継承。外れると応答が種別の存在オラクルになる。
         .isInstanceOf(BadCredentialsException.class);
 
-    verify(jwtIssuer, never()).issue(anyString(), any());
+    verify(jwtIssuer, never()).issue(any(), any(), any(), any());
+  }
+
+  @Test
+  void login_issuesAccessAndRefreshTokensOfOneNewSession() {
+    stubSuccessfulAuthentication("admin@kizuna.test", "pass", hqAdmin());
+    stubHqRole();
+    stubIssuer();
+
+    IssuedSession session = authService.login("admin@kizuna.test", "pass");
+
+    ArgumentCaptor<String> accessSid = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> refreshSid = ArgumentCaptor.forClass(String.class);
+    verify(jwtIssuer)
+        .issue(eq(TokenType.ACCESS), eq("admin@kizuna.test"), any(), accessSid.capture());
+    verify(jwtIssuer)
+        .issue(
+            eq(TokenType.REFRESH),
+            eq("admin@kizuna.test"),
+            claimsCaptor.capture(),
+            refreshSid.capture());
+    assertThat(refreshSid.getValue()).isNotBlank().isEqualTo(accessSid.getValue());
+    // リフレッシュトークンは権限を運ばない — リフレッシュのたびに DB から組み立て直す。
+    assertThat(claimsCaptor.getValue())
+        .containsOnlyKeys(CredentialVersionService.CLAIM, CredentialVersionService.USER_ID_CLAIM)
+        .containsEntry(CredentialVersionService.USER_ID_CLAIM, 1L);
+    assertThat(session.userId()).isEqualTo(1L);
+    assertThat(session.refresh().value()).isEqualTo("refresh-token");
+    assertThat(session.toToken().refreshExpiresAt()).isEqualTo(EXPIRES_AT);
+  }
+
+  private static Jwt refreshJwt(long userId, long version) {
+    return Jwt.withTokenValue("refresh")
+        .header("alg", "HS256")
+        .claim(CredentialVersionService.USER_ID_CLAIM, userId)
+        .claim(CredentialVersionService.CLAIM, version)
+        .claim(TokenType.SESSION_ID_CLAIM, "session-1")
+        .build();
+  }
+
+  @Test
+  void refresh_rebuildsAuthoritiesFromTheDatabaseInTheSameSession() {
+    when(sessionTokenDecoder.decodeRefresh("cookie")).thenReturn(refreshJwt(1L, 0L));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(hqAdmin()));
+    stubRolePermissions(HQ_ROLE_ID, "HQ管理者", Set.of(PermissionCode.STORE_VIEW));
+    stubIssuer();
+
+    IssuedSession session = authService.refresh("cookie", null);
+
+    verify(jwtIssuer)
+        .issue(
+            eq(TokenType.ACCESS), eq("admin@kizuna.test"), claimsCaptor.capture(), eq("session-1"));
+    assertThat(claimsCaptor.getValue().get("authorities")).isEqualTo(List.of("PERM_STORE_VIEW"));
+    verify(jwtIssuer).issue(eq(TokenType.REFRESH), eq("admin@kizuna.test"), any(), eq("session-1"));
+    assertThat(session.userId()).isEqualTo(1L);
+    verifyNoInteractions(loginBenefitTrigger);
+  }
+
+  @Test
+  void refresh_acceptsTheSameSessionUser() {
+    when(sessionTokenDecoder.decodeRefresh("cookie")).thenReturn(refreshJwt(1L, 0L));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(hqAdmin()));
+    stubHqRole();
+    stubIssuer();
+
+    assertThat(authService.refresh("cookie", 1L).userId()).isEqualTo(1L);
+  }
+
+  @Test
+  void refresh_anotherSessionUser_isAConflictWithoutIssuing() {
+    when(sessionTokenDecoder.decodeRefresh("cookie")).thenReturn(refreshJwt(1L, 0L));
+
+    assertThatThrownBy(() -> authService.refresh("cookie", 2L))
+        .isInstanceOf(ConflictException.class)
+        .hasMessage("別のアカウントでログインされました。画面を開き直してください。");
+    verifyNoInteractions(jwtIssuer);
+  }
+
+  @Test
+  void refresh_versionAdvancedAfterVerification_isCredentialChanged() {
+    when(sessionTokenDecoder.decodeRefresh("cookie")).thenReturn(refreshJwt(1L, 0L));
+    User user = hqAdmin();
+    user.stop();
+    when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+    assertThatThrownBy(() -> authService.refresh("cookie", null))
+        .isInstanceOfSatisfying(
+            RefreshTokenRejectedException.class,
+            ex -> assertThat(ex.getReason()).isEqualTo(Reason.CREDENTIAL_CHANGED));
+    verifyNoInteractions(jwtIssuer);
+  }
+
+  @Test
+  void refresh_missingUser_isInvalid() {
+    when(sessionTokenDecoder.decodeRefresh("cookie")).thenReturn(refreshJwt(1L, 0L));
+    when(userRepository.findById(1L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> authService.refresh("cookie", null))
+        .isInstanceOfSatisfying(
+            RefreshTokenRejectedException.class,
+            ex -> assertThat(ex.getReason()).isEqualTo(Reason.INVALID));
   }
 }

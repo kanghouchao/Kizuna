@@ -12,7 +12,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -155,7 +154,6 @@ class OrderControllerTest {
             post("/orders/o1/completion")
                 .header("X-Store-ID", STORE_ID.toString())
                 .principal(staff())
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(COMPLETION_BODY))
         .andExpect(status().isOk());
@@ -175,8 +173,7 @@ class OrderControllerTest {
         .perform(
             post("/orders/o1/receipt-token")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(staff())
-                .with(csrf()))
+                .principal(staff()))
         .andExpect(status().isCreated());
 
     verify(orderPointRollbackService)
@@ -996,7 +993,7 @@ class OrderControllerTest {
 
   // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder storePost(String path) {
-    return post(path).header("X-Store-ID", "1").principal(staff()).with(csrf());
+    return post(path).header("X-Store-ID", "1").principal(staff());
   }
 
   private MockHttpServletRequestBuilder storePost(String path, String body) {
@@ -1012,7 +1009,6 @@ class OrderControllerTest {
         .header("X-Store-ID", "1")
         .principal(staff())
         .contentType(MediaType.APPLICATION_JSON)
-        .content(body)
-        .with(csrf());
+        .content(body);
   }
 }

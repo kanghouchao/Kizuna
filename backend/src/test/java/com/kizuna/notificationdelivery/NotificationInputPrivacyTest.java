@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -79,7 +78,6 @@ class NotificationInputPrivacyTest {
         var response =
             mvc.perform(
                     post("/notification-deliveries")
-                        .with(csrf())
                         .header("X-Store-ID", "1")
                         .with(
                             request -> {
@@ -96,7 +94,6 @@ class NotificationInputPrivacyTest {
       var actionResponse =
           mvc.perform(
                   post("/notification-deliveries/1/queue")
-                      .with(csrf())
                       .header("X-Store-ID", "1")
                       .with(
                           request -> {

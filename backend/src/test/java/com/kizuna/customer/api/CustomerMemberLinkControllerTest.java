@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -131,7 +130,6 @@ class CustomerMemberLinkControllerTest {
             post("/customers/c1/member-link/releases")
                 .contentType("application/json")
                 .content("{\"expected_link_id\":\"l1\",\"operation_reason\":\"本人依頼\"}")
-                .with(csrf())
                 .header("X-Store-ID", STORE_ID.toString())
                 .principal(() -> "tanaka.hanako@kizuna.test"))
         .andExpect(status().isNoContent());

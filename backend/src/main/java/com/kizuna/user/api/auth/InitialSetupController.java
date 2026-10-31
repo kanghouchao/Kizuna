@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 最初の管理者を登録する初期設定の公開端点。完了後の登録は 404。
  *
- * <p>POST は SecurityConfig の CSRF 免除と ExemptingBearerTokenResolver の Bearer 免除の対象。GET
- * は初期設定画面のサーバー側から Bearer なしで呼ばれるため、どちらにも登録しない。
+ * <p>POST は ExemptingBearerTokenResolver の Bearer 免除の対象。GET は初期設定画面のサーバー側から Bearer なしで呼ばれるため、
+ * 登録しない。
  */
 @RestController
 @RequestMapping("/auth/initial-setup")

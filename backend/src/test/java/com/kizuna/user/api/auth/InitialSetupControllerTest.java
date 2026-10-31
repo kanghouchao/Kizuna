@@ -35,7 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 初期設定の公開端点の契約。本番の SecurityConfig を載せ、匿名の POST が CSRF・陳腐な Bearer に阻まれないことまで確かめる。 */
+/** 初期設定の公開端点の契約。本番の SecurityConfig を載せ、匿名の POST が陳腐な Bearer に阻まれないことまで確かめる。 */
 @WebMvcTest(InitialSetupController.class)
 @Import({
   SecurityConfig.class,
@@ -70,7 +70,7 @@ class InitialSetupControllerTest {
     when(jwtDecoder.decode(any())).thenThrow(new BadJwtException("broken"));
   }
 
-  /** 匿名の登録を模す。CSRF トークンも認証主体も載せない。 */
+  /** 匿名の登録を模す。認証主体を載せない。 */
   private static MockHttpServletRequestBuilder anonymousPost(String body) {
     return post("/auth/initial-setup").contentType(MediaType.APPLICATION_JSON).content(body);
   }
@@ -87,7 +87,7 @@ class InitialSetupControllerTest {
   }
 
   @Test
-  @DisplayName("POST は CSRF トークンなしの匿名要求で受理され、201 で新しい id を返すこと")
+  @DisplayName("POST は匿名要求で受理され、201 で新しい id を返すこと")
   void registerAcceptsAnonymousPostWithoutCsrfToken() throws Exception {
     ArgumentCaptor<InitialSetupRequest> captor = ArgumentCaptor.forClass(InitialSetupRequest.class);
     when(initialSetupService.register(captor.capture())).thenReturn(42L);

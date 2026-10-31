@@ -3,7 +3,6 @@ package com.kizuna.shift.api;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -72,7 +71,7 @@ class ShiftControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(delete("/shifts/s1").with(csrf()).header("X-Store-ID", STORE_ID.toString()))
+        .perform(delete("/shifts/s1").header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isNoContent());
 
     verify(shiftService).delete(STORE_ID, "s1");

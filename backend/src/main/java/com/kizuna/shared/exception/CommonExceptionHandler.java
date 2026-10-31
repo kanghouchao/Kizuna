@@ -19,6 +19,7 @@ import org.springframework.security.authentication.InsufficientAuthenticationExc
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -295,6 +296,14 @@ public class CommonExceptionHandler {
     Map<String, Object> body = new HashMap<>();
     body.put("error", "他の操作と競合しました。最新の状態を取得してやり直してください");
     return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+  }
+
+  /** JSON 本文を要求する端点へのフォーム・平文の送信（ログインの偽装送信を含む）を、汎用の 500 ではなく 415 で拒否する。 */
+  @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+  public ResponseEntity<Map<String, Object>> handle(HttpMediaTypeNotSupportedException ex) {
+    log.warn(ex.getMessage());
+    return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+        .body(Map.of("error", "この形式の要求には対応していません"));
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
