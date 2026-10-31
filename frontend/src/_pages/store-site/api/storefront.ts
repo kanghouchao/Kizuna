@@ -1,4 +1,5 @@
-import { Cast, PublicShift, SiteConfig, StorefrontData } from '../model/types';
+import { Cast, PublicReview, PublicShift, SiteConfig, StorefrontData } from '../model/types';
+import type { Page } from '@/shared/api';
 import { serverClient } from '@/shared/api/index.server';
 
 function storeHeaders(storeId: string): HeadersInit {
@@ -51,6 +52,21 @@ export const storefrontService = {
     } catch (error) {
       console.error('出勤情報の取得に失敗しました:', error);
       return [];
+    }
+  },
+
+  /**
+   * 掲出中の口コミを 1 ページ分取得します（公開期間が分単位で切り替わるためキャッシュしない）
+   */
+  async fetchReviews(storeId: string, page: number, size: number): Promise<Page<PublicReview>> {
+    try {
+      return await serverClient.get<Page<PublicReview>>(
+        `/reviews/public?page=${page}&size=${size}`,
+        { headers: storeHeaders(storeId), cache: 'no-store' }
+      );
+    } catch (error) {
+      console.error('口コミの取得に失敗しました:', error);
+      return { content: [], total_pages: 0, total_elements: 0, size, number: page };
     }
   },
 

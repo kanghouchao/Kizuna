@@ -1,7 +1,6 @@
 package com.kizuna.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -15,12 +14,6 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.revieworigin.ReviewOriginLookup;
 import com.kizuna.review.api.ReviewController;
 import com.kizuna.review.application.ReviewService;
-import com.kizuna.review.domain.ReviewInput;
-import com.kizuna.review.domain.ReviewRecord;
-import com.kizuna.review.domain.ReviewRepository;
-import com.kizuna.review.domain.ReviewSummaryView;
-import com.kizuna.review.domain.ReviewValues.ReceivedVia;
-import com.kizuna.review.publication.ReviewPublication;
 import com.kizuna.service.domain.ServiceItem;
 import com.kizuna.service.domain.ServiceItemRepository;
 import com.kizuna.service.domain.ServiceKind;
@@ -31,7 +24,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
-import com.kizuna.shared.publication.Publication;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.WebBindingConfig;
@@ -39,20 +31,18 @@ import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.LongStream;
-import java.util.stream.Stream;
 import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -73,7 +63,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
@@ -100,6 +90,7 @@ class ReviewIntegrationTest {
   private Long storeId, otherStore, actorId, roleId;
   private String email;
   private Authentication auth;
+  private SettableClock clock;
 
   @BeforeAll
   void connect() {
@@ -119,6 +110,7 @@ class ReviewIntegrationTest {
                     Map.entry("logging.level.root", "WARN")))
             .run();
     jdbc = context.getBean(JdbcTemplate.class);
+    clock = context.getBean(SettableClock.class);
     mvc =
         MockMvcBuilders.standaloneSetup(context.getBean(ReviewController.class))
             .setCustomArgumentResolvers(argumentResolvers())
@@ -144,6 +136,7 @@ class ReviewIntegrationTest {
   void clearContext() {
     SecurityContextHolder.clearContext();
     currentStore = null;
+    clock.set(null);
   }
 
   @BeforeEach
@@ -303,14 +296,12 @@ class ReviewIntegrationTest {
         """,
             201);
     String id = intake.get("review").get("id").asString();
-    var publication = context.getBean(ReviewPublication.class);
     send(
         "/" + id + "/decisions",
         """
         {"version":0,"decision":"APPROVE","reason":"確認","dedupe_key":"permission-approve"}
         """,
         200);
-    assertThat(publication.current(storeId, Set.of(id))).isEmpty();
     String grant =
         """
         {"version":1,"basis_type":"WRITTEN","granted_at":"2026-01-02T09:00:00+09:00","evidence_note":"  書面の記録  ","dedupe_key":"permission-grant"}
@@ -333,31 +324,38 @@ class ReviewIntegrationTest {
               statistics.getEntityStatistics("com.kizuna.review.domain." + entity).getLoadCount())
           .as("読取APIは%s全体をロードしない", entity)
           .isZero();
-    var projected = publication.current(storeId, Set.of(id)).get(id);
-    assertThat(projected.body()).isEqualTo("  公開を許可した原文  ");
-    assertThat(json.valueToTree(projected).properties())
+    publish(
+        id,
+        """
+        {"version":2,"published":true,"dedupe_key":"permission-publish"}
+        """,
+        200);
+    var shown = publicReviews(storeId, "").get("content");
+    assertThat(shown).hasSize(1);
+    assertThat(shown.get(0).get("body").asString()).isEqualTo("  公開を許可した原文  ");
+    assertThat(shown.get(0).get("display_name").asString()).isEqualTo("名前");
+    assertThat(shown.get(0).get("received_on").asString()).isEqualTo("2026-01-01");
+    assertThat(shown.get(0).properties())
         .extracting(Map.Entry::getKey)
-        .containsExactlyInAnyOrder("review_id", "review_version", "display_name", "body");
-    assertThat(publication.current(otherStore, Set.of(id))).isEmpty();
-    assertThatThrownBy(() -> publication.current(null, Set.of(id)))
-        .isInstanceOf(AccessDeniedException.class);
+        .containsExactlyInAnyOrder("display_name", "body", "received_on");
+    assertThat(publicReviews(otherStore, "").get("content")).isEmpty();
     var revoked =
         send(
             "/" + id + "/permission-revocations",
             """
-        {"version":2,"withdrawal_received_at":"2026-01-03T00:00:00Z","reason":"本人から撤回","dedupe_key":"permission-revoke"}
+        {"version":3,"withdrawal_received_at":"2026-01-03T00:00:00Z","reason":"本人から撤回","dedupe_key":"permission-revoke"}
         """,
             200);
     assertThat(revoked.get("review").get("status").asString()).isEqualTo("APPROVED");
     assertThat(revoked.get("review").get("permission_status").asString()).isEqualTo("REVOKED");
-    assertThat(publication.current(storeId, Set.of(id))).isEmpty();
+    assertThat(publicReviews(storeId, "").get("content")).isEmpty();
     var replay = send("/" + id + "/permissions", grant, 200);
     assertThat(replay.get("review").get("permission_status").asString()).isEqualTo("REVOKED");
     assertThat(replay.get("review").get("permission").get("revocation").get("reason").asString())
         .isEqualTo("本人から撤回");
     send(
         "/" + id + "/permissions",
-        grant.replace("\"version\":1", "\"version\":3").replace("permission-grant", "regrant"),
+        grant.replace("\"version\":1", "\"version\":4").replace("permission-grant", "regrant"),
         409);
   }
 
@@ -407,8 +405,6 @@ class ReviewIntegrationTest {
                 id))
         .isEqualTo("GRANTED");
     assertThat(old.get("superseded_by_id").asString()).isEqualTo(next);
-    assertThat(context.getBean(ReviewPublication.class).current(storeId, Set.of(id, next)))
-        .isEmpty();
     send(
         "/" + next + "/withdrawals",
         """
@@ -655,12 +651,6 @@ class ReviewIntegrationTest {
         {"version":1,"basis_type":"WRITTEN","granted_at":"2026-01-01T00:00:00Z","evidence_note":"記録","dedupe_key":"rejected-grant"}
         """,
         409);
-    var projection = context.getBean(ReviewPublication.class);
-    assertThat(projection.current(storeId, Set.of())).isEmpty();
-    var tooMany =
-        LongStream.rangeClosed(1, 101).mapToObj(Long::toString).collect(Collectors.toSet());
-    assertThatThrownBy(() -> projection.current(storeId, tooMany))
-        .isInstanceOf(IllegalArgumentException.class);
     send(
         "/" + id + "/withdrawals",
         """
@@ -826,6 +816,7 @@ class ReviewIntegrationTest {
             """,
             200);
     assertThat(published.get("review").get("displayed").asBoolean()).isTrue();
+    assertThat(publicReviews(storeId, "").get("content")).hasSize(1);
     var corrected =
         send(
             "/" + id + "/corrections",
@@ -838,6 +829,7 @@ class ReviewIntegrationTest {
     assertThat(old.get("status").asString()).isEqualTo("WITHDRAWN");
     assertThat(old.get("publication").get("published").asBoolean()).isTrue();
     assertThat(old.get("displayed").asBoolean()).isFalse();
+    assertThat(publicReviews(storeId, "").get("content")).isEmpty();
   }
 
   @Test
@@ -888,64 +880,60 @@ class ReviewIntegrationTest {
   }
 
   @Test
-  void displayedQueryKeepsStartExcludesEndAndOrdersTotallyWithNullsLast() {
+  void publicEndpointKeepsStartExcludesEndAndOrdersTotallyWithinTheNamedStore() throws Exception {
     var now = OffsetDateTime.parse("2026-06-01T00:00:00Z");
-    var older = now.minusDays(2);
-    var newer = now.minusDays(1);
-    var repository = context.getBean(ReviewRepository.class);
-    List<String> ids =
-        new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
-            .execute(
-                status ->
-                    Stream.of(
-                            new Publication(true, null, null, null),
-                            new Publication(true, older, null, null),
-                            new Publication(true, newer, null, null),
-                            new Publication(true, null, null, 2),
-                            new Publication(true, older, null, 1),
-                            new Publication(true, null, null, 1),
-                            new Publication(false, null, null, 0),
-                            new Publication(true, now, null, 0),
-                            new Publication(true, null, now, 0),
-                            new Publication(true, now.plusMinutes(1), null, 0),
-                            new Publication(true, null, null, null))
-                        .map(
-                            p -> {
-                              var row =
-                                  ReviewRecord.receive(
-                                      storeId,
-                                      new ReviewInput("並び", null, ReceivedVia.PAPER, older, null),
-                                      actorId,
-                                      "担当",
-                                      null,
-                                      null);
-                              row.changePublication(p);
-                              return repository.saveAndFlush(row).getId();
-                            })
-                        .toList());
-    var shown =
-        repository
-            .findBy(
-                Publication.shownSpecification(ReviewRecord::getPublication, now)
-                    .and((root, q, cb) -> cb.equal(root.get("storeId"), storeId)),
-                q ->
-                    q.as(ReviewSummaryView.class)
-                        .sortBy(
-                            Publication.order(ReviewRecord::getPublication, ReviewRecord::getId))
-                        .all())
-            .stream()
-            .map(ReviewSummaryView::getId)
-            .toList();
-    assertThat(shown)
+    clock.set(now.toInstant());
+    String older = now.minusDays(2).toString();
+    String newer = now.minusDays(1).toString();
+    List<String> publications =
+        List.of(
+            "\"published\":true",
+            "\"published\":true,\"publish_from\":\"" + older + "\"",
+            "\"published\":true,\"publish_from\":\"" + newer + "\"",
+            "\"published\":true,\"display_order\":2",
+            "\"published\":true,\"publish_from\":\"" + older + "\",\"display_order\":1",
+            "\"published\":true,\"display_order\":1",
+            "\"published\":false,\"display_order\":0",
+            "\"published\":true,\"publish_from\":\"" + now + "\",\"display_order\":0",
+            "\"published\":true,\"publish_until\":\"" + now + "\",\"display_order\":0",
+            "\"published\":true,\"publish_from\":\""
+                + now.plusMinutes(1)
+                + "\",\"display_order\":0",
+            "\"published\":true");
+    for (int i = 0; i < publications.size(); i++)
+      approveGrantAndPublish("order-" + i, publications.get(i));
+    String pending = intake("pending-published");
+    publish(pending, "{\"version\":0,\"published\":true,\"dedupe_key\":\"pending-publish\"}", 200);
+    String withdrawn = approveGrantAndPublish("withdrawn", "\"published\":true");
+    send(
+        "/" + withdrawn + "/withdrawals",
+        "{\"version\":3,\"reason\":\"取り下げ\",\"dedupe_key\":\"withdrawn-withdraw\"}",
+        200);
+    currentStore = otherStore;
+    approveGrantAndPublish("foreign", "\"published\":true,\"display_order\":0");
+    var all = publicReviews(storeId, "?size=100");
+    assertThat(all.get("content"))
+        .extracting(r -> r.get("body").asString())
         .containsExactly(
-            ids.get(7),
-            ids.get(4),
-            ids.get(5),
-            ids.get(3),
-            ids.get(2),
-            ids.get(1),
-            ids.get(0),
-            ids.get(10));
+            "order-7",
+            "order-4",
+            "order-5",
+            "order-3",
+            "order-2",
+            "order-1",
+            "order-0",
+            "order-10");
+    assertThat(all.get("content").get(0).get("received_on").asString()).isEqualTo("2026-01-02");
+    var second = publicReviews(storeId, "?page=1&size=3");
+    assertThat(second.get("content"))
+        .extracting(r -> r.get("body").asString())
+        .containsExactly("order-3", "order-2", "order-1");
+    assertThat(second.get("total_elements").asLong()).isEqualTo(8);
+    assertThat(publicReviews(otherStore, "").get("content"))
+        .extracting(r -> r.get("body").asString())
+        .containsExactly("foreign");
+    publicReviews(storeId, "?size=101", 400);
+    publicReviews(storeId, "?page=99999999&size=100", 400);
   }
 
   private String intake(String key) throws Exception {
@@ -958,6 +946,60 @@ class ReviewIntegrationTest {
         .get("review")
         .get("id")
         .asString();
+  }
+
+  private String approveGrantAndPublish(String body, String publication) throws Exception {
+    String id =
+        send(
+                "",
+                "{\"body\":\""
+                    + body
+                    + "\",\"display_name\":\"表示名\",\"received_via\":\"PAPER\",\"received_at\":\"2026-01-01T20:00:00Z\",\"dedupe_key\":\""
+                    + body
+                    + "\"}",
+                201)
+            .get("review")
+            .get("id")
+            .asString();
+    send(
+        "/" + id + "/decisions",
+        "{\"version\":0,\"decision\":\"APPROVE\",\"reason\":\"確認\",\"dedupe_key\":\""
+            + body
+            + "-approve\"}",
+        200);
+    send(
+        "/" + id + "/permissions",
+        "{\"version\":1,\"basis_type\":\"WRITTEN\",\"granted_at\":\"2026-01-02T00:00:00Z\",\"evidence_note\":\"書面\",\"dedupe_key\":\""
+            + body
+            + "-grant\"}",
+        201);
+    publish(id, "{\"version\":2," + publication + ",\"dedupe_key\":\"" + body + "-publish\"}", 200);
+    return id;
+  }
+
+  private JsonNode publicReviews(Long store, String query) throws Exception {
+    return publicReviews(store, query, 200);
+  }
+
+  /** 公開端点は未認証で叩かれる。名乗る店舗だけを差し替え、終われば元の担当者と店舗へ戻す。 */
+  private JsonNode publicReviews(Long store, String query, int expected) throws Exception {
+    var previous = currentStore;
+    currentStore = store;
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new AnonymousAuthenticationToken(
+                "public", "anonymousUser", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
+    try {
+      return json.readTree(
+          mvc.perform(get("/reviews/public" + query))
+              .andExpect(status().is(expected))
+              .andReturn()
+              .getResponse()
+              .getContentAsString());
+    } finally {
+      currentStore = previous;
+      SecurityContextHolder.getContext().setAuthentication(auth);
+    }
   }
 
   private JsonNode publish(String id, String body, int expected) throws Exception {
@@ -1049,7 +1091,7 @@ class ReviewIntegrationTest {
 
   @Configuration
   @EnableAutoConfiguration
-  @EnableMethodSecurity
+  @EnableMethodSecurity(jsr250Enabled = true)
   @EntityScan("com.kizuna")
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackageClasses = ReviewService.class)
@@ -1057,18 +1099,43 @@ class ReviewIntegrationTest {
     AuditWriter.class,
     BusinessAudit.class,
     ReviewController.class,
-    ReviewPublication.class,
     ReviewOriginLookup.class
   })
   static class Config {
     @Bean
-    Clock clock() {
-      return Clock.systemUTC();
+    SettableClock clock() {
+      return new SettableClock();
     }
 
     @Bean
     AppProperties properties() {
       return new AppProperties();
+    }
+  }
+
+  /** 掲出の境界を分単位で固定するための時計。未設定なら現在時刻。時間帯は店舗の現地日付を確かめるため東京に置く。 */
+  static class SettableClock extends Clock {
+    private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
+    private volatile Instant fixed;
+
+    void set(Instant instant) {
+      fixed = instant;
+    }
+
+    @Override
+    public ZoneId getZone() {
+      return ZONE;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Instant instant() {
+      var at = fixed;
+      return at == null ? Instant.now() : at;
     }
   }
 }
