@@ -16,6 +16,7 @@ import com.kizuna.user.domain.RoleInUseException;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleRoleUpdateException;
 import com.kizuna.user.domain.SystemRoleImmutableException;
+import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +45,7 @@ public class RoleService {
   private final PermissionRepository permissionRepository;
   private final UserRepository userRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
+  private final CredentialOperations credentialOperations;
 
   /** 一覧は権限の個数だけを返す要約。権限コードの列挙が要るのは編集時のみで、それは {@link #get(Long)} が担う。 */
   @Transactional(readOnly = true)
@@ -96,9 +98,17 @@ public class RoleService {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
     }
     var before = snapshot(role);
+    boolean permissionsChanged = !role.getPermissionIds().equals(codesById.keySet());
     role.rename(req.getName());
     role.replacePermissions(codesById.keySet());
     save(role);
+    // トークンの権限は発行時にロールから写したものなので、保持者全員を再ログインさせる（操作者本人も含む）。
+    // ロール行の保存で同一ロールの並行更新を先に撥ねてから、保持者を押さえて版の増分を直列化する。
+    if (permissionsChanged) {
+      List<User> holders = userRepository.lockRoleHolders(role.getId());
+      holders.forEach(credentialOperations::invalidateSessions);
+      userRepository.saveAllAndFlush(holders);
+    }
     if (!before.equals(snapshot(role)))
       businessAudit.recordCurrent(
           null, "ROLE_CHANGED", "ROLE", role.getId().toString(), before, snapshot(role));

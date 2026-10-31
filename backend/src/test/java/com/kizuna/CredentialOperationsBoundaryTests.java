@@ -18,7 +18,12 @@ class CredentialOperationsBoundaryTests {
     var protectedOperations =
         Map.of(
             User.class.getName(),
-                Set.of("stop", "changePassword", "invalidateSessions", "markWithdrawn"),
+                Set.of(
+                    "stop",
+                    "changePassword",
+                    "invalidateSessions",
+                    "markWithdrawn",
+                    "reassignGrants"),
             UserCredentialsChanged.class.getName(), Set.of("<init>"));
     var classes =
         new ClassFileImporter()

@@ -32,7 +32,7 @@ databaseChangeLog:
                   type: VARCHAR(255)
                   remarks: bcrypt ハッシュ（SERVICE は NULL）
               - column:
-                  # 資格情報の版（ADR 0022）。パスワード変更・再設定・停止で単調増分し、
+                  # 資格情報の版（ADR 0022）。パスワード変更・再設定・停止・実効権限の変更で単調増分し、
                   # 発行済み JWT の claim と相等比較してセッションを即時失効させる。
                   name: credential_version
                   type: BIGINT

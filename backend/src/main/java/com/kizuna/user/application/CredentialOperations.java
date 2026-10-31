@@ -1,9 +1,11 @@
 package com.kizuna.user.application;
 
+import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.modulith.NamedInterface;
@@ -25,6 +27,13 @@ public class CredentialOperations {
 
   public void changePassword(User user, String encodedPassword) {
     user.changePassword(encodedPassword);
+    notifyCredentialsChanged(user);
+  }
+
+  /** 授権の再割当。ロール集合が変わると集約が版を進める。停止と同じく、再送で反映を書き直せるよう要求ごとに現在版を通知する。 */
+  public void reassignGrants(
+      User user, Set<Long> roleIds, StoreScopeType storeScopeType, Set<Long> storeIds) {
+    user.reassignGrants(roleIds, storeScopeType, storeIds);
     notifyCredentialsChanged(user);
   }
 

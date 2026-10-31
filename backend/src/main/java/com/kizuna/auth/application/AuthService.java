@@ -38,8 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
  * フレームワークの既定挙動が担う。いずれの例外も {@code AuthenticationException} 系のため 401 で応答される。
  *
  * <p>authorities の発行: ロールで授権される種別（STAFF / SERVICE）は保持ロールの権限並集を {@code PERM_} 形式で発行し、CAST / MEMBER
- * は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER} のみを発行する。権限の変更は次回ログインから反映される（会話中は失効しない既定挙動）。 店舗集合は
- * claim に載せず要求ごとに DB から解決する（StoreScopeResolver）。SERVICE は共通の発行守衛が拒否するため、この発行に到達しない。
+ * は本人種別標識 {@code ROLE_CAST} / {@code ROLE_MEMBER}
+ * のみを発行する。実効権限（ロールの権限集合・保持ロール）が変わると資格情報の版が進み、既発行トークンは失効して再ログインを要する（ADR 0022）。 店舗集合は claim に載せず要求ごとに
+ * DB から解決する（StoreScopeResolver）。SERVICE は共通の発行守衛が拒否するため、この発行に到達しない。
  */
 @Service
 @RequiredArgsConstructor
@@ -93,7 +94,7 @@ public class AuthService {
     Map<String, Object> claims = new HashMap<>();
     claims.put("authorities", buildAuthorities(user, permissions));
     claims.put("userType", user.getUserType().name());
-    // 発行時点の資格情報の版。検証時に現在の版と相等比較され、パスワード変更・再設定・停止で
+    // 発行時点の資格情報の版。検証時に現在の版と相等比較され、パスワード変更・再設定・停止・実効権限の変更で
     // 即時に不一致となる（ADR 0022）。
     claims.put(CredentialVersionService.CLAIM, user.getCredentialVersion());
     // 版の照合の鍵。subject の電子メールは退会で解放されて別人が引き継ぎうる（ADR 0029）。

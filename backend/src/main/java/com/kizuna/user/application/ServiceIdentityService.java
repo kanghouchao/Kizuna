@@ -133,7 +133,8 @@ public class ServiceIdentityService {
       throw new StaleServiceIdentityUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
     var before = BusinessAudit.grants(user);
-    user.reassignGrants(req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
+    credentialOperations.reassignGrants(
+        user, req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
       businessAudit.recordCurrent(

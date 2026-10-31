@@ -11,7 +11,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * 認証セッション（発行済み JWT が表す認証状態）の失効。ログアウト（トークン単位）と、資格情報の版の変更 （パスワード変更・再設定・停止 — アカウント単位、ADR
+ * 認証セッション（発行済み JWT が表す認証状態）の失効。ログアウト（トークン単位）と、資格情報の版の変更 （パスワード変更・再設定・停止・実効権限の変更 — アカウント単位、ADR
  * 0022）が共用する唯一の失効経路。資格情報を変える ユースケースは必ず {@link UserCredentialsChanged} を発行してここを通すこと（controller
  * で個別に組み立てない）。
  *

@@ -60,6 +60,28 @@ class CredentialOperationsTest {
   }
 
   @Test
+  void grantReassignmentNotifiesTheCurrentVersionOnEveryRequest() {
+    User user = user(UserType.STAFF);
+    operations.reassignGrants(user, Set.of(1L, 2L), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    operations.reassignGrants(user, Set.of(1L, 2L), StoreScopeType.ALL_STORES, Set.of());
+    assertThat(user.getRoleIds()).containsExactlyInAnyOrder(1L, 2L);
+    assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+    assertThat(events)
+        .containsExactly(
+            new UserCredentialsChanged(user.getId(), 1L),
+            new UserCredentialsChanged(user.getId(), 1L));
+  }
+
+  @Test
+  void serviceGrantReassignmentAdvancesWithoutNotification() {
+    User user = user(UserType.SERVICE);
+    operations.reassignGrants(user, Set.of(2L), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    assertThat(user.getCredentialVersion()).isEqualTo(1L);
+    assertThat(events).isEmpty();
+  }
+
+  @Test
   void serviceCannotReceivePassword() {
     User user = user(UserType.SERVICE);
     assertThatThrownBy(() -> operations.changePassword(user, "encoded"))
