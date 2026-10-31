@@ -63,14 +63,18 @@ class SessionTokenDecoderTest {
   }
 
   private String expiredRefreshToken() {
-    JwtEncoder encoder = new JwtEncoderConfig().jwtEncoder(appProperties);
     Instant now = Instant.now();
+    return refreshToken(now.minusSeconds(20), now.minusSeconds(10));
+  }
+
+  private String refreshToken(Instant issuedAt, Instant expiresAt) {
+    JwtEncoder encoder = new JwtEncoderConfig().jwtEncoder(appProperties);
     JwtClaimsSet claims =
         JwtClaimsSet.builder()
             .issuer(JwtIssuer.ISSUER)
             .subject("u@kizuna.test")
-            .issuedAt(now.minusSeconds(20))
-            .expiresAt(now.minusSeconds(10))
+            .issuedAt(issuedAt)
+            .expiresAt(expiresAt)
             .claims(c -> c.putAll(claims()))
             .claim(TokenType.CLAIM, TokenType.REFRESH.claimValue())
             .claim(TokenType.SESSION_ID_CLAIM, "session-1")
@@ -109,6 +113,20 @@ class SessionTokenDecoderTest {
   @DisplayName("期限切れは expired")
   void expiredToken() {
     assertThat(reasonOf(expiredRefreshToken())).isEqualTo(Reason.EXPIRED);
+  }
+
+  @Test
+  @DisplayName("有効期間を短縮した後は、exp が残っていても現在の有効期間を過ぎたトークンを expired にする")
+  void shortenedLifetimeExpiresOlderTokens() {
+    Instant now = Instant.now();
+    // 14 日の設定で 2 日前に発行されたトークン（exp は 12 日後）。
+    String issuedUnderLongerLifetime =
+        refreshToken(now.minusSeconds(2 * 86_400), now.plusSeconds(12 * 86_400));
+    assertThat(decoder.decodeRefresh(issuedUnderLongerLifetime)).isNotNull();
+
+    appProperties.getJwt().setRefreshExpiration(86_400_000L);
+
+    assertThat(reasonOf(issuedUnderLongerLifetime)).isEqualTo(Reason.EXPIRED);
   }
 
   @Test

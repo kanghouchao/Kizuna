@@ -3,6 +3,7 @@ package com.kizuna.auth.infrastructure;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException.Reason;
 import com.kizuna.shared.config.AppProperties;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -38,8 +39,14 @@ public class SessionTokenDecoder {
             List.of(
                 // 種別を期限より先に見る — 期限切れのアクセストークンを expired と答えない。
                 new TokenTypeValidator(TokenType.REFRESH),
+                // 有効期間は発行時ではなく現在の設定で数え直す。セッションの失効キーの TTL は現在の設定値なので、
+                // 運用中に有効期間を短縮しても、失効キーより長生きする既発行トークンを残さない。
                 jwt ->
                     timestamp.validate(jwt).hasErrors()
+                            || jwt.getIssuedAt() == null
+                            || !jwt.getIssuedAt()
+                                .plusMillis(appProperties.getJwt().getRefreshExpiration())
+                                .isAfter(Instant.now())
                         ? OAuth2TokenValidatorResult.failure(new OAuth2Error(EXPIRED))
                         : OAuth2TokenValidatorResult.success(),
                 tokenBlacklistValidator,
