@@ -70,6 +70,15 @@ public class RoleManageHolderGuard {
     }
   }
 
+  /**
+   * ロールの保持者全員を押さえて返す。利用者の行を複数押さえる経路は全て先にこの目録行を取る — 停止は対象を押さえてから保持者を id
+   * 昇順に押さえるため、目録行を経ずに保持者を押さえると獲得順が食い違って待ちが環になる。
+   */
+  public List<User> lockRoleHolders(Long roleId) {
+    permissionRepository.lockIdByCode(ROLE_MANAGE);
+    return repository.lockRoleHolders(roleId);
+  }
+
   private void requireAnotherHolder(User target, Set<Long> supplierIds) {
     // ロック照会は待機中に変わった関連ロールを見ないため、別クエリの新しい顔ぶれで数える。
     repository.lockEnabledRoleHolderIds(supplierIds);

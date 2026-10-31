@@ -239,7 +239,7 @@ class RoleServiceTest {
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
-    when(userRepository.lockRoleHolders(7L)).thenReturn(List.of(staff, serviceIdentity));
+    when(roleManageHolderGuard.lockRoleHolders(7L)).thenReturn(List.of(staff, serviceIdentity));
 
     service.update(7L, updateRequest("受付", Set.of("CUSTOMER_MANAGE"), 0L));
 
@@ -259,7 +259,7 @@ class RoleServiceTest {
 
     service.update(7L, updateRequest("受付リーダー", Set.of("ORDER_MANAGE"), 0L));
 
-    verifyNoInteractions(userRepository);
+    verifyNoInteractions(userRepository, roleManageHolderGuard);
     assertThat(events).isEmpty();
   }
 
@@ -373,7 +373,7 @@ class RoleServiceTest {
 
   @Test
   void update_thatKeepsRoleManage_doesNotSerialize() {
-    // 母集団を減らさない編集（改名・権限の追加）まで共有の直列化点を押さえると、無関係なロール編集同士が待ち合う。
+    // 権限集合を変えない編集（改名）まで共有の直列化点を押さえると、無関係なロール編集同士が待ち合う。
     Role existing = role(GUARDED_ROLE, "IT管理", false, Set.of(ROLE_MANAGE_ID));
     when(permissionRepository.findByCodeIn(Set.of("ROLE_MANAGE")))
         .thenReturn(List.of(permission(ROLE_MANAGE_ID, PermissionCode.ROLE_MANAGE)));
@@ -510,6 +510,6 @@ class RoleServiceTest {
 
     service.update(GUARDED_ROLE, updateRequest("受付", Set.of("CUSTOMER_MANAGE"), 0L));
 
-    verifyNoInteractions(roleManageHolderGuard);
+    verify(roleManageHolderGuard, never()).requireAfterRolePermissionRemoval(any());
   }
 }

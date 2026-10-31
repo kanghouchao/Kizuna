@@ -35,6 +35,26 @@ class RoleManageHolderGuardTest {
   @InjectMocks private RoleManageHolderGuard guard;
 
   @Test
+  void roleHolders_areLockedAfterTheCatalogueRow() {
+    User holder =
+        User.builder()
+            .email("holder@kizuna.test")
+            .password("hash")
+            .displayName("保持者")
+            .enabled(true)
+            .userType(UserType.STAFF)
+            .roleIds(Set.of(10L))
+            .build();
+    when(repository.lockRoleHolders(10L)).thenReturn(List.of(holder));
+
+    assertThat(guard.lockRoleHolders(10L)).containsExactly(holder);
+
+    var order = inOrder(permissionRepository, repository);
+    order.verify(permissionRepository).lockIdByCode("ROLE_MANAGE");
+    order.verify(repository).lockRoleHolders(10L);
+  }
+
+  @Test
   void grantChange_countsFreshHoldersAfterTheMutexAndPopulationLocks() {
     User target =
         User.builder()

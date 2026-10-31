@@ -14,6 +14,8 @@ import com.kizuna.shared.config.RedisConfig;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.user.application.CredentialOperations;
+import com.kizuna.user.application.RoleManageHolderGuard;
+import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -83,6 +85,7 @@ class CredentialRevocationIntegrationTest {
   private AnnotationConfigApplicationContext context;
   private UserRepository users;
   private RoleRepository roles;
+  private RoleManageHolderGuard guard;
   private CredentialOperations credentials;
   private CredentialVersionService versions;
   private RedisTemplate<String, Object> redis;
@@ -97,6 +100,7 @@ class CredentialRevocationIntegrationTest {
     context = new AnnotationConfigApplicationContext(Config.class);
     users = context.getBean(UserRepository.class);
     roles = context.getBean(RoleRepository.class);
+    guard = context.getBean(RoleManageHolderGuard.class);
     credentials = context.getBean(CredentialOperations.class);
     versions = context.getBean(CredentialVersionService.class);
     redis = context.getBean(RedisTemplate.class);
@@ -283,14 +287,64 @@ class CredentialRevocationIntegrationTest {
     assertThat(users.findById(holder.getId()).orElseThrow().getRoleIds()).containsExactly(role);
   }
 
-  /** ロールの権限集合を変えた更新が保持者に対して行うことと同じ（RoleService はこの試験の文脈に載せない）。 */
+  @Test
+  void roleFanOutAndSuspensionOfAnotherHolderDoNotDeadlock() throws Exception {
+    long role = createRole(PermissionCode.ROLE_MANAGE);
+    var first = createStaff(role);
+    var second = createStaff(role);
+    var executor = Executors.newFixedThreadPool(3);
+    try {
+      var held = new CountDownLatch(1);
+      var release = new CountDownLatch(1);
+      // 先頭の保持者を押さえて、権限変更の保持者走査をそこで待たせる。停止はその後ろから二人目を先に押さえにくる。
+      Future<?> blocker =
+          executor.submit(
+              () ->
+                  transaction.executeWithoutResult(
+                      status -> {
+                        users.findByIdForUpdate(first.getId()).orElseThrow();
+                        held.countDown();
+                        await(release);
+                      }));
+      assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+      Future<?> fanOut =
+          executor.submit(
+              () -> transaction.executeWithoutResult(status -> invalidateHolders(role)));
+      awaitLockWaiters(1);
+      Future<?> suspension =
+          executor.submit(
+              () ->
+                  transaction.executeWithoutResult(
+                      status -> {
+                        User target = guard.loadForSuspension(second.getId());
+                        credentials.stop(target);
+                        users.saveAndFlush(target);
+                      }));
+      awaitLockWaiters(2);
+      release.countDown();
+      blocker.get(10, TimeUnit.SECONDS);
+      fanOut.get(10, TimeUnit.SECONDS);
+      suspension.get(10, TimeUnit.SECONDS);
+    } finally {
+      executor.shutdownNow();
+    }
+
+    assertThat(users.findCredentialVersionById(first.getId())).contains(1L);
+    assertThat(users.findCredentialVersionById(second.getId())).contains(2L);
+  }
+
+  /** RoleService.update が権限集合を変えたときに保持者に対して行うことと同じ（RoleService はこの試験の文脈に載せない）。 */
   private void invalidateHolders(long roleId) {
-    List<User> holders = users.lockRoleHolders(roleId);
+    List<User> holders = guard.lockRoleHolders(roleId);
     holders.forEach(credentials::invalidateSessions);
     users.saveAllAndFlush(holders);
   }
 
   private long createRole() {
+    return createRole(PermissionCode.ORDER_MANAGE);
+  }
+
+  private long createRole(PermissionCode permission) {
     return transaction.execute(
         status ->
             roles
@@ -301,7 +355,9 @@ class CredentialRevocationIntegrationTest {
                         .permissionIds(
                             Set.of(
                                 jdbc.queryForObject(
-                                    "select min(id) from t_permissions", Long.class)))
+                                    "select id from t_permissions where code = ?",
+                                    Long.class,
+                                    permission.name())))
                         .build())
                 .getId());
   }
@@ -322,13 +378,17 @@ class CredentialRevocationIntegrationTest {
   }
 
   private void awaitLockWait() throws InterruptedException {
+    awaitLockWaiters(1);
+  }
+
+  private void awaitLockWaiters(int expected) throws InterruptedException {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
       Long waiting =
           jdbc.queryForObject(
               "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock'",
               Long.class);
-      if (waiting != null && waiting > 0) return;
+      if (waiting != null && waiting >= expected) return;
       Thread.sleep(20);
     }
     throw new AssertionError("後続の失効が保持者の行ロックを待っていません");
@@ -435,6 +495,7 @@ class CredentialRevocationIntegrationTest {
   @Import({
     AuthService.class,
     CredentialOperations.class,
+    RoleManageHolderGuard.class,
     AuthSessionService.class,
     CredentialVersionService.class,
     CredentialVersionValidator.class,

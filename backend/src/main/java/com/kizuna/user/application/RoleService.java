@@ -105,7 +105,7 @@ public class RoleService {
     // トークンの権限は発行時にロールから写したものなので、保持者全員を再ログインさせる（操作者本人も含む）。
     // ロール行の保存で同一ロールの並行更新を先に撥ねてから、保持者を押さえて版の増分を直列化する。
     if (permissionsChanged) {
-      List<User> holders = userRepository.lockRoleHolders(role.getId());
+      List<User> holders = roleManageHolderGuard.lockRoleHolders(role.getId());
       holders.forEach(credentialOperations::invalidateSessions);
       userRepository.saveAllAndFlush(holders);
     }
