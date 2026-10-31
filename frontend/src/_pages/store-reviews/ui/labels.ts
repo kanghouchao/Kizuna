@@ -29,8 +29,11 @@ export function time(value: string) {
 export function publicationSummary(p: Publication) {
   const period =
     p.publish_from || p.publish_until
-      ? `${p.publish_from ? time(p.publish_from) : '開始指定なし'} 〜 ${p.publish_until ? time(p.publish_until) : '終了指定なし'}`
+      ? `${p.publish_from ? storeTime(p.publish_from) : '開始指定なし'} 〜 ${p.publish_until ? storeTime(p.publish_until) : '終了指定なし'}`
       : '期間指定なし';
   const order = p.display_order === null ? '表示順指定なし' : `表示順 ${p.display_order}`;
   return `${p.published ? '公開' : '非公開'} / ${period} / ${order}`;
+}
+function storeTime(value: string) {
+  return new Date(value).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 }

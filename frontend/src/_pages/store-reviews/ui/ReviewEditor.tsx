@@ -43,8 +43,18 @@ function localInput(value: string | null | undefined) {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
+// 公開期間は店舗の現地日時（Asia/Tokyo）で入出力する。夏時間が無いので +09:00 固定で変換できる。
+function storeInput(value: string | null | undefined) {
+  if (!value) return '';
+  return new Date(new Date(value).getTime() + 9 * 3600000).toISOString().slice(0, 16);
+}
+function fromStoreInput(value: string) {
+  return value === '' ? null : new Date(`${value}:00+09:00`).toISOString();
+}
 const optionalDate = (value: string) =>
-  value === '' || Number.isFinite(new Date(value).getTime()) || '日時を正しく入力してください';
+  value === '' ||
+  Number.isFinite(new Date(`${value}:00+09:00`).getTime()) ||
+  '日時を正しく入力してください';
 export const dateRule = (value: string) => {
   const date = new Date(value).getTime();
   return (
@@ -82,9 +92,9 @@ export function ReviewEditor({
       event_at: '',
       evidence_note: '',
       published: publication?.published ?? false,
-      publish_from: localInput(publication?.publish_from),
-      publish_until: localInput(publication?.publish_until),
-      display_order: publication?.display_order?.toString() ?? '',
+      publish_from: storeInput(publication?.publish_from),
+      publish_until: storeInput(publication?.publish_until),
+      display_order: publication?.display_order ?? (null as number | null),
     },
   });
   const create = editor.action === 'CREATE';
@@ -116,11 +126,9 @@ export function ReviewEditor({
             version: base.version,
             dedupe_key: base.dedupe_key,
             published: values.published,
-            publish_from:
-              values.publish_from === '' ? null : new Date(values.publish_from).toISOString(),
-            publish_until:
-              values.publish_until === '' ? null : new Date(values.publish_until).toISOString(),
-            display_order: values.display_order === '' ? null : Number(values.display_order),
+            publish_from: fromStoreInput(values.publish_from),
+            publish_until: fromStoreInput(values.publish_until),
+            display_order: values.display_order,
           },
         });
       else if (editor.action === 'GRANT')
@@ -367,6 +375,7 @@ export function ReviewEditor({
                     <FormLabel>公式サイトで公開する</FormLabel>
                     <FormControl>
                       <Switch
+                        ref={field.ref}
                         checked={field.value}
                         onCheckedChange={field.onChange}
                         disabled={busy}
@@ -381,7 +390,7 @@ export function ReviewEditor({
                 rules={{ validate: optionalDate }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>公開開始（任意・この端末の時刻）</FormLabel>
+                    <FormLabel>公開開始（任意・店舗の現地時刻）</FormLabel>
                     <FormControl>
                       <Input {...field} type="datetime-local" disabled={busy} />
                     </FormControl>
@@ -399,7 +408,7 @@ export function ReviewEditor({
                     return (
                       value === '' ||
                       values.publish_from === '' ||
-                      new Date(values.publish_from).getTime() < new Date(value).getTime() ||
+                      values.publish_from < value ||
                       '公開終了は公開開始より後にしてください'
                     );
                   },
@@ -407,7 +416,7 @@ export function ReviewEditor({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      公開終了（任意・この端末の時刻。この時刻に掲出を終えます）
+                      公開終了（任意・店舗の現地時刻。この時刻に掲出を終えます）
                     </FormLabel>
                     <FormControl>
                       <Input {...field} type="datetime-local" disabled={busy} />
@@ -421,15 +430,26 @@ export function ReviewEditor({
                 name="display_order"
                 rules={{
                   validate: value =>
-                    value === '' ||
-                    (/^-?[0-9]{1,9}$/.test(value.trim()) && Number.isSafeInteger(Number(value))) ||
+                    value === null ||
+                    (Number.isInteger(value) && Math.abs(value) <= 2147483647) ||
                     '表示順は整数で入力してください（空欄は末尾）',
                 }}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>表示順（任意・小さいほど先頭。空欄は末尾に新しい順）</FormLabel>
                     <FormControl>
-                      <Input {...field} type="number" step={1} disabled={busy} />
+                      <Input
+                        {...field}
+                        type="number"
+                        step={1}
+                        disabled={busy}
+                        value={field.value === null || Number.isNaN(field.value) ? '' : field.value}
+                        onChange={event =>
+                          field.onChange(
+                            event.target.value === '' ? null : event.target.valueAsNumber
+                          )
+                        }
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
