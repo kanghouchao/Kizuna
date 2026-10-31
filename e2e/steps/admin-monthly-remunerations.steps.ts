@@ -7,6 +7,7 @@ import {
   getAuthorizedStores, getOrder, invalidateOrder, issueCastInvitation,
   loginAsStoreAdmin, loginUser, STORE1_ID, suspendCast, switchStoreOnRail, withdrawCast,
   openLoginForm,
+  monthInTokyo,
 } from './store-api';
 
 const { Given, When, Then } = createBdd();
@@ -65,7 +66,7 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
   const course = await createCourse(request, manager, '月次グループ級・長いサービス概要の折り返しを確認するコース');
   originalOrder = await createAgreedOrder(request, manager, first, course, '月次グループ級顧客', { businessDate: originalDate });
   await completeAgreedOrder(request, manager, originalOrder);
-  expect((await getOrder(request, manager, STORE1_ID, originalOrder)).completed_at!.slice(0, 7) > originalMonth).toBeTruthy();
+  expect(monthInTokyo((await getOrder(request, manager, STORE1_ID, originalOrder)).completed_at!) > originalMonth).toBeTruthy();
   await withdrawCast(request, manager, first);
   const second = await createCast(request, manager, name + '-新名');
   await acceptExistingCastInvitation(request, await issueCastInvitation(request, manager, second), email, password);

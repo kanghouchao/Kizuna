@@ -207,6 +207,13 @@ export function todayInTokyo(): string {
   );
 }
 
+/** 時刻（API の UTC オフセット付き文字列）が属する日本時間の年月（YYYY-MM）。 */
+export function monthInTokyo(instant: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" })
+    .format(new Date(instant))
+    .slice(0, 7);
+}
+
 /** キャストを作成し id を返す（POST /api/casts, hasAuthority('CAST_MANAGE')）。 */
 export async function createUnpublishedCast(
   request: APIRequestContext,

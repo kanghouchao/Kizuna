@@ -21,6 +21,7 @@ import {
   suspendCast,
   withdrawCast,
   openLoginForm,
+  monthInTokyo,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
@@ -265,7 +266,7 @@ When(
     );
     const original = await getOrder(request, manager, STORE1_ID, firstOrder);
     expect(original.business_date).toBe(oldDate);
-    expect(original.completed_at!.slice(0, 7) > month).toBe(true);
+    expect(monthInTokyo(original.completed_at!) > month).toBe(true);
   },
 );
 

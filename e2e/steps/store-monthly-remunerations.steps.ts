@@ -21,6 +21,7 @@ import {
   withdrawCast,
   invalidateOrder,
   cancelOrder,
+  monthInTokyo,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
@@ -161,7 +162,7 @@ Given(
       originalOrderId,
     );
     expect(completed.business_date).toBe(originalDate);
-    expect(completed.completed_at!.slice(0, 7) > originalMonth).toBeTruthy();
+    expect(monthInTokyo(completed.completed_at!) > originalMonth).toBeTruthy();
     await withdrawCast(request, managerToken, first);
     const second = await createCast(request, managerToken, `${name}-新名`);
     await acceptExistingCastInvitation(
