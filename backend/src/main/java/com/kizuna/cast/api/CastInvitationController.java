@@ -45,7 +45,7 @@ public class CastInvitationController {
 
   /**
    * 資格情報を照合してから受諾する。照合を受諾の取引の外に置くのは、取引内で利用者を読み込むと受諾の行ロックが版照合つきの昇格になり、
-   * 新鮮な行を読み直せないため。照合から受諾までの間の停止は、受諾側がロック後に拒む。
+   * 新鮮な行を読み直せないため。照合から受諾までの間の停止とパスワード変更は、受諾側がロック後に拒む。
    */
   @PostMapping("/acceptance/existing")
   @PermitAll
@@ -56,6 +56,7 @@ public class CastInvitationController {
             UsernamePasswordAuthenticationToken.unauthenticated(
                 request.getEmail(), request.getPassword()));
     return ResponseEntity.ok(
-        acceptanceService.acceptAsExistingUser(request.getToken(), authentication.getName()));
+        acceptanceService.acceptAsExistingUser(
+            request.getToken(), authentication.getName(), request.getPassword()));
   }
 }

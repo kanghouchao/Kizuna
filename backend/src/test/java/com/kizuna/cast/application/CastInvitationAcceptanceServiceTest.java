@@ -49,6 +49,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -67,6 +68,8 @@ class CastInvitationAcceptanceServiceTest {
 
   @BeforeEach
   void profilesAndPeople() {
+    // 既定では受諾者のパスワードがロック時点の行と一致する。不一致の場合は個別のテストで上書きする。
+    Mockito.lenient().when(passwordEncoder.matches("pw", "x")).thenReturn(true);
     Mockito.lenient()
         .when(profileRepository.findByEnrollmentIdAndStoreId(any(), any()))
         .thenAnswer(
@@ -118,7 +121,7 @@ class CastInvitationAcceptanceServiceTest {
 
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", new CastInvitationAcceptRequest()))
         .isInstanceOf(CastInvitationStateException.class);
-    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
+    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com", "pw"))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).claimPending(any(), any(), any(), any(), any());
     verify(userRepository, never()).save(any());
@@ -378,7 +381,7 @@ class CastInvitationAcceptanceServiceTest {
     when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(existing));
     when(castRepository.findIdsByUserIdAndStoreId(7L, 2L)).thenReturn(List.of("current"));
 
-    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
+    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com", "pw"))
         .isInstanceOf(ConflictException.class)
         .hasMessage("この店舗には既に有効な在籍があります");
     assertThat(enrollment.getCastId()).isNull();
@@ -405,7 +408,7 @@ class CastInvitationAcceptanceServiceTest {
         .thenReturn(1);
     stubStore(2L, "店舗B");
 
-    CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com");
+    CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com", "pw");
 
     assertThat(response.storeName()).isEqualTo("店舗B");
     assertThat(existing.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
@@ -440,7 +443,7 @@ class CastInvitationAcceptanceServiceTest {
         .thenReturn(1);
     stubStore(2L, "店舗B");
 
-    CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com");
+    CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com", "pw");
 
     assertThat(response.storeName()).isEqualTo("店舗B");
     // ALL_STORES 授権は招待受諾で SPECIFIC_STORES へ降格させない（全店アクセス権を1店舗に狭めない）。
@@ -470,8 +473,33 @@ class CastInvitationAcceptanceServiceTest {
     // 資格情報の照合は取引の外で済んでいる。ロックした行が停止済みなら、照合後に停止されたことになる。
     when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(stopped));
 
-    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com"))
+    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com", "pw"))
         .isInstanceOf(DisabledException.class);
+    assertThat(enrollment.getCastId()).isNull();
+    verify(userRepository, never()).save(any());
+  }
+
+  @Test
+  void acceptAsExistingUser_rejectsPasswordChangedAfterAuthentication() {
+    CastInvitation invitation =
+        invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
+    CastEnrollment enrollment = cast("c2", "花子档案");
+    when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
+    when(castRepository.findByIdAndStoreIdForUpdate("c2", 2L)).thenReturn(Optional.of(enrollment));
+    when(castInvitationRepository.claimPending(
+            any(),
+            eq(2L),
+            any(),
+            eq(CastInvitation.Status.PENDING),
+            eq(CastInvitation.Status.ACCEPTED)))
+        .thenReturn(1);
+    when(userRepository.findByEmailForUpdate("cast@example.com"))
+        .thenReturn(Optional.of(user(7L, UserType.CAST, Set.of(1L))));
+    // 照合の後にパスワードが変わっていれば、ロックした行の新しいハッシュとは一致しない。
+    when(passwordEncoder.matches("pw", "x")).thenReturn(false);
+
+    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com", "pw"))
+        .isInstanceOf(BadCredentialsException.class);
     assertThat(enrollment.getCastId()).isNull();
     verify(userRepository, never()).save(any());
   }
@@ -494,7 +522,7 @@ class CastInvitationAcceptanceServiceTest {
     when(userRepository.findByEmailForUpdate("staff@example.com"))
         .thenReturn(Optional.of(user(8L, UserType.STAFF, Set.of(1L))));
 
-    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "staff@example.com"))
+    assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "staff@example.com", "pw"))
         .isInstanceOf(AccessDeniedException.class);
     // 招待エンティティは直接変更しない。クレームの UPDATE は AccessDeniedException で
     // @Transactional ごとロールバックされ、招待は消費されない。

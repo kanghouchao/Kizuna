@@ -100,7 +100,7 @@ class CastInvitationControllerTest {
   @DisplayName("正しい資格情報なら CSRF トークンなしの匿名要求で受諾でき、トークンも cookie も発行しないこと")
   void acceptsWithCredentialsAndIssuesNoCookie() throws Exception {
     givenAccount(true);
-    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL))
+    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL, PASSWORD))
         .thenReturn(new CastAcceptanceResponse("渋谷店"));
 
     mockMvc
@@ -115,7 +115,7 @@ class CastInvitationControllerTest {
   @DisplayName("期限切れの Bearer が付いていても資格情報で受諾できること")
   void acceptsDespiteStaleBearer() throws Exception {
     givenAccount(true);
-    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL))
+    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL, PASSWORD))
         .thenReturn(new CastAcceptanceResponse("渋谷店"));
 
     mockMvc
@@ -154,7 +154,7 @@ class CastInvitationControllerTest {
   @DisplayName("CAST でない利用者は 403 になること")
   void rejectsNonCastUser() throws Exception {
     givenAccount(true);
-    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL))
+    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL, PASSWORD))
         .thenThrow(new AccessDeniedException("CAST アカウントのみ既存受諾できます"));
 
     mockMvc.perform(acceptExisting(EMAIL, PASSWORD)).andExpect(status().isForbidden());
