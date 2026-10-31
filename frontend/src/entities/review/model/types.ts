@@ -6,6 +6,12 @@ export interface Actor {
   id: string;
   display_name: string;
 }
+export interface Publication {
+  published: boolean;
+  publish_from: string | null;
+  publish_until: string | null;
+  display_order: number | null;
+}
 export interface ReviewSummary {
   id: string;
   intake_source: 'STAFF_RECORDED';
@@ -16,6 +22,8 @@ export interface ReviewSummary {
   status: ReviewStatus;
   permission_status: PermissionStatus;
   version: number;
+  publication: Publication;
+  displayed: boolean;
 }
 export interface ReviewPermission {
   id: string;
@@ -52,7 +60,8 @@ export type Operation =
   | 'WITHDRAWN'
   | 'PERMISSION_GRANTED'
   | 'PERMISSION_REVOKED'
-  | 'CORRECTION_RECEIVED';
+  | 'CORRECTION_RECEIVED'
+  | 'PUBLICATION_CHANGED';
 export interface ReviewHistory {
   id: string;
   type: Operation | 'CORRECTION_LINKED';
@@ -67,6 +76,7 @@ export interface ReviewHistory {
   reason: string | null;
   related_review_id: string | null;
   permission_record_id: string | null;
+  after_publication: Publication;
 }
 export interface ReviewWriteResponse {
   review: Review;
@@ -103,7 +113,12 @@ export type ReviewCommand =
         dedupe_key: string;
       };
     }
-  | { kind: 'REVOKE'; id: string; input: ActionInput & { withdrawal_received_at: string } };
+  | { kind: 'REVOKE'; id: string; input: ActionInput & { withdrawal_received_at: string } }
+  | {
+      kind: 'PUBLISH';
+      id: string;
+      input: Publication & { version: number; dedupe_key: string };
+    };
 export interface ReviewSearch {
   q?: string;
   review_id?: string;

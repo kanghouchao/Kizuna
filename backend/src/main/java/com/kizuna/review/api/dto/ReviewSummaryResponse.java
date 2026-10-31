@@ -5,6 +5,7 @@ import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.review.domain.ReviewValues.Status;
+import com.kizuna.shared.publication.Publication;
 import java.time.OffsetDateTime;
 
 public record ReviewSummaryResponse(
@@ -16,8 +17,10 @@ public record ReviewSummaryResponse(
     OffsetDateTime createdAt,
     Status status,
     PermissionStatus permissionStatus,
-    Long version) {
-  public static ReviewSummaryResponse of(ReviewSummaryView r) {
+    Long version,
+    Publication publication,
+    boolean displayed) {
+  public static ReviewSummaryResponse of(ReviewSummaryView r, OffsetDateTime now) {
     return new ReviewSummaryResponse(
         r.getId(),
         "STAFF_RECORDED",
@@ -27,6 +30,8 @@ public record ReviewSummaryResponse(
         ReviewInput.time(r.getCreatedAt()),
         r.getStatus(),
         r.getPermissionStatus(),
-        r.getVersion());
+        r.getVersion(),
+        r.getPublication(),
+        r.displayedAt(now));
   }
 }

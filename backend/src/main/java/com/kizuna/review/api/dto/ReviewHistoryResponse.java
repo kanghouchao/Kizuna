@@ -5,6 +5,7 @@ import com.kizuna.review.domain.ReviewInput;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
+import com.kizuna.shared.publication.Publication;
 import java.time.OffsetDateTime;
 
 public record ReviewHistoryResponse(
@@ -20,7 +21,8 @@ public record ReviewHistoryResponse(
     PermissionStatus afterPermissionStatus,
     String reason,
     String relatedReviewId,
-    String permissionRecordId) {
+    String permissionRecordId,
+    Publication afterPublication) {
   public static ReviewHistoryResponse of(ReviewHistoryView h) {
     return new ReviewHistoryResponse(
         h.getId(),
@@ -35,6 +37,7 @@ public record ReviewHistoryResponse(
         h.getAfterPermissionStatus(),
         h.getReason(),
         h.getRelatedReviewId(),
-        h.getPermissionRecordId());
+        h.getPermissionRecordId(),
+        h.getAfterPublication());
   }
 }

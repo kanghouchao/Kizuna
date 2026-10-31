@@ -89,6 +89,23 @@ databaseChangeLog:
               - column:
                   name: superseded_by_id
                   type: VARCHAR(32)
+              - column:
+                  name: published
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: publish_from
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: publish_until
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: display_order
+                  type: INTEGER
+        - sql:
+            sql: ALTER TABLE t_reviews ADD CONSTRAINT ck_t_reviews_publication_period CHECK (publish_from < publish_until)
         - addUniqueConstraint:
             tableName: t_reviews
             columnNames: id, store_id
@@ -302,6 +319,20 @@ databaseChangeLog:
               - column:
                   name: permission_record_id
                   type: VARCHAR(32)
+              - column:
+                  name: after_published
+                  type: BOOLEAN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: after_publish_from
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: after_publish_until
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: after_display_order
+                  type: INTEGER
         - addForeignKeyConstraint:
             baseTableName: t_review_history
             baseColumnNames: store_id

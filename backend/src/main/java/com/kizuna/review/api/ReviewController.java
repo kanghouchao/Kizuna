@@ -7,6 +7,7 @@ import com.kizuna.review.api.dto.ReviewDecisionRequest;
 import com.kizuna.review.api.dto.ReviewHistoryResponse;
 import com.kizuna.review.api.dto.ReviewPermissionRequest;
 import com.kizuna.review.api.dto.ReviewPermissionRevocationRequest;
+import com.kizuna.review.api.dto.ReviewPublicationRequest;
 import com.kizuna.review.api.dto.ReviewResponse;
 import com.kizuna.review.api.dto.ReviewSummaryResponse;
 import com.kizuna.review.api.dto.ReviewWriteResponse;
@@ -28,6 +29,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -93,6 +95,16 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewPermissionRevocationRequest request) {
+    return change(storeId, auth.getName(), request.change(id));
+  }
+
+  @PutMapping("/{id}/publication")
+  @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MODERATE')")
+  public ReviewWriteResponse publish(
+      @CurrentStore Long storeId,
+      Authentication auth,
+      @PathVariable String id,
+      @RequestBody ReviewPublicationRequest request) {
     return change(storeId, auth.getName(), request.change(id));
   }
 

@@ -31,6 +31,7 @@ import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -143,6 +144,7 @@ public class ReviewService {
             ReviewInput.time(OffsetDateTime.now(clock)));
         permissionId = p.getId();
       }
+      case PUBLICATION_CHANGED -> row.changePublication(change.publication());
       default -> throw new ServiceException("口コミの操作内容を確認してください");
     }
     reviews.flush();
@@ -164,20 +166,8 @@ public class ReviewService {
         row.getId(),
         null,
         null,
-        Map.of(
-            "status",
-            before.status().name(),
-            "permission_status",
-            before.permissionStatus().name(),
-            "version",
-            before.version().toString()),
-        Map.of(
-            "status",
-            row.getStatus().name(),
-            "permission_status",
-            row.getPermissionStatus().name(),
-            "version",
-            row.getVersion().toString()));
+        auditState(before, change.type()),
+        auditState(ReviewHistory.Before.of(row), change.type()));
     var operation =
         operations.saveAndFlush(
             ReviewOperation.record(
@@ -343,7 +333,7 @@ public class ReviewService {
         .findBy(
             search.specification(storeId),
             q -> q.as(ReviewSummaryView.class).page(search.pageable()))
-        .map(ReviewSummaryResponse::of);
+        .map(r -> ReviewSummaryResponse.of(r, OffsetDateTime.now(clock)));
   }
 
   private ReviewDetailsView find(Long storeId, String id) {
@@ -376,10 +366,25 @@ public class ReviewService {
         storeId,
         email,
         switch (change.type()) {
-          case APPROVED, REJECTED -> PermissionCode.REVIEW_MODERATE;
+          case APPROVED, REJECTED, PUBLICATION_CHANGED -> PermissionCode.REVIEW_MODERATE;
           case WITHDRAWN, PERMISSION_GRANTED, PERMISSION_REVOKED -> PermissionCode.REVIEW_MANAGE;
           default -> throw new ServiceException("口コミの操作内容を確認してください");
         });
+  }
+
+  private static Map<String, String> auditState(ReviewHistory.Before state, Operation type) {
+    var values = new LinkedHashMap<String, String>();
+    values.put("status", state.status().name());
+    values.put("permission_status", state.permissionStatus().name());
+    values.put("version", state.version().toString());
+    if (type == Operation.PUBLICATION_CHANGED) {
+      var p = state.publication();
+      values.put("published", Boolean.toString(p.published()));
+      if (p.publishFrom() != null) values.put("publish_from", p.publishFrom().toString());
+      if (p.publishUntil() != null) values.put("publish_until", p.publishUntil().toString());
+      if (p.displayOrder() != null) values.put("display_order", p.displayOrder().toString());
+    }
+    return values;
   }
 
   private ReviewResponse response(Long storeId, ReviewRecord row) {
@@ -388,7 +393,9 @@ public class ReviewService {
 
   private ReviewResponse response(Long storeId, ReviewDetailsView row) {
     return ReviewResponse.of(
-        row, permissions.findProjectedByStoreIdAndReviewId(storeId, row.getId()).orElse(null));
+        row,
+        permissions.findProjectedByStoreIdAndReviewId(storeId, row.getId()).orElse(null),
+        OffsetDateTime.now(clock));
   }
 
   private ReviewWriteResponse replay(Long storeId, ReviewOperation operation, String hash) {

@@ -227,6 +227,7 @@ function Reviews({
               <TableHead>受付・表示名</TableHead>
               <TableHead>審査</TableHead>
               <TableHead>公開許可</TableHead>
+              <TableHead>掲出</TableHead>
               <TableHead>操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -240,6 +241,7 @@ function Reviews({
                 </TableCell>
                 <TableCell>{statuses[r.status]}</TableCell>
                 <TableCell>{permissions[r.permission_status]}</TableCell>
+                <TableCell>{r.displayed ? '掲出対象' : '—'}</TableCell>
                 <TableCell>
                   <Button
                     variant="outline"

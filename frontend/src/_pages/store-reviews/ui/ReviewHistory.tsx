@@ -1,7 +1,7 @@
 import { reviewApi } from '@/entities/review';
 import { useCursorList } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
-import { operations, time } from './labels';
+import { operations, time, publicationSummary } from './labels';
 export function ReviewHistory({ id }: { id: string }) {
   const history = useCursorList(cursor => reviewApi.history(id, cursor));
   return (
@@ -25,6 +25,7 @@ export function ReviewHistory({ id }: { id: string }) {
               </p>
               {h.reason && <p className="whitespace-pre-wrap wrap-anywhere">{h.reason}</p>}
               {h.related_review_id && <p>関連口コミ #{h.related_review_id}</p>}
+              {h.type === 'PUBLICATION_CHANGED' && <p>{publicationSummary(h.after_publication)}</p>}
             </li>
           ))}
         </ol>
