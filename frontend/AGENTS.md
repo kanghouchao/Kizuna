@@ -13,7 +13,7 @@ Feature-Sliced Design is checked by Steiger. Dependencies point downward: app �
 
 ## Fetching and store context
 
-Use `shared/lib/hooks` for fetch lifecycles. Pick `useListPage` for paging/applied search, `useCursorList` for queues, `useManagedList` for a whole list, and `useResource` for one value, optional fetching, dependency-driven reload, replacement after writes, or a 404 split. For a plain unparameterized array, either of the last two fits. Failure/loading presentation and retry semantics are defined in [DESIGN.md](DESIGN.md#通知と失敗状態).
+Use `shared/lib/hooks` for fetch lifecycles. Pick `useListPage` for every paged list (pager: `ListPage` on a list screen, `Pager` from `@/shared/ui` inside a panel or dialog), `useManagedList` for a whole list, and `useResource` for one value, optional fetching, dependency-driven reload, replacement after writes, or a 404 split. For a plain unparameterized array, either of the last two fits. Failure/loading presentation and retry semantics are defined in [DESIGN.md](DESIGN.md#通知と失敗状態).
 
 There is one admin shell (`widgets/admin-shell`), mounted once by `app/(admin)/(staff)/layout.tsx`, the common parent of `admin/` and `store/` (so crossing between them does not remount it or refetch stores/me/menus; `admin-shell-mount.test.ts` pins this); the cast/member portals sit outside `(staff)` with their own layouts; `/admin/**` and `/store/**` are mount prefixes without authorization meaning; `/auth/**` holds the public login / registration / invitation / LINE callback / initial-setup pages. The shell mounts two seams:
 
