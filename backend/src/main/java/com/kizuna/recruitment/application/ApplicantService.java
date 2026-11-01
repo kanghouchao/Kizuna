@@ -182,7 +182,7 @@ public class ApplicantService {
   public CursorPage<ApplicantHistoryResponse> history(
       Long storeId, String id, String cursor, int requestedSize) {
     require(storeId, id);
-    int size = Math.min(100, CursorPage.clampSize(requestedSize));
+    int size = CursorPage.clampSize(requestedSize);
     Limit limit = Limit.of(size + 1);
     PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
     var rows =

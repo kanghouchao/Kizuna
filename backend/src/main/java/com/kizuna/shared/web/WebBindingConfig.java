@@ -11,7 +11,7 @@ import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/** 要求引数の束縛に横断的な既定を敷く設定（ページングの副キー補完と {@code @CurrentStore} の解決）。 */
+/** 要求引数の束縛に横断的な既定を敷く設定（ページングの取得位置の検査と副キー補完、{@code @CurrentStore} の解決）。 */
 @Configuration
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor
@@ -26,7 +26,9 @@ public class WebBindingConfig implements WebMvcConfigurer {
    */
   @Override
   public void addArgumentResolvers(@NonNull List<HandlerMethodArgumentResolver> resolvers) {
-    resolvers.add(new TiebreakerPageableArgumentResolver(pageableResolver));
+    resolvers.add(
+        new TiebreakerPageableArgumentResolver(
+            new OffsetBoundPageableArgumentResolver(pageableResolver)));
     resolvers.add(currentStoreResolver);
   }
 }

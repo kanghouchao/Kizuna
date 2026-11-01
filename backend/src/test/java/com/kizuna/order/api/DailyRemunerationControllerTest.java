@@ -174,7 +174,7 @@ class DailyRemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"0,1", "-2,1", "2001,2000"})
+  @CsvSource({"0,1", "-2,1", "101,100"})
   void clampsPageSize(int requested, int expected) throws Exception {
     mvc.perform(request("store", "2026-09-30").param("size", Integer.toString(requested)))
         .andExpect(status().isOk())
