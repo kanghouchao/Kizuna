@@ -14,5 +14,5 @@ export {
 export type { SessionAlert } from './session';
 export { fileApi } from './file';
 export * from './types';
-export { fromCursorPage, fromSpringPage, toSpringPageParams } from './page';
-export type { CursorPageResult, PageResult } from './page';
+export { fromSpringPage, toSpringPageParams } from './page';
+export type { PageResult } from './page';
