@@ -30,7 +30,7 @@ Store paths are assembled only in `shared/lib/store-route` (`storePath(subPath)`
 
 ## Public templates and shared UI
 
-- Public pages load `_pages/store-site/templates/<key>/<page>.tsx` through `loadTemplatePage`; unknown keys use the default template's same page. Preserve that dynamic import contract. Pages are page / casts / cast-detail / schedule / menu / about / reservation.
+- Public pages load `_pages/store-site/templates/<key>/<page>.tsx` through `loadTemplatePage`; unknown keys use the default template's same page. Preserve that dynamic import contract. Pages are page / casts / cast-detail / schedule / menu / about / reservation / reviews.
 - Shared sections live in `templates/_sections/`, never as a template key. Template directories contain themes and layouts. `entities/store-profile/getTemplateMeta` owns text-slot metadata used by site and settings.
 - Import shadcn primitives through `@/shared/ui`. For any shared/ui change, consult DESIGN.md's vendored/authored classification; generated primitives stay frozen.
 - Toast call sites use `@/shared/notify`. Direct Base UI toast imports are limited to that module and `shared/ui/toast.tsx`; this also applies to dynamic imports and test mocks not caught by ESLint.
