@@ -71,33 +71,39 @@ export default function ImageUpload({
       {/* ドロップ可能域の境界はその機能を示す唯一の手掛かりなので装飾免除にならず 3:1 を要する。
           既定の border-border は 1.27/1.33 でほぼ不可視のため muted-foreground を明示する。 */}
       <div
-        className={`relative border-2 border-dashed border-muted-foreground rounded-lg overflow-hidden cursor-pointer hover:border-primary transition-colors ${className}`}
-        onClick={() => {
-          if (!isUploading) inputRef.current?.click();
-        }}
+        className={`relative border-2 border-dashed border-muted-foreground rounded-lg overflow-hidden hover:border-primary transition-colors has-[[data-picker]:focus-visible]:ring-2 has-[[data-picker]:focus-visible]:ring-primary has-[[data-picker]:focus-visible]:ring-offset-2 has-[[data-picker]:focus-visible]:ring-offset-background ${className}`}
       >
-        {displayUrl ? (
-          <>
-            <Image src={displayUrl} alt="プレビュー" fill className="object-cover" sizes="160px" />
-            {/* 遮蔽の下でも Tab で届くため、アップロード中は出さない（削除後に完了が値を上書きする） */}
-            {!isUploading && (
-              <button
-                type="button"
-                onClick={e => {
-                  e.stopPropagation();
-                  handleRemove();
-                }}
-                className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
-              >
-                <XIcon className="h-4 w-4" />
-              </button>
-            )}
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <ImageIcon className="h-10 w-10 mb-2" />
-            <span className="text-xs">{isUploading ? 'アップロード中...' : '写真を選択'}</span>
-          </div>
+        {/* 選択域を button にしてキーボードで届くようにする。削除ボタンを入れ子にしないよう兄弟に置く。
+            フォーカスの ring は画像の上では対比を保証できないので、外枠の外側（ページ面）に出す */}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={isUploading}
+          aria-label={
+            isUploading ? 'アップロード中...' : displayUrl ? '画像を差し替える' : undefined
+          }
+          data-picker
+          className="absolute inset-0 w-full h-full cursor-pointer disabled:cursor-default focus-visible:outline-none"
+        >
+          {displayUrl ? (
+            <Image src={displayUrl} alt="" fill className="object-cover" sizes="160px" />
+          ) : (
+            <span className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <ImageIcon className="h-10 w-10 mb-2" />
+              <span className="text-xs">{isUploading ? 'アップロード中...' : '写真を選択'}</span>
+            </span>
+          )}
+        </button>
+        {/* 遮蔽の下でも Tab で届くため、アップロード中は出さない（削除後に完了が値を上書きする） */}
+        {displayUrl && !isUploading && (
+          <button
+            type="button"
+            onClick={handleRemove}
+            aria-label="画像を削除"
+            className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
         )}
         {isUploading && (
           // 遮蔽は不透明にする。半透明だと背後のプレビュー画像次第でスピナーの
