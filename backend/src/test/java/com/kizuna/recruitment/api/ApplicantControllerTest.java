@@ -43,6 +43,9 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.GrantedAuthority;
@@ -87,6 +90,21 @@ class ApplicantControllerTest {
   @BeforeEach
   void setup() {
     when(stores.exists(anyLong())).thenReturn(true);
+  }
+
+  @Test
+  void historyIsAPageNewestFirst() throws Exception {
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(service.history(eq(1L), eq("a"), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+    mvc.perform(
+            get("/applicants/a/history")
+                .header("X-Store-ID", "1")
+                .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
   }
 
   @Test

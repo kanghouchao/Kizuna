@@ -7,12 +7,13 @@ import { notify } from '@/shared/notify';
 import { customerApi } from '@/entities/customer';
 import { PointAdjustmentDialog } from './PointAdjustmentDialog';
 import { hasPermission, useMe } from '@/entities/user';
-import { getApiErrorMessage, useCursorList, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
   ConfirmDialog,
   Input,
+  Pager,
   Form,
   FormField,
   FormItem,
@@ -60,12 +61,13 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
   } = useResource(() => customerApi.memberLink(customerId), [customerId]);
   const {
     rows: history,
+    page,
+    pageCount,
     isLoading,
     failed,
-    hasMore,
     reload,
-    loadMore,
-  } = useCursorList(cursor => customerApi.memberLinkHistory(customerId, { cursor }));
+    onPageChange,
+  } = useListPage(page => customerApi.memberLinkHistory(customerId, page));
   // 残高は顧客ではなく紐づく会員の台帳が持つため、紐づけ履歴とは別の読み口から取る
   const {
     data: balance,
@@ -102,7 +104,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
       form.reset();
       setNeedsReconfirmation(false);
       // 紐づく先が変われば残高の指す台帳も変わる。履歴と一緒に取り直す
-      reload();
+      void reload();
       await Promise.all([reloadLink(), reloadBalance()]);
     } catch (error) {
       notify.error(getApiErrorMessage(error, '会員の紐づけに失敗しました'));
@@ -124,7 +126,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
       form.setValue('operation_reason', '');
       setNeedsReconfirmation(false);
       notify.success('会員の紐づけを解除しました');
-      reload();
+      void reload();
       await Promise.all([reloadLink(), reloadBalance()]);
     } catch (error) {
       notify.error(getApiErrorMessage(error, '会員の紐づけ解除に失敗しました'));
@@ -137,7 +139,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
   async function refreshAfterConflict(error: unknown) {
     if (isAxiosError(error) && error.response?.status === 409) {
       setNeedsReconfirmation(true);
-      reload();
+      void reload();
       await Promise.all([reloadLink(), reloadBalance()]);
     }
   }
@@ -291,7 +293,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
           // 読めなかった履歴を残すと「紐づけ履歴がありません」に化ける。区画自身が失敗を名乗る
           <RegionError
             message="会員紐づけの履歴取得に失敗しました"
-            onRetry={() => reload()}
+            onRetry={() => void reload()}
             className="justify-center p-8"
           />
         ) : history.length === 0 ? (
@@ -350,13 +352,14 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
           </Table>
         )}
 
-        {hasMore && (
-          <div className="flex justify-center border-t p-4">
-            <Button variant="outline" onClick={() => loadMore()} disabled={isLoading}>
-              さらに読み込む
-            </Button>
-          </div>
-        )}
+        <div className="border-t p-4 empty:hidden">
+          <Pager
+            page={page}
+            pageCount={pageCount}
+            disabled={isLoading}
+            onPageChange={next => void onPageChange(next)}
+          />
+        </div>
       </TableCard>
 
       {/* ダイアログは履歴の再取得で消えないよう外殻の外に置く */}

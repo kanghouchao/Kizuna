@@ -18,10 +18,17 @@ jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
+const pageOf = (rows: unknown[], page = 0, pageCount = 1) => ({
+  rows,
+  page,
+  pageCount,
+  total: rows.length,
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
-  (customerApi.contacts as jest.Mock).mockResolvedValue({ rows: [], nextCursor: undefined });
-  (customerApi.contactHistory as jest.Mock).mockResolvedValue({ rows: [], nextCursor: undefined });
+  (customerApi.contacts as jest.Mock).mockResolvedValue(pageOf([]));
+  (customerApi.contactHistory as jest.Mock).mockResolvedValue(pageOf([]));
 });
 
 test('連絡先がなくても表示でき、入力して追加する', async () => {
@@ -70,10 +77,9 @@ test('保存失敗後も入力を保持し、修正して再送できる', async
 });
 
 test('優先指定を解除でき、削除は確認を経て実行する', async () => {
-  (customerApi.contacts as jest.Mock).mockResolvedValue({
-    rows: [{ id: 'phone1', type: 'PHONE', value: '+819012345678', preferred: true }],
-    nextCursor: null,
-  });
+  (customerApi.contacts as jest.Mock).mockResolvedValue(
+    pageOf([{ id: 'phone1', type: 'PHONE', value: '+819012345678', preferred: true }])
+  );
   (customerApi.setContactPreference as jest.Mock).mockResolvedValue(undefined);
   (customerApi.deleteContact as jest.Mock).mockResolvedValue(undefined);
   render(<CustomerContactsSection customerId="customer1" />);
@@ -90,28 +96,26 @@ test('優先指定を解除でき、削除は確認を経て実行する', async
 });
 
 test('編集中の連絡先が消えたら保存を外し、閉じて一覧を再取得する', async () => {
-  (customerApi.contacts as jest.Mock).mockResolvedValue({
-    rows: [{ id: 'gone', type: 'PHONE', value: '+819012345678', preferred: false }],
-    nextCursor: null,
-  });
+  (customerApi.contacts as jest.Mock).mockResolvedValue(
+    pageOf([{ id: 'gone', type: 'PHONE', value: '+819012345678', preferred: false }])
+  );
   (customerApi.updateContact as jest.Mock).mockRejectedValue({ response: { status: 404 } });
   render(<CustomerContactsSection customerId="customer1" />);
   fireEvent.click(await screen.findByRole('button', { name: '編集' }));
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
   expect(await screen.findByText('この連絡先は見つかりませんでした。')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
-  (customerApi.contacts as jest.Mock).mockResolvedValue({ rows: [], nextCursor: null });
+  (customerApi.contacts as jest.Mock).mockResolvedValue(pageOf([]));
   fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
   expect(await screen.findByText('連絡先はありません')).toBeInTheDocument();
 });
 
 test.each(['削除', '優先にする'])('%s が 404 なら消えた行と履歴を再取得する', async action => {
   (customerApi.contacts as jest.Mock)
-    .mockResolvedValueOnce({
-      rows: [{ id: 'gone', type: 'PHONE', value: '+819012345678', preferred: false }],
-      nextCursor: null,
-    })
-    .mockResolvedValue({ rows: [], nextCursor: null });
+    .mockResolvedValueOnce(
+      pageOf([{ id: 'gone', type: 'PHONE', value: '+819012345678', preferred: false }])
+    )
+    .mockResolvedValue(pageOf([]));
   (customerApi.deleteContact as jest.Mock).mockRejectedValue({ response: { status: 404 } });
   (customerApi.setContactPreference as jest.Mock).mockRejectedValue({ response: { status: 404 } });
   render(<CustomerContactsSection customerId="customer1" />);
@@ -124,8 +128,8 @@ test.each(['削除', '優先にする'])('%s が 404 なら消えた行と履歴
 });
 
 test('行の許可と共同制約を区別し、根拠なしの変更を防ぐ', async () => {
-  (customerApi.contacts as jest.Mock).mockResolvedValue({
-    rows: [
+  (customerApi.contacts as jest.Mock).mockResolvedValue(
+    pageOf([
       {
         id: 'phone1',
         type: 'PHONE',
@@ -136,9 +140,8 @@ test('行の許可と共同制約を区別し、根拠なしの変更を防ぐ',
         effective_business_status: 'DENIED',
         effective_marketing_status: 'UNKNOWN',
       },
-    ],
-    nextCursor: null,
-  });
+    ])
+  );
   render(<CustomerContactsSection customerId="customer1" />);
   expect(await screen.findByText('業務連絡: 許可／共同制約: 拒否（連絡不可）')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '業務連絡の可否を変更' }));
@@ -158,13 +161,13 @@ test('可否保存の失敗後に根拠を保持して再送し、全行を再�
     effective_business_status: 'UNKNOWN',
     effective_marketing_status: 'UNKNOWN',
   };
-  (customerApi.contacts as jest.Mock).mockResolvedValue({ rows: [contact] });
+  (customerApi.contacts as jest.Mock).mockResolvedValue(pageOf([contact]));
   (customerApi.setContactPermission as jest.Mock)
     .mockRejectedValueOnce(new Error('failed'))
     .mockImplementationOnce(async () => {
-      (customerApi.contacts as jest.Mock).mockResolvedValue({
-        rows: [{ ...contact, business_status: 'ALLOWED', effective_business_status: 'ALLOWED' }],
-      });
+      (customerApi.contacts as jest.Mock).mockResolvedValue(
+        pageOf([{ ...contact, business_status: 'ALLOWED', effective_business_status: 'ALLOWED' }])
+      );
     });
   render(<CustomerContactsSection customerId="customer1" />);
   fireEvent.click(await screen.findByRole('button', { name: '業務連絡の可否を変更' }));
@@ -201,8 +204,8 @@ test('継承履歴は新たな同意と区別し除去元と引継先を表示�
     business_status: 'ALLOWED',
     marketing_status: 'ALLOWED',
   };
-  (customerApi.contactHistory as jest.Mock).mockResolvedValue({
-    rows: [
+  (customerApi.contactHistory as jest.Mock).mockResolvedValue(
+    pageOf([
       {
         id: 'h1',
         contact_id: 'target',
@@ -215,8 +218,8 @@ test('継承履歴は新たな同意と区別し除去元と引継先を表示�
         before: state,
         after: { ...state, business_status: 'DENIED', marketing_status: 'UNKNOWN' },
       },
-    ],
-  });
+    ])
+  );
   render(<CustomerContactsSection customerId="customer1" />);
   expect(await screen.findByText(/制約の継承（新たな同意ではありません）/)).toBeInTheDocument();
   expect(screen.getByText('除去元: removed／引継先: target')).toBeInTheDocument();
@@ -224,8 +227,8 @@ test('継承履歴は新たな同意と区別し除去元と引継先を表示�
 });
 
 test('可否の保存時に対象が消えたら入力を閉じ一覧を更新できる', async () => {
-  (customerApi.contacts as jest.Mock).mockResolvedValue({
-    rows: [
+  (customerApi.contacts as jest.Mock).mockResolvedValue(
+    pageOf([
       {
         id: 'gone',
         type: 'PHONE',
@@ -235,8 +238,8 @@ test('可否の保存時に対象が消えたら入力を閉じ一覧を更新�
         effective_business_status: 'UNKNOWN',
         effective_marketing_status: 'UNKNOWN',
       },
-    ],
-  });
+    ])
+  );
   (customerApi.setContactPermission as jest.Mock).mockRejectedValue({ response: { status: 404 } });
   render(<CustomerContactsSection customerId="customer1" />);
   fireEvent.click(await screen.findByRole('button', { name: '販促連絡の可否を変更' }));
@@ -245,7 +248,23 @@ test('可否の保存時に対象が消えたら入力を閉じ一覧を更新�
   fireEvent.click(screen.getByRole('button', { name: '可否を保存' }));
   expect(await screen.findByText('この連絡先は見つかりませんでした。')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '可否を保存' })).not.toBeInTheDocument();
-  (customerApi.contacts as jest.Mock).mockResolvedValue({ rows: [] });
+  (customerApi.contacts as jest.Mock).mockResolvedValue(pageOf([]));
   fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
   expect(await screen.findByText('連絡先はありません')).toBeInTheDocument();
+});
+
+test('連絡先と履歴はそれぞれのページ送りで次のページを取り直す', async () => {
+  (customerApi.contacts as jest.Mock)
+    .mockResolvedValueOnce(
+      pageOf([{ id: 'p1', type: 'PHONE', value: '+819011111111', preferred: false }], 0, 2)
+    )
+    .mockResolvedValueOnce(
+      pageOf([{ id: 'p2', type: 'PHONE', value: '+819022222222', preferred: false }], 1, 2)
+    );
+  render(<CustomerContactsSection customerId="customer1" />);
+  expect(await screen.findByText('+819011111111')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  expect(await screen.findByText('+819022222222')).toBeInTheDocument();
+  expect(screen.queryByText('+819011111111')).not.toBeInTheDocument();
+  expect(customerApi.contacts).toHaveBeenLastCalledWith('customer1', 1);
 });

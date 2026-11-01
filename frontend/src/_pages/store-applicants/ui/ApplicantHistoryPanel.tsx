@@ -1,14 +1,14 @@
 'use client';
 import { applicantApi, applicantStatusLabels } from '@/entities/applicant';
-import { useCursorList } from '@/shared/lib';
-import { Button, RegionError } from '@/shared/ui';
+import { useListPage } from '@/shared/lib';
+import { Pager, RegionError } from '@/shared/ui';
 export function ApplicantHistoryPanel({ id }: { id: string }) {
-  const history = useCursorList(cursor => applicantApi.history(id, cursor));
+  const history = useListPage(page => applicantApi.history(id, page));
   return (
     <section className="rounded-xl border bg-card p-6 space-y-4">
       <h2 className="text-lg font-semibold">選考履歴</h2>
       {history.failed ? (
-        <RegionError message="選考履歴の取得に失敗しました" onRetry={history.reload} />
+        <RegionError message="選考履歴の取得に失敗しました" onRetry={() => void history.reload()} />
       ) : (
         <>
           <ol className="space-y-4">
@@ -26,11 +26,12 @@ export function ApplicantHistoryPanel({ id }: { id: string }) {
             ))}
           </ol>
           {history.isLoading && <p>読み込み中...</p>}
-          {history.hasMore && (
-            <Button variant="outline" disabled={history.isLoading} onClick={history.loadMore}>
-              過去の履歴を表示
-            </Button>
-          )}
+          <Pager
+            page={history.page}
+            pageCount={history.pageCount}
+            disabled={history.isLoading}
+            onPageChange={page => void history.onPageChange(page)}
+          />
         </>
       )}
     </section>

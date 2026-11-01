@@ -484,10 +484,10 @@ Then(
     });
     const first = await history.json();
     expect(first.content).toHaveLength(1);
-    expect(first.next_cursor).toBeTruthy();
+    expect(first.total_pages).toBeGreaterThan(1);
     const next = await request.get(`${path()}/history`, {
       headers: headers(),
-      params: { size: 1, cursor: first.next_cursor },
+      params: { size: 1, page: 1 },
     });
     expect((await next.json()).content[0].new_status).toBe("RECEIVED");
   },

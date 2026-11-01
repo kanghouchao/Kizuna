@@ -9,7 +9,6 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.application.CustomerService;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -49,26 +48,29 @@ public class CustomerController {
   /** 同店の未統合顧客が共有する有効連絡先を、種類・値の順で提示する。 */
   @GetMapping("/duplicates")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<CursorPage<CustomerDuplicateGroupResponse>> listDuplicates(
+  public ResponseEntity<Page<CustomerDuplicateGroupResponse>> listDuplicates(
       @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) ContactType type,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
     return ResponseEntity.ok(
-        customerService.listDuplicateCandidates(storeId, search, type, cursor, size));
+        customerService.listDuplicateCandidates(storeId, search, type, pageable));
   }
 
   @GetMapping("/duplicates/customers")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<CursorPage<CustomerMergeComparisonResponse>> duplicateCustomers(
+  public ResponseEntity<Page<CustomerMergeComparisonResponse>> duplicateCustomers(
       @CurrentStore Long storeId,
       @RequestParam ContactType type,
       @RequestParam String value,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(
-        customerService.duplicateCustomers(storeId, type, value, cursor, size));
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
+    return ResponseEntity.ok(customerService.duplicateCustomers(storeId, type, value, pageable));
   }
 
   /**

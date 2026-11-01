@@ -9,9 +9,12 @@ import com.kizuna.customer.application.CustomerContactService;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,7 +25,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -33,12 +35,11 @@ public class CustomerContactController {
 
   @GetMapping("/contacts")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public CursorPage<ContactResponse> list(
+  public Page<ContactResponse> list(
       @CurrentStore Long storeId,
       @PathVariable String customerId,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.list(storeId, customerId, cursor, size);
+      @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+    return service.list(storeId, customerId, pageable);
   }
 
   @PostMapping("/contacts")
@@ -93,11 +94,14 @@ public class CustomerContactController {
 
   @GetMapping("/contact-history")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public CursorPage<ContactHistoryResponse> history(
+  public Page<ContactHistoryResponse> history(
       @CurrentStore Long storeId,
       @PathVariable String customerId,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.history(storeId, customerId, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"occurredAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return service.history(storeId, customerId, pageable);
   }
 }

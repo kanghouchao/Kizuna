@@ -22,8 +22,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import java.util.Collection;
@@ -34,7 +32,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -50,29 +49,20 @@ public class CustomerContactService {
   private final BusinessAudit businessAudit;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<ContactResponse> list(
-      Long storeId, String customerId, String cursor, int requestedSize) {
+  public Page<ContactResponse> list(Long storeId, String customerId, Pageable pageable) {
     String resolved = resolve(storeId, customerId);
-    int size = CursorPage.clampSize(requestedSize);
-    var page =
-        CursorPage.of(
-            contacts.findByStoreIdAndCustomerIdAndDeletedFalseAndIdGreaterThanOrderByIdAsc(
-                storeId,
-                resolved,
-                cursor == null ? "" : PageCursor.decodeKey(cursor),
-                Limit.of(size + 1)),
-            size,
-            c -> PageCursor.encodeKey(c.getId()));
-    var values = page.content().stream().map(CustomerContact::getValue).distinct().toList();
-    if (values.isEmpty()) return new CursorPage<>(List.of(), null);
+    var page = contacts.findByStoreIdAndCustomerIdAndDeletedFalse(storeId, resolved, pageable);
+    var values = page.getContent().stream().map(CustomerContact::getValue).distinct().toList();
     // 同値の状態組だけを読むため、重複行数によらず一値あたり最大 3 種類 × 9 状態組に収まる。
-    var restrictions =
-        contacts.findRestrictions(storeId, resolved, values).stream()
-            .collect(
-                Collectors.toMap(
-                    c -> new ContactKey(c.getType(), c.getValue()),
-                    ContactRestrictionView::permissions,
-                    ContactPermissions::restrict));
+    Map<ContactKey, ContactPermissions> restrictions =
+        values.isEmpty()
+            ? Map.of()
+            : contacts.findRestrictions(storeId, resolved, values).stream()
+                .collect(
+                    Collectors.toMap(
+                        c -> new ContactKey(c.getType(), c.getValue()),
+                        ContactRestrictionView::permissions,
+                        ContactPermissions::restrict));
     return page.map(
         c -> ContactResponse.from(c, restrictions.get(new ContactKey(c.getType(), c.getValue()))));
   }
@@ -184,18 +174,9 @@ public class CustomerContactService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<ContactHistoryResponse> history(
-      Long storeId, String customerId, String cursor, int requestedSize) {
-    String resolved = resolve(storeId, customerId);
-    int size = CursorPage.clampSize(requestedSize);
-    var key = cursor == null ? null : PageCursor.decode(cursor);
-    var rows =
-        key == null
-            ? histories.history(storeId, resolved, Limit.of(size + 1))
-            : histories.historyAfter(
-                storeId, resolved, key.timestampKey(), key.id(), Limit.of(size + 1));
-    return CursorPage.of(
-            rows, size, h -> new PageCursor(h.getOccurredAt().toString(), h.getId()).encode())
+  public Page<ContactHistoryResponse> history(Long storeId, String customerId, Pageable pageable) {
+    return histories
+        .history(storeId, resolve(storeId, customerId), pageable)
         .map(
             h ->
                 new ContactHistoryResponse(

@@ -72,6 +72,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -90,6 +92,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 class AttachmentIntegrationTest {
   private static final Long STORE_ID = 1L;
   private static final Long OTHER_STORE_ID = 2L;
+  private static final PageRequest NEWEST_FIRST =
+      PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate transactions;
@@ -311,7 +315,7 @@ class AttachmentIntegrationTest {
                   upload.getId()))
           .contains("applicant_id", "attachment_id")
           .doesNotContain("sha256", "image/png", "object_id");
-      assertThat(service.list(STORE_ID, applicant, true, null, 20).content()).hasSize(1);
+      assertThat(service.list(STORE_ID, applicant, true, NEWEST_FIRST).getContent()).hasSize(1);
     }
   }
 
@@ -445,8 +449,8 @@ class AttachmentIntegrationTest {
               service.lookup(
                   STORE_ID, applicant, null, losingKey, image.originalSha256(), image.mediaType()))
           .isEmpty();
-      assertThat(service.list(STORE_ID, applicant, false, null, 20).content()).hasSize(2);
-      assertThat(service.list(STORE_ID, applicant, true, null, 20).content()).isEmpty();
+      assertThat(service.list(STORE_ID, applicant, false, NEWEST_FIRST).getContent()).hasSize(2);
+      assertThat(service.list(STORE_ID, applicant, true, NEWEST_FIRST).getContent()).isEmpty();
       assertApplicantAuditCount(applicant, 0);
       verifyNoInteractions(storage);
       assertThat(complete(applicant, committed, image).created()).isTrue();
@@ -490,7 +494,7 @@ class AttachmentIntegrationTest {
       verifyNoInteractions(storage);
       assertThat(complete(applicant, committed, image).created()).isTrue();
       assertThat(complete(applicant, replay.get(), image).created()).isFalse();
-      assertThat(service.list(STORE_ID, applicant, true, null, 20).content()).hasSize(1);
+      assertThat(service.list(STORE_ID, applicant, true, NEWEST_FIRST).getContent()).hasSize(1);
       assertReservations(applicant, 1, 3);
       assertApplicantAuditCount(applicant, 1);
     }

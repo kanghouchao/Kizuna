@@ -49,9 +49,9 @@ const currentLink = {
   linked_at: '2026-08-01T10:00:00+09:00',
 };
 
-/** 履歴 1 頁分。続きは無い。 */
-function historyPage(rows: unknown[]) {
-  return { rows, nextCursor: null } as never;
+/** 履歴 1 頁分。既定は 1 ページで完結する。 */
+function historyPage(rows: unknown[], page = 0, pageCount = 1) {
+  return { rows, page, pageCount, total: rows.length } as never;
 }
 
 const activeRow = {
@@ -308,21 +308,18 @@ describe('MemberLinkSection', () => {
     }
   );
 
-  it('続きがあれば追加読み込みで履歴を継ぎ足すこと', async () => {
+  it('ページ送りで次のページの履歴を取り直すこと', async () => {
     mockedApi.memberLinkHistory
-      .mockResolvedValueOnce({ rows: [activeRow], nextCursor: 'c-2' } as never)
-      .mockResolvedValueOnce(historyPage([releasedRow]));
+      .mockResolvedValueOnce(historyPage([activeRow], 0, 2))
+      .mockResolvedValueOnce(historyPage([releasedRow], 1, 2));
 
     render(<MemberLinkSection customerId="c1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'さらに読み込む' }));
+    fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
 
     expect(await screen.findByText('999999999999')).toBeInTheDocument();
-    // 読み込み済みの範囲は読み直さない
-    expect(mockedApi.memberLinkHistory).toHaveBeenNthCalledWith(2, 'c1', { cursor: 'c-2' });
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'さらに読み込む' })).not.toBeInTheDocument()
-    );
+    expect(mockedApi.memberLinkHistory).toHaveBeenNthCalledWith(2, 'c1', 1);
+    expect(screen.getByRole('button', { name: '次のページ' })).toBeDisabled();
   });
 
   it('解除は確認ダイアログの実行でのみ API を呼ぶこと', async () => {

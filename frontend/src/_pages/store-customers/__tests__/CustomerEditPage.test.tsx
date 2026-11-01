@@ -10,8 +10,8 @@ const mockPush = jest.fn();
 
 jest.mock('@/entities/customer', () => ({
   customerApi: {
-    contacts: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
-    contactHistory: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
+    contacts: jest.fn().mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 }),
+    contactHistory: jest.fn().mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 }),
     get: jest.fn(),
     update: jest.fn(),
     linkMember: jest.fn(),
@@ -86,7 +86,12 @@ describe('顧客編集ページの取得失敗', () => {
     jest.clearAllMocks();
     currentParams.id = 'cus-1';
     mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
-    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
+    });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
@@ -181,7 +186,12 @@ describe('顧客編集ページの注文履歴', () => {
     currentParams.id = 'cus-1';
     mockedCustomerApi.get.mockResolvedValue(customer);
     mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
-    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
+    });
   });
 
   it('受注ステータスを enum 生値ではなく受注一覧と同じ日本語ラベルで表示すること', async () => {
@@ -235,9 +245,14 @@ describe('顧客編集ページを統合済みの旧 ID で開いたとき', () 
     mockedCustomerApi.get.mockResolvedValue(surviving);
     mockedCustomerApi.update.mockResolvedValue(surviving);
     mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
-    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
+    });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
-    mockedCustomerApi.mergeHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedCustomerApi.mergeHistory.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
     meWith(['CUSTOMER_MANAGE', 'CUSTOMER_MERGE']);
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
@@ -251,13 +266,9 @@ describe('顧客編集ページを統合済みの旧 ID で開いたとき', () 
     expect(mockedOrderApi.list).toHaveBeenLastCalledWith(
       expect.objectContaining({ customer_id: 'cus-2' })
     );
-    expect(mockedCustomerApi.memberLinkHistory).toHaveBeenLastCalledWith('cus-2', {
-      cursor: undefined,
-    });
+    expect(mockedCustomerApi.memberLinkHistory).toHaveBeenLastCalledWith('cus-2', 0);
     // 統合履歴も同じ紀律。旧 ID のまま引くと、頁が語る行と区画が語る行が食い違う
-    expect(mockedCustomerApi.mergeHistory).toHaveBeenLastCalledWith('cus-2', {
-      cursor: undefined,
-    });
+    expect(mockedCustomerApi.mergeHistory).toHaveBeenLastCalledWith('cus-2', 0);
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
@@ -273,9 +284,14 @@ describe('顧客編集ページの統合履歴区画', () => {
     currentParams.id = 'cus-1';
     mockedCustomerApi.get.mockResolvedValue(customer);
     mockedCustomerApi.memberLink.mockRejectedValue({ response: { status: 404 } });
-    mockedCustomerApi.memberLinkHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedCustomerApi.memberLinkHistory.mockResolvedValue({
+      rows: [],
+      page: 0,
+      pageCount: 0,
+      total: 0,
+    });
     mockedCustomerApi.memberPointBalance.mockResolvedValue({ linked: false });
-    mockedCustomerApi.mergeHistory.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedCustomerApi.mergeHistory.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
     mockedOrderApi.list.mockResolvedValue(emptyOrderPage);
   });
 
@@ -310,7 +326,9 @@ describe('顧客編集ページの顧客切り替え', () => {
         linked_by_name: '山田次郎',
       },
     ],
-    nextCursor: 'cursor-of-' + customerId,
+    page: 0,
+    pageCount: 1,
+    total: 1,
   });
 
   beforeEach(() => {
@@ -337,9 +355,7 @@ describe('顧客編集ページの顧客切り替え', () => {
 
     expect(await screen.findByText('CODE-cus-2')).toBeInTheDocument();
     expect(screen.queryByText('CODE-cus-1')).not.toBeInTheDocument();
-    expect(mockedCustomerApi.memberLinkHistory).toHaveBeenLastCalledWith('cus-2', {
-      cursor: undefined,
-    });
+    expect(mockedCustomerApi.memberLinkHistory).toHaveBeenLastCalledWith('cus-2', 0);
   });
 
   it('顧客が変わったら、入力途中の会員コードを持ち越さないこと', async () => {

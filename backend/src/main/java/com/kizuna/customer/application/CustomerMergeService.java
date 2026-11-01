@@ -22,17 +22,15 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -157,29 +155,20 @@ public class CustomerMergeService {
   }
 
   /**
-   * 顧客 1 件の統合履歴。存続行として受けた統合と、自分が被統合となった統合の両方を新しい順に返す。続きはカーソルで辿る。
+   * 顧客 1 件の統合履歴。存続行として受けた統合と、自分が被統合となった統合の両方を返す。
    *
    * <p>統合を 1 件も持たない顧客は空で返る。404 にしないのは、「統合が無い」と「読めなかった」を呼出側が区別できるようにするため — 404 は顧客そのものが引けないときだけである。
    *
    * <p>統合履歴は機微情報なので、読むにも実行と同じ {@code CUSTOMER_MERGE} を要する（強制は端点の注釈）。
-   *
-   * @param cursor 続きの位置。null なら先頭から
-   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
    */
   @Transactional(readOnly = true)
-  public CursorPage<CustomerMergeHistoryResponse> history(
-      Long storeId, String customerId, String cursor, int requestedSize) {
+  public Page<CustomerMergeHistoryResponse> history(
+      Long storeId, String customerId, Pageable pageable) {
     if (!customerRepository.existsByIdAndStoreId(customerId, storeId)) {
       throw new NotFoundException("顧客が見つかりません");
     }
-    int size = CursorPage.clampSize(requestedSize);
-    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    Limit limit = Limit.of(size + 1);
-    List<CustomerMergeView> fetched =
-        cursor == null
-            ? customerMergeRepository.findHistory(storeId, customerId, limit)
-            : fetchHistoryAfter(storeId, customerId, PageCursor.decode(cursor), limit);
-    return CursorPage.of(fetched, size, CustomerMergeService::cursorOf)
+    return customerMergeRepository
+        .findHistory(storeId, customerId, pageable)
         .map(view -> toHistoryResponse(customerId, view));
   }
 
@@ -194,17 +183,6 @@ public class CustomerMergeService {
                         || m.getMergedCustomerId().equals(customerId))
             .orElseThrow(() -> new NotFoundException("統合履歴が見つかりません"));
     return CustomerMergeAuditResponse.from(merge);
-  }
-
-  private List<CustomerMergeView> fetchHistoryAfter(
-      Long storeId, String customerId, PageCursor cursor, Limit limit) {
-    return customerMergeRepository.findHistoryAfter(
-        storeId, customerId, cursor.timestampKey(), cursor.id(), limit);
-  }
-
-  /** 続きの位置は一覧の並び（統合時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
-  private static String cursorOf(CustomerMergeView view) {
-    return new PageCursor(view.getMergedAt().toString(), view.getId()).encode();
   }
 
   /** 「相手」は問い合わせた顧客によって変わる。向きの判定を記録の側に持たせず、読み手ごとにここで解く。 */

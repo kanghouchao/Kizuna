@@ -2,7 +2,6 @@ package com.kizuna.customer.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -21,7 +20,6 @@ import com.kizuna.customer.application.CustomerMergeService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -35,6 +33,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -77,9 +79,9 @@ class CustomerMergeControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
   void historyExposesTheEvidenceInSnakeCase() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerMergeService.history(eq(STORE_ID), anyString(), any(), anyInt()))
+    when(customerMergeService.history(eq(STORE_ID), anyString(), any()))
         .thenReturn(
-            new CursorPage<>(
+            new PageImpl<>(
                 List.of(
                     new CustomerMergeHistoryResponse(
                         "m1",
@@ -91,8 +93,7 @@ class CustomerMergeControllerTest {
                         3,
                         1,
                         0,
-                        "重複を確認")),
-                null));
+                        "重複を確認"))));
 
     mockMvc
         .perform(storeGet("/customers/c1/merges"))
@@ -102,22 +103,25 @@ class CustomerMergeControllerTest {
         .andExpect(jsonPath("$.content[0].counterpart_customer_name").value("山田太郎"))
         .andExpect(jsonPath("$.content[0].merged_by_name").value("田中花子"))
         .andExpect(jsonPath("$.content[0].moved_order_count").value(3))
-        .andExpect(jsonPath("$.content[0].moved_link_count").value(1))
-        // 続きが無いときは non_null 直列化で欄ごと現れない
-        .andExpect(jsonPath("$.next_cursor").doesNotExist());
+        .andExpect(jsonPath("$.content[0].moved_link_count").value(1));
   }
 
   @Test
-  @DisplayName("続きの位置と件数がそのまま渡ること")
+  @DisplayName("履歴は新しい統合から並べたページで返ること")
   @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
-  void historyForwardsTheCursorAndSize() throws Exception {
+  void historyIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerMergeService.history(eq(STORE_ID), anyString(), any(), anyInt()))
-        .thenReturn(new CursorPage<>(List.of(), null));
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(customerMergeService.history(eq(STORE_ID), eq("c1"), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-    mockMvc.perform(storeGet("/customers/c1/merges?cursor=abc&size=5")).andExpect(status().isOk());
+    mockMvc
+        .perform(storeGet("/customers/c1/merges"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
 
-    verify(customerMergeService).history(STORE_ID, "c1", "abc", 5);
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "mergedAt", "id"));
   }
 
   @Test
@@ -129,7 +133,7 @@ class CustomerMergeControllerTest {
     mockMvc.perform(storeGet("/customers/c1/merges")).andExpect(status().isForbidden());
 
     // 履歴は誰がどの顧客を畳んだかを明かす。拒否は読み取りの手前で成立していること
-    verify(customerMergeService, never()).history(any(), anyString(), any(), anyInt());
+    verify(customerMergeService, never()).history(any(), anyString(), any());
   }
 
   @Autowired private ObjectMapper json;

@@ -47,18 +47,26 @@ describe('customerApi', () => {
   it('get は /customers/:id を GET する', async () => {
     expect(await customerApi.get('c1')).toEqual({ ok: true, url: '/customers/c1' });
   });
-  it('duplicates は /customers/duplicates を GET し、カーソルページを正規化する', async () => {
+  it('duplicates は /customers/duplicates を GET し、ページを正規化する', async () => {
     // 字面セグメント。/{id} と同じパス空間に住むので、綴りが変わると詳細取得へ吸われる
     mockedGet.mockResolvedValueOnce({
-      data: { content: [{ phone_number: '090-1111-2222', customers: [] }], next_cursor: 'abc' },
+      data: {
+        content: [{ phone_number: '090-1111-2222', customers: [] }],
+        number: 1,
+        size: 20,
+        total_pages: 2,
+        total_elements: 21,
+      },
     });
 
-    await expect(customerApi.duplicates({ cursor: 'x' })).resolves.toEqual({
+    await expect(customerApi.duplicates(1, { type: 'PHONE' })).resolves.toEqual({
       rows: [{ phone_number: '090-1111-2222', customers: [] }],
-      nextCursor: 'abc',
+      page: 1,
+      pageCount: 2,
+      total: 21,
     });
     expect(mockedGet).toHaveBeenLastCalledWith('/customers/duplicates', {
-      params: { cursor: 'x' },
+      params: { page: 1, size: 20, type: 'PHONE' },
     });
   });
   it('mergeComparison は 2 つの ids を同じキーの繰り返しで GET する', async () => {
@@ -72,19 +80,27 @@ describe('customerApi', () => {
     await customerApi.merge('c1', mergeInput);
     expect(mockedPost).toHaveBeenLastCalledWith('/customers/c1/merges', mergeInput);
   });
-  it('mergeHistory は同じ merges を GET し、カーソルページを正規化する', async () => {
+  it('mergeHistory は同じ merges を GET し、ページを正規化する', async () => {
     // 実行（POST）と読み（GET）が同じパスに載る。GET は両方向の統合を返すので、
     // パスの {id} は「存続行」ではなく「この統合に関与した行」を意味する
     mockedGet.mockResolvedValueOnce({
-      data: { content: [{ id: 'm1', direction: 'SURVIVING' }], next_cursor: 'abc' },
+      data: {
+        content: [{ id: 'm1', direction: 'SURVIVING' }],
+        number: 1,
+        size: 20,
+        total_pages: 2,
+        total_elements: 21,
+      },
     });
 
-    await expect(customerApi.mergeHistory('c1', { cursor: 'x' })).resolves.toEqual({
+    await expect(customerApi.mergeHistory('c1', 1)).resolves.toEqual({
       rows: [{ id: 'm1', direction: 'SURVIVING' }],
-      nextCursor: 'abc',
+      page: 1,
+      pageCount: 2,
+      total: 21,
     });
     expect(mockedGet).toHaveBeenLastCalledWith('/customers/c1/merges', {
-      params: { cursor: 'x' },
+      params: { page: 1, size: 20 },
     });
   });
   it('create は /customers を POST する', async () => {
@@ -122,17 +138,25 @@ describe('customerApi', () => {
     });
     expect(mockedGet).toHaveBeenLastCalledWith('/customers/c1/member-link');
   });
-  it('memberLinkHistory は member-link/history を GET し、カーソルページを正規化する', async () => {
+  it('memberLinkHistory は member-link/history を GET し、ページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
-      data: { content: [{ id: 'l1', status: 'ACTIVE' }], next_cursor: 'abc' },
+      data: {
+        content: [{ id: 'l1', status: 'ACTIVE' }],
+        number: 1,
+        size: 20,
+        total_pages: 2,
+        total_elements: 21,
+      },
     });
 
-    await expect(customerApi.memberLinkHistory('c1', { cursor: 'x' })).resolves.toEqual({
+    await expect(customerApi.memberLinkHistory('c1', 1)).resolves.toEqual({
       rows: [{ id: 'l1', status: 'ACTIVE' }],
-      nextCursor: 'abc',
+      page: 1,
+      pageCount: 2,
+      total: 21,
     });
     expect(mockedGet).toHaveBeenLastCalledWith('/customers/c1/member-link/history', {
-      params: { cursor: 'x' },
+      params: { page: 1, size: 20 },
     });
   });
   it('memberPointBalance は member-point-balance を GET する', async () => {

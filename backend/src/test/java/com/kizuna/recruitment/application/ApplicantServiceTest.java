@@ -52,7 +52,8 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -339,7 +340,7 @@ class ApplicantServiceTest {
   void scopeInvisibleReadsAndMutationsFailClosed() {
     assertThatThrownBy(() -> service.get(STORE_ID, "outside"))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.history(STORE_ID, "outside", null, 20))
+    assertThatThrownBy(() -> service.history(STORE_ID, "outside", PageRequest.of(0, 20)))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
@@ -349,8 +350,7 @@ class ApplicantServiceTest {
     assertThatThrownBy(() -> service.enroll(STORE_ID, "outside", enrollment(0L), "actor"))
         .isInstanceOf(NotFoundException.class);
     verifyNoInteractions(casts);
-    verify(histories, never())
-        .findByStoreIdAndApplicantIdOrderByCreatedAtDescIdDesc(any(), any(), any());
+    verify(histories, never()).findByStoreIdAndApplicantId(any(), any(), any());
   }
 
   @Test
@@ -382,7 +382,7 @@ class ApplicantServiceTest {
   }
 
   @Test
-  void historyCursorUsesSameTupleAndCapsSize() {
+  void historyReadsTheRequestedPageOfTheApplicant() {
     when(applicants.findByIdAndStoreId("a", STORE_ID)).thenReturn(Optional.of(applicant));
     var row =
         ApplicantStatusHistory.builder()
@@ -392,14 +392,11 @@ class ApplicantServiceTest {
             .reason("受付")
             .build();
     row.setId("h");
-    row.setCreatedAt(OffsetDateTime.parse("2026-10-01T00:00:00Z"));
-    when(histories.findByStoreIdAndApplicantIdOrderByCreatedAtDescIdDesc(
-            STORE_ID, "a", Limit.of(2)))
-        .thenReturn(List.of(row, row));
-    var page = service.history(STORE_ID, "a", null, 1);
-    assertThat(page.content()).hasSize(1);
-    when(histories.findAfter(STORE_ID, "a", row.getCreatedAt(), "h", Limit.of(101)))
-        .thenReturn(List.of());
-    assertThat(service.history(STORE_ID, "a", page.nextCursor(), 1000).content()).isEmpty();
+    var pageable = PageRequest.of(1, 1);
+    when(histories.findByStoreIdAndApplicantId(STORE_ID, "a", pageable))
+        .thenReturn(new PageImpl<>(List.of(row), pageable, 2));
+    var page = service.history(STORE_ID, "a", pageable);
+    assertThat(page.getContent()).hasSize(1);
+    assertThat(page.getTotalElements()).isEqualTo(2);
   }
 }

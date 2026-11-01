@@ -1,7 +1,9 @@
 package com.kizuna.recruitment.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -37,10 +39,15 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -57,6 +64,31 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
   AppProperties.class
 })
 class AttachmentControllerTest {
+  @Test
+  void attachmentListsArePagesNewestFirst() throws Exception {
+    var listed = ArgumentCaptor.forClass(Pageable.class);
+    var uploading = ArgumentCaptor.forClass(Pageable.class);
+    when(service.list(eq(1L), eq("a"), listed.capture()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+    when(service.uploads(eq(1L), eq("a"), uploading.capture()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+    for (String suffix : List.of("attachments", "attachment-uploads")) {
+      mvc.perform(
+              get("/applicants/a/" + suffix)
+                  .header("X-Store-ID", "1")
+                  .with(
+                      actor(
+                          new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
+                          new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"),
+                          new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.total_elements").value(0));
+    }
+    var newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+    assertThat(listed.getValue().getSort()).isEqualTo(newestFirst);
+    assertThat(uploading.getValue().getSort()).isEqualTo(newestFirst);
+  }
+
   @Test
   void exactOperationIncludesAllStatesOnlyBehindWritePermission() throws Exception {
     UUID key = UUID.randomUUID();

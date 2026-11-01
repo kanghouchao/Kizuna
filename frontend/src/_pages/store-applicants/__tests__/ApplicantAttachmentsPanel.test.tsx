@@ -27,7 +27,12 @@ const pending = {
   size_bytes: 3,
   created_at: '2026-10-07T00:00:00Z',
 };
-const page = (rows: unknown[] = []) => ({ rows, nextCursor: null });
+const page = (rows: unknown[] = [], number = 0, pageCount = 1) => ({
+  rows,
+  page: number,
+  pageCount,
+  total: rows.length,
+});
 const missing = { response: { status: 404 } };
 const file = () => new File(['png'], 'original.png', { type: 'image/png' });
 const upload = applicantAttachmentApi.upload as jest.Mock;
@@ -354,12 +359,11 @@ test('空入力と不正形式は入力に紐づくエラーを表示し送信�
 });
 
 test('画面を離れた後のダウンロード応答は保存操作を開始しない', async () => {
-  (applicantAttachmentApi.list as jest.Mock).mockResolvedValue({
-    rows: [
+  (applicantAttachmentApi.list as jest.Mock).mockResolvedValue(
+    page([
       { id: 'ready', media_type: 'image/png', size_bytes: 3, created_at: '2026-10-07T00:00:00Z' },
-    ],
-    nextCursor: null,
-  });
+    ])
+  );
   let resolve: (value: Blob) => void = () => {};
   (applicantAttachmentApi.download as jest.Mock).mockImplementation(
     () =>
@@ -473,3 +477,41 @@ test.each(['同じ画像を処理中です', '元の画像変換方式を利用�
     expect(upload.mock.calls[1][1]).toBe(original);
   }
 );
+
+test('添付画像一覧はページ送りで次のページを取り直す', async () => {
+  readyList
+    .mockResolvedValueOnce(
+      page(
+        [
+          {
+            id: 'r1',
+            media_type: 'image/png',
+            size_bytes: 1024,
+            created_at: '2026-10-07T00:00:00Z',
+          },
+        ],
+        0,
+        2
+      )
+    )
+    .mockResolvedValueOnce(
+      page(
+        [
+          {
+            id: 'r2',
+            media_type: 'image/jpeg',
+            size_bytes: 2048,
+            created_at: '2026-10-06T00:00:00Z',
+          },
+        ],
+        1,
+        2
+      )
+    );
+  render(<ApplicantAttachmentsPanel id="a" canManage={false} editable />);
+  expect(await screen.findByText(/PNG・1 KB/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  expect(await screen.findByText(/JPEG・2 KB/)).toBeInTheDocument();
+  expect(screen.queryByText(/PNG・1 KB/)).not.toBeInTheDocument();
+  expect(readyList).toHaveBeenLastCalledWith('a', 1);
+});

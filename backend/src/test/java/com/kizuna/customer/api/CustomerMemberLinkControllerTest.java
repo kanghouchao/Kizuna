@@ -1,7 +1,6 @@
 package com.kizuna.customer.api;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -18,16 +17,20 @@ import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -105,18 +108,21 @@ class CustomerMemberLinkControllerTest {
   }
 
   @Test
-  @DisplayName("履歴は続きの位置と件数をそのまま読み口へ渡すこと")
+  @DisplayName("履歴は新しい区間から並べたページで返ること")
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
-  void historyForwardsTheCursorAndSize() throws Exception {
+  void historyIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerMemberLinkService.history(eq(STORE_ID), anyString(), any(), anyInt()))
-        .thenReturn(new CursorPage<>(List.of(), null));
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(customerMemberLinkService.history(eq(STORE_ID), eq("c1"), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
-        .perform(storeGet("/customers/c1/member-link/history?cursor=abc&size=5"))
-        .andExpect(status().isOk());
+        .perform(storeGet("/customers/c1/member-link/history"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
 
-    verify(customerMemberLinkService).history(STORE_ID, "c1", "abc", 5);
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "linkedAt", "id"));
   }
 
   @Test

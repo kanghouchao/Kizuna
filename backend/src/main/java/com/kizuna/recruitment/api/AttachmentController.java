@@ -8,7 +8,6 @@ import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.file.Files;
 import java.security.Principal;
@@ -17,6 +16,10 @@ import java.util.concurrent.Callable;
 import lombok.RequiredArgsConstructor;
 import org.apache.logging.log4j.CloseableThreadContext;
 import org.apache.logging.log4j.ThreadContext;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,7 +32,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.context.request.async.CallableProcessingInterceptor;
@@ -53,22 +55,28 @@ public class AttachmentController {
 
   @GetMapping("/{id}/attachments")
   @PreAuthorize(AttachmentService.READ)
-  public CursorPage<AttachmentSummaryResponse> list(
+  public Page<AttachmentSummaryResponse> list(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return attachments.list(storeId, id, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return attachments.list(storeId, id, pageable);
   }
 
   @GetMapping("/{id}/attachment-uploads")
   @PreAuthorize(AttachmentService.WRITE)
-  public CursorPage<AttachmentUploadResponse> uploads(
+  public Page<AttachmentUploadResponse> uploads(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return attachments.uploads(storeId, id, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return attachments.uploads(storeId, id, pageable);
   }
 
   @GetMapping("/{id}/attachment-operations/{key}")

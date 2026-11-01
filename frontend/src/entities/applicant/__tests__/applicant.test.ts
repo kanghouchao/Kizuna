@@ -9,7 +9,6 @@ import type { ApplicantIntake } from '..';
 jest.mock('@/shared/api', () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), put: jest.fn() },
   fromSpringPage: (data: unknown) => data,
-  fromCursorPage: (data: unknown) => data,
 }));
 const intake: ApplicantIntake = {
   name: '応募者',
@@ -67,14 +66,14 @@ test('在籍登録は版とキャスト登録と同じ項目を送る', async ()
     ...enrollment,
   });
 });
-test('一覧条件と履歴cursorを保持する', async () => {
+test('一覧条件と履歴のページ番号を保持する', async () => {
   await applicantApi.list({ page: 2, size: 20, search: '応募者', status: 'SCREENING' });
   expect(apiClient.get).toHaveBeenCalledWith('/applicants', {
     params: { page: 2, size: 20, search: '応募者', status: 'SCREENING' },
   });
-  await applicantApi.history('a', 'cursor');
+  await applicantApi.history('a', 3);
   expect(apiClient.get).toHaveBeenCalledWith('/applicants/a/history', {
-    params: { cursor: 'cursor', size: 20 },
+    params: { page: 3, size: 20 },
   });
   await applicantApi.get('a');
   await applicantApi.policy();

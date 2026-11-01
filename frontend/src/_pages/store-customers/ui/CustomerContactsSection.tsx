@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { validateContactValue } from '../lib/contactValidation';
 import { useForm, useWatch } from 'react-hook-form';
 import { customerApi, ContactInput, ContactResponse, ContactState } from '@/entities/customer';
-import { useCursorList, getApiErrorMessage, isNotFound } from '@/shared/lib';
+import { useListPage, getApiErrorMessage, isNotFound } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -27,6 +27,7 @@ import {
   FormControl,
   FormMessage,
   Input,
+  Pager,
   Select,
   SelectTrigger,
   SelectValue,
@@ -51,8 +52,8 @@ const stateLabel = (state?: ContactState) =>
     : '未登録';
 
 export function CustomerContactsSection({ customerId }: { customerId: string }) {
-  const contacts = useCursorList(cursor => customerApi.contacts(customerId, { cursor }));
-  const history = useCursorList(cursor => customerApi.contactHistory(customerId, { cursor }));
+  const contacts = useListPage(page => customerApi.contacts(customerId, page));
+  const history = useListPage(page => customerApi.contactHistory(customerId, page));
   const [permission, setPermission] = useState<{
     contact: ContactResponse;
     purpose: ContactPurpose;
@@ -71,8 +72,8 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
     name: 'type',
   });
   const refresh = () => {
-    contacts.reload();
-    history.reload();
+    void contacts.reload();
+    void history.reload();
   };
   const beginEdit = (contact: ContactResponse | null) => {
     setGone(false);
@@ -125,7 +126,10 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
             登録や優先指定は、本人確認や連絡の許可を意味しません。
           </p>
           {contacts.failed ? (
-            <RegionError message="連絡先を取得できませんでした" onRetry={contacts.reload} />
+            <RegionError
+              message="連絡先を取得できませんでした"
+              onRetry={() => void contacts.reload()}
+            />
           ) : contacts.isLoading && contacts.rows.length === 0 ? (
             <p>読み込み中...</p>
           ) : contacts.rows.length === 0 ? (
@@ -201,11 +205,12 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
               </div>
             ))
           )}
-          {contacts.hasMore && (
-            <Button variant="outline" disabled={contacts.isLoading} onClick={contacts.loadMore}>
-              連絡先をさらに読み込む
-            </Button>
-          )}
+          <Pager
+            page={contacts.page}
+            pageCount={contacts.pageCount}
+            disabled={contacts.isLoading}
+            onPageChange={page => void contacts.onPageChange(page)}
+          />
         </CardContent>
       </Card>
       <Card>
@@ -216,7 +221,10 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
         </CardHeader>
         <CardContent className="space-y-4">
           {history.failed ? (
-            <RegionError message="連絡先の履歴を取得できませんでした" onRetry={history.reload} />
+            <RegionError
+              message="連絡先の履歴を取得できませんでした"
+              onRetry={() => void history.reload()}
+            />
           ) : history.isLoading && history.rows.length === 0 ? (
             <p>読み込み中...</p>
           ) : history.rows.length === 0 ? (
@@ -245,11 +253,12 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
               </div>
             ))
           )}
-          {history.hasMore && (
-            <Button variant="outline" disabled={history.isLoading} onClick={history.loadMore}>
-              履歴をさらに読み込む
-            </Button>
-          )}
+          <Pager
+            page={history.page}
+            pageCount={history.pageCount}
+            disabled={history.isLoading}
+            onPageChange={page => void history.onPageChange(page)}
+          />
         </CardContent>
       </Card>
       <Dialog

@@ -21,8 +21,6 @@ import com.kizuna.customer.domain.MergeSnapshot;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -42,7 +40,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 /**
  * 顧客統合の拒否条件と、付替え・墓標・履歴の書き込み順をサービス層で固定する。
@@ -62,6 +62,7 @@ class CustomerMergeServiceTest {
   private static final String MERGED_ID = "c-1";
 
   private static final OffsetDateTime MERGED_AT = OffsetDateTime.parse("2026-08-10T10:00:00+09:00");
+  private static final PageRequest PAGE = PageRequest.of(0, 20);
 
   @Mock private BusinessAudit businessAudit;
   @Mock private CustomerContactService customerContactService;
@@ -256,12 +257,12 @@ class CustomerMergeServiceTest {
     Mockito.when(
             customerMergeRepository.findHistory(
                 Mockito.eq(STORE_ID), Mockito.anyString(), Mockito.any()))
-        .thenReturn(List.of(row));
+        .thenReturn(new PageImpl<>(List.of(row)));
 
     CustomerMergeHistoryResponse fromSurviving =
-        service.history(STORE_ID, SURVIVING_ID, null, 20).content().get(0);
+        service.history(STORE_ID, SURVIVING_ID, PAGE).getContent().get(0);
     CustomerMergeHistoryResponse fromMerged =
-        service.history(STORE_ID, MERGED_ID, null, 20).content().get(0);
+        service.history(STORE_ID, MERGED_ID, PAGE).getContent().get(0);
 
     assertThat(fromSurviving.direction()).isEqualTo(MergeDirection.SURVIVING);
     assertThat(fromSurviving.counterpartCustomerId()).isEqualTo(MERGED_ID);
@@ -282,13 +283,12 @@ class CustomerMergeServiceTest {
     Mockito.when(
             customerMergeRepository.findHistory(
                 Mockito.eq(STORE_ID), Mockito.anyString(), Mockito.any()))
-        .thenReturn(List.of());
+        .thenReturn(Page.empty(PAGE));
 
-    CursorPage<CustomerMergeHistoryResponse> page =
-        service.history(STORE_ID, SURVIVING_ID, null, 20);
+    Page<CustomerMergeHistoryResponse> page = service.history(STORE_ID, SURVIVING_ID, PAGE);
 
-    assertThat(page.content()).isEmpty();
-    assertThat(page.nextCursor()).isNull();
+    assertThat(page.getContent()).isEmpty();
+    assertThat(page.getTotalElements()).isZero();
   }
 
   @Test
@@ -296,60 +296,11 @@ class CustomerMergeServiceTest {
   void refusesToReadTheHistoryOfACustomerItCannotSee() {
     Mockito.when(customerRepository.existsByIdAndStoreId(SURVIVING_ID, STORE_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.history(STORE_ID, SURVIVING_ID, null, 20))
+    assertThatThrownBy(() -> service.history(STORE_ID, SURVIVING_ID, PAGE))
         .isInstanceOf(NotFoundException.class);
 
     Mockito.verify(customerMergeRepository, Mockito.never())
         .findHistory(Mockito.any(), Mockito.anyString(), Mockito.any());
-  }
-
-  @Test
-  @DisplayName("上限より 1 件多く取り、余分は返さずに続きの位置だけを組むこと")
-  void fetchesOneExtraRowAndTurnsItIntoTheNextCursor() {
-    HistoryRow first = new HistoryRow("m-2", SURVIVING_ID, MERGED_ID, MERGED_AT);
-    HistoryRow last = new HistoryRow("m-1", SURVIVING_ID, "c-0", MERGED_AT.minusDays(1));
-    givenCustomerExists(SURVIVING_ID);
-    Mockito.when(
-            customerMergeRepository.findHistory(
-                Mockito.eq(STORE_ID), Mockito.anyString(), Mockito.any()))
-        .thenReturn(List.of(first, last));
-
-    CursorPage<CustomerMergeHistoryResponse> page =
-        service.history(STORE_ID, SURVIVING_ID, null, 1);
-
-    ArgumentCaptor<Limit> limit = ArgumentCaptor.forClass(Limit.class);
-    Mockito.verify(customerMergeRepository)
-        .findHistory(Mockito.eq(STORE_ID), Mockito.eq(SURVIVING_ID), limit.capture());
-    assertThat(limit.getValue().max()).isEqualTo(2);
-    assertThat(page.content()).hasSize(1);
-    // 続きの位置は返した最後の行から組む。余分の 1 件から組むと、その行が次の頁で消える
-    assertThat(PageCursor.decode(page.nextCursor()))
-        .isEqualTo(new PageCursor(MERGED_AT.toString(), "m-2"));
-  }
-
-  @Test
-  @DisplayName("続きの位置は復号した組のまま問い合わせへ渡ること")
-  void passesTheDecodedCursorStraightToTheQuery() {
-    givenCustomerExists(SURVIVING_ID);
-    Mockito.when(
-            customerMergeRepository.findHistoryAfter(
-                Mockito.eq(STORE_ID),
-                Mockito.anyString(),
-                Mockito.any(),
-                Mockito.anyString(),
-                Mockito.any()))
-        .thenReturn(List.of());
-
-    service.history(
-        STORE_ID, SURVIVING_ID, new PageCursor(MERGED_AT.toString(), "m-9").encode(), 20);
-
-    Mockito.verify(customerMergeRepository)
-        .findHistoryAfter(
-            Mockito.eq(STORE_ID),
-            Mockito.eq(SURVIVING_ID),
-            Mockito.eq(MERGED_AT),
-            Mockito.eq("m-9"),
-            Mockito.any());
   }
 
   // ==================== 前提の組み立て ====================
