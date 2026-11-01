@@ -78,7 +78,9 @@ beforeEach(() => {
         store_name: '本店',
       },
     ],
-    nextCursor: null,
+    page: 0,
+    pageCount: 1,
+    total: 2,
   });
 });
 
@@ -180,4 +182,39 @@ it('存在しない会員は一覧への導線だけを出す', async () => {
     'href',
     '/admin/members'
   );
+});
+
+it('明細はページ番号で送り、次のページを取り直す', async () => {
+  api.pointEntries
+    .mockResolvedValueOnce({
+      rows: [
+        {
+          occurred_at: '2026-10-20T10:00:00+09:00',
+          entry_type: 'USE',
+          amount: -10,
+          reason: '一頁目',
+        },
+      ],
+      page: 0,
+      pageCount: 2,
+      total: 21,
+    })
+    .mockResolvedValueOnce({
+      rows: [
+        {
+          occurred_at: '2026-10-01T10:00:00+09:00',
+          entry_type: 'USE',
+          amount: -20,
+          reason: '二頁目',
+        },
+      ],
+      page: 1,
+      pageCount: 2,
+      total: 21,
+    });
+  render(<AdminMemberDetailPage />);
+  expect(await screen.findByText('一頁目')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  expect(await screen.findByText('二頁目')).toBeInTheDocument();
+  expect(api.pointEntries).toHaveBeenLastCalledWith(7, { page: 1, size: 20 });
 });

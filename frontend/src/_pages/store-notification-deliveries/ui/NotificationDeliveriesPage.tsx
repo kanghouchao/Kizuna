@@ -15,7 +15,7 @@ import {
   isForbidden,
   isNotFound,
   isConflict,
-  useCursorList,
+  useListPage,
   useResource,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -40,6 +40,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Pager,
   RegionError,
   Table,
   TableBody,
@@ -103,12 +104,15 @@ function useActive() {
 }
 
 function History({ id }: { id: string }) {
-  const history = useCursorList(cursor => notificationApi.history(id, cursor));
+  const history = useListPage(page => notificationApi.history(id, page));
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">送信試行</h2>
       {history.failed ? (
-        <RegionError message="送信履歴を取得できませんでした" onRetry={history.reload} />
+        <RegionError
+          message="送信履歴を取得できませんでした"
+          onRetry={() => void history.reload()}
+        />
       ) : history.isLoading ? (
         <p>読み込み中...</p>
       ) : history.rows.length === 0 ? (
@@ -131,10 +135,13 @@ function History({ id }: { id: string }) {
           ))}
         </ol>
       )}
-      {history.hasMore && !history.failed && (
-        <Button variant="outline" disabled={history.isLoading} onClick={history.loadMore}>
-          履歴をさらに表示
-        </Button>
+      {!history.failed && (
+        <Pager
+          page={history.page}
+          pageCount={history.pageCount}
+          disabled={history.isLoading}
+          onPageChange={page => void history.onPageChange(page)}
+        />
       )}
     </section>
   );
@@ -478,7 +485,7 @@ function Create({
   );
 }
 function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolean }) {
-  const list = useCursorList(notificationApi.list);
+  const list = useListPage(page => notificationApi.list(page));
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -491,10 +498,10 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
         state={list}
         emptyMessage="業務通知はありません"
         errorMessage="通知一覧を取得できませんでした"
-        onRetry={list.reload}
+        onRetry={() => void list.reload()}
         actions={
           <>
-            <Button variant="outline" onClick={list.reload}>
+            <Button variant="outline" onClick={() => void list.reload()}>
               再読み込み
             </Button>
             {canManage && <Button onClick={() => setCreating(true)}>通知を作成</Button>}
@@ -541,16 +548,6 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
           </TableBody>
         </Table>
       </ListPage>
-      {list.hasMore && !list.failed && (
-        <Button
-          className="mt-4"
-          variant="outline"
-          disabled={list.isLoading}
-          onClick={list.loadMore}
-        >
-          さらに表示
-        </Button>
-      )}
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
           <DialogHeader>
@@ -566,7 +563,7 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
               setCreating(false);
               setSelected(row.id);
               setOpen(true);
-              list.reload();
+              void list.reload();
             }}
           />
         </DialogContent>
@@ -585,7 +582,7 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
               onChanged={list.reload}
               onMissing={() => {
                 setOpen(false);
-                list.reload();
+                void list.reload();
               }}
             />
           )}

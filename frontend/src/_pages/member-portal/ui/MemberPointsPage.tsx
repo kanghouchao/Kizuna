@@ -2,11 +2,17 @@
 
 import Link from 'next/link';
 import { MemberPointEntry, POINT_ENTRY_TYPE_LABELS, memberPointApi } from '@/entities/point';
-import { useCursorList, useResource } from '@/shared/lib';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
-
-/** 1 回に読み込む件数。会員の画面は縦に伸ばす前提なので、追加読み込みで過去へ遡る。 */
-const PAGE_SIZE = 20;
+import { useListPage, useResource } from '@/shared/lib';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Pager,
+  RegionError,
+} from '@/shared/ui';
 
 /** 増減は符号を付けて出す。加算と減算が同じ一本に並ぶので、符号が無いとどちらか読めない。 */
 function formatAmount(amount: number): string {
@@ -51,18 +57,15 @@ export function MemberPointsPage() {
     failure: balanceFailure,
     reload: reloadBalance,
   } = useResource(() => memberPointApi.balance());
-  // 1 回の取得は常に PAGE_SIZE 件で、続きは位置（カーソル）を渡して 1 回ずつ継ぎ足す。要求サイズ自体を
-  // 膨らませると、サーバ側の取得上限に当たった時点でそれ以降の明細へ到達できなくなる。
   const {
     rows: entries,
     isLoading: entriesLoading,
     failed: entriesFailed,
-    hasMore,
+    page,
+    pageCount,
     reload: reloadEntries,
-    loadMore,
-  } = useCursorList<MemberPointEntry>(cursor =>
-    memberPointApi.entries({ cursor, size: PAGE_SIZE })
-  );
+    onPageChange,
+  } = useListPage<MemberPointEntry>(page => memberPointApi.entries(page));
 
   return (
     <div className="mx-auto w-full max-w-md p-4">
@@ -96,31 +99,31 @@ export function MemberPointsPage() {
         </CardHeader>
         <CardContent>
           {entriesFailed ? (
-            <RegionError message="明細を取得できませんでした。" onRetry={reloadEntries} />
+            <RegionError
+              message="明細を取得できませんでした。"
+              onRetry={() => void reloadEntries()}
+            />
           ) : entriesLoading && entries.length === 0 ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : entries.length === 0 ? (
             <p className="text-sm text-muted-foreground">ポイントの増減はまだありません。</p>
           ) : (
             <ul className="space-y-3">
-              {/* 明細は台帳内部の ID を持たない（応答に出さない）。行は末尾に継ぎ足されるだけで並べ替えも
-                  削除も起きないため、位置がそのまま識別子になる。 */}
+              {/* 明細は台帳内部の ID を持たない（応答に出さない）。ページ内の行は並べ替えも削除も起きない
+                  ため、位置がそのまま識別子になる。 */}
               {entries.map((entry, index) => (
                 <EntryRow key={index} entry={entry} />
               ))}
             </ul>
           )}
-          {hasMore && (
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4 w-full"
-              onClick={loadMore}
+          <div className="mt-4">
+            <Pager
+              page={page}
+              pageCount={pageCount}
               disabled={entriesLoading}
-            >
-              もっと見る
-            </Button>
-          )}
+              onPageChange={next => void onPageChange(next)}
+            />
+          </div>
         </CardContent>
       </Card>
       <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">

@@ -1,11 +1,11 @@
-import { apiClient, fromCursorPage, CursorPageResult } from '@/shared/api';
+import { apiClient, fromSpringPage, PageResult } from '@/shared/api';
 import { AuditEventSummary, AuditEventResponse } from '../model/types';
 export const auditEventApi = {
-  list: async (cursor?: string, action?: string): Promise<CursorPageResult<AuditEventSummary>> =>
-    fromCursorPage(
+  list: async (page: number, action?: string): Promise<PageResult<AuditEventSummary>> =>
+    fromSpringPage(
       (
         await apiClient.get('/audit-events', {
-          params: { cursor, action: action || undefined },
+          params: { page, size: 50, action: action || undefined },
         })
       ).data
     ),

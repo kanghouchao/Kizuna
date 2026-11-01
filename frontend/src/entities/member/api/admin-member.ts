@@ -1,11 +1,4 @@
-import {
-  apiClient,
-  CursorPageResult,
-  PageResult,
-  fromCursorPage,
-  fromSpringPage,
-  toSpringPageParams,
-} from '@/shared/api';
+import { apiClient, PageResult, fromSpringPage, toSpringPageParams } from '@/shared/api';
 import {
   AdminMemberDetail,
   AdminMemberLedgerEntry,
@@ -38,13 +31,15 @@ export const adminMemberApi = {
     const response = await apiClient.get(`${BASE_URL}/${id}`);
     return response.data;
   },
-  /** 明細。続きは前回応答の nextCursor を cursor に渡す。 */
+  /** 明細。並びはサーバが記帳の新しい順に固定する。 */
   pointEntries: async (
     id: number,
-    params: { cursor?: string; size: number }
-  ): Promise<CursorPageResult<AdminMemberLedgerEntry>> => {
-    const response = await apiClient.get(`${BASE_URL}/${id}/point-entries`, { params });
-    return fromCursorPage(response.data);
+    params: { page: number; size: number }
+  ): Promise<PageResult<AdminMemberLedgerEntry>> => {
+    const response = await apiClient.get(`${BASE_URL}/${id}/point-entries`, {
+      params: toSpringPageParams(params.page, params.size),
+    });
+    return fromSpringPage(response.data);
   },
   /** 代行退会（204）。二度目は 409。 */
   withdraw: async (id: number, data: StaffWithdrawalRequest): Promise<void> => {

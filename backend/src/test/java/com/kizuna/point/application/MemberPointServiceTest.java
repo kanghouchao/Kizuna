@@ -11,10 +11,7 @@ import com.kizuna.point.domain.MemberPointEntryView;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointEntryType;
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -28,13 +25,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class MemberPointServiceTest {
@@ -51,7 +49,7 @@ class MemberPointServiceTest {
 
   @InjectMocks private MemberPointService service;
 
-  @Captor private ArgumentCaptor<Limit> limitCaptor;
+  private static final Pageable FIRST = PageRequest.of(0, 20);
 
   /** 明細 1 行の読み側 projection の代役。 */
   private record View(
@@ -132,25 +130,26 @@ class MemberPointServiceTest {
     Mockito.when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     Mockito.when(pointEntryRepository.findMemberEntryViews(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(
-            List.of(
-                new View(
-                    2L,
-                    OffsetDateTime.parse("2026-08-11T20:00:00+09:00"),
-                    PointEntryType.USE,
-                    -300,
-                    null,
-                    "店舗B"),
-                new View(
-                    1L,
-                    OffsetDateTime.parse("2026-08-10T20:00:00+09:00"),
-                    PointEntryType.MANUAL_ADJUST,
-                    500,
-                    LocalDate.parse("2027-08-10"),
-                    "店舗A")));
+            new PageImpl<>(
+                List.of(
+                    new View(
+                        2L,
+                        OffsetDateTime.parse("2026-08-11T20:00:00+09:00"),
+                        PointEntryType.USE,
+                        -300,
+                        null,
+                        "店舗B"),
+                    new View(
+                        1L,
+                        OffsetDateTime.parse("2026-08-10T20:00:00+09:00"),
+                        PointEntryType.MANUAL_ADJUST,
+                        500,
+                        LocalDate.parse("2027-08-10"),
+                        "店舗A"))));
 
-    CursorPage<MemberPointEntryResponse> page = service.entries(EMAIL, null, 20);
+    Page<MemberPointEntryResponse> page = service.entries(EMAIL, FIRST);
 
-    assertThat(page.content())
+    assertThat(page.getContent())
         .extracting(
             MemberPointEntryResponse::occurredOn,
             MemberPointEntryResponse::storeName,
@@ -165,7 +164,6 @@ class MemberPointServiceTest {
                 "MANUAL_ADJUST",
                 500,
                 LocalDate.parse("2027-08-10")));
-    assertThat(page.nextCursor()).as("続きが無ければ位置は返さない").isNull();
   }
 
   @Test
@@ -174,9 +172,9 @@ class MemberPointServiceTest {
     // UTC で判じると前日になる時刻。JVM のタイムゾーンに引きずられると深夜の記帳が 1 日ずれて並ぶ。
     Mockito.when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     Mockito.when(pointEntryRepository.findMemberEntryViews(Mockito.eq(MEMBER_ID), Mockito.any()))
-        .thenReturn(List.of(grant(1L, "2026-08-11T00:30:00+09:00")));
+        .thenReturn(new PageImpl<>(List.of(grant(1L, "2026-08-11T00:30:00+09:00"))));
 
-    assertThat(service.entries(EMAIL, null, 20).content())
+    assertThat(service.entries(EMAIL, FIRST).getContent())
         .extracting(MemberPointEntryResponse::occurredOn)
         .containsExactly(LocalDate.parse("2026-08-11"));
   }
@@ -187,64 +185,33 @@ class MemberPointServiceTest {
     Mockito.when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
     Mockito.when(pointEntryRepository.findMemberEntryViews(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(
-            List.of(
-                new View(
-                    3L,
-                    OffsetDateTime.parse("2026-08-11T20:00:00+09:00"),
-                    PointEntryType.EXPIRE,
-                    -100,
-                    null,
-                    null)));
+            new PageImpl<>(
+                List.of(
+                    new View(
+                        3L,
+                        OffsetDateTime.parse("2026-08-11T20:00:00+09:00"),
+                        PointEntryType.EXPIRE,
+                        -100,
+                        null,
+                        null))));
 
-    assertThat(service.entries(EMAIL, null, 20).content())
+    assertThat(service.entries(EMAIL, FIRST).getContent())
         .extracting(MemberPointEntryResponse::entryType, MemberPointEntryResponse::storeName)
         .containsExactly(tuple("EXPIRE", null));
   }
 
   @Test
-  @DisplayName("上限より多く読めたときは、上限までを返して続きの位置を添える")
-  void returnsACursorWhenMoreRowsExist() {
+  @DisplayName("明細は本人の会員 ID と受け取った Pageable で問い合わせ、総件数をそのまま返す")
+  void entriesAskForTheOwnMemberWithTheGivenPage() {
     Mockito.when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
-    Mockito.when(
-            pointEntryRepository.findMemberEntryViews(Mockito.eq(MEMBER_ID), limitCaptor.capture()))
-        .thenReturn(
-            List.of(
-                grant(3L, "2026-08-12T20:00:00+09:00"),
-                grant(2L, "2026-08-11T20:00:00+09:00"),
-                grant(1L, "2026-08-10T20:00:00+09:00")));
+    Pageable second = PageRequest.of(1, 2);
+    Mockito.when(pointEntryRepository.findMemberEntryViews(MEMBER_ID, second))
+        .thenReturn(new PageImpl<>(List.of(grant(1L, "2026-08-10T20:00:00+09:00")), second, 3));
 
-    CursorPage<MemberPointEntryResponse> page = service.entries(EMAIL, null, 2);
+    Page<MemberPointEntryResponse> page = service.entries(EMAIL, second);
 
-    assertThat(limitCaptor.getValue().max()).as("続きの有無は 1 件多く取って判る").isEqualTo(3);
-    assertThat(page.content()).hasSize(2);
-    // 位置は一覧の並び（記帳時刻 + id）と同じ組。ずれると続きが手前へ戻るか行を飛ばす。
-    assertThat(PageCursor.decode(page.nextCursor()))
-        .isEqualTo(new PageCursor("2026-08-11T20:00+09:00", "2"));
-  }
-
-  @Test
-  @DisplayName("続きの取得は渡された位置より後ろだけを、本人の一致つきで問い合わせる")
-  void fetchesOnlyAfterTheGivenPosition() {
-    Mockito.when(appProperties.getTimezone()).thenReturn("Asia/Tokyo");
-    OffsetDateTime position = OffsetDateTime.parse("2026-08-11T20:00:00+09:00");
-    Mockito.when(
-            pointEntryRepository.findMemberEntryViewsAfter(
-                Mockito.eq(MEMBER_ID), Mockito.eq(position), Mockito.eq(2L), Mockito.any()))
-        .thenReturn(List.of(grant(1L, "2026-08-10T20:00:00+09:00")));
-
-    CursorPage<MemberPointEntryResponse> page =
-        service.entries(EMAIL, new PageCursor(position.toString(), "2").encode(), 20);
-
-    assertThat(page.content()).hasSize(1);
-    Mockito.verify(pointEntryRepository, Mockito.never())
-        .findMemberEntryViews(Mockito.any(), Mockito.any());
-  }
-
-  @Test
-  @DisplayName("壊れた位置は要求誤りとして撥ね、先頭から取り直さない")
-  void rejectsAMalformedCursor() {
-    assertThatThrownBy(() -> service.entries(EMAIL, "!!!not-base64!!!", 20))
-        .isInstanceOf(ServiceException.class);
+    assertThat(page.getContent()).hasSize(1);
+    assertThat(page.getTotalElements()).isEqualTo(3);
   }
 
   @Test
@@ -253,7 +220,7 @@ class MemberPointServiceTest {
     Mockito.when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.balance(EMAIL)).isInstanceOf(StaleSessionException.class);
-    assertThatThrownBy(() -> service.entries(EMAIL, null, 20))
+    assertThatThrownBy(() -> service.entries(EMAIL, FIRST))
         .isInstanceOf(StaleSessionException.class);
   }
 

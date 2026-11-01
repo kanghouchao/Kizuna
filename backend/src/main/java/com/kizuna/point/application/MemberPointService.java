@@ -8,13 +8,11 @@ import com.kizuna.point.domain.MemberPointEntryView;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.UserRepository;
 import java.time.ZoneId;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,37 +39,12 @@ public class MemberPointService {
     return new MemberPointBalanceResponse(pointLedgerService.balance(resolveMemberId(email)));
   }
 
-  /**
-   * 本人のポイント明細（全種別・跨店集約）。
-   *
-   * <p>続きの指定は予約一覧と同じくカーソル（並びの鍵）で受ける。台帳は追加型で行が消えないが、記帳は明細を見ている 最中にも増えるため、件数で位置を指すと続きを取った時点で境界の行を飛ばす。
-   *
-   * @param cursor 続きの位置。null なら先頭から
-   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
-   */
+  /** 本人のポイント明細（全種別・跨店集約）。 */
   @Transactional(readOnly = true)
-  public CursorPage<MemberPointEntryResponse> entries(
-      String email, String cursor, int requestedSize) {
-    Long memberId = resolveMemberId(email);
-    int size = CursorPage.clampSize(requestedSize);
-    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    Limit limit = Limit.of(size + 1);
-    List<MemberPointEntryView> fetched =
-        cursor == null
-            ? pointEntryRepository.findMemberEntryViews(memberId, limit)
-            : fetchAfter(memberId, PageCursor.decode(cursor), limit);
-    return CursorPage.of(fetched, size, MemberPointService::cursorOf).map(this::toResponse);
-  }
-
-  private List<MemberPointEntryView> fetchAfter(Long memberId, PageCursor cursor, Limit limit) {
-    // 続きの取得でも本人の一致は問い合わせに載せ続ける — カーソルは位置を指すだけで、隔離境界にはならない。
-    return pointEntryRepository.findMemberEntryViewsAfter(
-        memberId, cursor.timestampKey(), cursor.longId(), limit);
-  }
-
-  /** 続きの位置は一覧の並び（記帳時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
-  private static String cursorOf(MemberPointEntryView view) {
-    return new PageCursor(view.getCreatedAt().toString(), String.valueOf(view.getId())).encode();
+  public Page<MemberPointEntryResponse> entries(String email, Pageable pageable) {
+    return pointEntryRepository
+        .findMemberEntryViews(resolveMemberId(email), pageable)
+        .map(this::toResponse);
   }
 
   private Long resolveMemberId(String email) {

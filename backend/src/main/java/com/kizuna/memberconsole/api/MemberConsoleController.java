@@ -8,13 +8,14 @@ import com.kizuna.memberconsole.api.dto.StaffWithdrawalRequest;
 import com.kizuna.memberconsole.application.MemberConsoleService;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -57,14 +58,16 @@ public class MemberConsoleController {
     return ResponseEntity.ok(memberConsoleService.detail(id, scope));
   }
 
-  /** 明細の続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。 */
   @GetMapping("/{id}/point-entries")
   @PreAuthorize("hasAuthority('PERM_MEMBER_VIEW')")
-  public ResponseEntity<CursorPage<MemberLedgerEntryResponse>> pointEntries(
+  public ResponseEntity<Page<MemberLedgerEntryResponse>> pointEntries(
       @PathVariable Long id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(memberConsoleService.entries(id, cursor, size));
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return ResponseEntity.ok(memberConsoleService.entries(id, pageable));
   }
 
   /** 代行退会。操作者は検証済みトークンの利用者 ID。二度目は 409、存在しない会員は 404。 */

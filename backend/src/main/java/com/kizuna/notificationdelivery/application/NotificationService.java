@@ -9,14 +9,12 @@ import com.kizuna.notificationdelivery.domain.DeliveryContent;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,13 +58,9 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<DeliverySummary> list(Long storeId, String email, String cursor, int size) {
+  public Page<DeliverySummary> list(Long storeId, String email, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
-    checkSize(size);
-    var rows =
-        deliveries.findByStoreIdAndIdLessThanOrderByIdDesc(
-            storeId, before(cursor), Limit.of(size + 1));
-    return CursorPage.of(rows, size, d -> PageCursor.encodeKey(d.getId())).map(DeliverySummary::of);
+    return deliveries.findByStoreId(storeId, pageable).map(DeliverySummary::of);
   }
 
   @Transactional(readOnly = true)
@@ -91,16 +85,12 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<DeliveryAttemptResponse> history(
-      Long storeId, String email, String id, String cursor, int size) {
+  public Page<DeliveryAttemptResponse> history(
+      Long storeId, String email, String id, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
     require(storeId, id);
-    checkSize(size);
-    return CursorPage.of(
-            attempts.findByStoreIdAndDeliveryIdAndIdLessThanOrderByIdDesc(
-                storeId, id, before(cursor), Limit.of(size + 1)),
-            size,
-            a -> PageCursor.encodeKey(a.getId()))
+    return attempts
+        .findByStoreIdAndDeliveryId(storeId, id, pageable)
         .map(DeliveryAttemptResponse::of);
   }
 
@@ -113,16 +103,5 @@ public class NotificationService {
   private DeliveryResponse response(Long storeId, NotificationDelivery row) {
     return DeliveryResponse.of(
         row, contacts.decide(storeId, row.content()).decision().name(), transport.available());
-  }
-
-  private static String before(String cursor) {
-    if (cursor == null) return "~";
-    var id = PageCursor.decodeKey(cursor);
-    if (!id.matches("[0-9]{1,32}")) throw new ServiceException("続きの位置が不正です");
-    return id;
-  }
-
-  private static void checkSize(int size) {
-    if (size < 1 || size > 100) throw new ServiceException("取得件数は1〜100件で指定してください");
   }
 }

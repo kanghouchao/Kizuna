@@ -41,6 +41,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 /** 通知の各口が、引数（または送信事象）で受けた店舗だけを repository へ渡すことの単体テスト。 */
 class NotificationApplicationTest {
@@ -103,11 +105,14 @@ class NotificationApplicationTest {
     assertThat(service.get(STORE_ID, "actor", "101").id()).isEqualTo("101");
     assertThat(service.queue(STORE_ID, "actor", "101", null, "確認済み", false).status())
         .isEqualTo("QUEUED");
-    service.history(STORE_ID, "actor", "101", null, 10);
-    verify(attempts)
-        .findByStoreIdAndDeliveryIdAndIdLessThanOrderByIdDesc(STORE_ID, "101", "~", Limit.of(11));
-    service.list(STORE_ID, "actor", null, 10);
-    verify(deliveries).findByStoreIdAndIdLessThanOrderByIdDesc(STORE_ID, "~", Limit.of(11));
+    var pageable = PageRequest.of(0, 10);
+    when(attempts.findByStoreIdAndDeliveryId(STORE_ID, "101", pageable))
+        .thenReturn(new PageImpl<>(List.of()));
+    when(deliveries.findByStoreId(STORE_ID, pageable)).thenReturn(new PageImpl<>(List.of()));
+    service.history(STORE_ID, "actor", "101", pageable);
+    verify(attempts).findByStoreIdAndDeliveryId(STORE_ID, "101", pageable);
+    service.list(STORE_ID, "actor", pageable);
+    verify(deliveries).findByStoreId(STORE_ID, pageable);
   }
 
   @Test

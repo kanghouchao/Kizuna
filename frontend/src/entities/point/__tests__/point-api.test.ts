@@ -23,23 +23,19 @@ describe('memberPointApi', () => {
     });
   });
 
-  it('entries は明細を GET し、カーソルページを正規化する', async () => {
+  it('entries は明細をページ番号で GET し、ページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
-      data: { content: [{ amount: 100 }], next_cursor: 'c1' },
+      data: { content: [{ amount: 100 }], number: 1, total_pages: 3, total_elements: 41 },
     });
 
-    await expect(memberPointApi.entries({ cursor: 'c0', size: 20 })).resolves.toEqual({
+    await expect(memberPointApi.entries(1)).resolves.toEqual({
       rows: [{ amount: 100 }],
-      nextCursor: 'c1',
+      page: 1,
+      pageCount: 3,
+      total: 41,
     });
     expect(mockedGet).toHaveBeenCalledWith('/me/points/entries', {
-      params: { cursor: 'c0', size: 20 },
+      params: { page: 1, size: 20 },
     });
-  });
-
-  it('続きが無い応答では位置を null に畳む', async () => {
-    mockedGet.mockResolvedValueOnce({ data: { content: [] } });
-
-    await expect(memberPointApi.entries()).resolves.toEqual({ rows: [], nextCursor: null });
   });
 });

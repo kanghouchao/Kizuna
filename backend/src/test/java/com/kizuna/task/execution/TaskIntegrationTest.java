@@ -45,6 +45,8 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -211,7 +213,7 @@ class TaskIntegrationTest {
   }
 
   @Test
-  void auditRejectsSqlMutationAndHistoryUsesStableCursor() {
+  void auditRejectsSqlMutationAndHistoryPagesByStartTime() {
     for (var statement :
         List.of(
             "update t_audit_events set action = 'ALTERED'",
@@ -224,10 +226,11 @@ class TaskIntegrationTest {
     first.getBean(TaskExecutor.class).executeScheduled(command());
     first.getBean(TaskExecutor.class).executeScheduled(command());
     var query = first.getBean(TaskQuery.class);
-    var page = query.list(null, 1);
-    assertThat(page.nextCursor()).isNotNull();
-    assertThat(query.list(page.nextCursor(), 1).content().getFirst().id())
-        .isNotEqualTo(page.content().getFirst().id());
+    var newestFirst = Sort.by(Sort.Direction.DESC, "startedAt", "id");
+    var page = query.list(PageRequest.of(0, 1, newestFirst));
+    assertThat(page.getTotalElements()).isGreaterThanOrEqualTo(2);
+    assertThat(query.list(PageRequest.of(1, 1, newestFirst)).getContent().getFirst().id())
+        .isNotEqualTo(page.getContent().getFirst().id());
   }
 
   private long countProbe(Long id) {

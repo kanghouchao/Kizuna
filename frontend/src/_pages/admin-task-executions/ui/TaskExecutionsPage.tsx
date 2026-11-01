@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { taskExecutionApi, ExecutionSummary } from '@/entities/task-execution';
-import { getApiErrorMessage, useCursorList, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Badge,
@@ -22,6 +22,7 @@ import {
   FormMessage,
   Input,
   Label,
+  Pager,
   RegionError,
   Select,
   SelectContent,
@@ -190,7 +191,7 @@ function taskLabel(name: string) {
   );
 }
 export default function TaskExecutionsPage() {
-  const list = useCursorList(cursor => taskExecutionApi.list(cursor));
+  const list = useListPage(page => taskExecutionApi.list(page));
   const [taskName, setTaskName] = useState('SERVICE_IDENTITY_CHECK');
   const catalog = useResource(taskExecutionApi.taskTypes);
   const taskType = catalog.data?.find(task => task.name === taskName);
@@ -249,7 +250,7 @@ export default function TaskExecutionsPage() {
       pending.current = null;
       setSelected(result.execution.id);
       setDetailOpen(true);
-      list.reload();
+      void list.reload();
     } catch (error) {
       if (generation.current === currentGeneration)
         notify.error(getApiErrorMessage(error, '実行に失敗しました'));
@@ -514,7 +515,7 @@ export default function TaskExecutionsPage() {
         )}
       </Card>
       <div className="flex justify-end">
-        <Button variant="outline" onClick={list.reload} disabled={list.isLoading}>
+        <Button variant="outline" onClick={() => void list.reload()} disabled={list.isLoading}>
           履歴を更新
         </Button>
       </div>
@@ -522,7 +523,10 @@ export default function TaskExecutionsPage() {
         {list.isLoading ? (
           <p className="p-6">読み込み中...</p>
         ) : list.failed ? (
-          <RegionError message="実行履歴を取得できませんでした" onRetry={list.reload} />
+          <RegionError
+            message="実行履歴を取得できませんでした"
+            onRetry={() => void list.reload()}
+          />
         ) : list.rows.length === 0 ? (
           <p className="p-6 text-muted-foreground">実行履歴がありません</p>
         ) : (
@@ -566,13 +570,14 @@ export default function TaskExecutionsPage() {
             </TableBody>
           </Table>
         )}
-        {list.hasMore && (
-          <div className="p-4 text-center">
-            <Button variant="outline" disabled={list.isLoading} onClick={list.loadMore}>
-              さらに読み込む
-            </Button>
-          </div>
-        )}
+        <div className="p-4">
+          <Pager
+            page={list.page}
+            pageCount={list.pageCount}
+            disabled={list.isLoading}
+            onPageChange={page => void list.onPageChange(page)}
+          />
+        </div>
       </TableCard>
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
@@ -586,7 +591,7 @@ export default function TaskExecutionsPage() {
               id={selected}
               onChanged={id => {
                 setSelected(id);
-                list.reload();
+                void list.reload();
               }}
             />
           )}

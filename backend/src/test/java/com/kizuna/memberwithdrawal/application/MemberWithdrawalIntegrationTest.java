@@ -62,6 +62,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -543,12 +544,15 @@ class MemberWithdrawalIntegrationTest {
         .isEqualTo(1);
     assertThat(console.detail(member.memberId, new StoreScope(true, java.util.Set.of())).links())
         .hasSize(2);
-    var entries = console.entries(member.memberId, null, 20);
-    assertThat(entries.content())
+    var entries =
+        console.entries(
+            member.memberId,
+            PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+    assertThat(entries.getContent())
         .extracting(e -> e.entryType(), e -> e.amount(), e -> e.actorName())
         .containsExactly(
             tuple("WITHDRAWAL_CLEAR", -300, "検証職員"), tuple("MANUAL_ADJUST", 300, "検証職員"));
-    assertThat(entries.content().getFirst().reason()).isEqualTo("会員退会");
+    assertThat(entries.getContent().getFirst().reason()).isEqualTo("会員退会");
   }
 
   private record MemberFixture(long memberId, long userId, String email, String memberCode) {}

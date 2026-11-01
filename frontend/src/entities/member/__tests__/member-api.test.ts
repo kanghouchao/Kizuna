@@ -45,14 +45,16 @@ describe('admin member api', () => {
     expect(page).toEqual({ rows: [{ id: 1 }], page: 0, pageCount: 1, total: 1 });
   });
 
-  it('pointEntries GETs the cursor sub-resource and withdraw POSTs the reason', async () => {
-    client().get.mockResolvedValueOnce({ data: { content: [], next_cursor: 'c2' } });
-    const { adminMemberApi } = await import('@/entities/member');
-    const page = await adminMemberApi.pointEntries(7, { cursor: 'c1', size: 20 });
-    expect(client().get).toHaveBeenLastCalledWith('/members/7/point-entries', {
-      params: { cursor: 'c1', size: 20 },
+  it('pointEntries GETs the paged sub-resource and withdraw POSTs the reason', async () => {
+    client().get.mockResolvedValueOnce({
+      data: { content: [], number: 1, total_pages: 2, total_elements: 21 },
     });
-    expect(page).toEqual({ rows: [], nextCursor: 'c2' });
+    const { adminMemberApi } = await import('@/entities/member');
+    const page = await adminMemberApi.pointEntries(7, { page: 1, size: 20 });
+    expect(client().get).toHaveBeenLastCalledWith('/members/7/point-entries', {
+      params: { page: 1, size: 20 },
+    });
+    expect(page).toEqual({ rows: [], page: 1, pageCount: 2, total: 21 });
     await adminMemberApi.withdraw(7, { reason: '電話依頼' });
     expect(client().post).toHaveBeenLastCalledWith('/members/7/withdrawal', {
       reason: '電話依頼',

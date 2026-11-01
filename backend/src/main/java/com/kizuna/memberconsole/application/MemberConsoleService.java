@@ -13,7 +13,6 @@ import com.kizuna.point.application.MemberLedgerQueryService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.web.CursorPage;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -89,11 +88,11 @@ public class MemberConsoleService {
         links.otherStoreCount());
   }
 
-  /** 明細の続きはカーソルで辿る。会員の存在は確かめない — 無い会員の明細は空で、照会は詳細が 404 を返す。 */
+  /** 会員の存在は確かめない — 無い会員の明細は空で、照会は詳細が 404 を返す。 */
   @Transactional(readOnly = true)
-  public CursorPage<MemberLedgerEntryResponse> entries(long memberId, String cursor, int size) {
+  public Page<MemberLedgerEntryResponse> entries(long memberId, Pageable pageable) {
     return memberLedgerQueryService
-        .entries(memberId, cursor, size)
+        .entries(memberId, pageable)
         .map(
             e ->
                 new MemberLedgerEntryResponse(

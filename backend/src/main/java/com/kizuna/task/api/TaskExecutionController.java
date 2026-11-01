@@ -2,7 +2,6 @@ package com.kizuna.task.api;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.task.api.dto.ExecutionReasonRequest;
 import com.kizuna.task.api.dto.ExecutionSummary;
 import com.kizuna.task.api.dto.TaskExecutionRequest;
@@ -18,6 +17,9 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -43,12 +45,15 @@ public class TaskExecutionController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
-  public CursorPage<ExecutionSummary> list(
+  public Page<ExecutionSummary> list(
       Authentication auth,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "50") int size) {
+      @PageableDefault(
+              size = 50,
+              sort = {"startedAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
     identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
-    return query.list(cursor, size);
+    return query.list(pageable);
   }
 
   @GetMapping("/service-identities")
