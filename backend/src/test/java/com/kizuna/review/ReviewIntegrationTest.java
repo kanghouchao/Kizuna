@@ -34,12 +34,14 @@ import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -68,6 +70,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
@@ -80,6 +83,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
@@ -117,8 +121,7 @@ class ReviewIntegrationTest {
     jdbc = context.getBean(JdbcTemplate.class);
     mvc =
         MockMvcBuilders.standaloneSetup(context.getBean(ReviewController.class))
-            .setCustomArgumentResolvers(
-                new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+            .setCustomArgumentResolvers(argumentResolvers())
             .defaultRequest(
                 get("/")
                     .with(
@@ -1003,6 +1006,16 @@ class ReviewIntegrationTest {
               row.setStoreId(item.getStoreId());
               return context.getBean(OrderRepository.class).saveAndFlush(row).getId();
             });
+  }
+
+  /** 本番と同じ引数解決器の並び（Pageable の検査・副キー補完と現在店舗）を standalone の MockMvc へ渡す。 */
+  private static HandlerMethodArgumentResolver[] argumentResolvers() {
+    List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
+    new WebBindingConfig(
+            new PageableHandlerMethodArgumentResolver(),
+            new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+        .addArgumentResolvers(resolvers);
+    return resolvers.toArray(HandlerMethodArgumentResolver[]::new);
   }
 
   private JsonNode read(String path, int expected) throws Exception {

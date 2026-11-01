@@ -13,12 +13,14 @@ import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.survey.api.SurveyController;
 import com.kizuna.survey.api.SurveyResponseController;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +45,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -52,6 +55,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
@@ -91,8 +95,7 @@ class SurveyIntegrationTest {
         MockMvcBuilders.standaloneSetup(
                 context.getBean(SurveyController.class),
                 context.getBean(SurveyResponseController.class))
-            .setCustomArgumentResolvers(
-                new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+            .setCustomArgumentResolvers(argumentResolvers())
             .defaultRequest(
                 get("/")
                     .with(
@@ -535,6 +538,16 @@ class SurveyIntegrationTest {
       return List.of(
           tasks.get(0).get(30, TimeUnit.SECONDS), tasks.get(1).get(30, TimeUnit.SECONDS));
     }
+  }
+
+  /** 本番と同じ引数解決器の並び（Pageable の検査・副キー補完と現在店舗）を standalone の MockMvc へ渡す。 */
+  private static HandlerMethodArgumentResolver[] argumentResolvers() {
+    List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
+    new WebBindingConfig(
+            new PageableHandlerMethodArgumentResolver(),
+            new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+        .addArgumentResolvers(resolvers);
+    return resolvers.toArray(HandlerMethodArgumentResolver[]::new);
   }
 
   private JsonNode read(String path, int expected) throws Exception {
