@@ -227,7 +227,7 @@ describe('ShiftsPage の取得失敗', () => {
   });
 
   it('キャスト名簿は総ページ数に達するまで続きのページを取ること', async () => {
-    const full = Array.from({ length: 100 }, (_, i) => ({ id: `c${i}`, name: `キャスト${i}` }));
+    const full = Array.from({ length: 50 }, (_, i) => ({ id: `c${i}`, name: `キャスト${i}` }));
     mockedCastList
       .mockResolvedValueOnce({ ...castPage(full), pageCount: 2 })
       .mockResolvedValueOnce({
