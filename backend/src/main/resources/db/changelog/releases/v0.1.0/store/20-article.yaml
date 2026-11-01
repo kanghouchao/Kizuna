@@ -47,6 +47,9 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
+                  name: cover_image_url
+                  type: VARCHAR(500)
+              - column:
                   name: published
                   type: BOOLEAN
                   defaultValueBoolean: false

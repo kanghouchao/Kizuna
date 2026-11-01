@@ -109,7 +109,11 @@ describe('作成', () => {
     fireEvent.change(screen.getByLabelText('本文'), { target: { value: '一行目\n二行目' } });
     fireEvent.click(screen.getByRole('button', { name: '記事を作成' }));
     await waitFor(() =>
-      expect(api.create).toHaveBeenCalledWith({ title: '新着', body: '一行目\n二行目' })
+      expect(api.create).toHaveBeenCalledWith({
+        title: '新着',
+        body: '一行目\n二行目',
+        cover_image_url: null,
+      })
     );
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/articles/42/edit'));
     expect(notify.success).toHaveBeenCalledWith('記事を作成しました');
@@ -134,6 +138,7 @@ describe('編集', () => {
       expect(api.update).toHaveBeenCalledWith('7', {
         title: '夏のお知らせ',
         body: '直した本文',
+        cover_image_url: null,
         version: 3,
       })
     );

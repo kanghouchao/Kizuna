@@ -180,6 +180,43 @@ class ArticleIntegrationTest {
   }
 
   @Test
+  void coverImageIsAttachedReplacedAndRemovedAcrossAdminAndPublicReads() throws Exception {
+    String cover = "/static/uploads/public/1/article-cover/a.png";
+    String replaced = "/static/uploads/public/1/article-cover/b.png";
+    String id =
+        call(post("/articles").content(body("表紙付き", BODY, null, cover)), 201).get("id").asString();
+    publish(id, true, null, null);
+
+    assertThat(call(get("/articles/" + id), 200).get("cover_image_url").asString())
+        .isEqualTo(cover);
+    assertThat(call(get("/articles"), 200).get("content").get(0).get("cover_image_url").asString())
+        .isEqualTo(cover);
+    assertThat(
+            publicArticles(storeId, "/articles/public", 200)
+                .get("content")
+                .get(0)
+                .get("cover_image_url")
+                .asString())
+        .isEqualTo(cover);
+    assertThat(
+            publicArticles(storeId, "/articles/public/" + id, 200)
+                .get("cover_image_url")
+                .asString())
+        .isEqualTo(cover);
+
+    var swapped = call(put("/articles/" + id).content(body("表紙付き", BODY, 1L, replaced)), 200);
+    assertThat(swapped.get("cover_image_url").asString()).isEqualTo(replaced);
+
+    // 管理画面は外した表紙を空文字で送る。空文字を保存すると公式サイトに空の画像が出るため、無しとして扱う
+    var removed = call(put("/articles/" + id).content(body("表紙付き", BODY, 2L, "")), 200);
+    assertThat(removed.get("cover_image_url").isNull()).isTrue();
+    assertThat(
+            publicArticles(storeId, "/articles/public/" + id, 200).get("cover_image_url").isNull())
+        .isTrue();
+    call(put("/articles/" + id).content(body("表紙付き", BODY, 3L, "u".repeat(501))), 400);
+  }
+
+  @Test
   void callerWithoutArticleManageIsRefusedOnEveryEndpoint() throws Exception {
     String id = create("権限検証", BODY);
     var other = principal(auth.getName(), "PERM_REVIEW_VIEW");
@@ -401,7 +438,8 @@ class ArticleIntegrationTest {
             "order-0",
             "order-10");
     var first = all.get("content").get(0);
-    assertThat(first.propertyNames()).containsExactlyInAnyOrder("id", "title", "publish_from");
+    assertThat(first.propertyNames())
+        .containsExactlyInAnyOrder("id", "title", "cover_image_url", "publish_from");
     assertThat(first.get("publish_from").asString()).isEqualTo("2026-06-01T00:00:00Z");
     assertThat(all.get("content").get(6).get("publish_from").isNull()).isTrue();
 
@@ -433,7 +471,7 @@ class ArticleIntegrationTest {
 
     var detail = publicArticles(storeId, "/articles/public/" + shown, 200);
     assertThat(detail.propertyNames())
-        .containsExactlyInAnyOrder("id", "title", "publish_from", "body");
+        .containsExactlyInAnyOrder("id", "title", "cover_image_url", "publish_from", "body");
     assertThat(detail.get("id").asString()).isEqualTo(shown);
     assertThat(detail.get("title").asString()).isEqualTo("掲出中");
     assertThat(detail.get("body").asString()).isEqualTo(BODY);
@@ -496,10 +534,15 @@ class ArticleIntegrationTest {
   }
 
   private String body(String title, String text, Long version) {
+    return body(title, text, version, null);
+  }
+
+  private String body(String title, String text, Long version, String cover) {
     var request = new LinkedHashMap<String, Object>();
     request.put("title", title);
     request.put("body", text);
     if (version != null) request.put("version", version);
+    if (cover != null) request.put("cover_image_url", cover);
     return json.writeValueAsString(request);
   }
 

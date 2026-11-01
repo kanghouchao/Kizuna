@@ -8,5 +8,7 @@ public interface ArticlePublicSummaryView {
 
   String getTitle();
 
+  String getCoverImageUrl();
+
   Publication getPublication();
 }

@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { Page } from '@/shared/api';
 import { PublicArticleSummary } from '../../model/types';
@@ -54,6 +55,18 @@ export default function NewsSection({ articles, page }: NewsSectionProps) {
                 }}
               >
                 <article>
+                  {/* 表題がリンク名を担うので、表紙は装飾として読み上げない */}
+                  {article.cover_image_url && (
+                    <div className="relative aspect-video mb-4 md:mb-5 overflow-hidden">
+                      <Image
+                        src={article.cover_image_url}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 768px"
+                      />
+                    </div>
+                  )}
                   <h2
                     className="break-words text-base md:text-lg tracking-wider text-[var(--storefront-fg)]"
                     style={{ fontFamily: 'var(--storefront-font-display)' }}

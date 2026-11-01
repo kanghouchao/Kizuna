@@ -9,6 +9,8 @@ public interface ArticleSummaryView {
 
   String getTitle();
 
+  String getCoverImageUrl();
+
   Publication getPublication();
 
   OffsetDateTime getUpdatedAt();

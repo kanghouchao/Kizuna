@@ -27,7 +27,8 @@ public class S3FileStorage implements FileStorageService, ApplicationRunner {
 
   /** 用途は画像の置き場所ごとの区分で、object key の一段になるので許可リストに限る。 */
   private static final Set<String> PURPOSES =
-      Set.of("cast-photo", "store-logo", "store-banner", "store-mv", "partner-logo");
+      Set.of(
+          "cast-photo", "store-logo", "store-banner", "store-mv", "partner-logo", "article-cover");
 
   /** 完成形 key は監査の target_id（VARCHAR(100)）にそのまま入るので、これを超える key は保存しない。 */
   private static final int MAX_KEY_LENGTH = 100;

@@ -72,6 +72,7 @@ export interface PublicReview {
 export interface PublicArticleSummary {
   id: string;
   title: string;
+  cover_image_url?: string;
   publish_from: string | null;
 }
 

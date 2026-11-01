@@ -60,18 +60,24 @@ public class ArticleService {
   }
 
   @Transactional
-  public String create(Long storeId, String title, String body) {
-    var article = articles.saveAndFlush(Article.write(storeId, title, body));
+  public String create(Long storeId, String title, String body, String coverImageUrl) {
+    var article = articles.saveAndFlush(Article.write(storeId, title, body, coverImageUrl));
     record(storeId, "ARTICLE_CREATED", article, absent(), snapshot(article));
     return article.getId();
   }
 
   @Transactional
-  public Article edit(Long storeId, String id, String title, String body, long expectedVersion) {
+  public Article edit(
+      Long storeId,
+      String id,
+      String title,
+      String body,
+      String coverImageUrl,
+      long expectedVersion) {
     var article = find(storeId, id);
     article.requireVersion(expectedVersion);
     var before = snapshot(article);
-    boolean bodyChanged = article.edit(title, body);
+    boolean bodyChanged = article.edit(title, body, coverImageUrl);
     articles.saveAndFlush(article);
     var after = snapshot(article);
     if (bodyChanged) after.put("redacted_fields_changed", "body");
@@ -115,6 +121,7 @@ public class ArticleService {
     var values = new LinkedHashMap<String, String>();
     values.put("exists", "true");
     values.put("title", article.getTitle());
+    values.put("cover_image_url", Objects.toString(article.getCoverImageUrl(), ""));
     values.put("published", String.valueOf(p.published()));
     values.put("publish_from", Objects.toString(p.publishFrom(), ""));
     values.put("publish_until", Objects.toString(p.publishUntil(), ""));
