@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { auditEventApi } from '@/entities/audit-event';
-import { useCursorList, useResource } from '@/shared/lib';
+import { useListPage, useResource } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -18,6 +18,7 @@ import {
   FormControl,
   FormLabel,
   FormMessage,
+  Pager,
   RegionError,
   Table,
   TableBody,
@@ -95,7 +96,7 @@ function AuditDetail({ id }: { id: number }) {
 }
 
 export default function AuditEventsPage() {
-  const list = useCursorList((cursor, action: string) => auditEventApi.list(cursor, action), '');
+  const list = useListPage((page, action: string) => auditEventApi.list(page, action), '');
   const search = useForm<{ action: string }>({ defaultValues: { action: '' } });
   const [selected, setSelected] = useState<number | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -109,7 +110,7 @@ export default function AuditEventsPage() {
         <form
           noValidate
           className="flex items-end gap-3"
-          onSubmit={search.handleSubmit(values => list.search(values.action.trim()))}
+          onSubmit={search.handleSubmit(values => void list.search(values.action.trim()))}
         >
           <FormField
             control={search.control}
@@ -140,7 +141,7 @@ export default function AuditEventsPage() {
             disabled={list.isLoading}
             onClick={() => {
               search.reset();
-              list.search('');
+              void list.search('');
             }}
           >
             すべて表示
@@ -151,7 +152,10 @@ export default function AuditEventsPage() {
         {list.isLoading ? (
           <p className="p-6">読み込み中...</p>
         ) : list.failed ? (
-          <RegionError message="監査履歴を取得できませんでした" onRetry={list.reload} />
+          <RegionError
+            message="監査履歴を取得できませんでした"
+            onRetry={() => void list.reload()}
+          />
         ) : list.rows.length === 0 ? (
           <p className="p-6 text-muted-foreground">該当する監査履歴がありません</p>
         ) : (
@@ -193,13 +197,14 @@ export default function AuditEventsPage() {
             </TableBody>
           </Table>
         )}
-        {list.hasMore && (
-          <div className="p-4 text-center">
-            <Button variant="outline" disabled={list.isLoading} onClick={list.loadMore}>
-              さらに読み込む
-            </Button>
-          </div>
-        )}
+        <div className="p-4">
+          <Pager
+            page={list.page}
+            pageCount={list.pageCount}
+            disabled={list.isLoading}
+            onPageChange={page => void list.onPageChange(page)}
+          />
+        </div>
       </TableCard>
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">

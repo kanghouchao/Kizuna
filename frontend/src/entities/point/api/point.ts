@@ -1,4 +1,4 @@
-import { CursorPageResult, CursorParams, apiClient, fromCursorPage } from '@/shared/api';
+import { PageResult, apiClient, fromSpringPage } from '@/shared/api';
 import { MemberPointBalance, MemberPointEntry } from '../model/types';
 
 export const memberPointApi = {
@@ -8,8 +8,8 @@ export const memberPointApi = {
     return response.data;
   },
   /** 本人のポイント明細（全種別）を新しい順に取得する。 */
-  entries: async (params?: CursorParams): Promise<CursorPageResult<MemberPointEntry>> => {
-    const response = await apiClient.get('/me/points/entries', { params });
-    return fromCursorPage(response.data);
+  entries: async (page: number): Promise<PageResult<MemberPointEntry>> => {
+    const response = await apiClient.get('/me/points/entries', { params: { page, size: 20 } });
+    return fromSpringPage(response.data);
   },
 };

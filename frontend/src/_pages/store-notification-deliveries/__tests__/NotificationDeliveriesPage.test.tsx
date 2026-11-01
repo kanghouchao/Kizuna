@@ -65,9 +65,9 @@ beforeEach(() => {
   mockStoreId = '1';
   Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: undefined });
   permission('NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND');
-  api.list.mockResolvedValue({ rows: [row], nextCursor: null });
+  api.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
   api.get.mockResolvedValue(row);
-  api.history.mockResolvedValue({ rows: [], nextCursor: null });
+  api.history.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 });
 async function detail() {
   fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
@@ -123,19 +123,24 @@ test('操作失敗後に理由を保持し連打で二重登録しない', async
   expect(api.queue).toHaveBeenLastCalledWith('10', 1, '内容確認済み');
 });
 test('店舗変更後に旧店舗の遅い応答を表示しない', async () => {
-  let resolve!: (data: { rows: Delivery[]; nextCursor: null }) => void;
+  let resolve!: (data: {
+    rows: Delivery[];
+    page: number;
+    pageCount: number;
+    total: number;
+  }) => void;
   api.list
     .mockReturnValueOnce(
       new Promise(r => {
         resolve = r;
       })
     )
-    .mockResolvedValueOnce({ rows: [], nextCursor: null });
+    .mockResolvedValueOnce({ rows: [], page: 0, pageCount: 0, total: 0 });
   const view = render(<NotificationDeliveriesPage />);
   mockStoreId = '2';
   view.rerender(<NotificationDeliveriesPage />);
   expect(await screen.findByText('業務通知はありません')).toBeVisible();
-  await act(async () => resolve({ rows: [row], nextCursor: null }));
+  await act(async () => resolve({ rows: [row], page: 0, pageCount: 1, total: 1 }));
   expect(screen.queryByRole('button', { name: '内容・履歴' })).not.toBeInTheDocument();
 });
 test('詳細取得の失敗からその場で回復し404は一覧へ戻れる', async () => {
@@ -245,4 +250,49 @@ test('確認操作の404では保存を外して一覧へ戻れる', async () =>
     within(dialog).queryByRole('button', { name: '確認して送信待ちにする' })
   ).not.toBeInTheDocument();
   await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+});
+test('通知一覧はページ番号で送り、次のページを取り直す', async () => {
+  api.list
+    .mockResolvedValueOnce({ rows: [row], page: 0, pageCount: 2, total: 51 })
+    .mockResolvedValueOnce({
+      rows: [{ ...row, id: '102', source_id: '456' }],
+      page: 1,
+      pageCount: 2,
+      total: 51,
+    });
+  render(<NotificationDeliveriesPage />);
+  expect(await screen.findByText(/123/)).toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
+  expect(await screen.findByText(/456/)).toBeInTheDocument();
+  expect(api.list).toHaveBeenLastCalledWith(1);
+});
+test('送信試行はページ番号で送り、次のページを取り直す', async () => {
+  const attempt = (id: string, reason: string) => ({
+    id,
+    attempt_number: 1,
+    status: 'FAILED' as const,
+    started_at: '2026-10-07T01:00:00Z',
+    task_execution_id: 1,
+    reason,
+    failure_code: undefined,
+  });
+  api.history
+    .mockResolvedValueOnce({
+      rows: [attempt('a1', '一頁目の試行')],
+      page: 0,
+      pageCount: 2,
+      total: 51,
+    })
+    .mockResolvedValueOnce({
+      rows: [attempt('a2', '二頁目の試行')],
+      page: 1,
+      pageCount: 2,
+      total: 51,
+    });
+  render(<NotificationDeliveriesPage />);
+  const modal = await detail();
+  expect(await within(modal).findByText('一頁目の試行')).toBeInTheDocument();
+  fireEvent.click(within(modal).getByRole('button', { name: '次のページ' }));
+  expect(await within(modal).findByText('二頁目の試行')).toBeInTheDocument();
+  expect(api.history).toHaveBeenLastCalledWith('10', 1);
 });

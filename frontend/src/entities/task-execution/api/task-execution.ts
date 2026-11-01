@@ -1,10 +1,4 @@
-import {
-  apiClient,
-  fromCursorPage,
-  fromSpringPage,
-  CursorPageResult,
-  PageResult,
-} from '@/shared/api';
+import { apiClient, fromSpringPage, PageResult } from '@/shared/api';
 import {
   ExecutionSummary,
   ExecutionResponse,
@@ -18,8 +12,8 @@ export const taskExecutionApi = {
   taskTypes: async (): Promise<TaskType[]> => (await apiClient.get(`${path}/task-types`)).data,
   stores: async (page: number): Promise<PageResult<TaskStoreOption>> =>
     fromSpringPage((await apiClient.get(`${path}/stores`, { params: { page, size: 20 } })).data),
-  list: async (cursor?: string): Promise<CursorPageResult<ExecutionSummary>> =>
-    fromCursorPage((await apiClient.get(path, { params: { cursor } })).data),
+  list: async (page: number): Promise<PageResult<ExecutionSummary>> =>
+    fromSpringPage((await apiClient.get(path, { params: { page, size: 50 } })).data),
   get: async (id: number): Promise<ExecutionResponse> =>
     (await apiClient.get(`${path}/${id}`)).data,
   create: async (data: ExecutionRequest): Promise<ExecutionResponse> =>

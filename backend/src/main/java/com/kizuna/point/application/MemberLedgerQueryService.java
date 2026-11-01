@@ -3,13 +3,11 @@ package com.kizuna.point.application;
 import com.kizuna.point.domain.MemberLedgerEntryView;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointEntryType;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +22,7 @@ public class MemberLedgerQueryService {
 
   private final PointEntryRepository pointEntryRepository;
 
-  /** 明細 1 行。仕訳の ID は出さない — 続きの位置はカーソルが運ぶ。 */
+  /** 明細 1 行。仕訳の ID は出さない。 */
   public record LedgerEntry(
       OffsetDateTime occurredAt,
       PointEntryType entryType,
@@ -34,26 +32,12 @@ public class MemberLedgerQueryService {
       String reason,
       String actorName) {}
 
-  /** 会員 1 人の明細（全種別・全店舗）を新しい順に。続きはカーソルで指す（本人向けと同じ理由）。 */
+  /** 会員 1 人の明細（全種別・全店舗）。 */
   @Transactional(readOnly = true)
-  public CursorPage<LedgerEntry> entries(long memberId, String cursor, int requestedSize) {
-    int size = CursorPage.clampSize(requestedSize);
-    Limit limit = Limit.of(size + 1);
-    List<MemberLedgerEntryView> fetched =
-        cursor == null
-            ? pointEntryRepository.findLedgerEntryViews(memberId, limit)
-            : fetchAfter(memberId, PageCursor.decode(cursor), limit);
-    return CursorPage.of(fetched, size, MemberLedgerQueryService::cursorOf)
+  public Page<LedgerEntry> entries(long memberId, Pageable pageable) {
+    return pointEntryRepository
+        .findLedgerEntryViews(memberId, pageable)
         .map(MemberLedgerQueryService::toEntry);
-  }
-
-  private List<MemberLedgerEntryView> fetchAfter(Long memberId, PageCursor cursor, Limit limit) {
-    return pointEntryRepository.findLedgerEntryViewsAfter(
-        memberId, cursor.timestampKey(), cursor.longId(), limit);
-  }
-
-  private static String cursorOf(MemberLedgerEntryView view) {
-    return new PageCursor(view.getCreatedAt().toString(), String.valueOf(view.getId())).encode();
   }
 
   private static LedgerEntry toEntry(MemberLedgerEntryView view) {

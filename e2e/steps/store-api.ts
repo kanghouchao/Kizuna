@@ -1292,7 +1292,7 @@ export async function listAuditEvents(
   request: APIRequestContext,
   token: string,
   action: string,
-): Promise<{ content: AuditEventSummary[]; next_cursor?: string | null }> {
+): Promise<{ content: AuditEventSummary[]; total_elements: number }> {
   const response = await request.get("/api/audit-events", {
     headers: { Authorization: `Bearer ${token}` },
     params: { action, size: 100 },

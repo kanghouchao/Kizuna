@@ -82,6 +82,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.IncompleteEventPublications;
@@ -272,9 +273,9 @@ class NotificationIntegrationTest {
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).containsExactly("permitted@example.invalid");
-    var history = notifications.history(storeId, email, row.id(), null, 10);
-    assertThat(history.content()).hasSize(1);
-    assertThat(history.content().getFirst().status()).isEqualTo("SENT");
+    var history = notifications.history(storeId, email, row.id(), PageRequest.of(0, 10));
+    assertThat(history.getContent()).hasSize(1);
+    assertThat(history.getContent().getFirst().status()).isEqualTo("SENT");
     assertThat(
             jdbc.queryForObject(
                 "select after_values::text from t_audit_events where target_id=? and action='NOTIFICATION_RESULT'",
@@ -318,7 +319,8 @@ class NotificationIntegrationTest {
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).hasSize(1);
-    assertThat(notifications.history(storeId, email, row.id(), null, 10).content()).hasSize(2);
+    assertThat(notifications.history(storeId, email, row.id(), PageRequest.of(0, 10)).getContent())
+        .hasSize(2);
   }
 
   @Test
@@ -329,8 +331,8 @@ class NotificationIntegrationTest {
     await(row.id(), "FAILED");
     assertThat(
             notifications
-                .history(storeId, email, row.id(), null, 10)
-                .content()
+                .history(storeId, email, row.id(), PageRequest.of(0, 10))
+                .getContent()
                 .getFirst()
                 .failureCode())
         .isEqualTo("UNAVAILABLE");
@@ -452,8 +454,8 @@ class NotificationIntegrationTest {
     assertThat(transport.results).isEmpty();
     assertThat(
             notifications
-                .history(storeId, email, row.id(), null, 10)
-                .content()
+                .history(storeId, email, row.id(), PageRequest.of(0, 10))
+                .getContent()
                 .getFirst()
                 .failureCode())
         .isEqualTo("AUTHORIZATION_DENIED");

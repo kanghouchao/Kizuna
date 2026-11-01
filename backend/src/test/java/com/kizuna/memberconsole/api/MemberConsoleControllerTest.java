@@ -39,7 +39,9 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -170,16 +172,20 @@ class MemberConsoleControllerTest {
   }
 
   @Test
-  @DisplayName("明細は cursor と size を service へ渡すこと")
-  void pointEntriesPassCursorAndSize() throws Exception {
-    when(memberConsoleService.entries(7L, "abc", 5))
-        .thenReturn(new com.kizuna.shared.web.CursorPage<>(List.of(), null));
+  @DisplayName("明細は記帳の新しい順を既定の並びとして service へ渡し、Page で返すこと")
+  void pointEntriesAreAPageNewestFirst() throws Exception {
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(memberConsoleService.entries(eq(7L), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
-        .perform(get("/members/7/point-entries?cursor=abc&size=5").with(staff("PERM_MEMBER_VIEW")))
-        .andExpect(status().isOk());
+        .perform(get("/members/7/point-entries").with(staff("PERM_MEMBER_VIEW")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
 
-    verify(memberConsoleService).entries(7L, "abc", 5);
+    assertThat(pageable.getValue().getPageSize()).isEqualTo(20);
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
   }
 
   @Test

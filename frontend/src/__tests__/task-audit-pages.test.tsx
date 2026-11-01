@@ -48,7 +48,7 @@ beforeEach(() => {
   tasks.candidates.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 });
 test('実行要求の応答を受け取れなくても同じ入力の再送には同じ実行キーを使う', async () => {
-  tasks.list.mockResolvedValue({ rows: [], nextCursor: null });
+  tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
   tasks.candidates.mockResolvedValue({
     rows: [{ id: 10, display_name: '確認処理' }],
     page: 0,
@@ -83,7 +83,7 @@ test('実行要求の応答を受け取れなくても同じ入力の再送に�
 test('履歴取得の失敗を空一覧と区別し再取得できる', async () => {
   tasks.list
     .mockRejectedValueOnce(new Error('network'))
-    .mockResolvedValueOnce({ rows: [], nextCursor: null });
+    .mockResolvedValueOnce({ rows: [], page: 0, pageCount: 0, total: 0 });
   render(<TaskExecutionsPage />);
   const failure = await screen.findByRole('alert');
   expect(failure).toHaveTextContent('実行履歴を取得できませんでした');
@@ -92,7 +92,7 @@ test('履歴取得の失敗を空一覧と区別し再取得できる', async ()
   expect(await screen.findByText('実行履歴がありません')).toBeVisible();
 });
 test('再試行の競合では理由を保持し成功するまで履歴を変更しない', async () => {
-  tasks.list.mockResolvedValue({ rows: [row], nextCursor: null });
+  tasks.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
   tasks.get.mockResolvedValue({
     execution: row,
     logical_key: 'daily',
@@ -147,7 +147,7 @@ test('監査詳細の取得失敗は一覧の値で埋めず領域内で再取�
     source_type: null,
     source_id: null,
   };
-  audit.list.mockResolvedValue({ rows: [event], nextCursor: null });
+  audit.list.mockResolvedValue({ rows: [event], page: 0, pageCount: 1, total: 1 });
   audit.get.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({
     event,
     before_values: { role_ids: '1' },
@@ -163,7 +163,7 @@ test('監査詳細の取得失敗は一覧の値で埋めず領域内で再取�
 });
 
 test('処理を変更すると旧主体を消し、新しい処理の候補だけを使う', async () => {
-  tasks.list.mockResolvedValue({ rows: [], nextCursor: null });
+  tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
   tasks.candidates.mockImplementation(async (_page, taskName) => ({
     rows: [
       {
@@ -218,7 +218,7 @@ test('店舗単位の登録処理は店舗選択後に候補を取得し文字�
     pageCount: 1,
     total: 1,
   });
-  tasks.list.mockResolvedValue({ rows: [], nextCursor: null });
+  tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
   tasks.candidates.mockImplementation(async (_page, name, store) => ({
     rows: store ? [{ id: 10, display_name: '通知主体' }] : [],
     page: 0,
@@ -255,7 +255,7 @@ test('登録処理の手動権限がなければ実行操作を送らない', as
   tasks.taskTypes.mockResolvedValue([
     { name: 'SERVICE_IDENTITY_CHECK', scope: 'PLATFORM', manual_allowed: false },
   ]);
-  tasks.list.mockResolvedValue({ rows: [], nextCursor: null });
+  tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
   tasks.candidates.mockResolvedValue({
     rows: [{ id: 10, display_name: '確認主体' }],
     page: 0,
@@ -266,4 +266,50 @@ test('登録処理の手動権限がなければ実行操作を送らない', as
   expect(await screen.findByText('この処理の手動実行権限がありません。')).toBeVisible();
   expect(await screen.findByRole('button', { name: '実行確認を記録' })).toBeDisabled();
   expect(tasks.create).not.toHaveBeenCalled();
+});
+
+test('監査履歴はページ番号で送り、検索条件を保ったまま次のページを取り直す', async () => {
+  const event = (id: number, action: string) => ({
+    id,
+    occurred_at: '2026-10-07T01:00:00Z',
+    actor_id: 1,
+    actor_type: 'STAFF',
+    actor_name: '担当',
+    store_id: null,
+    action,
+    result: 'SUCCEEDED',
+    target_type: 'ROLE',
+    target_id: '5',
+    source_type: null,
+    source_id: null,
+  });
+  audit.list
+    .mockResolvedValueOnce({ rows: [event(1, 'FIRST_PAGE')], page: 0, pageCount: 2, total: 51 })
+    .mockResolvedValueOnce({ rows: [event(2, 'SECOND_PAGE')], page: 1, pageCount: 2, total: 51 });
+  render(<AuditEventsPage />);
+  expect(await screen.findByText('FIRST_PAGE')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  expect(await screen.findByText('SECOND_PAGE')).toBeInTheDocument();
+  expect(audit.list).toHaveBeenLastCalledWith(1, '');
+});
+
+test('実行履歴はページ番号で送り、次のページを取り直す', async () => {
+  tasks.list
+    .mockResolvedValueOnce({
+      rows: [{ ...row, service_name: '一頁目の処理' }],
+      page: 0,
+      pageCount: 2,
+      total: 51,
+    })
+    .mockResolvedValueOnce({
+      rows: [{ ...row, id: 2, service_name: '二頁目の処理' }],
+      page: 1,
+      pageCount: 2,
+      total: 51,
+    });
+  render(<TaskExecutionsPage />);
+  expect(await screen.findByText('一頁目の処理')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  expect(await screen.findByText('二頁目の処理')).toBeInTheDocument();
+  expect(tasks.list).toHaveBeenLastCalledWith(1);
 });

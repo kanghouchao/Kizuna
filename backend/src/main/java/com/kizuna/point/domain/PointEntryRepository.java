@@ -2,11 +2,12 @@ package com.kizuna.point.domain;
 
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -198,34 +199,16 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       """;
 
   // 台帳は店舗で分割しない（ADR 0006）。本人の会員 ID の一致が唯一の隔離境界で、
-  // 先頭と続きの問い合わせが同じ条件を共有する。
+  // 本体と総件数の問い合わせが同じ条件を共有する。並びは呼出側の Pageable が決める。
   String MEMBER_ENTRY_WHERE = " where e.memberId = :memberId ";
 
-  // 新しい仕訳から。カーソルの比較（下記 AFTER 条件）はこの並びと同じ列の組で行う。
-  String MEMBER_ENTRY_ORDER = " order by e.createdAt desc, e.id desc";
+  String MEMBER_ENTRY_COUNT =
+      "select count(e) from com.kizuna.point.domain.PointEntry e" + MEMBER_ENTRY_WHERE;
 
-  /**
-   * 会員本人のポイント明細（全種別・跨店集約）の先頭。
-   *
-   * <p>並びは記帳時刻の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
-   */
-  @Query(MEMBER_ENTRY_SELECT + MEMBER_ENTRY_WHERE + MEMBER_ENTRY_ORDER)
-  List<MemberPointEntryView> findMemberEntryViews(@Param("memberId") Long memberId, Limit limit);
-
-  /** 会員本人のポイント明細の続き。渡された位置より後ろ（＝より古い側）だけを返す。 */
-  @Query(
-      MEMBER_ENTRY_SELECT
-          + MEMBER_ENTRY_WHERE
-          + """
-            and (e.createdAt < :cursorCreatedAt
-                 or (e.createdAt = :cursorCreatedAt and e.id < :cursorId))
-            """
-          + MEMBER_ENTRY_ORDER)
-  List<MemberPointEntryView> findMemberEntryViewsAfter(
-      @Param("memberId") Long memberId,
-      @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
-      @Param("cursorId") Long cursorId,
-      Limit limit);
+  /** 会員本人のポイント明細（全種別・跨店集約）。 */
+  @Query(value = MEMBER_ENTRY_SELECT + MEMBER_ENTRY_WHERE, countQuery = MEMBER_ENTRY_COUNT)
+  Page<MemberPointEntryView> findMemberEntryViews(
+      @Param("memberId") Long memberId, Pageable pageable);
 
   // 職員が見る明細。本人向け（MEMBER_ENTRY_SELECT）と違い理由と実行者の表示名まで出す — 退会消去・取消・
   // 手動調整の「なぜ」は運用側の照会にこそ要る。実行者は消えうるので left join。
@@ -239,22 +222,8 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
         left join com.kizuna.user.domain.User au on au.id = e.actorUserId
       """;
 
-  /** 職員が見る会員 1 人の明細（全種別・全店舗）の先頭。並びと境界は本人向けと同じ。 */
-  @Query(LEDGER_ENTRY_SELECT + MEMBER_ENTRY_WHERE + MEMBER_ENTRY_ORDER)
-  List<MemberLedgerEntryView> findLedgerEntryViews(@Param("memberId") Long memberId, Limit limit);
-
-  /** 職員が見る明細の続き。 */
-  @Query(
-      LEDGER_ENTRY_SELECT
-          + MEMBER_ENTRY_WHERE
-          + """
-            and (e.createdAt < :cursorCreatedAt
-                 or (e.createdAt = :cursorCreatedAt and e.id < :cursorId))
-            """
-          + MEMBER_ENTRY_ORDER)
-  List<MemberLedgerEntryView> findLedgerEntryViewsAfter(
-      @Param("memberId") Long memberId,
-      @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
-      @Param("cursorId") Long cursorId,
-      Limit limit);
+  /** 職員が見る会員 1 人の明細（全種別・全店舗）。境界は本人向けと同じ。 */
+  @Query(value = LEDGER_ENTRY_SELECT + MEMBER_ENTRY_WHERE, countQuery = MEMBER_ENTRY_COUNT)
+  Page<MemberLedgerEntryView> findLedgerEntryViews(
+      @Param("memberId") Long memberId, Pageable pageable);
 }

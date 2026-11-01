@@ -12,7 +12,7 @@ import {
 } from '@/entities/member';
 import { POINT_ENTRY_TYPE_LABELS, PointEntryType } from '@/entities/point';
 import { hasPermission, useMe } from '@/entities/user';
-import { useCursorList, useResource } from '@/shared/lib';
+import { useListPage, useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -20,6 +20,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Pager,
   RegionError,
   Table,
   TableBody,
@@ -31,7 +32,7 @@ import {
 import { StaffWithdrawalDialog } from './StaffWithdrawalDialog';
 import { formatDateTime, formatSignedPoints } from './format';
 
-/** 明細の 1 回の読み込み件数。続きはカーソルで 1 回ずつ継ぎ足す。 */
+/** 明細の 1 ページの件数。 */
 const ENTRY_PAGE_SIZE = 20;
 
 const LINK_STATUS_LABELS = { ACTIVE: '有効', RELEASED: '解除済み' } as const;
@@ -357,8 +358,8 @@ function entryTypeLabel(entry: AdminMemberLedgerEntry): string {
 }
 
 function LedgerEntries({ id }: { id: number }) {
-  const entries = useCursorList<AdminMemberLedgerEntry>(cursor =>
-    adminMemberApi.pointEntries(id, { cursor, size: ENTRY_PAGE_SIZE })
+  const entries = useListPage<AdminMemberLedgerEntry>(page =>
+    adminMemberApi.pointEntries(id, { page, size: ENTRY_PAGE_SIZE })
   );
   return (
     <Card>
@@ -369,7 +370,10 @@ function LedgerEntries({ id }: { id: number }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {entries.failed ? (
-          <RegionError message="明細を取得できませんでした。" onRetry={entries.reload} />
+          <RegionError
+            message="明細を取得できませんでした。"
+            onRetry={() => void entries.reload()}
+          />
         ) : entries.isLoading && entries.rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">読み込み中...</p>
         ) : entries.rows.length === 0 ? (
@@ -388,7 +392,7 @@ function LedgerEntries({ id }: { id: number }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {/* 行は末尾に継ぎ足されるだけで並べ替えも削除も起きないため、位置がそのまま識別子になる */}
+              {/* ページ内の行は並べ替えも削除も起きないため、位置がそのまま識別子になる */}
               {entries.rows.map((entry, index) => (
                 <TableRow key={index}>
                   <TableCell className="text-foreground">
@@ -416,16 +420,12 @@ function LedgerEntries({ id }: { id: number }) {
             </TableBody>
           </Table>
         )}
-        {entries.hasMore && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={entries.loadMore}
-            disabled={entries.isLoading}
-          >
-            {entries.isLoading ? '読み込み中...' : 'さらに読み込む'}
-          </Button>
-        )}
+        <Pager
+          page={entries.page}
+          pageCount={entries.pageCount}
+          disabled={entries.isLoading}
+          onPageChange={page => void entries.onPageChange(page)}
+        />
       </CardContent>
     </Card>
   );

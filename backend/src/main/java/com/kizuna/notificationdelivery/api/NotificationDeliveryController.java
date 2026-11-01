@@ -9,10 +9,13 @@ import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -21,7 +24,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -51,12 +53,11 @@ public class NotificationDeliveryController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_NOTIFICATION_VIEW')")
-  public CursorPage<DeliverySummary> list(
+  public Page<DeliverySummary> list(
       @CurrentStore Long storeId,
       Authentication auth,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "50") int size) {
-    return notifications.list(storeId, auth.getName(), cursor, size);
+      @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+    return notifications.list(storeId, auth.getName(), pageable);
   }
 
   @GetMapping("/{id}")
@@ -92,12 +93,11 @@ public class NotificationDeliveryController {
 
   @GetMapping("/{id}/attempts")
   @PreAuthorize("hasAuthority('PERM_NOTIFICATION_VIEW')")
-  public CursorPage<DeliveryAttemptResponse> history(
+  public Page<DeliveryAttemptResponse> history(
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "50") int size) {
-    return notifications.history(storeId, auth.getName(), id, cursor, size);
+      @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+    return notifications.history(storeId, auth.getName(), id, pageable);
   }
 }
