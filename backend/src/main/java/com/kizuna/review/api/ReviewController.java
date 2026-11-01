@@ -154,10 +154,8 @@ public class ReviewController {
   @GetMapping("/public")
   @PermitAll
   public Page<ReviewPublicResponse> listPublic(
-      @CurrentStore Long storeId,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return reviews.listPublic(storeId, page, size);
+      @CurrentStore Long storeId, @PageableDefault(size = 20) Pageable pageable) {
+    return reviews.listPublic(storeId, pageable);
   }
 
   @GetMapping("/{id}")

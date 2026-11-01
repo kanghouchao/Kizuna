@@ -36,6 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -323,19 +324,17 @@ public class ReviewService {
   }
 
   @Transactional(readOnly = true)
-  public Page<ReviewPublicResponse> listPublic(Long storeId, int page, int size) {
-    if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
-      throw new ServiceException("一覧のページ条件を確認してください");
+  public Page<ReviewPublicResponse> listPublic(Long storeId, Pageable pageable) {
+    // 並びは公開設定が決める。呼出側の sort は受け取らない
+    var page =
+        PageRequest.of(
+            pageable.getPageNumber(),
+            pageable.getPageSize(),
+            Publication.order(ReviewRecord::getPublication, ReviewRecord::getId));
     return reviews
         .findBy(
             ReviewSummaryView.displayed(storeId, OffsetDateTime.now(clock)),
-            q ->
-                q.as(ReviewPublicView.class)
-                    .page(
-                        PageRequest.of(
-                            page,
-                            size,
-                            Publication.order(ReviewRecord::getPublication, ReviewRecord::getId))))
+            q -> q.as(ReviewPublicView.class).page(page))
         .map(r -> ReviewPublicResponse.of(r, clock.getZone()));
   }
 

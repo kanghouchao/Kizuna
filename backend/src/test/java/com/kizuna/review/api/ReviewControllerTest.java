@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +33,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -146,5 +148,21 @@ class ReviewControllerTest {
                 .header("X-Store-ID", STORE_ID.toString())
                 .principal(currentUser()))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("公開口コミ一覧はページ番号と取得件数を Pageable として service へ渡すこと")
+  @WithAnonymousUser
+  void publicListBindsThePageRequest() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(reviews.listPublic(eq(STORE_ID), pageable.capture())).thenReturn(Page.empty());
+
+    mockMvc
+        .perform(get("/reviews/public?page=2&size=10").header("X-Store-ID", STORE_ID.toString()))
+        .andExpect(status().isOk());
+
+    assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
+    assertThat(pageable.getValue().getPageSize()).isEqualTo(10);
   }
 }
