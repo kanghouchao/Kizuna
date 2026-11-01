@@ -10,6 +10,8 @@ interface ImageUploadProps {
   purpose: UploadPurpose;
   value?: string;
   onChange: (url: string) => void;
+  /** 確定前の画像で親フォームが保存しないよう、アップロードの開始と終了を知らせる。 */
+  onUploadingChange?: (uploading: boolean) => void;
   className?: string;
   required?: boolean;
   accept?: string;
@@ -20,6 +22,7 @@ export default function ImageUpload({
   purpose,
   value,
   onChange,
+  onUploadingChange,
   required = false,
   className = 'w-40 h-52',
   accept = 'image/jpeg,image/png,image/webp',
@@ -40,6 +43,7 @@ export default function ImageUpload({
 
     try {
       setIsUploading(true);
+      onUploadingChange?.(true);
       const response = await fileApi.upload(file, purpose);
       onChange(response.url ?? '');
       notify.success('画像をアップロードしました');
@@ -48,6 +52,7 @@ export default function ImageUpload({
       setPreview(value);
     } finally {
       setIsUploading(false);
+      onUploadingChange?.(false);
     }
   };
 

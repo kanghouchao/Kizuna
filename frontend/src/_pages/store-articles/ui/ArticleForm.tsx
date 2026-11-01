@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ARTICLE_BODY_MAX, ARTICLE_TITLE_MAX, ArticleInput } from '@/entities/content/article';
 import {
@@ -31,6 +32,7 @@ export function ArticleForm({
   submitLabel: string;
   onSubmit: (input: ArticleInput) => Promise<void>;
 }) {
+  const [uploading, setUploading] = useState(false);
   const form = useForm<ArticleFormValues>({
     defaultValues: {
       title: initial?.title ?? '',
@@ -43,9 +45,10 @@ export function ArticleForm({
       <form
         className="space-y-6"
         noValidate
-        onSubmit={form.handleSubmit(values =>
-          onSubmit({ ...values, cover_image_url: values.cover_image_url || null })
-        )}
+        onSubmit={form.handleSubmit(async values => {
+          if (uploading) return;
+          await onSubmit({ ...values, cover_image_url: values.cover_image_url || null });
+        })}
       >
         <FormField
           control={form.control}
@@ -98,12 +101,13 @@ export function ArticleForm({
                 purpose="article-cover"
                 value={value || undefined}
                 onChange={onChange}
+                onUploadingChange={setUploading}
                 className="w-full max-w-md aspect-video"
               />
             )}
           />
         </div>
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy || uploading}>
           {submitLabel}
         </Button>
       </form>
