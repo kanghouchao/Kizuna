@@ -15,6 +15,7 @@ import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.TiebreakerPageableArgumentResolver;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
@@ -41,6 +42,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -91,6 +93,7 @@ class ArticleIntegrationTest {
     mvc =
         MockMvcBuilders.standaloneSetup(context.getBean(ArticleController.class))
             .setCustomArgumentResolvers(
+                new TiebreakerPageableArgumentResolver(new PageableHandlerMethodArgumentResolver()),
                 new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
             .defaultRequest(
                 get("/")
@@ -280,7 +283,7 @@ class ArticleIntegrationTest {
   }
 
   @Test
-  void listIsNewestUpdateFirstAndRejectsOutOfRangePage() throws Exception {
+  void listIsNewestUpdateFirstWhateverTheRequestedSortAndCapsPageSize() throws Exception {
     String first = create("一番目", BODY);
     String second = create("二番目", BODY);
     call(put("/articles/" + first).content("{\"title\":\"更新\",\"body\":\"b\",\"version\":0}"), 200);
@@ -288,8 +291,10 @@ class ArticleIntegrationTest {
     var rows = call(get("/articles"), 200).get("content");
     assertThat(List.of(rows.get(0).get("id").asString(), rows.get(1).get("id").asString()))
         .containsExactly(first, second);
+    var requestedSort = call(get("/articles").param("sort", "title,asc"), 200).get("content");
+    assertThat(requestedSort.get(0).get("id").asString()).isEqualTo(first);
+    call(get("/articles").param("size", "100"), 200);
     call(get("/articles").param("size", "101"), 400);
-    call(get("/articles").param("page", "-1"), 400);
   }
 
   @Test

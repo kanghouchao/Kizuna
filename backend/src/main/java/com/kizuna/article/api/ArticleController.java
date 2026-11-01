@@ -6,10 +6,15 @@ import com.kizuna.article.api.dto.ArticleRequest;
 import com.kizuna.article.api.dto.ArticleResponse;
 import com.kizuna.article.api.dto.ArticleSummaryResponse;
 import com.kizuna.article.application.ArticleService;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.CurrentStore;
 import jakarta.validation.Valid;
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,34 +28,37 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 記事の管理 API。一覧は更新の新しい順に固定し、呼出側の並び指定は受けない。 */
 @RestController
 @RequestMapping("/articles")
 @RequiredArgsConstructor
 public class ArticleController {
+  private static final int MAX_PAGE_SIZE = 100;
+
   private final ArticleService articles;
+  private final Clock clock;
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('PERM_ARTICLE_MANAGE')")
   public ArticleIdResponse create(
       @CurrentStore Long storeId, @Valid @RequestBody ArticleRequest request) {
-    return articles.create(storeId, request.title(), request.body());
+    return new ArticleIdResponse(articles.create(storeId, request.title(), request.body()));
   }
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ARTICLE_MANAGE')")
   public Page<ArticleSummaryResponse> list(
-      @CurrentStore Long storeId,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return articles.list(storeId, page, size);
+      @CurrentStore Long storeId, @PageableDefault(size = 20) Pageable pageable) {
+    if (pageable.getPageSize() > MAX_PAGE_SIZE)
+      throw new ServiceException("1 ページの件数は " + MAX_PAGE_SIZE + " 件までです");
+    var now = now();
+    return articles.list(storeId, pageable).map(row -> ArticleSummaryResponse.of(row, now));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ARTICLE_MANAGE')")
   public ArticleResponse get(@CurrentStore Long storeId, @PathVariable String id) {
-    return articles.get(storeId, id);
+    return ArticleResponse.of(articles.get(storeId, id), now());
   }
 
   @PutMapping("/{id}")
@@ -59,7 +67,9 @@ public class ArticleController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody ArticleRequest request) {
-    return articles.edit(storeId, id, request.title(), request.body(), request.expectedVersion());
+    var article =
+        articles.edit(storeId, id, request.title(), request.body(), request.expectedVersion());
+    return ArticleResponse.of(article, now());
   }
 
   @PutMapping("/{id}/publication")
@@ -68,7 +78,8 @@ public class ArticleController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody ArticlePublicationRequest request) {
-    return articles.publish(storeId, id, request.publication(), request.version());
+    var article = articles.publish(storeId, id, request.publication(), request.version());
+    return ArticleResponse.of(article, now());
   }
 
   @DeleteMapping("/{id}")
@@ -77,5 +88,9 @@ public class ArticleController {
   public void delete(
       @CurrentStore Long storeId, @PathVariable String id, @RequestParam long version) {
     articles.delete(storeId, id, version);
+  }
+
+  private OffsetDateTime now() {
+    return OffsetDateTime.now(clock);
   }
 }

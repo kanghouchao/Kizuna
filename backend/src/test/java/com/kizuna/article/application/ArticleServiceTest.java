@@ -15,13 +15,9 @@ import com.kizuna.article.domain.Article;
 import com.kizuna.article.domain.ArticleRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
-import java.time.Clock;
-import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,9 +29,7 @@ class ArticleServiceTest {
   private static final Long STORE = 7L;
   private final ArticleRepository articles = mock(ArticleRepository.class);
   private final BusinessAudit audit = mock(BusinessAudit.class);
-  private final ArticleService service =
-      new ArticleService(
-          articles, audit, Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC));
+  private final ArticleService service = new ArticleService(articles, audit);
   private Article article;
 
   @BeforeEach
@@ -58,7 +52,7 @@ class ArticleServiceTest {
   void createAuditsWithoutTheBody() {
     var created = service.create(STORE, "新しい記事", "秘密の本文");
 
-    assertThat(created.id()).isEqualTo("new");
+    assertThat(created).isEqualTo("new");
     var after = captureAfter("ARTICLE_CREATED", "new");
     assertThat(after).containsEntry("title", "新しい記事").containsEntry("published", "false");
     assertThat(after.values()).noneMatch(v -> v.contains("秘密"));
@@ -66,9 +60,9 @@ class ArticleServiceTest {
 
   @Test
   void editMarksTheBodyAsChangedWithoutCopyingIt() {
-    var response = service.edit(STORE, "a1", "改題", "差し替えた秘密", 0);
+    var edited = service.edit(STORE, "a1", "改題", "差し替えた秘密", 0);
 
-    assertThat(response.body()).isEqualTo("差し替えた秘密");
+    assertThat(edited.getBody()).isEqualTo("差し替えた秘密");
     var after = captureAfter("ARTICLE_UPDATED", "a1");
     assertThat(after).containsEntry("redacted_fields_changed", "body");
     assertThat(after.values()).noneMatch(v -> v.contains("秘密"));
@@ -82,15 +76,12 @@ class ArticleServiceTest {
   }
 
   @Test
-  void publishIsDisplayedInsideItsPeriod() {
-    var response =
-        service.publish(
-            STORE,
-            "a1",
-            new Publication(true, OffsetDateTime.parse("2026-06-01T00:00:00Z"), null, 3),
-            0);
+  void publishReplacesThePublicationAndAuditsIt() {
+    var next = new Publication(true, OffsetDateTime.parse("2026-06-01T00:00:00Z"), null, 3);
 
-    assertThat(response.displayed()).isTrue();
+    var published = service.publish(STORE, "a1", next, 0);
+
+    assertThat(published.getPublication()).isEqualTo(next);
     assertThat(captureAfter("ARTICLE_PUBLICATION_CHANGED", "a1"))
         .containsEntry("published", "true")
         .containsEntry("display_order", "3");
@@ -121,12 +112,6 @@ class ArticleServiceTest {
     when(articles.findByIdAndStoreId("a1", 8L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.get(8L, "a1")).isInstanceOf(NotFoundException.class);
-  }
-
-  @Test
-  void outOfRangePageIsRejected() {
-    assertThatThrownBy(() -> service.list(STORE, -1, 20)).isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> service.list(STORE, 0, 101)).isInstanceOf(ServiceException.class);
   }
 
   @SuppressWarnings("unchecked")
