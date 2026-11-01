@@ -9,8 +9,7 @@ import java.time.OffsetDateTime;
  * <p>来店の正本は帰属記録（{@link OrderAttribution}）で、表示に要る来店日・店舗名・人数・担当は受注への join で導出する。会計金額・利用ポイント・顧客台帳の項目は
  * projection の段階で落ちる。
  *
- * <p>{@code createdAt} は続きの位置（カーソル）を作るためだけに持ち、応答へは出さない。{@code orderId}
- * も同じく応答へは出さず、当該受注の獲得ポイントを台帳から引くためだけに持つ。
+ * <p>{@code createdAt} は並びの鍵としてだけ持ち、応答へは出さない。{@code orderId} も同じく応答へは出さず、当該受注の獲得ポイントを台帳から引くためだけに持つ。
  */
 public interface MemberVisitView {
 

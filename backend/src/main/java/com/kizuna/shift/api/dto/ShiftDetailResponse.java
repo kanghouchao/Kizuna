@@ -40,7 +40,7 @@ public class ShiftDetailResponse {
    * このシフトを生んだ出勤希望（NEW）。店舗が直接作成したシフトでは出ない。
    *
    * <p>1 シフトにつき高々 1 本なので詳細へ埋める。増え続ける変更申請の履歴は有界でないため {@code GET /shifts/{id}/change-requests}
-   * へ分け、カーソルで辿る（backend/AGENTS.md の Pagination）。
+   * へ分け、ページで辿る（backend/AGENTS.md の Pagination）。
    */
   private ShiftRequestLineageResponse origin;
 

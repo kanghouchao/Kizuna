@@ -110,7 +110,7 @@ public interface OrderView {
 
   OffsetDateTime getCancelledAt();
 
-  /** 受付時刻。予約受付 inbox の並びの鍵であり、続きを指すカーソルもこの値から組む。 */
+  /** 受付時刻。予約受付 inbox の並びの鍵。 */
   OffsetDateTime getCreatedAt();
 
   /**
