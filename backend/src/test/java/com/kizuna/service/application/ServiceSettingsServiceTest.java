@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -36,11 +37,11 @@ class ServiceSettingsServiceTest {
   void listsNewestServicesFirst() {
     when(items.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
 
-    settings.list(7L, null, false, 0, 20);
+    var newestFirst = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+    settings.list(7L, null, false, newestFirst);
 
     var pageable = ArgumentCaptor.forClass(Pageable.class);
     verify(items).findAll(any(Specification.class), pageable.capture());
-    assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+    assertThat(pageable.getValue()).isEqualTo(newestFirst);
   }
 }

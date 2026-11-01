@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -18,6 +19,7 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,14 +79,7 @@ class MonthlyRemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @CsvSource({
-    "2026-13,1,0",
-    "2026-9,1,0",
-    "0000-01,1,0",
-    "2026-09,0,0",
-    "2026-09,1,-1",
-    "2026-09,1,2147483647"
-  })
+  @CsvSource({"2026-13,1,0", "2026-9,1,0", "0000-01,1,0", "2026-09,0,0", "2026-09,1,2147483647"})
   @DisplayName("店舗受注権限でも不正な本人・対象月・ページは入力エラーになる")
   void rejectsInvalidCriteria(String month, String person, String page) throws Exception {
     mvc.perform(request("").param("person_id", person).param("month", month).param("page", page))
@@ -118,15 +113,27 @@ class MonthlyRemunerationControllerTest {
   }
 
   @Test
-  @DisplayName("横断照会権限だけでも現在店舗の本人候補へ到達する（不正なページは400）")
+  @DisplayName("横断照会権限だけでも現在店舗の本人候補へ到達し、範囲外のページ指定は既定へ正規化される")
   @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
-  void crossStoreViewerReachesCandidates() throws Exception {
-    mvc.perform(request("/casts").param("page", "-1")).andExpect(status().isBadRequest());
+  @SuppressWarnings("unchecked")
+  void crossStoreViewerReachesCandidatesWithNormalizedPaging() throws Exception {
+    TypedQuery<Tuple> rows = mock(TypedQuery.class, RETURNS_SELF);
+    TypedQuery<Long> count = mock(TypedQuery.class, RETURNS_SELF);
+    when(entityManager.createQuery(anyString(), eq(Tuple.class))).thenReturn(rows);
+    when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(count);
+    when(count.getSingleResult()).thenReturn(0L);
+    mvc.perform(request("/casts").param("page", "-1").param("size", "0"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.number").value(0))
+        .andExpect(jsonPath("$.size").value(20));
+    verify(rows).setFirstResult(0);
+    verify(rows).setMaxResults(20);
   }
 
   @Test
-  @DisplayName("本人候補の不正なページ指定も400にする")
-  void invalidCandidatePage() throws Exception {
-    mvc.perform(request("/casts").param("page", "-1")).andExpect(status().isBadRequest());
+  @DisplayName("本人候補の取得位置が int を超えるページ指定は400にする")
+  void candidateOffsetBeyondIntIs400() throws Exception {
+    mvc.perform(request("/casts").param("page", "99999999").param("size", "100"))
+        .andExpect(status().isBadRequest());
   }
 }

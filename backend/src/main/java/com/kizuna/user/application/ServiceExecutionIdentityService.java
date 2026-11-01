@@ -1,7 +1,6 @@
 package com.kizuna.user.application;
 
 import com.kizuna.audit.recording.AuditActor;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -11,8 +10,7 @@ import com.kizuna.user.domain.UserType;
 import java.util.Collections;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -68,13 +66,7 @@ public class ServiceExecutionIdentityService {
 
   public record Candidate(Long id, String displayName) {}
 
-  public Page<Candidate> candidates(int page, int size, PermissionCode permission) {
-    return candidates(page, size, permission, null);
-  }
-
-  public Page<Candidate> candidates(int page, int size, PermissionCode permission, Long storeId) {
-    if (page < 0 || size < 1 || size > 100) throw new ServiceException("ページ指定が不正です");
-    var pageable = PageRequest.of(page, size, Sort.by(User::getDisplayName, User::getId));
+  public Page<Candidate> candidates(Pageable pageable, PermissionCode permission, Long storeId) {
     var roleIds = roles.findIdsByPermissionCode(PermissionCode.TASK_EXECUTE.name());
     var taskRoleIds = roles.findIdsByPermissionCode(permission.name());
     if (roleIds.isEmpty() || taskRoleIds.isEmpty()) return Page.empty(pageable);

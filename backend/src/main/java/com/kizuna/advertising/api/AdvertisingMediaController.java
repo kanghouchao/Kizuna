@@ -5,6 +5,8 @@ import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.shared.storescope.CurrentStore;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -26,12 +28,16 @@ public class AdvertisingMediaController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
   public ResponseEntity<AdvertisingMediaSummaryResponse> list(
-      @CurrentStore Long storeId, @RequestParam MultiValueMap<String, String> params) {
+      @CurrentStore Long storeId,
+      @RequestParam MultiValueMap<String, String> params,
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
     var query = AdvertisingSummaryQuery.parse(params, false);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(
-            AdvertisingMediaSummaryResponse.of(service.view(storeId, query.month()), query.page()));
+        .body(AdvertisingMediaSummaryResponse.of(service.view(storeId, query.month()), pageable));
   }
 
   @GetMapping("/exports")

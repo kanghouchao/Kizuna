@@ -6,11 +6,10 @@ import com.kizuna.cast.api.dto.AdminCastSummaryResponse;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,8 +21,7 @@ public class AdminCastService {
   private final CastEnrollmentRepository enrollments;
 
   @Transactional(readOnly = true)
-  public Page<AdminCastSummaryResponse> list(String search, int page, int size) {
-    var pageable = pageRequest(page, size);
+  public Page<AdminCastSummaryResponse> list(String search, Pageable pageable) {
     String term = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
     String pattern = "%" + EscapeCharacter.DEFAULT.escape(term) + "%";
     return people
@@ -41,8 +39,7 @@ public class AdminCastService {
   }
 
   @Transactional(readOnly = true)
-  public Page<AdminCastEnrollmentResponse> enrollments(Long id, int page, int size) {
-    var pageable = pageRequest(page, size);
+  public Page<AdminCastEnrollmentResponse> enrollments(Long id, Pageable pageable) {
     if (!people.existsById(id)) throw new NotFoundException("キャスト本人が見つかりません");
     return enrollments
         .findPersonEnrollments(id, pageable)
@@ -56,12 +53,5 @@ public class AdminCastService {
                     row.getStatus(),
                     row.getStartedOn(),
                     row.getEndedAt()));
-  }
-
-  private static PageRequest pageRequest(int page, int size) {
-    if (page < 0 || size < 1 || size > 100) {
-      throw new ServiceException("page は 0 以上、size は 1〜100 を指定してください");
-    }
-    return PageRequest.of(page, size);
   }
 }

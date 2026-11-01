@@ -288,16 +288,53 @@ class RemunerationControllerTest {
         .andExpect(status().isForbidden());
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"0", "101", "-1"})
-  void pageLimitsAreValidated(String size) throws Exception {
+  @Test
+  void statementPagesAreBoundSeparatelyAndOutOfRangeValuesAreNormalized() throws Exception {
+    var orderPage = ArgumentCaptor.forClass(Pageable.class);
+    var bonusPage = ArgumentCaptor.forClass(Pageable.class);
+    when(orders.orders(eq(1L), eq(34L), any(), orderPage.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    when(records.bonuses(eq(1L), eq(34L), any(), any(), bonusPage.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
     mvc.perform(
             get("/remuneration-statements")
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09")
-                .param("size", size))
+                .param("order_page", "2")
+                .param("order_size", "0")
+                .param("bonus_page", "-1")
+                .param("bonus_size", "101"))
+        .andExpect(status().isOk());
+    assertThat(orderPage.getValue().getPageNumber()).isEqualTo(2);
+    assertThat(orderPage.getValue().getPageSize()).isEqualTo(20);
+    assertThat(bonusPage.getValue().getPageNumber()).isZero();
+    assertThat(bonusPage.getValue().getPageSize()).isEqualTo(100);
+
+    mvc.perform(
+            get("/remuneration-statements")
+                .header("X-Store-ID", "1")
+                .param("person_id", "34")
+                .param("month", "2026-09")
+                .param("bonus_page", "99999999")
+                .param("bonus_size", "100"))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void bonusListIsAPageWithTheDefaultPaging() throws Exception {
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(records.bonuses(eq(1L), eq(34L), any(), any(), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    mvc.perform(
+            get("/bonus-awards")
+                .header("X-Store-ID", "1")
+                .param("person_id", "34")
+                .param("month", "2026-09"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    assertThat(pageable.getValue().getPageNumber()).isZero();
+    assertThat(pageable.getValue().getPageSize()).isEqualTo(20);
   }
 
   @Test

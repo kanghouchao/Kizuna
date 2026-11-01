@@ -34,6 +34,7 @@ import org.apache.poi.util.TempFile;
 import org.apache.poi.util.TempFileCreationStrategy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.data.domain.PageRequest;
 
 class AdvertisingReportResourceTest {
   final AppProperties properties = new AppProperties();
@@ -142,7 +143,8 @@ class AdvertisingReportResourceTest {
   }
 
   private OperationalReportResponse view() {
-    return service.viewStore(1L, "2026-09-01", "2026-09-30", "month", 0, 1, false, true);
+    return service.viewStore(
+        1L, "2026-09-01", "2026-09-30", "month", PageRequest.of(0, 1), false, true);
   }
 
   private byte[] export() throws IOException {

@@ -158,13 +158,15 @@ public class SurveyController {
   public Page<SurveySummaryResponse> list(
       @CurrentStore Long storeId,
       Authentication auth,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size,
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable,
       @RequestParam(required = false) String q,
       @RequestParam(name = "survey_id", required = false) String surveyId,
       @RequestParam(name = "latest_status", required = false) RevisionStatus latestStatus,
       @RequestParam(defaultValue = "CREATED_DESC") String sort) {
-    return reads.list(storeId, auth.getName(), page, size, q, surveyId, latestStatus, sort);
+    return reads.list(storeId, auth.getName(), pageable, q, surveyId, latestStatus, sort);
   }
 
   @GetMapping("/{sid}")
@@ -180,9 +182,12 @@ public class SurveyController {
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return reads.revisions(storeId, auth.getName(), sid, page, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"revisionNumber", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return reads.revisions(storeId, auth.getName(), sid, pageable);
   }
 
   @GetMapping("/{sid}/revisions/{rid}/responses")
@@ -192,12 +197,14 @@ public class SurveyController {
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size,
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable,
       @RequestParam(name = "response_id", required = false) String responseId,
       @RequestParam(required = false) AnswerStatus status,
       @RequestParam(defaultValue = "RECEIVED_DESC") String sort) {
-    return reads.answers(storeId, auth.getName(), sid, rid, page, size, responseId, status, sort);
+    return reads.answers(storeId, auth.getName(), sid, rid, pageable, responseId, status, sort);
   }
 
   @GetMapping("/{sid}/revisions/{rid}/history")

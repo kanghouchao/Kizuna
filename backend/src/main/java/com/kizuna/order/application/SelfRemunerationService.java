@@ -7,12 +7,9 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.SelfRemunerationView;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -28,8 +25,7 @@ public class SelfRemunerationService {
   private final OrderCorrectionHistory history;
 
   @Transactional(readOnly = true)
-  public Page<SelfRemunerationEnrollment> enrollments(String actor, int page, int size) {
-    var pageable = page(page, size);
+  public Page<SelfRemunerationEnrollment> enrollments(String actor, Pageable pageable) {
     var person = people.findByUserId(actors.requireUserId(actor));
     if (person.isEmpty()) return Page.empty(pageable);
     return enrollments
@@ -41,8 +37,7 @@ public class SelfRemunerationService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<SelfRemunerationOrder> list(String actor, String enrollmentId, int page, int size) {
-    var pageable = page(page, size);
+  public Page<SelfRemunerationOrder> list(String actor, String enrollmentId, Pageable pageable) {
     Long userId = actors.requireUserId(actor);
     if (enrollmentId == null)
       return orders.findSelfRemunerations(userId, pageable).map(this::summary);
@@ -117,10 +112,5 @@ public class SelfRemunerationService {
         view.getAgreedRemuneration(),
         planned ? view.getAgreedRemuneration() : 0,
         accrued);
-  }
-
-  private PageRequest page(int page, int size) {
-    if (page < 0) throw new ServiceException("ページ番号が不正です");
-    return PageRequest.of(page, CursorPage.clampSize(size));
   }
 }

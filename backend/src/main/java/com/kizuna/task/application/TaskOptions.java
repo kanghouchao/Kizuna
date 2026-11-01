@@ -2,15 +2,13 @@ package com.kizuna.task.application;
 
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.execution.TaskHandler;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,19 +47,18 @@ public class TaskOptions {
   }
 
   @Transactional(readOnly = true)
-  public Page<StoreOption> stores(int page, int size) {
-    if (page < 0 || size < 1 || size > 100) throw new ServiceException("ページ指定が不正です");
+  public Page<StoreOption> stores(Pageable pageable) {
     return stores
-        .findAll(PageRequest.of(page, size, Sort.by(Store::getName, Store::getId)))
+        .findAll(pageable)
         .map(store -> new StoreOption(store.getId().toString(), store.getName()));
   }
 
   public Page<ServiceExecutionIdentityService.Candidate> candidates(
-      String taskName, Long storeId, int page, int size) {
+      String taskName, Long storeId, Pageable pageable) {
     var handler = registry.requireName(taskName);
     if (handler.groupWide() != (storeId == null) || storeId != null && storeId <= 0)
       throw new ServiceException("処理の対象範囲と店舗を確認してください");
     if (storeId != null && !stores.existsById(storeId)) throw new NotFoundException("対象店舗が見つかりません");
-    return identities.candidates(page, size, handler.permission(), storeId);
+    return identities.candidates(pageable, handler.permission(), storeId);
   }
 }

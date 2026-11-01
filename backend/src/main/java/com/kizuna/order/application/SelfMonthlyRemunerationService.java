@@ -6,12 +6,11 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.YearMonth;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,8 +24,7 @@ public class SelfMonthlyRemunerationService {
   private final RemunerationQuery monthlyQuery;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<RemunerationStoreRow> stores(String actor, int page, int size) {
-    var pageable = page(page, size);
+  public Page<RemunerationStoreRow> stores(String actor, Pageable pageable) {
     var person = people.findByUserId(actors.requireUserId(actor));
     return person
         .map(p -> selfQuery.stores(p.getId(), pageable))
@@ -35,8 +33,7 @@ public class SelfMonthlyRemunerationService {
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public SelfMonthlyRemuneration monthly(
-      String actor, Long storeId, String month, int page, int size) {
-    var pageable = page(page, size);
+      String actor, Long storeId, String month, Pageable pageable) {
     if (storeId <= 0) throw new ServiceException("店舗の指定が不正です");
     if (!month.matches("[0-9]{4}-(0[1-9]|1[0-2])") || month.startsWith("0000"))
       throw new ServiceException("対象月は YYYY-MM 形式で指定してください");
@@ -53,12 +50,5 @@ public class SelfMonthlyRemunerationService {
         month,
         monthlyQuery.total(storeId, personId, target),
         monthlyQuery.orders(storeId, personId, target, pageable));
-  }
-
-  private PageRequest page(int page, int size) {
-    int effectiveSize = CursorPage.clampSize(size);
-    if (page < 0 || (long) page * effectiveSize > Integer.MAX_VALUE)
-      throw new ServiceException("ページ番号が不正です");
-    return PageRequest.of(page, effectiveSize);
   }
 }

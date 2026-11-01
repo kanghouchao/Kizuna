@@ -29,10 +29,12 @@ public class OrderSurchargeController {
   public Page<SurchargeCandidateResponse> candidates(
       @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {"afterTerms.name", "serviceId", "id"})
+          Pageable pageable) {
     return catalog
-        .candidates(storeId, OrderServiceCatalog.SelectionKind.SURCHARGE, search, page, size)
+        .candidates(storeId, OrderServiceCatalog.SelectionKind.SURCHARGE, search, pageable)
         .map(SurchargeCandidateResponse::of);
   }
 

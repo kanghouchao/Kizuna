@@ -134,8 +134,10 @@ public class ReviewController {
   public Page<ReviewSummaryResponse> list(
       @CurrentStore Long storeId,
       Authentication auth,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size,
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable,
       @RequestParam(required = false) String q,
       @RequestParam(name = "review_id", required = false) String reviewId,
       @RequestParam(required = false) Status status,
@@ -144,7 +146,7 @@ public class ReviewController {
     return reviews.list(
         storeId,
         auth.getName(),
-        new ReviewSearch(page, size, q, reviewId, status, permissionStatus, sort));
+        new ReviewSearch(pageable, q, reviewId, status, permissionStatus, sort));
   }
 
   @GetMapping("/{id}")

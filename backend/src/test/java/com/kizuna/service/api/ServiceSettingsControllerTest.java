@@ -23,6 +23,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -61,7 +62,12 @@ class ServiceSettingsControllerTest {
         .perform(get("/services").header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk());
 
-    verify(service).list(STORE_ID, null, false, 0, 20);
+    verify(service)
+        .list(
+            STORE_ID,
+            null,
+            false,
+            PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
   }
 
   @Test

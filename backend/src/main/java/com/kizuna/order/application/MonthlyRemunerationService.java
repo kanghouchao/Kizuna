@@ -3,12 +3,11 @@ package com.kizuna.order.application;
 import com.kizuna.order.domain.RemunerationCastRow;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,14 +18,12 @@ public class MonthlyRemunerationService {
   private final RemunerationQuery query;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<RemunerationCastRow> casts(Long storeId, String search, int page, int size) {
-    return query.casts(storeId, search, page(page, size));
+  public Page<RemunerationCastRow> casts(Long storeId, String search, Pageable pageable) {
+    return query.casts(storeId, search, pageable);
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public MonthlyRemuneration monthly(
-      Long storeId, Long personId, String month, int page, int size) {
-    var pageable = page(page, size);
+  public MonthlyRemuneration monthly(Long storeId, Long personId, String month, Pageable pageable) {
     if (personId <= 0) throw new ServiceException("キャスト本人の指定が不正です");
     YearMonth target;
     try {
@@ -43,11 +40,5 @@ public class MonthlyRemunerationService {
         month,
         query.total(storeId, personId, target),
         query.orders(storeId, personId, target, pageable));
-  }
-
-  private PageRequest page(int page, int size) {
-    if (page < 0 || (long) page * CursorPage.clampSize(size) > Integer.MAX_VALUE)
-      throw new ServiceException("ページ番号が不正です");
-    return PageRequest.of(page, CursorPage.clampSize(size));
   }
 }

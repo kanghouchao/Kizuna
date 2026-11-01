@@ -83,6 +83,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.IncompleteEventPublications;
@@ -623,13 +624,20 @@ class NotificationIntegrationTest {
     var options = context.getBean(TaskOptions.class);
     jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", serviceId);
     jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", serviceId, storeId);
-    assertThat(options.candidates("NOTIFICATION_DELIVER", storeId, 0, 100).getContent())
+    assertThat(
+            options
+                .candidates("NOTIFICATION_DELIVER", storeId, PageRequest.of(0, 100))
+                .getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
         .contains(serviceId);
-    assertThat(options.candidates("NOTIFICATION_DELIVER", otherStore, 0, 100).getContent())
+    assertThat(
+            options
+                .candidates("NOTIFICATION_DELIVER", otherStore, PageRequest.of(0, 100))
+                .getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
         .doesNotContain(serviceId);
-    assertThat(options.candidates("SERVICE_IDENTITY_CHECK", null, 0, 100).getContent())
+    assertThat(
+            options.candidates("SERVICE_IDENTITY_CHECK", null, PageRequest.of(0, 100)).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
         .doesNotContain(serviceId);
     assertThat(options.taskTypes(email)).extracting(TaskOptions.TaskType::name).isSorted();
@@ -640,14 +648,16 @@ class NotificationIntegrationTest {
                 .orElseThrow()
                 .manualAllowed())
         .isFalse();
-    assertThat(options.stores(0, 100).getContent())
+    assertThat(options.stores(PageRequest.of(0, 100, Sort.by("name", "id"))).getContent())
         .extracting(TaskOptions.StoreOption::id)
         .contains(storeId.toString());
-    assertThatThrownBy(() -> options.candidates("MISSING", storeId, 0, 10))
+    assertThatThrownBy(() -> options.candidates("MISSING", storeId, PageRequest.of(0, 10)))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> options.candidates("NOTIFICATION_DELIVER", null, 0, 10))
+    assertThatThrownBy(
+            () -> options.candidates("NOTIFICATION_DELIVER", null, PageRequest.of(0, 10)))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> options.candidates("NOTIFICATION_DELIVER", Long.MAX_VALUE, 0, 10))
+    assertThatThrownBy(
+            () -> options.candidates("NOTIFICATION_DELIVER", Long.MAX_VALUE, PageRequest.of(0, 10)))
         .isInstanceOf(NotFoundException.class);
   }
 

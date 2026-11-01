@@ -74,4 +74,27 @@ class MemberPagedHistoryControllerTest {
     assertThat(pageable.getValue().getSort())
         .isEqualTo(Sort.by(Sort.Direction.DESC, "afterVersion", "id"));
   }
+
+  @Test
+  @WithMockUser(username = "cast@kizuna.test", roles = "CAST")
+  void remunerationEnrollmentsAndOrdersAreNewestFirstPages() throws Exception {
+    var enrollments = ArgumentCaptor.forClass(Pageable.class);
+    when(remunerations.enrollments(eq("cast@kizuna.test"), enrollments.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    var orders = ArgumentCaptor.forClass(Pageable.class);
+    when(remunerations.list(eq("cast@kizuna.test"), eq(null), orders.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    mvc.perform(get("/me/remuneration-enrollments").principal(() -> "cast@kizuna.test"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    mvc.perform(get("/me/remunerations").principal(() -> "cast@kizuna.test"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+
+    assertThat(enrollments.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+    assertThat(orders.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "businessDate", "id"));
+  }
 }

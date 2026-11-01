@@ -47,27 +47,19 @@ public class RemunerationManagementService {
   private final ObjectMapper json;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public GuaranteeListResponse guarantees(Long storeId, Long personId, int page, int size) {
+  public GuaranteeListResponse guarantees(Long storeId, Long personId, Pageable pageable) {
     requirePerson(storeId, personId);
     return new GuaranteeListResponse(
         records.timeline(storeId, personId).map(t -> t.getRevision()).orElse(0L),
-        records
-            .terms(storeId, personId, RemunerationInput.page(page, size))
-            .map(GuaranteeResponse::of));
+        records.terms(storeId, personId, pageable).map(GuaranteeResponse::of));
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<BonusResponse> bonuses(
-      Long storeId, Long personId, String month, int page, int size) {
+  public Page<BonusResponse> bonuses(Long storeId, Long personId, String month, Pageable pageable) {
     requirePerson(storeId, personId);
     var target = RemunerationInput.month(month);
     return records
-        .bonuses(
-            storeId,
-            personId,
-            target.atDay(1),
-            target.atEndOfMonth(),
-            RemunerationInput.page(page, size))
+        .bonuses(storeId, personId, target.atDay(1), target.atEndOfMonth(), pageable)
         .map(BonusResponse::of);
   }
 

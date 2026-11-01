@@ -533,11 +533,12 @@ class ReviewIntegrationTest {
     assertThat(
             read("?review_id=" + firstId + "&status=APPROVED", 200).get("total_elements").asLong())
         .isZero();
+    var normalized = read("?page=-1&size=0", 200);
+    assertThat(normalized.get("number").asInt()).isZero();
+    assertThat(normalized.get("size").asInt()).isEqualTo(20);
     for (String bad :
         List.of(
-            "?page=-1",
-            "?size=0",
-            "?size=101",
+            "?page=99999999&size=100",
             "?sort=WRONG",
             "?status=WRONG",
             "/" + firstId + "/history?page=99999999&size=100")) read(bad, 400);

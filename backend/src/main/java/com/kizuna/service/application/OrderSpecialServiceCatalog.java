@@ -11,10 +11,8 @@ import com.kizuna.service.domain.ServiceRevision;
 import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -58,11 +56,10 @@ public class OrderSpecialServiceCatalog {
   /** 在籍資格・候補・総数を同じ断面で判定する。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page<SpecialServiceTerms> candidates(
-      Long storeId, String enrollment, String search, int page, int size) {
-    requirePage(page, size);
+      Long storeId, String enrollment, String search, Pageable pageable) {
     requireEnrollment(storeId, enrollment);
     return revisions.findAcceptedSpecials(
-        storeId, enrollment, search == null ? "" : search, PageRequest.of(page, size));
+        storeId, enrollment, search == null ? "" : search, pageable);
   }
 
   @Transactional(readOnly = true)
@@ -132,10 +129,5 @@ public class OrderSpecialServiceCatalog {
         consent == null ? null : consent.getRevisionNumber(),
         r.getOccurredAt(),
         items.findByIdAndStoreId(r.getServiceId(), storeId).orElseThrow().isDeleted());
-  }
-
-  private void requirePage(int page, int size) {
-    if (page < 0 || size < 1 || size > Math.min(100, CursorPage.MAX_SIZE))
-      throw new ServiceException("ページの範囲が正しくありません");
   }
 }

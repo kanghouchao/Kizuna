@@ -9,7 +9,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 public record OperationalReportResponse(
     LocalDate from,
@@ -25,10 +25,9 @@ public record OperationalReportResponse(
     Page<OperationalReport.Row> rows,
     @JsonInclude(JsonInclude.Include.NON_NULL) OperationalReport.Amounts remuneration,
     @JsonInclude(JsonInclude.Include.NON_NULL) AdvertisingAmounts advertising) {
-  public static OperationalReportResponse from(OperationalReport report, int page, int size) {
-    var pageable = PageRequest.of(page, size);
+  public static OperationalReportResponse from(OperationalReport report, Pageable pageable) {
     int start = (int) Math.min(pageable.getOffset(), report.rows().size());
-    int end = Math.min(start + size, report.rows().size());
+    int end = Math.min(start + pageable.getPageSize(), report.rows().size());
     return new OperationalReportResponse(
         report.criteria().from(),
         report.criteria().to(),

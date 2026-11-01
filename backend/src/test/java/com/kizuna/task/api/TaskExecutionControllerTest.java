@@ -76,4 +76,36 @@ class TaskExecutionControllerTest {
     assertThat(pageable.getValue().getSort())
         .isEqualTo(Sort.by(Sort.Direction.DESC, "startedAt", "id"));
   }
+
+  @Test
+  @DisplayName("実行主体の候補と店舗の選択肢は名前順の Page で返し、範囲外のページを 400 にすること")
+  @WithMockUser(authorities = "PERM_TASK_MANAGE")
+  void optionListsArePagesInNameOrder() throws Exception {
+    var candidates = ArgumentCaptor.forClass(Pageable.class);
+    var stores = ArgumentCaptor.forClass(Pageable.class);
+    when(options.candidates(eq("SERVICE_IDENTITY_CHECK"), eq(null), candidates.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    when(options.stores(stores.capture())).thenReturn(new PageImpl<>(List.of()));
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+
+    mockMvc
+        .perform(get("/task-executions/service-identities").principal(auth))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    mockMvc
+        .perform(get("/task-executions/stores").principal(auth))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    mockMvc
+        .perform(
+            get("/task-executions/stores")
+                .param("page", "99999999")
+                .param("size", "100")
+                .principal(auth))
+        .andExpect(status().isBadRequest());
+
+    assertThat(candidates.getValue())
+        .isEqualTo(PageRequest.of(0, 20, Sort.by("displayName", "id")));
+    assertThat(stores.getValue()).isEqualTo(PageRequest.of(0, 20, Sort.by("name", "id")));
+  }
 }

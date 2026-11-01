@@ -34,13 +34,12 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
               from com.kizuna.order.domain.OrderFeeLine l
               where l.orderId = o.id and l.storeId = o.storeId) as agreedRemuneration
       """;
-  String SELF_SORT = " order by o.businessDate desc, o.id desc";
 
-  @Query(value = SELF_SELECT + SELF_FROM + SELF_SORT, countQuery = "select count(o) " + SELF_FROM)
+  @Query(value = SELF_SELECT + SELF_FROM, countQuery = "select count(o) " + SELF_FROM)
   Page<SelfRemunerationView> findSelfRemunerations(Long userId, Pageable pageable);
 
   @Query(
-      value = SELF_SELECT + SELF_FROM + " and e.id = :enrollmentId" + SELF_SORT,
+      value = SELF_SELECT + SELF_FROM + " and e.id = :enrollmentId",
       countQuery = "select count(o) " + SELF_FROM + " and e.id = :enrollmentId")
   Page<SelfRemunerationView> findSelfRemunerationsByEnrollment(
       Long userId, String enrollmentId, Pageable pageable);

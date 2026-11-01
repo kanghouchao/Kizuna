@@ -43,9 +43,11 @@ public class OrderSpecialServiceController {
       @CurrentStore Long storeId,
       @RequestParam("cast_id") String castId,
       @RequestParam(required = false) String search,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return catalog.candidates(storeId, castId, search, page, size).map(Candidate::of);
+      @PageableDefault(
+              size = 20,
+              sort = {"afterTerms.name", "serviceId", "id"})
+          Pageable pageable) {
+    return catalog.candidates(storeId, castId, search, pageable).map(Candidate::of);
   }
 
   @GetMapping("/{id}/special-service-revisions")

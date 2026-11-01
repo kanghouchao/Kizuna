@@ -53,14 +53,13 @@ public class SurveyReadService {
   public Page<SurveySummaryResponse> list(
       Long storeId,
       String email,
-      int page,
-      int size,
+      Pageable pageable,
       String q,
       String id,
       RevisionStatus status,
       String sort) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
-    var paging = page(page, size, sort, null, SurveySeries::getCreatedAt, SurveySeries::getId);
+    var paging = page(pageable, sort, null, SurveySeries::getCreatedAt, SurveySeries::getId);
     Specification<SurveySeries> spec = (r, query, cb) -> cb.equal(r.get("storeId"), storeId);
     if (id != null) {
       var target = SurveyInput.id(id);
@@ -133,25 +132,13 @@ public class SurveyReadService {
 
   @Transactional(readOnly = true)
   public Page<SurveyRevisionSummaryResponse> revisions(
-      Long storeId, String email, String sid, int page, int size) {
+      Long storeId, String email, String sid, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     requireSurvey(storeId, sid);
-    validatePage(page, size);
     Specification<SurveyRevision> spec =
         (r, q, cb) -> cb.and(cb.equal(r.get("storeId"), storeId), cb.equal(r.get("surveyId"), sid));
     return revisions
-        .findBy(
-            spec,
-            f ->
-                f.as(SurveyRevisionSummaryView.class)
-                    .page(
-                        PageRequest.of(
-                            page,
-                            size,
-                            Sort.by(
-                                Sort.Direction.DESC,
-                                SurveyRevision::getRevisionNumber,
-                                SurveyRevision::getId))))
+        .findBy(spec, f -> f.as(SurveyRevisionSummaryView.class).page(pageable))
         .map(SurveyRevisionSummaryResponse::of);
   }
 
@@ -161,8 +148,7 @@ public class SurveyReadService {
       String email,
       String sid,
       String rid,
-      int page,
-      int size,
+      Pageable pageable,
       String id,
       AnswerStatus status,
       String sort) {
@@ -170,8 +156,7 @@ public class SurveyReadService {
     requireRevision(storeId, sid, rid);
     var paging =
         page(
-            page,
-            size,
+            pageable,
             sort,
             SurveyAnswer::getReceivedAt,
             SurveyAnswer::getCreatedAt,
@@ -261,25 +246,20 @@ public class SurveyReadService {
     return new NotFoundException("対象のアンケート・設問版・回答が見つかりません");
   }
 
-  private void validatePage(int page, int size) {
-    if (page < 0 || size < 1 || size > 100) throw SurveyInput.invalid();
-  }
-
+  /** 並びは独自の sort 引数が決めるため、要求の Pageable からは page と size だけを使う。 */
   private <T> PageRequest page(
-      int page,
-      int size,
+      Pageable pageable,
       String sort,
       TypedPropertyPath<T, ?> received,
       TypedPropertyPath<T, ?> created,
       TypedPropertyPath<T, ?> id) {
-    validatePage(page, size);
     if (sort == null
         || !List.of("CREATED_ASC", "CREATED_DESC").contains(sort)
             && (received == null || !List.of("RECEIVED_ASC", "RECEIVED_DESC").contains(sort)))
       throw SurveyInput.invalid();
     return PageRequest.of(
-        page,
-        size,
+        pageable.getPageNumber(),
+        pageable.getPageSize(),
         Sort.by(
             sort.endsWith("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC,
             sort.startsWith("RECEIVED") ? received : created,

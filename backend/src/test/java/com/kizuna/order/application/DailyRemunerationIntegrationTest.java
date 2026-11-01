@@ -21,6 +21,7 @@ import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
@@ -32,6 +33,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -52,7 +55,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -63,6 +68,7 @@ import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
@@ -176,21 +182,29 @@ class DailyRemunerationIntegrationTest {
 
   @Test
   void bothReadsAggregateHistoricalEnrollmentsAndKeepInvalidatedRows() {
-    var store = service.store(storeId, personId, DAY.toString(), 0, 1);
-    var self = service.self(email, storeId, DAY.toString(), 0, 1);
+    var store = service.store(storeId, personId, DAY.toString(), PageRequest.of(0, 1));
+    var self = service.self(email, storeId, DAY.toString(), PageRequest.of(0, 1));
     assertThat(store.totalRemuneration()).isEqualTo(16000);
     assertThat(self.totalRemuneration()).isEqualTo(16000);
     assertThat(store.orders().getTotalElements()).isEqualTo(3);
     assertThat(store.orders().getContent()).hasSize(1);
-    var all = service.store(storeId, personId, DAY.toString(), 0, 20);
+    var all = service.store(storeId, personId, DAY.toString(), PageRequest.of(0, 20));
     assertThat(all.orders().stream().mapToInt(row -> row.accruedRemuneration()).sum())
         .isEqualTo(16000);
     assertThat(all.orders().stream().filter(row -> row.completionInvalidated()))
         .singleElement()
         .satisfies(row -> assertThat(row.accruedRemuneration()).isZero());
-    assertThat(service.store(storeId, personId, DAY.toString(), 10, 20).orders()).isEmpty();
-    assertThat(service.store(storeId, personId, "0001-01-01", 0, 20).totalRemuneration()).isZero();
-    assertThat(service.store(storeId, personId, "9999-12-31", 0, 20).totalRemuneration())
+    assertThat(service.store(storeId, personId, DAY.toString(), PageRequest.of(10, 20)).orders())
+        .isEmpty();
+    assertThat(
+            service
+                .store(storeId, personId, "0001-01-01", PageRequest.of(0, 20))
+                .totalRemuneration())
+        .isZero();
+    assertThat(
+            service
+                .store(storeId, personId, "9999-12-31", PageRequest.of(0, 20))
+                .totalRemuneration())
         .isEqualTo(3000);
   }
 
@@ -209,8 +223,7 @@ class DailyRemunerationIntegrationTest {
                     JsonMapper.builder()
                         .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                         .build()))
-            .setCustomArgumentResolvers(
-                new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+            .setCustomArgumentResolvers(argumentResolvers())
             .build();
     try (var executor = Executors.newSingleThreadExecutor()) {
       var reading =
@@ -250,10 +263,24 @@ class DailyRemunerationIntegrationTest {
       probe.reached = null;
       probe.resume = null;
     }
-    assertThat(service.store(storeId, personId, DAY.toString(), 0, 20).totalRemuneration())
+    assertThat(
+            service
+                .store(storeId, personId, DAY.toString(), PageRequest.of(0, 20))
+                .totalRemuneration())
         .isEqualTo(20000);
-    assertThat(service.self(email, storeId, DAY.toString(), 0, 20).totalRemuneration())
+    assertThat(
+            service.self(email, storeId, DAY.toString(), PageRequest.of(0, 20)).totalRemuneration())
         .isEqualTo(20000);
+  }
+
+  /** 本番と同じ引数解決器の並び（Pageable の検査・副キー補完と現在店舗）を standalone の MockMvc へ渡す。 */
+  private static HandlerMethodArgumentResolver[] argumentResolvers() {
+    List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
+    new WebBindingConfig(
+            new PageableHandlerMethodArgumentResolver(),
+            new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+        .addArgumentResolvers(resolvers);
+    return resolvers.toArray(HandlerMethodArgumentResolver[]::new);
   }
 
   static class SnapshotQuery extends RemunerationQuery {

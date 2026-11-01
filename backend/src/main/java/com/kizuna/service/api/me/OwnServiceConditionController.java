@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,10 +31,12 @@ public class OwnServiceConditionController {
   public Page<OwnServiceConditionSummary> list(
       @RequestParam("store_id") Long storeId,
       @RequestParam(required = false) ServiceKind kind,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size,
+      @PageableDefault(
+              size = 20,
+              sort = {"id"})
+          Pageable pageable,
       Principal principal) {
-    return service.list(storeId, principal.getName(), kind, page, size);
+    return service.list(storeId, principal.getName(), kind, pageable);
   }
 
   @PutMapping("/{id}/consent")

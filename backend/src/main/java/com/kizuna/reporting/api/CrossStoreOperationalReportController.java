@@ -6,6 +6,8 @@ import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -29,8 +31,10 @@ public class CrossStoreOperationalReportController {
       @RequestParam String from,
       @RequestParam String to,
       @RequestParam(name = "group_by", defaultValue = "day") String groupBy,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size,
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable,
       @RequestParam(name = "include_remuneration", defaultValue = "false")
           boolean includeRemuneration,
       @RequestParam(name = "include_advertising", defaultValue = "false")
@@ -41,7 +45,7 @@ public class CrossStoreOperationalReportController {
         .cacheControl(CacheControl.noStore())
         .body(
             service.viewGroupWide(
-                scope, from, to, groupBy, page, size, includeRemuneration, includeAdvertising));
+                scope, from, to, groupBy, pageable, includeRemuneration, includeAdvertising));
   }
 
   @GetMapping("/exports")

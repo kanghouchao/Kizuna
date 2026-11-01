@@ -40,9 +40,14 @@ public class ServiceSettingsController {
       @CurrentStore Long storeId,
       @RequestParam(required = false) ServiceKind kind,
       @RequestParam(defaultValue = "false") boolean deleted,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.list(storeId, kind, deleted, page, size);
+      // 作成直後のサービスを先頭ページに出す。ID は文字列で桁が増えると辞書順が作成順と
+      // ずれるため作成日時で並べ、ID は同時刻の順序を固定する第 2 キーにとどめる。
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return service.list(storeId, kind, deleted, pageable);
   }
 
   @PostMapping
