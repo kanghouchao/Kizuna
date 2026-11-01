@@ -49,7 +49,7 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
         }}
       >
         <div className="max-w-7xl mx-auto px-5 lg:px-10">
-          <div className="flex items-center justify-between h-14 md:h-15">
+          <div className="flex items-center justify-between h-14 lg:h-15">
             {/* ロゴ */}
             <Link href="/" onClick={closeMenu} className="flex items-center shrink-0">
               {logoUrl ? (
@@ -71,7 +71,7 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
             </Link>
 
             {/* デスクトップナビ */}
-            <nav className="hidden md:flex items-center gap-6 lg:gap-10">
+            <nav className="hidden lg:flex items-center gap-6 xl:gap-10">
               {navLinks.map(({ href, label }) => (
                 <Link
                   key={href}
@@ -106,10 +106,10 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
                 ログイン
               </Link>
 
-              {/* ハンバーガーボタン（md未満で表示） */}
+              {/* ハンバーガーボタン（lg未満で表示） */}
               <button
                 onClick={() => setMenuOpen(prev => !prev)}
-                className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-[5px] shrink-0"
+                className="lg:hidden flex flex-col justify-center items-center w-8 h-8 gap-[5px] shrink-0"
                 aria-label={menuOpen ? 'メニューを閉じる' : 'メニューを開く'}
                 aria-expanded={menuOpen}
               >
@@ -142,7 +142,7 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
 
       {/* モバイルメニューオーバーレイ */}
       <div
-        className="fixed inset-0 z-40 md:hidden flex flex-col pointer-events-none"
+        className="fixed inset-0 z-40 lg:hidden flex flex-col pointer-events-none"
         style={{
           top: '56px',
           background: 'color-mix(in srgb, var(--storefront-bg) 98%, transparent)',
