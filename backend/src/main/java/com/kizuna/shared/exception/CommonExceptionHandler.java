@@ -7,6 +7,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -137,6 +139,22 @@ public class CommonExceptionHandler {
     Map<String, String> details = new HashMap<>();
     details.put(ex.getName(), "値の形式が正しくありません");
     body.put("details", details);
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+  }
+
+  /**
+   * {@code ?sort=} に実在しない属性を名指した要求を 400 にする。全一覧が Pageable を受けるため、並びの指定は利用者が 是正しうる入力である。repository
+   * の例外翻訳で包まれて届く場合があるので、原因まで辿って判定する。
+   */
+  @ExceptionHandler({PropertyReferenceException.class, InvalidDataAccessApiUsageException.class})
+  public ResponseEntity<Map<String, Object>> handleSort(RuntimeException ex) {
+    if (!(ex instanceof PropertyReferenceException)
+        && !(ex.getCause() instanceof PropertyReferenceException)) {
+      return handle((Exception) ex);
+    }
+    log.warn("並び替えの属性が不正");
+    Map<String, Object> body = new HashMap<>();
+    body.put("error", "並び替えの指定を確認してください");
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
   }
 

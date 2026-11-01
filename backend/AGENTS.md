@@ -50,8 +50,8 @@ This section is the normative source for all HTTP endpoint additions and changes
 
 ### Pagination
 
-- Use Spring `Page` for a numbered list with a total count. Sort by a total order ending in a unique key.
-- Use `CursorPage` for queues, infinite scrolling, and growing history without counts. Apply `MAX_SIZE`; the cursor comparison must use the same ordered column tuple, including its unique tie-breaker.
+- Every paged list takes Spring `Pageable` and returns Spring `Page`, work queues and growing history included. Declare a total order ending in the unique key with `@PageableDefault` (omitting `id` makes the tiebreaker resolver append `id ASC`); a query that owns a computed `ORDER BY` declares `sort = {}`.
+- Page size (max 100, `spring.data.web.pageable.max-page-size`) and offset range (beyond int → 400) are enforced once at binding by the shared resolvers in `shared/web`. Services never re-check page or size.
 - A bare `List` is only for a small, explainably bounded collection. Growing history is not bounded. State the bound when introducing a list endpoint.
 
 ### Authorization and anonymous endpoints
