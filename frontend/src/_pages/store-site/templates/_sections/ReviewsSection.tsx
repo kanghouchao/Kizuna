@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import type { Page } from '@/shared/api';
 import { PublicReview } from '../../model/types';
 
@@ -51,6 +52,94 @@ function ReviewsNotice({
         )}
       </div>
     </section>
+  );
+}
+
+const pagerItem =
+  'inline-flex h-8 min-w-8 items-center justify-center px-2 border text-xs md:text-sm transition-colors duration-300';
+const pagerIdle =
+  'border-[color-mix(in_srgb,var(--storefront-accent)_25%,transparent)] text-[color-mix(in_srgb,var(--storefront-fg)_70%,transparent)] hover:border-[var(--storefront-accent)] hover:text-[var(--storefront-accent)]';
+const pagerDisabled =
+  'border-[color-mix(in_srgb,var(--storefront-accent)_10%,transparent)] text-[var(--storefront-subtle)]';
+
+/** 端に達した前へ/次へはリンクにせず、押せない状態として残す。 */
+function PagerLink({
+  index,
+  enabled,
+  label,
+  children,
+}: {
+  index: number;
+  enabled: boolean;
+  label: string;
+  children: ReactNode;
+}) {
+  return enabled ? (
+    <Link href={pageHref(index)} aria-label={label} className={`${pagerItem} ${pagerIdle}`}>
+      {children}
+    </Link>
+  ) : (
+    <span aria-disabled="true" className={`${pagerItem} ${pagerDisabled}`}>
+      <span className="sr-only">{label}</span>
+      <span aria-hidden="true">{children}</span>
+    </span>
+  );
+}
+
+/** 管理画面の一覧（ListPage）と同じ構成：件数と表示範囲、最大 5 件の番号窓、狭い幅では前へ/次へだけ。 */
+function ReviewsPager({ reviews }: { reviews: Page<PublicReview> }) {
+  const page = reviews.number;
+  const pageCount = reviews.total_pages;
+  const from = page * reviews.size + 1;
+  const to = from + reviews.content.length - 1;
+  const windowSize = Math.min(5, pageCount);
+  const windowStart = Math.max(
+    0,
+    Math.min(page - Math.floor(windowSize / 2), pageCount - windowSize)
+  );
+  const hasPrev = page > 0;
+  const hasNext = page < pageCount - 1;
+
+  return (
+    <div className="mt-10 flex items-center justify-between gap-4 text-[color-mix(in_srgb,var(--storefront-fg)_70%,transparent)]">
+      <div className="flex flex-1 justify-between sm:hidden">
+        <PagerLink index={page - 1} enabled={hasPrev} label="前へ">
+          前へ
+        </PagerLink>
+        <PagerLink index={page + 1} enabled={hasNext} label="次へ">
+          次へ
+        </PagerLink>
+      </div>
+      <p className="hidden sm:block text-xs md:text-sm tracking-wider">
+        {`${reviews.total_elements} 件中 ${from}-${to} を表示`}
+      </p>
+      <nav aria-label="ページネーション" className="hidden sm:flex gap-1">
+        <PagerLink index={page - 1} enabled={hasPrev} label="前へ">
+          ‹
+        </PagerLink>
+        {Array.from({ length: windowSize }, (_, i) => {
+          const index = windowStart + i;
+          const current = index === page;
+          return (
+            <Link
+              key={index}
+              href={pageHref(index)}
+              aria-current={current ? 'page' : undefined}
+              className={`${pagerItem} ${
+                current
+                  ? 'border-[var(--storefront-accent)] text-[var(--storefront-accent)] bg-[color-mix(in_srgb,var(--storefront-accent)_10%,transparent)]'
+                  : pagerIdle
+              }`}
+            >
+              {index + 1}
+            </Link>
+          );
+        })}
+        <PagerLink index={page + 1} enabled={hasNext} label="次へ">
+          ›
+        </PagerLink>
+      </nav>
+    </div>
   );
 }
 
@@ -112,18 +201,7 @@ export default function ReviewsSection({ reviews, page }: ReviewsSectionProps) {
             </li>
           ))}
         </ul>
-        {last > 0 && (
-          <nav
-            aria-label="口コミのページ送り"
-            className="mt-10 flex items-center justify-center gap-6 text-xs md:text-sm tracking-wider text-[color-mix(in_srgb,var(--storefront-fg)_70%,transparent)]"
-          >
-            {current > 0 ? <Link href={pageHref(current - 1)}>前のページ</Link> : <span />}
-            <span>
-              {current + 1} / {last + 1}
-            </span>
-            {current < last ? <Link href={pageHref(current + 1)}>次のページ</Link> : <span />}
-          </nav>
-        )}
+        {last > 0 && <ReviewsPager reviews={reviews} />}
       </div>
     </section>
   );
