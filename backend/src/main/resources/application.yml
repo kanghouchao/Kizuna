@@ -53,6 +53,10 @@ spring:
       key-prefix: ${SPRING_CACHE_KEY_PREFIX:kizuna:cache:}
 
   data:
+    web:
+      pageable:
+        # 一覧 1 回の取得件数の上限。CursorPage.MAX_SIZE と同じ値に保つ
+        max-page-size: 100
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}

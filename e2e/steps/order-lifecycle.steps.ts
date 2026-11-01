@@ -600,12 +600,11 @@ Then('受付箱で連絡先を補正して顧客未設定で確定でき原文�
   expect(order.contact_snapshot.email).toBe('corrected@example.com');
   expect(order.contact_snapshot.line_id).toBe('guest-line');
   const token = await loginAsStoreAdmin(request);
-  const applications = await request.get('/api/order-applications?statuses=CONFIRMED&size=2000', {
+  const application = await request.get(`/api/order-applications/${guestApplicationId}`, {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
   });
-  expect(applications.status()).toBe(200);
-  const original = (await applications.json()).content.find((row: { id: string }) => row.id === guestApplicationId);
-  expect(original.contact_snapshot.email).toBe('Guest@EXAMPLE.COM');
+  expect(application.status()).toBe(200);
+  expect((await application.json()).contact_snapshot.email).toBe('Guest@EXAMPLE.COM');
 });
 
 const oneTimeEmail = `${'long-contact.'.repeat(4)}once@example.com`;

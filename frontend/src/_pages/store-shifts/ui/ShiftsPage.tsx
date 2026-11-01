@@ -50,12 +50,13 @@ export default function ShiftsPage() {
     failure: castsFailure,
     reload: loadAllCasts,
   } = useResource(async () => {
-    const size = 200;
+    // 最終ページは応答の総ページ数で判定する。要求件数との比較だと、サーバーが件数を上限へ
+    // 丸めた時点で 1 ページ目を最終ページと誤認する
     const all: CastResponse[] = [];
     for (let page = 0; ; page += 1) {
-      const res = await castApi.list({ page, size, sort: 'displayOrder,id,asc' });
+      const res = await castApi.list({ page, size: 100, sort: 'displayOrder,id,asc' });
       all.push(...res.rows);
-      if (res.rows.length < size) break; // 最終ページ
+      if (page + 1 >= res.pageCount) break;
     }
     return all;
   });

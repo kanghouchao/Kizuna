@@ -479,7 +479,7 @@ Then(
       ).toBe(404);
     for (const size of [0, -3, 3000]) {
       const result = await monthly(request, { size });
-      expect(result.orders.size).toBe(size > 2000 ? 2000 : 1);
+      expect(result.orders.size).toBe(size > 100 ? 100 : 1);
       expect(result.total_remuneration).toBe(initialTotal);
     }
   },

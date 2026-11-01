@@ -144,7 +144,7 @@ class SelfMonthlyRemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"0,1", "-4,1", "3000,2000"})
+  @CsvSource({"0,1", "-4,1", "3000,100"})
   @DisplayName("店舗候補の取得件数は既存の上下限へ収める")
   void clampsStorePage(int size, int effective) throws Exception {
     var page = PageRequest.of(0, effective);

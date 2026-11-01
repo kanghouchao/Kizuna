@@ -253,8 +253,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
     orders
         .findByIdAndStoreId(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    if (size < 1 || size > Math.min(100, CursorPage.MAX_SIZE))
-      throw new ServiceException("取得件数が正しくありません");
+    if (size < 1 || size > CursorPage.MAX_SIZE) throw new ServiceException("取得件数が正しくありません");
     var key = cursor == null ? null : PageCursor.decode(cursor);
     OffsetDateTime at;
     try {

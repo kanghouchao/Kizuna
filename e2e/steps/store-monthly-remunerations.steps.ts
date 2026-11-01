@@ -318,7 +318,7 @@ When("原月の受注を翌月に完了し訂正して無効化する", async ({
 Then(
   "再照会で原月の最新額と訂正履歴を確認できる",
   async ({ request, page }) => {
-    const result = await monthly(request, 0, 2000);
+    const result = await monthly(request, 0, 100);
     expect(result.total_remuneration).toBe(147000);
     expect(result.orders.total_elements).toBe(22);
     expect(
@@ -567,7 +567,7 @@ Then(
     );
     const invalidated = await request.get("/api/daily-remunerations", {
       headers,
-      params: { person_id: personId, business_date: originalDate, size: 2000 },
+      params: { person_id: personId, business_date: originalDate, size: 100 },
     });
     const result = await invalidated.json();
     expect(result.total_remuneration).toBe(147000);

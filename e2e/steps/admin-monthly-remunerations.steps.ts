@@ -232,9 +232,9 @@ Then('月次横断照会は異なる授権集合と直接HTTP要求を検証す�
     const invalid = await request.get(base, { headers: headers(firstReader), params: { ...params, [key]: value } });
     expect(invalid.status()).toBe(400);
   }
-  for (const size of [0, -1, 2001]) {
+  for (const size of [0, -1, 101]) {
     const result = await monthly(request, firstReader, STORE1_ID, 0, size);
-    expect(result.orders.size).toBe(Math.max(1, Math.min(size, 2000)));
+    expect(result.orders.size).toBe(Math.max(1, Math.min(size, 100)));
     expect(result.total_remuneration).toBe(14000);
   }
   const beyond = await monthly(request, firstReader, STORE1_ID, 99, 1);

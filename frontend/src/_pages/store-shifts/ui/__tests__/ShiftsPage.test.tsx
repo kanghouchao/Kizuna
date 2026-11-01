@@ -48,7 +48,7 @@ const mockedCancel = attendanceApi.cancel as jest.Mock;
 /** 月グリッドの先頭 6 セル・末尾 14 セルにしか他月は現れないため、15 日は常に当月で一意。 */
 const DAY_IN_MONTH = 15;
 
-/** キャスト一覧の 1 ページ分。頁側は rows と「size 未満なら最終ページ」だけを読む。 */
+/** キャスト一覧の 1 ページ分。頁側は rows と総ページ数だけを読む。 */
 const castPage = (rows: { id: string; name: string }[] = []) => ({
   rows,
   page: 0,
@@ -224,6 +224,22 @@ describe('ShiftsPage の取得失敗', () => {
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
+  it('キャスト名簿は総ページ数に達するまで続きのページを取ること', async () => {
+    const full = Array.from({ length: 100 }, (_, i) => ({ id: `c${i}`, name: `キャスト${i}` }));
+    mockedCastList
+      .mockResolvedValueOnce({ ...castPage(full), pageCount: 2 })
+      .mockResolvedValueOnce({
+        ...castPage([{ id: 'c100', name: 'さいご' }]),
+        page: 1,
+        pageCount: 2,
+      });
+
+    render(<ShiftsPage />);
+
+    await waitFor(() => expect(mockedCastList).toHaveBeenCalledTimes(2));
+    expect(mockedCastList.mock.calls.map(([params]) => params.page)).toEqual([0, 1]);
   });
 });
 

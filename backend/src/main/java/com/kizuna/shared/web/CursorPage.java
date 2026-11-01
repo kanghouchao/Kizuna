@@ -12,12 +12,12 @@ import java.util.function.Function;
 public record CursorPage<T>(List<T> content, String nextCursor) {
 
   /**
-   * 1 回の取得件数の上限。{@code spring.data.web.pageable.max-page-size} の既定値と同じ数を採るのは、Pageable
-   * を離れる読み口だけが上限を失って青天井にならないようにするため — 呼出側から見える天井は据え置きになる。
+   * 1 回の取得件数の上限。{@code spring.data.web.pageable.max-page-size}（application.yml）と同じ数を採るのは、 Pageable
+   * を離れる読み口だけが別の天井を持たないようにするため。
    *
    * <p>ここで抑えても続きはカーソルで辿れるので、到達性はこの値に依存しない。
    */
-  public static final int MAX_SIZE = 2000;
+  public static final int MAX_SIZE = 100;
 
   /** 要求された取得件数を許容範囲に収める。 */
   public static int clampSize(int requested) {

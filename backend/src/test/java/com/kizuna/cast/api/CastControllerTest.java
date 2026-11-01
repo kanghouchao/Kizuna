@@ -46,7 +46,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
-/** ハンドラ層で閉じている約束（offset ページングの全順序、削除 204）の単体テスト。 */
+/** ハンドラ層で閉じている約束（offset ページングの全順序・件数上限・取得位置の境界、削除 204）の単体テスト。 */
 @WebMvcTest(CastController.class)
 @Import({
   CastControllerTest.MethodSecurityConfig.class,
@@ -83,6 +83,36 @@ class CastControllerTest {
     mockMvc.perform(get("/casts?sort=name").header("X-Store-ID", "1")).andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
+  }
+
+  @Test
+  @DisplayName("上限を超える取得件数は Pageable 共通の上限 100 件へ丸めて service へ渡ること")
+  @WithMockUser(authorities = "PERM_CAST_MANAGE")
+  void listClampsSizeToSharedPageLimit() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    when(castService.list(eq(1L), any(), pageableCaptor.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    mockMvc
+        .perform(get("/casts").param("size", "1000").header("X-Store-ID", "1"))
+        .andExpect(status().isOk());
+
+    assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(100);
+  }
+
+  @Test
+  @DisplayName("取得位置が int を超えるページ指定は service を呼ばずに 400 を返すこと")
+  @WithMockUser(authorities = "PERM_CAST_MANAGE")
+  void listRejectsPageBeyondIntOffset() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            get("/casts").param("page", "99999999").param("size", "100").header("X-Store-ID", "1"))
+        .andExpect(status().isBadRequest());
+
+    verify(castService, never()).list(anyLong(), any(), any());
   }
 
   @Test
