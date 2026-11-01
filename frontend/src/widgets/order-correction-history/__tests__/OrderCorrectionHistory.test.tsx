@@ -62,7 +62,7 @@ it('前後の費用・報酬と理由を表示し、次ページの取得失敗�
   expect(await screen.findByText('提供コースの訂正')).toBeInTheDocument();
   expect(screen.getByText('請求 ¥12,000 → ¥11,000')).toBeInTheDocument();
   expect(screen.getByText('発生済み報酬 ¥7,000 → ¥7,000')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByRole('alert')).toHaveTextContent('履歴を取得できませんでした');
   expect(screen.queryByText('提供コースの訂正')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '再試行' }));

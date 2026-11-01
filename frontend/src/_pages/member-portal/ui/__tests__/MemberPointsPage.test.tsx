@@ -129,7 +129,7 @@ describe('MemberPointsPage', () => {
     render(<MemberPointsPage />);
 
     expect(await screen.findByText('店舗0')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     expect(await screen.findByText('店舗20')).toBeInTheDocument();
     expect(screen.queryByText('店舗0')).not.toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(20);

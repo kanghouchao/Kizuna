@@ -258,12 +258,12 @@ it('履歴を開き直すと同一記録でも先頭ページへ戻り別記録�
     />
   );
   fireEvent.click((await screen.findAllByRole('button', { name: 'ボーナスの変更履歴' }))[0]);
-  fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: '次へ' }))[0]);
   await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'a', 1));
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   fireEvent.click(screen.getAllByRole('button', { name: 'ボーナスの変更履歴' })[1]);
   await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', 0));
-  fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: '次へ' }))[0]);
   await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', 1));
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   fireEvent.click(screen.getAllByRole('button', { name: 'ボーナスの変更履歴' })[1]);

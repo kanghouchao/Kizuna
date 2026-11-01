@@ -423,6 +423,8 @@ function LedgerEntries({ id }: { id: number }) {
         <Pager
           page={entries.page}
           pageCount={entries.pageCount}
+          total={entries.total}
+          rowCount={entries.rows.length}
           disabled={entries.isLoading}
           onPageChange={page => void entries.onPageChange(page)}
         />

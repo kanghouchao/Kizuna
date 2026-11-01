@@ -1,8 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { Button, Card, CardContent, RegionError, TableCard } from '@/shared/ui';
+import { Card, CardContent, Pager, RegionError, TableCard } from '@/shared/ui';
 
 export interface ListPageSearch {
   /** 検索カードの中身（入力欄・ボタンなど） */
@@ -73,19 +72,8 @@ export function ListPage({
     </Card>
   );
 
-  // 非最終ページは常に満杯という offset pagination の前提から、rows.length だけで件数範囲を算出できる
-  const isLastPage = page === pageCount - 1;
-  const from = isLastPage ? total - rows.length + 1 : page * rows.length + 1;
-  const to = isLastPage ? total : from + rows.length - 1;
-
   // 削除等で現在ページの rows が空になっても（total は残っていても）前ページへ戻れるよう、
-  // ページネーションは isEmpty 分岐の外側で常に描画する
-  const windowSize = Math.min(5, pageCount);
-  const windowStart = Math.max(
-    0,
-    Math.min(page - Math.floor(windowSize / 2), pageCount - windowSize)
-  );
-
+  // ページ送りは isEmpty 分岐の外側で常に描画する
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -120,80 +108,15 @@ export function ListPage({
           children
         )}
 
-        {/* pageCount が 1 に潰れても、削除等で page が範囲外（page > 0）になった場合は
-            戻る手段を残す必要があるため、pageCount > 1 だけでは判定しない */}
-        {onPageChange && !isLoading && (pageCount > 1 || page > 0) && (
-          <div className="px-6 py-4 flex items-center justify-between border-t">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(page - 1)}
-                disabled={page <= 0}
-              >
-                前へ
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-3"
-                onClick={() => onPageChange(page + 1)}
-                disabled={page >= pageCount - 1}
-              >
-                次へ
-              </Button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {rows.length > 0 ? `${total} 件中 ${from}-${to} を表示` : `${total} 件`}
-                </p>
-              </div>
-              <div>
-                <nav className="flex gap-1" aria-label="ページネーション">
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label="前へ"
-                    onClick={() => onPageChange(page - 1)}
-                    disabled={page <= 0}
-                  >
-                    <ChevronLeftIcon />
-                  </Button>
-
-                  {Array.from({ length: windowSize }, (_, i) => {
-                    const buttonPage = windowStart + i;
-                    return (
-                      <Button
-                        key={buttonPage}
-                        variant="outline"
-                        size="sm"
-                        aria-current={buttonPage === page ? 'page' : undefined}
-                        className={
-                          buttonPage === page
-                            ? 'border-primary bg-primary/10 text-primary-strong'
-                            : undefined
-                        }
-                        onClick={() => onPageChange(buttonPage)}
-                      >
-                        {buttonPage + 1}
-                      </Button>
-                    );
-                  })}
-
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label="次へ"
-                    onClick={() => onPageChange(page + 1)}
-                    disabled={page >= pageCount - 1}
-                  >
-                    <ChevronRightIcon />
-                  </Button>
-                </nav>
-              </div>
-            </div>
-          </div>
+        {onPageChange && !isLoading && (
+          <Pager
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            rowCount={rows.length}
+            onPageChange={onPageChange}
+            className="px-6 py-4 border-t"
+          />
         )}
       </TableCard>
     </div>

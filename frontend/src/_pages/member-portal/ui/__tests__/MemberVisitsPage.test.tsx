@@ -112,14 +112,14 @@ describe('MemberVisitsPage', () => {
     render(<MemberVisitsPage />);
 
     expect(await screen.findByText('店舗0')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     expect(await screen.findByText('店舗20')).toBeInTheDocument();
     expect(screen.queryByText('店舗0')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(5));
 
     expect(mockedList.mock.calls.map(([number]) => number)).toEqual([0, 1, 2]);
-    expect(screen.getByRole('button', { name: '次のページ' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: '次へ' })[0]).toBeDisabled();
   });
 
   it('来店が無ければ空を名乗る', async () => {

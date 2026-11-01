@@ -29,8 +29,8 @@ interface MergeHistorySectionProps {
  */
 export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
   const [mergeId, setMergeId] = useState<string | null>(null);
-  const { rows, page, pageCount, isLoading, failed, reload, onPageChange } = useListPage(page =>
-    customerApi.mergeHistory(customerId, page)
+  const { rows, page, pageCount, total, isLoading, failed, reload, onPageChange } = useListPage(
+    page => customerApi.mergeHistory(customerId, page)
   );
 
   return (
@@ -105,6 +105,8 @@ export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
         <Pager
           page={page}
           pageCount={pageCount}
+          total={total}
+          rowCount={rows.length}
           disabled={isLoading}
           onPageChange={next => void onPageChange(next)}
         />

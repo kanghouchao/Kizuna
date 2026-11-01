@@ -154,6 +154,8 @@ export function OrderServiceProgress({
             <Pager
               page={page}
               pageCount={history.data?.pageCount ?? 0}
+              total={history.data?.total ?? 0}
+              rowCount={history.data?.rows.length ?? 0}
               disabled={history.isLoading}
               onPageChange={setPage}
             />

@@ -202,7 +202,7 @@ describe('CustomerDuplicatesPage', () => {
       .mockResolvedValueOnce(pageOf([], 1, 2));
 
     render(<CustomerDuplicatesPage />);
-    fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: '次へ' }))[0]);
 
     await waitFor(() => expect(mockedDuplicates).toHaveBeenLastCalledWith(1, {}));
   });
@@ -211,7 +211,7 @@ describe('CustomerDuplicatesPage', () => {
     render(<CustomerDuplicatesPage />);
     await screen.findByText('山田太郎');
 
-    expect(screen.queryByRole('navigation', { name: 'ページ送り' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'ページネーション' })).not.toBeInTheDocument();
   });
 
   it.each(['close', 'escape'])('確認を中断しても展開済み候補と選択を保持する: %s', async action => {
@@ -245,7 +245,7 @@ describe('CustomerDuplicatesPage', () => {
     render(<CustomerDuplicatesPage />);
     fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
     await selectBothRows();
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     await waitFor(() => expect(mockedDuplicates).toHaveBeenLastCalledWith(1, {}));
     expect(screen.getByLabelText('ヤマダタロウ を見比べる')).toBeChecked();
     expect(screen.getByRole('table', { name: '2 行の比較' })).toBeInTheDocument();
@@ -272,7 +272,7 @@ describe('CustomerDuplicatesPage', () => {
     if (expanded) fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
     await selectBothRows();
     fireEvent.click(screen.getByLabelText('山田太郎 を残す'));
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     fireEvent.click(await screen.findByRole('button', { name: '再試行' }));
     const comparison = await screen.findByRole('table', { name: '2 行の比較' });
     expect(within(comparison).getAllByText('9 件')).toHaveLength(2);
@@ -304,7 +304,7 @@ describe('CustomerDuplicatesPage', () => {
     expect(await screen.findByText('21 件')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '顧客を表示' }));
     await screen.findByText('山田太郎');
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     expect(await screen.findByRole('alert')).toHaveTextContent('候補顧客の取得に失敗しました');
     expect(screen.queryByText('山田太郎')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
@@ -325,7 +325,7 @@ describe('CustomerDuplicatesPage', () => {
     );
     expect(screen.queryByRole('table', { name: '2 行の比較' })).not.toBeInTheDocument();
     mockedDuplicates.mockRejectedValueOnce(new Error('failure'));
-    fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: '次へ' }))[0]);
     await screen.findByRole('alert');
     expect(screen.queryByText('山田太郎')).not.toBeInTheDocument();
     mockedDuplicates.mockResolvedValueOnce(twoRowGroup);

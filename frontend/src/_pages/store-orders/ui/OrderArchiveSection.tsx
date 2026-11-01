@@ -4,18 +4,12 @@ import { OrderCorrectionHistoryDialog } from '@/widgets/order-correction-history
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  PencilLineIcon,
-  UserRoundCogIcon,
-} from 'lucide-react';
+import { ChevronDownIcon, PencilLineIcon, UserRoundCogIcon } from 'lucide-react';
 import { OrderArchiveRow, OrderListCriteria, OrderStatus, orderApi } from '@/entities/order';
 import { storePath, useListPage } from '@/shared/lib';
 import { formatDateTime } from '../lib/formatDateTime';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
-import { Button, RegionError } from '@/shared/ui';
+import { Button, Pager, RegionError } from '@/shared/ui';
 
 /** アーカイブの 1 ページ。増えるだけの記録なので、位置をページ番号で指せる。 */
 const PAGE_SIZE = 10;
@@ -228,39 +222,15 @@ export function OrderArchiveSection({
               />
             ))
           )}
-          {list.pageCount > 1 && (
-            <div className="flex items-center justify-between border-t px-4 py-3">
-              <span className="text-muted-foreground text-sm">
-                {list.total} 件中 {list.page * PAGE_SIZE + 1}-
-                {list.page * PAGE_SIZE + list.rows.length} を表示
-              </span>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  aria-label="前のページ"
-                  disabled={list.page <= 0}
-                  onClick={() => void list.onPageChange(list.page - 1)}
-                >
-                  <ChevronLeftIcon />
-                </Button>
-                <span className="text-muted-foreground px-2 text-sm">
-                  {list.page + 1} / {list.pageCount}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  aria-label="次のページ"
-                  disabled={list.page >= list.pageCount - 1}
-                  onClick={() => void list.onPageChange(list.page + 1)}
-                >
-                  <ChevronRightIcon />
-                </Button>
-              </div>
-            </div>
-          )}
+          <Pager
+            page={list.page}
+            pageCount={list.pageCount}
+            total={list.total}
+            rowCount={list.rows.length}
+            disabled={list.isLoading}
+            onPageChange={page => void list.onPageChange(page)}
+            className="border-t px-4 py-3"
+          />
         </div>
       )}
     </div>

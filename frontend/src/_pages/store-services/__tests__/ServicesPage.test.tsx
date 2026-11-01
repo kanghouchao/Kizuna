@@ -193,7 +193,7 @@ it('変更履歴をページ番号で送り、次のページを取り直す', a
   render(<ServicesPage />);
   fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
   expect(await screen.findByText('版本 3 · 変更')).toBeInTheDocument();
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '次のページ' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('版本 2 · 変更')).toBeInTheDocument();
   expect(screen.queryByText('版本 3 · 変更')).not.toBeInTheDocument();
   expect(api.history).toHaveBeenLastCalledWith('10', 1);

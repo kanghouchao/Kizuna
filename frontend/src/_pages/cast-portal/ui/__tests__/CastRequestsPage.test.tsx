@@ -224,7 +224,7 @@ describe('CastRequestsPage', () => {
     render(<CastRequestsPage />);
 
     expect(await screen.findByText('新しい店舗')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     expect(await screen.findByText('古い店舗')).toBeInTheDocument();
     expect(screen.queryByText('新しい店舗')).not.toBeInTheDocument();
     expect(mockedMyShiftRequests).toHaveBeenLastCalledWith(1);

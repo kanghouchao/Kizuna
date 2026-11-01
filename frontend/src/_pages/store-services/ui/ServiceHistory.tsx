@@ -115,6 +115,8 @@ function HistoryContent({ id, onForbidden }: Pick<ServiceHistoryProps, 'id' | 'o
           <Pager
             page={history.page}
             pageCount={history.pageCount}
+            total={history.total}
+            rowCount={history.rows.length}
             disabled={history.isLoading}
             onPageChange={page => void history.onPageChange(page)}
           />

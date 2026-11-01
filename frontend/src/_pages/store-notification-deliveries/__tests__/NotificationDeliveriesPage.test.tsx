@@ -292,7 +292,7 @@ test('送信試行はページ番号で送り、次のページを取り直す',
   render(<NotificationDeliveriesPage />);
   const modal = await detail();
   expect(await within(modal).findByText('一頁目の試行')).toBeInTheDocument();
-  fireEvent.click(within(modal).getByRole('button', { name: '次のページ' }));
+  fireEvent.click(within(modal).getAllByRole('button', { name: '次へ' })[0]);
   expect(await within(modal).findByText('二頁目の試行')).toBeInTheDocument();
   expect(api.history).toHaveBeenLastCalledWith('10', 1);
 });

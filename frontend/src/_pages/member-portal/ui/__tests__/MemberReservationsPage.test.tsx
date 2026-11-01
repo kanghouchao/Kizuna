@@ -171,7 +171,7 @@ describe('MemberReservationsPage', () => {
     mockedList.mockImplementation((number: number) =>
       number > 0 ? Promise.reject(new Error('failed')) : server(number)
     );
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('予約を取得できませんでした。');
     expect(screen.queryByText('店舗0')).not.toBeInTheDocument();
@@ -192,15 +192,15 @@ describe('MemberReservationsPage', () => {
     render(<MemberReservationsPage />);
 
     expect(await screen.findByText('店舗0')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     expect(await screen.findByText('店舗20')).toBeInTheDocument();
     expect(screen.queryByText('店舗0')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(5)
     );
 
     expect(mockedList.mock.calls.map(([number]) => number)).toEqual([0, 1, 2]);
-    expect(screen.getByRole('button', { name: '次のページ' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: '次へ' })[0]).toBeDisabled();
   });
 });

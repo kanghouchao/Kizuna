@@ -197,7 +197,7 @@ test('版の操作履歴をページ番号で送り、次のページを取り�
   await showRevision();
   const section = screen.getByRole('heading', { name: '操作履歴' }).closest('section')!;
   expect(await within(section).findByText('新しい操作')).toBeVisible();
-  fireEvent.click(within(section).getByRole('button', { name: '次のページ' }));
+  fireEvent.click(within(section).getAllByRole('button', { name: '次へ' })[0]);
   expect(await within(section).findByText('古い操作')).toBeVisible();
   expect(api.history).toHaveBeenLastCalledWith({ sid: '10', rid: '20' }, 1);
 });
