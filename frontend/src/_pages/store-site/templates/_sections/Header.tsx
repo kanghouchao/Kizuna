@@ -14,6 +14,7 @@ const navLinks = [
   { href: '/', label: 'TOP' },
   { href: '/casts', label: 'キャスト' },
   { href: '/schedule', label: '出勤表' },
+  { href: '/news', label: 'お知らせ' },
   { href: '/reviews', label: '口コミ' },
   { href: '/menu', label: '料金' },
   { href: '/about', label: '店舗情報' },

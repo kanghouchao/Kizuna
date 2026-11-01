@@ -20,6 +20,7 @@ import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -46,6 +47,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
@@ -353,6 +355,117 @@ class ArticleIntegrationTest {
         .isEqualTo("false");
   }
 
+  @Test
+  void publicListKeepsStartExcludesEndAndOrdersTotallyWithinTheNamedStore() throws Exception {
+    var now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    String older = now.minusDays(2).toString();
+    String newer = now.minusDays(1).toString();
+    String start = now.toString();
+    String upcoming = now.plusMinutes(1).toString();
+    List<Object[]> publications =
+        List.of(
+            new Object[] {true, null, null, null},
+            new Object[] {true, older, null, null},
+            new Object[] {true, newer, null, null},
+            new Object[] {true, null, null, 2},
+            new Object[] {true, older, null, 1},
+            new Object[] {true, null, null, 1},
+            new Object[] {false, null, null, 0},
+            new Object[] {true, start, null, 0},
+            new Object[] {true, null, start, 0},
+            new Object[] {true, upcoming, null, 0},
+            new Object[] {true, null, null, null});
+    for (int i = 0; i < publications.size(); i++) {
+      var p = publications.get(i);
+      publish(
+          create("order-" + i, BODY),
+          (Boolean) p[0],
+          (String) p[1],
+          (String) p[2],
+          (Integer) p[3],
+          0);
+    }
+    currentStore = otherStore;
+    publish(create("foreign", BODY), true, null, null, 0, 0);
+
+    var all = publicArticles(storeId, "/articles/public?size=100", 200);
+    assertThat(all.get("content"))
+        .extracting(r -> r.get("title").asString())
+        .containsExactly(
+            "order-7",
+            "order-4",
+            "order-5",
+            "order-3",
+            "order-2",
+            "order-1",
+            "order-0",
+            "order-10");
+    var first = all.get("content").get(0);
+    assertThat(first.propertyNames()).containsExactlyInAnyOrder("id", "title", "publish_from");
+    assertThat(first.get("publish_from").asString()).isEqualTo("2026-06-01T00:00:00Z");
+    assertThat(all.get("content").get(6).get("publish_from").isNull()).isTrue();
+
+    var second = publicArticles(storeId, "/articles/public?page=1&size=3", 200);
+    assertThat(second.get("content"))
+        .extracting(r -> r.get("title").asString())
+        .containsExactly("order-3", "order-2", "order-1");
+    assertThat(second.get("total_elements").asLong()).isEqualTo(8);
+    assertThat(publicArticles(otherStore, "/articles/public", 200).get("content"))
+        .extracting(r -> r.get("title").asString())
+        .containsExactly("foreign");
+  }
+
+  @Test
+  void publicDetailReturnsBodyOnlyForADisplayedArticleOfTheNamedStore() throws Exception {
+    var now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    String shown = create("掲出中", BODY);
+    publish(shown, true, now.toString(), null, 3, 0);
+    String hidden = create("非公開", BODY);
+    publish(hidden, false, null, null);
+    String ended = create("終了", BODY);
+    publish(ended, true, now.minusHours(1).toString(), now.toString());
+    String upcoming = create("開始前", BODY);
+    publish(upcoming, true, now.plusMinutes(1).toString(), null);
+    String draft = create("作成直後", BODY);
+    currentStore = otherStore;
+    String foreign = create("他店", BODY);
+    publish(foreign, true, null, null);
+
+    var detail = publicArticles(storeId, "/articles/public/" + shown, 200);
+    assertThat(detail.propertyNames())
+        .containsExactlyInAnyOrder("id", "title", "publish_from", "body");
+    assertThat(detail.get("id").asString()).isEqualTo(shown);
+    assertThat(detail.get("title").asString()).isEqualTo("掲出中");
+    assertThat(detail.get("body").asString()).isEqualTo(BODY);
+    assertThat(detail.get("publish_from").asString()).isEqualTo("2026-06-01T00:00:00Z");
+
+    for (String id : List.of(hidden, ended, upcoming, draft, foreign, "999999999999"))
+      assertThat(publicArticles(storeId, "/articles/public/" + id, 404).get("error").asString())
+          .isEqualTo("記事が見つかりません");
+    publicArticles(otherStore, "/articles/public/" + shown, 404);
+  }
+
+  /** 公開エンドポイントは未認証で叩かれる。名乗る店舗だけを差し替え、終われば元の担当者と店舗へ戻す。 */
+  private JsonNode publicArticles(Long store, String path, int expected) throws Exception {
+    var previous = currentStore;
+    currentStore = store;
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new AnonymousAuthenticationToken(
+                "public", "anonymousUser", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
+    try {
+      return json.readTree(
+          mvc.perform(get(path))
+              .andExpect(status().is(expected))
+              .andReturn()
+              .getResponse()
+              .getContentAsString());
+    } finally {
+      currentStore = previous;
+      SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+  }
+
   private String create(String title, String text) throws Exception {
     return call(post("/articles").content(body(title, text)), 201).get("id").asString();
   }
@@ -363,10 +476,17 @@ class ArticleIntegrationTest {
 
   private void publish(String id, boolean published, String from, String until, long version)
       throws Exception {
+    publish(id, published, from, until, null, version);
+  }
+
+  private void publish(
+      String id, boolean published, String from, String until, Integer order, long version)
+      throws Exception {
     var request = new LinkedHashMap<String, Object>();
     request.put("published", published);
     request.put("publish_from", from);
     request.put("publish_until", until);
+    request.put("display_order", order);
     request.put("version", version);
     call(put("/articles/" + id + "/publication").content(json.writeValueAsString(request)), 200);
   }
@@ -412,7 +532,7 @@ class ArticleIntegrationTest {
 
   @Configuration
   @EnableAutoConfiguration
-  @EnableMethodSecurity
+  @EnableMethodSecurity(jsr250Enabled = true)
   @EntityScan("com.kizuna")
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackageClasses = ArticleService.class)

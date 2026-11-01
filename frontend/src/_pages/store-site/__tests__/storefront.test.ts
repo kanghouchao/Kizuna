@@ -1,8 +1,9 @@
 import { storefrontService } from '../api/storefront';
-import { serverClient } from '@/shared/api/index.server';
+import { ServerApiError, serverClient } from '@/shared/api/index.server';
 
 // serverClientのモック
 jest.mock('@/shared/api/server-client', () => ({
+  ...jest.requireActual('@/shared/api/server-client'),
   serverClient: {
     get: jest.fn(),
   },
@@ -159,6 +160,32 @@ describe('storefrontService', () => {
 
       expect(result.casts).toEqual(mockCasts);
       expect(result.siteConfig).toEqual(mockConfig);
+    });
+  });
+
+  describe('fetchArticle', () => {
+    it('掲出中の記事を店舗を名乗って取得すること', async () => {
+      const article = { id: '12', title: '告知', body: '本文' };
+      (serverClient.get as jest.Mock).mockResolvedValue(article);
+
+      await expect(storefrontService.fetchArticle('7', '12')).resolves.toEqual(article);
+      expect(serverClient.get).toHaveBeenCalledWith('/articles/public/12', {
+        headers: { 'X-Store-ID': '7' },
+        cache: 'no-store',
+      });
+    });
+
+    it('404 は見つからないとして null を返すこと', async () => {
+      (serverClient.get as jest.Mock).mockRejectedValue(new ServerApiError(404, 'not found'));
+
+      await expect(storefrontService.fetchArticle('7', '12')).resolves.toBeNull();
+    });
+
+    it('404 以外の失敗は見つからないと取り違えず投げること', async () => {
+      const failure = new ServerApiError(500, 'boom');
+      (serverClient.get as jest.Mock).mockRejectedValue(failure);
+
+      await expect(storefrontService.fetchArticle('7', '12')).rejects.toBe(failure);
     });
   });
 });
