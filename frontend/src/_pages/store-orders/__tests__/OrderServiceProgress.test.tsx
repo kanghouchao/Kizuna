@@ -25,7 +25,12 @@ const order = {
 } as Order;
 beforeEach(() => {
   jest.clearAllMocks();
-  (orderApi.specialServiceEvents as jest.Mock).mockResolvedValue({ rows: [], nextCursor: 'next' });
+  (orderApi.specialServiceEvents as jest.Mock).mockResolvedValue({
+    rows: [],
+    page: 0,
+    pageCount: 2,
+    total: 21,
+  });
 });
 test('空の開始理由は送信時にエラーを示して入力へフォーカスする', async () => {
   render(<OrderServiceProgress order={order} onOrderUpdated={jest.fn()} />);
@@ -44,11 +49,11 @@ test('開始中の履歴ページ変更でも更新応答を反映し、送信�
   );
   const onOrderUpdated = jest.fn();
   render(<OrderServiceProgress order={order} onOrderUpdated={onOrderUpdated} />);
-  await waitFor(() => expect(screen.getByRole('button', { name: '次の履歴' })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: '次のページ' })).toBeEnabled());
   fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
   fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
-  fireEvent.click(screen.getByRole('button', { name: '次の履歴' }));
-  await waitFor(() => expect(orderApi.specialServiceEvents).toHaveBeenCalledWith('o1', 'next'));
+  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  await waitFor(() => expect(orderApi.specialServiceEvents).toHaveBeenCalledWith('o1', 1));
   const updated = { ...order, status: 'IN_SERVICE' as const, version: 2 };
   await act(async () => finish(updated));
   expect(onOrderUpdated).toHaveBeenCalledWith(updated);

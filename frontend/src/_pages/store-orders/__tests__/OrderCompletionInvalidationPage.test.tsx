@@ -63,7 +63,12 @@ beforeEach(() => {
   meWith(allPermissions);
   (orderApi.get as jest.Mock).mockResolvedValue(order);
   (orderApi.invalidateCompletion as jest.Mock).mockResolvedValue(change);
-  (orderApi.correctionHistory as jest.Mock).mockResolvedValue({ rows: [change], nextCursor: null });
+  (orderApi.correctionHistory as jest.Mock).mockResolvedValue({
+    rows: [change],
+    page: 0,
+    pageCount: 1,
+    total: 0,
+  });
 });
 test('未提供と理由を確認し、表示した版で無効化する', async () => {
   render(<OrderCompletionInvalidationPage />);
@@ -159,7 +164,7 @@ test('再訪では無効化履歴の前後額を表示する', async () => {
   render(<OrderCompletionInvalidationPage />);
   expect(await screen.findByText('有効な請求 9,000 円 → 0 円')).toBeInTheDocument();
   expect(screen.getByText('発生済み報酬 5,000 円 → 0 円')).toBeInTheDocument();
-  expect(orderApi.correctionHistory).toHaveBeenCalledWith('o1');
+  expect(orderApi.correctionHistory).toHaveBeenCalledWith('o1', 0);
 });
 
 test('再訪時の履歴取得失敗を零の前値で隠さず再試行できる', async () => {

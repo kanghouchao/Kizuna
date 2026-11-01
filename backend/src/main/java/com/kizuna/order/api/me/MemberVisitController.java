@@ -3,14 +3,16 @@ package com.kizuna.order.api.me;
 import com.kizuna.order.api.dto.MemberVisitResponse;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.MemberVisitService;
-import com.kizuna.shared.web.CursorPage;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -26,14 +28,17 @@ public class MemberVisitController {
   private final MemberVisitService memberVisitService;
   private final OrderMapper orderMapper;
 
-  /** 本人の来店履歴。続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。 */
+  /** 本人の来店履歴。新しい帰属から。 */
   @GetMapping
   @PreAuthorize("hasRole('MEMBER')")
-  public ResponseEntity<CursorPage<MemberVisitResponse>> list(
+  public ResponseEntity<Page<MemberVisitResponse>> list(
       Principal principal,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
     return ResponseEntity.ok(
-        memberVisitService.list(principal.getName(), cursor, size).map(orderMapper::toResponse));
+        memberVisitService.list(principal.getName(), pageable).map(orderMapper::toResponse));
   }
 }

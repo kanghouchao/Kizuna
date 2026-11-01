@@ -1,8 +1,9 @@
 package com.kizuna.order.domain;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -59,29 +60,15 @@ public interface OrderAttributionRepository extends JpaRepository<OrderAttributi
   String MEMBER_VISIT_WHERE =
       " where a.memberId = :memberId and a.status = com.kizuna.order.domain.OrderAttributionStatus.ACTIVE ";
 
-  // 新しい帰属から。カーソルの比較（下記 AFTER 条件）はこの並びと同じ列の組で行う。
-  String MEMBER_VISIT_ORDER = " order by a.createdAt desc, a.id desc";
-
-  /**
-   * 来店履歴（跨店集約）の先頭を返す。
-   *
-   * <p>並びは帰属の作成時刻の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
-   */
-  @Query(MEMBER_VISIT_SELECT + MEMBER_VISIT_WHERE + MEMBER_VISIT_ORDER)
-  List<MemberVisitView> findMemberVisitViews(@Param("memberId") Long memberId, Limit limit);
-
-  /** 来店履歴の続き（渡された位置より古い側）だけを返す。 */
+  /** 来店履歴（跨店集約）。並びは呼出側の Pageable が決める。件数は一覧と同じ内部結合で数える。 */
   @Query(
-      MEMBER_VISIT_SELECT
-          + MEMBER_VISIT_WHERE
-          + """
-            and (a.createdAt < :cursorCreatedAt
-                 or (a.createdAt = :cursorCreatedAt and a.id < :cursorId))
-            """
-          + MEMBER_VISIT_ORDER)
-  List<MemberVisitView> findMemberVisitViewsAfter(
-      @Param("memberId") Long memberId,
-      @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
-      @Param("cursorId") Long cursorId,
-      Limit limit);
+      value = MEMBER_VISIT_SELECT + MEMBER_VISIT_WHERE,
+      countQuery =
+          """
+          select count(a) from com.kizuna.order.domain.OrderAttribution a
+            join com.kizuna.order.domain.Order o on o.id = a.orderId
+            join com.kizuna.store.domain.Store st on st.id = o.storeId
+          """
+              + MEMBER_VISIT_WHERE)
+  Page<MemberVisitView> findMemberVisitViews(@Param("memberId") Long memberId, Pageable pageable);
 }

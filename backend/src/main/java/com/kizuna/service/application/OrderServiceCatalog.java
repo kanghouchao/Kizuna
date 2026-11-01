@@ -5,12 +5,10 @@ import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
-import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,29 +55,10 @@ public class OrderServiceCatalog {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<OrderServiceTerms> history(
-      Long storeId, SelectionKind kind, String search, String cursor, int size) {
-    requirePage(0, size);
-    var key = cursor == null ? null : PageCursor.decode(cursor);
-    OffsetDateTime at;
-    try {
-      at =
-          key == null
-              ? OffsetDateTime.parse("9999-12-31T23:59:59Z")
-              : OffsetDateTime.parse(key.key());
-    } catch (RuntimeException ex) {
-      throw new ServiceException("カーソルが正しくありません");
-    }
-    var rows =
-        revisions.findHistoricalSelections(
-            storeId,
-            ServiceKind.valueOf(kind.name()),
-            search == null ? "" : search,
-            at,
-            key == null ? "" : key.id(),
-            PageRequest.of(0, size + 1));
-    return CursorPage.of(
-        rows, size, row -> new PageCursor(row.occurredAt().toString(), row.revisionId()).encode());
+  public Page<OrderServiceTerms> history(
+      Long storeId, SelectionKind kind, String search, Pageable pageable) {
+    return revisions.findHistoricalSelections(
+        storeId, ServiceKind.valueOf(kind.name()), search == null ? "" : search, pageable);
   }
 
   private void requirePage(int page, int size) {

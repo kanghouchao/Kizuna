@@ -46,7 +46,7 @@ beforeEach(() => {
   jest
     .mocked(selfRemunerationApi.detail)
     .mockResolvedValue({ ...summary, version: 1, items: [item] });
-  jest.mocked(selfRemunerationApi.changes).mockResolvedValue({ rows: [], nextCursor: null });
+  jest.mocked(selfRemunerationApi.changes).mockResolvedValue(page([]));
 });
 it('opens a withdrawn enrollment order and its history from the portal', async () => {
   render(<CastRemunerationsPage />);
@@ -120,7 +120,9 @@ it('shows invalidation before and after without describing original terms as pai
         },
       },
     ],
-    nextCursor: null,
+    page: 0,
+    pageCount: 1,
+    total: 1,
   });
   render(<CastRemunerationsPage />);
   fireEvent.click(await screen.findByRole('button', { name: '詳細を確認' }));
@@ -131,21 +133,21 @@ it('shows invalidation before and after without describing original terms as pai
   expect(screen.getByText('約定報酬: 7,000 円 / 発生済み報酬: 0 円')).toBeInTheDocument();
   expect(screen.getByText('変更 ID: change')).toBeInTheDocument();
 });
-it('retries history failures and respects cursor continuation', async () => {
+it('retries history failures and pages through the history', async () => {
   jest
     .mocked(selfRemunerationApi.changes)
     .mockRejectedValueOnce(new Error('network'))
-    .mockResolvedValueOnce({ rows: [], nextCursor: 'next' })
-    .mockResolvedValueOnce({ rows: [], nextCursor: null });
+    .mockResolvedValueOnce({ rows: [], page: 0, pageCount: 2, total: 21 })
+    .mockResolvedValueOnce({ rows: [], page: 1, pageCount: 2, total: 21 });
   render(<CastRemunerationsPage />);
   fireEvent.click(await screen.findByRole('button', { name: '詳細を確認' }));
   fireEvent.click(await screen.findByRole('button', { name: '変更履歴を確認' }));
   await screen.findByText('報酬明細の取得に失敗しました');
   expect(screen.queryByText('変更履歴はありません')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /再試行/ }));
-  fireEvent.click(await screen.findByRole('button', { name: 'さらに読み込む' }));
-  await screen.findByText('変更履歴はありません');
-  expect(selfRemunerationApi.changes).toHaveBeenLastCalledWith('order', 'next');
+  fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+  expect(await screen.findByText('2 / 2')).toBeInTheDocument();
+  expect(selfRemunerationApi.changes).toHaveBeenLastCalledWith('order', 1);
 });
 it('shows empty results without treating them as errors', async () => {
   jest.mocked(selfRemunerationApi.list).mockResolvedValue(page([]));

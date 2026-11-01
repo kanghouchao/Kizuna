@@ -8,8 +8,17 @@ import {
   ORDER_APPLICATION_STATUS_LABELS,
   memberOrderApplicationApi,
 } from '@/entities/order';
-import { getApiErrorMessage, useCursorList } from '@/shared/lib';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
+import { getApiErrorMessage, useListPage } from '@/shared/lib';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Pager,
+  RegionError,
+} from '@/shared/ui';
 
 /**
  * 予約申請の状態バッジ。行の状態は PENDING のままでも、希望日を過ぎた申請はサーバの導出（expired）に
@@ -37,33 +46,18 @@ function StatusBadge({ application }: { application: MemberOrderApplication }) {
   );
 }
 
-/** 1 回に読み込む件数。会員の画面は縦に伸ばす前提なので、追加読み込みで過去へ遡る。 */
-const PAGE_SIZE = 20;
-
 /** 会員ポータルの予約申請一覧。全店舗を集約し、未処理のものは本人が取り下げられる。 */
 export function MemberReservationsPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
-  // 1 回の取得は常に PAGE_SIZE 件で、続きは位置（カーソル）を渡して 1 回ずつ継ぎ足す。要求サイズ自体を
-  // 膨らませると、サーバ側の取得上限に当たった時点でそれ以降の申請へ到達できなくなる。
-  const {
-    rows: reservations,
-    setRows: setReservations,
-    isLoading: loading,
-    failed,
-    hasMore,
-    reload,
-    loadMore,
-  } = useCursorList<MemberOrderApplication>(cursor =>
-    memberOrderApplicationApi.list({ cursor, size: PAGE_SIZE })
-  );
+  const list = useListPage<MemberOrderApplication>(page => memberOrderApplicationApi.list(page));
+  const { rows: reservations, isLoading: loading, failed } = list;
 
   const withdraw = async (reservation: MemberOrderApplication) => {
     setProcessingId(reservation.id ?? null);
     try {
-      // 取り下げても申請は一覧に残る（状態が変わるだけ）ので、その行だけ差し替える。
-      const updated = await memberOrderApplicationApi.withdraw(reservation.id);
+      await memberOrderApplicationApi.withdraw(reservation.id);
       notify.success('予約を取り下げました');
-      setReservations(prev => prev.map(row => (row.id === reservation.id ? updated : row)));
+      await list.reload();
     } catch (error) {
       notify.error(getApiErrorMessage(error, '取り下げに失敗しました'));
     } finally {
@@ -82,7 +76,10 @@ export function MemberReservationsPage() {
         </CardHeader>
         <CardContent>
           {failed ? (
-            <RegionError message="予約を取得できませんでした。" onRetry={reload} />
+            <RegionError
+              message="予約を取得できませんでした。"
+              onRetry={() => void list.reload()}
+            />
           ) : loading && reservations.length === 0 ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : reservations.length === 0 ? (
@@ -122,17 +119,14 @@ export function MemberReservationsPage() {
               ))}
             </ul>
           )}
-          {hasMore && (
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4 w-full"
-              onClick={loadMore}
+          <div className="mt-4">
+            <Pager
+              page={list.page}
+              pageCount={list.pageCount}
               disabled={loading}
-            >
-              もっと見る
-            </Button>
-          )}
+              onPageChange={page => void list.onPageChange(page)}
+            />
+          </div>
         </CardContent>
       </Card>
       <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">

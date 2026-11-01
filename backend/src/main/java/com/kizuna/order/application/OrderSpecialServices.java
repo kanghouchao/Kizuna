@@ -13,15 +13,14 @@ import com.kizuna.service.application.SpecialServiceRejectionHandler;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -248,26 +247,10 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<OrderSpecialServiceEvent> history(
-      Long storeId, String orderId, String cursor, int size) {
+  public Page<OrderSpecialServiceEvent> history(Long storeId, String orderId, Pageable pageable) {
     orders
         .findByIdAndStoreId(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    if (size < 1 || size > CursorPage.MAX_SIZE) throw new ServiceException("取得件数が正しくありません");
-    var key = cursor == null ? null : PageCursor.decode(cursor);
-    OffsetDateTime at;
-    try {
-      at =
-          key == null
-              ? OffsetDateTime.parse("9999-12-31T23:59:59Z")
-              : OffsetDateTime.parse(key.key());
-    } catch (RuntimeException ex) {
-      throw new ServiceException("カーソルが正しくありません");
-    }
-    return CursorPage.of(
-        events.history(
-            storeId, orderId, at, key == null ? "" : key.id(), PageRequest.of(0, size + 1)),
-        size,
-        e -> new PageCursor(e.getOccurredAt().toString(), e.getId()).encode());
+    return events.findByStoreIdAndOrderId(storeId, orderId, pageable);
   }
 }

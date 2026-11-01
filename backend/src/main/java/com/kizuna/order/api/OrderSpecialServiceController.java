@@ -10,12 +10,14 @@ import com.kizuna.order.application.OrderSpecialServices;
 import com.kizuna.service.application.OrderSpecialServiceCatalog;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,24 +50,30 @@ public class OrderSpecialServiceController {
 
   @GetMapping("/{id}/special-service-revisions")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
-  public CursorPage<Revision> revisions(
+  public Page<Revision> revisions(
       @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String search,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {"occurredAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
     orderQueries.get(storeId, id);
-    return catalog.history(storeId, search, cursor, size).map(Revision::of);
+    return catalog.history(storeId, search, pageable).map(Revision::of);
   }
 
   @GetMapping("/{id}/special-service-events")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public CursorPage<OrderSpecialServiceEventResponse> events(
+  public Page<OrderSpecialServiceEventResponse> events(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return specials.history(storeId, id, cursor, size).map(orderMapper::toResponse);
+      @PageableDefault(
+              size = 20,
+              sort = {"occurredAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return specials.history(storeId, id, pageable).map(orderMapper::toResponse);
   }
 
   @PostMapping("/{id}/start")

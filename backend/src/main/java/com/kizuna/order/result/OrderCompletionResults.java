@@ -4,7 +4,6 @@ import com.kizuna.order.application.OrderCorrectionHistory;
 import com.kizuna.order.domain.OrderCorrectionRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
-import com.kizuna.shared.web.CursorPage;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,12 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderCompletionResults {
   private final OrderRepository orders;
   private final OrderCorrectionRepository corrections;
-  private final OrderCorrectionHistory history;
-
-  public CursorPage<OrderCorrectionResult> corrections(
-      Long storeId, String orderId, String cursor, int size) {
-    return history.store(storeId, orderId, cursor, size);
-  }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Optional<OrderCompletionResult> find(Long storeId, String orderId) {

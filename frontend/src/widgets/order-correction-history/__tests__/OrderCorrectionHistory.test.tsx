@@ -53,48 +53,53 @@ const entry: OrderCorrectionHistoryEntry = {
   after: { ...snapshot, total_fee: 11000 },
 };
 beforeEach(() => jest.clearAllMocks());
-it('前後の費用・報酬と理由を表示し、追加取得の失敗では古い履歴を消して先頭から再試行する', async () => {
+it('前後の費用・報酬と理由を表示し、次ページの取得失敗では古い履歴を消して先頭から再試行する', async () => {
   fetchHistory
-    .mockResolvedValueOnce({ rows: [entry], nextCursor: 'next' })
+    .mockResolvedValueOnce({ rows: [entry], page: 0, pageCount: 2, total: 21 })
     .mockRejectedValueOnce(new Error('offline'))
-    .mockResolvedValueOnce({ rows: [entry], nextCursor: null });
+    .mockResolvedValueOnce({ rows: [entry], page: 0, pageCount: 1, total: 0 });
   render(<OrderCorrectionHistory orderId="o1" />);
   expect(await screen.findByText('提供コースの訂正')).toBeInTheDocument();
   expect(screen.getByText('請求 ¥12,000 → ¥11,000')).toBeInTheDocument();
   expect(screen.getByText('発生済み報酬 ¥7,000 → ¥7,000')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'さらに表示' }));
+  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('履歴を取得できませんでした');
   expect(screen.queryByText('提供コースの訂正')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '再試行' }));
   expect(await screen.findByText('提供コースの訂正')).toBeInTheDocument();
-  await waitFor(() => expect(fetchHistory).toHaveBeenLastCalledWith('o1', undefined, undefined));
+  await waitFor(() => expect(fetchHistory).toHaveBeenLastCalledWith('o1', 0, undefined));
 });
 it('横断一覧から行の店舗を名指して読み、権限不足は空履歴と区別する', async () => {
   fetchHistory.mockRejectedValue({ response: { status: 403 } });
   render(<OrderCorrectionHistory orderId="o1" storeId={2} />);
-  await waitFor(() => expect(fetchHistory).toHaveBeenCalledWith('o1', undefined, 2));
+  await waitFor(() => expect(fetchHistory).toHaveBeenCalledWith('o1', 0, 2));
   expect(await screen.findByRole('alert')).toHaveTextContent('履歴を閲覧する権限がありません');
   expect(screen.queryByText('訂正履歴はありません')).not.toBeInTheDocument();
 });
 
 it('対象切替後に旧対象の遅い応答を表示しない', async () => {
-  let resolveOld!: (value: { rows: OrderCorrectionHistoryEntry[]; nextCursor: null }) => void;
+  let resolveOld!: (value: {
+    rows: OrderCorrectionHistoryEntry[];
+    page: number;
+    pageCount: number;
+    total: number;
+  }) => void;
   fetchHistory
     .mockReturnValueOnce(
       new Promise(resolve => {
         resolveOld = resolve;
       })
     )
-    .mockResolvedValueOnce({ rows: [], nextCursor: null });
+    .mockResolvedValueOnce({ rows: [], page: 0, pageCount: 1, total: 0 });
   const { rerender } = render(<OrderCorrectionHistory key="o1" orderId="o1" />);
   rerender(<OrderCorrectionHistory key="o2" orderId="o2" />);
   expect(await screen.findByText('訂正履歴はありません')).toBeInTheDocument();
-  await act(async () => resolveOld({ rows: [entry], nextCursor: null }));
+  await act(async () => resolveOld({ rows: [entry], page: 0, pageCount: 1, total: 0 }));
   expect(screen.queryByText('提供コースの訂正')).not.toBeInTheDocument();
 });
 
 it('閉じる要求を即時に反映しても退出中の本文を保ち、再表示で履歴を取り直す', async () => {
-  fetchHistory.mockResolvedValue({ rows: [entry], nextCursor: null });
+  fetchHistory.mockResolvedValue({ rows: [entry], page: 0, pageCount: 1, total: 0 });
   const changed = jest.fn();
   function Page() {
     const [open, setOpen] = useState(true);

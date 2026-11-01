@@ -3,7 +3,6 @@ package com.kizuna.order.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEFAULTS;
@@ -35,7 +34,6 @@ import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
 import java.util.List;
@@ -49,6 +47,9 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -92,25 +93,25 @@ class OrderApplicationControllerTest {
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
-  @DisplayName("受付箱が要求された群・続きの位置を読み口へ渡すこと")
+  @DisplayName("受付箱が要求された群と希望日の早い順のページを読み口へ渡すこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
-  void listForwardsTheRequestedStatusesAndCursor() throws Exception {
+  void listForwardsTheRequestedStatusesAndPage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Set<OrderApplicationStatus>> statusesCaptor = ArgumentCaptor.captor();
-    ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
-    ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     when(orderQueryService.listApplications(
-            eq(STORE_ID), statusesCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
-        .thenReturn(new CursorPage<>(List.of(), null));
+            eq(STORE_ID), statusesCaptor.capture(), pageableCaptor.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
-        .perform(storeGet("/order-applications?statuses=PENDING&cursor=abc&size=5"))
-        .andExpect(status().isOk());
+        .perform(storeGet("/order-applications?statuses=PENDING&page=1&size=5"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(statusesCaptor.getValue()).containsExactly(OrderApplicationStatus.PENDING);
-    assertThat(cursorCaptor.getValue()).isEqualTo("abc");
-    assertThat(sizeCaptor.getValue()).isEqualTo(5);
-    verify(orderQueryService).listApplications(eq(STORE_ID), any(), any(), anyInt());
+    assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
+    assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+    assertThat(pageableCaptor.getValue().getSort()).isEqualTo(Sort.by("businessDate", "id"));
   }
 
   @Test
@@ -317,8 +318,8 @@ class OrderApplicationControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void applicationRowCarriesOnlyApplicationFields() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderQueryService.listApplications(any(), any(), any(), anyInt()))
-        .thenReturn(new CursorPage<>(List.of(pendingApplication()), null));
+    when(orderQueryService.listApplications(any(), any(), any()))
+        .thenReturn(new PageImpl<>(List.of(pendingApplication())));
 
     mockMvc
         .perform(storeGet("/order-applications?statuses=PENDING"))

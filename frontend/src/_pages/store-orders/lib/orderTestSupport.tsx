@@ -26,17 +26,23 @@ export const preview: OrderPreview = {
 };
 export function courseApiMocks() {
   return {
-    customerCandidates: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
+    customerCandidates: jest.fn().mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 }),
     specialServiceCandidates: jest
       .fn()
       .mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 }),
-    specialServiceRevisions: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
-    specialServiceEvents: jest.fn().mockResolvedValue({ rows: [], nextCursor: null }),
+    specialServiceRevisions: jest
+      .fn()
+      .mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 }),
+    specialServiceEvents: jest
+      .fn()
+      .mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 }),
     start: jest.fn(),
     courseCandidates: jest
       .fn()
       .mockResolvedValue({ rows: [course], page: 0, pageCount: 1, total: 1 }),
-    courseRevisions: jest.fn().mockResolvedValue({ content: [course] }),
+    courseRevisions: jest
+      .fn()
+      .mockResolvedValue({ rows: [course], page: 0, pageCount: 1, total: 1 }),
     previewCreate: jest.fn().mockResolvedValue(preview),
     previewUpdate: jest.fn().mockResolvedValue(preview),
     previewCorrection: jest.fn().mockResolvedValue(preview),

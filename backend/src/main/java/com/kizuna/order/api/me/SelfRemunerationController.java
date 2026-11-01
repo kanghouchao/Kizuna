@@ -6,10 +6,12 @@ import com.kizuna.order.api.dto.SelfRemunerationEnrollmentSummary;
 import com.kizuna.order.api.dto.SelfRemunerationResponse;
 import com.kizuna.order.api.dto.SelfRemunerationSummary;
 import com.kizuna.order.application.SelfRemunerationService;
-import com.kizuna.shared.web.CursorPage;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -53,11 +55,14 @@ public class SelfRemunerationController {
 
   @GetMapping("/remunerations/{orderId}/changes")
   @PreAuthorize("hasRole('CAST')")
-  public CursorPage<SelfRemunerationChangeResponse> changes(
+  public Page<SelfRemunerationChangeResponse> changes(
       Principal principal,
       @PathVariable String orderId,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.changes(principal.getName(), orderId, cursor, size).map(mapper::toResponse);
+      @PageableDefault(
+              size = 20,
+              sort = {"afterVersion", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return service.changes(principal.getName(), orderId, pageable).map(mapper::toResponse);
   }
 }

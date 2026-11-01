@@ -3,11 +3,11 @@ package com.kizuna.order.domain;
 import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
-import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
@@ -63,32 +63,14 @@ public interface OrderApplicationRepository extends StoreScopedRepository<OrderA
 
   String VIEW_WHERE = " where a.storeId = :storeId and a.status in :statuses ";
 
-  // 受付箱は希望日の早い順（近い来店から処理する）。一意な副キー id を重ねて全順序にし、カーソルの比較
-  // （下記 AFTER 条件）はこの並びと同じ列の組で行う。
-  String VIEW_ORDER = " order by a.businessDate asc, a.id asc";
-
-  /** 店舗の申請一覧の先頭。状態の群を指定して辿る（受付箱は PENDING）。 */
-  @Query(VIEW_SELECT + VIEW_WHERE + VIEW_ORDER)
-  List<OrderApplicationView> findViews(
-      @Param("storeId") Long storeId,
-      @Param("statuses") Collection<OrderApplicationStatus> statuses,
-      Limit limit);
-
-  /** 店舗の申請一覧の続き。渡された位置より後ろだけを返す。 */
+  /** 店舗の申請一覧。状態の群を指定して辿る（受付箱は PENDING）。並びは呼出側の Pageable が決める。 */
   @Query(
-      VIEW_SELECT
-          + VIEW_WHERE
-          + """
-            and (a.businessDate > :cursorBusinessDate
-                 or (a.businessDate = :cursorBusinessDate and a.id > :cursorId))
-            """
-          + VIEW_ORDER)
-  List<OrderApplicationView> findViewsAfter(
+      value = VIEW_SELECT + VIEW_WHERE,
+      countQuery = "select count(a) from com.kizuna.order.domain.OrderApplication a" + VIEW_WHERE)
+  Page<OrderApplicationView> findViews(
       @Param("storeId") Long storeId,
       @Param("statuses") Collection<OrderApplicationStatus> statuses,
-      @Param("cursorBusinessDate") LocalDate cursorBusinessDate,
-      @Param("cursorId") String cursorId,
-      Limit limit);
+      Pageable pageable);
 
   String MEMBER_VIEW_SELECT =
       """
@@ -104,35 +86,21 @@ public interface OrderApplicationRepository extends StoreScopedRepository<OrderA
           on k.enrollmentId = ce.id and k.storeId = a.storeId
       """;
 
-  // 本人の申請を店舗を跨いで返すため、申請者の一致が唯一の隔離境界である。先頭と続きの
+  // 本人の申請を店舗を跨いで返すため、申請者の一致が唯一の隔離境界である。一覧と件数の
   // 問い合わせが同じ条件を共有する。
   String MEMBER_VIEW_WHERE = " where a.requesterMemberId = :memberId ";
 
-  // 新しい希望日から。カーソルの比較（下記 AFTER 条件）はこの並びと同じ列の組で行う。
-  String MEMBER_VIEW_ORDER = " order by a.businessDate desc, a.id desc";
-
-  /**
-   * 会員本人の予約申請一覧（跨店集約）の先頭。
-   *
-   * <p>並びは希望日の降順に一意な副キー id を重ねて全順序にする（カーソルが 1 行を一意に指せるため）。
-   */
-  @Query(MEMBER_VIEW_SELECT + MEMBER_VIEW_WHERE + MEMBER_VIEW_ORDER)
-  List<MemberOrderApplicationView> findMemberViews(@Param("memberId") Long memberId, Limit limit);
-
-  /** 会員本人の予約申請一覧の続き。 */
+  /** 会員本人の予約申請一覧（跨店集約）。並びは呼出側の Pageable が決める。 */
   @Query(
-      MEMBER_VIEW_SELECT
-          + MEMBER_VIEW_WHERE
-          + """
-            and (a.businessDate < :cursorBusinessDate
-                 or (a.businessDate = :cursorBusinessDate and a.id < :cursorId))
-            """
-          + MEMBER_VIEW_ORDER)
-  List<MemberOrderApplicationView> findMemberViewsAfter(
-      @Param("memberId") Long memberId,
-      @Param("cursorBusinessDate") LocalDate cursorBusinessDate,
-      @Param("cursorId") String cursorId,
-      Limit limit);
+      value = MEMBER_VIEW_SELECT + MEMBER_VIEW_WHERE,
+      countQuery =
+          """
+          select count(a) from com.kizuna.order.domain.OrderApplication a
+            join com.kizuna.store.domain.Store st on st.id = a.storeId
+          """
+              + MEMBER_VIEW_WHERE)
+  Page<MemberOrderApplicationView> findMemberViews(
+      @Param("memberId") Long memberId, Pageable pageable);
 
   /** 一覧と同じく申請者の一致を問い合わせに載せ、他人の申請には到達させない。 */
   @Query(MEMBER_VIEW_SELECT + " where a.requesterMemberId = :memberId and a.id = :applicationId")

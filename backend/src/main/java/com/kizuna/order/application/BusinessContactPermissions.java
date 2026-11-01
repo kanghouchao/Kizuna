@@ -10,8 +10,6 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -20,7 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -134,19 +133,10 @@ public class BusinessContactPermissions {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<BusinessContactHistory> history(
-      Long storeId, String orderId, String cursor, int requestedSize) {
+  public Page<BusinessContactHistory> history(Long storeId, String orderId, Pageable pageable) {
     orders
         .findByIdAndStoreId(orderId, storeId)
         .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    int size = CursorPage.clampSize(requestedSize);
-    return CursorPage.of(
-        histories.findByStoreIdAndOrderIdAndIdLessThanOrderByIdDesc(
-            storeId,
-            orderId,
-            cursor == null ? "~" : PageCursor.decodeKey(cursor),
-            Limit.of(size + 1)),
-        size,
-        h -> PageCursor.encodeKey(h.getId()));
+    return histories.findByStoreIdAndOrderId(storeId, orderId, pageable);
   }
 }

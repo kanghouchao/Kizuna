@@ -19,13 +19,15 @@ import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
 import com.kizuna.shared.exception.TooManyRequestsException;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -94,12 +96,6 @@ public class OrderApplicationController {
     return hops[hops.length - 1].trim();
   }
 
-  /**
-   * 予約申請の一覧。状態の群を指定してカーソルで辿る（受付箱は PENDING）。
-   *
-   * <p>続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。確定・謝絶で行が消えていく一覧なので、
-   * 位置を「何件目か」で指すと処理の直後に境界の申請を飛ばす。
-   */
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public OrderApplicationDetailResponse detail(
@@ -107,16 +103,19 @@ public class OrderApplicationController {
     return orderMapper.toResponse(orderQueryService.applicationDetail(storeId, id));
   }
 
+  /** 予約申請の一覧。状態の群を指定してページで辿る（受付箱は PENDING）。希望日の早い順（近い来店から処理する）。 */
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<CursorPage<OrderApplicationResponse>> list(
+  public ResponseEntity<Page<OrderApplicationResponse>> list(
       @CurrentStore Long storeId,
       @RequestParam(name = "statuses") Set<OrderApplicationStatus> statuses,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {"businessDate", "id"})
+          Pageable pageable) {
     return ResponseEntity.ok(
         orderQueryService
-            .listApplications(storeId, statuses, cursor, size)
+            .listApplications(storeId, statuses, pageable)
             .map(orderMapper::toResponse));
   }
 

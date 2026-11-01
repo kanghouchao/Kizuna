@@ -44,7 +44,9 @@ beforeEach(() => {
     version: 1,
     items: [],
   });
-  jest.mocked(selfRemunerationApi.changes).mockResolvedValue({ rows: [], nextCursor: null });
+  jest
+    .mocked(selfRemunerationApi.changes)
+    .mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
 });
 
 async function chooseStore(name = store.store_name) {
@@ -80,7 +82,7 @@ it('本人詳細と履歴から戻っても店舗と月と合計を維持する'
   fireEvent.click(await screen.findByRole('button', { name: '変更履歴を確認' }));
   await screen.findByText('変更履歴はありません');
   expect(selfRemunerationApi.detail).toHaveBeenCalledWith('old-order');
-  expect(selfRemunerationApi.changes).toHaveBeenCalledWith('old-order', undefined);
+  expect(selfRemunerationApi.changes).toHaveBeenCalledWith('old-order', 0);
   fireEvent.click(screen.getByRole('button', { name: '一覧へ戻る' }));
   expect(screen.getByLabelText('対象月')).toHaveValue('2026-09');
   expect(screen.getByLabelText('月次報酬合計')).toHaveTextContent('¥14,000');

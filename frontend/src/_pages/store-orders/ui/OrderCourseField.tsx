@@ -39,8 +39,6 @@ export function OrderCourseField({
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);
-  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
-  const cursor = cursors[page];
   const [selected, setSelected] = useState<{
     scope: string;
     value: string;
@@ -49,28 +47,16 @@ export function OrderCourseField({
   }>();
   const scope = `${storeId}:${historicalOrderId ?? ''}`;
   const result = useKeyedResource(
-    ['course-options', storeId, historicalOrderId, search, page, cursor],
+    ['course-options', storeId, historicalOrderId, search, page],
     async () => {
       try {
-        if (historicalOrderId) {
-          const data = await orderApi.courseRevisions(historicalOrderId, search, cursor);
-          return {
-            rows: data.content,
-            next: data.next_cursor,
-            more: !!data.next_cursor,
-            forbidden: false,
-          };
-        }
-        const data = await orderApi.courseCandidates(search, page);
-        return {
-          rows: data.rows,
-          next: undefined,
-          more: (page + 1) * 20 < data.total,
-          forbidden: false,
-        };
+        const data = historicalOrderId
+          ? await orderApi.courseRevisions(historicalOrderId, search, page)
+          : await orderApi.courseCandidates(search, page);
+        return { rows: data.rows, more: page + 1 < data.pageCount, forbidden: false };
       } catch (error) {
         if (isAxiosError(error) && error.response?.status === 403)
-          return { rows: [] as CourseCandidate[], next: undefined, more: false, forbidden: true };
+          return { rows: [] as CourseCandidate[], more: false, forbidden: true };
         throw error;
       }
     }
@@ -116,7 +102,6 @@ export function OrderCourseField({
               onInputValueChange={value => {
                 setSearch(value);
                 setPage(0);
-                setCursors([undefined]);
               }}
               itemToStringLabel={(item: (typeof items)[number]) => item.label}
               onValueChange={item => {
@@ -177,10 +162,7 @@ export function OrderCourseField({
                         type="button"
                         variant="outline"
                         disabled={!result.data?.more}
-                        onClick={() => {
-                          setCursors([...cursors.slice(0, page + 1), result.data?.next]);
-                          setPage(page + 1);
-                        }}
+                        onClick={() => setPage(page + 1)}
                       >
                         次へ
                       </Button>

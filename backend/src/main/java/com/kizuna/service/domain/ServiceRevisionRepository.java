@@ -3,7 +3,6 @@ package com.kizuna.service.domain;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.persistence.StoreScopedRepository;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -17,13 +16,15 @@ public interface ServiceRevisionRepository extends StoreScopedRepository<Service
   Page<ServiceRevision> findByStoreIdAndServiceId(
       Long storeId, String serviceId, Pageable pageable);
 
-  String SPECIAL_SELECT =
+  String SPECIAL_FROM =
       """
-      select r from ServiceRevision r join ServiceItem s on s.id = r.serviceId
+      from ServiceRevision r join ServiceItem s on s.id = r.serviceId
       where r.storeId = :storeId and s.storeId = r.storeId
         and r.afterTerms.kind = com.kizuna.service.domain.ServiceKind.SPECIAL_SERVICE
         and r.operation <> com.kizuna.service.domain.ServiceRevision.Operation.DELETED
       """;
+
+  String SPECIAL_SELECT = "select r " + SPECIAL_FROM;
 
   @Query(SPECIAL_SELECT + " and r.id = :id")
   Optional<ServiceRevision> findHistoricalSpecial(Long storeId, String id);
@@ -52,13 +53,20 @@ public interface ServiceRevisionRepository extends StoreScopedRepository<Service
   Page<SpecialServiceTerms> findAcceptedSpecials(
       Long storeId, String enrollment, String search, Pageable pageable);
 
+  String NAME_MATCHES = " and locate(lower(:search), lower(r.afterTerms.name)) > 0";
+
   @Query(
-      SPECIAL_SELECT
-          + " and locate(lower(:search), lower(r.afterTerms.name)) > 0"
-          + " and (r.occurredAt < :at or (r.occurredAt = :at and r.id < :id))"
-          + " order by r.occurredAt desc, r.id desc")
-  List<ServiceRevision> findHistoricalSpecials(
-      Long storeId, String search, OffsetDateTime at, String id, Pageable pageable);
+      value = SPECIAL_SELECT + NAME_MATCHES,
+      countQuery = "select count(r) " + SPECIAL_FROM + NAME_MATCHES)
+  Page<ServiceRevision> findHistoricalSpecials(Long storeId, String search, Pageable pageable);
+
+  String SELECTION_FROM =
+      """
+      from ServiceRevision r join ServiceItem s on s.id = r.serviceId
+      where r.storeId = :storeId and s.storeId = r.storeId
+        and r.afterTerms.kind = :kind
+        and r.operation <> com.kizuna.service.domain.ServiceRevision.Operation.DELETED
+      """;
 
   String SELECTION_SELECT =
       """
@@ -66,11 +74,8 @@ public interface ServiceRevisionRepository extends StoreScopedRepository<Service
         r.serviceId, r.id, r.revisionNumber, r.afterTerms.name,
         r.afterTerms.durationMinutes, r.afterTerms.price, r.afterTerms.remuneration,
         r.occurredAt, s.deleted)
-      from ServiceRevision r join ServiceItem s on s.id = r.serviceId
-      where r.storeId = :storeId and s.storeId = r.storeId
-        and r.afterTerms.kind = :kind
-        and r.operation <> com.kizuna.service.domain.ServiceRevision.Operation.DELETED
-      """;
+      """
+          + SELECTION_FROM;
 
   @Query(SELECTION_SELECT + " and r.serviceId = :serviceId and r.revisionNumber = :number")
   Optional<OrderServiceTerms> findSelection(
@@ -88,15 +93,8 @@ public interface ServiceRevisionRepository extends StoreScopedRepository<Service
       Long storeId, ServiceKind kind, String search, Pageable pageable);
 
   @Query(
-      SELECTION_SELECT
-          + " and locate(lower(:search), lower(r.afterTerms.name)) > 0"
-          + " and (r.occurredAt < :at or (r.occurredAt = :at and r.id < :id))"
-          + " order by r.occurredAt desc, r.id desc")
-  List<OrderServiceTerms> findHistoricalSelections(
-      Long storeId,
-      ServiceKind kind,
-      String search,
-      OffsetDateTime at,
-      String id,
-      Pageable pageable);
+      value = SELECTION_SELECT + NAME_MATCHES,
+      countQuery = "select count(r) " + SELECTION_FROM + NAME_MATCHES)
+  Page<OrderServiceTerms> findHistoricalSelections(
+      Long storeId, ServiceKind kind, String search, Pageable pageable);
 }

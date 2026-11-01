@@ -61,8 +61,8 @@ test('取得失敗は再試行でき、権限不足は操作理由を表示す�
 test('次のページでも採用候補の名称を保ち、空の候補を説明する', async () => {
   const load = orderApi.courseCandidates as jest.Mock;
   load
-    .mockResolvedValueOnce({ rows: [course], total: 21 })
-    .mockResolvedValueOnce({ rows: [], total: 21 });
+    .mockResolvedValueOnce({ rows: [course], page: 0, pageCount: 2, total: 21 })
+    .mockResolvedValueOnce({ rows: [], page: 1, pageCount: 2, total: 21 });
   render(<Screen />);
   fireEvent.click(await screen.findByRole('combobox', { name: 'コース' }));
   const option = screen.getByRole('option', { name: /基本/ });
@@ -75,4 +75,24 @@ test('次のページでも採用候補の名称を保ち、空の候補を説�
     expect(screen.getByRole('combobox', { name: 'コース' })).toHaveTextContent('基本')
   );
   expect(load).toHaveBeenLastCalledWith('', 1);
+});
+test('訂正の歴史版本も検索語を保ったままページ番号で辿る', async () => {
+  const load = orderApi.courseRevisions as jest.Mock;
+  load
+    .mockResolvedValueOnce({ rows: [course], page: 0, pageCount: 2, total: 21 })
+    .mockResolvedValueOnce({ rows: [], page: 1, pageCount: 2, total: 21 });
+  function Historical() {
+    const form = useForm({ defaultValues: { course_revision_id: '' } });
+    return (
+      <Form {...form}>
+        <OrderCourseField historicalOrderId="o1" />
+      </Form>
+    );
+  }
+  render(<Historical />);
+  fireEvent.click(await screen.findByRole('combobox', { name: '訂正する過去の版' }));
+  fireEvent.click(await screen.findByRole('button', { name: '次へ' }));
+  await screen.findByText('選択できるコースがありません。');
+  expect(load).toHaveBeenLastCalledWith('o1', '', 1);
+  expect(orderApi.courseCandidates).not.toHaveBeenCalled();
 });

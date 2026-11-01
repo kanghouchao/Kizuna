@@ -73,10 +73,12 @@ describe('orderApi', () => {
     });
   });
   it('correctionHistory は横断一覧の行の店舗を X-Store-ID で名指す', async () => {
-    mockedGet.mockResolvedValueOnce({ data: { content: [], next_cursor: null } });
-    await orderApi.correctionHistory('o1', undefined, 2);
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [], total_pages: 0, total_elements: 0, size: 20, number: 0 },
+    });
+    await orderApi.correctionHistory('o1', 0, 2);
     expect(mockedGet).toHaveBeenCalledWith('/orders/o1/corrections', {
-      params: { cursor: undefined, size: 20 },
+      params: { page: 0, size: 20 },
       headers: { 'X-Store-ID': '2' },
     });
   });
@@ -87,15 +89,15 @@ describe('orderApi', () => {
     });
   });
   it('cancel は取消の子リソースを POST し、本体を返さない', async () => {
-    // 応答は 204。呼出側は行を消すだけで結果を読まない
+    // 応答は 204。呼出側は一覧を取り直すだけで結果を読まない
     await expect(orderApi.cancel('o1', { reason: '客都合' })).resolves.toBeUndefined();
     expect(mockedPost).toHaveBeenLastCalledWith('/orders/o1/cancellation', {
       reason: '客都合',
     });
   });
-  it('listWorkQueue は群読み口を GET し、カーソルページを正規化する', async () => {
+  it('listWorkQueue は群読み口を GET し、ページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
-      data: { content: [{ id: 'o1' }], next_cursor: 'abc' },
+      data: { content: [{ id: 'o1' }], total_pages: 3, total_elements: 41, size: 20, number: 1 },
     });
 
     // 絞り込みは専用読み口の責務。受注一覧を取って手元で選り分ける形へは戻さない。
@@ -104,22 +106,24 @@ describe('orderApi', () => {
         statuses: ['CONFIRMED', 'COMPLETED'],
         sort_key: 'PAX',
         desc: true,
-        cursor: 'abc',
+        page: 1,
         size: 20,
       })
-    ).resolves.toEqual({ rows: [{ id: 'o1' }], nextCursor: 'abc' });
+    ).resolves.toEqual({ rows: [{ id: 'o1' }], page: 1, pageCount: 3, total: 41 });
     expect(mockedGet).toHaveBeenCalledWith('/orders/work-queue', {
       params: {
         statuses: 'CONFIRMED,COMPLETED',
         sort_key: 'PAX',
         desc: true,
-        cursor: 'abc',
+        page: 1,
         size: 20,
       },
     });
   });
   it('listWorkQueue は空欄の検索条件を要求から落とす', async () => {
-    mockedGet.mockResolvedValueOnce({ data: { content: [], next_cursor: null } });
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [], total_pages: 0, total_elements: 0, size: 20, number: 0 },
+    });
 
     await orderApi.listWorkQueue({
       statuses: ['CONFIRMED'],
@@ -173,16 +177,16 @@ describe('orderApi', () => {
 });
 
 describe('orderApplicationApi', () => {
-  it('list は受付箱を GET し、状態をカンマ区切りで送ってカーソルページを正規化する', async () => {
+  it('list は受付箱を GET し、状態をカンマ区切りで送ってページを正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
-      data: { content: [{ id: 'a1' }], next_cursor: 'abc' },
+      data: { content: [{ id: 'a1' }], total_pages: 3, total_elements: 41, size: 20, number: 1 },
     });
 
     await expect(
-      orderApplicationApi.list({ statuses: ['PENDING'], cursor: 'c0', size: 20 })
-    ).resolves.toEqual({ rows: [{ id: 'a1' }], nextCursor: 'abc' });
+      orderApplicationApi.list({ statuses: ['PENDING'], page: 1, size: 20 })
+    ).resolves.toEqual({ rows: [{ id: 'a1' }], page: 1, pageCount: 3, total: 41 });
     expect(mockedGet).toHaveBeenCalledWith('/order-applications', {
-      params: { statuses: 'PENDING', cursor: 'c0', size: 20 },
+      params: { statuses: 'PENDING', page: 1, size: 20 },
     });
   });
   it('confirm は確定の子リソースへ確定内容を POST し、生成された受注を返す', async () => {
@@ -212,16 +216,19 @@ describe('orderApplicationApi', () => {
 });
 
 describe('memberOrderApplicationApi', () => {
-  it('list は /me/order-applications を GET し、カーソルページを正規化する', async () => {
-    // 続きが無いときサーバは next_cursor を省く（null 非出力方針）
-    mockedGet.mockResolvedValueOnce({ data: { content: [{ id: 'a1' }] } });
+  it('list は /me/order-applications をページ番号で GET し、ページを正規化する', async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: { content: [{ id: 'a1' }], total_pages: 1, total_elements: 1, size: 20, number: 0 },
+    });
 
-    await expect(memberOrderApplicationApi.list()).resolves.toEqual({
+    await expect(memberOrderApplicationApi.list(0)).resolves.toEqual({
       rows: [{ id: 'a1' }],
-      nextCursor: null,
+      page: 0,
+      pageCount: 1,
+      total: 1,
     });
     expect(mockedGet).toHaveBeenCalledWith('/me/order-applications', {
-      params: undefined,
+      params: { page: 0, size: 20 },
     });
   });
   it('create は /me/order-applications を POST する', async () => {
@@ -239,25 +246,27 @@ describe('memberOrderApplicationApi', () => {
 });
 
 describe('memberVisitApi', () => {
-  it('list は来店履歴を GET し、カーソルページを正規化する', async () => {
+  it('list は来店履歴をページ番号で GET し、ページを正規化する', async () => {
     // 申請の追跡（/me/order-applications）とは別の読み口で、確定した来店だけを返す
     mockedGet.mockResolvedValueOnce({
-      data: { content: [{ granted_points: 120 }], next_cursor: 'c1' },
+      data: {
+        content: [{ granted_points: 120 }],
+        total_pages: 3,
+        total_elements: 41,
+        size: 20,
+        number: 1,
+      },
     });
 
-    await expect(memberVisitApi.list({ cursor: 'c0', size: 20 })).resolves.toEqual({
+    await expect(memberVisitApi.list(1)).resolves.toEqual({
       rows: [{ granted_points: 120 }],
-      nextCursor: 'c1',
+      page: 1,
+      pageCount: 3,
+      total: 41,
     });
     expect(mockedGet).toHaveBeenCalledWith('/me/visits', {
-      params: { cursor: 'c0', size: 20 },
+      params: { page: 1, size: 20 },
     });
-  });
-
-  it('続きが無い応答では位置を null に畳む', async () => {
-    mockedGet.mockResolvedValueOnce({ data: { content: [] } });
-
-    await expect(memberVisitApi.list()).resolves.toEqual({ rows: [], nextCursor: null });
   });
 });
 

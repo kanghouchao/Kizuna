@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStoreContext } from '@/entities/user';
 import { Order, orderApi, ORDER_STATUS_LABELS } from '@/entities/order';
 import { getApiErrorMessage, useKeyedResource } from '@/shared/lib';
-import { Button, Input, Label, RegionError } from '@/shared/ui';
+import { Button, Input, Label, Pager, RegionError } from '@/shared/ui';
 import { orderConflictField } from './useOrderConfirmation';
 
 export function OrderServiceProgress({
@@ -27,10 +27,10 @@ export function OrderServiceProgress({
   }, []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
-  const [cursor, setCursor] = useState<string>();
+  const [page, setPage] = useState(0);
   const history = useKeyedResource(
-    ['special-service-events', store, order.id, order.version, cursor],
-    order.id ? () => orderApi.specialServiceEvents(order.id!, cursor) : null
+    ['special-service-events', store, order.id, order.version, page],
+    order.id ? () => orderApi.specialServiceEvents(order.id!, page) : null
   );
   return (
     <section
@@ -151,24 +151,12 @@ export function OrderServiceProgress({
               ))}
             </ul>
             {history.data?.rows.length === 0 && <p>拒否・処置の記録はありません。</p>}
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!cursor}
-                onClick={() => setCursor(undefined)}
-              >
-                最初の履歴
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!history.data?.nextCursor}
-                onClick={() => setCursor(history.data?.nextCursor ?? undefined)}
-              >
-                次の履歴
-              </Button>
-            </div>
+            <Pager
+              page={page}
+              pageCount={history.data?.pageCount ?? 0}
+              disabled={history.isLoading}
+              onPageChange={setPage}
+            />
           </>
         )}
       </div>

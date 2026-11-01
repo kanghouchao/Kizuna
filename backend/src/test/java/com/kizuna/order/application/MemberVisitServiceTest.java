@@ -9,10 +9,7 @@ import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.order.domain.MemberVisitView;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.point.application.PointLedgerService;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -35,7 +32,9 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class MemberVisitServiceTest {
@@ -53,8 +52,6 @@ class MemberVisitServiceTest {
   @Mock private PointLedgerService pointLedgerService;
 
   @InjectMocks private MemberVisitService service;
-
-  @Captor private ArgumentCaptor<Limit> limitCaptor;
 
   @Captor private ArgumentCaptor<List<String>> orderIdsCaptor;
 
@@ -141,7 +138,7 @@ class MemberVisitServiceTest {
     Mockito.when(
             orderAttributionRepository.findMemberVisitViews(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(
-            List.of(
+            page(
                 new View(
                     2L,
                     OffsetDateTime.parse("2026-08-11T20:00:00+09:00"),
@@ -161,9 +158,9 @@ class MemberVisitServiceTest {
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of("order-b", 120L, "order-a", 80L));
 
-    CursorPage<MemberVisitSummary> page = service.list(EMAIL, null, 20);
+    Page<MemberVisitSummary> page = service.list(EMAIL, PageRequest.of(0, 20));
 
-    assertThat(page.content())
+    assertThat(page.getContent())
         .extracting(
             MemberVisitSummary::visitedOn,
             MemberVisitSummary::storeName,
@@ -173,7 +170,6 @@ class MemberVisitServiceTest {
         .containsExactly(
             tuple(LocalDate.parse("2026-08-11"), "店舗B", 3, "キャスト太郎", 120L),
             tuple(LocalDate.parse("2026-08-10"), "店舗A", 2, null, 80L));
-    assertThat(page.nextCursor()).as("続きが無ければ位置は返さない").isNull();
   }
 
   @Test
@@ -182,11 +178,11 @@ class MemberVisitServiceTest {
     // 0 円完了は付与行を積まないが帰属記録は生まれる（帰属は来店可視性の事実でポイントとは独立）。
     Mockito.when(
             orderAttributionRepository.findMemberVisitViews(Mockito.eq(MEMBER_ID), Mockito.any()))
-        .thenReturn(List.of(visit(1L, "2026-08-10T20:00:00+09:00")));
+        .thenReturn(page(visit(1L, "2026-08-10T20:00:00+09:00")));
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of());
 
-    assertThat(service.list(EMAIL, null, 20).content())
+    assertThat(service.list(EMAIL, PageRequest.of(0, 20)).getContent())
         .extracting(MemberVisitSummary::storeName, MemberVisitSummary::grantedPoints)
         .containsExactly(tuple("店舗A", 0L));
   }
@@ -198,12 +194,12 @@ class MemberVisitServiceTest {
     // 台帳が表せる状態のまま来店履歴だけが開けなくなる。
     Mockito.when(
             orderAttributionRepository.findMemberVisitViews(Mockito.eq(MEMBER_ID), Mockito.any()))
-        .thenReturn(List.of(visit(1L, "2026-08-10T20:00:00+09:00")));
+        .thenReturn(page(visit(1L, "2026-08-10T20:00:00+09:00")));
     long beyondInt = Integer.MAX_VALUE + 1L;
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of("order-1", beyondInt));
 
-    assertThat(service.list(EMAIL, null, 20).content())
+    assertThat(service.list(EMAIL, PageRequest.of(0, 20)).getContent())
         .extracting(MemberVisitSummary::grantedPoints)
         .containsExactly(beyondInt);
   }
@@ -211,21 +207,17 @@ class MemberVisitServiceTest {
   @Test
   @DisplayName("付与の問い合わせは 1 ページにつき 1 回で、返す行の分だけを引く")
   void asksTheLedgerOncePerPage() {
-    // 行ごとに引くと来店が増えるほど問い合わせが線形に増える。続きの有無を判るための余分な 1 件は
-    // 返さないので、その分の付与も引かない。
+    // 行ごとに引くと来店が増えるほど問い合わせが線形に増える。
     Mockito.when(
             orderAttributionRepository.findMemberVisitViews(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(
-            List.of(
-                visit(3L, "2026-08-12T20:00:00+09:00"),
-                visit(2L, "2026-08-11T20:00:00+09:00"),
-                visit(1L, "2026-08-10T20:00:00+09:00")));
+            page(visit(3L, "2026-08-12T20:00:00+09:00"), visit(2L, "2026-08-11T20:00:00+09:00")));
     Mockito.when(
             pointLedgerService.grantedPointsByOrder(
                 Mockito.eq(MEMBER_ID), orderIdsCaptor.capture()))
         .thenReturn(Map.of());
 
-    service.list(EMAIL, null, 2);
+    service.list(EMAIL, PageRequest.of(0, 2));
 
     Mockito.verify(pointLedgerService, Mockito.times(1))
         .grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any());
@@ -233,52 +225,18 @@ class MemberVisitServiceTest {
   }
 
   @Test
-  @DisplayName("上限より多く読めたときは、上限までを返して続きの位置を添える")
-  void returnsACursorWhenMoreRowsExist() {
-    Mockito.when(
-            orderAttributionRepository.findMemberVisitViews(
-                Mockito.eq(MEMBER_ID), limitCaptor.capture()))
-        .thenReturn(
-            List.of(
-                visit(3L, "2026-08-12T20:00:00+09:00"),
-                visit(2L, "2026-08-11T20:00:00+09:00"),
-                visit(1L, "2026-08-10T20:00:00+09:00")));
+  @DisplayName("一覧は本人の一致と受け取ったページ指定のまま問い合わせる")
+  void queriesWithTheMemberAndTheGivenPage() {
+    var pageable = PageRequest.of(1, 2);
+    Mockito.when(orderAttributionRepository.findMemberVisitViews(MEMBER_ID, pageable))
+        .thenReturn(new PageImpl<>(List.of(visit(1L, "2026-08-10T20:00:00+09:00")), pageable, 3));
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of());
 
-    CursorPage<MemberVisitSummary> page = service.list(EMAIL, null, 2);
+    Page<MemberVisitSummary> page = service.list(EMAIL, pageable);
 
-    assertThat(limitCaptor.getValue().max()).as("続きの有無は 1 件多く取って判る").isEqualTo(3);
-    assertThat(page.content()).hasSize(2);
-    // 位置は一覧の並び（帰属の作成時刻 + id）と同じ組。ずれると続きが手前へ戻るか行を飛ばす。
-    assertThat(PageCursor.decode(page.nextCursor()))
-        .isEqualTo(new PageCursor("2026-08-11T20:00+09:00", "2"));
-  }
-
-  @Test
-  @DisplayName("続きの取得は渡された位置より後ろだけを、本人の一致つきで問い合わせる")
-  void fetchesOnlyAfterTheGivenPosition() {
-    OffsetDateTime position = OffsetDateTime.parse("2026-08-11T20:00:00+09:00");
-    Mockito.when(
-            orderAttributionRepository.findMemberVisitViewsAfter(
-                Mockito.eq(MEMBER_ID), Mockito.eq(position), Mockito.eq(2L), Mockito.any()))
-        .thenReturn(List.of(visit(1L, "2026-08-10T20:00:00+09:00")));
-    Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
-        .thenReturn(Map.of());
-
-    CursorPage<MemberVisitSummary> page =
-        service.list(EMAIL, new PageCursor(position.toString(), "2").encode(), 20);
-
-    assertThat(page.content()).hasSize(1);
-    Mockito.verify(orderAttributionRepository, Mockito.never())
-        .findMemberVisitViews(Mockito.any(), Mockito.any());
-  }
-
-  @Test
-  @DisplayName("壊れた位置は要求誤りとして撥ね、先頭から取り直さない")
-  void rejectsAMalformedCursor() {
-    assertThatThrownBy(() -> service.list(EMAIL, "!!!not-base64!!!", 20))
-        .isInstanceOf(ServiceException.class);
+    assertThat(page.getContent()).hasSize(1);
+    assertThat(page.getTotalElements()).isEqualTo(3);
   }
 
   @Test
@@ -286,7 +244,7 @@ class MemberVisitServiceTest {
   void refusesANonMemberPrincipal() {
     Mockito.when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.list(EMAIL, null, 20))
+    assertThatThrownBy(() -> service.list(EMAIL, PageRequest.of(0, 20)))
         .isInstanceOf(StaleSessionException.class);
   }
 
@@ -295,7 +253,11 @@ class MemberVisitServiceTest {
   void refusesAStalePrincipal() {
     Mockito.when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.list(EMAIL, null, 20))
+    assertThatThrownBy(() -> service.list(EMAIL, PageRequest.of(0, 20)))
         .isInstanceOf(StaleSessionException.class);
+  }
+
+  private static Page<MemberVisitView> page(MemberVisitView... rows) {
+    return new PageImpl<>(List.of(rows));
   }
 }

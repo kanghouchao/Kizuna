@@ -25,44 +25,19 @@ export function OrderSurchargePicker({
 }) {
   const [open, setOpen] = useState(true);
   const storeId = useStoreContext().currentStoreId;
-  const [query, setQuery] = useState({
-    search: '',
-    page: 0,
-    cursors: [undefined] as (string | undefined)[],
-  });
-  const { search, page, cursors } = query;
+  const [query, setQuery] = useState({ search: '', page: 0 });
+  const { search, page } = query;
   const resource = useKeyedResource(
-    ['surcharge-options', storeId, historicalOrderId, search, page, cursors[page]],
+    ['surcharge-options', storeId, historicalOrderId, search, page],
     async () => {
       try {
-        if (historicalOrderId) {
-          const result = await orderApi.surchargeRevisions(
-            historicalOrderId,
-            search,
-            cursors[page]
-          );
-          return {
-            rows: result.content,
-            next: result.next_cursor,
-            more: !!result.next_cursor,
-            forbidden: false,
-          };
-        }
-        const result = await orderApi.surchargeCandidates(search, page);
-        return {
-          rows: result.rows,
-          next: undefined,
-          more: (page + 1) * 20 < result.total,
-          forbidden: false,
-        };
+        const result = historicalOrderId
+          ? await orderApi.surchargeRevisions(historicalOrderId, search, page)
+          : await orderApi.surchargeCandidates(search, page);
+        return { rows: result.rows, more: page + 1 < result.pageCount, forbidden: false };
       } catch (error) {
         if (isAxiosError(error) && error.response?.status === 403)
-          return {
-            rows: [] as SurchargeCandidate[],
-            next: undefined,
-            more: false,
-            forbidden: true,
-          };
+          return { rows: [] as SurchargeCandidate[], more: false, forbidden: true };
         throw error;
       }
     }
@@ -76,7 +51,7 @@ export function OrderSurchargePicker({
         open={open}
         onOpenChange={setOpen}
         inputValue={search}
-        onInputValueChange={value => setQuery({ search: value, page: 0, cursors: [undefined] })}
+        onInputValueChange={value => setQuery({ search: value, page: 0 })}
         itemToStringLabel={(row: SurchargeCandidate) => row.name}
         onValueChange={row => {
           if (row) onSelect(row);
@@ -93,7 +68,7 @@ export function OrderSurchargePicker({
             <RegionError
               message="加算を取得できませんでした"
               onRetry={() => {
-                setQuery({ search, page: 0, cursors: [undefined] });
+                setQuery({ search, page: 0 });
                 void resource.reload();
               }}
             />
@@ -124,13 +99,7 @@ export function OrderSurchargePicker({
                   type="button"
                   variant="outline"
                   disabled={!resource.data?.more}
-                  onClick={() =>
-                    setQuery({
-                      search,
-                      page: page + 1,
-                      cursors: [...cursors.slice(0, page + 1), resource.data?.next],
-                    })
-                  }
+                  onClick={() => setQuery({ search, page: page + 1 })}
                 >
                   次へ
                 </Button>
