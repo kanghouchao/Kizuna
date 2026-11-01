@@ -5,7 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * 会員 1 人の照会結果。明細は件数が伸びるので別の端点（{@code /point-entries}）でカーソル付きに読む。
+ * 会員 1 人の照会結果。明細は件数が伸びるので別の端点（{@code /point-entries}）でページ付きに読む。
  *
  * @param withdrawal 退会情報。未退会なら null で応答から消える
  * @param balances 期限別の利用可能残高（合計は {@code balance}）

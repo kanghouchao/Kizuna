@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
  *
  * <p>台帳の仕訳そのもの（{@link PointEntry}）は渡さない。引き当て・元取引・理由・実行者は運用の内部情報で、本人向けの表示に要らない。
  *
- * <p>{@code createdAt} は続きの位置（カーソル）を作るためだけに持ち、応答へは日付として畳んで出す。
+ * <p>{@code createdAt} は並びの鍵として持ち、応答へは日付として畳んで出す。
  */
 public interface MemberPointEntryView {
 

@@ -8,24 +8,14 @@ import org.junit.jupiter.api.Test;
 /**
  * 並び替えの鍵の定義の単体テスト。
  *
- * <p>鍵の値そのものを Java 側で組む口は無い（続きの位置は並びを決めた問い合わせが返した値から作る）。ここで固定するのは 式が満たすべき性質だけで、値の一致は統合テストが本物の
- * PostgreSQL に当てて見る。
+ * <p>ここで固定するのは式が満たすべき性質だけで、値の並びは統合テストが本物の PostgreSQL に当てて見る。
  */
 class OrderSortKeyTest {
 
-  /** 可空の列を鍵にする並び。素の列のままだと、未設定の行へカーソルが二度と到達できない。 */
+  /** 可空の列を鍵にする並び。未設定を最大として並べるため番兵へ寄せる。 */
   private static final OrderSortKey[] NULLABLE_KEYS = {
     OrderSortKey.ARRIVAL_TIME, OrderSortKey.PAX, OrderSortKey.COURSE_MINUTES
   };
-
-  @Test
-  @DisplayName("鍵の型は復号の分岐と対応すること")
-  void keyType_matchesTheDecodingBranch() {
-    assertThat(OrderSortKey.BUSINESS_DATE.keyType()).isEqualTo(OrderSortKey.KeyType.DATE);
-    assertThat(OrderSortKey.ARRIVAL_TIME.keyType()).isEqualTo(OrderSortKey.KeyType.NUMBER);
-    assertThat(OrderSortKey.PAX.keyType()).isEqualTo(OrderSortKey.KeyType.NUMBER);
-    assertThat(OrderSortKey.COURSE_MINUTES.keyType()).isEqualTo(OrderSortKey.KeyType.NUMBER);
-  }
 
   @Test
   @DisplayName("並び替えの式は受注自身の列だけを指すこと（join 先を鍵にしない）")

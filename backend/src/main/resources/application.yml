@@ -55,7 +55,7 @@ spring:
   data:
     web:
       pageable:
-        # 一覧 1 回の取得件数の上限。CursorPage.MAX_SIZE と同じ値に保つ
+        # 全一覧で共通の 1 回の取得件数の上限
         max-page-size: 100
     redis:
       host: ${REDIS_HOST:localhost}
