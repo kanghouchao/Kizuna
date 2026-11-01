@@ -630,7 +630,7 @@ class ReviewIntegrationTest {
   }
 
   @Test
-  void rejectedAndWithdrawnRecordsCannotRegainEligibilityAndProjectionIsBounded() throws Exception {
+  void rejectedAndWithdrawnRecordsCannotRegainEligibility() throws Exception {
     var receipt =
         send(
             "",
