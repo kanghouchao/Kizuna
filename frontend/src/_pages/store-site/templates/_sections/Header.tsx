@@ -70,7 +70,7 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
             </Link>
 
             {/* デスクトップナビ */}
-            <nav className="hidden md:flex items-center gap-10">
+            <nav className="hidden md:flex items-center gap-6 lg:gap-10">
               {navLinks.map(({ href, label }) => (
                 <Link
                   key={href}
