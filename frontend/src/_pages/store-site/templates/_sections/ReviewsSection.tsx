@@ -86,7 +86,10 @@ function PagerLink({
   );
 }
 
-/** 管理画面の一覧（ListPage）と同じ構成：件数と表示範囲、最大 5 件の番号窓、狭い幅では前へ/次へだけ。 */
+/**
+ * 共通の Pager（shared/ui）と同じ構成：件数と表示範囲、最大 5 件の番号窓、狭い幅では前へ/次へだけ。
+ * Pager は管理画面の色とクリック処理で組まれているため、公開サイトでは --storefront-* とリンクで組み直す。
+ */
 function ReviewsPager({ reviews }: { reviews: Page<PublicReview> }) {
   const page = reviews.number;
   const pageCount = reviews.total_pages;
