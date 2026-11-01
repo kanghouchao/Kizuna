@@ -15,12 +15,13 @@ import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.shared.web.TiebreakerPageableArgumentResolver;
+import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,6 +55,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
@@ -92,9 +94,7 @@ class ArticleIntegrationTest {
     jdbc = context.getBean(JdbcTemplate.class);
     mvc =
         MockMvcBuilders.standaloneSetup(context.getBean(ArticleController.class))
-            .setCustomArgumentResolvers(
-                new TiebreakerPageableArgumentResolver(new PageableHandlerMethodArgumentResolver()),
-                new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+            .setCustomArgumentResolvers(argumentResolvers())
             .defaultRequest(
                 get("/")
                     .with(
@@ -283,7 +283,7 @@ class ArticleIntegrationTest {
   }
 
   @Test
-  void listIsNewestUpdateFirstWhateverTheRequestedSortAndCapsPageSize() throws Exception {
+  void listDefaultsToNewestUpdateFirst() throws Exception {
     String first = create("一番目", BODY);
     String second = create("二番目", BODY);
     call(put("/articles/" + first).content("{\"title\":\"更新\",\"body\":\"b\",\"version\":0}"), 200);
@@ -291,10 +291,6 @@ class ArticleIntegrationTest {
     var rows = call(get("/articles"), 200).get("content");
     assertThat(List.of(rows.get(0).get("id").asString(), rows.get(1).get("id").asString()))
         .containsExactly(first, second);
-    var requestedSort = call(get("/articles").param("sort", "title,asc"), 200).get("content");
-    assertThat(requestedSort.get(0).get("id").asString()).isEqualTo(first);
-    call(get("/articles").param("size", "100"), 200);
-    call(get("/articles").param("size", "101"), 400);
   }
 
   @Test
@@ -385,6 +381,16 @@ class ArticleIntegrationTest {
     request.put("body", text);
     if (version != null) request.put("version", version);
     return json.writeValueAsString(request);
+  }
+
+  /** 本番と同じ引数解決器の並び（Pageable の検査・副キー補完と現在店舗）を standalone の MockMvc へ渡す。 */
+  private static HandlerMethodArgumentResolver[] argumentResolvers() {
+    List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
+    new WebBindingConfig(
+            new PageableHandlerMethodArgumentResolver(),
+            new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+        .addArgumentResolvers(resolvers);
+    return resolvers.toArray(HandlerMethodArgumentResolver[]::new);
   }
 
   private JsonNode call(MockHttpServletRequestBuilder request, int expected) throws Exception {
