@@ -207,7 +207,6 @@ class ArticleIntegrationTest {
     var swapped = call(put("/articles/" + id).content(body("表紙付き", BODY, 1L, replaced)), 200);
     assertThat(swapped.get("cover_image_url").asString()).isEqualTo(replaced);
 
-    // 管理画面は外した表紙を空文字で送る。空文字を保存すると公式サイトに空の画像が出るため、無しとして扱う
     var removed = call(put("/articles/" + id).content(body("表紙付き", BODY, 2L, "")), 200);
     assertThat(removed.get("cover_image_url").isNull()).isTrue();
     assertThat(

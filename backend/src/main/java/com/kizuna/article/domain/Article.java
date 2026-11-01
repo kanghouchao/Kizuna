@@ -50,7 +50,7 @@ public class Article extends StoreScopedEntity {
     return bodyChanged;
   }
 
-  // 管理画面は外した表紙を空文字で送る。空のまま保存すると公式サイトに中身の無い画像が出るため、無しにそろえる。
+  // 空白だけの URL を保存すると公式サイトに中身の無い画像が出るため、どの呼出元から来ても「無し」にそろえる。
   private static String cover(String value) {
     return value == null || value.isBlank() ? null : text(value);
   }
