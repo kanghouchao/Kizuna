@@ -1,7 +1,6 @@
 package com.kizuna.shift.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftDetailResponse;
@@ -17,6 +16,10 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -62,12 +65,15 @@ public class ShiftController {
    */
   @GetMapping("/{id}/change-requests")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
-  public ResponseEntity<CursorPage<ShiftRequestLineageResponse>> changeRequests(
+  public ResponseEntity<Page<ShiftRequestLineageResponse>> changeRequests(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "50") int size) {
-    return ResponseEntity.ok(shiftLineageService.changeRequests(storeId, id, cursor, size));
+      @PageableDefault(
+              size = 50,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return ResponseEntity.ok(shiftLineageService.changeRequests(storeId, id, pageable));
   }
 
   @PostMapping

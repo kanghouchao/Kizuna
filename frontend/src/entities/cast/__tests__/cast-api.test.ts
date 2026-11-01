@@ -127,13 +127,17 @@ it.each([
 it.each([
   ['statusHistories', 'status-histories'],
   ['snapshots', 'snapshots'],
-] as const)('%s は履歴のカーソルを引き継ぐ', async (method, path) => {
-  mockedGet.mockResolvedValueOnce({ data: { content: [{ id: 'h1' }], next_cursor: 'next' } });
-  await expect(castApi[method]('c1', 'before')).resolves.toEqual({
+] as const)('%s は履歴のページ番号を渡し、Spring の Page を正規化する', async (method, path) => {
+  mockedGet.mockResolvedValueOnce({
+    data: { content: [{ id: 'h1' }], number: 1, size: 20, total_pages: 2, total_elements: 21 },
+  });
+  await expect(castApi[method]('c1', 1)).resolves.toEqual({
     rows: [{ id: 'h1' }],
-    nextCursor: 'next',
+    page: 1,
+    pageCount: 2,
+    total: 21,
   });
   expect(mockedGet).toHaveBeenLastCalledWith(`/casts/c1/${path}`, {
-    params: { cursor: 'before', size: 20 },
+    params: { page: 1, size: 20 },
   });
 });

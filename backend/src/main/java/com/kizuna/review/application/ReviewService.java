@@ -25,8 +25,6 @@ import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
@@ -35,8 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -300,29 +297,15 @@ public class ReviewService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<ReviewHistoryResponse> history(
-      Long storeId, String email, String id, String cursor, int size) {
+  public Page<ReviewHistoryResponse> history(
+      Long storeId, String email, String id, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
     find(storeId, id);
-    if (size < 1 || size > 100) throw new ServiceException("履歴の取得件数は1〜100件で指定してください");
     Specification<ReviewHistory> spec =
         (root, query, cb) ->
             cb.and(cb.equal(root.get("storeId"), storeId), cb.equal(root.get("reviewId"), id));
-    if (cursor != null) {
-      String last = ReviewInput.id(PageCursor.decodeKey(cursor));
-      spec = spec.and((root, query, cb) -> cb.lessThan(root.get("id"), last));
-    }
-    var rows =
-        history
-            .findBy(
-                spec,
-                q ->
-                    q.as(ReviewHistoryView.class)
-                        .page(
-                            PageRequest.of(
-                                0, size + 1, Sort.by(Sort.Direction.DESC, ReviewHistory::getId))))
-            .getContent();
-    return CursorPage.of(rows, size, h -> PageCursor.encodeKey(h.getId()))
+    return history
+        .findBy(spec, q -> q.as(ReviewHistoryView.class).page(pageable))
         .map(ReviewHistoryResponse::of);
   }
 

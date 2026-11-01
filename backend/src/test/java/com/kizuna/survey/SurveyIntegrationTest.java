@@ -338,7 +338,7 @@ class SurveyIntegrationTest {
       send(base + "/responses", body, 400);
     assertThat(read(base + "/response-counts", 200).get("total_records").asLong()).isZero();
     read("/surveys?size=101", 400);
-    read(base + "/history?cursor=bad", 400);
+    read(base + "/history?page=99999999&size=100", 400);
     read(base + "/responses?sort=WRONG", 400);
   }
 

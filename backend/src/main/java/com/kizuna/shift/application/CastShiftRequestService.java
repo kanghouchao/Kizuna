@@ -6,15 +6,12 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
 import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.ShiftRequestResponse;
 import com.kizuna.shift.domain.AttendanceRepository;
-import com.kizuna.shift.domain.CastShiftRequestView;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
@@ -29,7 +26,8 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -143,42 +141,17 @@ public class CastShiftRequestService {
     return shiftRequestMapper.toResponse(entity);
   }
 
-  /**
-   * 本人の出勤希望履歴。続きはカーソルで辿る。
-   *
-   * <p>履歴は提出のたびに増え続けるので、上限の無い一覧では返さない。
-   *
-   * @param cursor 続きの位置。null なら先頭から
-   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
-   */
+  /** 本人の出勤希望履歴。提出のたびに増え続けるので、上限の無い一覧では返さない。 */
   @Transactional(readOnly = true)
-  public CursorPage<CastShiftRequestResponse> history(
-      String email, String cursor, int requestedSize) {
+  public Page<CastShiftRequestResponse> history(String email, Pageable pageable) {
     Long userId = resolveUserId(email);
     List<String> castIds = castRepository.findIdsByUserId(userId);
     if (castIds.isEmpty()) {
-      return new CursorPage<>(List.of(), null);
+      return Page.empty(pageable);
     }
-    int size = CursorPage.clampSize(requestedSize);
-    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    Limit limit = Limit.of(size + 1);
-    List<CastShiftRequestView> fetched =
-        cursor == null
-            ? shiftRequestRepository.findHistoryByCastIds(castIds, limit)
-            : fetchHistoryAfter(castIds, PageCursor.decode(cursor), limit);
-    return CursorPage.of(fetched, size, CastShiftRequestService::cursorOf)
+    return shiftRequestRepository
+        .findHistoryByCastIds(castIds, pageable)
         .map(shiftRequestMapper::toHistoryResponse);
-  }
-
-  private List<CastShiftRequestView> fetchHistoryAfter(
-      List<String> castIds, PageCursor cursor, Limit limit) {
-    return shiftRequestRepository.findHistoryByCastIdsAfter(
-        castIds, cursor.timestampKey(), cursor.id(), limit);
-  }
-
-  /** 続きの位置は一覧の並び（提出時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
-  private static String cursorOf(CastShiftRequestView view) {
-    return new PageCursor(view.getCreatedAt().toString(), view.getId()).encode();
   }
 
   /** 希望する勤務枠の共通検証（新規希望・変更申請共通）: 開始≠終了、勤務日は現在の営業日以降。 */

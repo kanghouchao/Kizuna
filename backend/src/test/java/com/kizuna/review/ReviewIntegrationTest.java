@@ -424,8 +424,8 @@ class ReviewIntegrationTest {
     var events = read("/" + id + "/history?size=2", 200);
     assertThat(events.get("content").size()).isEqualTo(2);
     assertThat(events.get("content").get(0).get("type").asString()).isEqualTo("CORRECTION_LINKED");
-    var earlier =
-        read("/" + id + "/history?size=2&cursor=" + events.get("next_cursor").asString(), 200);
+    assertThat(events.get("total_pages").asInt()).isGreaterThan(1);
+    var earlier = read("/" + id + "/history?size=2&page=1", 200);
     assertThat(earlier.get("content").get(0).get("permission_record_id").asString())
         .isEqualTo(old.get("permission").get("id").asString());
     assertThat(earlier.toString()).doesNotContain("口頭確認", "元の本文");
@@ -537,8 +537,7 @@ class ReviewIntegrationTest {
             "?size=101",
             "?sort=WRONG",
             "?status=WRONG",
-            "/" + firstId + "/history?cursor=bad",
-            "/" + firstId + "/history?size=101")) read(bad, 400);
+            "/" + firstId + "/history?page=99999999&size=100")) read(bad, 400);
     currentStore = otherStore;
     assertThat(read("", 200).get("total_elements").asLong()).isZero();
     currentStore = storeId;

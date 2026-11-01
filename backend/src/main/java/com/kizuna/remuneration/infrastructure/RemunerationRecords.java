@@ -4,7 +4,6 @@ import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.GuaranteeTimeline;
 import com.kizuna.remuneration.domain.RemunerationAmounts;
-import com.kizuna.remuneration.domain.RemunerationChange;
 import com.kizuna.remuneration.domain.RemunerationRequest;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -12,7 +11,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -177,33 +175,5 @@ public class RemunerationRecords {
         .setParameter("start", start)
         .setParameter("end", end)
         .getResultList();
-  }
-
-  public List<RemunerationChange> changes(
-      Long store, String type, String id, String cursor, int size) {
-    String where =
-        " from RemunerationChange c where c.storeId=:store and c.resourceType=:type and c.resourceId=:id";
-    OffsetDateTime at = null;
-    String last = null;
-    if (cursor != null) {
-      try {
-        int split = cursor.lastIndexOf('|');
-        at = OffsetDateTime.parse(cursor.substring(0, split));
-        last = cursor.substring(split + 1);
-        if (!last.matches("[0-9]+")) throw new IllegalArgumentException();
-      } catch (RuntimeException e) {
-        throw new ServiceException("履歴のカーソルが不正です");
-      }
-      where += " and (c.createdAt<:at or (c.createdAt=:at and c.id<:last))";
-    }
-    var q =
-        em.createQuery(
-                "select c" + where + " order by c.createdAt desc,c.id desc",
-                RemunerationChange.class)
-            .setParameter("store", store)
-            .setParameter("type", type)
-            .setParameter("id", id);
-    if (at != null) q.setParameter("at", at).setParameter("last", last);
-    return q.setMaxResults(size + 1).getResultList();
   }
 }

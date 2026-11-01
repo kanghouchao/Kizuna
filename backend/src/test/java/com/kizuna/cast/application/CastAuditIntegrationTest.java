@@ -54,6 +54,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.support.PersistenceExceptionTranslationInterceptor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -223,7 +224,7 @@ class CastAuditIntegrationTest {
         .containsEntry("old", "1")
         .containsEntry("new", "2")
         .containsEntry("source_id", id);
-    assertThat(lifecycle.snapshots(storeId, id, null, 20).content()).hasSize(1);
+    assertThat(lifecycle.snapshots(storeId, id, PageRequest.of(0, 20)).getContent()).hasSize(1);
     assertThat(
             jdbc.queryForList(
                     "select before_values,after_values from t_audit_events where target_id in (?,?)",
@@ -280,7 +281,7 @@ class CastAuditIntegrationTest {
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThat(storedState(id)).isEqualTo(before);
       assertThat(tableCounts()).isEqualTo(counts);
-      assertThat(lifecycle.snapshots(storeId, id, null, 20).content()).isEmpty();
+      assertThat(lifecycle.snapshots(storeId, id, PageRequest.of(0, 20)).getContent()).isEmpty();
     } finally {
       allowAudit();
     }
@@ -398,7 +399,7 @@ class CastAuditIntegrationTest {
         .extracting(row -> row.get("new_status"))
         .containsExactly("SUSPENDED", "ENROLLED", "WITHDRAWN");
     assertThat(history.getLast().get("ended")).isNotNull().isNotEqualTo("");
-    assertThat(lifecycle.history(storeId, id, null, 20).content()).hasSize(4);
+    assertThat(lifecycle.history(storeId, id, PageRequest.of(0, 20)).getContent()).hasSize(4);
     assertThatThrownBy(() -> lifecycle.suspend(storeId, id, SECOND))
         .isInstanceOf(ServiceException.class);
     assertThatThrownBy(() -> lifecycle.resume(storeId, id, SECOND))
@@ -426,7 +427,7 @@ class CastAuditIntegrationTest {
           .containsExactlyInAnyOrder(true, false);
     }
     assertVersions(id, 1, 0);
-    assertThat(lifecycle.history(storeId, id, null, 20).content()).hasSize(2);
+    assertThat(lifecycle.history(storeId, id, PageRequest.of(0, 20)).getContent()).hasSize(2);
     assertThat(auditCount(id, profile)).isEqualTo(2);
     assertThat(storedState(id)).containsEntry("status", "SUSPENDED");
   }

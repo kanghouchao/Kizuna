@@ -1,4 +1,4 @@
-import type { Page, CursorPage } from '@/shared/api';
+import type { Page } from '@/shared/api';
 export type StatementScope =
   { scope: 'store'; personId: number } | { scope: 'self'; storeId: number };
 export interface Guarantee {
@@ -33,7 +33,7 @@ export interface Change {
   after_value?: Guarantee | Bonus;
   created_at: string;
 }
-export type Changes = CursorPage<Change>;
+export type Changes = Page<Change>;
 export interface Day {
   business_date: string;
   order_amount: number;

@@ -9,11 +9,13 @@ import com.kizuna.service.api.dto.ServiceUpdateRequest;
 import com.kizuna.service.application.ServiceSettingsService;
 import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -82,11 +84,14 @@ public class ServiceSettingsController {
 
   @GetMapping("/{id}/revisions")
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
-  public CursorPage<ServiceRevisionResponse> history(
+  public Page<ServiceRevisionResponse> history(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.history(storeId, id, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"revisionNumber", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return service.history(storeId, id, pageable);
   }
 }

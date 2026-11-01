@@ -1,8 +1,6 @@
 package com.kizuna.shift.application;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.shift.api.dto.ActorResponse;
 import com.kizuna.shift.api.dto.AttendanceLineageResponse;
 import com.kizuna.shift.api.dto.ShiftDetailResponse;
@@ -23,7 +21,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -118,39 +117,20 @@ public class ShiftLineageService {
         .build();
   }
 
-  /**
-   * 有界でない変更申請はカーソルで辿り、高々 1 本の出生 NEW だけを詳細へ残す（backend/AGENTS.md の Pagination）。
-   * 履歴と実行主体を別々に取得するため、途中の承認で同じ応答内の状態が食い違わないよう断面を固定する。
-   */
+  /** 変更申請の履歴を 1 ページ分返す。 履歴と実行主体を別々に取得するため、途中の承認で同じ応答内の状態が食い違わないよう断面を固定する。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<ShiftRequestLineageResponse> changeRequests(
-      Long storeId, String shiftId, String cursor, int requestedSize) {
+  public Page<ShiftRequestLineageResponse> changeRequests(
+      Long storeId, String shiftId, Pageable pageable) {
     // シフトの存在と作用域はここで確かめる。履歴だけを問い合わせると、他店舗のシフト id に対して
     // 「空の履歴」を返してしまい、存在しないことと区別が付かなくなる。
     if (!shiftRepository.existsByIdAndStoreId(shiftId, storeId)) {
       throw new NotFoundException("シフトが見つかりません: " + shiftId);
     }
-    int size = CursorPage.clampSize(requestedSize);
-    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    Limit limit = Limit.of(size + 1);
-    List<ShiftRequest> fetched =
-        cursor == null
-            ? shiftRequestRepository.findChangeHistoryByShiftId(storeId, shiftId, limit)
-            : fetchChangeHistoryAfter(storeId, shiftId, PageCursor.decode(cursor), limit);
-    CursorPage<ShiftRequest> page = CursorPage.of(fetched, size, ShiftLineageService::cursorOf);
-    Map<Long, String> actorNames = resolveProcessorNames(page.content());
+    Page<ShiftRequest> page =
+        shiftRequestRepository.findByStoreIdAndShiftIdAndType(
+            storeId, shiftId, ShiftRequestType.CHANGE, pageable);
+    Map<Long, String> actorNames = resolveProcessorNames(page.getContent());
     return page.map(request -> toLineage(request, actorNames));
-  }
-
-  private List<ShiftRequest> fetchChangeHistoryAfter(
-      Long storeId, String shiftId, PageCursor cursor, Limit limit) {
-    return shiftRequestRepository.findChangeHistoryByShiftIdAfter(
-        storeId, shiftId, cursor.timestampKey(), cursor.id(), limit);
-  }
-
-  /** 続きの位置は履歴の並び（提出時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
-  private static String cursorOf(ShiftRequest request) {
-    return new PageCursor(request.getCreatedAt().toString(), request.getId()).encode();
   }
 
   /** 履歴 1 ページ分の承認・却下の実行者を一度に引く。 */

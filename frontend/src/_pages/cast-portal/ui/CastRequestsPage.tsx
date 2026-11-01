@@ -9,7 +9,7 @@ import {
   ShiftRequestCreateRequest,
   shiftApi,
 } from '@/entities/shift';
-import { getApiErrorMessage, useCursorList, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -22,6 +22,7 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  Pager,
   RegionError,
   Select,
   SelectContent,
@@ -94,12 +95,13 @@ export function CastRequestsPage() {
   const stores = storesData ?? [];
   const {
     rows: history,
+    page: historyPage,
+    pageCount: historyPageCount,
     isLoading: historyLoading,
     failed: historyFailed,
-    hasMore: hasMoreHistory,
     reload: reloadHistory,
-    loadMore: loadMoreHistory,
-  } = useCursorList(cursor => shiftApi.myShiftRequests({ cursor }));
+    onPageChange: changeHistoryPage,
+  } = useListPage(page => shiftApi.myShiftRequests(page));
 
   // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
   const storeOptions = stores.map(s => ({
@@ -136,7 +138,8 @@ export function CastRequestsPage() {
       await shiftApi.submitShiftRequest(payload);
       notify.success('出勤希望を提出しました');
       reset(defaultValues(values.store_id));
-      reloadHistory();
+      // 提出した希望は先頭ページの最上段に載るので、先頭ページへ戻して見せる
+      void changeHistoryPage(0);
     } catch (e) {
       // 受理できる日付の下限は営業日で決まり、その境界（日付変更時刻・業務のタイムゾーン）を知るのは
       // サーバだけ。client 側で暦日から下限を組むと深夜帯や時差でサーバと食い違うため、日付の可否は
@@ -281,7 +284,7 @@ export function CastRequestsPage() {
           <p className="text-sm text-muted-foreground">読み込み中...</p>
         ) : historyFailed ? (
           // 読めなかった履歴を空に見せると、提出済みの希望が消えたと読める
-          <RegionError message="履歴の取得に失敗しました" onRetry={() => reloadHistory()} />
+          <RegionError message="履歴の取得に失敗しました" onRetry={() => void reloadHistory()} />
         ) : history.length === 0 ? (
           <p className="text-sm text-muted-foreground">提出履歴はありません</p>
         ) : (
@@ -322,17 +325,14 @@ export function CastRequestsPage() {
           </ul>
         )}
 
-        {hasMoreHistory && (
-          <div className="mt-3 flex justify-center">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => loadMoreHistory()}
+        {!historyFailed && (
+          <div className="mt-3">
+            <Pager
+              page={historyPage}
+              pageCount={historyPageCount}
               disabled={historyLoading}
-            >
-              さらに読み込む
-            </Button>
+              onPageChange={page => void changeHistoryPage(page)}
+            />
           </div>
         )}
       </div>

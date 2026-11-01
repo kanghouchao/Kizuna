@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
 import { remunerationApi, type Bonus, type Guarantee } from '../api';
-import { useResource } from '@/shared/lib';
-import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, RegionError } from '@/shared/ui';
+import { fromSpringPage } from '@/shared/api';
+import { useListPage } from '@/shared/lib';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, Pager, RegionError } from '@/shared/ui';
 const summary = (value: Bonus | Guarantee | undefined) => {
   if (!value) return '記録なし';
   if ('effective_from' in value)
@@ -20,8 +20,9 @@ export function RemunerationHistory({
   open: boolean;
   onClose: () => void;
 }) {
-  const [cursor, setCursor] = useState<string>();
-  const history = useResource(() => remunerationApi.changes(kind, id, cursor), [kind, id, cursor]);
+  const history = useListPage(async page =>
+    fromSpringPage(await remunerationApi.changes(kind, id, page))
+  );
   return (
     <Dialog
       open={open}
@@ -35,10 +36,13 @@ export function RemunerationHistory({
         </DialogHeader>
         {history.isLoading ? (
           <p role="status">読み込み中...</p>
-        ) : history.failure !== null ? (
-          <RegionError message="履歴を取得できませんでした。" onRetry={history.reload} />
+        ) : history.failed ? (
+          <RegionError
+            message="履歴を取得できませんでした。"
+            onRetry={() => void history.reload()}
+          />
         ) : (
-          history.data?.content.map(change => (
+          history.rows.map(change => (
             <article className="space-y-2 rounded-lg border p-4" key={change.id}>
               <p>
                 {change.created_at} / 操作者 {change.actor_id}
@@ -49,19 +53,13 @@ export function RemunerationHistory({
             </article>
           ))
         )}
-        {history.failure === null && !history.isLoading && (
-          <div className="flex gap-3">
-            {cursor && (
-              <Button variant="outline" onClick={() => setCursor(undefined)}>
-                最初へ
-              </Button>
-            )}
-            {history.data?.next_cursor && (
-              <Button variant="outline" onClick={() => setCursor(history.data?.next_cursor)}>
-                次の履歴
-              </Button>
-            )}
-          </div>
+        {!history.failed && (
+          <Pager
+            page={history.page}
+            pageCount={history.pageCount}
+            disabled={history.isLoading}
+            onPageChange={page => void history.onPageChange(page)}
+          />
         )}
       </DialogContent>
     </Dialog>

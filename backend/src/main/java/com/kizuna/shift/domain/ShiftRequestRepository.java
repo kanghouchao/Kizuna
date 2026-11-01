@@ -2,10 +2,11 @@ package com.kizuna.shift.domain;
 
 import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -36,37 +37,9 @@ public interface ShiftRequestRepository extends StoreScopedRepository<ShiftReque
   Optional<ShiftRequest> findFirstByStoreIdAndShiftIdAndTypeOrderByCreatedAtAscIdAsc(
       Long storeId, String shiftId, ShiftRequestType type);
 
-  // シフトの変更申請履歴。提出のたびに増え続け、1 本のシフトに対する件数の上限も一意性の守衛も無いので、
-  // 裸の一覧では返さない（backend/AGENTS.md の Pagination）。新しい申請が先頭で、createdAt が同値になりうる分は
-  // 一意な副キー id を重ねて全順序にする。カーソルの比較も同じ組で行う。
-  String CHANGE_HISTORY_SELECT =
-      """
-      select r from com.kizuna.shift.domain.ShiftRequest r
-      where r.storeId = :storeId and r.shiftId = :shiftId
-        and r.type = com.kizuna.shift.domain.ShiftRequestType.CHANGE
-      """;
-
-  String CHANGE_HISTORY_ORDER = " order by r.createdAt desc, r.id desc";
-
-  /** シフトの変更申請履歴の先頭。 */
-  @Query(CHANGE_HISTORY_SELECT + CHANGE_HISTORY_ORDER)
-  List<ShiftRequest> findChangeHistoryByShiftId(
-      @Param("storeId") Long storeId, @Param("shiftId") String shiftId, Limit limit);
-
-  /** シフトの変更申請履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。 */
-  @Query(
-      CHANGE_HISTORY_SELECT
-          + """
-            and (r.createdAt < :cursorCreatedAt
-                 or (r.createdAt = :cursorCreatedAt and r.id < :cursorId))
-            """
-          + CHANGE_HISTORY_ORDER)
-  List<ShiftRequest> findChangeHistoryByShiftIdAfter(
-      @Param("storeId") Long storeId,
-      @Param("shiftId") String shiftId,
-      @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
-      @Param("cursorId") String cursorId,
-      Limit limit);
+  /** シフトの変更申請履歴。並びは呼出側の Pageable が決める。 */
+  Page<ShiftRequest> findByStoreIdAndShiftIdAndType(
+      Long storeId, String shiftId, ShiftRequestType type, Pageable pageable);
 
   // 本人（cast_id 集合、店舗を跨ぐ）の出勤希望履歴を店名込みで返す。where 句に店舗の絞りは書かない —
   // cast_id は当人が所属する店にしか存在しないため、cast_id で本人に限ればそのまま店舗も限られる。
@@ -80,31 +53,13 @@ public interface ShiftRequestRepository extends StoreScopedRepository<ShiftReque
 
   String HISTORY_WHERE = " where r.castId in :castIds ";
 
-  // 新しい申請が先頭。createdAt は同一秒に並ぶ提出で同値になりうるので、一意な副キー id を重ねて
-  // 全順序にする。副キーが無いとページの境界で行が重複または欠落する。カーソルの比較も同じ組で行う。
-  String HISTORY_ORDER = " order by r.createdAt desc, r.id desc";
-
-  /** 本人の出勤希望履歴の先頭。 */
-  @Query(HISTORY_SELECT + HISTORY_WHERE + HISTORY_ORDER)
-  List<CastShiftRequestView> findHistoryByCastIds(
-      @Param("castIds") List<String> castIds, Limit limit);
-
-  /**
-   * 本人の出勤希望履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。
-   *
-   * <p>id は Snowflake の文字列で、比較も文字列の順序で行う。求めるのは全順序の決定性だけなので、 並び（{@link #HISTORY_ORDER}）と同じ順序であれば足りる。
-   */
+  /** 本人の出勤希望履歴。並びは呼出側の Pageable が決める。 */
   @Query(
-      HISTORY_SELECT
-          + HISTORY_WHERE
-          + """
-            and (r.createdAt < :cursorCreatedAt
-                 or (r.createdAt = :cursorCreatedAt and r.id < :cursorId))
-            """
-          + HISTORY_ORDER)
-  List<CastShiftRequestView> findHistoryByCastIdsAfter(
-      @Param("castIds") List<String> castIds,
-      @Param("cursorCreatedAt") OffsetDateTime cursorCreatedAt,
-      @Param("cursorId") String cursorId,
-      Limit limit);
+      value = HISTORY_SELECT + HISTORY_WHERE,
+      countQuery =
+          "select count(r) from ShiftRequest r join com.kizuna.store.domain.Store st"
+              + " on st.id = r.storeId"
+              + HISTORY_WHERE)
+  Page<CastShiftRequestView> findHistoryByCastIds(
+      @Param("castIds") List<String> castIds, Pageable pageable);
 }

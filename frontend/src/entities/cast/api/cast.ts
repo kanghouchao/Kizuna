@@ -1,11 +1,4 @@
-import {
-  CursorPageResult,
-  PageResult,
-  PaginationParams,
-  apiClient,
-  fromCursorPage,
-  fromSpringPage,
-} from '@/shared/api';
+import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import {
   CastCreateRequest,
@@ -38,21 +31,18 @@ export const castApi = {
   },
   statusHistories: async (
     id: string,
-    cursor?: string
-  ): Promise<CursorPageResult<CastEnrollmentStatusHistory>> => {
+    page = 0
+  ): Promise<PageResult<CastEnrollmentStatusHistory>> => {
     const response = await apiClient.get(`/casts/${requireId(id, 'キャスト')}/status-histories`, {
-      params: { cursor, size: 20 },
+      params: { page, size: 20 },
     });
-    return fromCursorPage(response.data);
+    return fromSpringPage(response.data);
   },
-  snapshots: async (
-    id: string,
-    cursor?: string
-  ): Promise<CursorPageResult<CastEnrollmentSnapshot>> => {
+  snapshots: async (id: string, page = 0): Promise<PageResult<CastEnrollmentSnapshot>> => {
     const response = await apiClient.get(`/casts/${requireId(id, 'キャスト')}/snapshots`, {
-      params: { cursor, size: 20 },
+      params: { page, size: 20 },
     });
-    return fromCursorPage(response.data);
+    return fromSpringPage(response.data);
   },
   changePublication: async (
     id: string,

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.cast.api.dto.CastInvitationResponse;
@@ -40,6 +41,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -113,6 +115,32 @@ class CastControllerTest {
         .andExpect(status().isBadRequest());
 
     verify(castService, never()).list(anyLong(), any(), any());
+  }
+
+  @Test
+  @DisplayName("在籍の状態履歴とスナップショットは記録の新しい順の Page で返すこと")
+  @WithMockUser(authorities = "PERM_CAST_MANAGE")
+  void enrollmentHistoriesArePagesNewestFirst() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<Pageable> histories = ArgumentCaptor.forClass(Pageable.class);
+    ArgumentCaptor<Pageable> snapshots = ArgumentCaptor.forClass(Pageable.class);
+    when(enrollmentService.history(eq(1L), eq("e1"), histories.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    when(enrollmentService.snapshots(eq(1L), eq("e1"), snapshots.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    mockMvc
+        .perform(get("/casts/e1/status-histories").header("X-Store-ID", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    mockMvc
+        .perform(get("/casts/e1/snapshots").header("X-Store-ID", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+
+    Sort newestFirst = Sort.by(Sort.Direction.DESC, "recordedAt", "id");
+    assertThat(histories.getValue().getSort()).isEqualTo(newestFirst);
+    assertThat(snapshots.getValue().getSort()).isEqualTo(newestFirst);
   }
 
   @Test

@@ -13,8 +13,8 @@ jest.mock('@/entities/cast', () => ({
     update: jest.fn(),
     changePublication: jest.fn(),
     resume: jest.fn(),
-    statusHistories: jest.fn(async () => ({ rows: [], nextCursor: null })),
-    snapshots: jest.fn(async () => ({ rows: [], nextCursor: null })),
+    statusHistories: jest.fn(async () => ({ rows: [], page: 0, pageCount: 0, total: 0 })),
+    snapshots: jest.fn(async () => ({ rows: [], page: 0, pageCount: 0, total: 0 })),
   },
   castFieldDefinitionApi: {
     list: jest.fn(),

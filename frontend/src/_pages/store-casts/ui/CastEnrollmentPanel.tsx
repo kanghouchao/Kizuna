@@ -7,8 +7,8 @@ import {
   CastResponse,
   castApi,
 } from '@/entities/cast';
-import { useCursorList } from '@/shared/lib';
-import { Button, ConfirmDialog, RegionError } from '@/shared/ui';
+import { useListPage } from '@/shared/lib';
+import { Button, ConfirmDialog, Pager, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 
 const statusLabels: Record<CastEnrollmentStatus, string> = {
@@ -28,8 +28,8 @@ export function CastEnrollmentPanel({
   const [endedAt, setEndedAt] = useState(cast.ended_at);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const history = useCursorList(cursor => castApi.statusHistories(cast.id!, cursor));
-  const snapshots = useCursorList(cursor => castApi.snapshots(cast.id!, cursor));
+  const history = useListPage(page => castApi.statusHistories(cast.id!, page));
+  const snapshots = useListPage(page => castApi.snapshots(cast.id!, page));
 
   async function change(action: 'suspend' | 'resume' | 'withdraw') {
     if (busy || !cast.id) return;
@@ -38,7 +38,7 @@ export function CastEnrollmentPanel({
       const result = await castApi[action](cast.id);
       setStatus(result.status);
       setEndedAt(result.ended_at);
-      history.reload();
+      void history.reload();
       onChanged(result);
       notify.success('在籍状態を更新しました');
     } catch {
@@ -94,7 +94,10 @@ export function CastEnrollmentPanel({
             <h2 className="inline">在籍履歴</h2>
           </summary>
           {history.failed ? (
-            <RegionError message="在籍履歴の取得に失敗しました" onRetry={history.reload} />
+            <RegionError
+              message="在籍履歴の取得に失敗しました"
+              onRetry={() => void history.reload()}
+            />
           ) : (
             <>
               {!history.isLoading && history.rows.length === 0 && (
@@ -116,16 +119,12 @@ export function CastEnrollmentPanel({
                 ))}
               </ul>
               {history.isLoading && <p role="status">読み込み中...</p>}
-              {history.hasMore && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={history.isLoading}
-                  onClick={history.loadMore}
-                >
-                  在籍履歴をさらに読み込む
-                </Button>
-              )}
+              <Pager
+                page={history.page}
+                pageCount={history.pageCount}
+                disabled={history.isLoading}
+                onPageChange={page => void history.onPageChange(page)}
+              />
             </>
           )}
         </details>
@@ -137,7 +136,10 @@ export function CastEnrollmentPanel({
           </summary>
           <p className="text-sm text-muted-foreground">各変更の直前の値を表示します。</p>
           {snapshots.failed ? (
-            <RegionError message="内部情報履歴の取得に失敗しました" onRetry={snapshots.reload} />
+            <RegionError
+              message="内部情報履歴の取得に失敗しました"
+              onRetry={() => void snapshots.reload()}
+            />
           ) : (
             <>
               {!snapshots.isLoading && snapshots.rows.length === 0 && (
@@ -166,16 +168,12 @@ export function CastEnrollmentPanel({
                 ))}
               </ul>
               {snapshots.isLoading && <p role="status">読み込み中...</p>}
-              {snapshots.hasMore && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={snapshots.isLoading}
-                  onClick={snapshots.loadMore}
-                >
-                  内部情報履歴をさらに読み込む
-                </Button>
-              )}
+              <Pager
+                page={snapshots.page}
+                pageCount={snapshots.pageCount}
+                disabled={snapshots.isLoading}
+                onPageChange={page => void snapshots.onPageChange(page)}
+              />
             </>
           )}
         </details>

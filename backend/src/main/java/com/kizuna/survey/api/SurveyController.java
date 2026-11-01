@@ -1,7 +1,6 @@
 package com.kizuna.survey.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.survey.api.dto.SurveyAnswerCreateRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerSummaryResponse;
 import com.kizuna.survey.api.dto.SurveyCreateRequest;
@@ -23,6 +22,9 @@ import com.kizuna.survey.domain.SurveyValues.Operation;
 import com.kizuna.survey.domain.SurveyValues.RevisionStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -200,13 +202,12 @@ public class SurveyController {
 
   @GetMapping("/{sid}/revisions/{rid}/history")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
-  public CursorPage<SurveyRevisionHistoryResponse> revisionHistory(
+  public Page<SurveyRevisionHistoryResponse> revisionHistory(
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return reads.revisionHistory(storeId, auth.getName(), sid, rid, cursor, size);
+      @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+    return reads.revisionHistory(storeId, auth.getName(), sid, rid, pageable);
   }
 }
