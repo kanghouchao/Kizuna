@@ -18,6 +18,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.core.PropertyPath;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -49,6 +52,37 @@ class CommonExceptionHandlerTest {
   @AfterAll
   static void tearDownValidator() {
     factory.close();
+  }
+
+  private static PropertyReferenceException unknownSortProperty() {
+    try {
+      PropertyPath.from("nope", SnsLink.class);
+    } catch (PropertyReferenceException ex) {
+      return ex;
+    }
+    throw new AssertionError("実在しない属性が解決された");
+  }
+
+  @Test
+  @DisplayName("実在しない並び替え属性は、直接でも repository の例外翻訳に包まれても 400 になる")
+  void unknownSortPropertyIsBadRequest() {
+    var direct = handler.handleSort(unknownSortProperty());
+    var wrapped =
+        handler.handleSort(
+            new InvalidDataAccessApiUsageException("translated", unknownSortProperty()));
+
+    assertThat(direct.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(wrapped.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(wrapped.getBody()).containsEntry("error", "並び替えの指定を確認してください");
+  }
+
+  @Test
+  @DisplayName("並び替えに由来しない API 誤用は 500 のまま固定文言で返す")
+  void otherApiMisuseStaysInternalError() {
+    var response = handler.handleSort(new InvalidDataAccessApiUsageException("bug"));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    assertThat(response.getBody()).containsEntry("error", "サーバー内部エラーが発生しました");
   }
 
   @Test

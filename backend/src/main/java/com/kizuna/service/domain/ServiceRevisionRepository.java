@@ -3,7 +3,6 @@ package com.kizuna.service.domain;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.persistence.StoreScopedRepository;
-import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
