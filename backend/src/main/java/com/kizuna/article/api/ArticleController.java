@@ -6,7 +6,6 @@ import com.kizuna.article.api.dto.ArticleRequest;
 import com.kizuna.article.api.dto.ArticleResponse;
 import com.kizuna.article.api.dto.ArticleSummaryResponse;
 import com.kizuna.article.application.ArticleService;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.CurrentStore;
 import jakarta.validation.Valid;
 import java.time.Clock;
@@ -14,6 +13,7 @@ import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,8 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/articles")
 @RequiredArgsConstructor
 public class ArticleController {
-  private static final int MAX_PAGE_SIZE = 100;
-
   private final ArticleService articles;
   private final Clock clock;
 
@@ -48,9 +46,12 @@ public class ArticleController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ARTICLE_MANAGE')")
   public Page<ArticleSummaryResponse> list(
-      @CurrentStore Long storeId, @PageableDefault(size = 20) Pageable pageable) {
-    if (pageable.getPageSize() > MAX_PAGE_SIZE)
-      throw new ServiceException("1 ページの件数は " + MAX_PAGE_SIZE + " 件までです");
+      @CurrentStore Long storeId,
+      @PageableDefault(
+              size = 20,
+              sort = {"updatedAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
     var now = now();
     return articles.list(storeId, pageable).map(row -> ArticleSummaryResponse.of(row, now));
   }

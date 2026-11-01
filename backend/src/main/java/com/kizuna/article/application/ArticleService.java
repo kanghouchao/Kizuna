@@ -11,9 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,16 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ArticleService {
-  private static final Sort NEWEST_FIRST =
-      Sort.by(Sort.Order.desc("updatedAt"), Sort.Order.desc("id"));
-
   private final ArticleRepository articles;
   private final BusinessAudit audit;
 
-  /** 並びは更新の新しい順に固定し、呼出側の並び指定は使わない。 */
   public Page<ArticleSummaryView> list(Long storeId, Pageable pageable) {
-    return articles.findByStoreId(
-        storeId, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWEST_FIRST));
+    return articles.findByStoreId(storeId, pageable);
   }
 
   public Article get(Long storeId, String id) {
