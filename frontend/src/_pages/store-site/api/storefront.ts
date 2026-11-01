@@ -56,9 +56,14 @@ export const storefrontService = {
   },
 
   /**
-   * 掲出中の口コミを 1 ページ分取得します（公開期間が分単位で切り替わるためキャッシュしない）
+   * 掲出中の口コミを 1 ページ分取得します（公開期間が分単位で切り替わるためキャッシュしない）。
+   * 失敗は null で返し、掲出 0 件と区別して画面に失敗を出させる。
    */
-  async fetchReviews(storeId: string, page: number, size: number): Promise<Page<PublicReview>> {
+  async fetchReviews(
+    storeId: string,
+    page: number,
+    size: number
+  ): Promise<Page<PublicReview> | null> {
     try {
       return await serverClient.get<Page<PublicReview>>(
         `/reviews/public?page=${page}&size=${size}`,
@@ -66,7 +71,7 @@ export const storefrontService = {
       );
     } catch (error) {
       console.error('口コミの取得に失敗しました:', error);
-      return { content: [], total_pages: 0, total_elements: 0, size, number: page };
+      return null;
     }
   },
 
