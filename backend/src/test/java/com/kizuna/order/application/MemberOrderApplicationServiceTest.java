@@ -26,8 +26,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
@@ -50,7 +48,10 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class MemberOrderApplicationServiceTest {
@@ -195,41 +196,13 @@ class MemberOrderApplicationServiceTest {
   @Test
   @DisplayName("一覧は本人が申請した予約に限って引くこと")
   void listQueriesOwnApplicationsOnly() {
-    when(orderApplicationRepository.findMemberViews(anyLong(), any(Limit.class)))
-        .thenReturn(List.of());
+    Pageable pageable = PageRequest.of(1, 20);
+    when(orderApplicationRepository.findMemberViews(MEMBER_ID, pageable))
+        .thenReturn(Page.empty(pageable));
 
-    service.list(EMAIL, null, 20);
+    service.list(EMAIL, pageable);
 
-    verify(orderApplicationRepository).findMemberViews(eq(MEMBER_ID), any(Limit.class));
-  }
-
-  @Test
-  @DisplayName("続きの取得でも申請者の一致を問い合わせに載せ続けること")
-  void listKeepsTheRequesterPredicateWhenResumingFromACursor() {
-    when(orderApplicationRepository.findMemberViewsAfter(
-            anyLong(), any(), anyString(), any(Limit.class)))
-        .thenReturn(List.of());
-
-    service.list(EMAIL, new PageCursor("2026-08-04", "a1").encode(), 20);
-
-    // カーソルは位置を指すだけで隔離境界ではない。ここが抜けると他会員の申請に続きから到達できる。
-    verify(orderApplicationRepository)
-        .findMemberViewsAfter(
-            eq(MEMBER_ID), eq(LocalDate.parse("2026-08-04")), eq("a1"), any(Limit.class));
-  }
-
-  @Test
-  @DisplayName("続きがあるときは最後に返した申請を指すカーソルを添えること")
-  void listHandsBackTheCursorOfTheLastReturnedApplication() {
-    List<MemberOrderApplicationView> fetched =
-        List.of(memberView("a1", "2026-08-04"), memberView("a2", "2026-08-03"));
-    when(orderApplicationRepository.findMemberViews(anyLong(), eq(Limit.of(2))))
-        .thenReturn(fetched);
-
-    CursorPage<MemberOrderApplicationResult> page = service.list(EMAIL, null, 1);
-
-    assertThat(page.content()).hasSize(1);
-    assertThat(PageCursor.decode(page.nextCursor())).isEqualTo(new PageCursor("2026-08-04", "a1"));
+    verify(orderApplicationRepository).findMemberViews(MEMBER_ID, pageable);
   }
 
   @Test
@@ -241,12 +214,12 @@ class MemberOrderApplicationServiceTest {
     lenient().when(fresh.getStatus()).thenReturn(OrderApplicationStatus.PENDING);
     MemberOrderApplicationView declined = memberView("a3", today().minusDays(1).toString());
     lenient().when(declined.getStatus()).thenReturn(OrderApplicationStatus.DECLINED);
-    when(orderApplicationRepository.findMemberViews(anyLong(), any(Limit.class)))
-        .thenReturn(List.of(stale, fresh, declined));
+    when(orderApplicationRepository.findMemberViews(anyLong(), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of(stale, fresh, declined)));
 
-    CursorPage<MemberOrderApplicationResult> page = service.list(EMAIL, null, 20);
+    Page<MemberOrderApplicationResult> page = service.list(EMAIL, PageRequest.of(0, 20));
 
-    assertThat(page.content())
+    assertThat(page.getContent())
         .extracting(MemberOrderApplicationResult::expired)
         .containsExactly(true, false, false);
   }
@@ -339,9 +312,9 @@ class MemberOrderApplicationServiceTest {
   void rejectsNonMemberPrincipal() {
     when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.list(EMAIL, null, 20))
+    assertThatThrownBy(() -> service.list(EMAIL, PageRequest.of(0, 20)))
         .isInstanceOf(StaleSessionException.class);
-    verify(orderApplicationRepository, never()).findMemberViews(anyLong(), any(Limit.class));
+    verify(orderApplicationRepository, never()).findMemberViews(anyLong(), any(Pageable.class));
   }
 
   @Test
@@ -349,7 +322,7 @@ class MemberOrderApplicationServiceTest {
   void rejectsUnknownPrincipal() {
     when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.list("ghost@kizuna.test", null, 20))
+    assertThatThrownBy(() -> service.list("ghost@kizuna.test", PageRequest.of(0, 20)))
         .isInstanceOf(StaleSessionException.class);
   }
 }

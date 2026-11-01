@@ -42,7 +42,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.time.LocalDate;
@@ -52,6 +51,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
@@ -96,16 +96,14 @@ public class OrderController {
   }
 
   /**
-   * 作業キュー（対応が要る受注）の読み口。状態の群を指定して、検索と並び替えを当てたうえでカーソルで辿る。
+   * 作業キュー（対応が要る受注）の読み口。状態の群を指定して、検索と並び替えを当てたうえでページで辿る。
    *
-   * <p>続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。確定・取消で行が消えていく一覧なので、
-   * 位置を「何件目か」で指すと処理の直後に境界の受注を飛ばす。
-   *
-   * <p>状態を要求で受けるのは、画面の群がその軸そのものだからである（検索条件には状態を持たせない）。
+   * <p>状態を要求で受けるのは、画面の群がその軸そのものだからである（検索条件には状態を持たせない）。並びは {@link OrderSortKey} が決めるので、Pageable
+   * の並びは使わない。
    */
   @GetMapping("/work-queue")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public ResponseEntity<CursorPage<OrderWorkQueueResponse>> listWorkQueue(
+  public ResponseEntity<Page<OrderWorkQueueResponse>> listWorkQueue(
       @CurrentStore Long storeId,
       @RequestParam(name = "statuses") Set<OrderStatus> statuses,
       @RequestParam(name = "customer_name", required = false) String customerName,
@@ -113,23 +111,20 @@ public class OrderController {
           LocalDate businessDate,
       @RequestParam(name = "sort_key", defaultValue = "BUSINESS_DATE") OrderSortKey sortKey,
       @RequestParam(name = "desc", defaultValue = "false") boolean descending,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
     return ResponseEntity.ok(
         orderQueryService
             .listWorkQueue(
                 storeId,
                 criteria(statuses, customerName, businessDate, sortKey, descending),
-                cursor,
-                size)
+                pageable)
             .map(orderMapper::toWorkQueueResponse));
   }
 
-  /**
-   * アーカイブ（完了・取消）の読み口。作業キューと同じ検索・並び替えを、オフセットのページャで辿る。
-   *
-   * <p>位置をページ番号で指せるのは、終端状態の受注が処理で消えず増えるだけだからである。
-   */
+  /** アーカイブ（完了・取消）の読み口。作業キューと同じ検索・並び替えを、ページで辿る。 */
   @GetMapping("/archive")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public ResponseEntity<Page<OrderArchiveResponse>> listArchive(
@@ -166,15 +161,14 @@ public class OrderController {
 
   @GetMapping("/customer-candidates")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public CursorPage<OrderCustomerCandidateResponse> customerCandidates(
+  public Page<OrderCustomerCandidateResponse> customerCandidates(
       @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size,
+      @PageableDefault(size = 20, sort = "id") Pageable pageable,
       Authentication authentication) {
     return orderQueryService
         .customerCandidates(
-            storeId, search, cursor, size, CustomerManagementAuthority.held(authentication))
+            storeId, search, CustomerManagementAuthority.held(authentication), pageable)
         .map(orderMapper::toResponse);
   }
 
@@ -186,14 +180,11 @@ public class OrderController {
 
   @GetMapping("/{id}/business-contact-permission-history")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
-  public CursorPage<BusinessContactHistoryResponse> businessContactHistory(
+  public Page<BusinessContactHistoryResponse> businessContactHistory(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return businessContactPermissions
-        .history(storeId, id, cursor, size)
-        .map(orderMapper::toResponse);
+      @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+    return businessContactPermissions.history(storeId, id, pageable).map(orderMapper::toResponse);
   }
 
   @GetMapping("/receptionists")
@@ -530,11 +521,14 @@ public class OrderController {
   /** 訂正履歴。横断一覧（/orders/cross-store）からも行の店舗を X-Store-ID に名指して読むので、横断照会者も通す。 */
   @GetMapping("/{id}/corrections")
   @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
-  public CursorPage<OrderCorrectionResult> corrections(
+  public Page<OrderCorrectionResult> corrections(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return correctionHistory.store(storeId, id, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"afterVersion", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return correctionHistory.store(storeId, id, pageable);
   }
 }

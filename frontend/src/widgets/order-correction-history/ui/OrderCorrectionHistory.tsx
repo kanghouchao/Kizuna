@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { orderApi, OrderCorrectionSnapshot, ORDER_FEE_LINE_KIND_LABELS } from '@/entities/order';
-import { storePath, useCursorList } from '@/shared/lib';
+import { storePath, useListPage } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  Pager,
   RegionError,
 } from '@/shared/ui';
 
@@ -84,8 +85,8 @@ function Snapshot({ value, label }: { value: OrderCorrectionSnapshot; label: str
 
 export function OrderCorrectionHistory({ orderId, storeId }: Props) {
   const [status, setStatus] = useState<number>();
-  const history = useCursorList(cursor =>
-    orderApi.correctionHistory(orderId, cursor, storeId).catch(error => {
+  const history = useListPage(page =>
+    orderApi.correctionHistory(orderId, page, storeId).catch(error => {
       setStatus(error?.response?.status);
       throw error;
     })
@@ -107,7 +108,7 @@ export function OrderCorrectionHistory({ orderId, storeId }: Props) {
                 label: '一覧へ戻る',
               },
             }
-          : { onRetry: history.reload })}
+          : { onRetry: () => void history.reload() })}
       />
     );
   return (
@@ -143,11 +144,12 @@ export function OrderCorrectionHistory({ orderId, storeId }: Props) {
       ))}
       {history.isLoading && <p role="status">履歴を読み込み中...</p>}
       {!history.isLoading && history.rows.length === 0 && <p>訂正履歴はありません</p>}
-      {history.hasMore && (
-        <Button variant="outline" disabled={history.isLoading} onClick={history.loadMore}>
-          さらに表示
-        </Button>
-      )}
+      <Pager
+        page={history.page}
+        pageCount={history.pageCount}
+        disabled={history.isLoading}
+        onPageChange={page => void history.onPageChange(page)}
+      />
     </div>
   );
 }

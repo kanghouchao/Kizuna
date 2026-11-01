@@ -1,10 +1,4 @@
-import {
-  apiClient,
-  fromSpringPage,
-  fromCursorPage,
-  PageResult,
-  CursorPageResult,
-} from '@/shared/api';
+import { apiClient, fromSpringPage, PageResult } from '@/shared/api';
 import {
   SelfRemuneration,
   SelfRemunerationSummary,
@@ -26,11 +20,11 @@ export const selfRemunerationApi = {
   async detail(id: string): Promise<SelfRemuneration> {
     return (await apiClient.get(`${base}/${encodeURIComponent(id)}`)).data;
   },
-  async changes(id: string, cursor?: string): Promise<CursorPageResult<SelfRemunerationChange>> {
-    return fromCursorPage(
+  async changes(id: string, page: number): Promise<PageResult<SelfRemunerationChange>> {
+    return fromSpringPage(
       (
         await apiClient.get(`${base}/${encodeURIComponent(id)}/changes`, {
-          params: { cursor, size: 20 },
+          params: { page, size: 20 },
         })
       ).data
     );

@@ -15,7 +15,7 @@ import {
   orderApplicationApi,
 } from '@/entities/order';
 import { hasPermission, useMe } from '@/entities/user';
-import { storePath, useCursorList } from '@/shared/lib';
+import { storePath, useListPage } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
 import { OrderApplicationCard } from './OrderApplicationCard';
 import { OrderApplicationConfirmModal } from './OrderApplicationConfirmModal';
@@ -29,6 +29,7 @@ import {
   CardContent,
   Input,
   Label,
+  Pager,
   RegionError,
   Select,
   SelectContent,
@@ -37,7 +38,7 @@ import {
   SelectValue,
 } from '@/shared/ui';
 
-/** 作業キューの 1 回の読み込み件数。処理で行が消える一覧なので継ぎ足しで辿る。 */
+/** 作業キューと受付箱の 1 ページの件数。 */
 const QUEUE_PAGE_SIZE = 20;
 
 /** 対応が要る未完了受注の群。未処理の予約申請は受付箱が持つ。 */
@@ -113,12 +114,12 @@ export default function OrderListPage() {
     [applied, sortKey, descending]
   );
 
-  const queue = useCursorList<OrderWorkQueueRow, OrderListCriteria>(
-    (cursor, activeCriteria) =>
+  const queue = useListPage<OrderWorkQueueRow, OrderListCriteria>(
+    (page, activeCriteria) =>
       orderApi.listWorkQueue({
         ...activeCriteria,
         statuses: ACTIVE_STATUSES,
-        cursor,
+        page,
         size: QUEUE_PAGE_SIZE,
       }),
     criteria
@@ -126,31 +127,26 @@ export default function OrderListPage() {
 
   // 受付箱（未処理の予約申請）。検索・並びの条件は持たない — 希望日の早い順に処理するだけの箱で、
   // 条件を持たせると作業キューと 2 つの母集合を主張し合う。
-  const inbox = useCursorList<OrderApplicationRow>(cursor =>
-    orderApplicationApi.list({ statuses: ['PENDING'], cursor, size: QUEUE_PAGE_SIZE })
+  const inbox = useListPage<OrderApplicationRow>(page =>
+    orderApplicationApi.list({ statuses: ['PENDING'], page, size: QUEUE_PAGE_SIZE })
   );
 
-  /** 謝絶し終えた申請を受付箱から取り除く。 */
-  const removeFromInbox = (id: string) => inbox.setRows(prev => prev.filter(row => row.id !== id));
-
   /** 確定し終えた申請の後始末。申請は受付箱から外れ、生まれた受注が作業キューへ現れる。 */
-  const settleConfirmed = (application: OrderApplicationRow | null) => {
-    if (application?.id) {
-      removeFromInbox(application.id);
-    }
+  const settleConfirmed = () => {
+    void inbox.reload();
     // 生まれた受注は検索・並びの条件次第でどこに入るか分からないため、行の差し込みではなく取り直す
-    queue.reload();
+    void queue.reload();
   };
 
   const apply = (next: SearchDraft) => {
     setApplied(next);
-    queue.search(toCriteria(next, sortKey, descending));
+    void queue.search(toCriteria(next, sortKey, descending));
   };
 
   const applySort = (key: OrderSortKey, desc: boolean) => {
     setSortKey(key);
     setDescending(desc);
-    queue.search(toCriteria(applied, key, desc));
+    void queue.search(toCriteria(applied, key, desc));
   };
 
   // アーカイブへ移った受注を群ごとに数える。件数の控えはたたんだままでも出ているので、移った先を
@@ -160,9 +156,9 @@ export default function OrderListPage() {
     CANCELLED: 0,
   });
 
-  /** 処理し終えた受注を手元から取り除き、行った先のアーカイブを取り直させる。 */
-  const removeFromQueue = (id: string, movedTo: ArchiveStatus) => {
-    queue.setRows(prev => prev.filter(row => row.id !== id));
+  /** 処理し終えた受注の後始末。作業キューを取り直し、行った先のアーカイブを取り直させる。 */
+  const settleProcessed = (movedTo: ArchiveStatus) => {
+    void queue.reload();
     setArchived(prev => ({ ...prev, [movedTo]: prev[movedTo] + 1 }));
   };
 
@@ -271,10 +267,13 @@ export default function OrderListPage() {
         <h2 className="text-foreground text-sm font-medium">予約申請</h2>
         {/* 取得の失敗を空表示と区別する — 「申請なし」に見せると未処理を見落とす */}
         {inbox.failed ? (
-          <RegionError message="予約申請を取得できませんでした。" onRetry={inbox.reload} />
+          <RegionError
+            message="予約申請を取得できませんでした。"
+            onRetry={() => void inbox.reload()}
+          />
         ) : inbox.isLoading && inbox.rows.length === 0 ? (
           <p className="text-muted-foreground text-sm">読み込み中...</p>
-        ) : inbox.rows.length === 0 && !inbox.hasMore ? (
+        ) : inbox.rows.length === 0 && inbox.page === 0 ? (
           <p className="text-muted-foreground bg-card rounded-lg border p-4 text-sm">
             未処理の予約申請はありません
           </p>
@@ -284,34 +283,29 @@ export default function OrderListPage() {
               <OrderApplicationCard
                 key={application.id}
                 application={application}
-                onDeclined={removeFromInbox}
+                onDeclined={() => void inbox.reload()}
                 onConfirm={setConfirming}
               />
             ))}
           </ul>
         )}
-        {inbox.hasMore && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            disabled={inbox.isLoading}
-            onClick={inbox.loadMore}
-          >
-            もっと見る
-          </Button>
-        )}
+        <Pager
+          page={inbox.page}
+          pageCount={inbox.pageCount}
+          disabled={inbox.isLoading}
+          onPageChange={page => void inbox.onPageChange(page)}
+        />
       </section>
 
       <section className="space-y-3">
         <h2 className="text-foreground text-sm font-medium">対応が要る</h2>
         {/* 取得の失敗を空表示と区別する — 「受注なし」に見せると未対応を見落とす */}
         {queue.failed ? (
-          <RegionError message="受注を取得できませんでした。" onRetry={queue.reload} />
+          <RegionError message="受注を取得できませんでした。" onRetry={() => void queue.reload()} />
         ) : queue.isLoading && queue.rows.length === 0 ? (
           <p className="text-muted-foreground text-sm">読み込み中...</p>
-        ) : queue.rows.length === 0 && !queue.hasMore ? (
-          // 続きが残っているうちは「受注なし」と言い切らない（表示中を処理し終えただけの状態と区別できなくなる）
+        ) : queue.rows.length === 0 && queue.page === 0 ? (
+          // 後ろのページで行が尽きたときは「受注なし」と言い切らない（前のページへ戻るページ送りが残る）
           <p className="text-muted-foreground bg-card rounded-lg border p-4 text-sm">
             条件に合う受注がありません
           </p>
@@ -321,23 +315,18 @@ export default function OrderListPage() {
               <OrderQueueCard
                 key={order.id}
                 order={order}
-                onProcessed={id => removeFromQueue(id, 'CANCELLED')}
+                onProcessed={() => settleProcessed('CANCELLED')}
                 onComplete={setCompleting}
               />
             ))}
           </ul>
         )}
-        {queue.hasMore && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            disabled={queue.isLoading}
-            onClick={queue.loadMore}
-          >
-            もっと見る
-          </Button>
-        )}
+        <Pager
+          page={queue.page}
+          pageCount={queue.pageCount}
+          disabled={queue.isLoading}
+          onPageChange={page => void queue.onPageChange(page)}
+        />
       </section>
 
       <div className="space-y-3">
@@ -365,8 +354,8 @@ export default function OrderListPage() {
         open={confirmingDialog?.open ?? false}
         application={confirming}
         onClose={() => setConfirmingDialog(previous => previous && { ...previous, open: false })}
-        onConfirmed={() => settleConfirmed(confirming)}
-        onMissing={inbox.reload}
+        onConfirmed={settleConfirmed}
+        onMissing={() => void inbox.reload()}
       />
       <OrderCompletionModal
         key={`completing-${completingDialog?.key}`}
@@ -374,12 +363,12 @@ export default function OrderListPage() {
         order={completing}
         onClose={missing => {
           setCompletingDialog(previous => previous && { ...previous, open: false });
-          if (missing) queue.reload();
+          if (missing) void queue.reload();
         }}
         // 完了した受注は作業キューから外れて完了のアーカイブへ移る
-        onCompleted={() => removeFromQueue(completing?.id ?? '', 'COMPLETED')}
+        onCompleted={() => settleProcessed('COMPLETED')}
         // 別の操作者が先に終端化していた受注も、行はキューに残さず該当のアーカイブへ移す
-        onSuperseded={status => removeFromQueue(completing?.id ?? '', status)}
+        onSuperseded={status => settleProcessed(status)}
       />
       {/* 訂正は受注の状態も会計欄も変えないため、一覧の取り直しは要らない */}
       <OrderAttributionModal

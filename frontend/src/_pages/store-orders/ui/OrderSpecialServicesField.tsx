@@ -72,36 +72,19 @@ function SpecialServiceOptions({
   const store = useStoreContext().currentStoreId;
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
-  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const result = useKeyedResource(
     ['special-services', store, cast, historicalOrderId, search, page],
     (!cast && !historicalOrderId) || changedCast
       ? null
       : async () => {
           try {
-            if (historicalOrderId) {
-              const data = await orderApi.specialServiceRevisions(
-                historicalOrderId,
-                search,
-                cursors[page]
-              );
-              return {
-                rows: data.rows,
-                more: !!data.nextCursor,
-                cursor: data.nextCursor ?? undefined,
-                forbidden: false,
-              };
-            }
-            const data = await orderApi.specialServiceCandidates(cast!, search, page);
-            return {
-              rows: data.rows,
-              more: (page + 1) * 20 < data.total,
-              cursor: undefined,
-              forbidden: false,
-            };
+            const data = historicalOrderId
+              ? await orderApi.specialServiceRevisions(historicalOrderId, search, page)
+              : await orderApi.specialServiceCandidates(cast!, search, page);
+            return { rows: data.rows, more: page + 1 < data.pageCount, forbidden: false };
           } catch (error) {
             if (isAxiosError(error) && error.response?.status === 403)
-              return { rows: [], more: false, cursor: undefined, forbidden: true };
+              return { rows: [], more: false, forbidden: true };
             throw error;
           }
         }
@@ -133,7 +116,6 @@ function SpecialServiceOptions({
             onChange={e => {
               setSearch(e.target.value);
               setPage(0);
-              setCursors([undefined]);
             }}
           />
           {result.data?.forbidden ? (
@@ -215,10 +197,7 @@ function SpecialServiceOptions({
               type="button"
               variant="outline"
               disabled={!result.data?.more}
-              onClick={() => {
-                setCursors([...cursors.slice(0, page + 1), result.data?.cursor]);
-                setPage(page + 1);
-              }}
+              onClick={() => setPage(page + 1)}
             >
               次の候補
             </Button>

@@ -2,11 +2,8 @@
 
 import Link from 'next/link';
 import { MemberVisit, memberVisitApi } from '@/entities/order';
-import { useCursorList } from '@/shared/lib';
-import { Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
-
-/** 1 回に読み込む件数。会員の画面は縦に伸ばす前提なので、追加読み込みで過去へ遡る。 */
-const PAGE_SIZE = 20;
+import { useListPage } from '@/shared/lib';
+import { Button, Card, CardContent, CardHeader, CardTitle, Pager, RegionError } from '@/shared/ui';
 
 /** 来店 1 件。人数と担当は記録の無い来店があるため、無い場合はその項目だけ落として行は残す。 */
 function VisitRow({ visit }: { visit: MemberVisit }) {
@@ -34,16 +31,8 @@ function VisitRow({ visit }: { visit: MemberVisit }) {
  * 過去の来店は残る（来店は確定した記録であって、現在の関連の写しではない）。
  */
 export function MemberVisitsPage() {
-  // 1 回の取得は常に PAGE_SIZE 件で、続きは位置（カーソル）を渡して 1 回ずつ継ぎ足す。要求サイズ自体を
-  // 膨らませると、サーバ側の取得上限に当たった時点でそれ以降の来店へ到達できなくなる。
-  const {
-    rows: visits,
-    isLoading,
-    failed,
-    hasMore,
-    reload,
-    loadMore,
-  } = useCursorList<MemberVisit>(cursor => memberVisitApi.list({ cursor, size: PAGE_SIZE }));
+  const list = useListPage<MemberVisit>(page => memberVisitApi.list(page));
+  const { rows: visits, isLoading, failed } = list;
 
   return (
     <div className="mx-auto w-full max-w-md p-4">
@@ -56,31 +45,31 @@ export function MemberVisitsPage() {
         </CardHeader>
         <CardContent>
           {failed ? (
-            <RegionError message="来店履歴を取得できませんでした。" onRetry={reload} />
+            <RegionError
+              message="来店履歴を取得できませんでした。"
+              onRetry={() => void list.reload()}
+            />
           ) : isLoading && visits.length === 0 ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : visits.length === 0 ? (
             <p className="text-sm text-muted-foreground">来店の記録はまだありません。</p>
           ) : (
             <ul className="space-y-3">
-              {/* 来店は台帳内部の ID を持たない（応答に出さない）。行は末尾に継ぎ足されるだけで並べ替えも
-                  削除も起きないため、位置がそのまま識別子になる。 */}
+              {/* 来店は台帳内部の ID を持たない（応答に出さない）。1 ページの中で並べ替えも削除も
+                  起きないため、ページ内の位置がそのまま識別子になる。 */}
               {visits.map((visit, index) => (
                 <VisitRow key={index} visit={visit} />
               ))}
             </ul>
           )}
-          {hasMore && (
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4 w-full"
-              onClick={loadMore}
+          <div className="mt-4">
+            <Pager
+              page={list.page}
+              pageCount={list.pageCount}
               disabled={isLoading}
-            >
-              もっと見る
-            </Button>
-          )}
+              onPageChange={page => void list.onPageChange(page)}
+            />
+          </div>
         </CardContent>
       </Card>
       <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">

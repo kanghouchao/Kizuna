@@ -296,23 +296,24 @@ Then(
     expect(history.status()).toBe(200);
     const firstPage = await history.json();
     expect(firstPage.content[0].change_type).toBe("COMPLETION_INVALIDATION");
+    expect(firstPage.total_pages).toBeGreaterThan(1);
     const next = await request.get(
       `/api/me/remunerations/${firstOrder}/changes`,
       {
         headers: { Authorization: `Bearer ${token}` },
-        params: { cursor: firstPage.next_cursor, size: 1 },
+        params: { page: 1, size: 1 },
       },
     );
     expect(next.status()).toBe(200);
     expect((await next.json()).content[0].change_type).toBe("CORRECTION");
-    const wrong = await request.get(
+    // 履歴は名指した受注の分だけで、別の受注の変更は混ざらない。
+    const other = await request.get(
       `/api/me/remunerations/${secondOrder}/changes`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { cursor: firstPage.next_cursor },
-      },
+      { headers: { Authorization: `Bearer ${token}` }, params: { size: 100 } },
     );
-    expect(wrong.status()).toBe(400);
+    expect(other.status()).toBe(200);
+    const otherChanges = (await other.json()).content as Array<{ order_id: string }>;
+    for (const change of otherChanges) expect(change.order_id).toBe(secondOrder);
   },
 );
 

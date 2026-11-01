@@ -6,8 +6,8 @@ import {
   SelfRemunerationItem,
   SelfRemunerationSummary,
 } from '@/entities/order';
-import { isForbidden, isNotFound, useResource, useCursorList } from '@/shared/lib';
-import { Button, Card, CardContent, RegionError } from '@/shared/ui';
+import { isForbidden, isNotFound, useListPage, useResource } from '@/shared/lib';
+import { Button, Card, CardContent, Pager, RegionError } from '@/shared/ui';
 
 const money = (amount: number) => `${amount.toLocaleString('ja-JP')} 円`;
 const statuses = {
@@ -128,15 +128,15 @@ export function RemunerationDetail({ id, onBack }: { id: string; onBack: () => v
 
 function Changes({ id }: { id: string }) {
   const [error, setError] = useState<unknown>();
-  const history = useCursorList(async cursor => {
+  const history = useListPage(async page => {
     try {
-      return await selfRemunerationApi.changes(id, cursor);
+      return await selfRemunerationApi.changes(id, page);
     } catch (failure) {
       setError(failure);
       throw failure;
     }
   });
-  if (history.failed) return <Failure error={error} onRetry={history.reload} />;
+  if (history.failed) return <Failure error={error} onRetry={() => void history.reload()} />;
   return (
     <section aria-label="変更履歴" className="space-y-4">
       <h2 className="text-lg font-semibold">変更履歴</h2>
@@ -171,11 +171,12 @@ function Changes({ id }: { id: string }) {
         </Card>
       ))}
       {history.isLoading && <p>履歴を読み込み中...</p>}
-      {history.hasMore && (
-        <Button variant="outline" disabled={history.isLoading} onClick={history.loadMore}>
-          さらに読み込む
-        </Button>
-      )}
+      <Pager
+        page={history.page}
+        pageCount={history.pageCount}
+        disabled={history.isLoading}
+        onPageChange={page => void history.onPageChange(page)}
+      />
     </section>
   );
 }

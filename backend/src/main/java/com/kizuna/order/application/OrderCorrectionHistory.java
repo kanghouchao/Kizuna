@@ -7,11 +7,9 @@ import com.kizuna.order.domain.OrderCorrectionSnapshot;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,52 +20,28 @@ public class OrderCorrectionHistory {
   private final OrderRepository orders;
   private final OrderCorrectionRepository corrections;
 
+  /** 履歴の母集合は受注の店舗と受注 ID で縛る。受注が呼出側の店舗に無ければ 404 で、他店の訂正には届かない。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<OrderCorrectionResult> store(
-      Long storeId, String orderId, String cursor, int size) {
+  public Page<OrderCorrectionResult> store(Long storeId, String orderId, Pageable pageable) {
     var order =
         orders
             .findByIdAndStoreId(orderId, storeId)
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    return readChanges(order, cursor, size, "store").map(OrderCorrectionHistory::result);
+    return readChanges(order, pageable).map(OrderCorrectionHistory::result);
   }
 
+  /** 本人の担当受注に限る。他人の受注は 404 で、その訂正には届かない。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<OrderCorrection> self(Long userId, String orderId, String cursor, int size) {
+  public Page<OrderCorrection> self(Long userId, String orderId, Pageable pageable) {
     var order =
         orders
             .findSelfOrder(userId, orderId)
             .orElseThrow(() -> new NotFoundException("報酬明細が見つかりません"));
-    return readChanges(order, cursor, size, "self:" + userId);
+    return readChanges(order, pageable);
   }
 
-  private CursorPage<OrderCorrection> readChanges(
-      Order order, String cursor, int size, String surface) {
-    String orderId = order.getId();
-    int limit = CursorPage.clampSize(size);
-    long version = Long.MAX_VALUE;
-    String id = "";
-    if (cursor != null) {
-      var key = PageCursor.decode(cursor);
-      var anchor =
-          corrections
-              .findByIdAndStoreId(key.id(), order.getStoreId())
-              .orElseThrow(() -> new ServiceException("続きの位置（cursor）が不正です"));
-      if (!anchor.getOrderId().equals(orderId)
-          || !anchor.getStoreId().equals(order.getStoreId())
-          || !key.key().equals(cursorKey(surface, anchor)))
-        throw new ServiceException("続きの位置（cursor）が不正です");
-      version = anchor.getAfterVersion();
-      id = anchor.getId();
-    }
-    return CursorPage.of(
-        corrections.history(order.getStoreId(), orderId, version, id, PageRequest.of(0, limit + 1)),
-        limit,
-        c -> new PageCursor(cursorKey(surface, c), c.getId()).encode());
-  }
-
-  private String cursorKey(String surface, OrderCorrection c) {
-    return surface + ":" + c.getStoreId() + ":" + c.getOrderId() + ":" + c.getAfterVersion();
+  private Page<OrderCorrection> readChanges(Order order, Pageable pageable) {
+    return corrections.findByStoreIdAndOrderId(order.getStoreId(), order.getId(), pageable);
   }
 
   public static OrderCorrectionResult result(OrderCorrection c) {

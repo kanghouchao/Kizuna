@@ -148,11 +148,11 @@ function pendingApplication(overrides: Partial<OrderApplicationRow> = {}): Order
 const EMPTY_ARCHIVE = { rows: [], page: 0, pageCount: 0, total: 0 };
 
 function stubQueue(...rows: OrderWorkQueueRow[]) {
-  mockedOrderApi.listWorkQueue.mockResolvedValue({ rows, nextCursor: null });
+  mockedOrderApi.listWorkQueue.mockResolvedValue({ rows, page: 0, pageCount: 1, total: 0 });
 }
 
 function stubInbox(...rows: OrderApplicationRow[]) {
-  mockedApplicationApi.list.mockResolvedValue({ rows, nextCursor: null });
+  mockedApplicationApi.list.mockResolvedValue({ rows, page: 0, pageCount: 1, total: 0 });
 }
 
 /** アーカイブの片群だけに行を置く。もう一方は空のまま（群ごとに別の読みが走るため）。 */
@@ -176,9 +176,9 @@ const meWith = (permissions: PermissionCode[]) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockedOrderApi.listWorkQueue.mockResolvedValue({ rows: [], nextCursor: null });
+  mockedOrderApi.listWorkQueue.mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
   mockedOrderApi.listArchive.mockResolvedValue(EMPTY_ARCHIVE);
-  mockedApplicationApi.list.mockResolvedValue({ rows: [], nextCursor: null });
+  mockedApplicationApi.list.mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
   mockedOrderApi.listReceptionists.mockResolvedValue([]);
   meWith(['ORDER_MANAGE']);
 });
@@ -251,6 +251,8 @@ describe('作業キューの描画', () => {
     await waitFor(() => expect(within(dialog).getByLabelText('人数')).toHaveValue(2));
     fireEvent.change(within(dialog).getByLabelText('人数'), { target: { value: '5' } });
     await chooseCourse();
+    // 確定後の取り直しでは、確定済みの申請はもう受付箱に返らない
+    stubInbox();
     fireEvent.click(within(dialog).getByRole('button', { name: '確定する' }));
     await confirmPreview();
 
@@ -260,9 +262,10 @@ describe('作業キューの描画', () => {
         expect.objectContaining({ business_date: '2026-07-05', pax: 5 })
       )
     );
-    // 申請は受付箱から外れ、生まれた受注は作業キューの取り直しで現れる
+    // 受付箱も作業キューも表示中のページを取り直す（生まれた受注はどこに入るか分からない）
     await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
     await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(2));
+    expect(mockedApplicationApi.list).toHaveBeenCalledTimes(2);
   });
 
   it('識別子の無い申請の謝絶は要求を組まず、理由を名乗ること', async () => {
@@ -295,12 +298,35 @@ describe('作業キューの描画', () => {
     expect(mockedApplicationApi.decline).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText('謝絶の理由'), { target: { value: '満席' } });
+    stubInbox();
     fireEvent.click(screen.getByRole('button', { name: '謝絶する' }));
 
     await waitFor(() =>
       expect(mockedApplicationApi.decline).toHaveBeenCalledWith('a1', { reason: '満席' })
     );
     await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
+    expect(mockedApplicationApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statuses: ['PENDING'], page: 0 })
+    );
+  });
+
+  it('作業キューはページ送りで次のページを同じ条件で取り直すこと', async () => {
+    mockedOrderApi.listWorkQueue.mockResolvedValue({
+      rows: [confirmedOrder()],
+      page: 0,
+      pageCount: 2,
+      total: 21,
+    });
+    render(<OrderListPage />);
+
+    await screen.findByText('山田太郎');
+    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+        expect.objectContaining({ statuses: ['CONFIRMED', 'IN_SERVICE'], page: 1, size: 20 })
+      )
+    );
   });
 
   it('受付箱の取得の失敗を空表示と区別すること', async () => {
@@ -412,12 +438,14 @@ describe('カード内の取消（二段）', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '取消' }));
     fireEvent.change(screen.getByLabelText('取消の理由'), { target: { value: '客都合' } });
+    stubQueue();
     fireEvent.click(screen.getByRole('button', { name: '取消する' }));
 
     await waitFor(() =>
       expect(mockedOrderApi.cancel).toHaveBeenCalledWith('o1', { reason: '客都合' })
     );
     await waitFor(() => expect(screen.queryByText('山田太郎')).not.toBeInTheDocument());
+    expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(2);
   });
 
   it('やめるを押すと理由を捨てて元の操作に戻ること', async () => {

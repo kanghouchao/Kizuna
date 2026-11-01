@@ -13,6 +13,7 @@ import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,10 +70,9 @@ public class SelfRemunerationService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<SelfRemunerationChange> changes(
-      String actor, String id, String cursor, int size) {
+  public Page<SelfRemunerationChange> changes(String actor, String id, Pageable pageable) {
     return history
-        .self(actors.requireUserId(actor), id, cursor, size)
+        .self(actors.requireUserId(actor), id, pageable)
         .map(
             c ->
                 new SelfRemunerationChange(

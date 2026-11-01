@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { CustomerSelection, OrderCustomerCandidate, orderApi } from '@/entities/order';
 import { hasPermission, useMe } from '@/entities/user';
-import { useCursorList } from '@/shared/lib';
+import { useListPage } from '@/shared/lib';
 import {
   Button,
   FormControl,
@@ -12,6 +12,7 @@ import {
   FormMessage,
   Input,
   Label,
+  Pager,
   RegionError,
   Select,
   SelectContent,
@@ -158,10 +159,7 @@ function CustomerCandidates({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<OrderCustomerCandidate | null>(null);
-  const list = useCursorList(
-    (cursor, search: string) => orderApi.customerCandidates(search, cursor),
-    ''
-  );
+  const list = useListPage((page, search: string) => orderApi.customerCandidates(search, page), '');
   const label = selected
     ? chosen?.id === selected
       ? chosen.name || selected
@@ -179,7 +177,7 @@ function CustomerCandidates({
         inputValue={query}
         onInputValueChange={value => {
           setQuery(value);
-          list.search(value);
+          void list.search(value);
         }}
         itemToStringLabel={(candidate: OrderCustomerCandidate) => candidate.name || candidate.id}
         onValueChange={candidate => {
@@ -213,7 +211,10 @@ function CustomerCandidates({
             </p>
           )}
           {list.failed && (
-            <RegionError message="顧客を取得できませんでした。" onRetry={list.reload} />
+            <RegionError
+              message="顧客を取得できませんでした。"
+              onRetry={() => void list.reload()}
+            />
           )}
           {!list.isLoading && !list.failed && <ComboboxEmpty>一致する顧客がいません</ComboboxEmpty>}
           <ComboboxList>
@@ -227,16 +228,12 @@ function CustomerCandidates({
               </ComboboxItem>
             )}
           </ComboboxList>
-          {list.hasMore && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={list.isLoading}
-              onClick={list.loadMore}
-            >
-              さらに読み込む
-            </Button>
-          )}
+          <Pager
+            page={list.page}
+            pageCount={list.pageCount}
+            disabled={list.isLoading}
+            onPageChange={page => void list.onPageChange(page)}
+          />
         </ComboboxContent>
       </Combobox>
     </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BusinessContactPermission, orderApi } from '@/entities/order';
-import { useCursorList } from '@/shared/lib';
-import { Button, RegionError } from '@/shared/ui';
+import { useListPage } from '@/shared/lib';
+import { Button, Pager, RegionError } from '@/shared/ui';
 import { CONTACT_CHANNELS, CONTACT_STATUS_LABELS } from './OrderBusinessContactFields';
 
 export function OrderBusinessContactSummary({
@@ -54,7 +54,7 @@ export function OrderBusinessContactSummary({
   );
 }
 function History({ orderId }: { orderId: string }) {
-  const list = useCursorList(cursor => orderApi.businessContactHistory(orderId, cursor));
+  const list = useListPage(page => orderApi.businessContactHistory(orderId, page));
   return (
     <div className="space-y-4">
       {list.rows.map(row => (
@@ -81,14 +81,18 @@ function History({ orderId }: { orderId: string }) {
       ))}
       {list.isLoading && <p>履歴を読み込み中...</p>}
       {list.failed && (
-        <RegionError message="連絡可否の履歴を取得できませんでした。" onRetry={list.reload} />
+        <RegionError
+          message="連絡可否の履歴を取得できませんでした。"
+          onRetry={() => void list.reload()}
+        />
       )}
       {!list.isLoading && !list.failed && list.rows.length === 0 && <p>履歴はありません。</p>}
-      {list.hasMore && (
-        <Button type="button" variant="outline" disabled={list.isLoading} onClick={list.loadMore}>
-          続きを表示
-        </Button>
-      )}
+      <Pager
+        page={list.page}
+        pageCount={list.pageCount}
+        disabled={list.isLoading}
+        onPageChange={page => void list.onPageChange(page)}
+      />
     </div>
   );
 }

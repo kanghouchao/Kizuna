@@ -129,7 +129,9 @@ describe('受注の編集ページ', () => {
         recorded_by: 1,
         recorded_at: '2026-09-25T10:00:00+09:00',
       })),
-      nextCursor: null,
+      page: 0,
+      pageCount: 1,
+      total: 0,
     });
     render(<OrderEditPage />);
     fireEvent.click(await screen.findByRole('button', { name: '連絡可否の履歴を表示' }));
@@ -157,7 +159,7 @@ describe('受注の編集ページ', () => {
     );
     mockedOrderApi.businessContactHistory
       .mockRejectedValueOnce(new Error('network'))
-      .mockResolvedValueOnce({ rows: [], nextCursor: null });
+      .mockResolvedValueOnce({ rows: [], page: 0, pageCount: 1, total: 0 });
     render(<OrderEditPage />);
     expect(
       await screen.findByText(/同店の顧客台帳に拒否があるため連絡できません/)
@@ -218,7 +220,9 @@ describe('受注の編集ページ', () => {
     mockedOrderApi.get.mockResolvedValue(confirmedOrder());
     mockedOrderApi.customerCandidates.mockResolvedValue({
       rows: [{ id: 'c2', name: '別の顧客', phone_number: null }],
-      nextCursor: null,
+      page: 0,
+      pageCount: 1,
+      total: 0,
     });
     mockedOrderApi.update.mockResolvedValue(confirmedOrder({ customer_id: 'c2' }));
     render(<OrderEditPage />);
@@ -226,7 +230,12 @@ describe('受注の編集ページ', () => {
     const option = await screen.findByRole('option', { name: /別の顧客/ });
     fireEvent.pointerDown(option);
     fireEvent.click(option);
-    mockedOrderApi.customerCandidates.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedOrderApi.customerCandidates.mockResolvedValue({
+      rows: [],
+      page: 0,
+      pageCount: 1,
+      total: 0,
+    });
     fireEvent.click(screen.getByRole('combobox', { name: '既存顧客の検索' }));
     fireEvent.change(screen.getByLabelText('顧客検索（氏名・電話）'), {
       target: { value: '候補なし' },

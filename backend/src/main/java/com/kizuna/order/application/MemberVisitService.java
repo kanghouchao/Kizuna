@@ -6,13 +6,11 @@ import com.kizuna.order.domain.MemberVisitView;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
-import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,45 +34,19 @@ public class MemberVisitService {
   private final OrderAttributionRepository orderAttributionRepository;
   private final PointLedgerService pointLedgerService;
 
-  /**
-   * 本人の来店履歴（跨店集約）。
-   *
-   * <p>続きの指定はポイント明細と同じくカーソル（並びの鍵）で受ける。帰属記録は追加型で行が消えないが、来店は履歴を見ている
-   * 最中にも増えるため、件数で位置を指すと続きを取った時点で境界の行を飛ばす。
-   *
-   * @param cursor 続きの位置。null なら先頭から
-   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
-   */
+  /** 本人の来店履歴（跨店集約）。 */
   @Transactional(readOnly = true)
-  public CursorPage<MemberVisitSummary> list(String email, String cursor, int requestedSize) {
+  public Page<MemberVisitSummary> list(String email, Pageable pageable) {
     Long memberId = resolveMemberId(email);
-    int size = CursorPage.clampSize(requestedSize);
-    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    Limit limit = Limit.of(size + 1);
-    List<MemberVisitView> fetched =
-        cursor == null
-            ? orderAttributionRepository.findMemberVisitViews(memberId, limit)
-            : fetchAfter(memberId, PageCursor.decode(cursor), limit);
-    CursorPage<MemberVisitView> page = CursorPage.of(fetched, size, MemberVisitService::cursorOf);
-    // 獲得ポイントは台帳にしか無いので、返す行の分だけをまとめて引く。行ごとに引くと来店が増えるほど
-    // 問い合わせが線形に増え、余分に取った 1 件（続きの有無を判るためだけの行）まで引いてしまう。
+    Page<MemberVisitView> page =
+        orderAttributionRepository.findMemberVisitViews(memberId, pageable);
+    // 獲得ポイントは台帳にしか無いので、返す行の分だけをまとめて引く（行ごとに引くと問い合わせが線形に増える）。
     // 本人の一致は台帳側の問い合わせにも載せる — 誤帰属を無効化しても付与行は残るため、受注 ID だけで
     // 足すと、その受注を申領した本人の来店に前の会員の付与が現れる。
     Map<String, Long> grantedPoints =
         pointLedgerService.grantedPointsByOrder(
-            memberId, page.content().stream().map(MemberVisitView::getOrderId).toList());
+            memberId, page.getContent().stream().map(MemberVisitView::getOrderId).toList());
     return page.map(view -> toSummary(view, grantedPoints));
-  }
-
-  private List<MemberVisitView> fetchAfter(Long memberId, PageCursor cursor, Limit limit) {
-    // 続きの取得でも本人の一致は問い合わせに載せ続ける — カーソルは位置を指すだけで、隔離境界にはならない。
-    return orderAttributionRepository.findMemberVisitViewsAfter(
-        memberId, cursor.timestampKey(), cursor.longId(), limit);
-  }
-
-  /** 続きの位置は一覧の並び（帰属の作成時刻 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
-  private static String cursorOf(MemberVisitView view) {
-    return new PageCursor(view.getCreatedAt().toString(), String.valueOf(view.getId())).encode();
   }
 
   private Long resolveMemberId(String email) {

@@ -8,12 +8,19 @@ jest.mock('@/entities/order', () => ({
 
 const mockedList = memberVisitApi.list as jest.Mock;
 
-const page = (rows: unknown[], nextCursor: string | null = null) => ({ rows, nextCursor });
+const PAGE_SIZE = 20;
 
-/** カーソルで続きを返すサーバの代役。位置は「次に返す行の番号」で表す。 */
-const cursorServer = (total: number) => (params: { cursor?: string; size: number }) => {
-  const start = params.cursor ? Number(params.cursor) : 0;
-  const end = Math.min(start + params.size, total);
+const page = (rows: unknown[], number = 0, total = rows.length) => ({
+  rows,
+  page: number,
+  pageCount: Math.ceil(total / PAGE_SIZE),
+  total,
+});
+
+/** ページ番号で行を返すサーバの代役。 */
+const pagedServer = (total: number) => (number: number) => {
+  const start = number * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, total);
   const rows = Array.from({ length: end - start }, (_, i) => ({
     visited_on: '2026-08-10',
     store_name: `店舗${start + i}`,
@@ -21,7 +28,7 @@ const cursorServer = (total: number) => (params: { cursor?: string; size: number
     cast_name: `担当${start + i}`,
     granted_points: 100 + start + i,
   }));
-  return Promise.resolve(page(rows, end < total ? String(end) : null));
+  return Promise.resolve(page(rows, number, total));
 };
 
 describe('MemberVisitsPage', () => {
@@ -86,7 +93,7 @@ describe('MemberVisitsPage', () => {
 
   it('取得に失敗したら失敗を名乗り、再試行で復帰できる', async () => {
     mockedList.mockRejectedValueOnce(new Error('failed'));
-    mockedList.mockImplementation(cursorServer(1));
+    mockedList.mockImplementation(pagedServer(1));
 
     render(<MemberVisitsPage />);
 
@@ -99,20 +106,20 @@ describe('MemberVisitsPage', () => {
     expect(await screen.findByText('店舗0')).toBeInTheDocument();
   });
 
-  it('続きは 1 回の操作につき 1 要求で、要求件数は上限のまま', async () => {
-    // 要求サイズ自体を膨らませると、サーバ側の取得上限に当たった時点で以降の来店へ到達できなくなる
-    mockedList.mockImplementation(cursorServer(45));
+  it('ページ送りで次のページを取り直し、最終ページでは先へ進めない', async () => {
+    mockedList.mockImplementation(pagedServer(45));
 
     render(<MemberVisitsPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'もっと見る' }));
-    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(40));
-    fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
-    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(45));
+    expect(await screen.findByText('店舗0')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    expect(await screen.findByText('店舗20')).toBeInTheDocument();
+    expect(screen.queryByText('店舗0')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(5));
 
-    expect(mockedList).toHaveBeenCalledTimes(3);
-    expect(mockedList.mock.calls.every(([params]) => params.size === 20)).toBe(true);
-    expect(screen.queryByRole('button', { name: 'もっと見る' })).not.toBeInTheDocument();
+    expect(mockedList.mock.calls.map(([number]) => number)).toEqual([0, 1, 2]);
+    expect(screen.getByRole('button', { name: '次のページ' })).toBeDisabled();
   });
 
   it('来店が無ければ空を名乗る', async () => {

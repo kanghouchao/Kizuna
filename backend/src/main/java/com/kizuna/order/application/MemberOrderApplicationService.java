@@ -11,14 +11,12 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,40 +77,14 @@ public class MemberOrderApplicationService {
     return toResult(member.memberId(), saved.getId());
   }
 
-  /**
-   * 本人が申請した予約の一覧（跨店集約）。
-   *
-   * <p>続きの指定はカーソル（並びの鍵）で受ける。取り下げで行が消えることはないが、確定・謝絶の反映で 並びが動きうる一覧を件数で指すと、続きを取った時点で境界の申請を飛ばす。
-   *
-   * @param cursor 続きの位置。null なら先頭から
-   * @param requestedSize 1 回に返す件数の希望値（上限に丸められる）
-   */
+  /** 本人が申請した予約の一覧（跨店集約）。 */
   @Transactional(readOnly = true)
-  public CursorPage<MemberOrderApplicationResult> list(
-      String email, String cursor, int requestedSize) {
+  public Page<MemberOrderApplicationResult> list(String email, Pageable pageable) {
     MemberLookup member = resolveMember(email);
-    int size = CursorPage.clampSize(requestedSize);
-    // 続きの有無は上限より 1 件多く取って判る。総件数の問い合わせを毎回撒かずに済む。
-    Limit limit = Limit.of(size + 1);
-    List<MemberOrderApplicationView> fetched =
-        cursor == null
-            ? orderApplicationRepository.findMemberViews(member.memberId(), limit)
-            : fetchAfter(member.memberId(), PageCursor.decode(cursor), limit);
     LocalDate today = businessDateService.currentBusinessDate();
-    return CursorPage.of(fetched, size, MemberOrderApplicationService::cursorOf)
+    return orderApplicationRepository
+        .findMemberViews(member.memberId(), pageable)
         .map(view -> toResult(view, today));
-  }
-
-  private List<MemberOrderApplicationView> fetchAfter(
-      Long memberId, PageCursor cursor, Limit limit) {
-    // 続きの取得でも申請者の一致は問い合わせに載せ続ける — カーソルは位置を指すだけで、隔離境界にはならない。
-    return orderApplicationRepository.findMemberViewsAfter(
-        memberId, cursor.dateKey(), cursor.id(), limit);
-  }
-
-  /** 続きの位置は一覧の並び（希望日 + id）と同じ組で作る。組が並びとずれると、続きが手前へ戻るか行を飛ばす。 */
-  private static String cursorOf(MemberOrderApplicationView view) {
-    return new PageCursor(view.getBusinessDate().toString(), view.getId()).encode();
   }
 
   /** 本人が申請した未処理の予約を取り下げる。確定・謝絶の後は動かせない（終端）。 */

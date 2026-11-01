@@ -4,10 +4,12 @@ import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,15 +38,18 @@ public class OrderCourseController {
 
   @GetMapping("/{id}/course-revisions")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_ORDER_CORRECT')")
-  public CursorPage<Revision> revisions(
+  public Page<Revision> revisions(
       @CurrentStore Long storeId,
       @PathVariable String id,
       @RequestParam(required = false) String search,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {"occurredAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
     orders.get(storeId, id);
     return catalog
-        .history(storeId, OrderServiceCatalog.SelectionKind.COURSE, search, cursor, size)
+        .history(storeId, OrderServiceCatalog.SelectionKind.COURSE, search, pageable)
         .map(Revision::of);
   }
 

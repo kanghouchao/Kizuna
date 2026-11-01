@@ -12,11 +12,10 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
-import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,28 +77,9 @@ public class OrderSpecialServiceCatalog {
 
   /** 歴史版本と各項目の現在の削除状態を同じ断面から返す。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<SpecialServiceTerms> history(
-      Long storeId, String search, String cursor, int size) {
-    requirePage(0, size);
-    var key = cursor == null ? null : PageCursor.decode(cursor);
-    OffsetDateTime at;
-    try {
-      at =
-          key == null
-              ? OffsetDateTime.parse("9999-12-31T23:59:59Z")
-              : OffsetDateTime.parse(key.key());
-    } catch (RuntimeException ex) {
-      throw new ServiceException("カーソルが正しくありません");
-    }
-    var rows =
-        revisions.findHistoricalSpecials(
-            storeId,
-            search == null ? "" : search,
-            at,
-            key == null ? "" : key.id(),
-            PageRequest.of(0, size + 1));
-    return CursorPage.of(
-            rows, size, r -> new PageCursor(r.getOccurredAt().toString(), r.getId()).encode())
+  public Page<SpecialServiceTerms> history(Long storeId, String search, Pageable pageable) {
+    return revisions
+        .findHistoricalSpecials(storeId, search == null ? "" : search, pageable)
         .map(r -> terms(storeId, r, null));
   }
 

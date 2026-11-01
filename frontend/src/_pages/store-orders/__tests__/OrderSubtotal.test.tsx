@@ -114,13 +114,15 @@ beforeEach(() => {
   jest
     .mocked(orderApi.courseCandidates)
     .mockResolvedValue({ rows: [course], total: 1, page: 0, pageCount: 1 });
-  jest.mocked(orderApi.courseRevisions).mockResolvedValue({ content: [course] });
+  jest
+    .mocked(orderApi.courseRevisions)
+    .mockResolvedValue({ rows: [course], total: 1, page: 0, pageCount: 1 });
   jest
     .mocked(orderApi.specialServiceCandidates)
     .mockResolvedValue({ rows: [special], total: 1, page: 0, pageCount: 1 });
   jest
     .mocked(orderApi.specialServiceRevisions)
-    .mockResolvedValue({ rows: [special], nextCursor: null });
+    .mockResolvedValue({ rows: [special], page: 0, pageCount: 1, total: 0 });
 });
 test('新規選択のコース・特殊サービス・割引を合算し、担当変更で特殊サービス額を除く', async () => {
   render(<Editor />);
@@ -183,11 +185,16 @@ test('候補の検索後も選択した特殊サービスの価格を保持す�
 });
 test('完了後訂正で歴史版本を選ぶとコースと特殊サービスの旧額を置換する', async () => {
   jest.mocked(orderApi.courseRevisions).mockResolvedValue({
-    content: [{ ...course, revision_id: 'course-r2', name: '訂正コース', price: 15000 }],
+    rows: [{ ...course, revision_id: 'course-r2', name: '訂正コース', price: 15000 }],
+    page: 0,
+    pageCount: 1,
+    total: 1,
   });
   jest.mocked(orderApi.specialServiceRevisions).mockResolvedValue({
     rows: [{ ...special, revision_id: 'special-r2', revision_number: 2, price: 4000 }],
-    nextCursor: null,
+    page: 0,
+    pageCount: 1,
+    total: 0,
   });
   render(<Editor existing historical />);
   await selectCourse(/訂正コース/, true);

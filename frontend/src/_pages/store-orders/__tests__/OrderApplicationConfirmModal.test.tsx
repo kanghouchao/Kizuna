@@ -368,7 +368,9 @@ describe('OrderApplicationConfirmModal の顧客化', () => {
   it('既存顧客は店員が探して選んだ 1 行だけを送る（電話番号の自動照合はしない）', async () => {
     mockedCustomerList.mockResolvedValue({
       rows: [{ id: 'cust-1', name: 'ゲスト花子', phone_number: '09000000000' }],
-      nextCursor: null,
+      page: 0,
+      pageCount: 1,
+      total: 0,
     });
     renderModal(guestApplication());
     await screen.findByText('顧客の選択');

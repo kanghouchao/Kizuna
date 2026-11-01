@@ -10,15 +10,7 @@ import type {
   SpecialServiceRevision,
   OrderSpecialServiceEvent,
 } from '../model/types';
-import {
-  CursorPageResult,
-  CursorParams,
-  PageResult,
-  PaginationParams,
-  apiClient,
-  fromCursorPage,
-  fromSpringPage,
-} from '@/shared/api';
+import { PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import {
   BusinessContactHistory,
@@ -74,19 +66,19 @@ function toQuery<T extends OrderQueryParams>(params: T): Record<string, unknown>
 }
 
 export const orderApi = {
-  businessContactHistory: async (id: string, cursor?: string) => {
+  businessContactHistory: async (id: string, page: number) => {
     const response = await apiClient.get(
       `/orders/${requireId(id, '受注')}/business-contact-permission-history`,
-      { params: { cursor, size: 20 } }
+      { params: { page, size: 20 } }
     );
-    return fromCursorPage<BusinessContactHistory>(response.data);
+    return fromSpringPage<BusinessContactHistory>(response.data);
   },
 
-  customerCandidates: async (search: string, cursor?: string) => {
+  customerCandidates: async (search: string, page: number) => {
     const response = await apiClient.get('/orders/customer-candidates', {
-      params: { search, cursor, size: 20 },
+      params: { search, page, size: 20 },
     });
-    return fromCursorPage<OrderCustomerCandidate>(response.data);
+    return fromSpringPage<OrderCustomerCandidate>(response.data);
   },
   invalidateCompletion: async (
     id: string,
@@ -105,12 +97,12 @@ export const orderApi = {
     return fromSpringPage<AdminOrder>(response.data);
   },
   /** storeId は横断一覧の行の店舗を名指すときだけ渡す。省略時は現在店舗（cookie）が注入される。 */
-  correctionHistory: async (id: string, cursor?: string, storeId?: number) => {
+  correctionHistory: async (id: string, page: number, storeId?: number) => {
     const response = await apiClient.get(`/orders/${requireId(id, '受注')}/corrections`, {
-      params: { cursor, size: 20 },
+      params: { page, size: 20 },
       ...(storeId === undefined ? {} : { headers: { 'X-Store-ID': String(storeId) } }),
     });
-    return fromCursorPage<OrderCorrectionHistoryEntry>(response.data);
+    return fromSpringPage<OrderCorrectionHistoryEntry>(response.data);
   },
   surchargeCandidates: async (search: string, page: number) => {
     const response = await apiClient.get('/orders/surcharge-candidates', {
@@ -118,16 +110,12 @@ export const orderApi = {
     });
     return fromSpringPage<SurchargeCandidate>(response.data);
   },
-  surchargeRevisions: async (
-    id: string,
-    search: string,
-    cursor?: string
-  ): Promise<{ content: SurchargeCandidate[]; next_cursor?: string }> =>
-    (
-      await apiClient.get(`/orders/${requireId(id, '受注')}/surcharge-revisions`, {
-        params: { search, cursor, size: 20 },
-      })
-    ).data,
+  surchargeRevisions: async (id: string, search: string, page: number) => {
+    const response = await apiClient.get(`/orders/${requireId(id, '受注')}/surcharge-revisions`, {
+      params: { search, page, size: 20 },
+    });
+    return fromSpringPage<SurchargeCandidate>(response.data);
+  },
 
   specialServiceCandidates: async (castId: string, search: string, page: number) => {
     const response = await apiClient.get('/orders/special-service-candidates', {
@@ -135,19 +123,19 @@ export const orderApi = {
     });
     return fromSpringPage<SpecialServiceCandidate>(response.data);
   },
-  specialServiceRevisions: async (id: string, search: string, cursor?: string) => {
+  specialServiceRevisions: async (id: string, search: string, page: number) => {
     const response = await apiClient.get(
       `/orders/${requireId(id, '受注')}/special-service-revisions`,
-      { params: { search, cursor, size: 20 } }
+      { params: { search, page, size: 20 } }
     );
-    return fromCursorPage<SpecialServiceRevision>(response.data);
+    return fromSpringPage<SpecialServiceRevision>(response.data);
   },
-  specialServiceEvents: async (id: string, cursor?: string) => {
+  specialServiceEvents: async (id: string, page: number) => {
     const response = await apiClient.get(
       `/orders/${requireId(id, '受注')}/special-service-events`,
-      { params: { cursor, size: 20 } }
+      { params: { page, size: 20 } }
     );
-    return fromCursorPage<OrderSpecialServiceEvent>(response.data);
+    return fromSpringPage<OrderSpecialServiceEvent>(response.data);
   },
   start: async (id: string, expectedVersion: number, reason: string): Promise<Order> => {
     const response = await apiClient.post(`/orders/${requireId(id, '受注')}/start`, {
@@ -162,16 +150,11 @@ export const orderApi = {
     });
     return fromSpringPage<CourseCandidate>(response.data);
   },
-  courseRevisions: async (
-    id: string,
-    search: string,
-    cursor?: string
-  ): Promise<{ content: CourseCandidate[]; next_cursor?: string }> => {
-    return (
-      await apiClient.get(`/orders/${requireId(id, '受注')}/course-revisions`, {
-        params: { search, cursor, size: 20 },
-      })
-    ).data;
+  courseRevisions: async (id: string, search: string, page: number) => {
+    const response = await apiClient.get(`/orders/${requireId(id, '受注')}/course-revisions`, {
+      params: { search, page, size: 20 },
+    });
+    return fromSpringPage<CourseCandidate>(response.data);
   },
   previewCreate: async (data: OrderCreateRequest): Promise<OrderPreview> =>
     (await apiClient.post('/orders/preview', data)).data,
@@ -232,24 +215,16 @@ export const orderApi = {
     const response = await apiClient.post(`/orders/${requireId(id, '受注')}/corrections`, data);
     return response.data;
   },
-  /**
-   * 作業キュー（対応が要る受注）。状態の群を指定して、検索と並び替えを当てたうえでカーソルで辿る。
-   *
-   * 続きは応答の nextCursor をそのまま cursor に渡して取る。確定・取消で行が消えても位置がずれない。
-   */
+  /** 作業キュー（対応が要る受注）。状態の群を指定して、検索と並び替えを当てたうえでページで辿る。 */
   listWorkQueue: async (
-    params: OrderQueryParams & CursorParams
-  ): Promise<CursorPageResult<OrderWorkQueueRow>> => {
+    params: OrderQueryParams & PaginationParams
+  ): Promise<PageResult<OrderWorkQueueRow>> => {
     const response = await apiClient.get('/orders/work-queue', {
       params: toQuery(params),
     });
-    return fromCursorPage(response.data);
+    return fromSpringPage(response.data);
   },
-  /**
-   * アーカイブ（完了・取消）。作業キューと同じ検索・並び替えを、オフセットのページャで辿る。
-   *
-   * 位置をページ番号で指せるのは、終端状態の受注が処理で消えず増えるだけだから。
-   */
+  /** アーカイブ（完了・取消）。作業キューと同じ検索・並び替えを、ページで辿る。 */
   listArchive: async (
     params: OrderQueryParams & PaginationParams
   ): Promise<PageResult<OrderArchiveRow>> => {
@@ -391,19 +366,15 @@ export const orderApplicationApi = {
       )
     ).data,
 
-  /**
-   * 予約申請の一覧。状態の群を指定してカーソルで辿る（受付箱は PENDING）。
-   *
-   * 続きは応答の nextCursor をそのまま cursor に渡して取る。確定・謝絶で行が消えても位置がずれない。
-   */
+  /** 予約申請の一覧。状態の群を指定してページで辿る（受付箱は PENDING）。 */
   list: async (
-    params: { statuses: OrderApplicationStatus[] } & CursorParams
-  ): Promise<CursorPageResult<OrderApplicationRow>> => {
+    params: { statuses: OrderApplicationStatus[] } & PaginationParams
+  ): Promise<PageResult<OrderApplicationRow>> => {
     const { statuses, ...rest } = params;
     const response = await apiClient.get('/order-applications', {
       params: { ...rest, statuses: statuses.join(',') },
     });
-    return fromCursorPage(response.data);
+    return fromSpringPage(response.data);
   },
   /**
    * 予約申請を確定する — 確定内容で受注を CONFIRMED で生成し、申請行へ order_id を回写する。
@@ -419,7 +390,7 @@ export const orderApplicationApi = {
     );
     return response.data;
   },
-  /** 予約申請を理由付きで謝絶する。応答は 204（本体なし）で、呼出側は行を消す。 */
+  /** 予約申請を理由付きで謝絶する。応答は 204（本体なし）で、呼出側は一覧を取り直す。 */
   decline: async (id: string | undefined, data: OrderApplicationDeclineRequest): Promise<void> => {
     await apiClient.post(`/order-applications/${requireId(id, '予約申請')}/refusal`, data);
   },
@@ -445,9 +416,11 @@ export const guestOrderApplicationApi = {
 
 /** 会員本人の予約申請 API。店舗文脈を要さない（/me 配下）。 */
 export const memberOrderApplicationApi = {
-  list: async (params?: CursorParams): Promise<CursorPageResult<MemberOrderApplication>> => {
-    const response = await apiClient.get('/me/order-applications', { params });
-    return fromCursorPage(response.data);
+  list: async (page: number): Promise<PageResult<MemberOrderApplication>> => {
+    const response = await apiClient.get('/me/order-applications', {
+      params: { page, size: 20 },
+    });
+    return fromSpringPage(response.data);
   },
   create: async (data: MemberOrderApplicationCreateRequest): Promise<MemberOrderApplication> => {
     const response = await apiClient.post('/me/order-applications', data);
@@ -464,9 +437,9 @@ export const memberOrderApplicationApi = {
 
 /** 会員本人の来店履歴 API。申請の追跡（memberOrderApplicationApi）とは別の読み口で、確定した来店だけを返す。 */
 export const memberVisitApi = {
-  list: async (params?: CursorParams): Promise<CursorPageResult<MemberVisit>> => {
-    const response = await apiClient.get('/me/visits', { params });
-    return fromCursorPage(response.data);
+  list: async (page: number): Promise<PageResult<MemberVisit>> => {
+    const response = await apiClient.get('/me/visits', { params: { page, size: 20 } });
+    return fromSpringPage(response.data);
   },
 };
 

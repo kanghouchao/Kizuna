@@ -3,7 +3,6 @@ package com.kizuna.order.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEFAULTS;
@@ -48,7 +47,6 @@ import com.kizuna.point.application.PointLedgerService.PointRollbackHistory;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -63,6 +61,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -185,14 +184,17 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
   void correctionHistoryPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(correctionHistory.store(any(), any(), any(), anyInt()))
-        .thenReturn(new CursorPage<>(List.of(), null));
+    ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(correctionHistory.store(eq(STORE_ID), eq("o1"), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
         .perform(get("/orders/o1/corrections").header("X-Store-ID", STORE_ID.toString()))
-        .andExpect(status().isOk());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
 
-    verify(correctionHistory).store(STORE_ID, "o1", null, 20);
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "afterVersion", "id"));
   }
 
   @Test
@@ -212,24 +214,23 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("作業キューが要求された群・検索・並び・続きの位置を読み口へ渡すこと")
+  @DisplayName("作業キューが要求された群・検索・並び・ページを読み口へ渡すこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
-  void workQueueForwardsTheRequestedCriteriaAndCursor() throws Exception {
+  void workQueueForwardsTheRequestedCriteriaAndPage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
         ArgumentCaptor.forClass(OrderQueryCriteria.class);
-    ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
-    ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
-    when(orderQueryService.listWorkQueue(
-            any(), criteriaCaptor.capture(), cursorCaptor.capture(), sizeCaptor.capture()))
-        .thenReturn(new CursorPage<>(List.of(), null));
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    when(orderQueryService.listWorkQueue(any(), criteriaCaptor.capture(), pageableCaptor.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
         .perform(
             get("/orders/work-queue?statuses=CONFIRMED,COMPLETED&customer_name=山田"
-                    + "&business_date=2026-08-15&sort_key=PAX&desc=true&cursor=abc&size=5")
+                    + "&business_date=2026-08-15&sort_key=PAX&desc=true&page=2&size=5")
                 .header("X-Store-ID", "1"))
-        .andExpect(status().isOk());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(criteriaCaptor.getValue().statuses())
         .containsExactlyInAnyOrder(OrderStatus.CONFIRMED, OrderStatus.COMPLETED);
@@ -237,8 +238,8 @@ class OrderControllerTest {
     assertThat(criteriaCaptor.getValue().businessDate()).isEqualTo(LocalDate.of(2026, 8, 15));
     assertThat(criteriaCaptor.getValue().sortKey()).isEqualTo(OrderSortKey.PAX);
     assertThat(criteriaCaptor.getValue().descending()).isTrue();
-    assertThat(cursorCaptor.getValue()).isEqualTo("abc");
-    assertThat(sizeCaptor.getValue()).isEqualTo(5);
+    assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
+    assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
   }
 
   @Test
@@ -248,8 +249,8 @@ class OrderControllerTest {
     // 抑制ではなく型から消えていることを見る。NON_NULL 下では値が null でもキーは消えるので、
     // isNull() では「型に残ったまま詰め忘れただけ」の状態と区別できない。
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderQueryService.listWorkQueue(any(), any(), any(), anyInt()))
-        .thenReturn(new CursorPage<>(List.of(view("o1", OrderStatus.CONFIRMED)), null));
+    when(orderQueryService.listWorkQueue(any(), any(), any()))
+        .thenReturn(new PageImpl<>(List.of(view("o1", OrderStatus.CONFIRMED))));
 
     mockMvc
         .perform(storeGet("/orders/work-queue?statuses=CONFIRMED"))
@@ -338,23 +339,23 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("続きの位置と検索を指定しない作業キューは先頭から絞り込みなしで読むこと")
+  @DisplayName("ページと検索を指定しない作業キューは先頭ページを絞り込みなしで読むこと")
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
-  void workQueueStartsFromTheBeginningWithoutACursor() throws Exception {
+  void workQueueStartsFromTheFirstPageWithoutFilters() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<OrderQueryCriteria> criteriaCaptor =
         ArgumentCaptor.forClass(OrderQueryCriteria.class);
-    ArgumentCaptor<String> cursorCaptor = ArgumentCaptor.forClass(String.class);
-    when(orderQueryService.listWorkQueue(
-            any(), criteriaCaptor.capture(), cursorCaptor.capture(), anyInt()))
-        .thenReturn(new CursorPage<>(List.of(), null));
+    ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+    when(orderQueryService.listWorkQueue(any(), criteriaCaptor.capture(), pageableCaptor.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
         .perform(
             get("/orders/work-queue?statuses=CONFIRMED&customer_name=").header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
-    assertThat(cursorCaptor.getValue()).isNull();
+    assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
+    assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(20);
     // 空欄の検索語は「送っていない」と同じ。述語を組むと全件が条件から漏れる
     assertThat(criteriaCaptor.getValue().customerName()).isNull();
     assertThat(criteriaCaptor.getValue().businessDate()).isNull();
@@ -794,10 +795,10 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
   void crossStoreViewerReadsOnlyCorrectionHistory() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(correctionHistory.store(1L, "o1", null, 20)).thenReturn(new CursorPage<>(List.of(), null));
+    when(correctionHistory.store(eq(1L), eq("o1"), any())).thenReturn(new PageImpl<>(List.of()));
 
     mockMvc.perform(storeGet("/orders/o1/corrections")).andExpect(status().isOk());
-    verify(correctionHistory).store(1L, "o1", null, 20);
+    verify(correctionHistory).store(eq(1L), eq("o1"), any());
     mockMvc.perform(storeGet("/orders/o1")).andExpect(status().isForbidden());
     mockMvc
         .perform(storePost("/orders/o1/corrections", CORRECTION_BODY))
@@ -918,12 +919,17 @@ class OrderControllerTest {
   @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void customerCandidatesDoNotSearchContactsWithoutCustomerManagement() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderQueryService.customerCandidates(any(), any(), any(), anyInt(), anyBoolean()))
-        .thenReturn(new CursorPage<>(List.of(), null));
+    ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(orderQueryService.customerCandidates(any(), any(), anyBoolean(), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
 
-    mockMvc.perform(storeGet("/orders/customer-candidates?search=090")).andExpect(status().isOk());
+    mockMvc
+        .perform(storeGet("/orders/customer-candidates?search=090"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
 
-    verify(orderQueryService).customerCandidates(any(), eq("090"), any(), anyInt(), eq(false));
+    verify(orderQueryService).customerCandidates(any(), eq("090"), eq(false), any());
+    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by("id"));
   }
 
   @Test
@@ -931,12 +937,29 @@ class OrderControllerTest {
   @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_CUSTOMER_MANAGE"})
   void customerCandidatesSearchContactsWithCustomerManagement() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderQueryService.customerCandidates(any(), any(), any(), anyInt(), anyBoolean()))
-        .thenReturn(new CursorPage<>(List.of(), null));
+    when(orderQueryService.customerCandidates(any(), any(), anyBoolean(), any()))
+        .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc.perform(storeGet("/orders/customer-candidates?search=090")).andExpect(status().isOk());
 
-    verify(orderQueryService).customerCandidates(any(), eq("090"), any(), anyInt(), eq(true));
+    verify(orderQueryService).customerCandidates(any(), eq("090"), eq(true), any());
+  }
+
+  @Test
+  @DisplayName("業務連絡の許可履歴は新しい順の Page で返ること")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
+  void businessContactHistoryIsANewestFirstPage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(businessContactPermissions.history(eq(1L), eq("o1"), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    mockMvc
+        .perform(storeGet("/orders/o1/business-contact-permission-history"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+
+    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "id"));
   }
 
   private static OrderPreview emptyPreview() {
