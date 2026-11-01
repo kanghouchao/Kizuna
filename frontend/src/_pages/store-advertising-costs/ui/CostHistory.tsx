@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { advertisingApi, type Change, categoryLabels, type Cost } from '../api/advertising';
-import { fromCursorPage } from '@/shared/api';
-import { storePath, useCursorList, useResource } from '@/shared/lib';
+import { fromSpringPage } from '@/shared/api';
+import { storePath, useListPage, useResource } from '@/shared/lib';
 import {
   Button,
+  Pager,
   RegionError,
   Table,
   TableCard,
@@ -15,8 +16,8 @@ import {
 } from '@/shared/ui';
 const actions = { CREATED: '登録', UPDATED: '変更', DELETED: '削除', COPIED: '前月コピー' };
 export function CostHistory({ month }: { month: string }) {
-  const list = useCursorList<Change>(async cursor =>
-    fromCursorPage(await advertisingApi.changes(month, cursor))
+  const list = useListPage<Change>(async page =>
+    fromSpringPage(await advertisingApi.changes(month, page))
   );
   const [selected, setSelected] = useState<string | null>(null);
   const detail = useResource(selected ? () => advertisingApi.change(month, selected) : null, [
@@ -28,7 +29,7 @@ export function CostHistory({ month }: { month: string }) {
       <h2 className="text-lg font-semibold">変更履歴</h2>
       {list.isLoading && <p>読み込み中...</p>}
       {list.failed ? (
-        <RegionError message="履歴を取得できませんでした。" onRetry={list.reload} />
+        <RegionError message="履歴を取得できませんでした。" onRetry={() => void list.reload()} />
       ) : (
         <>
           <TableCard>
@@ -58,11 +59,12 @@ export function CostHistory({ month }: { month: string }) {
             </Table>
           </TableCard>
           {!list.isLoading && !list.rows.length && <p>変更履歴はありません。</p>}
-          {list.hasMore && (
-            <Button variant="outline" disabled={list.isLoading} onClick={list.loadMore}>
-              続きを表示
-            </Button>
-          )}
+          <Pager
+            page={list.page}
+            pageCount={list.pageCount}
+            disabled={list.isLoading}
+            onPageChange={page => void list.onPageChange(page)}
+          />
         </>
       )}
       {selected && (

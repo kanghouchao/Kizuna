@@ -248,7 +248,7 @@ Then("広告費の履歴と冪等性と店舗分離が守られる", async ({ re
   expect(history.status(), await history.text()).toBe(200);
   const page = await history.json();
   expect(page.content).toHaveLength(2);
-  expect(page.next_cursor).toBeTruthy();
+  expect(page.total_pages).toBeGreaterThan(1);
   const detail = await request.get(
     `${months}/${month}/changes/${page.content[0].id}`,
     { headers: h() },

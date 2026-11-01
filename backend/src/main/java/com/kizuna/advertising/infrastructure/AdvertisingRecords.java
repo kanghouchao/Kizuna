@@ -5,7 +5,6 @@ import com.kizuna.advertising.domain.AdvertisingCost;
 import com.kizuna.advertising.domain.AdvertisingMonth;
 import com.kizuna.advertising.domain.AdvertisingRequest;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.web.PageCursor;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -132,21 +131,6 @@ public class AdvertisingRecords {
         .setParameter("request", request)
         .getResultStream()
         .findFirst();
-  }
-
-  public List<AdvertisingChange> changes(Long store, String month, String cursor, int size) {
-    var after = cursor == null ? null : PageCursor.decode(cursor);
-    String extra = after == null ? "" : " and (c.createdAt<:at or (c.createdAt=:at and c.id<:id))";
-    var q =
-        em.createQuery(
-                "select c from AdvertisingChange c where c.storeId=:store and c.month=:month"
-                    + extra
-                    + " order by c.createdAt desc,c.id desc",
-                AdvertisingChange.class)
-            .setParameter("store", store)
-            .setParameter("month", month);
-    if (after != null) q.setParameter("at", after.timestampKey()).setParameter("id", after.id());
-    return q.setMaxResults(size + 1).getResultList();
   }
 
   public AdvertisingChange change(Long store, String month, String id) {
