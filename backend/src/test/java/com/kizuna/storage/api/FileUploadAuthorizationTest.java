@@ -28,6 +28,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -48,7 +49,10 @@ class FileUploadAuthorizationTest {
 
     @Bean
     SecurityFilterChain security(HttpSecurity http) throws Exception {
-      return http.authorizeHttpRequests(auth -> auth.anyRequest().permitAll()).build();
+      // 本番の SecurityConfig と同じく CSRF を外し、拒否が権限の検査だけから来るようにする
+      return http.csrf(AbstractHttpConfigurer::disable)
+          .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+          .build();
     }
   }
 
