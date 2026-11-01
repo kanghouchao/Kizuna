@@ -1,4 +1,4 @@
-import { serverClient } from '../server-client';
+import { ServerApiError, serverClient } from '../server-client';
 
 // fetchのモック
 global.fetch = jest.fn();
@@ -65,6 +65,18 @@ describe('serverClient', () => {
       });
 
       await expect(serverClient.get('/test')).rejects.toThrow('APIエラー: 500 Server Error');
+    });
+
+    it('失敗の例外が応答の状態コードを持つこと', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      const error: unknown = await serverClient.get('/test').catch(e => e);
+      expect(error).toBeInstanceOf(ServerApiError);
+      expect((error as ServerApiError).status).toBe(404);
     });
   });
 });

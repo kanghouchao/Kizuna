@@ -1,12 +1,15 @@
 package com.kizuna.article.api;
 
 import com.kizuna.article.api.dto.ArticleIdResponse;
+import com.kizuna.article.api.dto.ArticlePublicResponse;
+import com.kizuna.article.api.dto.ArticlePublicSummaryResponse;
 import com.kizuna.article.api.dto.ArticlePublicationRequest;
 import com.kizuna.article.api.dto.ArticleRequest;
 import com.kizuna.article.api.dto.ArticleResponse;
 import com.kizuna.article.api.dto.ArticleSummaryResponse;
 import com.kizuna.article.application.ArticleService;
 import com.kizuna.shared.storescope.CurrentStore;
+import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -54,6 +57,24 @@ public class ArticleController {
           Pageable pageable) {
     var now = now();
     return articles.list(storeId, pageable).map(row -> ArticleSummaryResponse.of(row, now));
+  }
+
+  @GetMapping("/public")
+  @PermitAll
+  public Page<ArticlePublicSummaryResponse> listPublic(
+      @CurrentStore Long storeId,
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
+    return articles.listPublic(storeId, pageable).map(ArticlePublicSummaryResponse::of);
+  }
+
+  // 記事の ID は数字だけの Snowflake なので、パスの public と衝突しない
+  @GetMapping("/public/{id}")
+  @PermitAll
+  public ArticlePublicResponse getPublic(@CurrentStore Long storeId, @PathVariable String id) {
+    return ArticlePublicResponse.of(articles.getPublic(storeId, id));
   }
 
   @GetMapping("/{id}")

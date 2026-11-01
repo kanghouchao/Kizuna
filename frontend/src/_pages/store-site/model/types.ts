@@ -66,6 +66,20 @@ export interface PublicReview {
   received_on: string;
 }
 
+/**
+ * 公式サイトに掲出中の記事の一覧行。publish_from は公開開始の日時（未設定なら null）
+ */
+export interface PublicArticleSummary {
+  id: string;
+  title: string;
+  publish_from: string | null;
+}
+
+/** 公式サイトに掲出中の記事。body はプレーンテキスト */
+export interface PublicArticle extends PublicArticleSummary {
+  body: string;
+}
+
 /** 模版ページが受け取る店舗。サーバがリクエストの Host から解決した値。 */
 export interface StoreSitePageProps {
   store: PublicStore;

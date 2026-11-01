@@ -1,5 +1,16 @@
 import { backendUrl } from '../lib/backend-url';
 
+/** 応答の状態コードを持つ失敗。呼び出し側が 404 と通信・サーバの失敗を分けられるようにする。 */
+export class ServerApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = 'ServerApiError';
+  }
+}
+
 /**
  * サーバーサイド専用のAPIクライアント
  * Next.js Server Components 内で使用することを想定しています。
@@ -19,7 +30,10 @@ export const serverClient = {
     });
 
     if (!response.ok) {
-      throw new Error(`APIエラー: ${response.status} ${response.statusText} (${path})`);
+      throw new ServerApiError(
+        response.status,
+        `APIエラー: ${response.status} ${response.statusText} (${path})`
+      );
     }
 
     return response.json();

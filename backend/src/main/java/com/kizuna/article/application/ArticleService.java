@@ -1,17 +1,23 @@
 package com.kizuna.article.application;
 
 import com.kizuna.article.domain.Article;
+import com.kizuna.article.domain.ArticlePublicSummaryView;
+import com.kizuna.article.domain.ArticlePublicView;
 import com.kizuna.article.domain.ArticleRepository;
 import com.kizuna.article.domain.ArticleSummaryView;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ArticleService {
   private final ArticleRepository articles;
   private final BusinessAudit audit;
+  private final Clock clock;
 
   public Page<ArticleSummaryView> list(Long storeId, Pageable pageable) {
     return articles.findByStoreId(storeId, pageable);
@@ -28,6 +35,28 @@ public class ArticleService {
 
   public Article get(Long storeId, String id) {
     return find(storeId, id);
+  }
+
+  public Page<ArticlePublicSummaryView> listPublic(Long storeId, Pageable pageable) {
+    // 並びは公開設定が決める。呼出側の sort は受け取らない
+    var page =
+        PageRequest.of(
+            pageable.getPageNumber(),
+            pageable.getPageSize(),
+            Publication.order(Article::getPublication, Article::getId));
+    return articles.findBy(
+        ArticleRepository.displayed(storeId, OffsetDateTime.now(clock)),
+        q -> q.as(ArticlePublicSummaryView.class).page(page));
+  }
+
+  /** 存在しない・他店・掲出外を同じ 404 にし、訪問者に掲出外の記事の存在を知らせない。 */
+  public ArticlePublicView getPublic(Long storeId, String id) {
+    Specification<Article> byId = (root, q, cb) -> cb.equal(root.get("id"), id);
+    return articles
+        .findBy(
+            ArticleRepository.displayed(storeId, OffsetDateTime.now(clock)).and(byId),
+            q -> q.as(ArticlePublicView.class).first())
+        .orElseThrow(() -> new NotFoundException("記事が見つかりません"));
   }
 
   @Transactional

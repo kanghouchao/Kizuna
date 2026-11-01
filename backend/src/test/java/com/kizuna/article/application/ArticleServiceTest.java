@@ -17,6 +17,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -29,7 +30,7 @@ class ArticleServiceTest {
   private static final Long STORE = 7L;
   private final ArticleRepository articles = mock(ArticleRepository.class);
   private final BusinessAudit audit = mock(BusinessAudit.class);
-  private final ArticleService service = new ArticleService(articles, audit);
+  private final ArticleService service = new ArticleService(articles, audit, Clock.systemUTC());
   private Article article;
 
   @BeforeEach
@@ -102,7 +103,7 @@ class ArticleServiceTest {
     assertThatThrownBy(() -> service.publish(STORE, "a1", Publication.HIDDEN, 1))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(() -> service.delete(STORE, "a1", 1)).isInstanceOf(ConflictException.class);
-    verify(articles, never()).delete(any());
+    verify(articles, never()).delete(any(Article.class));
     verify(audit, never())
         .recordCurrent(any(), anyString(), anyString(), anyString(), anyMap(), anyMap());
   }
