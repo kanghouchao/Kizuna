@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.query.sqm.UnknownPathException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -74,6 +75,17 @@ class CommonExceptionHandlerTest {
     assertThat(direct.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(wrapped.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(wrapped.getBody()).containsEntry("error", "並び替えの指定を確認してください");
+  }
+
+  @Test
+  @DisplayName("@Query の並びで経路が解決できない例外も、包まれた原因を辿って 400 にする")
+  void unknownQueryPathIsBadRequest() {
+    var translated =
+        new InvalidDataAccessApiUsageException(
+            "translated",
+            new IllegalArgumentException("wrapped", new UnknownPathException("e.nope")));
+
+    assertThat(handler.handleSort(translated).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   @Test

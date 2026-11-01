@@ -314,6 +314,25 @@ describe('CustomerDuplicatesPage', () => {
     expect(mockedMerge).not.toHaveBeenCalled();
   });
 
+  it('大きい組では別々のページで選んだ 2 人も見比べられる', async () => {
+    mockedDuplicates.mockResolvedValue(
+      pageOf([{ ...twoRowGroup.rows[0], total: 21, customers: [] }])
+    );
+    const [first, second] = twoRowGroup.rows[0].customers;
+    (customerApi.duplicateCustomers as jest.Mock)
+      .mockResolvedValueOnce(pageOf([first], 0, 2))
+      .mockResolvedValueOnce(pageOf([second], 1, 2));
+    render(<CustomerDuplicatesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
+    fireEvent.click(await screen.findByLabelText('山田太郎 を見比べる'));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
+    fireEvent.click(await screen.findByLabelText('ヤマダタロウ を見比べる'));
+
+    const comparison = await screen.findByRole('table', { name: '2 行の比較' });
+    expect(comparison).toHaveTextContent('山田太郎');
+    expect(comparison).toHaveTextContent('ヤマダタロウ');
+  });
+
   it('条件変更で選択とページ位置を捨て、ページ送りの失敗から同じ条件で再試行する', async () => {
     render(<CustomerDuplicatesPage />);
     await selectBothRows();
