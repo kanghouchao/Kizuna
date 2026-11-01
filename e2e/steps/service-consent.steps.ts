@@ -47,6 +47,19 @@ When("本人がサービス条件を開く", async ({ page }) => {
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await page.getByRole("link", { name: "サービス条件", exact: true }).click();
+  // 共有の店舗では他の機能が作ったサービスが先に並ぶため、用意したサービスが載るページまで送る
+  const heading = page.getByRole("heading", { name: serviceName, exact: true });
+  const next = page
+    .getByRole("button", { name: "次へ", exact: true })
+    .locator("visible=true");
+  await expect(heading.or(next)).toBeVisible();
+  while (!(await heading.isVisible())) {
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/me/service-conditions")),
+      next.click(),
+    ]);
+    await expect(heading.or(next)).toBeVisible();
+  }
 });
 Then("特殊サービスの顧客価格と固定報酬が表示される", async ({ page }) => {
   const card = page
