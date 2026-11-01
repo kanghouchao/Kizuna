@@ -3,8 +3,15 @@ package com.kizuna.shared.publication;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.kizuna.shared.exception.ServiceException;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Root;
 import java.time.OffsetDateTime;
 import lombok.Getter;
 import org.junit.jupiter.api.Test;
@@ -65,17 +72,30 @@ class PublicationTest {
 
   @Test
   void orderResolvesNestedPathsUnderTheHostAttribute() {
-    assertThat(Publication.order(Host::getPublication, Host::getId))
+    assertThat(Publication.order(Host::getSettings, Host::getKey))
         .extracting(Sort.Order::getProperty, Sort.Order::getDirection, Sort.Order::getNullHandling)
         .containsExactly(
-            tuple("publication.displayOrder", Sort.Direction.ASC, Sort.NullHandling.NULLS_LAST),
-            tuple("publication.publishFrom", Sort.Direction.DESC, Sort.NullHandling.NULLS_LAST),
-            tuple("id", Sort.Direction.ASC, Sort.NullHandling.NATIVE));
+            tuple("settings.displayOrder", Sort.Direction.ASC, Sort.NullHandling.NULLS_LAST),
+            tuple("settings.publishFrom", Sort.Direction.DESC, Sort.NullHandling.NULLS_LAST),
+            tuple("key", Sort.Direction.ASC, Sort.NullHandling.NATIVE));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void shownSpecificationReadsFieldsUnderTheHostAttribute() {
+    Root<Host> root = mock();
+    Path<Object> settings = mock();
+    doReturn(settings).when(root).get("settings");
+    Publication.<Host>shownSpecification(Host::getSettings, FROM)
+        .toPredicate(root, mock(), mock(CriteriaBuilder.class));
+    verify(root).get("settings");
+    verifyNoMoreInteractions(root);
+    verify(settings).get("published");
   }
 
   @Getter
   private static class Host {
-    private Long id;
-    private Publication publication;
+    private Long key;
+    private Publication settings;
   }
 }
