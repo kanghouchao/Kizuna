@@ -1,11 +1,11 @@
 package com.kizuna.customer.domain;
 
 import com.kizuna.shared.persistence.StoreScopedRepository;
-import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -72,33 +72,12 @@ public interface CustomerMemberLinkRepository extends StoreScopedRepository<Cust
 
   String HISTORY_WHERE = " where l.storeId = :storeId and l.customerId = :customerId ";
 
-  // 新しい区間が先頭。linkedAt の同値は id で決定的に解く。カーソルの比較も同じ組で行う。
-  String HISTORY_ORDER = " order by l.linkedAt desc, l.id desc";
-
-  /** 顧客 1 件の紐づけ履歴の先頭。並びは linkedAt の降順に一意な副キー id を重ねて全順序にする。 */
-  @Query(HISTORY_SELECT + HISTORY_WHERE + HISTORY_ORDER)
-  List<CustomerMemberLinkView> findHistory(
-      @Param("storeId") Long storeId, @Param("customerId") String customerId, Limit limit);
-
-  /**
-   * 顧客 1 件の紐づけ履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。
-   *
-   * <p>id は Snowflake の文字列で、比較も文字列の順序で行う。求めるのは全順序の決定性だけなので、 並び（{@link #HISTORY_ORDER}）と同じ順序であれば足りる。
-   */
   @Query(
-      HISTORY_SELECT
-          + HISTORY_WHERE
-          + """
-            and (l.linkedAt < :cursorLinkedAt
-                 or (l.linkedAt = :cursorLinkedAt and l.id < :cursorId))
-            """
-          + HISTORY_ORDER)
-  List<CustomerMemberLinkView> findHistoryAfter(
-      @Param("storeId") Long storeId,
-      @Param("customerId") String customerId,
-      @Param("cursorLinkedAt") OffsetDateTime cursorLinkedAt,
-      @Param("cursorId") String cursorId,
-      Limit limit);
+      value = HISTORY_SELECT + HISTORY_WHERE,
+      countQuery =
+          "select count(l) from com.kizuna.customer.domain.CustomerMemberLink l" + HISTORY_WHERE)
+  Page<CustomerMemberLinkView> findHistory(
+      @Param("storeId") Long storeId, @Param("customerId") String customerId, Pageable pageable);
 
   // 会員起点の関連一覧（職員の会員コンソール）。境界は会員 id と閲覧者の店舗集合 — 集合内の区間だけを展開し、集合外は
   // 店舗数しか返さないので顧客台帳の行へ店舗集合を跨いでは到達しない。Store / Customer は表示名のためだけに left join する。

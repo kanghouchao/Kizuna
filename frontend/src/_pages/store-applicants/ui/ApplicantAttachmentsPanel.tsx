@@ -10,8 +10,8 @@ import {
   getApiErrorMessage,
   isBadRequest,
   isConflict,
-  useCursorList,
   useKeyedResource,
+  useListPage,
   useResource,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -19,6 +19,7 @@ import {
   Button,
   Checkbox,
   Input,
+  Pager,
   RegionError,
   Form,
   FormControl,
@@ -73,7 +74,7 @@ function AttachmentContents({
   editable: boolean;
   policy: ApplicantAttachmentPolicy;
 }) {
-  const list = useCursorList(cursor => applicantAttachmentApi.list(id, cursor));
+  const list = useListPage(page => applicantAttachmentApi.list(id, page));
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [completedKeys, setCompletedKeys] = useState<string[]>([]);
   const lifetime = useTransferLifetime();
@@ -107,12 +108,15 @@ function AttachmentContents({
   };
   const completed = (key: string) => {
     setCompletedKeys(previous => [...previous, key]);
-    list.reload();
+    void list.reload();
   };
   return (
     <div className="space-y-6">
       {list.failed ? (
-        <RegionError message="添付画像一覧を取得できませんでした" onRetry={list.reload} />
+        <RegionError
+          message="添付画像一覧を取得できませんでした"
+          onRetry={() => void list.reload()}
+        />
       ) : (
         <>
           <ul className="space-y-3">
@@ -145,11 +149,12 @@ function AttachmentContents({
           ) : list.rows.length === 0 ? (
             <p>添付画像はありません。</p>
           ) : null}
-          {list.hasMore && (
-            <Button variant="outline" disabled={list.isLoading} onClick={list.loadMore}>
-              さらに表示
-            </Button>
-          )}
+          <Pager
+            page={list.page}
+            pageCount={list.pageCount}
+            disabled={list.isLoading}
+            onPageChange={page => void list.onPageChange(page)}
+          />
         </>
       )}
       {canManage && (

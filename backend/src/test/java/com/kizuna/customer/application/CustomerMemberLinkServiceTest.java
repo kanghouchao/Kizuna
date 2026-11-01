@@ -37,6 +37,9 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class CustomerMemberLinkServiceTest {
@@ -414,9 +417,9 @@ class CustomerMemberLinkServiceTest {
     Mockito.when(
             customerMemberLinkRepository.findHistory(
                 Mockito.eq(STORE_ID), Mockito.eq(CUSTOMER_ID), any()))
-        .thenReturn(List.of());
+        .thenReturn(Page.empty());
 
-    service.history(STORE_ID, CUSTOMER_ID, null, 20);
+    service.history(STORE_ID, CUSTOMER_ID, PageRequest.of(0, 20));
 
     Mockito.verify(customerRepository, Mockito.never()).findByIdAndStoreIdForUpdate(any(), any());
   }
@@ -437,10 +440,10 @@ class CustomerMemberLinkServiceTest {
     Mockito.when(
             customerMemberLinkRepository.findHistory(
                 Mockito.eq(STORE_ID), Mockito.eq(CUSTOMER_ID), any()))
-        .thenReturn(List.of(view));
+        .thenReturn(new PageImpl<>(List.of(view)));
 
     List<CustomerMemberLinkHistoryResponse> history =
-        service.history(STORE_ID, CUSTOMER_ID, null, 20).content();
+        service.history(STORE_ID, CUSTOMER_ID, PageRequest.of(0, 20)).getContent();
 
     assertThat(history).hasSize(1);
     CustomerMemberLinkHistoryResponse row = history.get(0);
@@ -456,7 +459,7 @@ class CustomerMemberLinkServiceTest {
   void historyFailsWhenCustomerMissing() {
     Mockito.when(customerRepository.existsByIdAndStoreId(CUSTOMER_ID, STORE_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.history(STORE_ID, CUSTOMER_ID, null, 20))
+    assertThatThrownBy(() -> service.history(STORE_ID, CUSTOMER_ID, PageRequest.of(0, 20)))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }

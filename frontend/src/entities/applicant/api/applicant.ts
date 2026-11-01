@@ -1,10 +1,4 @@
-import {
-  apiClient,
-  fromCursorPage,
-  fromSpringPage,
-  type PageResult,
-  type CursorPageResult,
-} from '@/shared/api';
+import { apiClient, fromSpringPage, type Page, type PageResult } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import type {
   ApplicantDecision,
@@ -57,9 +51,13 @@ export const applicantApi = {
     enrollment: ApplicantEnrollmentInput
   ): Promise<ApplicantDetail> =>
     (await apiClient.post(`${resource(id)}/enrollment`, { version, ...enrollment })).data,
-  history: async (id: string, cursor?: string): Promise<CursorPageResult<ApplicantHistory>> =>
-    fromCursorPage(
-      (await apiClient.get(`${resource(id)}/history`, { params: { cursor, size: 20 } })).data
+  history: async (id: string, page = 0): Promise<PageResult<ApplicantHistory>> =>
+    fromSpringPage(
+      (
+        await apiClient.get<Page<ApplicantHistory>>(`${resource(id)}/history`, {
+          params: { page, size: 20 },
+        })
+      ).data
     ),
   policy: async (): Promise<RecruitmentPolicy> => (await apiClient.get('/applicants/policy')).data,
 };

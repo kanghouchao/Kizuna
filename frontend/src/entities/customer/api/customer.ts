@@ -6,15 +6,7 @@ import type {
   ContactPurpose,
   ContactPermissionInput,
 } from '../model/types';
-import {
-  CursorPageResult,
-  CursorParams,
-  PageResult,
-  PaginationParams,
-  apiClient,
-  fromCursorPage,
-  fromSpringPage,
-} from '@/shared/api';
+import { Page, PageResult, PaginationParams, apiClient, fromSpringPage } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import {
   ContactInput,
@@ -52,16 +44,22 @@ export const customerApi = {
       )
     ).data,
 
-  contacts: async (id: string, params?: CursorParams): Promise<CursorPageResult<ContactResponse>> =>
-    fromCursorPage(
-      (await apiClient.get(`/customers/${requireId(id, '顧客')}/contacts`, { params })).data
+  contacts: async (id: string, page = 0): Promise<PageResult<ContactResponse>> =>
+    fromSpringPage(
+      (
+        await apiClient.get<Page<ContactResponse>>(`/customers/${requireId(id, '顧客')}/contacts`, {
+          params: { page, size: 20 },
+        })
+      ).data
     ),
-  contactHistory: async (
-    id: string,
-    params?: CursorParams
-  ): Promise<CursorPageResult<ContactHistoryResponse>> =>
-    fromCursorPage(
-      (await apiClient.get(`/customers/${requireId(id, '顧客')}/contact-history`, { params })).data
+  contactHistory: async (id: string, page = 0): Promise<PageResult<ContactHistoryResponse>> =>
+    fromSpringPage(
+      (
+        await apiClient.get<Page<ContactHistoryResponse>>(
+          `/customers/${requireId(id, '顧客')}/contact-history`,
+          { params: { page, size: 20 } }
+        )
+      ).data
     ),
   addContact: async (id: string, data: ContactInput): Promise<ContactResponse> =>
     (await apiClient.post(`/customers/${requireId(id, '顧客')}/contacts`, data)).data,
@@ -110,18 +108,29 @@ export const customerApi = {
   /**
    * 重複候補（同店・未統合顧客・有効連絡先が一致する 2 行以上のグループ）を取得する。
    * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
-   * 続きは応答の nextCursor をそのまま cursor に渡して取る。
    */
   duplicates: async (
-    params?: CursorParams & { search?: string; type?: ContactType }
-  ): Promise<CursorPageResult<CustomerDuplicateGroupResponse>> => {
-    const response = await apiClient.get('/customers/duplicates', { params });
-    return fromCursorPage(response.data);
+    page: number,
+    filters: { search?: string; type?: ContactType } = {}
+  ): Promise<PageResult<CustomerDuplicateGroupResponse>> => {
+    const response = await apiClient.get<Page<CustomerDuplicateGroupResponse>>(
+      '/customers/duplicates',
+      { params: { page, size: 20, ...filters } }
+    );
+    return fromSpringPage(response.data);
   },
   duplicateCustomers: async (
-    params: CursorParams & { type: ContactType; value: string }
-  ): Promise<CursorPageResult<CustomerMergeComparisonResponse>> =>
-    fromCursorPage((await apiClient.get('/customers/duplicates/customers', { params })).data),
+    filters: { type: ContactType; value: string },
+    page = 0
+  ): Promise<PageResult<CustomerMergeComparisonResponse>> =>
+    fromSpringPage(
+      (
+        await apiClient.get<Page<CustomerMergeComparisonResponse>>(
+          '/customers/duplicates/customers',
+          { params: { page, size: 20, ...filters } }
+        )
+      ).data
+    ),
   /**
    * 統合の前に見比べる 2 行を取得する。重複候補に出てこない行どうしでも引ける。
    * 統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
@@ -178,16 +187,16 @@ export const customerApi = {
   /**
    * その顧客に関する統合履歴を新しい順に取得する。存続行として受けた統合と、自分が被統合と
    * なった統合の両方が返る。統合権限が要る読み口で、権限が無ければサーバが 403 を返す。
-   * 続きは応答の nextCursor をそのまま cursor に渡して取る。
    */
   mergeHistory: async (
     id: string | undefined,
-    params?: CursorParams
-  ): Promise<CursorPageResult<CustomerMergeHistoryResponse>> => {
-    const response = await apiClient.get(`/customers/${requireId(id, '顧客')}/merges`, {
-      params,
-    });
-    return fromCursorPage(response.data);
+    page = 0
+  ): Promise<PageResult<CustomerMergeHistoryResponse>> => {
+    const response = await apiClient.get<Page<CustomerMergeHistoryResponse>>(
+      `/customers/${requireId(id, '顧客')}/merges`,
+      { params: { page, size: 20 } }
+    );
+    return fromSpringPage(response.data);
   },
   /** 会員コードで会員を顧客へ紐づける（既に別の会員と紐づいていれば付け替える） */
   linkMember: async (
@@ -215,16 +224,16 @@ export const customerApi = {
     const response = await apiClient.get(`/customers/${requireId(id, '顧客')}/member-link`);
     return response.data;
   },
-  /** 会員紐づけの履歴を新しい順に取得する。続きは応答の nextCursor をそのまま cursor に渡して取る。 */
+  /** 会員紐づけの履歴を新しい順に取得する。 */
   memberLinkHistory: async (
     id: string | undefined,
-    params?: CursorParams
-  ): Promise<CursorPageResult<CustomerMemberLinkHistoryResponse>> => {
-    const response = await apiClient.get(
+    page = 0
+  ): Promise<PageResult<CustomerMemberLinkHistoryResponse>> => {
+    const response = await apiClient.get<Page<CustomerMemberLinkHistoryResponse>>(
       `/customers/${requireId(id, '顧客')}/member-link/history`,
-      { params }
+      { params: { page, size: 20 } }
     );
-    return fromCursorPage(response.data);
+    return fromSpringPage(response.data);
   },
   /** 紐づく会員のポイント残高を取得する（残高は顧客ではなく会員の台帳が持つ） */
   memberPointBalance: async (id: string | undefined): Promise<CustomerPointBalanceResponse> => {

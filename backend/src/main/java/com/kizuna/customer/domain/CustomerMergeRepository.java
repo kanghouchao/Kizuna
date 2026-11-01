@@ -2,10 +2,10 @@ package com.kizuna.customer.domain;
 
 import com.kizuna.shared.persistence.StoreScopedRepository;
 import jakarta.persistence.LockModeType;
-import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -96,37 +96,16 @@ public interface CustomerMergeRepository extends StoreScopedRepository<CustomerM
         left join com.kizuna.user.domain.User mu on mu.id = m.mergedBy
       """;
 
-  // 両方向を 1 文で引く。括弧は必須 — 外すと続きの位置の条件が `or` の片方の枝にしか掛からず、
-  // 2 ページ目が 1 ページ目をそのまま返して末尾へ到達できなくなる（外して実測）。
+  // 両方向を 1 文で引く。括弧は必須 — 外すと店舗条件が `or` の片方の枝にしか掛からず、
+  // 他店舗の統合が混ざる。
   String HISTORY_WHERE =
       " where m.storeId = :storeId"
           + " and (m.survivingCustomerId = :customerId or m.mergedCustomerId = :customerId) ";
 
-  // 新しい統合が先頭。mergedAt の同値は id で決定的に解く。カーソルの比較も同じ組で行う。
-  String HISTORY_ORDER = " order by m.mergedAt desc, m.id desc";
-
-  /** 顧客 1 件の統合履歴の先頭。並びは mergedAt の降順に一意な副キー id を重ねて全順序にする。 */
-  @Query(HISTORY_SELECT + HISTORY_WHERE + HISTORY_ORDER)
-  List<CustomerMergeView> findHistory(
-      @Param("storeId") Long storeId, @Param("customerId") String customerId, Limit limit);
-
-  /**
-   * 顧客 1 件の統合履歴の続き。渡された位置より後ろ（＝より古い側）だけを返す。
-   *
-   * <p>id は Snowflake の文字列で、比較も文字列の順序で行う。求めるのは全順序の決定性だけなので、 並び（{@link #HISTORY_ORDER}）と同じ順序であれば足りる。
-   */
   @Query(
-      HISTORY_SELECT
-          + HISTORY_WHERE
-          + """
-            and (m.mergedAt < :cursorMergedAt
-                 or (m.mergedAt = :cursorMergedAt and m.id < :cursorId))
-            """
-          + HISTORY_ORDER)
-  List<CustomerMergeView> findHistoryAfter(
-      @Param("storeId") Long storeId,
-      @Param("customerId") String customerId,
-      @Param("cursorMergedAt") OffsetDateTime cursorMergedAt,
-      @Param("cursorId") String cursorId,
-      Limit limit);
+      value = HISTORY_SELECT + HISTORY_WHERE,
+      countQuery =
+          "select count(m) from com.kizuna.customer.domain.CustomerMerge m" + HISTORY_WHERE)
+  Page<CustomerMergeView> findHistory(
+      @Param("storeId") Long storeId, @Param("customerId") String customerId, Pageable pageable);
 }

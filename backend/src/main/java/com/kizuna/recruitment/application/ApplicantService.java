@@ -21,8 +21,6 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -31,7 +29,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -179,19 +176,9 @@ public class ApplicantService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<ApplicantHistoryResponse> history(
-      Long storeId, String id, String cursor, int requestedSize) {
+  public Page<ApplicantHistoryResponse> history(Long storeId, String id, Pageable pageable) {
     require(storeId, id);
-    int size = CursorPage.clampSize(requestedSize);
-    Limit limit = Limit.of(size + 1);
-    PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
-    var rows =
-        after == null
-            ? histories.findByStoreIdAndApplicantIdOrderByCreatedAtDescIdDesc(storeId, id, limit)
-            : histories.findAfter(storeId, id, after.timestampKey(), after.id(), limit);
-    return CursorPage.of(
-            rows, size, row -> new PageCursor(row.getCreatedAt().toString(), row.getId()).encode())
-        .map(mapper::toHistory);
+    return histories.findByStoreIdAndApplicantId(storeId, id, pageable).map(mapper::toHistory);
   }
 
   private void recordAudit(Applicant applicant, String action, Map<String, String> before) {

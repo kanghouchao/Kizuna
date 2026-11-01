@@ -7,7 +7,7 @@ import {
   CustomerMergeComparisonResponse,
   customerApi,
 } from '@/entities/customer';
-import { CursorPageResult } from '@/shared/api';
+import { PageResult } from '@/shared/api';
 
 // describe の resetAllMocks に消されないよう、jest.fn ではなく固定の関数で返す。
 jest.mock('@/entities/user/model/MeContext', () => ({
@@ -64,7 +64,7 @@ function candidate(
 }
 
 /** 同じ番号の 2 行。氏名以外にも食い違う項目を持たせ、見比べる材料が出ることを確かめられるようにする。 */
-const twoRowGroup: CursorPageResult<CustomerDuplicateGroupResponse> = {
+const twoRowGroup: PageResult<CustomerDuplicateGroupResponse> = {
   rows: [
     {
       matched_type: 'PHONE',
@@ -91,8 +91,14 @@ const twoRowGroup: CursorPageResult<CustomerDuplicateGroupResponse> = {
       ],
     },
   ],
-  nextCursor: null,
+  page: 0,
+  pageCount: 1,
+  total: 1,
 };
+
+function pageOf<T>(rows: T[], page = 0, pageCount = 1): PageResult<T> {
+  return { rows, page, pageCount, total: rows.length };
+}
 
 /** 2 行を見比べる状態まで進める（どのテストも本題はその先なので、ここまでを 1 つにまとめる）。 */
 async function selectBothRows() {
@@ -129,14 +135,15 @@ describe('CustomerDuplicatesPage', () => {
   });
 
   it('メールと LINE の同じ値を別の一致種類として表示する', async () => {
-    mockedDuplicates.mockResolvedValue({
-      rows: (['EMAIL', 'LINE'] as const).map(type => ({
-        ...twoRowGroup.rows[0],
-        matched_type: type,
-        matched_value: 'Case@example.com',
-      })),
-      nextCursor: null,
-    });
+    mockedDuplicates.mockResolvedValue(
+      pageOf(
+        (['EMAIL', 'LINE'] as const).map(type => ({
+          ...twoRowGroup.rows[0],
+          matched_type: type,
+          matched_value: 'Case@example.com',
+        }))
+      )
+    );
     render(<CustomerDuplicatesPage />);
     expect(await screen.findByText('メール')).toBeInTheDocument();
     expect(screen.getByText('LINE ID')).toBeInTheDocument();
@@ -179,7 +186,7 @@ describe('CustomerDuplicatesPage', () => {
   });
 
   it('候補が無ければ、取得の失敗と区別のつく空表示になること', async () => {
-    mockedDuplicates.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedDuplicates.mockResolvedValue(pageOf([]));
 
     render(<CustomerDuplicatesPage />);
 
@@ -187,33 +194,32 @@ describe('CustomerDuplicatesPage', () => {
     expect(screen.queryByText('重複候補の取得に失敗しました')).not.toBeInTheDocument();
   });
 
-  it('続きがあるときは、続きを辿る導線を出すこと', async () => {
+  it('ページが続くときは、ページ送りで次のページを取ること', async () => {
     // 上限で黙って切ると、番号を共有する同伴者のような正当な偽陽性が先頭を占めたとき
     // 以降の真の重複が一生画面に出ない
     mockedDuplicates
-      .mockResolvedValueOnce({ ...twoRowGroup, nextCursor: 'MDkw' })
-      .mockResolvedValueOnce({ rows: [], nextCursor: null });
+      .mockResolvedValueOnce(pageOf(twoRowGroup.rows, 0, 2))
+      .mockResolvedValueOnce(pageOf([], 1, 2));
 
     render(<CustomerDuplicatesPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'さらに読み込む' }));
+    fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
 
-    await waitFor(() => expect(mockedDuplicates).toHaveBeenLastCalledWith({ cursor: 'MDkw' }));
+    await waitFor(() => expect(mockedDuplicates).toHaveBeenLastCalledWith(1, {}));
   });
 
-  it('続きが無ければ、続きを辿る導線を出さないこと', async () => {
+  it('1 ページに収まれば、ページ送りを出さないこと', async () => {
     render(<CustomerDuplicatesPage />);
     await screen.findByText('山田太郎');
 
-    expect(screen.queryByRole('button', { name: 'さらに読み込む' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'ページ送り' })).not.toBeInTheDocument();
   });
 
   it.each(['close', 'escape'])('確認を中断しても展開済み候補と選択を保持する: %s', async action => {
-    mockedDuplicates.mockResolvedValue({
-      rows: [{ ...twoRowGroup.rows[0], total: 21, customers: [] }],
-      nextCursor: null,
-    });
+    mockedDuplicates.mockResolvedValue(
+      pageOf([{ ...twoRowGroup.rows[0], total: 21, customers: [] }])
+    );
     const members = customerApi.duplicateCustomers as jest.Mock;
-    members.mockResolvedValue({ rows: twoRowGroup.rows[0].customers, nextCursor: null });
+    members.mockResolvedValue(pageOf(twoRowGroup.rows[0].customers));
     render(<CustomerDuplicatesPage />);
     fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
     await selectBothRows();
@@ -230,36 +236,20 @@ describe('CustomerDuplicatesPage', () => {
     expect(members).toHaveBeenCalledTimes(1);
   });
 
-  it('候補群の追加取得中も展開済みの顧客ページと選択を保持する', async () => {
-    let finish!: (page: CursorPageResult<CustomerDuplicateGroupResponse>) => void;
+  it('候補群のページ送りの取得中も展開済みの顧客と選択を保持する', async () => {
     mockedDuplicates
-      .mockResolvedValueOnce({
-        rows: [{ ...twoRowGroup.rows[0], total: 21, customers: [] }],
-        nextCursor: 'groups-next',
-      })
-      .mockReturnValueOnce(
-        new Promise(resolve => {
-          finish = resolve;
-        })
-      );
+      .mockResolvedValueOnce(pageOf([{ ...twoRowGroup.rows[0], total: 21, customers: [] }], 0, 2))
+      .mockReturnValueOnce(new Promise(() => {}));
     const members = customerApi.duplicateCustomers as jest.Mock;
-    members
-      .mockResolvedValueOnce({
-        rows: [twoRowGroup.rows[0].customers[0]],
-        nextCursor: 'members-next',
-      })
-      .mockResolvedValueOnce({ rows: [twoRowGroup.rows[0].customers[1]], nextCursor: null });
+    members.mockResolvedValueOnce(pageOf(twoRowGroup.rows[0].customers));
     render(<CustomerDuplicatesPage />);
     fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
-    fireEvent.click(await screen.findByRole('button', { name: '顧客をさらに読み込む' }));
-    await screen.findByLabelText('ヤマダタロウ を見比べる');
     await selectBothRows();
-    fireEvent.click(screen.getByRole('button', { name: 'さらに読み込む' }));
-    expect(screen.getByRole('table', { name: '2 行の比較' })).toBeInTheDocument();
-    await act(async () => finish({ rows: [], nextCursor: null }));
+    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    await waitFor(() => expect(mockedDuplicates).toHaveBeenLastCalledWith(1, {}));
     expect(screen.getByLabelText('ヤマダタロウ を見比べる')).toBeChecked();
     expect(screen.getByRole('table', { name: '2 行の比較' })).toBeInTheDocument();
-    expect(members).toHaveBeenCalledTimes(2);
+    expect(members).toHaveBeenCalledTimes(1);
   });
 
   it.each([false, true])('再試行後の最新行から統合確認を作る（展開群: %s）', async expanded => {
@@ -267,27 +257,22 @@ describe('CustomerDuplicatesPage', () => {
     const fresh = group.customers.map(row => ({ ...row, name: `${row.name}更新`, order_count: 9 }));
     const members = customerApi.duplicateCustomers as jest.Mock;
     if (expanded) {
-      mockedDuplicates.mockResolvedValue({
-        rows: [{ ...group, total: 21, customers: [] }],
-        nextCursor: null,
-      });
+      mockedDuplicates.mockResolvedValue(pageOf([{ ...group, total: 21, customers: [] }]));
       members
-        .mockResolvedValueOnce({ rows: group.customers, nextCursor: 'next' })
+        .mockResolvedValueOnce(pageOf(group.customers, 0, 2))
         .mockRejectedValueOnce(new Error('boom'))
-        .mockResolvedValueOnce({ rows: fresh, nextCursor: null });
+        .mockResolvedValueOnce(pageOf(fresh, 0, 2));
     } else {
       mockedDuplicates
-        .mockResolvedValueOnce({ ...twoRowGroup, nextCursor: 'next' })
+        .mockResolvedValueOnce(pageOf(twoRowGroup.rows, 0, 2))
         .mockRejectedValueOnce(new Error('boom'))
-        .mockResolvedValueOnce({ rows: [{ ...group, customers: fresh }], nextCursor: null });
+        .mockResolvedValueOnce(pageOf([{ ...group, customers: fresh }], 0, 2));
     }
     render(<CustomerDuplicatesPage />);
     if (expanded) fireEvent.click(await screen.findByRole('button', { name: '顧客を表示' }));
     await selectBothRows();
     fireEvent.click(screen.getByLabelText('山田太郎 を残す'));
-    fireEvent.click(
-      screen.getByRole('button', { name: expanded ? '顧客をさらに読み込む' : 'さらに読み込む' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
     fireEvent.click(await screen.findByRole('button', { name: '再試行' }));
     const comparison = await screen.findByRole('table', { name: '2 行の比較' });
     expect(within(comparison).getAllByText('9 件')).toHaveLength(2);
@@ -306,71 +291,59 @@ describe('CustomerDuplicatesPage', () => {
     );
   });
 
-  it('大きい組も続きを取得でき、失敗したら先頭から再試行できる', async () => {
-    mockedDuplicates.mockResolvedValue({
-      rows: [{ ...twoRowGroup.rows[0], total: 21, customers: [] }],
-      nextCursor: null,
-    });
+  it('大きい組もページ送りで辿れ、失敗したら先頭から再試行できる', async () => {
+    mockedDuplicates.mockResolvedValue(
+      pageOf([{ ...twoRowGroup.rows[0], total: 21, customers: [] }])
+    );
     const members = customerApi.duplicateCustomers as jest.Mock;
     members
-      .mockResolvedValueOnce({ rows: [twoRowGroup.rows[0].customers[0]], nextCursor: 'next' })
+      .mockResolvedValueOnce(pageOf([twoRowGroup.rows[0].customers[0]], 0, 2))
       .mockRejectedValueOnce(new Error('failure'))
-      .mockResolvedValueOnce({ rows: twoRowGroup.rows[0].customers, nextCursor: null });
+      .mockResolvedValueOnce(pageOf(twoRowGroup.rows[0].customers, 0, 2));
     render(<CustomerDuplicatesPage />);
     expect(await screen.findByText('21 件')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '顧客を表示' }));
     await screen.findByText('山田太郎');
-    fireEvent.click(screen.getByRole('button', { name: '顧客をさらに読み込む' }));
+    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('候補顧客の取得に失敗しました');
     expect(screen.queryByText('山田太郎')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
     await selectBothRows();
     expect(await screen.findByRole('table', { name: '2 行の比較' })).toBeInTheDocument();
-    expect(members).toHaveBeenLastCalledWith({
-      type: 'PHONE',
-      value: '090-1111-2222',
-      cursor: undefined,
-    });
+    expect(members).toHaveBeenLastCalledWith({ type: 'PHONE', value: '090-1111-2222' }, 0);
     expect(mockedMerge).not.toHaveBeenCalled();
   });
 
-  it('条件変更で選択とカーソルを捨て、追加取得の失敗から同じ条件で再試行する', async () => {
+  it('条件変更で選択とページ位置を捨て、ページ送りの失敗から同じ条件で再試行する', async () => {
     render(<CustomerDuplicatesPage />);
     await selectBothRows();
-    mockedDuplicates.mockResolvedValueOnce({ ...twoRowGroup, nextCursor: 'next' });
+    mockedDuplicates.mockResolvedValueOnce(pageOf(twoRowGroup.rows, 0, 2));
     fireEvent.change(screen.getByLabelText('連絡先で検索'), { target: { value: '090' } });
     fireEvent.click(screen.getByRole('button', { name: '検索' }));
     await waitFor(() =>
-      expect(mockedDuplicates).toHaveBeenLastCalledWith({
-        cursor: undefined,
-        search: '090',
-        type: undefined,
-      })
+      expect(mockedDuplicates).toHaveBeenLastCalledWith(0, { search: '090', type: undefined })
     );
     expect(screen.queryByRole('table', { name: '2 行の比較' })).not.toBeInTheDocument();
     mockedDuplicates.mockRejectedValueOnce(new Error('failure'));
-    fireEvent.click(await screen.findByRole('button', { name: 'さらに読み込む' }));
+    fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
     await screen.findByRole('alert');
     expect(screen.queryByText('山田太郎')).not.toBeInTheDocument();
     mockedDuplicates.mockResolvedValueOnce(twoRowGroup);
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
     await screen.findByText('山田太郎');
-    expect(mockedDuplicates).toHaveBeenLastCalledWith({
-      cursor: undefined,
-      search: '090',
-      type: undefined,
-    });
+    expect(mockedDuplicates).toHaveBeenLastCalledWith(0, { search: '090', type: undefined });
   });
 
   it('同じ顧客が複数種類で一致しても選択中の組だけを比較する', async () => {
-    mockedDuplicates.mockResolvedValue({
-      rows: (['EMAIL', 'LINE'] as const).map(type => ({
-        ...twoRowGroup.rows[0],
-        matched_type: type,
-        matched_value: 'Case@example.com',
-      })),
-      nextCursor: null,
-    });
+    mockedDuplicates.mockResolvedValue(
+      pageOf(
+        (['EMAIL', 'LINE'] as const).map(type => ({
+          ...twoRowGroup.rows[0],
+          matched_type: type,
+          matched_value: 'Case@example.com',
+        }))
+      )
+    );
     render(<CustomerDuplicatesPage />);
     const first = await screen.findAllByLabelText('山田太郎 を見比べる');
     fireEvent.click(first[0]);
@@ -465,7 +438,7 @@ describe('CustomerDuplicatesPage', () => {
       finish = resolve;
     });
     Object.defineProperty(dialog, 'getAnimations', { value: () => [{ finished }] });
-    mockedDuplicates.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedDuplicates.mockResolvedValue(pageOf([]));
     await confirmMerge();
 
     expect(await screen.findByText('連絡先が重複している顧客はいません')).toBeInTheDocument();

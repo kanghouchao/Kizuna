@@ -7,12 +7,18 @@ import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactSearch;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
+import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.query.criteria.JpaCriteriaQuery;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -21,13 +27,7 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
   private final EntityManager em;
 
   @Override
-  public List<Group> groups(
-      Long storeId,
-      String search,
-      ContactType type,
-      ContactType afterType,
-      String afterValue,
-      int limit) {
+  public Page<Group> groups(Long storeId, String search, ContactType type, Pageable pageable) {
     var cb = em.getCriteriaBuilder();
     var query = cb.createTupleQuery();
     var contact = query.from(CustomerContact.class);
@@ -37,15 +37,8 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
     if (type != null) predicates.add(cb.equal(contact.get("type"), type));
     if (search != null && !search.isBlank())
       predicates.add(CustomerContactSearch.matches(contact, cb, search));
-    // 列の文字列表現で比較し、enum の宣言順と DB の文字列順の差を持ち込まない。
+    // 列の文字列表現で並べ、enum の宣言順と DB の文字列順の差を持ち込まない。
     var typeKey = contact.get("type").as(String.class);
-    if (afterType != null)
-      predicates.add(
-          cb.or(
-              cb.greaterThan(typeKey, afterType.name()),
-              cb.and(
-                  cb.equal(contact.get("type"), afterType),
-                  cb.greaterThan(contact.get("value"), afterValue))));
     var total = cb.countDistinct(customer.get("id"));
     query
         .select(cb.tuple(contact.get("type"), contact.get("value"), total))
@@ -53,14 +46,16 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
         .groupBy(contact.get("type"), contact.get("value"))
         .having(cb.ge(total, 2))
         .orderBy(cb.asc(typeKey), cb.asc(contact.get("value")));
-    return em.createQuery(query).setMaxResults(limit).getResultList().stream()
-        .map(
-            row ->
-                new Group(
-                    row.get(0, ContactType.class),
-                    row.get(1, String.class),
-                    row.get(2, Long.class)))
-        .toList();
+    var rows =
+        page(em.createQuery(query), pageable).getResultList().stream()
+            .map(
+                row ->
+                    new Group(
+                        row.get(0, ContactType.class),
+                        row.get(1, String.class),
+                        row.get(2, Long.class)))
+            .toList();
+    return new PageImpl<>(rows, pageable, count(query));
   }
 
   @Override
@@ -87,8 +82,7 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
   }
 
   @Override
-  public List<Customer> members(
-      Long storeId, ContactType type, String value, String afterId, int limit) {
+  public Page<Customer> members(Long storeId, ContactType type, String value, Pageable pageable) {
     var cb = em.getCriteriaBuilder();
     var query = cb.createQuery(Customer.class);
     var customer = query.from(Customer.class);
@@ -99,10 +93,20 @@ public class JpaCustomerCandidateRepository implements CustomerCandidateReposito
         .where(
             live(cb, contact, customer, storeId),
             cb.equal(contact.get("type"), type),
-            cb.equal(contact.get("value"), value),
-            cb.greaterThan(customer.get("id"), afterId))
+            cb.equal(contact.get("value"), value))
         .orderBy(cb.asc(customer.get("id")));
-    return em.createQuery(query).setMaxResults(limit).getResultList();
+    return new PageImpl<>(
+        page(em.createQuery(query), pageable).getResultList(), pageable, count(query));
+  }
+
+  private static <T> TypedQuery<T> page(TypedQuery<T> query, Pageable pageable) {
+    return query.setFirstResult((int) pageable.getOffset()).setMaxResults(pageable.getPageSize());
+  }
+
+  // group by / distinct の結果行を数えるため、Hibernate が問い合わせを副問い合わせで包んで数える形を使う。
+  // 同じ述語から数えるので、件数と行が別々の絞り込みでずれることがない。
+  private long count(CriteriaQuery<?> query) {
+    return em.createQuery(((JpaCriteriaQuery<?>) query).createCountQuery()).getSingleResult();
   }
 
   private Predicate live(

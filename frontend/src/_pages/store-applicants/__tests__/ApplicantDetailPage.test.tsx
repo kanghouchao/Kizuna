@@ -67,7 +67,12 @@ beforeEach(() => {
   (applicantApi.policy as jest.Mock).mockResolvedValue({
     retention_periods: { rejected_months: null, withdrawn_months: null, hired_months: null },
   });
-  (applicantApi.history as jest.Mock).mockResolvedValue({ rows: [], nextCursor: null });
+  (applicantApi.history as jest.Mock).mockResolvedValue({
+    rows: [],
+    page: 0,
+    pageCount: 0,
+    total: 0,
+  });
   meWith(allPermissions);
 });
 test('保持方針は終端状態ごとの月数を示し、未設定は自動匿名化しないと示す', async () => {

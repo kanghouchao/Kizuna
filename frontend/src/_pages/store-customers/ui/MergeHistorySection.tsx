@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { MergeAuditDialog } from './MergeAuditDialog';
 import { customerApi } from '@/entities/customer';
-import { useCursorList } from '@/shared/lib';
+import { useListPage } from '@/shared/lib';
 import {
   Badge,
   Button,
+  Pager,
   RegionError,
   Table,
   TableBody,
@@ -28,8 +29,8 @@ interface MergeHistorySectionProps {
  */
 export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
   const [mergeId, setMergeId] = useState<string | null>(null);
-  const { rows, isLoading, failed, hasMore, reload, loadMore } = useCursorList(cursor =>
-    customerApi.mergeHistory(customerId, { cursor })
+  const { rows, page, pageCount, isLoading, failed, reload, onPageChange } = useListPage(page =>
+    customerApi.mergeHistory(customerId, page)
   );
 
   return (
@@ -44,7 +45,7 @@ export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
         // 読めなかった履歴を残すと「統合履歴がありません」に化ける。区画自身が失敗を名乗る
         <RegionError
           message="統合履歴の取得に失敗しました"
-          onRetry={() => reload()}
+          onRetry={() => void reload()}
           className="justify-center p-8"
         />
       ) : rows.length === 0 ? (
@@ -100,13 +101,14 @@ export function MergeHistorySection({ customerId }: MergeHistorySectionProps) {
         </Table>
       )}
 
-      {hasMore && (
-        <div className="flex justify-center border-t p-4">
-          <Button variant="outline" onClick={() => loadMore()} disabled={isLoading}>
-            さらに読み込む
-          </Button>
-        </div>
-      )}
+      <div className="border-t p-4 empty:hidden">
+        <Pager
+          page={page}
+          pageCount={pageCount}
+          disabled={isLoading}
+          onPageChange={next => void onPageChange(next)}
+        />
+      </div>
       <MergeAuditDialog
         customerId={customerId}
         mergeId={mergeId}

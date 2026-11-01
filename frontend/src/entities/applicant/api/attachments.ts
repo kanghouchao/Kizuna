@@ -1,4 +1,4 @@
-import { apiClient, fromCursorPage, type CursorPageResult } from '@/shared/api';
+import { apiClient, fromSpringPage, type Page, type PageResult } from '@/shared/api';
 import { requireId } from '@/shared/lib';
 import type {
   ApplicantAttachment,
@@ -10,17 +10,21 @@ const resource = (id: string) => `/applicants/${requireId(id, '応募者')}`;
 export const applicantAttachmentApi = {
   policy: async (): Promise<ApplicantAttachmentPolicy> =>
     (await apiClient.get('/applicants/attachment-policy')).data,
-  list: async (id: string, cursor?: string): Promise<CursorPageResult<ApplicantAttachment>> =>
-    fromCursorPage(
-      (await apiClient.get(`${resource(id)}/attachments`, { params: { cursor, size: 20 } })).data
+  list: async (id: string, page = 0): Promise<PageResult<ApplicantAttachment>> =>
+    fromSpringPage(
+      (
+        await apiClient.get<Page<ApplicantAttachment>>(`${resource(id)}/attachments`, {
+          params: { page, size: 20 },
+        })
+      ).data
     ),
-  uploads: async (
-    id: string,
-    cursor?: string
-  ): Promise<CursorPageResult<ApplicantAttachmentUpload>> =>
-    fromCursorPage(
-      (await apiClient.get(`${resource(id)}/attachment-uploads`, { params: { cursor, size: 20 } }))
-        .data
+  uploads: async (id: string, page = 0): Promise<PageResult<ApplicantAttachmentUpload>> =>
+    fromSpringPage(
+      (
+        await apiClient.get<Page<ApplicantAttachmentUpload>>(`${resource(id)}/attachment-uploads`, {
+          params: { page, size: 20 },
+        })
+      ).data
     ),
   operation: async (id: string, key: string): Promise<ApplicantAttachmentOperation> =>
     (

@@ -6,10 +6,13 @@ import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.CustomerMergeResponse;
 import com.kizuna.customer.application.CustomerMergeService;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +20,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -52,8 +54,7 @@ public class CustomerMergeController {
   }
 
   /**
-   * その顧客に関する統合履歴。存続行として受けた統合と、自分が被統合となった統合の両方が新しい順に返る。続きは応答の {@code next_cursor} をそのまま {@code
-   * cursor} に渡して取る。
+   * その顧客に関する統合履歴。存続行として受けた統合と、自分が被統合となった統合の両方が新しい順に返る。
    *
    * <p>パスの意味が POST と非対称なのは意図したもの。POST の {@code customerId} は存続行を名指すが、GET
    * は「この行が関与した統合」の集合を指すので、被統合となった側も含む。
@@ -62,11 +63,14 @@ public class CustomerMergeController {
    */
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
-  public ResponseEntity<CursorPage<CustomerMergeHistoryResponse>> history(
+  public ResponseEntity<Page<CustomerMergeHistoryResponse>> history(
       @CurrentStore Long storeId,
       @PathVariable String customerId,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(customerMergeService.history(storeId, customerId, cursor, size));
+      @PageableDefault(
+              size = 20,
+              sort = {"mergedAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return ResponseEntity.ok(customerMergeService.history(storeId, customerId, pageable));
   }
 }

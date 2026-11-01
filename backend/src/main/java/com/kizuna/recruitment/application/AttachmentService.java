@@ -15,13 +15,14 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.AuthenticationException;
@@ -80,17 +81,15 @@ public class AttachmentService {
   }
 
   @PreAuthorize(READ)
-  public CursorPage<AttachmentSummaryResponse> list(
-      Long storeId, String id, String cursor, int size) {
+  public Page<AttachmentSummaryResponse> list(Long storeId, String id, Pageable pageable) {
     storage.requireConfigured();
-    return transactions.list(storeId, id, true, cursor, size).map(AttachmentSummaryResponse::from);
+    return transactions.list(storeId, id, true, pageable).map(AttachmentSummaryResponse::from);
   }
 
   @PreAuthorize(WRITE)
-  public CursorPage<AttachmentUploadResponse> uploads(
-      Long storeId, String id, String cursor, int size) {
+  public Page<AttachmentUploadResponse> uploads(Long storeId, String id, Pageable pageable) {
     storage.requireConfigured();
-    return transactions.list(storeId, id, false, cursor, size).map(AttachmentUploadResponse::from);
+    return transactions.list(storeId, id, false, pageable).map(AttachmentUploadResponse::from);
   }
 
   @PreAuthorize(WRITE)

@@ -19,13 +19,13 @@ import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
-import com.kizuna.customer.domain.CustomerCandidateRepository;
 import com.kizuna.customer.domain.CustomerContactHistoryRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerListRepository;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.customer.infrastructure.JpaCustomerCandidateRepository;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.user.application.BusinessAudit;
@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -55,6 +56,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -362,6 +365,48 @@ class CustomerContactAuditIntegrationTest {
     jdbc.execute("alter table t_audit_events drop constraint ck_contact_audit_test_reject");
   }
 
+  @Test
+  void duplicateGroupsMembersContactsAndHistoryArePagedWithTotals() {
+    String key = "dup-" + UUID.randomUUID();
+    List<String> ids =
+        IntStream.range(0, 3)
+            .mapToObj(
+                i -> {
+                  var request = new CustomerCreateRequest();
+                  request.setName("重複検証-" + i);
+                  request.setContacts(
+                      List.of(
+                          new ContactRequest(ContactType.LINE, key + "-1"),
+                          new ContactRequest(ContactType.LINE, key + "-2")));
+                  return customers.create(STORE_ID, request).getId();
+                })
+            .toList();
+
+    var first = customers.listDuplicateCandidates(STORE_ID, key, null, PageRequest.of(0, 1));
+    assertThat(first.getTotalElements()).isEqualTo(2);
+    assertThat(first.getContent())
+        .singleElement()
+        .satisfies(g -> assertThat(g.total()).isEqualTo(3));
+    var second = customers.listDuplicateCandidates(STORE_ID, key, null, PageRequest.of(1, 1));
+    assertThat(second.getContent().getFirst().matchedValue()).isEqualTo(key + "-2");
+
+    var members =
+        customers.duplicateCustomers(STORE_ID, ContactType.LINE, key + "-1", PageRequest.of(1, 2));
+    assertThat(members.getTotalElements()).isEqualTo(3);
+    assertThat(members.getContent()).hasSize(1);
+
+    var contacts = service.list(STORE_ID, ids.getFirst(), PageRequest.of(0, 1, Sort.by("id")));
+    assertThat(contacts.getTotalElements()).isEqualTo(2);
+    assertThat(contacts.getContent()).hasSize(1);
+    var history =
+        service.history(
+            STORE_ID,
+            ids.getFirst(),
+            PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "occurredAt", "id")));
+    assertThat(history.getTotalElements()).isGreaterThan(1);
+    assertThat(history.getContent()).hasSize(1);
+  }
+
   private CustomerCreateRequest request() {
     var request = new CustomerCreateRequest();
     request.setName("取引検証-" + UUID.randomUUID());
@@ -433,6 +478,8 @@ class CustomerContactAuditIntegrationTest {
                           Customer.class, call.getArgument(0), LockModeType.PESSIMISTIC_WRITE)));
       when(repository.findByIdAndStoreId(anyString(), any()))
           .thenAnswer(call -> Optional.ofNullable(em.find(Customer.class, call.getArgument(0))));
+      when(repository.findResolvingMerge(any(), anyString()))
+          .thenAnswer(call -> Optional.ofNullable(em.find(Customer.class, call.getArgument(1))));
       when(repository.save(any(Customer.class)))
           .thenAnswer(
               call -> {
@@ -489,11 +536,12 @@ class CustomerContactAuditIntegrationTest {
         CustomerRepository repository,
         CustomerContactService contacts,
         CustomerContactRepository contactRepository,
-        BusinessAudit audit) {
+        BusinessAudit audit,
+        EntityManager em) {
       return new CustomerService(
           repository,
           mock(CustomerListRepository.class),
-          mock(CustomerCandidateRepository.class),
+          new JpaCustomerCandidateRepository(em),
           contacts,
           contactRepository,
           mock(CustomerMemberLinkRepository.class),

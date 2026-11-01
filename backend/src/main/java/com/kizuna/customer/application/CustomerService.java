@@ -27,8 +27,6 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.validation.ContactValues;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -43,6 +41,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -58,7 +57,7 @@ public class CustomerService {
   /** LIKE パターンのエスケープ規則。派生クエリが内部で使うものと同一で、手書きの cb.like にも同じ規則を適用する。 */
   private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
 
-  /** 初回応答に同梱する顧客数の上限。大きいグループは専用のカーソル一覧で読む。 */
+  /** 初回応答に同梱する顧客数の上限。大きいグループは専用のページ一覧で読む。 */
   private static final int MAX_LISTED_GROUP_SIZE = 20;
 
   /** 見比べる対象は 2 行。3 行以上を一度に畳む形は持たない（ADR 0010）。 */
@@ -125,36 +124,20 @@ public class CustomerService {
 
   /** グループ件数と判断材料を同じ断面から読み、途中の削除・統合による不一致を避ける。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<CustomerDuplicateGroupResponse> listDuplicateCandidates(
-      Long storeId, String search, ContactType type, String cursor, int requestedSize) {
-    int size = candidatePageSize(requestedSize);
-    ContactType afterType = null;
-    String afterValue = null;
-    if (cursor != null) {
-      var decoded = PageCursor.decode(cursor);
-      try {
-        afterType = ContactType.valueOf(decoded.key());
-      } catch (IllegalArgumentException e) {
-        throw new ServiceException("続きの位置（cursor）が不正です");
-      }
-      afterValue = PageCursor.decodeKey(decoded.id());
-    }
-    var page =
-        CursorPage.of(
-            candidateRepository.groups(storeId, search, type, afterType, afterValue, size + 1),
-            size,
-            group -> groupCursor(group.type(), group.value()));
+  public Page<CustomerDuplicateGroupResponse> listDuplicateCandidates(
+      Long storeId, String search, ContactType type, Pageable pageable) {
+    var page = candidateRepository.groups(storeId, search, type, pageable);
     var matches =
         candidateRepository.members(
             storeId,
-            page.content().stream()
+            page.getContent().stream()
                 .filter(group -> group.total() <= MAX_LISTED_GROUP_SIZE)
                 .toList());
     var rows =
         matches.stream()
             .collect(
                 Collectors.groupingBy(
-                    match -> groupCursor(match.type(), match.value()),
+                    match -> new GroupKey(match.type(), match.value()),
                     LinkedHashMap::new,
                     Collectors.mapping(
                         CustomerCandidateRepository.Match::customer, Collectors.toList())));
@@ -171,14 +154,14 @@ public class CustomerService {
                 group.type(),
                 group.value(),
                 group.total(),
-                rows.getOrDefault(groupCursor(group.type(), group.value()), List.of()).stream()
+                rows.getOrDefault(new GroupKey(group.type(), group.value()), List.of()).stream()
                     .map(customer -> comparisons.get(customer.getId()))
                     .toList()));
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<CustomerMergeComparisonResponse> duplicateCustomers(
-      Long storeId, ContactType type, String value, String cursor, int requestedSize) {
+  public Page<CustomerMergeComparisonResponse> duplicateCustomers(
+      Long storeId, ContactType type, String value, Pageable pageable) {
     if (value == null || value.isBlank() || value.length() > 320)
       throw new ServiceException("320文字以内の連絡先を指定してください");
     String normalized =
@@ -187,31 +170,17 @@ public class CustomerService {
           case EMAIL -> ContactValues.email(value, "value");
           case LINE -> value.strip();
         };
-    int size = candidatePageSize(requestedSize);
-    String afterId = cursor == null ? "" : PageCursor.decodeKey(cursor);
-    if (!afterId.matches("[0-9]*")) throw new ServiceException("続きの位置（cursor）が不正です");
-    var page =
-        CursorPage.of(
-            candidateRepository.members(storeId, type, normalized, afterId, size + 1),
-            size,
-            customer -> PageCursor.encodeKey(customer.getId()));
-    return new CursorPage<>(
+    var page = candidateRepository.members(storeId, type, normalized, pageable);
+    var rows =
         toComparisonRows(
             storeId,
-            page.content(),
+            page.getContent(),
             fetchComparisonMaterial(
-                storeId, page.content().stream().map(Customer::getId).toList())),
-        page.nextCursor());
+                storeId, page.getContent().stream().map(Customer::getId).toList()));
+    return new PageImpl<>(rows, pageable, page.getTotalElements());
   }
 
-  private static int candidatePageSize(int size) {
-    if (size < 1 || size > CursorPage.MAX_SIZE) throw new ServiceException("取得件数は1〜2000件で指定してください");
-    return size;
-  }
-
-  private static String groupCursor(ContactType type, String value) {
-    return new PageCursor(type.name(), PageCursor.encodeKey(value)).encode();
-  }
+  private record GroupKey(ContactType type, String value) {}
 
   /**
    * 顧客一覧から選んだ任意の 2 行を、統合の前に見比べるための読み口。重複候補に出てこない行どうしでも引ける。

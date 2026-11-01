@@ -16,8 +16,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
@@ -28,7 +26,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -184,48 +183,18 @@ public class AttachmentTransactions {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<AttachmentUpload> list(
-      Long storeId, String applicantId, boolean completed, String cursor, int size) {
+  public Page<AttachmentUpload> list(
+      Long storeId, String applicantId, boolean completed, Pageable pageable) {
     requireApplicant(storeId, applicantId);
-    if (size < 1 || size > 100 || cursor != null && cursor.length() > 512)
-      throw new ServiceException("取得件数または続きの位置が不正です");
-    PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
     Specification<AttachmentUpload> specification =
-        (root, query, cb) -> {
-          var condition =
-              cb.and(
-                  cb.equal(root.get("storeId"), storeId),
-                  cb.equal(root.get("applicantId"), applicantId),
-                  completed
-                      ? cb.equal(root.get("status"), AttachmentUpload.Status.READY)
-                      : cb.notEqual(root.get("status"), AttachmentUpload.Status.READY));
-          if (after != null)
-            condition =
-                cb.and(
-                    condition,
-                    cb.or(
-                        cb.lessThan(root.get("createdAt"), after.timestampKey()),
-                        cb.and(
-                            cb.equal(root.get("createdAt"), after.timestampKey()),
-                            cb.lessThan(root.get("id"), after.id()))));
-          return condition;
-        };
-    var rows =
-        uploads.findBy(
-            specification,
-            query ->
-                query
-                    .sortBy(
-                        Sort.by(
-                            Sort.Direction.DESC,
-                            AttachmentUpload::getCreatedAt,
-                            AttachmentUpload::getId))
-                    .limit(size + 1)
-                    .all());
-    return CursorPage.of(
-        rows,
-        size,
-        upload -> new PageCursor(upload.getCreatedAt().toString(), upload.getId()).encode());
+        (root, query, cb) ->
+            cb.and(
+                cb.equal(root.get("storeId"), storeId),
+                cb.equal(root.get("applicantId"), applicantId),
+                completed
+                    ? cb.equal(root.get("status"), AttachmentUpload.Status.READY)
+                    : cb.notEqual(root.get("status"), AttachmentUpload.Status.READY));
+    return uploads.findAll(specification, pageable);
   }
 
   @Transactional(readOnly = true)

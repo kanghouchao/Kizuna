@@ -1,7 +1,7 @@
 package com.kizuna.customer.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -31,12 +31,14 @@ import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -45,7 +47,6 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
-import tools.jackson.databind.ObjectMapper;
 
 /** 実際の controller・service・mapper を通じて候補の判断材料と HTTP 応答を検証する。 */
 @WebMvcTest(CustomerController.class)
@@ -63,7 +64,6 @@ class CustomerSearchControllerTest {
   static class Security {}
 
   @Autowired MockMvc mvc;
-  @Autowired ObjectMapper json;
   @MockitoBean PlatformTransactionManager transactions;
   @MockitoBean CustomerRepository customers;
   @MockitoBean CustomerListRepository customerList;
@@ -86,14 +86,18 @@ class CustomerSearchControllerTest {
   }
 
   @Test
-  void groupsIncludeComparisonMaterialAndOpaqueContinuation() throws Exception {
+  void groupsIncludeComparisonMaterialAsAPage() throws Exception {
     var a = customer("1", "候補甲");
     var b = customer("2", "候補乙");
-    when(candidates.groups(eq(STORE_ID), any(), any(), any(), any(), anyInt()))
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(candidates.groups(eq(STORE_ID), any(), any(), pageable.capture()))
         .thenReturn(
-            List.of(
-                new CustomerCandidateRepository.Group(ContactType.EMAIL, "Case@example.com", 2),
-                new CustomerCandidateRepository.Group(ContactType.LINE, "Case@example.com", 2)));
+            new PageImpl<>(
+                List.of(
+                    new CustomerCandidateRepository.Group(
+                        ContactType.EMAIL, "Case@example.com", 2)),
+                PageRequest.of(1, 1),
+                2));
     when(candidates.members(eq(STORE_ID), any()))
         .thenReturn(
             List.of(
@@ -105,71 +109,46 @@ class CustomerSearchControllerTest {
     when(contacts.findByStoreIdAndCustomerIdInAndPreferredTrueAndDeletedFalseOrderByIdAsc(
             eq(STORE_ID), any()))
         .thenReturn(List.of(preferred));
-    var body =
-        mvc.perform(
-                get("/customers/duplicates")
-                    .param("size", "1")
-                    .header("X-Store-ID", STORE_ID.toString()))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.content.length()").value(1))
-            .andExpect(jsonPath("$.content[0].matched_type").value("EMAIL"))
-            .andExpect(jsonPath("$.content[0].total").value(2))
-            .andExpect(jsonPath("$.content[0].customers[0].name").value("候補甲"))
-            .andExpect(
-                jsonPath("$.content[0].customers[0].preferred_contacts[0].value")
-                    .value("+819012345678"))
-            .andExpect(jsonPath("$.content[0].customers[0].member_linked").value(false))
-            .andExpect(jsonPath("$.content[0].customers[0].order_count").value(0))
-            .andExpect(jsonPath("$.next_cursor").isString())
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
-    String cursor = json.readTree(body).path("next_cursor").asString();
-    when(candidates.groups(eq(STORE_ID), any(), any(), any(), any(), anyInt()))
-        .thenReturn(List.of());
-    when(candidates.members(eq(STORE_ID), any())).thenReturn(List.of());
     mvc.perform(
             get("/customers/duplicates")
-                .param("cursor", cursor)
+                .param("page", "1")
+                .param("size", "1")
                 .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content").isEmpty())
-        .andExpect(jsonPath("$.next_cursor").doesNotExist());
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].matched_type").value("EMAIL"))
+        .andExpect(jsonPath("$.content[0].total").value(2))
+        .andExpect(jsonPath("$.content[0].customers[0].name").value("候補甲"))
+        .andExpect(
+            jsonPath("$.content[0].customers[0].preferred_contacts[0].value")
+                .value("+819012345678"))
+        .andExpect(jsonPath("$.content[0].customers[0].member_linked").value(false))
+        .andExpect(jsonPath("$.content[0].customers[0].order_count").value(0))
+        .andExpect(jsonPath("$.total_elements").value(2));
+    assertThat(pageable.getValue().getPageNumber()).isEqualTo(1);
+    assertThat(pageable.getValue().getPageSize()).isEqualTo(1);
   }
 
   @Test
   void largeGroupMembersArePagedWithNormalizedInput() throws Exception {
-    var a = customer("1", "候補甲");
     var b = customer("2", "候補乙");
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
     when(candidates.members(
-            eq(STORE_ID), eq(ContactType.PHONE), eq("+819012345678"), any(), anyInt()))
-        .thenReturn(List.of(a, b));
-    var body =
-        mvc.perform(
-                get("/customers/duplicates/customers")
-                    .param("type", "PHONE")
-                    .param("value", "090-1234-5678")
-                    .param("size", "1")
-                    .header("X-Store-ID", STORE_ID.toString()))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.content.length()").value(1))
-            .andExpect(jsonPath("$.content[0].id").value("1"))
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
-    String cursor = json.readTree(body).path("next_cursor").asString();
-    when(candidates.members(
-            eq(STORE_ID), eq(ContactType.PHONE), eq("+819012345678"), eq("1"), anyInt()))
-        .thenReturn(List.of(b));
+            eq(STORE_ID), eq(ContactType.PHONE), eq("+819012345678"), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of(b), PageRequest.of(1, 1), 2));
     mvc.perform(
             get("/customers/duplicates/customers")
                 .param("type", "PHONE")
-                .param("value", "09012345678")
-                .param("cursor", cursor)
+                .param("value", "090-1234-5678")
+                .param("page", "1")
+                .param("size", "1")
                 .header("X-Store-ID", STORE_ID.toString()))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value("2"))
-        .andExpect(jsonPath("$.next_cursor").doesNotExist());
+        .andExpect(jsonPath("$.total_elements").value(2))
+        .andExpect(jsonPath("$.total_pages").value(2));
+    assertThat(pageable.getValue().getPageNumber()).isEqualTo(1);
   }
 
   @Test
@@ -193,23 +172,14 @@ class CustomerSearchControllerTest {
   }
 
   @Test
-  void rejectsInvalidSizesAndCursorsAsClientErrors() throws Exception {
+  void rejectsOutOfRangePagesAsClientErrors() throws Exception {
     for (String endpoint : List.of("/customers/duplicates", "/customers/duplicates/customers")) {
-      for (String size : List.of("0", "-1", "2001")) {
-        mvc.perform(
-                get(endpoint)
-                    .param("type", "LINE")
-                    .param("value", "Case")
-                    .param("size", size)
-                    .header("X-Store-ID", STORE_ID.toString()))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.error").isString());
-      }
       mvc.perform(
               get(endpoint)
                   .param("type", "LINE")
                   .param("value", "Case")
-                  .param("cursor", "bad")
+                  .param("page", "99999999")
+                  .param("size", "100")
                   .header("X-Store-ID", STORE_ID.toString()))
           .andExpect(status().isBadRequest());
     }

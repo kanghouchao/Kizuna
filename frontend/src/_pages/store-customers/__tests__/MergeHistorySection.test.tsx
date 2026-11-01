@@ -8,9 +8,9 @@ jest.mock('@/entities/customer', () => ({
 
 const mockedApi = customerApi as jest.Mocked<typeof customerApi>;
 
-/** 履歴 1 頁分。続きの有無は呼出側が指定する。 */
-function historyPage(rows: unknown[], nextCursor: string | null = null) {
-  return { rows, nextCursor } as never;
+/** 履歴 1 頁分。ページ位置と総ページ数は呼出側が指定する。 */
+function historyPage(rows: unknown[], page = 0, pageCount = 1) {
+  return { rows, page, pageCount, total: rows.length } as never;
 }
 
 /** この顧客が存続行として受けた統合。 */
@@ -113,21 +113,19 @@ describe('MergeHistorySection', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('続きがあれば追加で読み込め、返ったカーソルをそのまま次の要求に渡すこと', async () => {
+  it('ページ送りで次のページを取り直し、前のページの行を残さないこと', async () => {
     // Once の並びで 1 頁目・2 頁目を決める（クリック後に積むと、先に走る要求が既定値を掴む）
     mockedApi.mergeHistory
-      .mockResolvedValueOnce(historyPage([receivedRow], 'cur-1'))
-      .mockResolvedValueOnce(historyPage([absorbedRow]));
+      .mockResolvedValueOnce(historyPage([receivedRow], 0, 2))
+      .mockResolvedValueOnce(historyPage([absorbedRow], 1, 2));
 
     render(<MergeHistorySection customerId="c1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'さらに読み込む' }));
+    fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
 
-    await waitFor(() =>
-      expect(mockedApi.mergeHistory).toHaveBeenLastCalledWith('c1', { cursor: 'cur-1' })
-    );
+    await waitFor(() => expect(mockedApi.mergeHistory).toHaveBeenLastCalledWith('c1', 1));
     expect(await screen.findByRole('row', { name: /cus-new/ })).toBeInTheDocument();
-    expect(screen.getByRole('row', { name: /山田太郎（旧）/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'さらに読み込む' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('row', { name: /山田太郎（旧）/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '次のページ' })).toBeDisabled();
   });
 });

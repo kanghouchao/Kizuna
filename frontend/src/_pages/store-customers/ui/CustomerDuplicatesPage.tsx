@@ -7,7 +7,7 @@ import { ChevronLeftIcon } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { ContactType, CustomerMergeComparisonResponse, customerApi } from '@/entities/customer';
 import { MePending, hasPermission, useMe } from '@/entities/user';
-import { storePath, useCursorList } from '@/shared/lib';
+import { storePath, useListPage } from '@/shared/lib';
 import { CustomerMergeComparison } from './CustomerMergeComparison';
 import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
 import {
@@ -21,6 +21,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  Pager,
   RegionError,
   Table,
   TableBody,
@@ -57,15 +58,15 @@ function CustomerDuplicatesContent() {
   const {
     search,
     rows: groups,
-    setRows: setGroups,
+    page,
+    pageCount,
     isLoading,
     failed,
-    hasMore,
     reload,
-    loadMore,
-  } = useCursorList(
-    (cursor, criteria: { search?: string; type?: ContactType }) =>
-      customerApi.duplicates({ cursor, ...criteria }),
+    onPageChange,
+  } = useListPage(
+    (page, criteria: { search?: string; type?: ContactType }) =>
+      customerApi.duplicates(page, criteria),
     {}
   );
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -115,8 +116,7 @@ function CustomerDuplicatesContent() {
     setIsConfirming(false);
     setSelection(null);
     setSurvivingId(null);
-    setGroups([]);
-    reload();
+    void reload();
   };
 
   const renderRows = (groupKey: string, rows: CustomerMergeComparisonResponse[]) => {
@@ -237,8 +237,7 @@ function CustomerDuplicatesContent() {
           setSelection(null);
           setSurvivingId(null);
           setIsConfirming(false);
-          setGroups([]);
-          search({
+          void search({
             search: searchTerm.trim() || undefined,
             type: type === 'ALL' ? undefined : type,
           });
@@ -281,7 +280,7 @@ function CustomerDuplicatesContent() {
           // 読めなかった候補を空表示にすると「重複は無い」と嘘をつくことになる
           <RegionError
             message="重複候補の取得に失敗しました"
-            onRetry={reload}
+            onRetry={() => void reload()}
             className="justify-center p-8"
           />
         ) : groups.length === 0 ? (
@@ -313,13 +312,14 @@ function CustomerDuplicatesContent() {
             );
           })
         )}
-        {hasMore && (
-          <div className="flex justify-center border-t p-4">
-            <Button variant="outline" onClick={loadMore} disabled={isLoading}>
-              {isLoading ? '読み込み中...' : 'さらに読み込む'}
-            </Button>
-          </div>
-        )}
+        <div className="border-t p-4 empty:hidden">
+          <Pager
+            page={page}
+            pageCount={pageCount}
+            disabled={isLoading}
+            onPageChange={next => void onPageChange(next)}
+          />
+        </div>
       </TableCard>
 
       {/* 確認は候補の取り直しで消えないよう外殻の外に置く */}
@@ -370,22 +370,27 @@ function ExpandedCustomerRows({
   value: string;
   children: (rows: CustomerMergeComparisonResponse[]) => ReactNode;
 }) {
-  const list = useCursorList(cursor => customerApi.duplicateCustomers({ type, value, cursor }));
-  if (list.isLoading) return <p className="p-6">読み込み中...</p>;
+  const list = useListPage(page => customerApi.duplicateCustomers({ type, value }, page));
+  if (list.isLoading && list.rows.length === 0) return <p className="p-6">読み込み中...</p>;
   if (list.failed)
     return (
-      <RegionError message="候補顧客の取得に失敗しました" onRetry={list.reload} className="p-6" />
+      <RegionError
+        message="候補顧客の取得に失敗しました"
+        onRetry={() => void list.reload()}
+        className="p-6"
+      />
     );
   return (
     <>
       {list.rows.length === 0 ? <p className="p-6">該当する顧客はいません</p> : children(list.rows)}
-      {list.hasMore && (
-        <div className="p-4">
-          <Button variant="outline" onClick={list.loadMore}>
-            顧客をさらに読み込む
-          </Button>
-        </div>
-      )}
+      <div className="p-4 empty:hidden">
+        <Pager
+          page={list.page}
+          pageCount={list.pageCount}
+          disabled={list.isLoading}
+          onPageChange={next => void list.onPageChange(next)}
+        />
+      </div>
     </>
   );
 }

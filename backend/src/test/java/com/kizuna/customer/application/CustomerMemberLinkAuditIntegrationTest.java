@@ -51,6 +51,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.support.PersistenceExceptionTranslationInterceptor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -74,6 +76,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 class CustomerMemberLinkAuditIntegrationTest {
   private static final AtomicLong MEMBERS = new AtomicLong(100);
   private static final Long STORE_ID = 1L;
+  private static final PageRequest HISTORY_PAGE =
+      PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "linkedAt", "id"));
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private CustomerMemberLinkService links;
@@ -161,7 +165,7 @@ class CustomerMemberLinkAuditIntegrationTest {
             "operation_reason",
             "release_reason",
             "operator@example.test");
-    assertThat(links.history(STORE_ID, customer, null, 20).content()).hasSize(2);
+    assertThat(links.history(STORE_ID, customer, HISTORY_PAGE).getContent()).hasSize(2);
   }
 
   @Test
@@ -176,7 +180,7 @@ class CustomerMemberLinkAuditIntegrationTest {
     } finally {
       allow();
     }
-    assertThat(links.history(STORE_ID, customer, null, 20).content()).isEmpty();
+    assertThat(links.history(STORE_ID, customer, HISTORY_PAGE).getContent()).isEmpty();
     assertThat(auditCount(customer)).isZero();
   }
 
@@ -275,7 +279,7 @@ class CustomerMemberLinkAuditIntegrationTest {
       assertThat(results.stream().filter(value -> value instanceof ConflictException).count())
           .isEqualTo(1);
     }
-    assertThat(links.history(STORE_ID, customer, null, 20).content()).hasSize(2);
+    assertThat(links.history(STORE_ID, customer, HISTORY_PAGE).getContent()).hasSize(2);
     assertThat(auditCount(customer)).isEqualTo(3);
     assertThat(links.current(STORE_ID, customer).id()).isNotEqualTo(first);
   }
@@ -332,7 +336,7 @@ class CustomerMemberLinkAuditIntegrationTest {
       String loser = firstResult == null ? customerTwo : customerOne;
       assertActiveUnchanged(loser, firstResult == null ? oldTwo : oldOne);
       String winner = firstResult == null ? customerOne : customerTwo;
-      assertThat(links.history(STORE_ID, winner, null, 20).content()).hasSize(2);
+      assertThat(links.history(STORE_ID, winner, HISTORY_PAGE).getContent()).hasSize(2);
       assertThat(auditCount(winner)).isEqualTo(3);
       assertThat(links.current(STORE_ID, winner).memberCode()).isEqualTo(targetCode);
     } finally {
@@ -357,7 +361,7 @@ class CustomerMemberLinkAuditIntegrationTest {
 
   private void assertActiveUnchanged(String customer, String first) {
     assertThat(links.current(STORE_ID, customer).id()).isEqualTo(first);
-    assertThat(links.history(STORE_ID, customer, null, 20).content()).hasSize(1);
+    assertThat(links.history(STORE_ID, customer, HISTORY_PAGE).getContent()).hasSize(1);
     assertThat(
             jdbc.queryForMap(
                 "select status,version,released_at,released_by from t_customer_member_links where id=?",

@@ -6,10 +6,13 @@ import com.kizuna.customer.api.dto.CustomerMemberLinkRequest;
 import com.kizuna.customer.api.dto.CustomerMemberLinkResponse;
 import com.kizuna.customer.application.CustomerMemberLinkService;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +20,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -69,14 +71,16 @@ public class CustomerMemberLinkController {
     return ResponseEntity.ok(customerMemberLinkService.current(storeId, customerId));
   }
 
-  /** 紐づけ履歴。続きは応答の {@code next_cursor} をそのまま {@code cursor} に渡して取る。 */
   @GetMapping("/history")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<CursorPage<CustomerMemberLinkHistoryResponse>> history(
+  public ResponseEntity<Page<CustomerMemberLinkHistoryResponse>> history(
       @CurrentStore Long storeId,
       @PathVariable String customerId,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return ResponseEntity.ok(customerMemberLinkService.history(storeId, customerId, cursor, size));
+      @PageableDefault(
+              size = 20,
+              sort = {"linkedAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return ResponseEntity.ok(customerMemberLinkService.history(storeId, customerId, pageable));
   }
 }

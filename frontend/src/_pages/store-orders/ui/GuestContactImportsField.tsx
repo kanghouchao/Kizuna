@@ -7,15 +7,15 @@ import {
   OrderApplicationDetail,
 } from '@/entities/order';
 import { hasPermission, useMe } from '@/entities/user';
-import { useCursorList } from '@/shared/lib';
+import { useListPage } from '@/shared/lib';
 import {
-  Button,
   Checkbox,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
   Label,
+  Pager,
   RegionError,
   Select,
   SelectContent,
@@ -57,10 +57,10 @@ function ContactChoices({
   customerId?: string;
 }) {
   const { control } = useFormContext();
-  const contacts = useCursorList(cursor =>
+  const contacts = useListPage(page =>
     customerId
-      ? customerApi.contacts(customerId, { cursor, size: 20 })
-      : Promise.resolve({ rows: [], nextCursor: null })
+      ? customerApi.contacts(customerId, page)
+      : Promise.resolve({ rows: [], page: 0, pageCount: 0, total: 0 })
   );
   return (
     <FormField
@@ -165,19 +165,18 @@ function ContactChoices({
               );
             })}
             {contacts.failed && (
-              <RegionError message="既存の連絡先を取得できませんでした" onRetry={contacts.reload} />
+              <RegionError
+                message="既存の連絡先を取得できませんでした"
+                onRetry={() => void contacts.reload()}
+              />
             )}
             {contacts.isLoading && <p>既存の連絡先を読み込み中...</p>}
-            {contacts.hasMore && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={contacts.isLoading}
-                onClick={contacts.loadMore}
-              >
-                連絡先の続きを取得
-              </Button>
-            )}
+            <Pager
+              page={contacts.page}
+              pageCount={contacts.pageCount}
+              disabled={contacts.isLoading}
+              onPageChange={page => void contacts.onPageChange(page)}
+            />
             <FormMessage />
           </FormItem>
         );

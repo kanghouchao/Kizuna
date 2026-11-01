@@ -12,12 +12,12 @@ import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.application.ApplicantService;
 import com.kizuna.recruitment.domain.ApplicantStatus;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -122,11 +122,14 @@ public class ApplicantController {
 
   @GetMapping("/{id}/history")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW')")
-  public CursorPage<ApplicantHistoryResponse> history(
+  public Page<ApplicantHistoryResponse> history(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return applicants.history(storeId, id, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return applicants.history(storeId, id, pageable);
   }
 }
