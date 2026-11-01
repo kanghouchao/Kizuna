@@ -87,6 +87,32 @@ describe('storefrontService', () => {
     });
   });
 
+  describe('fetchReviews', () => {
+    it('ページ条件を付けて公開口コミを取得すること', async () => {
+      const page = { content: [], total_pages: 0, total_elements: 0, size: 10, number: 1 };
+      (serverClient.get as jest.Mock).mockResolvedValue(page);
+
+      const result = await storefrontService.fetchReviews('7', 1, 10);
+
+      expect(serverClient.get).toHaveBeenCalledWith('/reviews/public?page=1&size=10', {
+        headers: { 'X-Store-ID': '7' },
+        cache: 'no-store',
+      });
+      expect(result).toEqual(page);
+    });
+
+    it('エラー時は掲出 0 件と区別できるよう null を返すこと', async () => {
+      (serverClient.get as jest.Mock).mockRejectedValue(new Error('Failed'));
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await storefrontService.fetchReviews('7', 0, 10);
+
+      expect(result).toBeNull();
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
+
   describe('fetchShifts', () => {
     it('serverClient.get を呼び出すこと', async () => {
       const mockShifts = [

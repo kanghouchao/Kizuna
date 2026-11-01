@@ -5,7 +5,10 @@ import { PublicReview } from '../../model/types';
 export const REVIEWS_PER_PAGE = 10;
 
 interface ReviewsSectionProps {
-  reviews: Page<PublicReview>;
+  /** 取得に失敗したときは null。 */
+  reviews: Page<PublicReview> | null;
+  /** 要求したページ（0 起点）。 */
+  page: number;
 }
 
 /** "YYYY-MM-DD" → "YYYY年M月D日"。店舗の現地日付をそのまま読むため Date を経由しない。 */
@@ -16,26 +19,64 @@ const formatDate = (value: string) => {
 
 const pageHref = (index: number) => (index === 0 ? '/reviews' : `/reviews?page=${index + 1}`);
 
+/** 一覧の代わりに出す一文と、あれば回復の導線。 */
+function ReviewsNotice({
+  message,
+  link,
+  alert = false,
+}: {
+  message: string;
+  link?: { href: string; label: string };
+  alert?: boolean;
+}) {
+  return (
+    <section className="py-16 md:py-24 px-5 sm:px-6" style={{ background: 'var(--storefront-bg)' }}>
+      <div
+        role={alert ? 'alert' : undefined}
+        className="max-w-2xl mx-auto flex flex-col items-center gap-6 text-center"
+      >
+        <p
+          className="text-[color-mix(in_srgb,var(--storefront-fg)_70%,transparent)] text-base md:text-lg font-light tracking-[0.15em]"
+          style={{ fontFamily: 'var(--storefront-font-display)' }}
+        >
+          {message}
+        </p>
+        {link && (
+          <Link
+            href={link.href}
+            className="text-xs tracking-[0.2em] text-[var(--storefront-accent)] px-5 py-2 border border-[color-mix(in_srgb,var(--storefront-accent)_40%,transparent)] hover:bg-[var(--storefront-accent)] hover:text-[var(--storefront-bg)] transition-colors duration-300"
+          >
+            {link.label}
+          </Link>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /**
  * 掲出中の口コミ一覧（Server Component）。
  * 本文はテキストとして出力し（記法として解釈しない）、受付時の改行を保って表示する。
  */
-export default function ReviewsSection({ reviews }: ReviewsSectionProps) {
-  if (reviews.content.length === 0) {
+export default function ReviewsSection({ reviews, page }: ReviewsSectionProps) {
+  if (reviews === null) {
     return (
-      <section
-        className="py-16 md:py-24 px-5 sm:px-6"
-        style={{ background: 'var(--storefront-bg)' }}
-      >
-        <div className="max-w-2xl mx-auto text-center">
-          <p
-            className="text-[color-mix(in_srgb,var(--storefront-fg)_70%,transparent)] text-base md:text-lg font-light tracking-[0.15em]"
-            style={{ fontFamily: 'var(--storefront-font-display)' }}
-          >
-            掲載中の口コミはありません
-          </p>
-        </div>
-      </section>
+      <ReviewsNotice
+        alert
+        message="口コミを読み込めませんでした"
+        link={{ href: pageHref(page), label: '再読み込み' }}
+      />
+    );
+  }
+  if (reviews.content.length === 0) {
+    // 掲出が減ってページ数が縮むと、開いていたページだけが空になる
+    return reviews.total_elements > 0 ? (
+      <ReviewsNotice
+        message="このページに口コミはありません"
+        link={{ href: pageHref(0), label: '最初のページへ' }}
+      />
+    ) : (
+      <ReviewsNotice message="掲載中の口コミはありません" />
     );
   }
 

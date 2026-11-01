@@ -27,7 +27,7 @@ export default async function ModernReviewsPage({
       <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
       <main className="grow">
         <PageHero title="口コミ" />
-        <ReviewsSection reviews={reviews} />
+        <ReviewsSection reviews={reviews} page={page} />
       </main>
       <Footer
         storeName={storeName}
