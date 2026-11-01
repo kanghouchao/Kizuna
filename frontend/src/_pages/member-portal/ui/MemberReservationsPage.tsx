@@ -123,6 +123,8 @@ export function MemberReservationsPage() {
             <Pager
               page={list.page}
               pageCount={list.pageCount}
+              total={list.total}
+              rowCount={list.rows.length}
               disabled={loading}
               onPageChange={page => void list.onPageChange(page)}
             />

@@ -288,7 +288,7 @@ test('監査履歴はページ番号で送り、検索条件を保ったまま�
     .mockResolvedValueOnce({ rows: [event(2, 'SECOND_PAGE')], page: 1, pageCount: 2, total: 51 });
   render(<AuditEventsPage />);
   expect(await screen.findByText('FIRST_PAGE')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('SECOND_PAGE')).toBeInTheDocument();
   expect(audit.list).toHaveBeenLastCalledWith(1, '');
 });
@@ -309,7 +309,7 @@ test('実行履歴はページ番号で送り、次のページを取り直す',
     });
   render(<TaskExecutionsPage />);
   expect(await screen.findByText('一頁目の処理')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('二頁目の処理')).toBeInTheDocument();
   expect(tasks.list).toHaveBeenLastCalledWith(1);
 });

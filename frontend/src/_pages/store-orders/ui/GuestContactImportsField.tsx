@@ -174,6 +174,8 @@ function ContactChoices({
             <Pager
               page={contacts.page}
               pageCount={contacts.pageCount}
+              total={contacts.total}
+              rowCount={contacts.rows.length}
               disabled={contacts.isLoading}
               onPageChange={page => void contacts.onPageChange(page)}
             />

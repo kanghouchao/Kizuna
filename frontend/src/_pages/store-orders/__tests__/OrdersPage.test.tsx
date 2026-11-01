@@ -320,7 +320,7 @@ describe('作業キューの描画', () => {
     render(<OrderListPage />);
 
     await screen.findByText('山田太郎');
-    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
 
     await waitFor(() =>
       expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(

@@ -137,7 +137,7 @@ Then('取消アーカイブに理由 {string} の行が現れる', async ({ page
   // 行が描画済みのときだけ次ページへ進む（読み込み中に押すとページを飛ばす）。
   const section = toggle.locator('..');
   const row = section.getByText(reason, { exact: false });
-  const next = section.getByRole('button', { name: '次のページ', exact: true });
+  const next = section.getByRole('button', { name: '次へ', exact: true });
   await expect
     .poll(
       async () => {

@@ -214,7 +214,7 @@ it('明細はページ番号で送り、次のページを取り直す', async (
     });
   render(<AdminMemberDetailPage />);
   expect(await screen.findByText('一頁目')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('二頁目')).toBeInTheDocument();
   expect(api.pointEntries).toHaveBeenLastCalledWith(7, { page: 1, size: 20 });
 });

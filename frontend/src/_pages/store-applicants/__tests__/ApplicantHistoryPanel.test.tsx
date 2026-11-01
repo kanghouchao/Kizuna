@@ -22,7 +22,7 @@ it('選考履歴をページ番号で送り、次のページを取り直す', a
     .mockResolvedValueOnce({ rows: [row('h2', '二件目')], page: 1, pageCount: 2, total: 2 });
   render(<ApplicantHistoryPanel id="a" />);
   expect(await screen.findByText('一件目')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('二件目')).toBeInTheDocument();
   expect(screen.queryByText('一件目')).not.toBeInTheDocument();
   expect(applicantApi.history).toHaveBeenLastCalledWith('a', 1);

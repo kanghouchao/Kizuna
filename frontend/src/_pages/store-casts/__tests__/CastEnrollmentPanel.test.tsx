@@ -90,7 +90,7 @@ it('履歴をページ送りで取り直し、失敗時はその領域から再�
     screen.getByRole('heading', { name: '内部情報の編集履歴', level: 2 }).closest('summary')!
   );
   const historyRegion = screen.getByRole('region', { name: '在籍履歴' });
-  fireEvent.click(await within(historyRegion).findByRole('button', { name: '次のページ' }));
+  fireEvent.click((await within(historyRegion).findAllByRole('button', { name: '次へ' }))[0]);
   expect(await screen.findByText('入店（在籍中）')).toBeInTheDocument();
   expect(screen.queryByText('在籍中 → 在籍停止')).not.toBeInTheDocument();
   expect(api.statusHistories).toHaveBeenLastCalledWith('e1', 1);

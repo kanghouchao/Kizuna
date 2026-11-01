@@ -60,6 +60,7 @@ function CustomerDuplicatesContent() {
     rows: groups,
     page,
     pageCount,
+    total: groupTotal,
     isLoading,
     failed,
     reload,
@@ -316,6 +317,8 @@ function CustomerDuplicatesContent() {
           <Pager
             page={page}
             pageCount={pageCount}
+            total={groupTotal}
+            rowCount={groups.length}
             disabled={isLoading}
             onPageChange={next => void onPageChange(next)}
           />
@@ -387,6 +390,8 @@ function ExpandedCustomerRows({
         <Pager
           page={list.page}
           pageCount={list.pageCount}
+          total={list.total}
+          rowCount={list.rows.length}
           disabled={list.isLoading}
           onPageChange={next => void list.onPageChange(next)}
         />

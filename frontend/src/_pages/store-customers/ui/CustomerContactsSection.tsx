@@ -208,6 +208,8 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
           <Pager
             page={contacts.page}
             pageCount={contacts.pageCount}
+            total={contacts.total}
+            rowCount={contacts.rows.length}
             disabled={contacts.isLoading}
             onPageChange={page => void contacts.onPageChange(page)}
           />
@@ -256,6 +258,8 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
           <Pager
             page={history.page}
             pageCount={history.pageCount}
+            total={history.total}
+            rowCount={history.rows.length}
             disabled={history.isLoading}
             onPageChange={page => void history.onPageChange(page)}
           />

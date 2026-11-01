@@ -33,8 +33,8 @@ it('変更履歴をページ番号で送り、次のページを取り直す', a
     .mockResolvedValueOnce(page([change('b')], 1, 2));
   render(<CostHistory month="2026-09" />);
   expect(await screen.findByText('cost-a')).toBeInTheDocument();
-  expect(screen.getByText('1 / 2')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  expect(screen.getByRole('button', { name: '1', current: 'page' })).toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('cost-b')).toBeInTheDocument();
   expect(screen.queryByText('cost-a')).not.toBeInTheDocument();
   await waitFor(() => expect(advertisingApi.changes).toHaveBeenLastCalledWith('2026-09', 1));
@@ -43,5 +43,5 @@ it('1 ページに収まる履歴ではページ送りを出さない', async ()
   jest.mocked(advertisingApi.changes).mockResolvedValue(page([change('a')], 0, 1));
   render(<CostHistory month="2026-09" />);
   expect(await screen.findByText('cost-a')).toBeInTheDocument();
-  expect(screen.queryByRole('navigation', { name: 'ページ送り' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('navigation', { name: 'ページネーション' })).not.toBeInTheDocument();
 });

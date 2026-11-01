@@ -90,6 +90,8 @@ function History({ orderId }: { orderId: string }) {
       <Pager
         page={list.page}
         pageCount={list.pageCount}
+        total={list.total}
+        rowCount={list.rows.length}
         disabled={list.isLoading}
         onPageChange={page => void list.onPageChange(page)}
       />

@@ -63,6 +63,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
     rows: history,
     page,
     pageCount,
+    total: historyTotal,
     isLoading,
     failed,
     reload,
@@ -356,6 +357,8 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
           <Pager
             page={page}
             pageCount={pageCount}
+            total={historyTotal}
+            rowCount={history.length}
             disabled={isLoading}
             onPageChange={next => void onPageChange(next)}
           />

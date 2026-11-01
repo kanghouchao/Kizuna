@@ -122,6 +122,8 @@ export function CastEnrollmentPanel({
               <Pager
                 page={history.page}
                 pageCount={history.pageCount}
+                total={history.total}
+                rowCount={history.rows.length}
                 disabled={history.isLoading}
                 onPageChange={page => void history.onPageChange(page)}
               />
@@ -171,6 +173,8 @@ export function CastEnrollmentPanel({
               <Pager
                 page={snapshots.page}
                 pageCount={snapshots.pageCount}
+                total={snapshots.total}
+                rowCount={snapshots.rows.length}
                 disabled={snapshots.isLoading}
                 onPageChange={page => void snapshots.onPageChange(page)}
               />

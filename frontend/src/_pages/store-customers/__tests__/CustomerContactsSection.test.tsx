@@ -263,7 +263,7 @@ test('連絡先と履歴はそれぞれのページ送りで次のページを�
     );
   render(<CustomerContactsSection customerId="customer1" />);
   expect(await screen.findByText('+819011111111')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('+819022222222')).toBeInTheDocument();
   expect(screen.queryByText('+819011111111')).not.toBeInTheDocument();
   expect(customerApi.contacts).toHaveBeenLastCalledWith('customer1', 1);

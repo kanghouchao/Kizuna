@@ -315,11 +315,11 @@ describe('MemberLinkSection', () => {
 
     render(<MemberLinkSection customerId="c1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: '次へ' }))[0]);
 
     expect(await screen.findByText('999999999999')).toBeInTheDocument();
     expect(mockedApi.memberLinkHistory).toHaveBeenNthCalledWith(2, 'c1', 1);
-    expect(screen.getByRole('button', { name: '次のページ' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: '次へ' })[0]).toBeDisabled();
   });
 
   it('解除は確認ダイアログの実行でのみ API を呼ぶこと', async () => {

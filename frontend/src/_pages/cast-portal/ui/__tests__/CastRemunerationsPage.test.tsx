@@ -145,8 +145,8 @@ it('retries history failures and pages through the history', async () => {
   await screen.findByText('報酬明細の取得に失敗しました');
   expect(screen.queryByText('変更履歴はありません')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /再試行/ }));
-  fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
-  expect(await screen.findByText('2 / 2')).toBeInTheDocument();
+  fireEvent.click((await screen.findAllByRole('button', { name: '次へ' }))[0]);
+  expect(await screen.findByRole('button', { name: '2', current: 'page' })).toBeInTheDocument();
   expect(selfRemunerationApi.changes).toHaveBeenLastCalledWith('order', 1);
 });
 it('shows empty results without treating them as errors', async () => {

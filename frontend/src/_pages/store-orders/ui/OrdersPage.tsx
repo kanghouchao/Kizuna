@@ -292,6 +292,8 @@ export default function OrderListPage() {
         <Pager
           page={inbox.page}
           pageCount={inbox.pageCount}
+          total={inbox.total}
+          rowCount={inbox.rows.length}
           disabled={inbox.isLoading}
           onPageChange={page => void inbox.onPageChange(page)}
         />
@@ -324,6 +326,8 @@ export default function OrderListPage() {
         <Pager
           page={queue.page}
           pageCount={queue.pageCount}
+          total={queue.total}
+          rowCount={queue.rows.length}
           disabled={queue.isLoading}
           onPageChange={page => void queue.onPageChange(page)}
         />

@@ -510,7 +510,7 @@ test('添付画像一覧はページ送りで次のページを取り直す', as
     );
   render(<ApplicantAttachmentsPanel id="a" canManage={false} editable />);
   expect(await screen.findByText(/PNG・1 KB/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText(/JPEG・2 KB/)).toBeInTheDocument();
   expect(screen.queryByText(/PNG・1 KB/)).not.toBeInTheDocument();
   expect(readyList).toHaveBeenLastCalledWith('a', 1);

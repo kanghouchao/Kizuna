@@ -63,6 +63,7 @@ export function MemberPointsPage() {
     failed: entriesFailed,
     page,
     pageCount,
+    total: entryTotal,
     reload: reloadEntries,
     onPageChange,
   } = useListPage<MemberPointEntry>(page => memberPointApi.entries(page));
@@ -120,6 +121,8 @@ export function MemberPointsPage() {
             <Pager
               page={page}
               pageCount={pageCount}
+              total={entryTotal}
+              rowCount={entries.length}
               disabled={entriesLoading}
               onPageChange={next => void onPageChange(next)}
             />

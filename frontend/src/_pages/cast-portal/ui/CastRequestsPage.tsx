@@ -97,6 +97,7 @@ export function CastRequestsPage() {
     rows: history,
     page: historyPage,
     pageCount: historyPageCount,
+    total: historyTotal,
     isLoading: historyLoading,
     failed: historyFailed,
     reload: reloadHistory,
@@ -330,6 +331,8 @@ export function CastRequestsPage() {
             <Pager
               page={historyPage}
               pageCount={historyPageCount}
+              total={historyTotal}
+              rowCount={history.length}
               disabled={historyLoading}
               onPageChange={page => void changeHistoryPage(page)}
             />

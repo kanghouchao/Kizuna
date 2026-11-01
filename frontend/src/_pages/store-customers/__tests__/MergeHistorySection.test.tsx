@@ -121,11 +121,11 @@ describe('MergeHistorySection', () => {
 
     render(<MergeHistorySection customerId="c1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: '次へ' }))[0]);
 
     await waitFor(() => expect(mockedApi.mergeHistory).toHaveBeenLastCalledWith('c1', 1));
     expect(await screen.findByRole('row', { name: /cus-new/ })).toBeInTheDocument();
     expect(screen.queryByRole('row', { name: /山田太郎（旧）/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '次のページ' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: '次へ' })[0]).toBeDisabled();
   });
 });
