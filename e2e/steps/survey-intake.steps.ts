@@ -303,7 +303,7 @@ Then(
       })
     ).json();
     expect(history.content[0].type).toBe("CORRECTION_LINKED");
-    expect(history.next_cursor).toBeTruthy();
+    expect(history.total_pages).toBeGreaterThan(1);
     const list = await (
       await request.get(`${revisionPath()}/responses`, { headers: headers() })
     ).json();

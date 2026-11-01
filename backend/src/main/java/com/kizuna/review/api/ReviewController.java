@@ -19,10 +19,12 @@ import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -154,13 +156,12 @@ public class ReviewController {
 
   @GetMapping("/{id}/history")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW')")
-  public CursorPage<ReviewHistoryResponse> history(
+  public Page<ReviewHistoryResponse> history(
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return reviews.history(storeId, auth.getName(), id, cursor, size);
+      @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+    return reviews.history(storeId, auth.getName(), id, pageable);
   }
 
   private ReviewWriteResponse change(Long storeId, String email, ReviewChange change) {

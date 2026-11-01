@@ -22,6 +22,7 @@ import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeState;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.RemunerationChange;
+import com.kizuna.remuneration.domain.RemunerationChangeRepository;
 import com.kizuna.remuneration.domain.RemunerationRequest;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
@@ -50,6 +51,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -87,6 +90,7 @@ class RemunerationControllerTest {
 
   @Autowired MockMvc mvc;
   @MockitoBean RemunerationRecords records;
+  @MockitoBean RemunerationChangeRepository changes;
   @MockitoBean RemunerationPersonLookup people;
   @MockitoBean OrderRemunerationFacts orders;
   @MockitoBean AttendanceFacts attendances;
@@ -294,5 +298,27 @@ class RemunerationControllerTest {
                 .param("month", "2026-09")
                 .param("size", size))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void changeHistoriesArePagesNewestFirst() throws Exception {
+    when(records.bonus(1L, "b")).thenReturn(new BonusAward(34L, DAY, 1000, "付与"));
+    when(records.term(1L, "g"))
+        .thenReturn(new GuaranteeTerm(34L, DAY, GuaranteeState.ACTIVE, 10000L, "日額"));
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(changes.findByStoreIdAndResourceTypeAndResourceId(
+            eq(1L), any(), any(), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    for (String base : List.of("/bonus-awards/b", "/remuneration-guarantees/g"))
+      mvc.perform(get(base + "/changes").header("X-Store-ID", "1"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.total_elements").value(0));
+    verify(changes).findByStoreIdAndResourceTypeAndResourceId(eq(1L), eq("BONUS"), eq("b"), any());
+    verify(changes)
+        .findByStoreIdAndResourceTypeAndResourceId(eq(1L), eq("GUARANTEE"), eq("g"), any());
+    assertThat(pageable.getAllValues())
+        .allSatisfy(
+            p ->
+                assertThat(p.getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id")));
   }
 }

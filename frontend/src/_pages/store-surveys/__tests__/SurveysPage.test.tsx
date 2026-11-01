@@ -104,7 +104,7 @@ function fixtures() {
     active_records: 1,
     withdrawn_records: 0,
   });
-  api.history.mockResolvedValue({ rows: [], nextCursor: null });
+  api.history.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 }
 async function showRevision() {
   fireEvent.click(await screen.findByRole('button', { name: '版と回答' }));
@@ -177,6 +177,29 @@ test('閲覧のみでは設問版・回答・記録件数を確認し、管理�
   fireEvent.click(screen.getByRole('button', { name: '回答・履歴' }));
   expect(await screen.findByText('保護された原回答')).toBeVisible();
   expect(screen.queryByRole('button', { name: '回答を訂正' })).not.toBeInTheDocument();
+});
+
+test('版の操作履歴をページ番号で送り、次のページを取り直す', async () => {
+  fixtures();
+  const event = (id: string, reason: string) => ({
+    id,
+    type: 'OPENED' as const,
+    created_at: '2026-01-01T00:00:00Z',
+    actor: { id: '1', display_name: '担当' },
+    after_version: 1,
+    after_status: 'OPEN',
+    reason,
+  });
+  api.history
+    .mockResolvedValueOnce({ rows: [event('h2', '新しい操作')], page: 0, pageCount: 2, total: 2 })
+    .mockResolvedValueOnce({ rows: [event('h1', '古い操作')], page: 1, pageCount: 2, total: 2 });
+  render(<SurveysPage />);
+  await showRevision();
+  const section = screen.getByRole('heading', { name: '操作履歴' }).closest('section')!;
+  expect(await within(section).findByText('新しい操作')).toBeVisible();
+  fireEvent.click(within(section).getByRole('button', { name: '次のページ' }));
+  expect(await within(section).findByText('古い操作')).toBeVisible();
+  expect(api.history).toHaveBeenLastCalledWith({ sid: '10', rid: '20' }, 1);
 });
 
 test('受付権限は設問管理を含まず、任意回答を省略して原文と取得時刻を送る', async () => {

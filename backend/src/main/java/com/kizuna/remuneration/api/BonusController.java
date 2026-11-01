@@ -8,11 +8,13 @@ import com.kizuna.remuneration.api.dto.RemunerationRequests.BonusCreateRequest;
 import com.kizuna.remuneration.api.dto.RemunerationRequests.CancellationRequest;
 import com.kizuna.remuneration.application.RemunerationManagementService;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -77,11 +79,14 @@ public class BonusController {
 
   @GetMapping("/{id}/changes")
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE') and hasAuthority('PERM_REMUNERATION_VIEW')")
-  public CursorPage<RemunerationChangeResponse> history(
+  public Page<RemunerationChangeResponse> history(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.bonusChanges(storeId, id, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return service.bonusChanges(storeId, id, pageable);
   }
 }

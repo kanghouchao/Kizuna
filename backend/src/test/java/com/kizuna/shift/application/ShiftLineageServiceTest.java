@@ -3,14 +3,12 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.shift.api.dto.ShiftDetailResponse;
 import com.kizuna.shift.api.dto.ShiftRequestLineageResponse;
 import com.kizuna.shift.domain.Attendance;
@@ -40,6 +38,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @ExtendWith(MockitoExtension.class)
 class ShiftLineageServiceTest {
@@ -206,7 +209,7 @@ class ShiftLineageServiceTest {
   }
 
   @Test
-  @DisplayName("変更申請履歴が新しい順に返り、続きのカーソルが出ること")
+  @DisplayName("変更申請履歴は変更申請だけを店舗とシフトで絞って取り、実行者名を添えること")
   void changeRequestsArePagedNewestFirst() {
     when(shiftRepository.existsByIdAndStoreId(SHIFT_ID, STORE_ID)).thenReturn(true);
     ShiftRequest newer = request(ShiftRequestType.CHANGE, ShiftRequestStatus.APPROVED);
@@ -215,20 +218,20 @@ class ShiftLineageServiceTest {
     ShiftRequest older = request(ShiftRequestType.CHANGE, ShiftRequestStatus.DECLINED);
     older.setId("request-older");
     older.setCreatedAt(OffsetDateTime.parse("2026-08-16T12:00:00+09:00"));
-    // 上限より 1 件多く返すことで「続きがある」を伝える契約なので、size=1 に対して 2 件返す。
-    when(shiftRequestRepository.findChangeHistoryByShiftId(eq(STORE_ID), eq(SHIFT_ID), any()))
-        .thenReturn(List.of(newer, older));
+    Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+    when(shiftRequestRepository.findByStoreIdAndShiftIdAndType(
+            STORE_ID, SHIFT_ID, ShiftRequestType.CHANGE, pageable))
+        .thenReturn(new PageImpl<>(List.of(newer, older), pageable, 3));
     when(userRepository.findAllById(any())).thenReturn(List.of(user(APPROVER_ID, "承認した店長")));
 
-    CursorPage<ShiftRequestLineageResponse> page =
-        shiftLineageService.changeRequests(STORE_ID, SHIFT_ID, null, 1);
+    Page<ShiftRequestLineageResponse> page =
+        shiftLineageService.changeRequests(STORE_ID, SHIFT_ID, pageable);
 
-    assertThat(page.content())
+    assertThat(page.getContent())
         .extracting(ShiftRequestLineageResponse::getId)
-        .as("上限を超えた分は返さず、新しい順であること")
-        .containsExactly("request-newer");
-    assertThat(page.nextCursor()).as("続きがあればカーソルが出ること").isNotBlank();
-    assertThat(page.content().getFirst().getProcessedBy().getName()).isEqualTo("承認した店長");
+        .containsExactly("request-newer", "request-older");
+    assertThat(page.getTotalElements()).isEqualTo(3);
+    assertThat(page.getContent().getFirst().getProcessedBy().getName()).isEqualTo("承認した店長");
   }
 
   @Test
@@ -236,7 +239,8 @@ class ShiftLineageServiceTest {
   void changeRequestsOfUnknownShiftIsNotFound() {
     when(shiftRepository.existsByIdAndStoreId(SHIFT_ID, STORE_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> shiftLineageService.changeRequests(STORE_ID, SHIFT_ID, null, 50))
+    assertThatThrownBy(
+            () -> shiftLineageService.changeRequests(STORE_ID, SHIFT_ID, PageRequest.of(0, 50)))
         .as("空の履歴を返すと、他店舗のシフト id と存在しない id が区別できなくなる")
         .isInstanceOf(NotFoundException.class);
   }

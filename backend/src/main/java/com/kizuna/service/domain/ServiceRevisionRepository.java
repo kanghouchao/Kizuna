@@ -6,7 +6,6 @@ import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
@@ -15,11 +14,8 @@ public interface ServiceRevisionRepository extends StoreScopedRepository<Service
   Optional<ServiceRevision> findByStoreIdAndServiceIdAndRevisionNumber(
       Long storeId, String serviceId, long revisionNumber);
 
-  List<ServiceRevision> findByStoreIdAndServiceIdOrderByRevisionNumberDesc(
-      Long storeId, String serviceId, Limit limit);
-
-  List<ServiceRevision> findByStoreIdAndServiceIdAndRevisionNumberLessThanOrderByRevisionNumberDesc(
-      Long storeId, String serviceId, long revisionNumber, Limit limit);
+  Page<ServiceRevision> findByStoreIdAndServiceId(
+      Long storeId, String serviceId, Pageable pageable);
 
   String SPECIAL_SELECT =
       """

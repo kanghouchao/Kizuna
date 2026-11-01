@@ -57,6 +57,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor.SpecificationFluentQuery;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
@@ -394,9 +395,7 @@ class ReviewApplicationTest {
             ArgumentMatchers
                 .<Function<? super SpecificationFluentQuery<ReviewHistory>, Object>>any()))
         .thenReturn(new PageImpl<>(List.of()));
-    assertThat(service.history(STORE_ID, "actor", id, null, 20).content()).isEmpty();
-    assertThatThrownBy(() -> service.history(STORE_ID, "actor", id, null, 101))
-        .isInstanceOf(ServiceException.class);
-    assertThat(service.history(STORE_ID, "actor", id, "MTIz", 1).content()).isEmpty();
+    assertThat(service.history(STORE_ID, "actor", id, PageRequest.of(0, 20)).getContent())
+        .isEmpty();
   }
 }

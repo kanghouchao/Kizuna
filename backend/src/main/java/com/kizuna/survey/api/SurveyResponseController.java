@@ -1,7 +1,6 @@
 package com.kizuna.survey.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.survey.api.dto.SurveyAnswerActionRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerCorrectionRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerHistoryResponse;
@@ -11,6 +10,10 @@ import com.kizuna.survey.application.SurveyReadService;
 import com.kizuna.survey.application.SurveyService;
 import com.kizuna.survey.domain.SurveyCommand;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -19,7 +22,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -68,12 +70,11 @@ public class SurveyResponseController {
 
   @GetMapping("/history")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
-  public CursorPage<SurveyAnswerHistoryResponse> answerHistory(
+  public Page<SurveyAnswerHistoryResponse> answerHistory(
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String aid,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return reads.answerHistory(storeId, auth.getName(), aid, cursor, size);
+      @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+    return reads.answerHistory(storeId, auth.getName(), aid, pageable);
   }
 }

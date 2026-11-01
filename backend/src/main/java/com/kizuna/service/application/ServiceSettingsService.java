@@ -15,7 +15,6 @@ import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -24,9 +23,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -151,21 +150,9 @@ public class ServiceSettingsService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<ServiceRevisionResponse> history(
-      Long storeId, String id, String cursor, int requestedSize) {
+  public Page<ServiceRevisionResponse> history(Long storeId, String id, Pageable pageable) {
     require(storeId, id);
-    int size = CursorPage.clampSize(requestedSize);
-    var limit = Limit.of(size + 1);
-    var found =
-        cursor == null
-            ? revisions.findByStoreIdAndServiceIdOrderByRevisionNumberDesc(storeId, id, limit)
-            : revisions.findByStoreIdAndServiceIdAndRevisionNumberLessThanOrderByRevisionNumberDesc(
-                storeId, id, decodeVersion(cursor), limit);
-    return CursorPage.of(
-            found,
-            size,
-            revision -> PageCursor.encodeKey(Long.toString(revision.getRevisionNumber())))
-        .map(mapper::revision);
+    return revisions.findByStoreIdAndServiceId(storeId, id, pageable).map(mapper::revision);
   }
 
   private static String changedFields(ServiceTerms before, ServiceTerms after) {
@@ -192,16 +179,6 @@ public class ServiceSettingsService {
         String.valueOf(item.getRevisionNumber()),
         "terms_version",
         String.valueOf(item.getTermsVersion()));
-  }
-
-  private static long decodeVersion(String cursor) {
-    try {
-      long version = Long.parseLong(PageCursor.decodeKey(cursor));
-      if (version < 1) throw new NumberFormatException();
-      return version;
-    } catch (NumberFormatException exception) {
-      throw new ServiceException("続きの位置（cursor）が不正です");
-    }
   }
 
   private ServiceItem require(Long storeId, String id) {

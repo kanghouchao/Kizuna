@@ -1,5 +1,6 @@
 package com.kizuna.review.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -7,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.review.application.ReviewService;
@@ -14,12 +16,17 @@ import com.kizuna.review.domain.ReviewChange;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -84,5 +91,25 @@ class ReviewControllerTest {
         .andExpect(status().isOk());
 
     verify(reviews).change(eq(STORE_ID), eq("user"), any(ReviewChange.class));
+  }
+
+  @Test
+  @DisplayName("口コミの履歴は新しい順の Page で返すこと")
+  @WithMockUser(authorities = "PERM_REVIEW_VIEW")
+  void historyIsAPageNewestFirst() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(reviews.history(eq(STORE_ID), eq("user"), eq("101"), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    mockMvc
+        .perform(
+            get("/reviews/101/history")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+
+    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "id"));
   }
 }

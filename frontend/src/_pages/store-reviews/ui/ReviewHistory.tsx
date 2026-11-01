@@ -1,14 +1,14 @@
 import { reviewApi } from '@/entities/review';
-import { useCursorList } from '@/shared/lib';
-import { Button, RegionError } from '@/shared/ui';
+import { useListPage } from '@/shared/lib';
+import { Pager, RegionError } from '@/shared/ui';
 import { operations, time, publicationSummary } from './labels';
 export function ReviewHistory({ id }: { id: string }) {
-  const history = useCursorList(cursor => reviewApi.history(id, cursor));
+  const history = useListPage(page => reviewApi.history(id, page));
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">操作履歴</h2>
       {history.failed ? (
-        <RegionError message="履歴を取得できませんでした" onRetry={history.reload} />
+        <RegionError message="履歴を取得できませんでした" onRetry={() => void history.reload()} />
       ) : history.isLoading ? (
         <p>読み込み中...</p>
       ) : history.rows.length === 0 ? (
@@ -30,10 +30,13 @@ export function ReviewHistory({ id }: { id: string }) {
           ))}
         </ol>
       )}
-      {history.hasMore && !history.failed && (
-        <Button variant="outline" disabled={history.isLoading} onClick={history.loadMore}>
-          履歴をさらに表示
-        </Button>
+      {!history.failed && (
+        <Pager
+          page={history.page}
+          pageCount={history.pageCount}
+          disabled={history.isLoading}
+          onPageChange={page => void history.onPageChange(page)}
+        />
       )}
     </section>
   );

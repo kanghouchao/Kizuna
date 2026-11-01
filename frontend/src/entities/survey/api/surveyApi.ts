@@ -1,10 +1,4 @@
-import {
-  apiClient,
-  fromSpringPage,
-  fromCursorPage,
-  PageResult,
-  CursorPageResult,
-} from '@/shared/api';
+import { apiClient, fromSpringPage, PageResult } from '@/shared/api';
 import {
   Survey,
   SurveySummary,
@@ -50,13 +44,13 @@ export const surveyApi = {
     (await apiClient.get(`${revisionPath(sid, rid)}/response-counts`)).data,
   history: async (
     target: { sid: string; rid: string } | { aid: string },
-    cursor?: string
-  ): Promise<CursorPageResult<SurveyHistory>> =>
-    fromCursorPage(
+    page = 0
+  ): Promise<PageResult<SurveyHistory>> =>
+    fromSpringPage(
       (
         await apiClient.get(
           `${'aid' in target ? `${responses}/${target.aid}` : revisionPath(target.sid, target.rid)}/history`,
-          { params: { size: 20, cursor } }
+          { params: { page, size: 20 } }
         )
       ).data
     ),

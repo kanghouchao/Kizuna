@@ -16,7 +16,6 @@ import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -24,6 +23,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -136,22 +136,28 @@ public class CastController {
 
   @GetMapping("/{id}/status-histories")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public CursorPage<CastEnrollmentStatusHistoryResponse> history(
+  public Page<CastEnrollmentStatusHistoryResponse> history(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return enrollmentService.history(storeId, id, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"recordedAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return enrollmentService.history(storeId, id, pageable);
   }
 
   @GetMapping("/{id}/snapshots")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
-  public CursorPage<CastEnrollmentSnapshotResponse> snapshots(
+  public Page<CastEnrollmentSnapshotResponse> snapshots(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
-    return enrollmentService.snapshots(storeId, id, cursor, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"recordedAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return enrollmentService.snapshots(storeId, id, pageable);
   }
 
   @GetMapping("/public")

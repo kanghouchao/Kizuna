@@ -23,6 +23,7 @@ import com.kizuna.remuneration.api.dto.RemunerationRequests.GuaranteeCorrectionR
 import com.kizuna.remuneration.api.dto.RemunerationRequests.GuaranteeCreateRequest;
 import com.kizuna.remuneration.domain.DailyGuarantee.Status;
 import com.kizuna.remuneration.domain.GuaranteeState;
+import com.kizuna.remuneration.domain.RemunerationChangeRepository;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
@@ -70,6 +71,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -90,6 +94,8 @@ import tools.jackson.databind.json.JsonMapper;
 @EnabledIfIntegration
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RemunerationIntegrationTest {
+  private static final PageRequest NEWEST_FIRST =
+      PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
   private AnnotationConfigApplicationContext context;
   private EntityManager em;
   private JdbcTemplate jdbc;
@@ -265,7 +271,10 @@ class RemunerationIntegrationTest {
                 DAY, GuaranteeState.ACTIVE, 12000L, "日額", "転記訂正", 1L, UUID.randomUUID()),
             email);
     assertThat(corrected.version()).isEqualTo(2);
-    assertThat(management.guaranteeChanges(storeId, created.guarantee().id(), null, 20).content())
+    assertThat(
+            management
+                .guaranteeChanges(storeId, created.guarantee().id(), NEWEST_FIRST)
+                .getContent())
         .hasSize(2);
     var bonus =
         management
@@ -288,7 +297,7 @@ class RemunerationIntegrationTest {
         changed.id(),
         new CancellationRequest("誤記取消", changed.version(), UUID.randomUUID()),
         email);
-    assertThat(management.bonusChanges(storeId, bonus.id(), null, 20).content()).hasSize(3);
+    assertThat(management.bonusChanges(storeId, bonus.id(), NEWEST_FIRST).getContent()).hasSize(3);
     assertThat(statements.store(storeId, personId, "2026-09", 0, 0, 20).bonusTotal()).isZero();
     management.cancelGuarantee(
         storeId,
@@ -320,9 +329,9 @@ class RemunerationIntegrationTest {
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> management.guarantees(storeId + 100000, personId, 0, 20))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> management.bonusChanges(storeId + 100000, bonus.id(), null, 20))
+    assertThatThrownBy(() -> management.bonusChanges(storeId + 100000, bonus.id(), NEWEST_FIRST))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> management.guaranteeChanges(storeId + 100000, term.id(), null, 20))
+    assertThatThrownBy(() -> management.guaranteeChanges(storeId + 100000, term.id(), NEWEST_FIRST))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
@@ -500,6 +509,7 @@ class RemunerationIntegrationTest {
 
   @Configuration
   @EnableTransactionManagement
+  @EnableJpaRepositories(basePackageClasses = RemunerationChangeRepository.class)
   @Import({
     RemunerationManagementService.class,
     RemunerationStatementService.class,

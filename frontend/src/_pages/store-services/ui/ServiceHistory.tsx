@@ -1,14 +1,14 @@
 'use client';
 
 import { serviceApi, ServiceSummary, serviceKindLabels } from '@/entities/service';
-import { useCursorList, isForbidden } from '@/shared/lib';
+import { useListPage, isForbidden } from '@/shared/lib';
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  Pager,
   RegionError,
 } from '@/shared/ui';
 
@@ -66,9 +66,9 @@ export function ServiceHistory({ id, open, onClose, onForbidden }: ServiceHistor
 }
 
 function HistoryContent({ id, onForbidden }: Pick<ServiceHistoryProps, 'id' | 'onForbidden'>) {
-  const history = useCursorList(async cursor => {
+  const history = useListPage(async page => {
     try {
-      return await serviceApi.history(id, cursor);
+      return await serviceApi.history(id, page);
     } catch (error) {
       if (isForbidden(error)) onForbidden();
       throw error;
@@ -83,7 +83,7 @@ function HistoryContent({ id, onForbidden }: Pick<ServiceHistoryProps, 'id' | 'o
         </DialogDescription>
       </DialogHeader>
       {history.failed ? (
-        <RegionError message="変更履歴の取得に失敗しました" onRetry={history.reload} />
+        <RegionError message="変更履歴の取得に失敗しました" onRetry={() => void history.reload()} />
       ) : (
         <>
           {history.rows.map(row => (
@@ -112,11 +112,12 @@ function HistoryContent({ id, onForbidden }: Pick<ServiceHistoryProps, 'id' | 'o
           ) : history.rows.length === 0 ? (
             <p>変更履歴はありません</p>
           ) : null}
-          {history.hasMore && (
-            <Button variant="outline" onClick={history.loadMore} disabled={history.isLoading}>
-              続きを表示
-            </Button>
-          )}
+          <Pager
+            page={history.page}
+            pageCount={history.pageCount}
+            disabled={history.isLoading}
+            onPageChange={page => void history.onPageChange(page)}
+          />
         </>
       )}
     </>

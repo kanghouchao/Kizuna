@@ -151,7 +151,7 @@ Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が�
   const history = await historyResponse.json();
   expect(history.content).toHaveLength(2);
   expect(history.content[0].type).toBe('CORRECTION_LINKED');
-  expect(history.next_cursor).toBeTruthy();
+  expect(history.total_pages).toBeGreaterThan(1);
   expect(JSON.stringify(history)).not.toContain('書面で対象文面と表示名の自店舗サイト掲載を確認');
   const listResponse = await request.get('/api/reviews', { headers: headers(), params: { review_id: old.superseded_by_id } });
   const list = await listResponse.json();

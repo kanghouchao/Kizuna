@@ -15,11 +15,11 @@ import com.kizuna.remuneration.api.dto.RemunerationRequests.GuaranteeCreateReque
 import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.RemunerationChange;
+import com.kizuna.remuneration.domain.RemunerationChangeRepository;
 import com.kizuna.remuneration.domain.RemunerationRequest;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.Map;
@@ -27,6 +27,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class RemunerationManagementService {
   private final RemunerationRecords records;
+  private final RemunerationChangeRepository changes;
   private final RemunerationPersonLookup people;
   private final ActorIdentityService actors;
   private final BusinessDateService dates;
@@ -299,26 +301,22 @@ public class RemunerationManagementService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<RemunerationChangeResponse> guaranteeChanges(
-      Long storeId, String id, String cursor, int size) {
+  public Page<RemunerationChangeResponse> guaranteeChanges(
+      Long storeId, String id, Pageable pageable) {
     requirePerson(storeId, records.term(storeId, id).getPersonId());
-    return history(storeId, "GUARANTEE", id, cursor, size);
+    return history(storeId, "GUARANTEE", id, pageable);
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public CursorPage<RemunerationChangeResponse> bonusChanges(
-      Long storeId, String id, String cursor, int size) {
+  public Page<RemunerationChangeResponse> bonusChanges(Long storeId, String id, Pageable pageable) {
     requirePerson(storeId, records.bonus(storeId, id).getPersonId());
-    return history(storeId, "BONUS", id, cursor, size);
+    return history(storeId, "BONUS", id, pageable);
   }
 
-  private CursorPage<RemunerationChangeResponse> history(
-      Long storeId, String type, String id, String cursor, int size) {
-    RemunerationInput.page(0, size);
-    return CursorPage.of(
-            records.changes(storeId, type, id, cursor, size),
-            size,
-            c -> c.getCreatedAt() + "|" + c.getId())
+  private Page<RemunerationChangeResponse> history(
+      Long storeId, String type, String id, Pageable pageable) {
+    return changes
+        .findByStoreIdAndResourceTypeAndResourceId(storeId, type, id, pageable)
         .map(
             c ->
                 new RemunerationChangeResponse(

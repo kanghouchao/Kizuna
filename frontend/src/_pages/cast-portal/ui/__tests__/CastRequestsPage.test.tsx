@@ -37,7 +37,7 @@ describe('CastRequestsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedMyStores.mockResolvedValue(STORES);
-    mockedMyShiftRequests.mockResolvedValue({ rows: [], nextCursor: null });
+    mockedMyShiftRequests.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
   });
 
   it('店舗セレクタに所属店舗一覧を表示する', async () => {
@@ -113,6 +113,7 @@ describe('CastRequestsPage', () => {
       end_time: '23:00:00',
     });
     await waitFor(() => expect(mockedMyShiftRequests).toHaveBeenCalledTimes(2));
+    expect(mockedMyShiftRequests).toHaveBeenLastCalledWith(0);
   });
 
   it('履歴の状態バッジ(受付済み/確定済み/却下)を表示すること', async () => {
@@ -152,7 +153,9 @@ describe('CastRequestsPage', () => {
           created_at: '2026-07-22T00:00:00Z',
         },
       ],
-      nextCursor: null,
+      page: 0,
+      pageCount: 1,
+      total: 1,
     });
 
     render(<CastRequestsPage />);
@@ -188,7 +191,9 @@ describe('CastRequestsPage', () => {
           created_at: '2026-07-24T00:00:00Z',
         },
       ],
-      nextCursor: null,
+      page: 0,
+      pageCount: 1,
+      total: 1,
     });
 
     render(<CastRequestsPage />);
@@ -200,9 +205,34 @@ describe('CastRequestsPage', () => {
     expect(screen.queryByText('却下')).not.toBeInTheDocument();
   });
 
+  it('履歴をページ番号で送り、次のページを取り直すこと', async () => {
+    const item = (id: string, store: string) => ({
+      id,
+      work_date: '2026-08-01',
+      start_time: '18:00:00',
+      end_time: '23:00:00',
+      note: null,
+      status: 'PENDING',
+      store_id: 1,
+      store_name: store,
+      created_at: '2026-07-20T00:00:00Z',
+    });
+    mockedMyShiftRequests
+      .mockResolvedValueOnce({ rows: [item('sr2', '新しい店舗')], page: 0, pageCount: 2, total: 2 })
+      .mockResolvedValueOnce({ rows: [item('sr1', '古い店舗')], page: 1, pageCount: 2, total: 2 });
+
+    render(<CastRequestsPage />);
+
+    expect(await screen.findByText('新しい店舗')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+    expect(await screen.findByText('古い店舗')).toBeInTheDocument();
+    expect(screen.queryByText('新しい店舗')).not.toBeInTheDocument();
+    expect(mockedMyShiftRequests).toHaveBeenLastCalledWith(1);
+  });
+
   it('取得に失敗した場合はエラー文言を表示し、再試行で復帰できること', async () => {
     mockedMyShiftRequests.mockRejectedValueOnce(new Error('network error'));
-    mockedMyShiftRequests.mockResolvedValueOnce({ rows: [], nextCursor: null });
+    mockedMyShiftRequests.mockResolvedValueOnce({ rows: [], page: 0, pageCount: 0, total: 0 });
 
     render(<CastRequestsPage />);
 

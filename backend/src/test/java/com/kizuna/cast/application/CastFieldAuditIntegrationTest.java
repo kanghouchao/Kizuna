@@ -55,6 +55,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.support.PersistenceExceptionTranslationInterceptor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -454,7 +455,7 @@ class CastFieldAuditIntegrationTest {
                     .containsEntry("actor_id", secondId)
                     .containsEntry("actor_type", "STAFF")
                     .containsEntry("store_id", storeId));
-    assertThat(lifecycle.snapshots(storeId, id, null, 20).content())
+    assertThat(lifecycle.snapshots(storeId, id, PageRequest.of(0, 20)).getContent())
         .hasSize(2)
         .allSatisfy(snapshot -> assertThat(snapshot.actorId()).isEqualTo(secondId));
     assertNoSecrets();
@@ -586,7 +587,8 @@ class CastFieldAuditIntegrationTest {
     assertThat(removed)
         .containsEntry("old", writerFirst ? "2" : "1")
         .containsEntry("new", writerFirst ? "3" : "2");
-    assertThat(lifecycle.snapshots(storeId, id, null, 20).content()).hasSize(writerFirst ? 3 : 2);
+    assertThat(lifecycle.snapshots(storeId, id, PageRequest.of(0, 20)).getContent())
+        .hasSize(writerFirst ? 3 : 2);
     assertNoSecrets();
   }
 

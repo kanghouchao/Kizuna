@@ -1,10 +1,4 @@
-import {
-  apiClient,
-  fromSpringPage,
-  fromCursorPage,
-  PageResult,
-  CursorPageResult,
-} from '@/shared/api';
+import { apiClient, fromSpringPage, PageResult } from '@/shared/api';
 import {
   ServiceCreateRequest,
   ServiceUpdateRequest,
@@ -36,11 +30,11 @@ export const serviceApi = {
       params: { expected_version: expectedVersion },
     });
   },
-  async history(id: string, cursor?: string): Promise<CursorPageResult<ServiceRevisionResponse>> {
-    return fromCursorPage(
+  async history(id: string, page = 0): Promise<PageResult<ServiceRevisionResponse>> {
+    return fromSpringPage(
       (
         await apiClient.get(`/services/${encodeURIComponent(id)}/revisions`, {
-          params: { cursor, size: 20 },
+          params: { page, size: 20 },
         })
       ).data
     );

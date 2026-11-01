@@ -66,7 +66,7 @@ beforeEach(() => {
   permission('REVIEW_VIEW');
   api.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
   api.get.mockResolvedValue(row);
-  api.history.mockResolvedValue({ rows: [], nextCursor: null });
+  api.history.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 });
 test('閲覧権限がなければ取得せず、閲覧のみは手動記録と未設定を確認できる', async () => {
   permission('REVIEW_MANAGE');

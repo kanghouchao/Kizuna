@@ -68,11 +68,11 @@ export const remunerationApi = {
   async cancelBonus(id: string, body: CancellationInput) {
     await apiClient.post(`${bonusBase}/${id}/cancellation`, body);
   },
-  async changes(kind: 'guarantee' | 'bonus', id: string, cursor?: string): Promise<Changes> {
+  async changes(kind: 'guarantee' | 'bonus', id: string, page = 0): Promise<Changes> {
     return (
       await apiClient.get<Changes>(
         `${kind === 'guarantee' ? guaranteeBase : bonusBase}/${id}/changes`,
-        { params: { cursor, size: 20 } }
+        { params: { page, size: 20 } }
       )
     ).data;
   },

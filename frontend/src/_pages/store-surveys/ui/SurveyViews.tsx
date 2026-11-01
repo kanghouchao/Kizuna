@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnswerSearch, SurveySearch, surveyApi } from '@/entities/survey';
-import { useListPage, useResource, useCursorList } from '@/shared/lib';
+import { useListPage, useResource } from '@/shared/lib';
 import {
   Button,
   Input,
@@ -13,6 +13,7 @@ import {
   TableCell,
   RegionError,
   Badge,
+  Pager,
 } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -487,12 +488,12 @@ function SurveyHistoryView({
   ...props
 }: ViewProps & { target: { sid: string; rid: string } | { aid: string } }) {
   const guard = useGuardedRead(props.denied);
-  const history = useCursorList(cursor => guard(() => surveyApi.history(target, cursor)));
+  const history = useListPage(page => guard(() => surveyApi.history(target, page)));
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">操作履歴</h2>
       {history.failed ? (
-        <RegionError message="履歴を取得できませんでした" onRetry={history.reload} />
+        <RegionError message="履歴を取得できませんでした" onRetry={() => void history.reload()} />
       ) : history.isLoading ? (
         <p>読み込み中...</p>
       ) : (
@@ -516,10 +517,13 @@ function SurveyHistoryView({
           ))}
         </ol>
       )}
-      {history.hasMore && !history.failed && (
-        <Button variant="outline" disabled={history.isLoading} onClick={history.loadMore}>
-          履歴をさらに表示
-        </Button>
+      {!history.failed && (
+        <Pager
+          page={history.page}
+          pageCount={history.pageCount}
+          disabled={history.isLoading}
+          onPageChange={page => void history.onPageChange(page)}
+        />
       )}
     </section>
   );

@@ -82,17 +82,19 @@ describe('shiftApi', () => {
       })
     ).toEqual({ ok: true, url: '/me/shift-requests/changes' });
   });
-  it('myShiftRequests は /me/shift-requests を GET し、カーソルページを正規化する', async () => {
+  it('myShiftRequests は /me/shift-requests をページ番号で GET し、Spring の Page を正規化する', async () => {
     mockedGet.mockResolvedValueOnce({
-      data: { content: [{ id: 'r1' }], next_cursor: 'abc' },
+      data: { content: [{ id: 'r1' }], number: 1, size: 20, total_pages: 3, total_elements: 41 },
     });
 
-    await expect(shiftApi.myShiftRequests({ cursor: 'x' })).resolves.toEqual({
+    await expect(shiftApi.myShiftRequests(1)).resolves.toEqual({
       rows: [{ id: 'r1' }],
-      nextCursor: 'abc',
+      page: 1,
+      pageCount: 3,
+      total: 41,
     });
     expect(mockedGet).toHaveBeenLastCalledWith('/me/shift-requests', {
-      params: { cursor: 'x' },
+      params: { page: 1, size: 20 },
     });
   });
   it('myStores は /me/stores を GET する', async () => {

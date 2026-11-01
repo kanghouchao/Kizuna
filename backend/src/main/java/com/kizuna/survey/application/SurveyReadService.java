@@ -1,8 +1,6 @@
 package com.kizuna.survey.application;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.survey.api.dto.SurveyActorResponse;
 import com.kizuna.survey.api.dto.SurveyAnswerHistoryResponse;
 import com.kizuna.survey.api.dto.SurveyAnswerSummaryResponse;
@@ -36,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.core.TypedPropertyPath;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -191,41 +190,26 @@ public class SurveyReadService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<SurveyRevisionHistoryResponse> revisionHistory(
-      Long storeId, String email, String sid, String rid, String cursor, int size) {
+  public Page<SurveyRevisionHistoryResponse> revisionHistory(
+      Long storeId, String email, String sid, String rid, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     requireRevision(storeId, sid, rid);
-    return history(storeId, "revisionId", rid, cursor, size).map(SurveyRevisionHistoryResponse::of);
+    return history(storeId, "revisionId", rid, pageable).map(SurveyRevisionHistoryResponse::of);
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<SurveyAnswerHistoryResponse> answerHistory(
-      Long storeId, String email, String aid, String cursor, int size) {
+  public Page<SurveyAnswerHistoryResponse> answerHistory(
+      Long storeId, String email, String aid, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     if (!answers.existsByIdAndStoreId(SurveyInput.id(aid), storeId)) throw missing();
-    return history(storeId, "responseId", aid, cursor, size).map(SurveyAnswerHistoryResponse::of);
+    return history(storeId, "responseId", aid, pageable).map(SurveyAnswerHistoryResponse::of);
   }
 
-  private CursorPage<SurveyHistoryView> history(
-      Long storeId, String target, String id, String cursor, int size) {
-    validatePage(0, size);
+  private Page<SurveyHistoryView> history(
+      Long storeId, String target, String id, Pageable pageable) {
     Specification<SurveyHistory> spec =
         (r, q, cb) -> cb.and(cb.equal(r.get("storeId"), storeId), cb.equal(r.get(target), id));
-    if (cursor != null) {
-      var after = SurveyInput.id(PageCursor.decodeKey(cursor));
-      spec = spec.and((r, q, cb) -> cb.lessThan(r.get("id"), after));
-    }
-    var rows =
-        history
-            .findBy(
-                spec,
-                f ->
-                    f.as(SurveyHistoryView.class)
-                        .page(
-                            PageRequest.of(
-                                0, size + 1, Sort.by(Sort.Direction.DESC, SurveyHistory::getId))))
-            .getContent();
-    return CursorPage.of(rows, size, r -> PageCursor.encodeKey(r.getId()));
+    return history.findBy(spec, f -> f.as(SurveyHistoryView.class).page(pageable));
   }
 
   private Map<String, SurveyRevisionSummaryView> latest(Long storeId, List<SurveySeriesView> rows) {

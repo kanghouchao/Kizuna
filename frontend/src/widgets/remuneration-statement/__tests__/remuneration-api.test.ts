@@ -77,7 +77,7 @@ it('ボーナスの付与・有理由訂正・取消を別操作にする', asyn
     request_id: 'cancel',
   });
 });
-it('増え続ける一覧と履歴はページとカーソルを引き継ぐ', async () => {
+it('増え続ける一覧と履歴はページ番号を引き継ぐ', async () => {
   await remunerationApi.guarantees(4, 2);
   expect(get).toHaveBeenLastCalledWith('/remuneration-guarantees', {
     params: { person_id: 4, page: 2, size: 20 },
@@ -86,12 +86,12 @@ it('増え続ける一覧と履歴はページとカーソルを引き継ぐ', a
   expect(get).toHaveBeenLastCalledWith('/bonus-awards', {
     params: { person_id: 4, month: '2026-09', page: 1, size: 20 },
   });
-  await remunerationApi.changes('guarantee', 'g', 'cursor');
+  await remunerationApi.changes('guarantee', 'g', 3);
   expect(get).toHaveBeenLastCalledWith('/remuneration-guarantees/g/changes', {
-    params: { cursor: 'cursor', size: 20 },
+    params: { page: 3, size: 20 },
   });
   await remunerationApi.changes('bonus', 'b');
   expect(get).toHaveBeenLastCalledWith('/bonus-awards/b/changes', {
-    params: { cursor: undefined, size: 20 },
+    params: { page: 0, size: 20 },
   });
 });

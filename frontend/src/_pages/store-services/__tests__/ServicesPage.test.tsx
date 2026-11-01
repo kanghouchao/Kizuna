@@ -165,7 +165,9 @@ it('削除済みの項目は履歴だけを開き前後の金額を照会でき�
         after: { ...item, deleted: true, version: 2 },
       },
     ],
-    nextCursor: null,
+    page: 0,
+    pageCount: 1,
+    total: 1,
   });
   render(<ServicesPage />);
   fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
@@ -173,6 +175,28 @@ it('削除済みの項目は履歴だけを開き前後の金額を照会でき�
   expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
   expect(await screen.findByText('版本 2 · 削除')).toBeInTheDocument();
   expect(within(screen.getByRole('dialog')).getAllByText('7,000 円')).toHaveLength(2);
+});
+it('変更履歴をページ番号で送り、次のページを取り直す', async () => {
+  seedItem();
+  const revision = (id: string, version: number) => ({
+    id,
+    version,
+    operation: 'UPDATED' as const,
+    actor_id: '3',
+    occurred_at: item.created_at,
+    before: item,
+    after: { ...item, version },
+  });
+  api.history
+    .mockResolvedValueOnce({ rows: [revision('r3', 3)], page: 0, pageCount: 2, total: 2 })
+    .mockResolvedValueOnce({ rows: [revision('r2', 2)], page: 1, pageCount: 2, total: 2 });
+  render(<ServicesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
+  expect(await screen.findByText('版本 3 · 変更')).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '次のページ' }));
+  expect(await screen.findByText('版本 2 · 変更')).toBeInTheDocument();
+  expect(screen.queryByText('版本 3 · 変更')).not.toBeInTheDocument();
+  expect(api.history).toHaveBeenLastCalledWith('10', 1);
 });
 it.each(['編集', '履歴'])('%s の取得で権限不足になったら設定値を消して案内する', async action => {
   seedItem();

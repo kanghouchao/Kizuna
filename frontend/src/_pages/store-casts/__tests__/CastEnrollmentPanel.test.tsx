@@ -16,8 +16,8 @@ const api = jest.mocked(castApi);
 
 beforeEach(() => {
   jest.clearAllMocks();
-  api.statusHistories.mockResolvedValue({ rows: [], nextCursor: null });
-  api.snapshots.mockResolvedValue({ rows: [], nextCursor: null });
+  api.statusHistories.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  api.snapshots.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 });
 
 it('退店は確認後だけ実行し、完了後は状態操作を表示しない', async () => {
@@ -47,7 +47,7 @@ it('退店は確認後だけ実行し、完了後は状態操作を表示しな�
   expect(screen.getByText('在籍状態: 退店')).toBeInTheDocument();
 });
 
-it('履歴を追加読み込みし、失敗時はその領域から再試行できる', async () => {
+it('履歴をページ送りで取り直し、失敗時はその領域から再試行できる', async () => {
   api.statusHistories
     .mockResolvedValueOnce({
       rows: [
@@ -59,13 +59,17 @@ it('履歴を追加読み込みし、失敗時はその領域から再試行で�
           recorded_at: '2026-09-10T12:00:00Z',
         },
       ],
-      nextCursor: 'next',
+      page: 0,
+      pageCount: 2,
+      total: 2,
     })
     .mockResolvedValueOnce({
       rows: [
         { id: 'h1', new_status: 'ENROLLED', actor_id: 7, recorded_at: '2026-09-09T12:00:00Z' },
       ],
-      nextCursor: null,
+      page: 1,
+      pageCount: 2,
+      total: 2,
     });
   api.snapshots.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({
     rows: [
@@ -76,16 +80,20 @@ it('履歴を追加読み込みし、失敗時はその領域から再試行で�
         custom_fields: { deleted_key: '変更前' },
       },
     ],
-    nextCursor: null,
+    page: 0,
+    pageCount: 1,
+    total: 1,
   });
   render(<CastEnrollmentPanel cast={{ id: 'e1', status: 'SUSPENDED' }} onChanged={jest.fn()} />);
   fireEvent.click(screen.getByRole('heading', { name: '在籍履歴', level: 2 }).closest('summary')!);
   fireEvent.click(
     screen.getByRole('heading', { name: '内部情報の編集履歴', level: 2 }).closest('summary')!
   );
-  fireEvent.click(await screen.findByRole('button', { name: '在籍履歴をさらに読み込む' }));
+  const historyRegion = screen.getByRole('region', { name: '在籍履歴' });
+  fireEvent.click(await within(historyRegion).findByRole('button', { name: '次のページ' }));
   expect(await screen.findByText('入店（在籍中）')).toBeInTheDocument();
-  expect(api.statusHistories).toHaveBeenLastCalledWith('e1', 'next');
+  expect(screen.queryByText('在籍中 → 在籍停止')).not.toBeInTheDocument();
+  expect(api.statusHistories).toHaveBeenLastCalledWith('e1', 1);
   fireEvent.click(
     within(screen.getByRole('region', { name: '内部情報の編集履歴' })).getByRole('button', {
       name: '再試行',

@@ -1,5 +1,6 @@
 package com.kizuna.survey.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -7,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -18,12 +20,17 @@ import com.kizuna.survey.application.SurveyService;
 import com.kizuna.survey.domain.SurveyCommand;
 import com.kizuna.survey.domain.SurveyValues.Operation;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -110,5 +117,37 @@ class SurveyControllerTest {
         .andExpect(status().isOk());
 
     verify(service).answer(STORE_ID, "user", "101");
+  }
+
+  @Test
+  @DisplayName("改訂と回答の履歴は新しい順の Page で返すこと")
+  @WithMockUser(authorities = "PERM_SURVEY_VIEW")
+  void historiesArePagesNewestFirst() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<Pageable> revisions = ArgumentCaptor.forClass(Pageable.class);
+    ArgumentCaptor<Pageable> answers = ArgumentCaptor.forClass(Pageable.class);
+    when(reads.revisionHistory(eq(STORE_ID), eq("user"), eq("s1"), eq("r1"), revisions.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    when(reads.answerHistory(eq(STORE_ID), eq("user"), eq("101"), answers.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    mockMvc
+        .perform(
+            get("/surveys/s1/revisions/r1/history")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    mockMvc
+        .perform(
+            get("/survey-responses/101/history")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+
+    Sort newestFirst = Sort.by(Sort.Direction.DESC, "id");
+    assertThat(revisions.getValue().getSort()).isEqualTo(newestFirst);
+    assertThat(answers.getValue().getSort()).isEqualTo(newestFirst);
   }
 }

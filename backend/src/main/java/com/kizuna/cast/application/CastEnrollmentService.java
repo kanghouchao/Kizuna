@@ -12,8 +12,6 @@ import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
@@ -25,7 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -120,18 +119,11 @@ public class CastEnrollmentService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<CastEnrollmentStatusHistoryResponse> history(
-      Long storeId, String id, String cursor, int requestedSize) {
+  public Page<CastEnrollmentStatusHistoryResponse> history(
+      Long storeId, String id, Pageable pageable) {
     require(storeId, id);
-    int size = CursorPage.clampSize(requestedSize);
-    Limit limit = Limit.of(size + 1);
-    PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
-    var rows =
-        after == null
-            ? histories.findByStoreIdAndEnrollmentIdOrderByRecordedAtDescIdDesc(storeId, id, limit)
-            : histories.findAfter(storeId, id, after.timestampKey(), after.id(), limit);
-    return CursorPage.of(
-            rows, size, row -> new PageCursor(row.getRecordedAt().toString(), row.getId()).encode())
+    return histories
+        .findByStoreIdAndEnrollmentId(storeId, id, pageable)
         .map(
             row ->
                 new CastEnrollmentStatusHistoryResponse(
@@ -143,18 +135,11 @@ public class CastEnrollmentService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<CastEnrollmentSnapshotResponse> snapshots(
-      Long storeId, String id, String cursor, int requestedSize) {
+  public Page<CastEnrollmentSnapshotResponse> snapshots(
+      Long storeId, String id, Pageable pageable) {
     require(storeId, id);
-    int size = CursorPage.clampSize(requestedSize);
-    Limit limit = Limit.of(size + 1);
-    PageCursor after = cursor == null ? null : PageCursor.decode(cursor);
-    var rows =
-        after == null
-            ? snapshots.findByStoreIdAndEnrollmentIdOrderByRecordedAtDescIdDesc(storeId, id, limit)
-            : snapshots.findAfter(storeId, id, after.timestampKey(), after.id(), limit);
-    return CursorPage.of(
-            rows, size, row -> new PageCursor(row.getRecordedAt().toString(), row.getId()).encode())
+    return snapshots
+        .findByStoreIdAndEnrollmentId(storeId, id, pageable)
         .map(
             row ->
                 new CastEnrollmentSnapshotResponse(

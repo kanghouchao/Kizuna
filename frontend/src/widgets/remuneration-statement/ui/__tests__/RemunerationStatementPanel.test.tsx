@@ -226,7 +226,7 @@ it('必須入力の不足をブラウザの吹き出しではなく日本語で�
   expect(screen.getByText('理由を入力してください')).toBeInTheDocument();
   expect(remunerationApi.createBonus).not.toHaveBeenCalled();
 });
-it('履歴を開き直すと同一記録でも最新の先頭へ戻り別記録のカーソルを使わない', async () => {
+it('履歴を開き直すと同一記録でも先頭ページへ戻り別記録のページ位置を引き継がない', async () => {
   jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
   const bonus = (id: string) => ({
     id,
@@ -241,7 +241,13 @@ it('履歴を開き直すと同一記録でも最新の先頭へ戻り別記録�
     .mocked(remunerationApi.bonuses)
     .mockResolvedValue({ ...page, content: [bonus('a'), bonus('b')] });
   const changes = jest.mocked(remunerationApi.changes);
-  changes.mockResolvedValue({ content: [], next_cursor: 'older' });
+  changes.mockImplementation(async (_kind, _id, number = 0) => ({
+    content: [],
+    number,
+    size: 20,
+    total_pages: 2,
+    total_elements: 21,
+  }));
   render(
     <RemunerationManagement
       personName="本人"
@@ -252,16 +258,16 @@ it('履歴を開き直すと同一記録でも最新の先頭へ戻り別記録�
     />
   );
   fireEvent.click((await screen.findAllByRole('button', { name: 'ボーナスの変更履歴' }))[0]);
-  fireEvent.click(await screen.findByRole('button', { name: '次の履歴' }));
-  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'a', 'older'));
+  fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'a', 1));
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   fireEvent.click(screen.getAllByRole('button', { name: 'ボーナスの変更履歴' })[1]);
-  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', undefined));
-  fireEvent.click(await screen.findByRole('button', { name: '次の履歴' }));
-  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', 'older'));
+  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', 0));
+  fireEvent.click(await screen.findByRole('button', { name: '次のページ' }));
+  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', 1));
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   fireEvent.click(screen.getAllByRole('button', { name: 'ボーナスの変更履歴' })[1]);
-  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', undefined));
+  await waitFor(() => expect(changes).toHaveBeenLastCalledWith('bonus', 'b', 0));
 });
 
 const fillBonus = () => {
