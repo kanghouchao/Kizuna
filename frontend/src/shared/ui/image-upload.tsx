@@ -34,7 +34,8 @@ export default function ImageUpload({
   /** ファイル選択時の処理 */
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    // 重ねて上げると先に終わった方が完了を知らせ、後の画像が確定する前に保存できてしまう
+    if (!file || isUploading) return;
 
     // プレビュー表示
     const reader = new FileReader();
@@ -71,21 +72,26 @@ export default function ImageUpload({
           既定の border-border は 1.27/1.33 でほぼ不可視のため muted-foreground を明示する。 */}
       <div
         className={`relative border-2 border-dashed border-muted-foreground rounded-lg overflow-hidden cursor-pointer hover:border-primary transition-colors ${className}`}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          if (!isUploading) inputRef.current?.click();
+        }}
       >
         {displayUrl ? (
           <>
             <Image src={displayUrl} alt="プレビュー" fill className="object-cover" sizes="160px" />
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                handleRemove();
-              }}
-              className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
-            >
-              <XIcon className="h-4 w-4" />
-            </button>
+            {/* 遮蔽の下でも Tab で届くため、アップロード中は出さない（削除後に完了が値を上書きする） */}
+            {!isUploading && (
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  handleRemove();
+                }}
+                className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            )}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -107,6 +113,7 @@ export default function ImageUpload({
         accept={accept}
         onChange={handleFileChange}
         className="hidden"
+        disabled={isUploading}
         required={required}
       />
     </div>
