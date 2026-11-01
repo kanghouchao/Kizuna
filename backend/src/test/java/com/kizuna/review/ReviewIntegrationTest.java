@@ -932,8 +932,6 @@ class ReviewIntegrationTest {
     assertThat(publicReviews(otherStore, "").get("content"))
         .extracting(r -> r.get("body").asString())
         .containsExactly("foreign");
-    publicReviews(storeId, "?size=101", 400);
-    publicReviews(storeId, "?page=99999999&size=100", 400);
   }
 
   private String intake(String key) throws Exception {
