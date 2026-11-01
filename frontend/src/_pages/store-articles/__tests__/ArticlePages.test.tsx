@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ArticleCreatePage, ArticleEditPage, ArticlesPage } from '..';
 import { Article, articleApi } from '@/entities/content/article';
+import { fileApi } from '@/shared/api';
 import { notify } from '@/shared/notify';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
@@ -117,6 +118,40 @@ describe('作成', () => {
     );
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/articles/42/edit'));
     expect(notify.success).toHaveBeenCalledWith('記事を作成しました');
+  });
+});
+
+describe('表紙画像', () => {
+  test('表紙のアップロードが終わるまで記事を保存させず、終われば表紙付きで作成する', async () => {
+    let finish: (value: { url: string; size: number }) => void = () => {};
+    jest
+      .spyOn(fileApi, 'upload')
+      .mockReturnValue(
+        new Promise(resolve => (finish = resolve)) as ReturnType<typeof fileApi.upload>
+      );
+    api.create.mockResolvedValue({ id: '42' });
+    const { container } = render(<ArticleCreatePage />);
+    fireEvent.change(screen.getByLabelText('表題'), { target: { value: '新着' } });
+    fireEvent.change(screen.getByLabelText('本文'), { target: { value: '本文' } });
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] },
+    });
+
+    const submit = screen.getByRole('button', { name: '記事を作成' });
+    await waitFor(() => expect(submit).toBeDisabled());
+    fireEvent.click(submit);
+    expect(api.create).not.toHaveBeenCalled();
+
+    finish({ url: '/static/uploads/public/1/article-cover/a.png', size: 1 });
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith({
+        title: '新着',
+        body: '本文',
+        cover_image_url: '/static/uploads/public/1/article-cover/a.png',
+      })
+    );
   });
 });
 
