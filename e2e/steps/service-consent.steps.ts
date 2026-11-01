@@ -52,13 +52,13 @@ When("本人がサービス条件を開く", async ({ page }) => {
   const next = page
     .getByRole("button", { name: "次へ", exact: true })
     .locator("visible=true");
-  await expect(heading.or(next)).toBeVisible();
+  await expect(heading.or(next).first()).toBeVisible();
   while (!(await heading.isVisible())) {
     await Promise.all([
       page.waitForResponse((r) => r.url().includes("/me/service-conditions")),
       next.click(),
     ]);
-    await expect(heading.or(next)).toBeVisible();
+    await expect(heading.or(next).first()).toBeVisible();
   }
 });
 Then("特殊サービスの顧客価格と固定報酬が表示される", async ({ page }) => {

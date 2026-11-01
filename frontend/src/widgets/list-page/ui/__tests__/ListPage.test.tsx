@@ -306,7 +306,7 @@ describe('ListPage', () => {
     );
 
     const nav = screen.getByRole('navigation');
-    const prev = within(nav).getByRole('button', { name: '前へ' });
+    const prev = within(nav).getAllByRole('button', { name: '前へ' })[0];
     expect(prev).not.toBeDisabled();
     fireEvent.click(prev);
     expect(onPageChange).toHaveBeenCalledWith(0);
@@ -364,8 +364,9 @@ describe('ListPage', () => {
       </ListPage>
     );
 
+    // 狭い幅用の文字ボタンと広い幅用のアイコンボタンが、どちらも同じ名前を名乗る
     const nav = screen.getByRole('navigation');
-    expect(within(nav).getByRole('button', { name: '前へ' })).toBeInTheDocument();
-    expect(within(nav).getByRole('button', { name: '次へ' })).toBeInTheDocument();
+    expect(within(nav).getAllByRole('button', { name: '前へ' })).toHaveLength(2);
+    expect(within(nav).getAllByRole('button', { name: '次へ' })).toHaveLength(2);
   });
 });

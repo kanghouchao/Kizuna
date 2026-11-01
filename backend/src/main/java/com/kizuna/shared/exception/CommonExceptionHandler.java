@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.query.sqm.PathElementException;
+import org.hibernate.query.sqm.UnknownPathException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.data.core.PropertyReferenceException;
@@ -143,19 +145,30 @@ public class CommonExceptionHandler {
   }
 
   /**
-   * {@code ?sort=} に実在しない属性を名指した要求を 400 にする。全一覧が Pageable を受けるため、並びの指定は利用者が 是正しうる入力である。repository
-   * の例外翻訳で包まれて届く場合があるので、原因まで辿って判定する。
+   * {@code ?sort=} に実在しない属性を名指した要求を 400 にする。派生クエリ・Specification は PropertyReferenceException、
+   * {@code @Query} は Hibernate の経路解決の失敗で落ち、どちらも例外翻訳で包まれて届くため原因まで辿る。静的な {@code @Query}
+   * の経路は起動時に検証されるので、要求の時点で経路が解決できないのは動的な並びの指定に限られる。
    */
   @ExceptionHandler({PropertyReferenceException.class, InvalidDataAccessApiUsageException.class})
   public ResponseEntity<Map<String, Object>> handleSort(RuntimeException ex) {
-    if (!(ex instanceof PropertyReferenceException)
-        && !(ex.getCause() instanceof PropertyReferenceException)) {
+    if (!isUnknownSortProperty(ex)) {
       return handle((Exception) ex);
     }
     log.warn("並び替えの属性が不正");
     Map<String, Object> body = new HashMap<>();
     body.put("error", "並び替えの指定を確認してください");
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+  }
+
+  private static boolean isUnknownSortProperty(Throwable ex) {
+    for (Throwable t = ex; t != null; t = t.getCause()) {
+      if (t instanceof PropertyReferenceException
+          || t instanceof UnknownPathException
+          || t instanceof PathElementException) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

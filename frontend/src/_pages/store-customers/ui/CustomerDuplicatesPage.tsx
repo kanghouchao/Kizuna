@@ -41,7 +41,8 @@ const PAIR_SIZE = 2;
  */
 interface Selection {
   groupKey: string;
-  ids: string[];
+  /** 選んだ行そのもの。候補顧客はページ送りで入れ替わるため、別ページで選んだ行もここから見比べる */
+  rows: CustomerMergeComparisonResponse[];
 }
 
 export default function CustomerDuplicatesPage() {
@@ -89,27 +90,32 @@ function CustomerDuplicatesContent() {
     setSurvivingId(null);
     setSelection(current => {
       if (current === null || current.groupKey !== groupKey) {
-        return { groupKey, ids: [customerId] };
+        return { groupKey, rows: [row] };
       }
-      if (current.ids.includes(customerId)) {
+      if (current.rows.some(selected => selected.id === customerId)) {
         return {
           ...current,
-          ids: current.ids.filter(id => id !== customerId),
+          rows: current.rows.filter(selected => selected.id !== customerId),
         };
       }
-      if (current.ids.length >= PAIR_SIZE) return current;
-      return { ...current, ids: [...current.ids, customerId] };
+      if (current.rows.length >= PAIR_SIZE) return current;
+      return { ...current, rows: [...current.rows, row] };
     });
   };
 
   const isSelected = (groupKey: string, customerId: string) =>
-    selection?.groupKey === groupKey && selection.ids.includes(customerId);
+    selection?.groupKey === groupKey && selection.rows.some(row => row.id === customerId);
 
-  /** 選択中の 2 行を、候補一覧に並んでいる順のまま取り出す。 */
+  /**
+   * 選択中の 2 行を選んだ順に取り出す。表示中のページにある行は取り直した最新の値を使い、
+   * ページ送りで見えなくなった行だけ選んだ時点の値で補う。
+   */
   const selectedPair = (
     rows: CustomerMergeComparisonResponse[]
   ): [CustomerMergeComparisonResponse, CustomerMergeComparisonResponse] | null => {
-    const selected = rows.filter(row => row.id !== undefined && selection?.ids.includes(row.id));
+    const selected = (selection?.rows ?? []).map(
+      chosen => rows.find(row => row.id === chosen.id) ?? chosen
+    );
     return selected.length === PAIR_SIZE ? [selected[0], selected[1]] : null;
   };
 
@@ -153,7 +159,7 @@ function CustomerDuplicatesContent() {
                         isSubmitting ||
                         (!isSelected(groupKey, row.id ?? '') &&
                           selection?.groupKey === groupKey &&
-                          selection.ids.length >= PAIR_SIZE)
+                          selection.rows.length >= PAIR_SIZE)
                       }
                       onCheckedChange={() => toggle(groupKey, row)}
                     />

@@ -44,7 +44,10 @@ export function Pager({
   );
 
   return (
-    <div className={cn('flex items-center justify-between', className)}>
+    <nav
+      aria-label="ページネーション"
+      className={cn('flex items-center justify-between', className)}
+    >
       <div className="flex-1 flex justify-between sm:hidden">
         <Button
           variant="outline"
@@ -68,7 +71,7 @@ export function Pager({
         <p className="text-sm text-muted-foreground">
           {rowCount > 0 ? `${total} 件中 ${from}-${to} を表示` : `${total} 件`}
         </p>
-        <nav className="flex gap-1" aria-label="ページネーション">
+        <div className="flex gap-1">
           <Button
             variant="outline"
             size="icon-sm"
@@ -107,8 +110,8 @@ export function Pager({
           >
             <ChevronRightIcon />
           </Button>
-        </nav>
+        </div>
       </div>
-    </div>
+    </nav>
   );
 }

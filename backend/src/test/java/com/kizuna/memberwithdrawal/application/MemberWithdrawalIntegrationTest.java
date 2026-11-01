@@ -2,6 +2,7 @@ package com.kizuna.memberwithdrawal.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -31,6 +32,7 @@ import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
@@ -64,6 +66,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
@@ -115,6 +118,22 @@ class MemberWithdrawalIntegrationTest {
   @AfterAll
   void close() {
     if (context != null) context.close();
+  }
+
+  @Test
+  void unknownSortPropertyOnQueryBackedPageIsBadRequest() {
+    // @Query の一覧は Hibernate が並びの経路を解決する。実際に投げられた例外が 400 へ映ることを本物の DB で確かめる
+    var member = member();
+    Throwable thrown =
+        catchThrowable(
+            () ->
+                context
+                    .getBean(PointEntryRepository.class)
+                    .findMemberEntryViews(member.memberId, PageRequest.of(0, 1, Sort.by("nope"))));
+
+    assertThat(thrown).isInstanceOf(RuntimeException.class);
+    assertThat(new CommonExceptionHandler().handleSort((RuntimeException) thrown).getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
   }
 
   @Test

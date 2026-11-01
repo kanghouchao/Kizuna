@@ -163,8 +163,8 @@ describe('店舗管理 3 画面の挙動', () => {
     // 前後ボタンはモバイル用と nav 内アイコン用の 2 つがあるため nav 内に限定する
     const nav = () => screen.getByRole('navigation', { name: 'ページネーション' });
     // 1 ページ目では「前へ」が押せない
-    expect(within(nav()).getByRole('button', { name: '前へ' })).toBeDisabled();
-    expect(within(nav()).getByRole('button', { name: '次へ' })).toBeEnabled();
+    expect(within(nav()).getAllByRole('button', { name: '前へ' })[0]).toBeDisabled();
+    expect(within(nav()).getAllByRole('button', { name: '次へ' })[0]).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: '2' }));
 
@@ -179,8 +179,10 @@ describe('店舗管理 3 画面の挙動', () => {
     fireEvent.click(screen.getByRole('button', { name: '3' }));
 
     // 最終ページでは「次へ」が押せない
-    await waitFor(() => expect(within(nav()).getByRole('button', { name: '次へ' })).toBeDisabled());
-    expect(within(nav()).getByRole('button', { name: '前へ' })).toBeEnabled();
+    await waitFor(() =>
+      expect(within(nav()).getAllByRole('button', { name: '次へ' })[0]).toBeDisabled()
+    );
+    expect(within(nav()).getAllByRole('button', { name: '前へ' })[0]).toBeEnabled();
   });
 
   it('一覧は稼働状態をバッジで表示すること', async () => {
