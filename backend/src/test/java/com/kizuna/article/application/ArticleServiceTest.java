@@ -35,7 +35,7 @@ class ArticleServiceTest {
 
   @BeforeEach
   void stored() {
-    article = Article.write(STORE, "表題", "秘密の本文");
+    article = Article.write(STORE, "表題", "秘密の本文", null);
     ReflectionTestUtils.setField(article, "id", "a1");
     ReflectionTestUtils.setField(article, "version", 0L);
     when(articles.findByIdAndStoreId("a1", STORE)).thenReturn(Optional.of(article));
@@ -51,7 +51,7 @@ class ArticleServiceTest {
 
   @Test
   void createAuditsWithoutTheBody() {
-    var created = service.create(STORE, "新しい記事", "秘密の本文");
+    var created = service.create(STORE, "新しい記事", "秘密の本文", null);
 
     assertThat(created).isEqualTo("new");
     var after = captureAfter("ARTICLE_CREATED", "new");
@@ -61,7 +61,7 @@ class ArticleServiceTest {
 
   @Test
   void editMarksTheBodyAsChangedWithoutCopyingIt() {
-    var edited = service.edit(STORE, "a1", "改題", "差し替えた秘密", 0);
+    var edited = service.edit(STORE, "a1", "改題", "差し替えた秘密", null, 0);
 
     assertThat(edited.getBody()).isEqualTo("差し替えた秘密");
     var after = captureAfter("ARTICLE_UPDATED", "a1");
@@ -71,7 +71,7 @@ class ArticleServiceTest {
 
   @Test
   void editKeepingTheBodyDoesNotMarkIt() {
-    service.edit(STORE, "a1", "改題", "秘密の本文", 0);
+    service.edit(STORE, "a1", "改題", "秘密の本文", null, 0);
 
     assertThat(captureAfter("ARTICLE_UPDATED", "a1")).doesNotContainKey("redacted_fields_changed");
   }
@@ -98,7 +98,7 @@ class ArticleServiceTest {
 
   @Test
   void staleVersionIsConflictAndNothingIsWritten() {
-    assertThatThrownBy(() -> service.edit(STORE, "a1", "t", "b", 1))
+    assertThatThrownBy(() -> service.edit(STORE, "a1", "t", "b", null, 1))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(() -> service.publish(STORE, "a1", Publication.HIDDEN, 1))
         .isInstanceOf(ConflictException.class);

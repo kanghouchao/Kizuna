@@ -25,24 +25,34 @@ public class Article extends StoreScopedEntity {
   @Column(nullable = false, length = 10000)
   private String body;
 
+  @Column(length = 500)
+  private String coverImageUrl;
+
   @Embedded private Publication publication;
 
   /** 書きかけを公開しないよう、作成直後は非公開で始まる。 */
-  public static Article write(Long storeId, String title, String body) {
+  public static Article write(Long storeId, String title, String body, String coverImageUrl) {
     var article = new Article();
     article.setStoreId(storeId);
     article.title = text(title);
     article.body = text(body);
+    article.coverImageUrl = cover(coverImageUrl);
     article.publication = Publication.HIDDEN;
     return article;
   }
 
   /** 本文が変わったかを返す。監査は本文を複製せず、変わった事実だけを残すため。 */
-  public boolean edit(String title, String body) {
+  public boolean edit(String title, String body, String coverImageUrl) {
     boolean bodyChanged = !Objects.equals(this.body, text(body));
     this.title = text(title);
     this.body = body;
+    this.coverImageUrl = cover(coverImageUrl);
     return bodyChanged;
+  }
+
+  // 管理画面は外した表紙を空文字で送る。空のまま保存すると公式サイトに中身の無い画像が出るため、無しにそろえる。
+  private static String cover(String value) {
+    return value == null || value.isBlank() ? null : text(value);
   }
 
   // PostgreSQL の文字列は NUL を保存できず、通すと 500 になるため入力誤りとして先に弾く。

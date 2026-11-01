@@ -43,7 +43,8 @@ public class ArticleController {
   @PreAuthorize("hasAuthority('PERM_ARTICLE_MANAGE')")
   public ArticleIdResponse create(
       @CurrentStore Long storeId, @Valid @RequestBody ArticleRequest request) {
-    return new ArticleIdResponse(articles.create(storeId, request.title(), request.body()));
+    return new ArticleIdResponse(
+        articles.create(storeId, request.title(), request.body(), request.coverImageUrl()));
   }
 
   @GetMapping
@@ -90,7 +91,13 @@ public class ArticleController {
       @PathVariable String id,
       @Valid @RequestBody ArticleRequest request) {
     var article =
-        articles.edit(storeId, id, request.title(), request.body(), request.expectedVersion());
+        articles.edit(
+            storeId,
+            id,
+            request.title(),
+            request.body(),
+            request.coverImageUrl(),
+            request.expectedVersion());
     return ArticleResponse.of(article, now());
   }
 

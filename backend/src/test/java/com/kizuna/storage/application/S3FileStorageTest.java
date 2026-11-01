@@ -50,6 +50,17 @@ class S3FileStorageTest {
   }
 
   @Test
+  void store_acceptsArticleCoverPurpose() throws IOException {
+    when(multipartFile.getSize()).thenReturn(3L);
+    when(multipartFile.getContentType()).thenReturn("image/png");
+    when(multipartFile.getOriginalFilename()).thenReturn("cover.png");
+    when(multipartFile.getBytes()).thenReturn(new byte[3]);
+
+    assertThat(storageService.store(1L, "public", "article-cover", multipartFile))
+        .matches("public/1/article-cover/[0-9a-f-]{36}\\.png");
+  }
+
+  @Test
   void store_uploadsToFixedBucketWithBucketPrefixKey() throws IOException {
     byte[] content = "test content".getBytes();
     when(multipartFile.getSize()).thenReturn((long) content.length);

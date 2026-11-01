@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { PublicArticle } from '../../model/types';
 import PublishedOn from './PublishedOn';
@@ -10,6 +11,19 @@ export default function ArticleSection({ article }: { article: PublicArticle }) 
   return (
     <section className="py-12 md:py-20 px-5 sm:px-6" style={{ background: 'var(--storefront-bg)' }}>
       <article className="max-w-3xl mx-auto">
+        {/* 表題はページ見出しにあるので、表紙は装飾として読み上げない */}
+        {article.cover_image_url && (
+          <div className="relative aspect-video mb-8 overflow-hidden">
+            <Image
+              src={article.cover_image_url}
+              alt=""
+              fill
+              priority
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 768px"
+            />
+          </div>
+        )}
         {article.publish_from && (
           <p className="mb-6 text-xs md:text-sm tracking-wider text-[color-mix(in_srgb,var(--storefront-accent)_70%,transparent)]">
             <PublishedOn value={article.publish_from} />

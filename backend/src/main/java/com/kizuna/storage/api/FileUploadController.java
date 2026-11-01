@@ -25,7 +25,8 @@ public class FileUploadController {
   private final StoredFileAudit storedFileAudit;
 
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('PERM_STORE_PROFILE_MANAGE', 'PERM_CAST_MANAGE')")
+  @PreAuthorize(
+      "hasAnyAuthority('PERM_STORE_PROFILE_MANAGE', 'PERM_CAST_MANAGE', 'PERM_ARTICLE_MANAGE')")
   public ResponseEntity<FileUploadResponse> upload(
       @CurrentStore Long storeId,
       @RequestParam("file") MultipartFile file,

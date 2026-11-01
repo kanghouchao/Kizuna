@@ -1,6 +1,13 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, createStaffFixture, loginUser } from './store-api';
+import {
+  ADMIN_PASSWORD,
+  STORE_HEADERS,
+  createPermissionRole,
+  createStaffFixture,
+  loginUser,
+  uploadStoreImage,
+} from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 let token = '';
@@ -8,6 +15,7 @@ let articleId = '';
 let version = 0;
 let title = '';
 let suffix = '';
+let coverUrl = '';
 const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${token}` });
 // 記法らしき文字列と改行を含め、HTML や記法として解釈されず書いたとおりに出ることを確かめる
 const body = () => `${title} の一行目\n<b>太字ではない</b>\n**強調でもない**`;
@@ -90,6 +98,51 @@ Then('お知らせ一覧から記事が消え記事ページは見つからな�
   await expect(page.getByRole('heading', { name: 'ページが見つかりませんでした' })).toBeVisible();
 });
 
+async function setCover(request: APIRequestContext, cover: string | null) {
+  const response = await request.put(`/api/articles/${articleId}`, {
+    headers: headers(),
+    data: { title, body: body(), cover_image_url: cover, version },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  const article = await response.json();
+  version = article.version;
+  return article;
+}
+
+When('記事管理者が表紙画像をアップロードして記事に付ける', async ({ request }) => {
+  // 記事管理の権限だけで公開アセットへ上げられる
+  const uploaded = await uploadStoreImage(request, token, 'article-cover');
+  expect(uploaded.status(), await uploaded.text()).toBe(201);
+  coverUrl = (await uploaded.json()).url;
+  expect(coverUrl).toMatch(/^\/static\/uploads\/public\/\d+\/article-cover\/[0-9a-f-]{36}\.png$/);
+  expect((await setCover(request, coverUrl)).cover_image_url).toBe(coverUrl);
+});
+
+Then('お知らせ一覧と記事ページに表紙画像が表示される', async ({ page }) => {
+  await page.goto('/news');
+  const card = page.getByRole('link').filter({ hasText: title });
+  await expect(card.locator(`img[src="${coverUrl}"]`)).toBeVisible();
+  // 画像の実体が訪問者のブラウザから読めることまで確かめる
+  await expect.poll(() => card.locator('img').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await page.goto(`/news/${articleId}`);
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await expect(page.locator(`img[src="${coverUrl}"]`)).toBeVisible();
+});
+
+When('記事の表紙画像を外す', async ({ request }) => {
+  expect((await setCover(request, null)).cover_image_url).toBeUndefined();
+});
+
+Then('お知らせ一覧と記事ページから表紙画像が消える', async ({ page }) => {
+  await page.goto('/news');
+  const card = page.getByRole('link').filter({ hasText: title });
+  await expect(card).toBeVisible();
+  await expect(card.locator('img')).toHaveCount(0);
+  await page.goto(`/news/${articleId}`);
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await expect(page.locator(`img[src="${coverUrl}"]`)).toHaveCount(0);
+});
+
 // 途中で失敗しても掲出したまま残さない。ベストエフォート。
 After(async ({ request }) => {
   if (articleId && token) {
@@ -102,4 +155,5 @@ After(async ({ request }) => {
   version = 0;
   title = '';
   suffix = '';
+  coverUrl = '';
 });

@@ -1755,11 +1755,12 @@ export const SAMPLE_PNG = Buffer.from(
 export function uploadStoreImage(
   request: APIRequestContext,
   token: string,
+  purpose = "store-logo",
 ): Promise<APIResponse> {
   return request.post("/api/files", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
     multipart: {
-      purpose: "store-logo",
+      purpose,
       file: { name: "storage-probe.png", mimeType: "image/png", buffer: SAMPLE_PNG },
     },
   });

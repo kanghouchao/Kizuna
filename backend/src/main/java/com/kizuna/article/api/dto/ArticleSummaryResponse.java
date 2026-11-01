@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 public record ArticleSummaryResponse(
     String id,
     String title,
+    String coverImageUrl,
     Publication publication,
     boolean displayed,
     OffsetDateTime updatedAt,
@@ -15,6 +16,7 @@ public record ArticleSummaryResponse(
     return new ArticleSummaryResponse(
         article.getId(),
         article.getTitle(),
+        article.getCoverImageUrl(),
         article.getPublication(),
         article.getPublication().shownAt(now),
         article.getUpdatedAt(),
