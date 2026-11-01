@@ -16,11 +16,12 @@ export interface Page<T> {
 }
 
 // 公開設定。記事と口コミが同じ形で持つ値オブジェクト（日時は ISO 8601 の瞬間）
+// 後端は null の項目を応答から省くため、未設定の項目は欠落として届く。
 export interface Publication {
   published: boolean;
-  publish_from: string | null;
-  publish_until: string | null;
-  display_order: number | null;
+  publish_from?: string | null;
+  publish_until?: string | null;
+  display_order?: number | null;
 }
 
 // 公開画像の用途。保存先 key の一段になり、バックエンドが同じ許可リストで検証する

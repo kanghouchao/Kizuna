@@ -49,6 +49,6 @@ export function publicationSummary(p: Publication) {
     p.publish_from || p.publish_until
       ? `${p.publish_from ? storeTime(p.publish_from) : '開始指定なし'} 〜 ${p.publish_until ? storeTime(p.publish_until) : '終了指定なし'}`
       : '期間指定なし';
-  const order = p.display_order === null ? '表示順指定なし' : `表示順 ${p.display_order}`;
+  const order = p.display_order == null ? '表示順指定なし' : `表示順 ${p.display_order}`;
   return `${p.published ? '公開' : '非公開'} / ${period} / ${order}`;
 }

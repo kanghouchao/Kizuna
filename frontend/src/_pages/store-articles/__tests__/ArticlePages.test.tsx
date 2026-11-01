@@ -34,7 +34,8 @@ const article: Article = {
   id: '7',
   title: '夏のお知らせ',
   body: '本文です',
-  publication: { published: false, publish_from: null, publish_until: null, display_order: null },
+  // 後端は null の項目を応答から省くため、未設定の公開設定はこの形で届く。
+  publication: { published: false },
   displayed: false,
   updated_at: '2026-10-01T00:00:00Z',
   version: 3,
@@ -77,7 +78,7 @@ describe('一覧', () => {
     expect(within(shown).getByText('掲出中')).toBeVisible();
     const hidden = screen.getByText('下書きの記事').closest('tr')!;
     expect(within(hidden).getByText('非掲出')).toBeVisible();
-    expect(within(hidden).getByText(/非公開 \/ 期間指定なし/)).toBeVisible();
+    expect(within(hidden).getByText('非公開 / 期間指定なし / 表示順指定なし')).toBeVisible();
     expect(api.list).toHaveBeenCalledWith(0);
     expect(screen.getByRole('link', { name: '記事を作成' })).toHaveAttribute(
       'href',
