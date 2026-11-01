@@ -156,6 +156,23 @@ describe('表紙画像', () => {
 });
 
 describe('編集', () => {
+  test('表紙付きの記事は本文だけ直しても表紙をそのまま送る', async () => {
+    const cover = '/static/uploads/public/1/article-cover/a.png';
+    api.get.mockResolvedValue({ ...article, cover_image_url: cover });
+    api.update.mockResolvedValue({ ...article, cover_image_url: cover, version: 4 });
+    render(<ArticleEditPage />);
+    fireEvent.change(await screen.findByLabelText('本文'), { target: { value: '直した本文' } });
+    fireEvent.click(screen.getByRole('button', { name: '記事を保存' }));
+    await waitFor(() =>
+      expect(api.update).toHaveBeenCalledWith('7', {
+        title: '夏のお知らせ',
+        body: '直した本文',
+        cover_image_url: cover,
+        version: 3,
+      })
+    );
+  });
+
   test('本文の保存と公開設定の保存はそれぞれ直前の応答の版を送る', async () => {
     api.update.mockResolvedValue({ ...article, body: '直した本文', version: 4 });
     api.updatePublication.mockResolvedValue({
