@@ -1,4 +1,4 @@
-import { apiClient, type Page, type CursorPage } from '@/shared/api';
+import { apiClient, type Page } from '@/shared/api';
 import { getCurrentStoreId } from '@/shared/lib';
 export type Category = 'SALES' | 'RECRUITMENT';
 export interface CostValues {
@@ -174,10 +174,10 @@ export const advertisingApi = {
     (await apiClient.get<Page<Cost>>(base, { params: { month, page, size: 20 } })).data,
   get: async (id: string) => (await apiClient.get<Cost>(`${base}/${id}`)).data,
   month: async (month: string) => (await apiClient.get<Month>(`${months}/${month}`)).data,
-  changes: async (month: string, cursor?: string) =>
+  changes: async (month: string, page = 0) =>
     (
-      await apiClient.get<CursorPage<Change>>(`${months}/${month}/changes`, {
-        params: { cursor, size: 20 },
+      await apiClient.get<Page<Change>>(`${months}/${month}/changes`, {
+        params: { page, size: 20 },
       })
     ).data,
   change: async (month: string, id: string) =>

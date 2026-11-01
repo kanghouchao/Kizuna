@@ -13,6 +13,7 @@ import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
+import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingCost;
 import com.kizuna.advertising.domain.AdvertisingRequest;
 import com.kizuna.advertising.domain.AdvertisingValues;
@@ -28,6 +29,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -41,6 +43,7 @@ class AdvertisingServiceTest {
   AdvertisingService service =
       new AdvertisingService(
           records,
+          mock(AdvertisingChangeRepository.class),
           actors,
           audit,
           JsonMapper.builder().build(),
@@ -50,7 +53,7 @@ class AdvertisingServiceTest {
   @Test
   void readsAskTheRecordsForTheGivenStore() {
     when(records.list(eq(STORE_ID), eq("2026-09"), any())).thenReturn(new PageImpl<>(List.of()));
-    service.list(STORE_ID, "2026-09", 0, 20);
+    service.list(STORE_ID, "2026-09", PageRequest.of(0, 20));
     verify(records).list(eq(STORE_ID), eq("2026-09"), any());
 
     when(records.cost(STORE_ID, "c")).thenReturn(cost());

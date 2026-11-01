@@ -44,10 +44,15 @@ import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -110,6 +115,30 @@ class AdvertisingControllerTest {
 
   private String body() {
     return "{\"month\":\"2026-09\",\"category\":\"SALES\",\"media_name\":\"媒体\",\"amount\":0,\"inquiry_count\":null,\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}";
+  }
+
+  @Test
+  void changesAreAPageNewestFirstAndRejectOutOfRangePages() throws Exception {
+    var pageable = ArgumentCaptor.forClass(Pageable.class);
+    when(service.changes(eq(1L), eq("2026-09"), pageable.capture()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+    mvc.perform(
+            get("/advertising-cost-months/2026-09/changes")
+                .header("X-Store-ID", "1")
+                .with(permissions("VIEW")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+
+    mvc.perform(
+            get("/advertising-cost-months/2026-09/changes")
+                .param("page", "99999999")
+                .param("size", "100")
+                .header("X-Store-ID", "1")
+                .with(permissions("VIEW")))
+        .andExpect(status().isBadRequest());
   }
 
   @Test

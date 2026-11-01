@@ -12,6 +12,7 @@ import com.kizuna.advertising.api.dto.AdvertisingResponses.CostSummary;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
+import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingCost;
 import com.kizuna.advertising.domain.AdvertisingRequest;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
@@ -19,8 +20,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.web.CursorPage;
-import com.kizuna.shared.web.PageCursor;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
@@ -32,6 +31,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +41,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class AdvertisingService {
   private final AdvertisingRecords records;
+  private final AdvertisingChangeRepository changes;
   private final ActorIdentityService actors;
   private final BusinessAudit audit;
   private final ObjectMapper json;
@@ -51,10 +52,8 @@ public class AdvertisingService {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public Page<CostSummary> list(Long storeId, String month, int page, int size) {
-    return records
-        .list(storeId, AdvertisingInput.month(month), AdvertisingInput.page(page, size))
-        .map(CostSummary::of);
+  public Page<CostSummary> list(Long storeId, String month, Pageable pageable) {
+    return records.list(storeId, AdvertisingInput.month(month), pageable).map(CostSummary::of);
   }
 
   @Transactional(readOnly = true)
@@ -223,14 +222,9 @@ public class AdvertisingService {
   }
 
   @Transactional(readOnly = true)
-  public CursorPage<ChangeSummary> changes(
-      Long storeId, String month, String cursor, int requestedSize) {
-    AdvertisingInput.month(month);
-    int size = CursorPage.clampSize(requestedSize);
-    return CursorPage.of(
-            records.changes(storeId, month, cursor, size),
-            size,
-            c -> new PageCursor(c.getCreatedAt().toString(), c.getId()).encode())
+  public Page<ChangeSummary> changes(Long storeId, String month, Pageable pageable) {
+    return changes
+        .findByStoreIdAndMonth(storeId, AdvertisingInput.month(month), pageable)
         .map(
             c ->
                 new ChangeSummary(

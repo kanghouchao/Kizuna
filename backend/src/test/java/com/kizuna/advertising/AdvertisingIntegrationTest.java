@@ -20,6 +20,7 @@ import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
+import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourses;
@@ -61,6 +62,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
@@ -81,6 +85,7 @@ import tools.jackson.databind.json.JsonMapper;
 @EnabledIfIntegration
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AdvertisingIntegrationTest {
+  private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
   AnnotationConfigApplicationContext context;
   AdvertisingService service;
   JdbcTemplate jdbc;
@@ -147,11 +152,12 @@ class AdvertisingIntegrationTest {
     assertThatThrownBy(() -> service.get(1L, first.id())).isInstanceOf(NotFoundException.class);
     assertThat(service.month(1L, "2026-09").recordedTotalAmount()).isZero();
     assertThat(service.month(1L, "2026-09").version()).isEqualTo(3);
-    var history = service.changes(1L, "2026-09", null, 2);
-    assertThat(history.content()).hasSize(2);
-    assertThat(history.nextCursor()).isNotNull();
-    assertThat(service.changes(1L, "2026-09", history.nextCursor(), 2).content()).hasSize(1);
-    var change = service.changeDetail(1L, "2026-09", history.content().getFirst().id());
+    var history = service.changes(1L, "2026-09", PageRequest.of(0, 2, NEWEST_FIRST));
+    assertThat(history.getContent()).hasSize(2);
+    assertThat(history.getTotalElements()).isEqualTo(3);
+    assertThat(service.changes(1L, "2026-09", PageRequest.of(1, 2, NEWEST_FIRST)).getContent())
+        .hasSize(1);
+    var change = service.changeDetail(1L, "2026-09", history.getContent().getFirst().id());
     assertThat(change.before().amount()).isEqualTo(200);
     assertThat(change.after()).isNull();
     assertThat(change.actorId()).isEqualTo(42);
@@ -194,7 +200,7 @@ class AdvertisingIntegrationTest {
     var copied = service.copy(1L, "2026-10", request, "actor");
     assertThat(copied.copiedCount()).isEqualTo(2);
     assertThat(service.copy(1L, "2026-10", request, "actor")).isEqualTo(copied);
-    assertThat(service.list(1L, "2026-10", 0, 100).getContent())
+    assertThat(service.list(1L, "2026-10", PageRequest.of(0, 100)).getContent())
         .allSatisfy(c -> assertThat(c.inquiryCount()).isNull());
     assertThat(service.month(1L, "2026-10").recordedTotalAmount()).isEqualTo(300);
     assertThatThrownBy(
@@ -212,11 +218,13 @@ class AdvertisingIntegrationTest {
   @Test
   void filtersAllStoreResourcesAndHistories() {
     var c = service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
-    var change = service.changes(1L, "2026-09", null, 20).content().getFirst();
-    assertThat(service.list(2L, "2026-09", 0, 20).getContent()).isEmpty();
+    var change =
+        service.changes(1L, "2026-09", PageRequest.of(0, 20, NEWEST_FIRST)).getContent().getFirst();
+    assertThat(service.list(2L, "2026-09", PageRequest.of(0, 20)).getContent()).isEmpty();
     assertThat(service.month(2L, "2026-09").recordedTotalAmount()).isZero();
     assertThat(service.snapshot(2L, "2026-09").costs()).isEmpty();
-    assertThat(service.changes(2L, "2026-09", null, 20).content()).isEmpty();
+    assertThat(service.changes(2L, "2026-09", PageRequest.of(0, 20, NEWEST_FIRST)).getContent())
+        .isEmpty();
     assertThatThrownBy(() -> service.get(2L, c.id())).isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> service.changeDetail(2L, "2026-09", change.id()))
         .isInstanceOf(NotFoundException.class);
@@ -243,7 +251,8 @@ class AdvertisingIntegrationTest {
             () -> service.create(1L, request, "actor"), () -> service.create(1L, request, "actor"));
     assertThat(result.get(0)).isEqualTo(result.get(1));
     assertThat(service.month(1L, "2026-09").entryCount()).isEqualTo(1);
-    assertThat(service.changes(1L, "2026-09", null, 20).content()).hasSize(1);
+    assertThat(service.changes(1L, "2026-09", PageRequest.of(0, 20, NEWEST_FIRST)).getContent())
+        .hasSize(1);
   }
 
   @Test
@@ -397,7 +406,8 @@ class AdvertisingIntegrationTest {
         .isInstanceOf(IllegalStateException.class);
     assertThat(service.month(1L, "2026-10").entryCount()).isZero();
     assertThat(service.month(1L, "2026-10").version()).isZero();
-    assertThat(service.changes(1L, "2026-10", null, 20).content()).isEmpty();
+    assertThat(service.changes(1L, "2026-10", PageRequest.of(0, 20, NEWEST_FIRST)).getContent())
+        .isEmpty();
     reset(audits);
     assertThat(service.copy(1L, "2026-10", request, "actor").copiedCount()).isEqualTo(2);
   }
@@ -534,6 +544,7 @@ class AdvertisingIntegrationTest {
 
   @Configuration
   @EnableTransactionManagement
+  @EnableJpaRepositories(basePackageClasses = AdvertisingChangeRepository.class)
   @EnableMethodSecurity
   @Import({
     AdvertisingService.class,

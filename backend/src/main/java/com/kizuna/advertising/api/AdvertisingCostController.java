@@ -14,11 +14,13 @@ import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingFailures;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.shared.storescope.CurrentStore;
-import com.kizuna.shared.web.CursorPage;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -46,11 +48,13 @@ public class AdvertisingCostController {
   public ResponseEntity<Page<CostSummary>> list(
       @CurrentStore Long storeId,
       @RequestParam String month,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(AdvertisingFailures.run(() -> service.list(storeId, month, page, size)));
+        .body(AdvertisingFailures.run(() -> service.list(storeId, month, pageable)));
   }
 
   @GetMapping("/advertising-costs/{id}")
@@ -118,14 +122,17 @@ public class AdvertisingCostController {
 
   @GetMapping("/advertising-cost-months/{month}/changes")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
-  public ResponseEntity<CursorPage<ChangeSummary>> changes(
+  public ResponseEntity<Page<ChangeSummary>> changes(
       @CurrentStore Long storeId,
       @PathVariable String month,
-      @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(service.changes(storeId, month, cursor, size));
+        .body(service.changes(storeId, month, pageable));
   }
 
   @GetMapping("/advertising-cost-months/{month}/changes/{id}")

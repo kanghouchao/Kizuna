@@ -71,14 +71,9 @@ class AdvertisingDomainTest {
   }
 
   @Test
-  void validatesMonthsAndBoundedPaging() {
+  void validatesMonths() {
     for (String month : new String[] {"0000-01", "2026-13", "2026-1", "+2026-01", "2026-02-01"})
       assertThatThrownBy(() -> AdvertisingInput.month(month)).isInstanceOf(ServiceException.class);
     assertThat(AdvertisingInput.month("0001-01")).isEqualTo("0001-01");
-    assertThat(AdvertisingInput.page(1, 2000).getPageSize()).isEqualTo(100);
-    assertThatThrownBy(() -> AdvertisingInput.page(-1, 20)).isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> AdvertisingInput.page(0, 0)).isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> AdvertisingInput.page(Integer.MAX_VALUE, 100))
-        .isInstanceOf(ServiceException.class);
   }
 }
