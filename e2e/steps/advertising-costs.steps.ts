@@ -677,9 +677,19 @@ Then(
           })
         ).status(),
       ).toBe(403);
-    const invalidQueries: Record<string, string | number | boolean>[] = [
+    for (const params of [
       { month, page: -1 },
       { month, size: 0 },
+    ] as Record<string, string | number>[]) {
+      const normalized = await request.get(mediaBase, { headers: h(), params });
+      expect(normalized.status()).toBe(200);
+      expect((await normalized.json()).rows).toMatchObject({
+        number: 0,
+        size: 20,
+      });
+    }
+    const invalidQueries: Record<string, string | number | boolean>[] = [
+      { month, page: 99999999, size: 100 },
       { month, sort: "amount" },
       { month: "2026-13" },
     ];

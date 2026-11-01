@@ -424,7 +424,6 @@ Then(
       { month: "2026-13" },
       { month: "2026-9" },
       { store_id: 0 },
-      { page: -1 },
     ] as Record<string, string | number>[]) {
       expect(
         (
@@ -435,6 +434,12 @@ Then(
         ).status(),
       ).toBe(400);
     }
+    const normalized = await request.get(base, {
+      params: { store_id: STORE1_ID, month, page: -1 },
+      headers,
+    });
+    expect(normalized.status()).toBe(200);
+    expect((await normalized.json()).orders.number).toBe(0);
     expect(
       (
         await request.get(base, { params: { store_id: STORE1_ID }, headers })

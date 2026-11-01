@@ -38,9 +38,11 @@ public class BonusController {
       @CurrentStore Long storeId,
       @RequestParam(name = "person_id") Long personId,
       @RequestParam String month,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.bonuses(storeId, personId, month, page, size);
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
+    return service.bonuses(storeId, personId, month, pageable);
   }
 
   @PostMapping

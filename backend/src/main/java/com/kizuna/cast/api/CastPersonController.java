@@ -6,6 +6,9 @@ import com.kizuna.cast.api.dto.AdminCastSummaryResponse;
 import com.kizuna.cast.application.AdminCastService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,9 +26,11 @@ public class CastPersonController {
   @PreAuthorize("hasAuthority('PERM_CAST_PERSON_VIEW')")
   public Page<AdminCastSummaryResponse> list(
       @RequestParam(required = false) String search,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.list(search, page, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"id"})
+          Pageable pageable) {
+    return service.list(search, pageable);
   }
 
   @GetMapping("/{id}")
@@ -38,8 +43,11 @@ public class CastPersonController {
   @PreAuthorize("hasAuthority('PERM_CAST_PERSON_VIEW')")
   public Page<AdminCastEnrollmentResponse> enrollments(
       @PathVariable Long id,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.enrollments(id, page, size);
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return service.enrollments(id, pageable);
   }
 }

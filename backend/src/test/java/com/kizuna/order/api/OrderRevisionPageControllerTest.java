@@ -28,6 +28,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -99,6 +100,32 @@ class OrderRevisionPageControllerTest {
 
     assertThat(revisions.getValue().getSort()).isEqualTo(NEWEST_FIRST);
     assertThat(events.getValue().getSort()).isEqualTo(NEWEST_FIRST);
+  }
+
+  @Test
+  void currentCandidatesArePagesInNameOrder() throws Exception {
+    var byName = Sort.by("afterTerms.name", "serviceId", "id");
+    var selections = ArgumentCaptor.forClass(Pageable.class);
+    when(catalog.candidates(eq(1L), any(SelectionKind.class), eq("基本"), selections.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    var specialCandidates = ArgumentCaptor.forClass(Pageable.class);
+    when(specialCatalog.candidates(eq(1L), eq("c1"), any(), specialCandidates.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    for (String path : List.of("/orders/course-candidates", "/orders/surcharge-candidates")) {
+      mvc.perform(get(path).param("search", "基本").header("X-Store-ID", "1"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.total_elements").value(0));
+      assertThat(selections.getValue()).isEqualTo(PageRequest.of(0, 20, byName));
+    }
+    mvc.perform(
+            get("/orders/special-service-candidates")
+                .param("cast_id", "c1")
+                .param("size", "101")
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    assertThat(specialCandidates.getValue()).isEqualTo(PageRequest.of(0, 100, byName));
   }
 
   @Test

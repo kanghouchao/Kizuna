@@ -11,7 +11,14 @@ beforeEach(() => {
 it('本人照会には本人IDを送らず店と月と各ページを指定する', async () => {
   await remunerationApi.statement({ scope: 'self', storeId: 7 }, '2026-09', 2, 3);
   expect(get).toHaveBeenCalledWith('/me/remuneration-statements', {
-    params: { store_id: 7, month: '2026-09', order_page: 2, bonus_page: 3, size: 20 },
+    params: {
+      store_id: 7,
+      month: '2026-09',
+      order_page: 2,
+      order_size: 20,
+      bonus_page: 3,
+      bonus_size: 20,
+    },
   });
 });
 it('店舗の明細は現在店舗の境界で本人を指定し、店舗はクエリに載せない', async () => {

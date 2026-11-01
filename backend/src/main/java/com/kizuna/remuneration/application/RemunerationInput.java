@@ -3,16 +3,9 @@ package com.kizuna.remuneration.application;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
-import org.springframework.data.domain.PageRequest;
 
 final class RemunerationInput {
   private RemunerationInput() {}
-
-  static PageRequest page(int page, int size) {
-    if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
-      throw new ServiceException("ページ指定が不正です");
-    return PageRequest.of(page, size);
-  }
 
   static YearMonth month(String value) {
     try {

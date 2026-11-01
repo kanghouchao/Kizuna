@@ -661,12 +661,23 @@ Then(
           })
         ).status(),
       ).toBe(400);
-    for (const page of [-1, 2147483647])
-      expect(
-        (
-          await request.get(path, { headers, params: { ...params, page } })
-        ).status(),
-      ).toBe(400);
+    expect(
+      (
+        await request.get(path, {
+          headers,
+          params: { ...params, page: 2147483647 },
+        })
+      ).status(),
+    ).toBe(400);
+    const normalized = await request.get(path, {
+      headers,
+      params: { ...params, page: -1, size: 0 },
+    });
+    expect(normalized.status()).toBe(200);
+    expect((await normalized.json()).orders).toMatchObject({
+      number: 0,
+      size: 20,
+    });
     const selfParams = { store_id: STORE1_ID, business_date: "2026-09-30" };
     expect(
       (

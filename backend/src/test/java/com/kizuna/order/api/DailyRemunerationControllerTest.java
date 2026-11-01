@@ -140,12 +140,15 @@ class DailyRemunerationControllerTest {
           .andExpect(jsonPath("$.error").isString());
   }
 
-  @ParameterizedTest
-  @CsvSource({"-1,20", "2147483647,20"})
-  void invalidPageIs400(String page, String size) throws Exception {
-    for (String scope : List.of("store", "self"))
-      mvc.perform(request(scope, "2026-09-30").param("page", page).param("size", size))
+  @Test
+  void offsetBeyondIntIs400AndNegativePageIsNormalized() throws Exception {
+    for (String scope : List.of("store", "self")) {
+      mvc.perform(request(scope, "2026-09-30").param("page", "2147483647").param("size", "20"))
           .andExpect(status().isBadRequest());
+      mvc.perform(request(scope, "2026-09-30").param("page", "-1"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.orders.number").value(0));
+    }
   }
 
   @ParameterizedTest
@@ -174,8 +177,8 @@ class DailyRemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"0,1", "-2,1", "101,100"})
-  void clampsPageSize(int requested, int expected) throws Exception {
+  @CsvSource({"0,20", "-2,20", "101,100"})
+  void normalizesPageSize(int requested, int expected) throws Exception {
     mvc.perform(request("store", "2026-09-30").param("size", Integer.toString(requested)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.orders.size").value(expected));

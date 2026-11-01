@@ -55,6 +55,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -561,13 +563,19 @@ class PointExpiryIntegrationTest {
     var page =
         first
             .getBean(ServiceExecutionIdentityService.class)
-            .candidates(0, 1, PermissionCode.POINT_EXPIRE);
+            .candidates(
+                PageRequest.of(0, 1, Sort.by("displayName", "id")),
+                PermissionCode.POINT_EXPIRE,
+                null);
     assertThat(page.getTotalElements()).isEqualTo(1);
     assertThat(page.getContent().getFirst().id()).isEqualTo(serviceId);
     assertThat(
             first
                 .getBean(ServiceExecutionIdentityService.class)
-                .candidates(1, 1, PermissionCode.POINT_EXPIRE)
+                .candidates(
+                    PageRequest.of(1, 1, Sort.by("displayName", "id")),
+                    PermissionCode.POINT_EXPIRE,
+                    null)
                 .getContent())
         .isEmpty();
   }

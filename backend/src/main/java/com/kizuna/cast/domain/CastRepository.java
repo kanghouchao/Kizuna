@@ -14,7 +14,6 @@ public interface CastRepository extends JpaRepository<Cast, Long> {
       from Cast c join com.kizuna.user.domain.User u on u.id = c.userId
       where lower(u.displayName) like :pattern escape '\\'
          or lower(c.realName) like :pattern escape '\\'
-      order by c.id asc
       """)
   Page<CastPersonSummaryView> searchPeople(@Param("pattern") String pattern, Pageable pageable);
 

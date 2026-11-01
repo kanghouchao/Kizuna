@@ -47,7 +47,6 @@ public interface ServiceRevisionRepository extends StoreScopedRepository<Service
         and c.termsVersion = s.termsVersion
         and enrollment.status = com.kizuna.cast.domain.CastEnrollmentStatus.ENROLLED
         and locate(lower(:search), lower(r.afterTerms.name)) > 0
-      order by r.afterTerms.name, r.serviceId
       """)
   Page<SpecialServiceTerms> findAcceptedSpecials(
       Long storeId, String enrollment, String search, Pageable pageable);
@@ -86,8 +85,7 @@ public interface ServiceRevisionRepository extends StoreScopedRepository<Service
   @Query(
       SELECTION_SELECT
           + " and s.deleted = false and r.revisionNumber = s.revisionNumber"
-          + " and locate(lower(:search), lower(r.afterTerms.name)) > 0"
-          + " order by r.afterTerms.name, r.serviceId")
+          + " and locate(lower(:search), lower(r.afterTerms.name)) > 0")
   Page<OrderServiceTerms> findCurrentSelections(
       Long storeId, ServiceKind kind, String search, Pageable pageable);
 

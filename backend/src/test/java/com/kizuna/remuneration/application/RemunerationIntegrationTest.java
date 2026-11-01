@@ -203,7 +203,11 @@ class RemunerationIntegrationTest {
             () ->
                 management.createGuarantee(storeId, guarantee(10000, 1, UUID.randomUUID()), email))
         .isInstanceOf(AccessDeniedException.class);
-    assertThat(management.guarantees(storeId, personId, 0, 20).entries().getTotalElements())
+    assertThat(
+            management
+                .guarantees(storeId, personId, PageRequest.of(0, 20))
+                .entries()
+                .getTotalElements())
         .isEqualTo(1);
   }
 
@@ -217,29 +221,47 @@ class RemunerationIntegrationTest {
     management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email);
     management.createBonus(
         storeId, new BonusCreateRequest(personId, DAY, 1500, "付与", UUID.randomUUID()), email);
-    var store = statements.store(storeId, personId, "2026-09", 0, 0, 20);
-    var self = statements.self(email, storeId, "2026-09", 0, 0, 20);
+    var store =
+        statements.store(
+            storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
+    var self =
+        statements.self(email, storeId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
     assertThat(store.guaranteeTotal()).isEqualTo(3000);
     assertThat(store.total()).isEqualTo(11500);
     assertThat(self.total()).isEqualTo(store.total());
     assertThat(store.days().getLast().closedDuration()).isEqualTo("PT4H");
     assertThat(store.orders().getTotalElements()).isEqualTo(1);
-    assertThat(statements.self(email, storeId, "2026-10", 0, 0, 20).total()).isZero();
+    assertThat(
+            statements
+                .self(email, storeId, "2026-10", PageRequest.of(0, 20), PageRequest.of(0, 20))
+                .total())
+        .isZero();
   }
 
   @Test
   void cancelledAttendanceAndStoppedTermRecalculateWithoutBlockingTheMonth() {
     management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email);
     jdbc.update("update t_attendances set actual_end_at=null where id=?", attendanceId);
-    assertThat(statements.store(storeId, personId, "2026-09", 0, 0, 20).guaranteeTotal()).isNull();
-    var term = management.guarantees(storeId, personId, 0, 20).entries().getContent().getFirst();
+    assertThat(
+            statements
+                .store(storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20))
+                .guaranteeTotal())
+        .isNull();
+    var term =
+        management
+            .guarantees(storeId, personId, PageRequest.of(0, 20))
+            .entries()
+            .getContent()
+            .getFirst();
     management.correctGuarantee(
         storeId,
         term.id(),
         new GuaranteeCorrectionRequest(
             DAY, GuaranteeState.STOPPED, null, "停止", "停止日訂正", 1L, UUID.randomUUID()),
         email);
-    var stopped = statements.store(storeId, personId, "2026-09", 0, 0, 20);
+    var stopped =
+        statements.store(
+            storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
     assertThat(stopped.guaranteeTotal()).isZero();
     assertThat(stopped.days().getLast().attendanceIncomplete()).isTrue();
     assertThat(stopped.days().getLast().guaranteeStatus()).isEqualTo(Status.STOPPED);
@@ -298,13 +320,21 @@ class RemunerationIntegrationTest {
         new CancellationRequest("誤記取消", changed.version(), UUID.randomUUID()),
         email);
     assertThat(management.bonusChanges(storeId, bonus.id(), NEWEST_FIRST).getContent()).hasSize(3);
-    assertThat(statements.store(storeId, personId, "2026-09", 0, 0, 20).bonusTotal()).isZero();
+    assertThat(
+            statements
+                .store(storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20))
+                .bonusTotal())
+        .isZero();
     management.cancelGuarantee(
         storeId,
         created.guarantee().id(),
         new CancellationRequest("誤記取消", 2L, UUID.randomUUID()),
         email);
-    assertThat(statements.store(storeId, personId, "2026-09", 0, 0, 20).guaranteeTotal()).isNull();
+    assertThat(
+            statements
+                .store(storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20))
+                .guaranteeTotal())
+        .isNull();
   }
 
   @Test
@@ -327,7 +357,8 @@ class RemunerationIntegrationTest {
                     new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()),
                     email))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> management.guarantees(storeId + 100000, personId, 0, 20))
+    assertThatThrownBy(
+            () -> management.guarantees(storeId + 100000, personId, PageRequest.of(0, 20)))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> management.bonusChanges(storeId + 100000, bonus.id(), NEWEST_FIRST))
         .isInstanceOf(NotFoundException.class);
@@ -341,7 +372,14 @@ class RemunerationIntegrationTest {
                     new CancellationRequest("取消", bonus.version(), UUID.randomUUID()),
                     email))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> statements.self(email, storeId + 100000, "2026-09", 0, 0, 20))
+    assertThatThrownBy(
+            () ->
+                statements.self(
+                    email,
+                    storeId + 100000,
+                    "2026-09",
+                    PageRequest.of(0, 20),
+                    PageRequest.of(0, 20)))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -363,7 +401,10 @@ class RemunerationIntegrationTest {
               });
       assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(second.get(10, TimeUnit.SECONDS));
     }
-    assertThat(management.bonuses(storeId, personId, "2026-09", 0, 20).getTotalElements())
+    assertThat(
+            management
+                .bonuses(storeId, personId, "2026-09", PageRequest.of(0, 20))
+                .getTotalElements())
         .isEqualTo(1);
     assertThat(
             jdbc.queryForObject(
@@ -391,7 +432,8 @@ class RemunerationIntegrationTest {
       for (var result : results) if (result.get(10, TimeUnit.SECONDS)) succeeded++;
       assertThat(succeeded).isEqualTo(1);
     }
-    assertThat(management.guarantees(storeId, personId, 0, 20).version()).isEqualTo(1);
+    assertThat(management.guarantees(storeId, personId, PageRequest.of(0, 20)).version())
+        .isEqualTo(1);
   }
 
   private boolean attemptFirst(CountDownLatch start) throws Exception {
@@ -422,8 +464,10 @@ class RemunerationIntegrationTest {
               () -> {
                 authorize();
                 return self
-                    ? statements.self(email, storeId, "2026-09", 0, 0, 20)
-                    : statements.store(storeId, personId, "2026-09", 0, 0, 20);
+                    ? statements.self(
+                        email, storeId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20))
+                    : statements.store(
+                        storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
               });
       assertThat(facts.reached.await(10, TimeUnit.SECONDS)).isTrue();
       jdbc.update("update t_orders set accrued_remuneration=9000 where id=?", orderId);
@@ -438,7 +482,11 @@ class RemunerationIntegrationTest {
       facts.resume.countDown();
       facts.reached = null;
     }
-    assertThat(statements.store(storeId, personId, "2026-09", 0, 0, 20).guaranteeTotal()).isNull();
+    assertThat(
+            statements
+                .store(storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20))
+                .guaranteeTotal())
+        .isNull();
   }
 
   static class SnapshotFacts extends OrderRemunerationFacts {

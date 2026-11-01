@@ -441,9 +441,15 @@ class OperationalReportControllerTest {
   }
 
   @Test
-  void invalidCriteriaAndSizeAre400AndOversizeNeverSetsAttachment() throws Exception {
+  void outOfRangePagingIsNormalizedOrRejectedAndOversizeNeverSetsAttachment() throws Exception {
     mvc.perform(
             request("admin", "", "ORDER_SET_VIEW", "OPERATIONAL_REPORT_VIEW").param("size", "101"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.rows.size").value(100));
+    mvc.perform(
+            request("admin", "", "ORDER_SET_VIEW", "OPERATIONAL_REPORT_VIEW")
+                .param("page", "99999999")
+                .param("size", "100"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").isString());
     mvc.perform(

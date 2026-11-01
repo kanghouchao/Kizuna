@@ -14,6 +14,7 @@ import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionTimedOutException;
 
@@ -30,8 +31,7 @@ public class OperationalReportService {
       String from,
       String to,
       String groupBy,
-      int page,
-      int size,
+      Pageable pageable,
       boolean includeRemuneration,
       boolean includeAdvertising) {
     return view(
@@ -39,8 +39,7 @@ public class OperationalReportService {
         from,
         to,
         groupBy,
-        page,
-        size);
+        pageable);
   }
 
   public OperationalReportResponse viewGroupWide(
@@ -48,8 +47,7 @@ public class OperationalReportService {
       String from,
       String to,
       String groupBy,
-      int page,
-      int size,
+      Pageable pageable,
       boolean includeRemuneration,
       boolean includeAdvertising) {
     return view(
@@ -57,8 +55,7 @@ public class OperationalReportService {
         from,
         to,
         groupBy,
-        page,
-        size);
+        pageable);
   }
 
   public byte[] exportStore(
@@ -100,17 +97,14 @@ public class OperationalReportService {
       String from,
       String to,
       String groupBy,
-      int page,
-      int size) {
-    if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
-      throw new ServiceException("ページ番号と件数（1〜100）の指定が不正です");
+      Pageable pageable) {
     try {
       return execute(
           read,
           from,
           to,
           groupBy,
-          (report, budget) -> OperationalReportResponse.from(report, page, size));
+          (report, budget) -> OperationalReportResponse.from(report, pageable));
     } catch (IOException ex) {
       throw new IllegalStateException(ex);
     }

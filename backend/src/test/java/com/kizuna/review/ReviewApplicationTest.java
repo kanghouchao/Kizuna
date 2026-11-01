@@ -388,7 +388,8 @@ class ReviewApplicationTest {
         service.list(
             STORE_ID,
             "actor",
-            new ReviewSearch(0, 20, null, null, null, null, ReviewSearch.Order.RECEIVED_DESC));
+            new ReviewSearch(
+                PageRequest.of(0, 20), null, null, null, null, ReviewSearch.Order.RECEIVED_DESC));
     assertThat(page.getContent().getFirst().displayName()).isEqualTo("表示名");
     when(history.findBy(
             ArgumentMatchers.<Specification<ReviewHistory>>any(),

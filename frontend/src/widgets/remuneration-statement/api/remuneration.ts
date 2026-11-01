@@ -25,8 +25,9 @@ export const remunerationApi = {
         params: {
           month,
           order_page: orderPage,
+          order_size: 20,
           bonus_page: bonusPage,
-          size: 20,
+          bonus_size: 20,
           ...('personId' in scope ? { person_id: scope.personId } : {}),
           ...('storeId' in scope ? { store_id: scope.storeId } : {}),
         },

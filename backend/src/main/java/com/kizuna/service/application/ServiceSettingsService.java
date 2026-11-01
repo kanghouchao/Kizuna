@@ -14,7 +14,6 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -24,9 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,18 +40,13 @@ public class ServiceSettingsService {
 
   @Transactional(readOnly = true)
   public Page<ServiceSummary> list(
-      Long storeId, ServiceKind kind, boolean deleted, int page, int size) {
-    if (page < 0 || size < 1 || size > CursorPage.MAX_SIZE)
-      throw new ServiceException("ページ番号と取得件数が不正です");
+      Long storeId, ServiceKind kind, boolean deleted, Pageable pageable) {
     Specification<ServiceItem> filter =
         (root, query, cb) ->
             cb.and(cb.equal(root.get("storeId"), storeId), cb.equal(root.get("deleted"), deleted));
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
-    // 作成直後のサービスを先頭ページに出す。ID は文字列で桁が増えると辞書順が作成順と
-    // ずれるため作成日時で並べ、ID は同時刻の順序を固定する第 2 キーにとどめる。
-    var newestFirst = Sort.by(Sort.Direction.DESC, ServiceItem::getCreatedAt, ServiceItem::getId);
-    return items.findAll(filter, PageRequest.of(page, size, newestFirst)).map(mapper::summary);
+    return items.findAll(filter, pageable).map(mapper::summary);
   }
 
   @Transactional(readOnly = true)

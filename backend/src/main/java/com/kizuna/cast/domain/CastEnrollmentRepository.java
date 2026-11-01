@@ -22,7 +22,6 @@ public interface CastEnrollmentRepository extends StoreScopedRepository<CastEnro
       join com.kizuna.store.domain.Store st on st.id = e.storeId
       join CastProfile p on p.enrollmentId = e.id and p.storeId = e.storeId
       where e.castId = :personId
-      order by e.createdAt desc, e.id desc
       """)
   Page<CastPersonEnrollmentView> findPersonEnrollments(
       @Param("personId") Long personId, Pageable pageable);

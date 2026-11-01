@@ -7,6 +7,8 @@ import com.kizuna.order.application.MonthlyRemunerationService;
 import com.kizuna.shared.storescope.CurrentStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,9 +28,11 @@ public class MonthlyRemunerationController {
   public Page<MonthlyRemunerationCastSummary> casts(
       @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.casts(storeId, search, page, size).map(mapper::toCastSummary);
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
+    return service.casts(storeId, search, pageable).map(mapper::toCastSummary);
   }
 
   @GetMapping
@@ -37,8 +41,10 @@ public class MonthlyRemunerationController {
       @CurrentStore Long storeId,
       @RequestParam(name = "person_id") Long personId,
       @RequestParam String month,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return mapper.toResponse(service.monthly(storeId, personId, month, page, size));
+      @PageableDefault(
+              size = 20,
+              sort = {})
+          Pageable pageable) {
+    return mapper.toResponse(service.monthly(storeId, personId, month, pageable));
   }
 }

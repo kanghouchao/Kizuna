@@ -6,12 +6,13 @@ import com.kizuna.shared.exception.ServiceException;
 import java.util.Locale;
 import org.springframework.data.core.TypedPropertyPath;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
+/** 要求の sort 引数は order として読むため、Pageable からは並びを使わず page と size だけを取る。 */
 public record ReviewSearch(
-    int page,
-    int size,
+    Pageable page,
     String query,
     String reviewId,
     Status status,
@@ -25,8 +26,7 @@ public record ReviewSearch(
   }
 
   public ReviewSearch {
-    if (page < 0 || size < 1 || size > 100 || order == null)
-      throw new ServiceException("一覧のページ条件を確認してください");
+    if (order == null) throw new ServiceException("一覧の並び順を確認してください");
     if (query != null) {
       query = query.strip();
       if (query.isEmpty()) query = null;
@@ -42,8 +42,8 @@ public record ReviewSearch(
             ? ReviewRecord::getReceivedAt
             : ReviewRecord::getCreatedAt;
     return PageRequest.of(
-        page,
-        size,
+        page.getPageNumber(),
+        page.getPageSize(),
         Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, field, ReviewRecord::getId));
   }
 

@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,24 +34,23 @@ public class RemunerationStatementService {
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public RemunerationStatementResponse store(
-      Long storeId, Long person, String month, int orderPage, int bonusPage, int size) {
-    return read(storeId, person, month, orderPage, bonusPage, size);
+      Long storeId, Long person, String month, Pageable orderPageable, Pageable bonusPageable) {
+    return read(storeId, person, month, orderPageable, bonusPageable);
   }
 
   /** 本人の明細。認証主体の本人と店舗の在籍の歴史を照合し（無ければ 404）、全照会を明示した本人・店舗に限る。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public RemunerationStatementResponse self(
-      String actor, Long store, String month, int orderPage, int bonusPage, int size) {
-    return read(store, people.self(actors.requireUserId(actor)), month, orderPage, bonusPage, size);
+      String actor, Long store, String month, Pageable orderPageable, Pageable bonusPageable) {
+    return read(
+        store, people.self(actors.requireUserId(actor)), month, orderPageable, bonusPageable);
   }
 
   private RemunerationStatementResponse read(
-      Long store, Long person, String month, int orderPage, int bonusPage, int size) {
+      Long store, Long person, String month, Pageable orderPageable, Pageable bonusPageable) {
     RemunerationInput.person(store);
     RemunerationInput.person(person);
     var target = RemunerationInput.month(month);
-    var orderPaging = RemunerationInput.page(orderPage, size);
-    var bonusPaging = RemunerationInput.page(bonusPage, size);
     var identity = people.require(store, person);
     var amounts = orders.daily(store, person, target);
     var attendance = new HashMap<LocalDate, List<AttendanceDuration.Interval>>();
@@ -112,9 +112,9 @@ public class RemunerationStatementService {
         bonusTotal,
         total,
         List.copyOf(days),
-        orders.orders(store, person, target, orderPaging),
+        orders.orders(store, person, target, orderPageable),
         records
-            .bonuses(store, person, target.atDay(1), target.atEndOfMonth(), bonusPaging)
+            .bonuses(store, person, target.atDay(1), target.atEndOfMonth(), bonusPageable)
             .map(
                 b ->
                     new BonusItem(

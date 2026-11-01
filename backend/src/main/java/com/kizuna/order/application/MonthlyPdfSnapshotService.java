@@ -33,7 +33,7 @@ public class MonthlyPdfSnapshotService {
       timeoutString = "#{@appProperties.monthlyPdf.readTimeoutSeconds}")
   public MonthlyPdfSnapshot store(
       Long storeId, Long personId, String month, MonthlyPdfBudget budget) {
-    var first = store.monthly(storeId, personId, month, 0, 1);
+    var first = store.monthly(storeId, personId, month, PageRequest.of(0, 1));
     return collect(
         storeId,
         personId,
@@ -51,7 +51,7 @@ public class MonthlyPdfSnapshotService {
       timeoutString = "#{@appProperties.monthlyPdf.readTimeoutSeconds}")
   public MonthlyPdfSnapshot self(
       String actor, Long storeId, String month, MonthlyPdfBudget budget) {
-    var first = self.monthly(actor, storeId, month, 0, 1);
+    var first = self.monthly(actor, storeId, month, PageRequest.of(0, 1));
     var person =
         people
             .findByUserId(actors.requireUserId(actor))

@@ -39,6 +39,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -144,10 +145,10 @@ class SelfMonthlyRemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"0,1", "-4,1", "3000,100"})
-  @DisplayName("店舗候補の取得件数は既存の上下限へ収める")
-  void clampsStorePage(int size, int effective) throws Exception {
-    var page = PageRequest.of(0, effective);
+  @CsvSource({"0,20", "-4,20", "3000,100"})
+  @DisplayName("店舗候補の取得件数は束縛の時点で既定値と上限へ正規化される")
+  void normalizesStorePage(int size, int effective) throws Exception {
+    var page = PageRequest.of(0, effective, Sort.by("id"));
     when(selfQuery.stores(34L, page))
         .thenReturn(new PageImpl<>(List.of(new RemunerationStoreRow(1L, "歴史店舗")), page, 1));
     mvc.perform(request(BASE + "/stores").param("size", String.valueOf(size)))
@@ -157,14 +158,7 @@ class SelfMonthlyRemunerationControllerTest {
   }
 
   @ParameterizedTest
-  @CsvSource({
-    "0000-01,1,0",
-    "2026-9,1,0",
-    "2026-13,1,0",
-    "2026-09,0,0",
-    "2026-09,1,-1",
-    "2026-09,1,2147483647"
-  })
+  @CsvSource({"0000-01,1,0", "2026-9,1,0", "2026-13,1,0", "2026-09,0,0", "2026-09,1,2147483647"})
   @DisplayName("月・店舗・ページの不正値を400にする")
   void invalidCriteria(String month, String store, String page) throws Exception {
     mvc.perform(request(BASE).param("month", month).param("store_id", store).param("page", page))
@@ -173,10 +167,15 @@ class SelfMonthlyRemunerationControllerTest {
     verifyNoInteractions(selfQuery, monthlyQuery);
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"-1", "2147483647"})
-  @DisplayName("候補ページも負値とoffset超過を拒否する")
-  void invalidStorePage(String page) throws Exception {
-    mvc.perform(request(BASE + "/stores").param("page", page)).andExpect(status().isBadRequest());
+  @Test
+  @DisplayName("候補ページの offset 超過は400にし、負のページは先頭へ正規化する")
+  void storePageBounds() throws Exception {
+    var first = PageRequest.of(0, 20, Sort.by("id"));
+    when(selfQuery.stores(34L, first)).thenReturn(new PageImpl<>(List.of(), first, 0));
+    mvc.perform(request(BASE + "/stores").param("page", "2147483647"))
+        .andExpect(status().isBadRequest());
+    mvc.perform(request(BASE + "/stores").param("page", "-1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.number").value(0));
   }
 }

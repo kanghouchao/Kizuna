@@ -228,15 +228,16 @@ Then('月次横断照会は異なる授権集合と直接HTTP要求を検証す�
     { headers: headers(firstReader), params: { person_id: personId, business_date: originalDate } })).status()).toBe(403);
   const selfBypass = await request.get('/api/me/remunerations/' + originalOrder, { headers: headers(firstReader) });
   expect(selfBypass.status()).toBe(403);
-  for (const [key, value] of [['month', '2026-13'], ['page', '-1'], ['page', '2147483647'], ['person_id', '0']]) {
+  for (const [key, value] of [['month', '2026-13'], ['page', '2147483647'], ['person_id', '0']]) {
     const invalid = await request.get(base, { headers: headers(firstReader), params: { ...params, [key]: value } });
     expect(invalid.status()).toBe(400);
   }
   for (const size of [0, -1, 101]) {
     const result = await monthly(request, firstReader, STORE1_ID, 0, size);
-    expect(result.orders.size).toBe(Math.max(1, Math.min(size, 100)));
+    expect(result.orders.size).toBe(size < 1 ? 20 : Math.min(size, 100));
     expect(result.total_remuneration).toBe(14000);
   }
+  expect((await monthly(request, firstReader, STORE1_ID, -1)).orders.number).toBe(0);
   const beyond = await monthly(request, firstReader, STORE1_ID, 99, 1);
   expect(beyond.orders.content).toHaveLength(0);
   expect(beyond.total_remuneration).toBe(14000);

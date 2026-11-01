@@ -300,20 +300,39 @@ class AdvertisingControllerTest {
     assertThat(result.getResponse().getContentAsString())
         .contains("\"recorded_inquiry_count_sum\":null");
     assertThat(result.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
-    mvc.perform(query.param("page", "2147483647").param("size", "1000"))
+    mvc.perform(
+            get("/advertising-media-summaries")
+                .param("month", "2026-09")
+                .param("size", "1000")
+                .header("X-Store-ID", "1")
+                .with(permissions("VIEW")))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.rows.content").isEmpty())
         .andExpect(jsonPath("$.rows.size").value(100));
-    for (var invalid :
-        List.of("page=-1", "page=0.1", "size=0", "size=", "sort=amount", "month=2026-09")) {
-      var pair = invalid.split("=", -1);
+    mvc.perform(query.param("page", "2147483647").param("size", "1000"))
+        .andExpect(status().isBadRequest());
+    for (var normalized : List.of("page=-1", "page=0.1", "size=0", "size=")) {
+      var pair = normalized.split("=", -1);
       mvc.perform(
               get("/advertising-media-summaries")
                   .param("month", "2026-09")
                   .param(pair[0], pair[1])
                   .header("X-Store-ID", "1")
                   .with(permissions("VIEW")))
-          .andExpect(status().isBadRequest());
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.rows.number").value(0))
+          .andExpect(jsonPath("$.rows.size").value(20));
+    }
+    for (var invalid : List.of("sort=amount", "month=2026-09", "page=0&page=1")) {
+      var request =
+          get("/advertising-media-summaries")
+              .param("month", "2026-09")
+              .header("X-Store-ID", "1")
+              .with(permissions("VIEW"));
+      for (var param : invalid.split("&")) {
+        var pair = param.split("=", -1);
+        request.param(pair[0], pair[1]);
+      }
+      mvc.perform(request).andExpect(status().isBadRequest());
     }
     mvc.perform(
             get("/advertising-media-summaries").header("X-Store-ID", "1").with(permissions("VIEW")))
@@ -368,7 +387,7 @@ class AdvertisingControllerTest {
   }
 
   @Test
-  void orderCostsKeepMissingAmountsAndRatiosAndRejectInvalidPaging() throws Exception {
+  void orderCostsKeepMissingAmountsAndRatiosAndNormalizeOrRejectPaging() throws Exception {
     var report =
         AdvertisingOrderCostReport.aggregate(
             List.of(), List.of(new AdvertisingOrderCostReport.Order("注文だけ", true)));
@@ -396,12 +415,20 @@ class AdvertisingControllerTest {
                 .param("size", "1000")
                 .header("X-Store-ID", "1")
                 .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.rows.content").isEmpty())
-        .andExpect(jsonPath("$.rows.size").value(100));
-    for (var invalid :
-        List.of(
-            "page=-1", "page=0.1", "size=0", "page=2147483648", "sort=amount", "month=2026-09")) {
+        .andExpect(status().isBadRequest());
+    for (var normalized : List.of("page=-1", "page=0.1", "size=0", "page=2147483648")) {
+      var pair = normalized.split("=", -1);
+      mvc.perform(
+              get("/advertising-order-costs")
+                  .param("month", "2026-09")
+                  .param(pair[0], pair[1])
+                  .header("X-Store-ID", "1")
+                  .with(orderPermissions("ADVERTISING_COST_VIEW", "ORDER_MANAGE")))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.rows.number").value(0))
+          .andExpect(jsonPath("$.rows.size").value(20));
+    }
+    for (var invalid : List.of("sort=amount", "month=2026-09")) {
       var pair = invalid.split("=", -1);
       mvc.perform(
               get("/advertising-order-costs")

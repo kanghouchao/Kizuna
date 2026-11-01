@@ -16,7 +16,6 @@ import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.web.CursorPage;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
@@ -25,8 +24,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,16 +44,14 @@ public class OwnServiceConditionService {
 
   @Transactional(readOnly = true)
   public Page<OwnServiceConditionSummary> list(
-      Long storeId, String actor, ServiceKind kind, int page, int size) {
+      Long storeId, String actor, ServiceKind kind, Pageable pageable) {
     String enrollment = requireEnrollment(storeId, actors.requireUserId(actor));
-    if (page < 0 || size < 1 || size > CursorPage.MAX_SIZE)
-      throw new ServiceException("ページ番号と取得件数が不正です");
     Specification<ServiceItem> filter =
         (root, query, cb) ->
             cb.and(cb.equal(root.get("storeId"), storeId), cb.isFalse(root.get("deleted")));
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
-    var found = items.findAll(filter, PageRequest.of(page, size, Sort.by(ServiceItem::getId)));
+    var found = items.findAll(filter, pageable);
     var decisions =
         consents
             .findByStoreIdAndEnrollmentIdAndServiceIdIn(

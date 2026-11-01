@@ -29,6 +29,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -75,7 +76,15 @@ class SurveyControllerTest {
         .perform(get("/surveys").header("X-Store-ID", STORE_ID.toString()).principal(currentUser()))
         .andExpect(status().isOk());
 
-    verify(reads).list(STORE_ID, "user", 0, 20, null, null, null, "CREATED_DESC");
+    verify(reads)
+        .list(
+            STORE_ID,
+            "user",
+            PageRequest.of(0, 20, Sort.by("id")),
+            null,
+            null,
+            null,
+            "CREATED_DESC");
   }
 
   @Test
@@ -149,5 +158,56 @@ class SurveyControllerTest {
     Sort newestFirst = Sort.by(Sort.Direction.DESC, "id");
     assertThat(revisions.getValue().getSort()).isEqualTo(newestFirst);
     assertThat(answers.getValue().getSort()).isEqualTo(newestFirst);
+  }
+
+  @Test
+  @DisplayName("設問版と回答の一覧は Page で返し、範囲外のページを 400 にすること")
+  @WithMockUser(authorities = "PERM_SURVEY_VIEW")
+  void revisionAndAnswerListsArePages() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    ArgumentCaptor<Pageable> revisions = ArgumentCaptor.forClass(Pageable.class);
+    when(reads.revisions(eq(STORE_ID), eq("user"), eq("s1"), revisions.capture()))
+        .thenReturn(new PageImpl<>(List.of()));
+    ArgumentCaptor<Pageable> answers = ArgumentCaptor.forClass(Pageable.class);
+    when(reads.answers(
+            eq(STORE_ID),
+            eq("user"),
+            eq("s1"),
+            eq("r1"),
+            answers.capture(),
+            eq(null),
+            eq(null),
+            eq("RECEIVED_ASC")))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    mockMvc
+        .perform(
+            get("/surveys/s1/revisions")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    mockMvc
+        .perform(
+            get("/surveys/s1/revisions/r1/responses")
+                .param("sort", "RECEIVED_ASC")
+                .param("page", "2")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total_elements").value(0));
+    mockMvc
+        .perform(
+            get("/surveys/s1/revisions")
+                .param("page", "99999999")
+                .param("size", "100")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser()))
+        .andExpect(status().isBadRequest());
+
+    assertThat(revisions.getValue())
+        .isEqualTo(PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "revisionNumber", "id")));
+    assertThat(answers.getValue().getPageNumber()).isEqualTo(2);
+    assertThat(answers.getValue().getPageSize()).isEqualTo(20);
   }
 }

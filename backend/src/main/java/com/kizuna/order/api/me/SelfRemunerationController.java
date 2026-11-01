@@ -30,9 +30,12 @@ public class SelfRemunerationController {
   @PreAuthorize("hasRole('CAST')")
   public Page<SelfRemunerationEnrollmentSummary> enrollments(
       Principal principal,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return service.enrollments(principal.getName(), page, size).map(mapper::toEnrollmentSummary);
+      @PageableDefault(
+              size = 20,
+              sort = {"createdAt", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
+    return service.enrollments(principal.getName(), pageable).map(mapper::toEnrollmentSummary);
   }
 
   @GetMapping("/remunerations")
@@ -40,10 +43,13 @@ public class SelfRemunerationController {
   public Page<SelfRemunerationSummary> list(
       Principal principal,
       @RequestParam(name = "enrollment_id", required = false) String enrollmentId,
-      @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
+      @PageableDefault(
+              size = 20,
+              sort = {"businessDate", "id"},
+              direction = Sort.Direction.DESC)
+          Pageable pageable) {
     return service
-        .list(principal.getName(), enrollmentId, page, size)
+        .list(principal.getName(), enrollmentId, pageable)
         .map(mapper::toRemunerationSummary);
   }
 
