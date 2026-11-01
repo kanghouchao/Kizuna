@@ -5,3 +5,9 @@ tone_instructions: >-
   簡潔かつ直接的に。指摘ごとに根拠となる箇所と直し方を一つずつ示す。
 reviews:
   profile: chill
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+  finishing_touches:
+    docstrings:
+      enabled: false
