@@ -2,10 +2,13 @@ package com.kizuna.shared.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.kizuna.shared.exception.ServiceException;
 import java.time.OffsetDateTime;
+import lombok.Getter;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
 
 class PublicationTest {
   private static final OffsetDateTime FROM = OffsetDateTime.parse("2026-11-01T20:00:00+09:00");
@@ -58,5 +61,21 @@ class PublicationTest {
                     OffsetDateTime.parse("2026-11-01T20:00:50+09:00"),
                     null))
         .isInstanceOf(ServiceException.class);
+  }
+
+  @Test
+  void orderResolvesNestedPathsUnderTheHostAttribute() {
+    assertThat(Publication.order(Host::getPublication, Host::getId))
+        .extracting(Sort.Order::getProperty, Sort.Order::getDirection, Sort.Order::getNullHandling)
+        .containsExactly(
+            tuple("publication.displayOrder", Sort.Direction.ASC, Sort.NullHandling.NULLS_LAST),
+            tuple("publication.publishFrom", Sort.Direction.DESC, Sort.NullHandling.NULLS_LAST),
+            tuple("id", Sort.Direction.ASC, Sort.NullHandling.NATIVE));
+  }
+
+  @Getter
+  private static class Host {
+    private Long id;
+    private Publication publication;
   }
 }

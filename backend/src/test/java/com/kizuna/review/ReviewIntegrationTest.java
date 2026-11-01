@@ -923,9 +923,13 @@ class ReviewIntegrationTest {
     var shown =
         repository
             .findBy(
-                Publication.<ReviewRecord>shownSpecification(now)
+                Publication.shownSpecification(ReviewRecord::getPublication, now)
                     .and((root, q, cb) -> cb.equal(root.get("storeId"), storeId)),
-                q -> q.as(ReviewSummaryView.class).sortBy(Publication.order()).all())
+                q ->
+                    q.as(ReviewSummaryView.class)
+                        .sortBy(
+                            Publication.order(ReviewRecord::getPublication, ReviewRecord::getId))
+                        .all())
             .stream()
             .map(ReviewSummaryView::getId)
             .toList();

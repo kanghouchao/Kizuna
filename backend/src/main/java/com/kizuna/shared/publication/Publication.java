@@ -3,16 +3,16 @@ package com.kizuna.shared.publication;
 import com.kizuna.shared.exception.ServiceException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+import jakarta.persistence.criteria.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import org.springframework.data.core.PropertyPath;
+import org.springframework.data.core.TypedPropertyPath;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
-/**
- * 公開コンテンツの公開設定。掲出述語と並びはここだけで定義し、種別ごとの前提は利用側が AND で重ねる。 問い合わせ用の述語と並びは、埋め込み先の属性名を {@code publication}
- * とする前提で組む。
- */
+/** 公開コンテンツの公開設定。掲出述語と並びはここだけで定義し、種別ごとの前提は利用側が AND で重ねる。 */
 @Embeddable
 public record Publication(
     @Column(nullable = false) boolean published,
@@ -34,9 +34,11 @@ public record Publication(
         && (publishUntil == null || now.isBefore(publishUntil));
   }
 
-  public static <T> Specification<T> shownSpecification(OffsetDateTime at) {
+  public static <T> Specification<T> shownSpecification(
+      TypedPropertyPath<T, Publication> publication, OffsetDateTime at) {
     return (root, query, cb) -> {
-      var p = root.get("publication");
+      Path<?> p = root;
+      for (PropertyPath segment : publication) p = p.get(segment.getSegment());
       return cb.and(
           cb.isTrue(p.get("published")),
           cb.or(
@@ -48,11 +50,12 @@ public record Publication(
     };
   }
 
-  public static Sort order() {
+  public static <T> Sort order(
+      TypedPropertyPath<T, Publication> publication, TypedPropertyPath<T, ?> id) {
     return Sort.by(
-        Sort.Order.asc("publication.displayOrder").nullsLast(),
-        Sort.Order.desc("publication.publishFrom").nullsLast(),
-        Sort.Order.asc("id"));
+        Sort.Order.asc(publication.then(Publication::displayOrder)).nullsLast(),
+        Sort.Order.desc(publication.then(Publication::publishFrom)).nullsLast(),
+        Sort.Order.asc(id));
   }
 
   private static OffsetDateTime minute(OffsetDateTime value) {
