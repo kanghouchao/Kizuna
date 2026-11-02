@@ -31,6 +31,7 @@ export function RemunerationEditor({
   open,
   personId,
   personName,
+  storeId,
   recovery,
   onClose,
   onSaved,
@@ -39,13 +40,14 @@ export function RemunerationEditor({
   open: boolean;
   personId: number;
   personName: string;
+  storeId: string | undefined;
   recovery?: Operation;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
   const [pending, setPending] = useState<EditValues | null>(null);
-  const operation = useRemunerationOperation();
+  const operation = useRemunerationOperation(storeId);
   const outstanding = operation.pending;
   const sending = outstanding?.phase === 'submitting';
   const locked = outstanding !== null;

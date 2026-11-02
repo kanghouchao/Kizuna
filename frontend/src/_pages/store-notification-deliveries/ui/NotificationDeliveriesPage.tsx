@@ -292,6 +292,7 @@ function Detail({
 type Draft = Omit<DeliveryInput, 'channel' | 'purpose'>;
 function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
   const operation = useOperation('notification-deliveries', {
+    storeId: useStoreContext().currentStoreId,
     store: memoryOperationStore,
     send: notificationApi.create,
   });

@@ -73,7 +73,7 @@ function report(): RecruitmentEffectReport {
 beforeEach(() => jest.clearAllMocks());
 it('費用だけ・入店だけ・媒体未入力と定着の可判定を区別する', async () => {
   jest.mocked(advertisingApi.recruitmentEffects).mockResolvedValue(report());
-  render(<RecruitmentEffectPage month="2026-05" />);
+  render(<RecruitmentEffectPage store="1" month="2026-05" />);
   const matched = await screen.findByRole('row', { name: /^求人A/ });
   expect(within(matched).getByText('約 15,000.00円')).toBeVisible();
   expect(within(matched).getByText('1 / 2人')).toBeVisible();
@@ -92,7 +92,7 @@ it('費用だけ・入店だけ・媒体未入力と定着の可判定を区別�
 });
 it('取得失敗で行と総計を出さない', async () => {
   jest.mocked(advertisingApi.recruitmentEffects).mockRejectedValue(new Error('切断'));
-  render(<RecruitmentEffectPage month="2026-05" />);
+  render(<RecruitmentEffectPage store="1" month="2026-05" />);
   expect(await screen.findByRole('alert')).toHaveTextContent('採用効果を取得できませんでした。');
   expect(screen.queryByLabelText('採用効果の月合計')).not.toBeInTheDocument();
 });

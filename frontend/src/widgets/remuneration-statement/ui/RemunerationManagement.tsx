@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { remunerationApi } from '../api';
-import { hasPermission, useMe } from '@/entities/user';
+import { hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useResource } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
 import { RemunerationEditor } from './RemunerationEditor';
@@ -25,7 +25,8 @@ export function RemunerationManagement({
     [bonusPage, setBonusPage] = useState(0),
     [revision, setRevision] = useState(0);
   const { me } = useMe();
-  const operation = useRemunerationOperation();
+  const storeId = useStoreContext().currentStoreId;
+  const operation = useRemunerationOperation(storeId);
   const outstanding = operation.pending;
   const blocked = !operation.ready || outstanding !== null;
   const [editor, setEditor] = useState<{
@@ -223,6 +224,7 @@ export function RemunerationManagement({
           open={editor.open}
           personId={editor.personId}
           personName={editor.personName}
+          storeId={storeId}
           recovery={editor.recovery}
           onClose={() => setEditor(current => current && { ...current, open: false })}
           onSaved={() => {

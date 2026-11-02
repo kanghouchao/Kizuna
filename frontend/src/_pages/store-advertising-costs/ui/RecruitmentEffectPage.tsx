@@ -31,7 +31,7 @@ function retention(hires: number, value: RecruitmentRetention | undefined) {
   return `${value.retained_count.toLocaleString()} / ${value.judgeable_count.toLocaleString()}人`;
 }
 
-export function RecruitmentEffectPage({ month }: { month: string }) {
+export function RecruitmentEffectPage({ store, month }: { store: string; month: string }) {
   const list = useListPage<RecruitmentEffectSummary, void, Omit<RecruitmentEffectReport, 'rows'>>(
     async page => {
       const { rows, ...metadata } = await advertisingApi.recruitmentEffects(month, page);
@@ -39,7 +39,7 @@ export function RecruitmentEffectPage({ month }: { month: string }) {
     },
     undefined
   );
-  useReloadAfterOperation(month, list.reload);
+  useReloadAfterOperation(store, month, list.reload);
   const visible = !list.isLoading && !list.failed ? list.metadata : null;
   return (
     <div className="space-y-6">

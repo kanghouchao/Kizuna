@@ -128,7 +128,9 @@ function StorePage({
         )}
         {canReadRecruitment && (
           <TabsContent value="recruitment">
-            {view === 'recruitment' && <RecruitmentEffectPage key={month} month={month} />}
+            {view === 'recruitment' && (
+              <RecruitmentEffectPage key={month} store={store} month={month} />
+            )}
           </TabsContent>
         )}
       </Tabs>
@@ -147,7 +149,7 @@ function MonthPage({
   canExport: boolean;
   month: string;
 }) {
-  const operation = useAdvertisingOperation(month);
+  const operation = useAdvertisingOperation(store, month);
   const { pending, unreadable: storageError } = operation;
   const [target, setTarget] = useState<Target | null>(null),
     [open, setOpen] = useState(false),
@@ -175,7 +177,7 @@ function MonthPage({
   useEffect(() => {
     reload.current = refresh;
   });
-  useReloadAfterOperation(month, () => reload.current());
+  useReloadAfterOperation(store, month, () => reload.current());
   function edit(t: Target) {
     setMissing(false);
     setTarget(t);

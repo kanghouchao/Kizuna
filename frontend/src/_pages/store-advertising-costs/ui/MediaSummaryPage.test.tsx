@@ -137,7 +137,7 @@ it('費用記録の画面で同じ月の操作が終わると集計を読み直�
   setCurrentStore('1');
   jest.mocked(advertisingApi.media).mockResolvedValue(report());
   jest.mocked(advertisingApi.mutate).mockResolvedValue(undefined as never);
-  const operation = renderHook(() => useAdvertisingOperation('2026-09'));
+  const operation = renderHook(() => useAdvertisingOperation('1', '2026-09'));
   render(<MediaSummaryPage store="1" month="2026-09" canExport={false} />);
   await waitFor(() => expect(advertisingApi.media).toHaveBeenCalledTimes(1));
   await act(async () => {
