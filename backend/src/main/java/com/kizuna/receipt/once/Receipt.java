@@ -18,4 +18,11 @@ public record Receipt(
     }
     return value.longValue();
   }
+
+  public String textFact(String name) {
+    if (facts == null || !(facts.get(name) instanceof String value)) {
+      throw new IllegalStateException("受領の事実が見つかりません");
+    }
+    return value;
+  }
 }

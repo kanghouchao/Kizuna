@@ -4,7 +4,6 @@ import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.GuaranteeTimeline;
 import com.kizuna.remuneration.domain.RemunerationAmounts;
-import com.kizuna.remuneration.domain.RemunerationRequest;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import jakarta.persistence.EntityManager;
@@ -13,7 +12,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -33,24 +31,6 @@ public class RemunerationRecords {
     em.flush();
   }
 
-  public void lock(String key) {
-    // 初回作成の行が無い場合も同じ店舗・本人の変更を直列化する。衝突は待機を増やすだけである。
-    em.createNativeQuery("select pg_advisory_xact_lock(387, :key)", Object.class)
-        .setParameter("key", key.hashCode())
-        .getSingleResult();
-  }
-
-  public Optional<RemunerationRequest> receipt(Long store, Long actor, UUID request) {
-    return em.createQuery(
-            "select r from RemunerationRequest r where r.storeId=:store and r.actorId=:actor and r.requestId=:request",
-            RemunerationRequest.class)
-        .setParameter("store", store)
-        .setParameter("actor", actor)
-        .setParameter("request", request)
-        .getResultStream()
-        .findFirst();
-  }
-
   public Optional<GuaranteeTimeline> timeline(Long store, Long person) {
     return em.createQuery(
             "select t from GuaranteeTimeline t where t.storeId=:store and t.personId=:person",
@@ -62,7 +42,10 @@ public class RemunerationRecords {
   }
 
   public GuaranteeTimeline lockedTimeline(Long store, Long person) {
-    lock("timeline:" + store + ":" + person);
+    // 初回作成の行が無い場合も同じ店舗・本人の変更を直列化する。衝突は待機を増やすだけである。
+    em.createNativeQuery("select pg_advisory_xact_lock(387, :key)", Object.class)
+        .setParameter("key", ("timeline:" + store + ":" + person).hashCode())
+        .getSingleResult();
     return timeline(store, person)
         .map(
             t -> {
@@ -108,24 +91,30 @@ public class RemunerationRecords {
   }
 
   public GuaranteeTerm term(Long store, String id) {
+    return findTerm(store, id).orElseThrow(() -> new NotFoundException("保証条件が見つかりません"));
+  }
+
+  public Optional<GuaranteeTerm> findTerm(Long store, String id) {
     return em.createQuery(
             "select t from GuaranteeTerm t where t.storeId=:store and t.id=:id",
             GuaranteeTerm.class)
         .setParameter("store", store)
         .setParameter("id", id)
         .getResultStream()
-        .findFirst()
-        .orElseThrow(() -> new NotFoundException("保証条件が見つかりません"));
+        .findFirst();
   }
 
   public BonusAward bonus(Long store, String id) {
+    return findBonus(store, id).orElseThrow(() -> new NotFoundException("ボーナスが見つかりません"));
+  }
+
+  public Optional<BonusAward> findBonus(Long store, String id) {
     return em.createQuery(
             "select b from BonusAward b where b.storeId=:store and b.id=:id", BonusAward.class)
         .setParameter("store", store)
         .setParameter("id", id)
         .getResultStream()
-        .findFirst()
-        .orElseThrow(() -> new NotFoundException("ボーナスが見つかりません"));
+        .findFirst();
   }
 
   public void refreshForWrite(Object entity) {

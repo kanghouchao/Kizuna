@@ -7,7 +7,9 @@ import com.kizuna.remuneration.api.dto.RemunerationRequests.BonusCorrectionReque
 import com.kizuna.remuneration.api.dto.RemunerationRequests.BonusCreateRequest;
 import com.kizuna.remuneration.api.dto.RemunerationRequests.CancellationRequest;
 import com.kizuna.remuneration.application.RemunerationManagementService;
+import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -53,7 +55,12 @@ public class BonusController {
       @CurrentStore Long storeId,
       @Valid @RequestBody BonusCreateRequest request,
       Principal principal) {
-    return service.createBonus(storeId, request, principal.getName());
+    return Replays.write(
+        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+        () -> service.createBonus(storeId, request, principal.getName()),
+        () ->
+            service.replayBonus(
+                storeId, request.requestId(), request.fingerprint(), principal.getName()));
   }
 
   @PostMapping("/{id}/corrections")
@@ -65,7 +72,12 @@ public class BonusController {
       @PathVariable String id,
       @Valid @RequestBody BonusCorrectionRequest request,
       Principal principal) {
-    return service.correctBonus(storeId, id, request, principal.getName());
+    return Replays.write(
+        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+        () -> service.correctBonus(storeId, id, request, principal.getName()),
+        () ->
+            service.replayBonus(
+                storeId, request.requestId(), request.fingerprint(id), principal.getName()));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -76,7 +88,12 @@ public class BonusController {
       @PathVariable String id,
       @Valid @RequestBody CancellationRequest request,
       Principal principal) {
-    return service.cancelBonus(storeId, id, request, principal.getName());
+    return Replays.write(
+        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+        () -> service.cancelBonus(storeId, id, request, principal.getName()),
+        () ->
+            service.replayBonus(
+                storeId, request.requestId(), request.bonusFingerprint(id), principal.getName()));
   }
 
   @GetMapping("/{id}/changes")

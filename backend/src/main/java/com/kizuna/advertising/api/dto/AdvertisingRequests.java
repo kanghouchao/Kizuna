@@ -2,6 +2,7 @@ package com.kizuna.advertising.api.dto;
 
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingValues;
+import com.kizuna.receipt.once.Fingerprint;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import tools.jackson.databind.annotation.JsonDeserialize;
@@ -29,6 +30,11 @@ public final class AdvertisingRequests {
     public AdvertisingValues values() {
       return new AdvertisingValues(category, mediumId, agencyName, planName, inquiryCount, amount);
     }
+
+    public String fingerprint() {
+      return Fingerprint.of(
+          "CREATE", month, category, mediumId, agencyName, planName, inquiryCount, amount);
+    }
   }
 
   public record ReplaceRequest(
@@ -53,6 +59,20 @@ public final class AdvertisingRequests {
     public AdvertisingValues values() {
       return new AdvertisingValues(category, mediumId, agencyName, planName, inquiryCount, amount);
     }
+
+    public String fingerprint(String id) {
+      return Fingerprint.of(
+          "REPLACE",
+          id,
+          version,
+          category,
+          mediumId,
+          agencyName,
+          planName,
+          inquiryCount,
+          amount,
+          reason);
+    }
   }
 
   public record DeleteRequest(
@@ -63,6 +83,10 @@ public final class AdvertisingRequests {
       @NotNull(message = "要求識別子を指定してください") UUID requestId) {
     public DeleteRequest {
       reason = AdvertisingValues.reason(reason);
+    }
+
+    public String fingerprint(String id) {
+      return Fingerprint.of("DELETE", id, version, reason);
     }
   }
 
@@ -77,6 +101,10 @@ public final class AdvertisingRequests {
       @NotNull(message = "要求識別子を指定してください") UUID requestId) {
     public CopyRequest {
       reason = AdvertisingValues.reason(reason);
+    }
+
+    public String fingerprint(String targetMonth) {
+      return Fingerprint.of("COPY", targetMonth, sourceVersion, targetVersion, reason);
     }
   }
 }

@@ -16,6 +16,8 @@ import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.remuneration.OrderRemunerationFacts;
+import com.kizuna.receipt.domain.OperationReceiptRepository;
+import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.remuneration.api.dto.RemunerationRequests.BonusCorrectionRequest;
 import com.kizuna.remuneration.api.dto.RemunerationRequests.BonusCreateRequest;
 import com.kizuna.remuneration.api.dto.RemunerationRequests.CancellationRequest;
@@ -119,7 +121,7 @@ class RemunerationIntegrationTest {
     jdbc.execute(
         "CREATE UNIQUE INDEX uq_test_term ON t_guarantee_terms(store_id,person_id,effective_from) WHERE cancelled_at IS NULL");
     jdbc.execute(
-        "CREATE UNIQUE INDEX uq_test_request ON t_remuneration_requests(store_id,actor_id,request_id)");
+        "CREATE UNIQUE INDEX uq_t_operation_receipts_key ON t_operation_receipts(store_id,actor_id,operation_key)");
   }
 
   @AfterAll
@@ -198,7 +200,10 @@ class RemunerationIntegrationTest {
     var request = guarantee(10000, 0, UUID.randomUUID());
     var original = management.createGuarantee(storeId, request, email);
     when(clock.instant()).thenReturn(Instant.parse("2026-10-01T12:00:00Z"));
-    assertThat(management.createGuarantee(storeId, request, email)).isEqualTo(original);
+    assertThat(management.createGuarantee(storeId, request, email))
+        .usingRecursiveComparison()
+        .ignoringFields("guarantee.createdAt", "guarantee.updatedAt")
+        .isEqualTo(original);
     assertThatThrownBy(
             () ->
                 management.createGuarantee(storeId, guarantee(10000, 1, UUID.randomUUID()), email))
@@ -399,7 +404,10 @@ class RemunerationIntegrationTest {
                 authorize();
                 return management.createBonus(storeId, request, email);
               });
-      assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(second.get(10, TimeUnit.SECONDS));
+      assertThat(first.get(10, TimeUnit.SECONDS))
+          .usingRecursiveComparison()
+          .ignoringFields("bonus.createdAt", "bonus.updatedAt")
+          .isEqualTo(second.get(10, TimeUnit.SECONDS));
     }
     assertThat(
             management
@@ -557,7 +565,8 @@ class RemunerationIntegrationTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableJpaRepositories(basePackageClasses = RemunerationChangeRepository.class)
+  @EnableJpaRepositories(
+      basePackageClasses = {RemunerationChangeRepository.class, OperationReceiptRepository.class})
   @Import({
     RemunerationManagementService.class,
     RemunerationStatementService.class,
@@ -566,7 +575,8 @@ class RemunerationIntegrationTest {
     AttendanceFacts.class,
     BusinessDateService.class,
     ActorIdentityService.class,
-    StoreScopeHolder.class
+    StoreScopeHolder.class,
+    OperationReceipts.class
   })
   static class Config {
     @Bean
@@ -585,7 +595,8 @@ class RemunerationIntegrationTest {
           "com.kizuna.shift.domain",
           "com.kizuna.cast.domain",
           "com.kizuna.store.domain",
-          "com.kizuna.user.domain");
+          "com.kizuna.user.domain",
+          "com.kizuna.receipt.domain");
       factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
       factory.setJpaPropertyMap(
           Map.of(
