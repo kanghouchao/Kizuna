@@ -42,20 +42,20 @@ public abstract class StoreScopedEntity {
 
   @PrePersist
   protected void onCreate() {
-    var now = RowTimestamps.now();
+    var now = Timestamps.now();
     this.createdAt = now;
     this.updatedAt = now;
   }
 
   @PreUpdate
   protected void onUpdate() {
-    this.updatedAt = RowTimestamps.now();
+    this.updatedAt = Timestamps.now();
   }
 
   /**
    * @PreUpdate と同じ永続化の時刻印で、集約の振る舞いから行を更新済みにするために使う。
    */
   protected void touch() {
-    this.updatedAt = RowTimestamps.now();
+    this.updatedAt = Timestamps.now();
   }
 }

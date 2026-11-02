@@ -8,6 +8,7 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
@@ -23,7 +24,6 @@ import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -121,7 +121,7 @@ public class AttendanceService {
     var before = ShiftAuditSnapshot.of(attendance);
     var correction =
         correctionRepository.save(
-            AttendanceCorrection.snapshotOf(attendance, actorId, OffsetDateTime.now()));
+            AttendanceCorrection.snapshotOf(attendance, actorId, Timestamps.now()));
     attendance.correct(
         request.getBusinessDate(),
         request.getActualStartAt(),
@@ -149,7 +149,7 @@ public class AttendanceService {
     Long actorId = resolveActorId(actorEmail);
     Attendance attendance = findAttendance(storeId, id);
     var before = ShiftAuditSnapshot.of(attendance);
-    attendance.cancel(request.getReason(), actorId, OffsetDateTime.now());
+    attendance.cancel(request.getReason(), actorId, Timestamps.now());
     attendanceRepository.save(attendance);
     attendanceRepository.flush();
     audit.recordById(

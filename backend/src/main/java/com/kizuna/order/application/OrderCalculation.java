@@ -10,7 +10,7 @@ import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import java.time.OffsetDateTime;
+import com.kizuna.shared.persistence.Timestamps;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -50,7 +50,7 @@ public class OrderCalculation {
         terms.price(),
         terms.remuneration(),
         basis,
-        OffsetDateTime.now());
+        Timestamps.now());
   }
 
   public OrderQuote calculate(

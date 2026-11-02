@@ -11,9 +11,9 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -78,7 +78,7 @@ public class OrderAttributionService {
 
     Long actorUserId = actorIdentityService.requireUserId(actorEmail);
     String beforeVersion = String.valueOf(attribution.getVersion());
-    attribution.invalidate(reason, actorUserId, OffsetDateTime.now());
+    attribution.invalidate(reason, actorUserId, Timestamps.now());
     // 実 version を記録するため flush する。理由は自由文なので共通監査へは写さない。
     OrderAttribution saved = orderAttributionRepository.saveAndFlush(attribution);
     businessAudit.recordById(
@@ -162,8 +162,7 @@ public class OrderAttributionService {
         tokens.isEmpty() ? order.getAutoGrantPoints() : tokens.get(0).getPlannedPoints();
     ReceiptTokenGenerator.GeneratedToken generated = receiptTokenGenerator.generate();
     OrderReceiptToken issued =
-        OrderReceiptToken.issueFor(
-            orderId, generated.digest(), plannedPoints, OffsetDateTime.now());
+        OrderReceiptToken.issueFor(orderId, generated.digest(), plannedPoints, Timestamps.now());
     orderReceiptTokenRepository.save(issued);
     // トークンの生値と digest は写さず、旧トークンの失効は件数で示す。
     businessAudit.record(

@@ -9,12 +9,11 @@ import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -91,7 +90,7 @@ public class OrderCorrectionService {
                 before,
                 input.reason(),
                 actorIdentityService.requireUserId(actorEmail),
-                OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS)));
+                Timestamps.now()));
 
     businessAudit.record(
         actorEmail,
@@ -148,7 +147,7 @@ public class OrderCorrectionService {
                 before,
                 reason.trim(),
                 actorIdentityService.requireUserId(actorEmail),
-                OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS)));
+                Timestamps.now()));
     businessAudit.record(
         actorEmail,
         order.getStoreId(),

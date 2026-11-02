@@ -33,6 +33,9 @@ spring:
   jackson:
     property-naming-strategy: SNAKE_CASE
     default-property-inclusion: non_null
+    # OffsetDateTime をオフセットに関わらず UTC で書く。timestamptz の読み直しは常に UTC なので、業務の時計（+09:00）で
+    # 作った時刻も書き込み直後の応答と読み直しで同じ文字列になる。読み込み側は既定で UTC へ揃えられている。
+    time-zone: UTC
     # Jackson 3 では日付関連のフラグは SerializationFeature から DateTimeFeature へ移動したため datatype.datetime 配下で指定する。
     datatype:
       datetime:

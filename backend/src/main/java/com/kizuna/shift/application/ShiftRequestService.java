@@ -6,6 +6,7 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
 import com.kizuna.shift.domain.AttendanceRepository;
@@ -21,7 +22,6 @@ import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -170,7 +170,7 @@ public class ShiftRequestService {
         .filter(CastEnrollment::isMembershipActive)
         .orElseThrow(() -> new ServiceException("退店済みの在籍の出勤希望は承認できません"));
     Long actorId = resolveActorId(actorEmail);
-    request.approve(actorId, OffsetDateTime.now());
+    request.approve(actorId, Timestamps.now());
 
     // 目標営業日が終了した希望は承認できない。期限切れ NEW の承認は「過去の確定シフト＝即座の導出欠勤」を
     // 無から作り、飛び込み実績との再結線機構も無い。自動失効は建てないので、申請は却下で終わるか PENDING のまま残る。
@@ -273,7 +273,7 @@ public class ShiftRequestService {
   public StoreShiftRequestResponse decline(Long storeId, String id, String actorEmail) {
     ShiftRequest request = findOwnRequest(storeId, id);
     var before = ShiftAuditSnapshot.of(request);
-    request.decline(resolveActorId(actorEmail), OffsetDateTime.now());
+    request.decline(resolveActorId(actorEmail), Timestamps.now());
     shiftRequestRepository.save(request);
     shiftRequestRepository.flush();
     audit.recordById(

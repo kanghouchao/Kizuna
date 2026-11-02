@@ -4,6 +4,7 @@ import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -70,7 +71,7 @@ public class MemberWithdrawal {
 
   private WithdrawnMember applyWithdrawal(
       Member member, User user, long actorUserId, String reason) {
-    OffsetDateTime now = OffsetDateTime.now();
+    OffsetDateTime now = Timestamps.now();
     long versionBefore = member.getVersion();
     boolean enabledBefore = user.getEnabled();
     member.withdraw(reason, actorUserId, now);

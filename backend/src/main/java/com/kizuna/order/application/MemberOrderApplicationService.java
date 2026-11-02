@@ -10,10 +10,10 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -93,7 +93,7 @@ public class MemberOrderApplicationService {
     Long userId = actorIdentityService.requireUserId(email);
     MemberLookup member = resolveMemberByUserId(userId);
     OrderApplication application = ownedApplication(member.memberId(), applicationId);
-    application.withdraw(userId, OffsetDateTime.now());
+    application.withdraw(userId, Timestamps.now());
     orderApplicationRepository.save(application);
     return toResult(member.memberId(), applicationId);
   }

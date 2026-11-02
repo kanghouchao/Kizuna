@@ -16,6 +16,7 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -159,7 +160,7 @@ public class CastInvitationAcceptanceService {
    * よって永続化コンテキストのクリアは不要。
    */
   private void claim(CastInvitation invitation) {
-    OffsetDateTime now = OffsetDateTime.now();
+    OffsetDateTime now = Timestamps.now();
     if (invitation.isExpired(now)) {
       throw new CastInvitationStateException("この招待は有効期限が切れています");
     }
@@ -259,7 +260,7 @@ public class CastInvitationAcceptanceService {
     if (!enrollment.isMembershipActive()) {
       return "UNAVAILABLE";
     }
-    return invitation.isExpired(OffsetDateTime.now()) ? "EXPIRED" : "VALID";
+    return invitation.isExpired(Timestamps.now()) ? "EXPIRED" : "VALID";
   }
 
   private User saveUser(User user) {

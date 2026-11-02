@@ -12,11 +12,11 @@ import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -45,7 +45,7 @@ public class CastEnrollmentService {
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
     enrollment.suspend();
-    var history = record(enrollment, previous, actorEmail, now());
+    var history = record(enrollment, previous, actorEmail, Timestamps.now());
     enrollments.flush();
     recordAudit(enrollment, history, actorEmail, before);
     return response(enrollment);
@@ -57,7 +57,7 @@ public class CastEnrollmentService {
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
     enrollment.resume();
-    var history = record(enrollment, previous, actorEmail, now());
+    var history = record(enrollment, previous, actorEmail, Timestamps.now());
     enrollments.flush();
     recordAudit(enrollment, history, actorEmail, before);
     return response(enrollment);
@@ -68,7 +68,7 @@ public class CastEnrollmentService {
     CastEnrollment enrollment = requireLocked(storeId, id);
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
-    OffsetDateTime at = now();
+    OffsetDateTime at = Timestamps.now();
     enrollment.withdraw(at);
     var history = record(enrollment, previous, actorEmail, at);
     enrollments.flush();
@@ -78,7 +78,7 @@ public class CastEnrollmentService {
 
   @Transactional(propagation = Propagation.MANDATORY)
   public void recordCreation(CastEnrollment enrollment, String actorEmail) {
-    record(enrollment, null, actorEmail, now());
+    record(enrollment, null, actorEmail, Timestamps.now());
   }
 
   @Transactional(propagation = Propagation.MANDATORY)
@@ -111,7 +111,7 @@ public class CastEnrollmentService {
         CastEnrollmentSnapshot.builder()
             .enrollmentId(enrollment.getId())
             .actorId(actorId)
-            .recordedAt(now())
+            .recordedAt(Timestamps.now())
             .customFields(new HashMap<>(enrollment.getCustomFields()))
             .build();
     snapshot.setStoreId(enrollment.getStoreId());
@@ -216,10 +216,6 @@ public class CastEnrollmentService {
         "status", enrollment.getStatus().name(),
         "ended_at", Objects.toString(enrollment.getEndedAt(), ""),
         "version", Objects.toString(enrollment.getVersion(), ""));
-  }
-
-  private static OffsetDateTime now() {
-    return OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS);
   }
 
   private static CastEnrollmentStatusResponse response(CastEnrollment enrollment) {

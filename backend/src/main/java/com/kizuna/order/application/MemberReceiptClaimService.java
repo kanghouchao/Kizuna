@@ -11,6 +11,7 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.OffsetDateTime;
@@ -62,7 +63,7 @@ public class MemberReceiptClaimService {
     // 時刻は行ロックを取った後に読む。並行申領の待ち合わせはロックの解放まで伸びるため、要求開始時の
     // 時刻で判じると、待っている間に期限を越えた伝票を通しうる。帰属時刻も「成立した瞬間」であるべきで、
     // 「要求が届いた瞬間」ではない。
-    OffsetDateTime now = OffsetDateTime.now();
+    OffsetDateTime now = Timestamps.now();
     if (!token.isClaimableAt(now)) {
       throw new NotFoundException(UNCLAIMABLE_MESSAGE);
     }

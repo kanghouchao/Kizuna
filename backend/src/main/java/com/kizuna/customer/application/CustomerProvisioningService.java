@@ -8,7 +8,7 @@ import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
-import java.time.OffsetDateTime;
+import com.kizuna.shared.persistence.Timestamps;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -45,7 +45,7 @@ public class CustomerProvisioningService {
             .memberCode(input.memberCode())
             .reason(LinkReason.MEMBER_REQUEST)
             .linkedBy(input.actorId())
-            .linkedAt(OffsetDateTime.now())
+            .linkedAt(Timestamps.now())
             .build();
     link.setStoreId(storeId);
     try {

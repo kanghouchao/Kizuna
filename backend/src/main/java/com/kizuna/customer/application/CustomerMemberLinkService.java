@@ -13,6 +13,7 @@ import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import java.time.OffsetDateTime;
@@ -71,7 +72,7 @@ public class CustomerMemberLinkService {
     }
     String normalizedReason =
         CustomerMemberLink.normalizeOperationReason(operationReason, current != null);
-    OffsetDateTime operatedAt = OffsetDateTime.now();
+    OffsetDateTime operatedAt = Timestamps.now();
     if (current != null && member.memberId().equals(current.getMemberId())) {
       throw new ConflictException("この顧客は既にこの会員と紐づいています");
     }
@@ -144,7 +145,7 @@ public class CustomerMemberLinkService {
             .orElseThrow(() -> new ConflictException("関連状態が変わりました。再取得して確認してください"));
     requireExpectedLink(current, expectedLinkId);
     var before = snapshot(current);
-    current.release(actorId, operationReason, OffsetDateTime.now());
+    current.release(actorId, operationReason, Timestamps.now());
     customerMemberLinkRepository.save(current);
     customerMemberLinkRepository.flush();
     audit.recordById(

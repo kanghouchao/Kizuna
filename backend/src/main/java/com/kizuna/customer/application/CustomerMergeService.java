@@ -22,10 +22,10 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManager;
-import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -112,7 +112,7 @@ public class CustomerMergeService {
                 survivingCustomerId,
                 mergedCustomerId,
                 actorId,
-                OffsetDateTime.now(),
+                Timestamps.now(),
                 movedOrderCount,
                 movedLinkCount,
                 preview.movedContactCount(),
