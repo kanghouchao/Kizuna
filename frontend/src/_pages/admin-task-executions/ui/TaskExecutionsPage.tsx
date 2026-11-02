@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { taskExecutionApi, ExecutionSummary } from '@/entities/task-execution';
-import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
+import { createUuid, getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Badge,
@@ -233,9 +233,7 @@ export default function TaskExecutionsPage() {
     if (pending.current?.signature !== signature)
       pending.current = {
         signature,
-        key: Array.from(crypto.getRandomValues(new Uint8Array(16)), value =>
-          value.toString(16).padStart(2, '0')
-        ).join(''),
+        key: createUuid(),
       };
     try {
       const result = await taskExecutionApi.create({

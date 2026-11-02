@@ -381,27 +381,6 @@ test('画面を離れた後のダウンロード応答は保存操作を開始�
   await waitFor(() => expect(URL.createObjectURL).not.toHaveBeenCalled());
 });
 
-test('安全コンテキスト専用UUID APIなしでも同じ契約の操作キーを生成する', async () => {
-  const randomUuid = jest.spyOn(crypto, 'randomUUID').mockImplementation(() => {
-    throw new Error('利用不可');
-  });
-  (applicantAttachmentApi.upload as jest.Mock).mockResolvedValue({ id: 'ready' });
-  try {
-    render(<ApplicantAttachmentsPanel id="a" canManage editable />);
-    fireEvent.change(await screen.findByLabelText('追加する画像'), {
-      target: { files: [new File(['png'], 'image.png', { type: 'image/png' })] },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '画像を追加' }));
-    await waitFor(() => expect(applicantAttachmentApi.upload).toHaveBeenCalledTimes(1));
-    expect((applicantAttachmentApi.upload as jest.Mock).mock.calls[0][2]).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-    );
-    expect(randomUuid).not.toHaveBeenCalled();
-  } finally {
-    randomUuid.mockRestore();
-  }
-});
-
 test('同じキーの古いREADY応答は新しい内容不一致を清掃しない', async () => {
   upload.mockRejectedValue(new Error('応答消失'));
   render(<ApplicantAttachmentsPanel id="a" canManage editable />);

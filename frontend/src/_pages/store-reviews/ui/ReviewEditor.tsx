@@ -54,11 +54,6 @@ export const dateRule = (value: string) => {
     '2000年以降、現在までの日時を入力してください'
   );
 };
-export function requestKey() {
-  return Array.from(crypto.getRandomValues(new Uint8Array(16)), x =>
-    x.toString(16).padStart(2, '0')
-  ).join('');
-}
 export function ReviewEditor({
   editor,
   busy,
@@ -96,7 +91,6 @@ export function ReviewEditor({
         received_via: values.received_via,
         received_at: new Date(values.received_at).toISOString(),
         origin_order_id: canOrder && values.origin_order_id !== '' ? values.origin_order_id : null,
-        dedupe_key: requestKey(),
       };
       if (editor.action === 'CREATE') void onSubmit({ kind: 'CREATE', input });
       else
@@ -106,14 +100,13 @@ export function ReviewEditor({
           input: { ...input, version: editor.row.version, reason: values.reason },
         });
     } else {
-      const base = { version: editor.row.version, reason: values.reason, dedupe_key: requestKey() };
+      const base = { version: editor.row.version, reason: values.reason };
       if (editor.action === 'PUBLISH')
         setConfirmation({
           kind: 'PUBLISH',
           id: editor.row.id,
           input: {
             version: base.version,
-            dedupe_key: base.dedupe_key,
             ...fromPublicationFormValues(values),
           },
         });
@@ -123,7 +116,6 @@ export function ReviewEditor({
           id: editor.row.id,
           input: {
             version: base.version,
-            dedupe_key: base.dedupe_key,
             basis_type: values.basis_type,
             granted_at: new Date(values.event_at).toISOString(),
             evidence_note: values.evidence_note,

@@ -5,6 +5,8 @@ import { Delivery, notificationApi } from '@/entities/notification-delivery';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
+import { storeSessionToken } from '@/shared/api';
+import { setCurrentStore } from '@/shared/lib';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -63,7 +65,9 @@ const permission = (...permissions: PermissionCode[]) =>
 beforeEach(() => {
   jest.resetAllMocks();
   mockStoreId = '1';
-  Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: undefined });
+  // 結果不明の操作は、このタブの本人と現在店舗の作用域でだけ起こせる
+  storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
+  setCurrentStore('1');
   permission('NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND');
   api.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
   api.get.mockResolvedValue(row);
@@ -166,17 +170,6 @@ async function fillDraft() {
   });
   return dialog;
 }
-test('作成応答が不明なら同じ内容と要求キーで再確認する', async () => {
-  api.create.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(row);
-  render(<NotificationDeliveriesPage />);
-  const dialog = await fillDraft();
-  fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
-  const retry = await within(dialog).findByRole('button', { name: '同じ要求で結果を確認' });
-  expect(within(dialog).getByLabelText('件名')).toBeDisabled();
-  fireEvent.click(retry);
-  await waitFor(() => expect(api.create).toHaveBeenCalledTimes(2));
-  expect(api.create.mock.calls[1][0]).toEqual(api.create.mock.calls[0][0]);
-});
 test('確定した入力エラーは内容を修正して再提出できる', async () => {
   api.create.mockRejectedValueOnce({
     response: { status: 400, data: { error: '起点を確認してください' } },
@@ -201,27 +194,27 @@ test('作成結果が不明なダイアログを閉じても同じ要求を再�
   expect(within(reopened).getByLabelText('送信予定（この端末の時刻）')).toHaveValue(
     '2026-10-07T10:00'
   );
+  expect(within(reopened).getByLabelText('件名')).toBeDisabled();
   fireEvent.click(within(reopened).getByRole('button', { name: '同じ要求で結果を確認' }));
-  await waitFor(() => expect(api.create).toHaveBeenCalledTimes(2));
-  expect(api.create.mock.calls[1][0]).toEqual(api.create.mock.calls[0][0]);
+  await waitFor(() => expect(notify.success).toHaveBeenCalledWith('通知の下書きを作成しました'));
+  expect(api.create.mock.calls[0][2]).toEqual({ headers: { 'X-Store-ID': '1' } });
 });
 
-test('不明な作成結果の再照会が拒否されても元のキーを保持する', async () => {
-  api.create
-    .mockRejectedValueOnce(new Error('network'))
-    .mockRejectedValueOnce({ response: { status: 403 } })
-    .mockResolvedValueOnce(row);
-  render(<NotificationDeliveriesPage />);
-  const dialog = await fillDraft();
-  fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
-  const retry = await within(dialog).findByRole('button', { name: '同じ要求で結果を確認' });
-  fireEvent.click(retry);
-  await waitFor(() => expect(notify.error).toHaveBeenCalledTimes(2));
-  expect(within(dialog).getByLabelText('件名')).toBeDisabled();
-  fireEvent.click(retry);
-  await waitFor(() => expect(api.create).toHaveBeenCalledTimes(3));
-  expect(api.create.mock.calls[2][0]).toEqual(api.create.mock.calls[0][0]);
-});
+test.each([400, 404, 409])(
+  '結果不明の再確認が業務拒否 %s を受けたら不明を解き、入力を直して送り直せる',
+  async status => {
+    api.create
+      .mockRejectedValueOnce(new Error('network'))
+      .mockRejectedValueOnce({ response: { status } });
+    render(<NotificationDeliveriesPage />);
+    const dialog = await fillDraft();
+    fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: '同じ要求で結果を確認' }));
+    expect(await within(dialog).findByRole('button', { name: '下書きを作成' })).toBeEnabled();
+    expect(within(dialog).getByLabelText('件名')).toBeEnabled();
+    expect(within(dialog).queryByText(/作成結果が確認できません/)).not.toBeInTheDocument();
+  }
+);
 
 test('本人情報が未取得のサーバー描画では権限に依存した本文を返さない', () => {
   mockedUseMe.mockReturnValue({

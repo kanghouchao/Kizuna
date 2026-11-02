@@ -21,13 +21,7 @@ import {
   TabsContent,
 } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
-import {
-  operationKey,
-  readPending,
-  requestId,
-  submitOperation,
-  type Pending,
-} from '../model/operation';
+import { useAdvertisingOperation, useReloadAfterOperation } from '../model/operation';
 import { CostEditor } from './CostEditor';
 import { CostTable } from './CostTable';
 import { CostExport } from './CostExport';
@@ -48,7 +42,6 @@ export default function AdvertisingCostsPage() {
     <StorePage
       key={JSON.stringify([userId, storeId])}
       store={storeId ?? ''}
-      subject={String(userId)}
       manage={hasPermission(me, 'ADVERTISING_COST_MANAGE')}
       canExport={hasPermission(me, 'ADVERTISING_COST_EXPORT')}
       canReadOrders={hasPermission(me, 'ORDER_MANAGE')}
@@ -58,14 +51,12 @@ export default function AdvertisingCostsPage() {
 }
 function StorePage({
   store,
-  subject,
   manage,
   canExport,
   canReadOrders,
   canReadRecruitment,
 }: {
   store: string;
-  subject: string;
   manage: boolean;
   canExport: boolean;
   canReadOrders: boolean;
@@ -125,9 +116,7 @@ function StorePage({
           {canReadRecruitment && <TabsTrigger value="recruitment">採用効果</TabsTrigger>}
         </TabsList>
         <TabsContent value="costs">
-          {view === 'costs' && (
-            <MonthPage key={month} {...{ store, subject, manage, canExport, month }} />
-          )}
+          {view === 'costs' && <MonthPage key={month} {...{ store, manage, canExport, month }} />}
         </TabsContent>
         <TabsContent value="media">
           {view === 'media' && <MediaSummaryPage key={month} {...{ store, month, canExport }} />}
@@ -149,27 +138,17 @@ function StorePage({
 type Target = { kind: 'create' } | { kind: 'replace' | 'delete'; cost: Cost } | { kind: 'copy' };
 function MonthPage({
   store,
-  subject,
   manage,
   canExport,
   month,
 }: {
   store: string;
-  subject: string;
   manage: boolean;
   canExport: boolean;
   month: string;
 }) {
-  const key = operationKey(subject, store, month);
-  const [initial] = useState(() => {
-    try {
-      return { pending: readPending(key), error: false };
-    } catch {
-      return { pending: null, error: true };
-    }
-  });
-  const [pending, setPending] = useState<Pending | null>(initial.pending);
-  const [storageError, setStorageError] = useState(initial.error);
+  const operation = useAdvertisingOperation(month);
+  const { pending, unreadable: storageError } = operation;
   const [target, setTarget] = useState<Target | null>(null),
     [open, setOpen] = useState(false),
     [missing, setMissing] = useState(false),
@@ -196,19 +175,7 @@ function MonthPage({
   useEffect(() => {
     reload.current = refresh;
   });
-  useEffect(() => {
-    const sync = (event: Event) => {
-      try {
-        setPending(readPending(key));
-        const result = (event as CustomEvent<{ key: string; completed: boolean }>).detail;
-        if (result?.key === key && result.completed) reload.current();
-      } catch {
-        setStorageError(true);
-      }
-    };
-    window.addEventListener('advertising-operation', sync);
-    return () => window.removeEventListener('advertising-operation', sync);
-  }, [key]);
+  useReloadAfterOperation(month, () => reload.current());
   function edit(t: Target) {
     setMissing(false);
     setTarget(t);
@@ -217,11 +184,8 @@ function MonthPage({
   }
   async function execute(mutation: Mutation) {
     if (pending || storageError) return;
-    const op = { subject, store, month, request_id: requestId(), mutation };
     try {
-      const done = await submitOperation(op, false, p => {
-        if (live.current) setPending(p);
-      });
+      const done = await operation.start(mutation);
       if (done && live.current) {
         setOpen(false);
         notify.success('広告費を保存しました。');
@@ -230,16 +194,13 @@ function MonthPage({
       if (live.current) {
         if ((e as { response?: { status?: number } }).response?.status === 404) setMissing(true);
         notify.error(message(e));
-        refresh();
       }
     }
   }
   async function replay() {
-    if (!pending || pending.phase !== 'unknown') return;
+    if (pending?.phase !== 'unknown') return;
     try {
-      const done = await submitOperation(pending.operation, true, p => {
-        if (live.current) setPending(p);
-      });
+      const done = await operation.replay();
       if (done && live.current) {
         setOpen(false);
         notify.success('操作結果を確認しました。');
@@ -265,11 +226,11 @@ function MonthPage({
           </p>
           <p>
             対象：{month} ／{' '}
-            {pending.operation.mutation.kind === 'copy'
+            {pending.payload.kind === 'copy'
               ? '前月コピー'
-              : pending.operation.mutation.kind === 'delete'
+              : pending.payload.kind === 'delete'
                 ? '削除'
-                : pending.operation.mutation.kind === 'replace'
+                : pending.payload.kind === 'replace'
                   ? '変更'
                   : '登録'}
           </p>

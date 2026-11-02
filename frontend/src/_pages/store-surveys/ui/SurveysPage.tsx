@@ -1,8 +1,15 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
-import { surveyApi, SurveyCommand, Revision } from '@/entities/survey';
-import { getApiErrorMessage, isBadRequest, isConflict, isNotFound } from '@/shared/lib';
+import { surveyApi, SurveyCommand, Revision, WriteResponse } from '@/entities/survey';
+import {
+  getApiErrorMessage,
+  isBadRequest,
+  isConflict,
+  isNotFound,
+  memoryOperationStore,
+  useOperation,
+} from '@/shared/lib';
 import { Button } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 import {
@@ -33,8 +40,9 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorKey, setEditorKey] = useState(0);
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState<SurveyCommand | null>(null);
-  const [uncertain, setUncertain] = useState(false);
+  const operation = useOperation('surveys', { store: memoryOperationStore, send: surveyApi.write });
+  const pending = operation.pending;
+  const uncertain = pending?.phase === 'unknown';
   const [conflict, setConflict] = useState(false);
   const [missing, setMissing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,20 +64,16 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
     if (!active.current) return;
     setDenied(message);
     setEditor(null);
-    setPending(null);
-    setUncertain(false);
     setOpen(false);
   };
-  const submit = async (command: SurveyCommand) => {
+  const run = async (send: () => Promise<{ value: WriteResponse } | null>) => {
     if (lock.current || denied) return;
     lock.current = true;
     setBusy(true);
-    setPending(command);
     try {
-      const result = await surveyApi.write(command);
-      if (!active.current) return;
-      setPending(null);
-      setUncertain(false);
+      const done = await send();
+      if (!done || !active.current) return;
+      const result = done.value;
       setConflict(false);
       setMissing(false);
       setEditor(null);
@@ -84,20 +88,18 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
     } catch (error) {
       if (!active.current) return;
       const denial = accessError(error);
-      if (denial) {
-        deny(denial);
-      } else if (isBadRequest(error) || isConflict(error) || isNotFound(error)) {
-        setPending(null);
-        setUncertain(false);
+      if (denial) deny(denial);
+      else if (isBadRequest(error) || isConflict(error) || isNotFound(error)) {
         setConflict(isConflict(error));
         setMissing(isNotFound(error));
-      } else setUncertain(true);
+      }
       notify.error(getApiErrorMessage(error, '操作結果が確認できません'));
     } finally {
       lock.current = false;
       if (active.current) setBusy(false);
     }
   };
+  const submit = (command: SurveyCommand) => run(() => operation.start(command));
   const navigate = (next: View) => {
     if (busy || pending) return;
     setEditor(null);
@@ -211,10 +213,10 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
           )}
         </div>
       )}
-      {pending && uncertain && (
+      {uncertain && (
         <div role="alert" className="rounded-lg border p-4 space-y-3">
           <p>結果が確認できません。同じ要求で結果を確認するまで、新しい操作はできません。</p>
-          <Button variant="outline" disabled={busy} onClick={() => void submit(pending)}>
+          <Button variant="outline" disabled={busy} onClick={() => void run(operation.replay)}>
             同じ要求で結果を確認
           </Button>
         </div>

@@ -24,7 +24,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui';
-import { requestKey, viaLabels } from './surveyUi';
+import { createUuid } from '@/shared/lib';
+import { viaLabels } from './surveyUi';
 import { SurveyTextField, SurveyChoiceField } from './SurveyFields';
 export type Editor =
   | { kind: 'CREATE' }
@@ -58,7 +59,7 @@ const clean = (value: string, max: number, trim = true) => {
 const validReceivedTime = (value: number) =>
   Number.isFinite(value) && value >= Date.parse('2000-01-01T00:00:00Z') && value <= Date.now();
 const blankQuestion = (): Question => ({
-  question_key: `q${requestKey()}`,
+  question_key: `q${createUuid()}`,
   type: 'TEXT',
   prompt: '',
   required: true,
@@ -140,7 +141,7 @@ function DefinitionEditor({
   }, [form, onDraft]);
   const questions = useFieldArray({ control: form.control, name: 'questions' });
   const submit = form.handleSubmit(values => {
-    const input = { ...values, dedupe_key: requestKey() };
+    const input = values;
     if (editor.kind === 'CREATE') void onSubmit({ kind: 'CREATE', input });
     else if (editor.kind === 'REVISE')
       void onSubmit({
@@ -261,8 +262,8 @@ function QuestionEditor({
             v === 'TEXT'
               ? []
               : [
-                  { option_key: `o${requestKey()}`, label: '' },
-                  { option_key: `o${requestKey()}`, label: '' },
+                  { option_key: `o${createUuid()}`, label: '' },
+                  { option_key: `o${createUuid()}`, label: '' },
                 ]
           )
         }
@@ -330,7 +331,7 @@ function QuestionEditor({
             type="button"
             variant="outline"
             disabled={disabled || options.fields.length >= 10}
-            onClick={() => options.append({ option_key: `o${requestKey()}`, label: '' })}
+            onClick={() => options.append({ option_key: `o${createUuid()}`, label: '' })}
           >
             選択肢を追加
           </Button>
@@ -382,7 +383,6 @@ function AnswerEditor({
     const base = {
       reason: v.reason,
       version: 'answer' in editor ? editor.answer.version : editor.revision.version,
-      dedupe_key: requestKey(),
     };
     let command: SurveyCommand;
     if (intake) {
@@ -411,7 +411,6 @@ function AnswerEditor({
         received_at:
           source && v.received_at === local ? source.received_at : new Date(at).toISOString(),
         answers,
-        dedupe_key: base.dedupe_key,
       };
       command =
         editor.kind === 'RECEIVE'

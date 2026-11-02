@@ -5,12 +5,7 @@ import { hasPermission, useMe } from '@/entities/user';
 import { useResource } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
 import { RemunerationEditor } from './RemunerationEditor';
-import {
-  operationScope,
-  usePendingOperation,
-  type EditTarget,
-  type Operation,
-} from '../model/operation';
+import { useRemunerationOperation, type EditTarget, type Operation } from '../model/operation';
 import { RemunerationHistory } from './RemunerationHistory';
 import { Paging } from './Paging';
 export function RemunerationManagement({
@@ -30,11 +25,10 @@ export function RemunerationManagement({
     [bonusPage, setBonusPage] = useState(0),
     [revision, setRevision] = useState(0);
   const { me } = useMe();
-  const scope = operationScope();
-  const outstanding = usePendingOperation(scope);
-  const blocked = !scope || outstanding !== null;
+  const operation = useRemunerationOperation();
+  const outstanding = operation.pending;
+  const blocked = !operation.ready || outstanding !== null;
   const [editor, setEditor] = useState<{
-    scope: string;
     target: EditTarget;
     personId: number;
     personName: string;
@@ -45,7 +39,6 @@ export function RemunerationManagement({
   const edit = (target: EditTarget) => {
     if (blocked) return;
     setEditor(current => ({
-      scope: scope!,
       target,
       personId,
       personName,
@@ -55,13 +48,12 @@ export function RemunerationManagement({
   };
   const restore = () => {
     if (!outstanding) return;
-    const operation = outstanding.operation;
+    const recovery = outstanding.payload;
     setEditor(current => ({
-      scope: operation.scope,
-      target: operation.target,
-      personId: operation.personId,
-      personName: operation.personName,
-      recovery: operation,
+      target: recovery.target,
+      personId: recovery.personId,
+      personName: recovery.personName,
+      recovery,
       open: true,
       key: (current?.key ?? 0) + 1,
     }));
@@ -93,8 +85,7 @@ export function RemunerationManagement({
       {outstanding && (
         <div role="status" className="space-y-3 rounded-lg border p-4">
           <p>
-            {outstanding.operation.personName}{' '}
-            の送信結果を確認するまで、新しい記録は作成できません。
+            {outstanding.payload.personName} の送信結果を確認するまで、新しい記録は作成できません。
           </p>
           <Button
             type="button"
@@ -225,14 +216,13 @@ export function RemunerationManagement({
           <Paging page={bonusPage} total={b.total_pages} label="付与記録" onPage={setBonusPage} />
         </div>
       )}
-      {editor && scope && editor.scope === scope && (
+      {editor && (
         <RemunerationEditor
           key={editor.key}
           target={editor.target}
           open={editor.open}
           personId={editor.personId}
           personName={editor.personName}
-          scope={scope}
           recovery={editor.recovery}
           onClose={() => setEditor(current => current && { ...current, open: false })}
           onSaved={() => {

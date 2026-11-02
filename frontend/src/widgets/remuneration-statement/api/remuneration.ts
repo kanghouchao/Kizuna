@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient, type Page } from '@/shared/api';
 import type {
   StatementScope,
@@ -48,26 +49,31 @@ export const remunerationApi = {
       })
     ).data;
   },
-  async createGuarantee(personId: number, body: GuaranteeInput) {
-    await apiClient.post(guaranteeBase, { ...body, person_id: personId });
+  async createGuarantee(personId: number, body: GuaranteeInput, config?: AxiosRequestConfig) {
+    await apiClient.post(guaranteeBase, { ...body, person_id: personId }, config);
   },
-  async correctGuarantee(id: string, body: GuaranteeInput & { correction_reason: string }) {
-    await apiClient.post(`${guaranteeBase}/${id}/corrections`, body);
+  async correctGuarantee(
+    id: string,
+    body: GuaranteeInput & { correction_reason: string },
+    config?: AxiosRequestConfig
+  ) {
+    await apiClient.post(`${guaranteeBase}/${id}/corrections`, body, config);
   },
-  async cancelGuarantee(id: string, body: CancellationInput) {
-    await apiClient.post(`${guaranteeBase}/${id}/cancellation`, body);
+  async cancelGuarantee(id: string, body: CancellationInput, config?: AxiosRequestConfig) {
+    await apiClient.post(`${guaranteeBase}/${id}/cancellation`, body, config);
   },
-  async createBonus(personId: number, body: BonusInput) {
-    await apiClient.post(bonusBase, { ...body, person_id: personId });
+  async createBonus(personId: number, body: BonusInput, config?: AxiosRequestConfig) {
+    await apiClient.post(bonusBase, { ...body, person_id: personId }, config);
   },
   async correctBonus(
     id: string,
-    body: BonusInput & { expected_version: number; correction_reason: string }
+    body: BonusInput & { expected_version: number; correction_reason: string },
+    config?: AxiosRequestConfig
   ) {
-    await apiClient.post(`${bonusBase}/${id}/corrections`, body);
+    await apiClient.post(`${bonusBase}/${id}/corrections`, body, config);
   },
-  async cancelBonus(id: string, body: CancellationInput) {
-    await apiClient.post(`${bonusBase}/${id}/cancellation`, body);
+  async cancelBonus(id: string, body: CancellationInput, config?: AxiosRequestConfig) {
+    await apiClient.post(`${bonusBase}/${id}/cancellation`, body, config);
   },
   async changes(kind: 'guarantee' | 'bonus', id: string, page = 0): Promise<Changes> {
     return (

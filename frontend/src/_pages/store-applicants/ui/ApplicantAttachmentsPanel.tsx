@@ -13,6 +13,7 @@ import {
   useKeyedResource,
   useListPage,
   useResource,
+  createUuid,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
@@ -304,7 +305,7 @@ function AttachmentUploadForm({
     if (!file || checking || stateUnavailable) return;
     const previous = operationRef.current;
     const current: Operation = {
-      key: previous?.key ?? upload?.idempotency_key ?? createOperationKey(),
+      key: previous?.key ?? upload?.idempotency_key ?? createUuid(),
       file: previous && !correctable ? previous.file : file,
       attempt: (previous?.attempt ?? 0) + 1,
       inputRejected: false,
@@ -464,12 +465,4 @@ function AttachmentUploadForm({
       </form>
     </Form>
   );
-}
-
-function createOperationKey(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

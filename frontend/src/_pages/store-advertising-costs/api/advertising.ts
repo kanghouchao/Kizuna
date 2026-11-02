@@ -1,5 +1,5 @@
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient, type Page } from '@/shared/api';
-import { getCurrentStoreId } from '@/shared/lib';
 export type Category = 'SALES' | 'RECRUITMENT';
 export interface MediumRef {
   id: string;
@@ -152,13 +152,6 @@ export type Mutation =
   | { kind: 'replace'; id: string; version: number; values: CostValues; reason: string }
   | { kind: 'delete'; id: string; version: number; reason: string }
   | { kind: 'copy'; source_version: number; target_version: number; reason: string };
-export interface Operation {
-  subject: string;
-  store: string;
-  month: string;
-  request_id: string;
-  mutation: Mutation;
-}
 const base = '/advertising-costs';
 const months = '/advertising-cost-months';
 export const advertisingApi = {
@@ -192,34 +185,25 @@ export const advertisingApi = {
     ).data,
   change: async (month: string, id: string) =>
     (await apiClient.get<ChangeDetail>(`${months}/${month}/changes/${id}`)).data,
-  async mutate(op: Operation) {
-    const m = op.mutation;
+  async mutate(month: string, m: Mutation, requestId: string, config?: AxiosRequestConfig) {
     const body =
       m.kind === 'create'
-        ? { ...m.values, month: op.month, request_id: op.request_id }
+        ? { ...m.values, month, request_id: requestId }
         : m.kind === 'replace'
-          ? { ...m.values, version: m.version, reason: m.reason, request_id: op.request_id }
+          ? { ...m.values, version: m.version, reason: m.reason, request_id: requestId }
           : m.kind === 'delete'
-            ? { version: m.version, reason: m.reason, request_id: op.request_id }
+            ? { version: m.version, reason: m.reason, request_id: requestId }
             : {
                 source_version: m.source_version,
                 target_version: m.target_version,
                 reason: m.reason,
-                request_id: op.request_id,
+                request_id: requestId,
               };
     return apiClient.request({
+      ...config,
       method: m.kind === 'replace' ? 'PUT' : m.kind === 'delete' ? 'DELETE' : 'POST',
-      url:
-        m.kind === 'copy' ? `${months}/${op.month}/copies` : 'id' in m ? `${base}/${m.id}` : base,
+      url: m.kind === 'copy' ? `${months}/${month}/copies` : 'id' in m ? `${base}/${m.id}` : base,
       data: body,
-      transformRequest: [
-        (data, headers) => {
-          if (getCurrentStoreId() !== op.store)
-            throw new Error('元の店舗に戻って操作結果を確認してください。');
-          headers['X-Store-ID'] = op.store;
-          return JSON.stringify(data);
-        },
-      ],
     });
   },
   async download(

@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient, fromSpringPage, PageResult } from '@/shared/api';
 import {
   Survey,
@@ -54,9 +55,14 @@ export const surveyApi = {
         )
       ).data
     ),
-  write: async (command: SurveyCommand): Promise<WriteResponse> => {
+  write: async (
+    command: SurveyCommand,
+    dedupeKey: string,
+    config?: AxiosRequestConfig
+  ): Promise<WriteResponse> => {
+    const body = { ...command.input, dedupe_key: dedupeKey };
     if (command.kind === 'REPLACE')
-      return (await apiClient.put(revisionPath(command.sid, command.rid), command.input)).data;
+      return (await apiClient.put(revisionPath(command.sid, command.rid), body, config)).data;
     let path: string;
     switch (command.kind) {
       case 'CREATE':
@@ -81,6 +87,6 @@ export const surveyApi = {
         path = `${responses}/${command.aid}/withdrawals`;
         break;
     }
-    return (await apiClient.post(path, command.input)).data;
+    return (await apiClient.post(path, body, config)).data;
   },
 };

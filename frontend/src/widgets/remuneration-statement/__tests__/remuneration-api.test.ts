@@ -29,6 +29,8 @@ it('店舗の明細は現在店舗の境界で本人を指定し、店舗はク�
   );
   expect(get.mock.lastCall?.[1]?.params).not.toHaveProperty('store_id');
 });
+// 結果不明の操作の送信は、起こした店舗を名指した設定をそのまま渡す。
+const pinned = { headers: { 'X-Store-ID': '1' } };
 it('条件の停止は空の日額、版、要求IDを保持して送信する', async () => {
   const input = {
     effective_from: '2026-10-01',
@@ -38,51 +40,83 @@ it('条件の停止は空の日額、版、要求IDを保持して送信する',
     expected_version: 2,
     request_id: 'request',
   };
-  await remunerationApi.createGuarantee(4, input);
-  expect(post).toHaveBeenLastCalledWith('/remuneration-guarantees', {
-    ...input,
-    person_id: 4,
-  });
-  await remunerationApi.correctGuarantee('g', { ...input, correction_reason: '日付訂正' });
-  expect(post).toHaveBeenLastCalledWith('/remuneration-guarantees/g/corrections', {
-    ...input,
-    correction_reason: '日付訂正',
-  });
-  await remunerationApi.cancelGuarantee('g', {
-    reason: '誤記',
-    expected_version: 3,
-    request_id: 'cancel',
-  });
-  expect(post).toHaveBeenLastCalledWith('/remuneration-guarantees/g/cancellation', {
-    reason: '誤記',
-    expected_version: 3,
-    request_id: 'cancel',
-  });
+  await remunerationApi.createGuarantee(4, input, pinned);
+  expect(post).toHaveBeenLastCalledWith(
+    '/remuneration-guarantees',
+    {
+      ...input,
+      person_id: 4,
+    },
+    pinned
+  );
+  await remunerationApi.correctGuarantee('g', { ...input, correction_reason: '日付訂正' }, pinned);
+  expect(post).toHaveBeenLastCalledWith(
+    '/remuneration-guarantees/g/corrections',
+    {
+      ...input,
+      correction_reason: '日付訂正',
+    },
+    pinned
+  );
+  await remunerationApi.cancelGuarantee(
+    'g',
+    {
+      reason: '誤記',
+      expected_version: 3,
+      request_id: 'cancel',
+    },
+    pinned
+  );
+  expect(post).toHaveBeenLastCalledWith(
+    '/remuneration-guarantees/g/cancellation',
+    {
+      reason: '誤記',
+      expected_version: 3,
+      request_id: 'cancel',
+    },
+    pinned
+  );
 });
 it('ボーナスの付与・有理由訂正・取消を別操作にする', async () => {
   const input = { award_date: '2026-09-30', amount: 1000, reason: '付与', request_id: 'request' };
-  await remunerationApi.createBonus(4, input);
-  expect(post).toHaveBeenLastCalledWith('/bonus-awards', { ...input, person_id: 4 });
-  await remunerationApi.correctBonus('b', {
-    ...input,
-    expected_version: 0,
-    correction_reason: '訂正',
-  });
-  expect(post).toHaveBeenLastCalledWith('/bonus-awards/b/corrections', {
-    ...input,
-    expected_version: 0,
-    correction_reason: '訂正',
-  });
-  await remunerationApi.cancelBonus('b', {
-    reason: '誤記',
-    expected_version: 1,
-    request_id: 'cancel',
-  });
-  expect(post).toHaveBeenLastCalledWith('/bonus-awards/b/cancellation', {
-    reason: '誤記',
-    expected_version: 1,
-    request_id: 'cancel',
-  });
+  await remunerationApi.createBonus(4, input, pinned);
+  expect(post).toHaveBeenLastCalledWith('/bonus-awards', { ...input, person_id: 4 }, pinned);
+  await remunerationApi.correctBonus(
+    'b',
+    {
+      ...input,
+      expected_version: 0,
+      correction_reason: '訂正',
+    },
+    pinned
+  );
+  expect(post).toHaveBeenLastCalledWith(
+    '/bonus-awards/b/corrections',
+    {
+      ...input,
+      expected_version: 0,
+      correction_reason: '訂正',
+    },
+    pinned
+  );
+  await remunerationApi.cancelBonus(
+    'b',
+    {
+      reason: '誤記',
+      expected_version: 1,
+      request_id: 'cancel',
+    },
+    pinned
+  );
+  expect(post).toHaveBeenLastCalledWith(
+    '/bonus-awards/b/cancellation',
+    {
+      reason: '誤記',
+      expected_version: 1,
+      request_id: 'cancel',
+    },
+    pinned
+  );
 });
 it('増え続ける一覧と履歴はページ番号を引き継ぐ', async () => {
   await remunerationApi.guarantees(4, 2);

@@ -1,9 +1,20 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { storeSessionToken } from '@/shared/api';
+import { setCurrentStore } from '@/shared/lib';
+import { useAdvertisingOperation } from '../model/operation';
 import { advertisingApi, type MediaReport } from '../api/advertising';
 import { MediaSummaryPage } from './MediaSummaryPage';
 jest.mock('../api/advertising', () => ({
   ...jest.requireActual('../api/advertising'),
-  advertisingApi: { media: jest.fn(), download: jest.fn() },
+  advertisingApi: { media: jest.fn(), download: jest.fn(), mutate: jest.fn() },
 }));
 function report(month = '2026-09', name = '媒体', count: number | null = 0): MediaReport {
   return {
@@ -119,4 +130,20 @@ it('空になった二ページ目を月全体の未登録と表示しない', a
   fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('このページに該当する媒体はありません')).toBeVisible();
   expect(screen.queryByText('この月の広告費は登録されていません')).not.toBeInTheDocument();
+});
+
+it('費用記録の画面で同じ月の操作が終わると集計を読み直す', async () => {
+  storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
+  setCurrentStore('1');
+  jest.mocked(advertisingApi.media).mockResolvedValue(report());
+  jest.mocked(advertisingApi.mutate).mockResolvedValue(undefined as never);
+  const operation = renderHook(() => useAdvertisingOperation('2026-09'));
+  render(<MediaSummaryPage store="1" month="2026-09" canExport={false} />);
+  await waitFor(() => expect(advertisingApi.media).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    await operation.result.current.start({ kind: 'delete', id: 'c', version: 1, reason: '誤記' });
+  });
+  await waitFor(() =>
+    expect(jest.mocked(advertisingApi.media).mock.calls.length).toBeGreaterThan(1)
+  );
 });

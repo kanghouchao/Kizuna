@@ -14,6 +14,14 @@ export { useListPage } from './hooks/useListPage';
 export { useResource } from './hooks/useResource';
 export { useDeleteAction } from './hooks/useDeleteAction';
 export {
+  memoryOperationStore,
+  sessionOperationStore,
+  useOperation,
+  useOperationRevision,
+} from './hooks/useOperation';
+export type { OperationStore, PendingOperation, SendOperation } from './hooks/useOperation';
+export { createUuid } from './uuid';
+export {
   clearSession,
   hasMemberReturnPath,
   isSafeMemberReturnPath,
