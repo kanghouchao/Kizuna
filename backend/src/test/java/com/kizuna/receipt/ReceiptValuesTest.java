@@ -7,7 +7,6 @@ import com.kizuna.receipt.domain.OperationReceipt;
 import com.kizuna.receipt.once.Committed;
 import com.kizuna.receipt.once.Receipt;
 import com.kizuna.receipt.once.ReceiptKey;
-import java.time.OffsetDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -32,8 +31,7 @@ class ReceiptValuesTest {
 
   @Test
   void recordKeepsTheKeyFingerprintAndCommittedFacts() {
-    var at = OffsetDateTime.parse("2026-11-02T00:00:00Z");
-    var row = OperationReceipt.record(1L, 2L, "key", "hash", "OP", "9", Map.of("v", 1L), at);
+    var row = OperationReceipt.record(1L, 2L, "key", "hash", "OP", "9", Map.of("v", 1L));
     assertThat(row)
         .extracting(
             OperationReceipt::getStoreId,
@@ -42,8 +40,7 @@ class ReceiptValuesTest {
             OperationReceipt::getFingerprint,
             OperationReceipt::getOperation,
             OperationReceipt::getTargetId,
-            OperationReceipt::getCommittedFacts,
-            OperationReceipt::getCreatedAt)
-        .containsExactly(1L, 2L, "key", "hash", "OP", "9", Map.of("v", 1L), at);
+            OperationReceipt::getCommittedFacts)
+        .containsExactly(1L, 2L, "key", "hash", "OP", "9", Map.of("v", 1L));
   }
 }

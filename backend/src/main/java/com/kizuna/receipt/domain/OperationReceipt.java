@@ -1,13 +1,11 @@
 package com.kizuna.receipt.domain;
 
-import com.kizuna.shared.persistence.SnowflakeId;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.io.Serializable;
-import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -20,33 +18,25 @@ import org.hibernate.annotations.Type;
 @Immutable
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class OperationReceipt {
-  @Id @SnowflakeId private String id;
-
-  @Column(nullable = false, updatable = false)
-  private Long storeId;
-
-  @Column(nullable = false, updatable = false)
+public class OperationReceipt extends StoreScopedEntity {
+  @Column(name = "actor_id", nullable = false, updatable = false)
   private Long actorId;
 
-  @Column(nullable = false, updatable = false, length = 120)
+  @Column(name = "operation_key", nullable = false, updatable = false, length = 120)
   private String operationKey;
 
-  @Column(nullable = false, updatable = false, length = 64)
+  @Column(name = "fingerprint", nullable = false, updatable = false, length = 64)
   private String fingerprint;
 
-  @Column(nullable = false, updatable = false, length = 80)
+  @Column(name = "operation", nullable = false, updatable = false, length = 80)
   private String operation;
 
-  @Column(nullable = false, updatable = false, length = 100)
+  @Column(name = "target_id", nullable = false, updatable = false, length = 100)
   private String targetId;
 
   @Type(JsonBinaryType.class)
-  @Column(updatable = false, columnDefinition = "jsonb")
+  @Column(name = "committed_facts", updatable = false, columnDefinition = "jsonb")
   private Map<String, Serializable> committedFacts;
-
-  @Column(nullable = false, updatable = false)
-  private OffsetDateTime createdAt;
 
   public static OperationReceipt record(
       Long storeId,
@@ -55,17 +45,15 @@ public class OperationReceipt {
       String fingerprint,
       String operation,
       String targetId,
-      Map<String, Serializable> committedFacts,
-      OffsetDateTime now) {
+      Map<String, Serializable> committedFacts) {
     var receipt = new OperationReceipt();
-    receipt.storeId = storeId;
+    receipt.setStoreId(storeId);
     receipt.actorId = actorId;
     receipt.operationKey = operationKey;
     receipt.fingerprint = fingerprint;
     receipt.operation = operation;
     receipt.targetId = targetId;
     receipt.committedFacts = committedFacts;
-    receipt.createdAt = now;
     return receipt;
   }
 }
