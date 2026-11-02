@@ -110,7 +110,7 @@ class AdvertisingRecruitmentEffectIntegrationTest {
   }
 
   @Test
-  void costsGroupByMediumIdWithinTheStoreAndHiresStayUnnamed() {
+  void costsAndHiresGroupByMediumIdWithinTheStoreAndNonMediaHiresStayUnnamed() {
     long store = store();
     long other = store();
     String recruiting = medium(store, "求人A");
@@ -119,37 +119,44 @@ class AdvertisingRecruitmentEffectIntegrationTest {
     cost(store, "2026-05", AdvertisingCategory.SALES, recruiting, 99999);
     cost(store, "2026-05", AdvertisingCategory.RECRUITMENT, costOnly, 500);
     cost(store, "2026-04", AdvertisingCategory.RECRUITMENT, recruiting, 70000);
-    cost(other, "2026-05", AdvertisingCategory.RECRUITMENT, medium(other, "求人A"), 1);
-    hire(store, "MEDIA", "求人A", "HIRED", "ENROLLED", "2026-05-10", null);
-    hire(store, "MEDIA", "求人A", "HIRED", "ENROLLED", "2026-05-11", null);
+    String foreign = medium(other, "求人A");
+    cost(other, "2026-05", AdvertisingCategory.RECRUITMENT, foreign, 1);
+    hire(store, "MEDIA", recruiting, "HIRED", "ENROLLED", "2026-05-10", null);
+    hire(store, "MEDIA", recruiting, "HIRED", "ENROLLED", "2026-05-11", null);
     hire(store, "REFERRAL", null, "HIRED", "ENROLLED", "2026-05-13", null);
-    hire(store, "MEDIA", "求人A", "WITHDRAWN", "ENROLLED", "2026-05-14", null);
-    hire(other, "MEDIA", "求人A", "HIRED", "ENROLLED", "2026-05-15", null);
+    hire(store, "MEDIA", recruiting, "WITHDRAWN", "ENROLLED", "2026-05-14", null);
+    hire(other, "MEDIA", foreign, "HIRED", "ENROLLED", "2026-05-15", null);
 
     var report = effects.view(store, "2026-05").report();
 
     assertThat(report.recordedRecruitmentAmount()).isEqualTo(30500);
     assertThat(report.hireCount()).isEqualTo(3);
-    assertThat(report.unnamedMediaHireCount()).isEqualTo(3);
+    assertThat(report.unnamedMediaHireCount()).isEqualTo(1);
     assertThat(report.rows())
         .extracting(r -> r.medium().id(), r -> r.medium().name())
         .containsExactly(tuple(recruiting, "求人A"), tuple(costOnly, "費用だけ"));
     assertThat(report.rows().get(0))
         .returns(30000L, Row::recordedRecruitmentAmount)
-        .returns(Status.NO_HIRES, Row::calculationStatus);
+        .returns(2L, Row::hireCount)
+        .returns("15000.00", Row::costPerHire)
+        .returns(Status.CALCULATED, Row::calculationStatus);
   }
 
   @Test
   void hiresCountOnlyEnrollmentsStartedWithinTheMonth() {
     long store = store();
+    String boundary = medium(store, "月境界");
     for (var startedOn : List.of("2026-04-30", "2026-05-01", "2026-05-31", "2026-06-01"))
-      hire(store, "MEDIA", "月境界", "HIRED", "ENROLLED", startedOn, null);
+      hire(store, "MEDIA", boundary, "HIRED", "ENROLLED", startedOn, null);
 
     var report = effects.view(store, "2026-05").report();
 
     assertThat(report.hireCount()).isEqualTo(2);
-    assertThat(report.unnamedMediaHireCount()).isEqualTo(2);
-    assertThat(report.rows()).isEmpty();
+    assertThat(report.unnamedMediaHireCount()).isZero();
+    assertThat(report.rows())
+        .singleElement()
+        .returns(2L, Row::hireCount)
+        .returns(Status.NO_COST_RECORDS, Row::calculationStatus);
   }
 
   @Test
@@ -195,7 +202,7 @@ class AdvertisingRecruitmentEffectIntegrationTest {
   private void hire(
       long store,
       String sourceType,
-      String media,
+      String mediumId,
       String status,
       String enrollmentStatus,
       String startedOn,
@@ -211,13 +218,13 @@ class AdvertisingRecruitmentEffectIntegrationTest {
     jdbc.update(
         """
         insert into t_applicants(id,store_id,created_at,updated_at,version,name,channel,source_type,
-          source_media,referrer,phone,status,modified_by,edit_sequence,enrollment_id)
+          medium_id,referrer,phone,status,modified_by,edit_sequence,enrollment_id)
         values (?,?,now(),now(),0,'非公開の氏名','PHONE',?,?,?,'090-0000-0000',?,?,0,?)
         """,
         UUID.randomUUID().toString(),
         store,
         sourceType,
-        media,
+        mediumId,
         "REFERRAL".equals(sourceType) ? "紹介者" : null,
         status,
         actorId,

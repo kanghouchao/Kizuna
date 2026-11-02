@@ -1,6 +1,7 @@
 package com.kizuna.order.application;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.kizuna.order.domain.AcquisitionSource;
 import com.kizuna.order.domain.ReceptionRoute;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -26,6 +27,7 @@ public record OrderCreateCommand(
     List<OrderFeeLineInput> feeLines,
     ReceptionRoute receptionRoute,
     String carrier,
-    String mediaName,
+    AcquisitionSource acquisitionSource,
+    String mediumId,
     String remarks,
     String castDriverMessage) {}

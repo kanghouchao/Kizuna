@@ -7,10 +7,13 @@ import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.order.domain.AcquisitionSource;
 import com.kizuna.order.domain.ConfirmedOrderDetails;
 import com.kizuna.order.domain.ContactSnapshot;
 import com.kizuna.order.domain.NewStoreOrder;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderAcquisition;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderPatch;
@@ -22,6 +25,8 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
@@ -73,6 +78,7 @@ public class OrderService {
   private final OrderCalculation calculation;
   private final OrderSpecialServices specialServices;
   private final OrderQueryService queryService;
+  private final MediumLookup mediumLookup;
 
   /**
    * 店舗が起こす受注を作成する。この経路の受注は<b>確定で出生する</b>（出生状態は下の Order 生成で CONFIRMED に固定される）— 電話口で受けると決めた時点で
@@ -89,6 +95,8 @@ public class OrderService {
       throw new ServiceException("受付経路に Web 申請は指定できません。予約申請の確定だけが MEMBER_WEB / GUEST_WEB を名乗ります");
     }
 
+    var acquisition = acquisition(storeId, command.acquisitionSource(), command.mediumId(), null);
+
     // 明細の店舗は採用時に受注から写すため、採用より先に置く（出生時に店舗が付く）
     Order order =
         Order.placedByStore(
@@ -103,7 +111,7 @@ public class OrderService {
                 command.pax(),
                 command.receptionRoute(),
                 command.carrier(),
-                command.mediaName(),
+                acquisition,
                 command.remarks(),
                 command.castDriverMessage()));
 
@@ -151,7 +159,7 @@ public class OrderService {
     order.assignReceptionist(resolveReceptionist(storeId, command.receptionistId(), actorEmail));
 
     Order saved = orderRepository.save(order);
-    orderRepository.flush();
+    flushMedium();
     businessContactPermissions.record(
         saved,
         ContactSnapshot.empty(),
@@ -160,6 +168,23 @@ public class OrderService {
         OffsetDateTime.now());
     auditOrder(saved, "ORDER_CREATED", actorEmail, null, null, null);
     return queryService.toDetail(storeId, saved);
+  }
+
+  private OrderAcquisition acquisition(
+      Long storeId, AcquisitionSource source, String mediumId, String current) {
+    var acquisition = new OrderAcquisition(source, mediumId);
+    if (mediumId != null) mediumLookup.requireSelectable(storeId, mediumId, current);
+    return acquisition;
+  }
+
+  // 検査の後に媒体が削除された場合も、FK 違反を同じ入力エラーに揃える。
+  private void flushMedium() {
+    IntegrityViolations.translateOnFailure(
+        () -> {
+          orderRepository.flush();
+          return null;
+        },
+        Map.of(DbConstraint.FK_T_ORDERS_MEDIUM, MediumLookup::missing));
   }
 
   private void validateReplacement(Long storeId, String id) {
@@ -216,6 +241,13 @@ public class OrderService {
         calculation.wasPreviewed(
             storeId, "UPDATE", id, actorEmail, command, command.confirmationToken()));
 
+    // 経路を省略した更新は経路も媒体も変えない。媒体だけを送る要求は組の規則で撥ねる。
+    var acquisition =
+        command.acquisitionSource() == null && command.mediumId() == null
+            ? null
+            : acquisition(
+                storeId, command.acquisitionSource(), command.mediumId(), order.getMediumId());
+
     validateEditableCustomer(order, command.customerSelection());
     if (command.customerSelection() != null)
       order.linkCustomer(
@@ -266,7 +298,7 @@ public class OrderService {
             command.locationAddress(),
             command.locationBuilding(),
             command.carrier(),
-            command.mediaName(),
+            acquisition,
             command.remarks(),
             command.castDriverMessage()));
 
@@ -284,6 +316,7 @@ public class OrderService {
         order, previousContact, command.businessContactPermissions(), actorEmail, now);
 
     Order saved = orderRepository.save(order);
+    flushMedium();
     auditOrder(saved, "ORDER_UPDATED", actorEmail, before, null, null);
     return queryService.toDetail(storeId, saved);
   }
@@ -340,6 +373,7 @@ public class OrderService {
       validateReceptionist(storeId, command.receptionistId());
     }
     validateCustomerChoice(storeId, application, command, canManageCustomers);
+    var acquisition = acquisition(storeId, command.acquisitionSource(), command.mediumId(), null);
     var contactImports = guestConsent.previewImports(application, command);
     Long actorId = actorIdentityService.requireUserId(actorEmail);
 
@@ -367,7 +401,8 @@ public class OrderService {
                 command.arrivalScheduledStartTime(),
                 command.arrivalScheduledEndTime(),
                 command.pax(),
-                command.remarks()));
+                command.remarks(),
+                acquisition));
     order.adoptServices(course, calculated.specialServices(), calculated.editableFeeLines());
     if (command.castId() != null) {
       order.assignCast(command.castId());
@@ -414,6 +449,7 @@ public class OrderService {
         completionPoints(storeId, order.getCustomerId(), calculated, 0),
         contactImports);
     Order saved = orderRepository.save(order);
+    flushMedium();
     var now = OffsetDateTime.now();
     businessContactPermissions.record(
         saved,

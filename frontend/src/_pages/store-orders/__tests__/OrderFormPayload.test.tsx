@@ -4,6 +4,8 @@ import { chooseCourse } from '../lib/orderTestSupport';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { OrderForm, OrderFormData } from '../ui/OrderForm';
 import { orderApi } from '@/entities/order';
+import { mediumApi } from '@/entities/medium';
+import { acquisitionPayload } from '../lib/formValues';
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -14,6 +16,9 @@ jest.mock('@/entities/order', () => ({
     listCastCandidates: jest.fn(),
   },
 }));
+
+// MediumSelect は API を slice 内の相対 import で読むため、barrel ではなく実体を差し替える。
+jest.mock('@/entities/medium/api/medium', () => ({ mediumApi: { options: jest.fn() } }));
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
@@ -74,11 +79,63 @@ async function pickOption(comboboxName: string | RegExp, optionName: string | Re
   fireEvent.click(option);
 }
 
+/** 媒体の選択肢は取得が終わるまで選べない。 */
+async function pickMedium(name: string) {
+  await waitFor(() => expect(screen.getByRole('combobox', { name: '知った媒体' })).toBeEnabled());
+  await pickOption('知った媒体', name);
+}
+
 describe('オーダーフォームのセレクト配線と送信ペイロード', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedOrderApi.listReceptionists.mockResolvedValue([{ id: 7, display_name: '受付花子' }]);
     mockedOrderApi.listCastCandidates.mockResolvedValue([{ id: 'cast-1', name: '花子' }]);
+    (mediumApi.options as jest.Mock).mockResolvedValue([{ id: 'm1', name: 'ヘブン' }]);
+  });
+
+  it('知った経路が媒体なら媒体の選択を求め、選んだ媒体の ID を送ること', async () => {
+    const { onSubmit } = renderForm();
+    await pickOption(/キャスト/, /花子/);
+    await chooseCourse();
+    expect(screen.queryByRole('combobox', { name: '知った媒体' })).not.toBeInTheDocument();
+
+    await pickOption('知った経路', '媒体');
+    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    expect(await screen.findByText('媒体を選択してください')).toBeVisible();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await pickMedium('ヘブン');
+    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      acquisition_source: 'MEDIA',
+      medium_id: 'm1',
+    });
+  });
+
+  it('媒体以外の経路へ切り替えると選んだ媒体を捨て、未入力に戻せること', async () => {
+    const { onSubmit } = renderForm();
+    await pickOption('知った経路', '媒体');
+    await pickMedium('ヘブン');
+    await pickOption('知った経路', 'リピート');
+    expect(screen.queryByRole('combobox', { name: '知った媒体' })).not.toBeInTheDocument();
+    await pickOption('知った経路', '未入力');
+
+    const body = await submitAndGetBody(onSubmit);
+
+    expect(body).toMatchObject({ acquisition_source: '', medium_id: '' });
+  });
+
+  it('経路の空欄は送らず、媒体 ID は経路が媒体のときだけ送ること', () => {
+    expect(acquisitionPayload('', '')).toEqual({});
+    expect(acquisitionPayload('REPEAT', 'm1')).toEqual({
+      acquisition_source: 'REPEAT',
+      medium_id: undefined,
+    });
+    expect(acquisitionPayload('MEDIA', 'm1')).toEqual({
+      acquisition_source: 'MEDIA',
+      medium_id: 'm1',
+    });
   });
 
   it('受付・キャスト以外を未操作のまま送ると既定値が型ごとそのまま送られること', async () => {

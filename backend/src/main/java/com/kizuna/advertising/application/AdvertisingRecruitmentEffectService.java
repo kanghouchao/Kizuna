@@ -4,6 +4,7 @@ import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
+import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.recruitment.reporting.RecruitmentHireReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
@@ -11,6 +12,8 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -25,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdvertisingRecruitmentEffectService {
   private final AdvertisingService costs;
   private final RecruitmentHireReader hires;
+  private final MediumLookup mediumLookup;
   private final AppProperties properties;
   private final Clock clock;
 
@@ -55,15 +59,26 @@ public class AdvertisingRecruitmentEffectService {
                       new AdvertisingMedium(c.medium().id(), c.medium().name()), c.amount());
                 })
             .toList();
+    var read =
+        hires.read(
+            storeId,
+            period.atDay(1),
+            period.atEndOfMonth(),
+            properties.getAdvertisingCost().getMaxOrders());
+    var media =
+        mediumLookup.findAll(
+            storeId,
+            read.stream()
+                .map(RecruitmentHireReader.Hire::mediumId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+    media.values().forEach(m -> budget.text(m.name()));
     var hired =
-        hires
-            .read(
-                storeId,
-                period.atDay(1),
-                period.atEndOfMonth(),
-                properties.getAdvertisingCost().getMaxOrders())
-            .stream()
-            .map(h -> new AdvertisingRecruitmentEffectReport.Hire(null, h.startedOn(), h.endedAt()))
+        read.stream()
+            .map(
+                h ->
+                    new AdvertisingRecruitmentEffectReport.Hire(
+                        AdvertisingMedia.of(media, h.mediumId()), h.startedOn(), h.endedAt()))
             .toList();
     var today = LocalDate.now(clock);
     var report =

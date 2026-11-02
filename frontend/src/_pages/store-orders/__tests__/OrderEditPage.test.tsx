@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import OrderEditPage from '../ui/OrderEditPage';
 import { Order, orderApi } from '@/entities/order';
 
+import { mediumApi } from '@/entities/medium';
 const mockPush = jest.fn();
 let mockStoreId = '1';
 let mockParams = { id: 'o1' };
@@ -22,6 +23,9 @@ jest.mock('@/entities/order', () => ({
     listCastCandidates: jest.fn(),
   },
 }));
+
+// MediumSelect は API を slice 内の相対 import で読むため、barrel ではなく実体を差し替える。
+jest.mock('@/entities/medium/api/medium', () => ({ mediumApi: { options: jest.fn() } }));
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
@@ -317,6 +321,55 @@ describe('受注の編集ページ', () => {
     });
     // 保存し終えたこの頁に留まる理由は無い。出口は一覧
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/orders'));
+  });
+
+  it('停止中の媒体を持つ受注は値を保ち、媒体だけを替えても経路と組で送ること', async () => {
+    (mediumApi.options as jest.Mock).mockResolvedValue([{ id: 'm2', name: '有効な媒体' }]);
+    mockedOrderApi.get.mockResolvedValue(
+      confirmedOrder({ acquisition_source: 'MEDIA', medium: { id: 'm1', name: '止めた媒体' } })
+    );
+    mockedOrderApi.update.mockResolvedValue(confirmedOrder());
+    render(<OrderEditPage />);
+
+    const medium = await screen.findByRole('combobox', { name: '知った媒体' });
+    await waitFor(() => expect(medium).toHaveTextContent('止めた媒体（停止中）'));
+    // 記録済みの経路は未入力へ戻せない契約なので、選べても送れない「未入力」を出さない
+    fireEvent.click(screen.getByRole('combobox', { name: '知った経路' }));
+    expect(await screen.findByRole('option', { name: 'リピート' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '未入力' })).not.toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    fireEvent.click(medium);
+    const option = await screen.findByRole('option', { name: '有効な媒体' });
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
+
+    await waitFor(() =>
+      expect(mockedOrderApi.update).toHaveBeenCalledWith(
+        'o1',
+        expect.objectContaining({ acquisition_source: 'MEDIA', medium_id: 'm2' })
+      )
+    );
+  });
+
+  it('経路も媒体も触らなければどちらも送らないこと', async () => {
+    mockedOrderApi.get.mockResolvedValue(
+      confirmedOrder({ acquisition_source: 'MEDIA', medium: { id: 'm1', name: '止めた媒体' } })
+    );
+    mockedOrderApi.update.mockResolvedValue(confirmedOrder());
+    render(<OrderEditPage />);
+    await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+
+    fireEvent.change(screen.getByLabelText('人数'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
+
+    await waitFor(() => expect(mockedOrderApi.update).toHaveBeenCalled());
+    const [, body] = mockedOrderApi.update.mock.calls[0];
+    expect(body).not.toHaveProperty('acquisition_source');
+    expect(body).not.toHaveProperty('medium_id');
   });
 
   it('キャンセルは保存せずに一覧へ戻ること', async () => {

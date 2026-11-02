@@ -9,6 +9,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   createStaffFixture,
+  ensureMedium,
   loginAsStoreAdmin,
   loginUser,
   openLoginForm,
@@ -20,12 +21,13 @@ let managerToken = "";
 let ownerToken = "";
 let applicantId = "";
 let applicantName = "";
+let mediumId = "";
 const storeId = STORE1_ID;
 const intake = () => ({
   name: applicantName,
   channel: "PHONE",
   source_type: "MEDIA",
-  source_media: "検証媒体",
+  medium_id: mediumId,
   referrer: null,
   assignee: "検証担当",
   phone: "09000000000",
@@ -146,7 +148,8 @@ async function foreignApplicant(request: APIRequestContext, sourceId: string) {
   await db.connect();
   try {
     const insert = await db.query(
-      "INSERT INTO t_applicants (id,store_id,name,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence) SELECT $1,$2,$3,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence FROM t_applicants WHERE id=$4 RETURNING id",
+      // 媒体は店舗の所有物で他店舗からは指せない（複合 FK）ため、写しは直接応募にする。
+      "INSERT INTO t_applicants (id,store_id,name,channel,source_type,medium_id,referrer,status,created_at,updated_at,version,modified_by,edit_sequence) SELECT $1,$2,$3,channel,'DIRECT',NULL,NULL,status,created_at,updated_at,version,modified_by,edit_sequence FROM t_applicants WHERE id=$4 RETURNING id",
       [`outside-${randomUUID()}`, otherStore.id, "別店舗応募者", sourceId],
     );
     return { id: insert.rows[0].id as string, storeId: String(otherStore.id) };
@@ -162,6 +165,8 @@ async function loginAsRecruiter(
 ) {
   applicantName = `応募検証-${randomUUID()}`;
   managerToken = await loginAsStoreAdmin(request);
+  // 媒体の登録は広告費の担当（店長）が行い、採用担当は選択肢から選ぶだけ。
+  mediumId = await ensureMedium(request, managerToken, "検証媒体", storeId);
   const ownerLogin = await request.post("/api/auth/login", {
     data: { email: "admin@kizuna.test", password: ADMIN_PASSWORD },
   });
@@ -209,6 +214,11 @@ When("応募者の受付と面接を画面で登録する", async ({ page }) => 
   await page.goto(`${APP_URL}/store/applicants`);
   await page.getByRole("link", { name: "応募者を登録" }).click();
   await page.getByLabel("氏名", { exact: true }).fill(applicantName);
+  // 採用担当は広告費の権限を持たないまま、媒体の選択肢を取得して選べる。
+  await page.getByRole("combobox", { name: "応募元区分" }).click();
+  await page.getByRole("option", { name: "媒体", exact: true }).click();
+  await page.getByRole("combobox", { name: "応募元媒体" }).click();
+  await page.getByRole("option", { name: "検証媒体", exact: true }).click();
   await page.getByLabel("電話番号", { exact: true }).fill("09000000000");
   await page.getByLabel("住所", { exact: true }).fill("非公開住所");
   await page
@@ -1086,7 +1096,7 @@ Then(
       name: "匿名化済み応募者",
       status: "REJECTED",
       assignee: "検証担当",
-      source_media: "検証媒体",
+      medium: { id: mediumId, name: "検証媒体" },
       interview: {
         interview_at: expect.any(String),
         interviewer: "面接担当者",

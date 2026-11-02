@@ -24,6 +24,7 @@ public record AdvertisingOrderCostResponse(
     long validCompletedOrderCount,
     long zeroAmountOrderCount,
     long unnamedMediaOrderCount,
+    long otherRouteOrderCount,
     Page<OrderCostSummary> rows) {
   @JsonInclude(JsonInclude.Include.ALWAYS)
   public record OrderCostSummary(
@@ -66,6 +67,7 @@ public record AdvertisingOrderCostResponse(
         report.validCompletedOrderCount(),
         report.zeroAmountOrderCount(),
         report.unnamedMediaOrderCount(),
+        report.otherRouteOrderCount(),
         new PageImpl<>(content, page, report.rows().size()));
   }
 }

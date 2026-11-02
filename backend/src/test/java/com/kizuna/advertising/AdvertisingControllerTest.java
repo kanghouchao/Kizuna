@@ -405,7 +405,8 @@ class AdvertisingControllerTest {
         AdvertisingOrderCostReport.aggregate(
             List.of(),
             List.of(
-                new AdvertisingOrderCostReport.Order(new AdvertisingMedium("m9", "注文だけ"), true)));
+                new AdvertisingOrderCostReport.Order(
+                    new AdvertisingMedium("m9", "注文だけ"), false, true)));
     when(orderCosts.view(1L, "2026-09"))
         .thenReturn(
             new AdvertisingOrderCostService.Snapshot(

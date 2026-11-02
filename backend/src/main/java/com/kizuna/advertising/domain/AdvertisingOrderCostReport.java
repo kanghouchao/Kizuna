@@ -15,6 +15,7 @@ public record AdvertisingOrderCostReport(
     long validCompletedOrderCount,
     long zeroAmountOrderCount,
     long unnamedMediaOrderCount,
+    long otherRouteOrderCount,
     List<Row> rows) {
   public static final String BASIS = "recorded-sales-cost-per-valid-order-v1";
   public static final String MATCHING = "MEDIUM_ID";
@@ -23,8 +24,8 @@ public record AdvertisingOrderCostReport(
 
   public record Cost(AdvertisingMedium medium, long amount) {}
 
-  /** medium が null の受注は媒体未入力として件数だけ別掲する。 */
-  public record Order(AdvertisingMedium medium, boolean zeroAmount) {}
+  /** 媒体の無い受注は、媒体以外の経路（otherRoute）と未入力（媒体未入力）に分けて件数だけ別掲する。 */
+  public record Order(AdvertisingMedium medium, boolean otherRoute, boolean zeroAmount) {}
 
   public enum Status {
     CALCULATED,
@@ -43,7 +44,7 @@ public record AdvertisingOrderCostReport(
 
   public static AdvertisingOrderCostReport aggregate(List<Cost> costs, List<Order> orders) {
     var groups = new HashMap<String, Totals>();
-    long amount = 0, zero = 0, unnamed = 0;
+    long amount = 0, zero = 0, unnamed = 0, other = 0;
     for (var cost : costs) {
       var group = group(groups, cost.medium());
       group.costs = safeAdd(group.costs, 1);
@@ -53,7 +54,8 @@ public record AdvertisingOrderCostReport(
     for (var order : orders) {
       if (order.zeroAmount()) zero = safeAdd(zero, 1);
       if (order.medium() == null) {
-        unnamed = safeAdd(unnamed, 1);
+        if (order.otherRoute()) other = safeAdd(other, 1);
+        else unnamed = safeAdd(unnamed, 1);
         continue;
       }
       var group = group(groups, order.medium());
@@ -66,6 +68,7 @@ public record AdvertisingOrderCostReport(
         orders.size(),
         zero,
         unnamed,
+        other,
         groups.values().stream()
             .map(Totals::row)
             .sorted(Comparator.comparing(Row::medium, AdvertisingMedium.BY_NAME_THEN_ID))

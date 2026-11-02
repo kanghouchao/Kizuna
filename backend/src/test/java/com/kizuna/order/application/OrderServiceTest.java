@@ -27,15 +27,18 @@ import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
+import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.order.api.dto.ContactSnapshotRequest;
 import com.kizuna.order.api.dto.CustomerSelectionRequest;
 import com.kizuna.order.api.dto.OrderApplicationConfirmationRequest;
 import com.kizuna.order.api.dto.OrderCreateRequest;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.OrderUpdateRequest;
+import com.kizuna.order.domain.AcquisitionSource;
 import com.kizuna.order.domain.IllegalOrderStateTransitionException;
 import com.kizuna.order.domain.InvalidOrderFeeLineException;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderAcquisition;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
@@ -128,6 +131,7 @@ class OrderServiceTest {
 
   @Mock private OrderSpecialServices specialServices;
   @Mock private OrderConfirmation confirmation;
+  @Mock MediumLookup mediumLookup;
 
   @InjectMocks OrderService service;
 
@@ -795,6 +799,127 @@ class OrderServiceTest {
     assertThat(confirmed.getPax()).isEqualTo(5);
     assertThat(confirmed.getCastId()).isEqualTo("g1");
     verify(nominatableCast, never()).findForUpdate(any(), anyString());
+  }
+
+  private OrderCreateRequest createRequest(AcquisitionSource source, String mediumId) {
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.NONE, null, null));
+    req.setCastId("g1");
+    req.setAcquisitionSource(source);
+    req.setMediumId(mediumId);
+    return req;
+  }
+
+  @Test
+  void createRecordsTheRouteAndTheSelectedMedium() {
+    User actor = authorizedReceptionist();
+    actor.setId(7L);
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    when(orderRepository.findViewById(eq(STORE_ID), nullable(String.class)))
+        .thenReturn(Optional.of(mock(OrderView.class)));
+
+    service.create(
+        STORE_ID,
+        mapper.toCommand(createRequest(AcquisitionSource.MEDIA, "m1")),
+        ACTOR_EMAIL,
+        true);
+
+    verify(mediumLookup).requireSelectable(STORE_ID, "m1", null);
+    verify(orderRepository).save(orderCaptor.capture());
+    assertThat(orderCaptor.getValue().getAcquisition())
+        .isEqualTo(new OrderAcquisition(AcquisitionSource.MEDIA, "m1"));
+  }
+
+  @Test
+  void createRejectsAMediumOutsideTheMediaRouteBeforeLookingItUp() {
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    STORE_ID,
+                    mapper.toCommand(createRequest(AcquisitionSource.REPEAT, "m1")),
+                    ACTOR_EMAIL,
+                    true))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("媒体は知った経路が媒体のときだけ指定できます");
+    verifyNoInteractions(mediumLookup);
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void createRejectsAnUnselectableMediumBeforeAnythingIsWritten() {
+    when(mediumLookup.requireSelectable(STORE_ID, "m1", null))
+        .thenThrow(new ServiceException("停止中の媒体は選択できません"));
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    STORE_ID,
+                    mapper.toCommand(createRequest(AcquisitionSource.MEDIA, "m1")),
+                    ACTOR_EMAIL,
+                    true))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("停止中の媒体は選択できません");
+    verify(orderRepository, never()).save(any());
+  }
+
+  private Order orderWithMedium() {
+    return Order.builder()
+        .status(OrderStatus.CONFIRMED)
+        .course(OrderCourses.course("基本", 60, 0))
+        .acquisitionSource(AcquisitionSource.MEDIA)
+        .mediumId("m1")
+        .pax(2)
+        .build();
+  }
+
+  @Test
+  void updateWithoutARouteKeepsTheRouteAndMediumWithoutLookingThemUp() {
+    var order = orderWithMedium();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    stubWriteBackResponse();
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setPax(5);
+
+    service.update(STORE_ID, "o1", mapper.toCommand(req), ACTOR_EMAIL, true);
+
+    assertThat(order.getAcquisition())
+        .isEqualTo(new OrderAcquisition(AcquisitionSource.MEDIA, "m1"));
+    verifyNoInteractions(mediumLookup);
+  }
+
+  @Test
+  void updateTellsTheLookupTheCurrentMediumSoAStoppedOneCanBeKeptAndOtherRoutesClearIt() {
+    var order = orderWithMedium();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    stubWriteBackResponse();
+    OrderUpdateRequest keep = new OrderUpdateRequest();
+    keep.setAcquisitionSource(AcquisitionSource.MEDIA);
+    keep.setMediumId("m1");
+
+    service.update(STORE_ID, "o1", mapper.toCommand(keep), ACTOR_EMAIL, true);
+    verify(mediumLookup).requireSelectable(STORE_ID, "m1", "m1");
+
+    OrderUpdateRequest referral = new OrderUpdateRequest();
+    referral.setAcquisitionSource(AcquisitionSource.REFERRAL);
+    service.update(STORE_ID, "o1", mapper.toCommand(referral), ACTOR_EMAIL, true);
+    assertThat(order.getAcquisition())
+        .isEqualTo(new OrderAcquisition(AcquisitionSource.REFERRAL, null));
+  }
+
+  @Test
+  void updateRejectsAMediumSentWithoutARoute() {
+    var order = orderWithMedium();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setMediumId("m2");
+
+    assertThatThrownBy(
+            () -> service.update(STORE_ID, "o1", mapper.toCommand(req), ACTOR_EMAIL, true))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("媒体は知った経路が媒体のときだけ指定できます");
+    assertThat(order.getMediumId()).isEqualTo("m1");
   }
 
   @Test

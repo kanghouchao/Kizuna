@@ -19,6 +19,7 @@ import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.OrderReferenceCheck;
+import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantMapperImpl;
 import com.kizuna.recruitment.domain.ApplicantRepository;
@@ -276,7 +277,8 @@ class ApplicantEnrollmentIntegrationTest {
     CastService.class,
     CastEnrollmentService.class,
     CastInvitationService.class,
-    CastMapperImpl.class
+    CastMapperImpl.class,
+    MediumLookup.class
   })
   static class Config {
     @Bean

@@ -26,7 +26,9 @@ import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.medium.domain.Medium;
 import com.kizuna.medium.domain.MediumRepository;
 import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.order.domain.AcquisitionSource;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderAcquisition;
 import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
@@ -464,14 +466,20 @@ class AdvertisingIntegrationTest {
   }
 
   String order(
-      long store, String month, String media, OrderStatus status, boolean invalid, int amount) {
+      long store,
+      String month,
+      OrderAcquisition acquisition,
+      OrderStatus status,
+      boolean invalid,
+      int amount) {
     return new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
         .execute(
             tx -> {
               var order =
                   Order.builder()
                       .businessDate(LocalDate.parse(month + "-01"))
-                      .mediaName(media)
+                      .acquisitionSource(acquisition.source())
+                      .mediumId(acquisition.mediumId())
                       .status(OrderStatus.CONFIRMED)
                       .build();
               order.setStoreId(store);
@@ -503,35 +511,45 @@ class AdvertisingIntegrationTest {
             10000,
             UUID.randomUUID()),
         "actor");
-    order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
-    var free = order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 0);
-    order(1, "2026-09", "媒体", OrderStatus.COMPLETED, true, 100);
-    order(1, "2026-09", "媒体", OrderStatus.CANCELLED, false, 100);
-    order(1, "2026-09", "媒体", OrderStatus.CONFIRMED, false, 100);
-    order(1, "2026-09", "媒体", OrderStatus.IN_SERVICE, false, 100);
-    order(1, "2026-10", "媒体", OrderStatus.COMPLETED, false, 100);
-    order(1, "2026-09", null, OrderStatus.COMPLETED, false, 0);
-    order(1, "2026-09", " 媒体 ", OrderStatus.COMPLETED, false, 100);
-    order(2, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
+    var viaMedium = new OrderAcquisition(AcquisitionSource.MEDIA, medium);
+    order(1, "2026-09", viaMedium, OrderStatus.COMPLETED, false, 100);
+    var free = order(1, "2026-09", viaMedium, OrderStatus.COMPLETED, false, 0);
+    order(1, "2026-09", viaMedium, OrderStatus.COMPLETED, true, 100);
+    order(1, "2026-09", viaMedium, OrderStatus.CANCELLED, false, 100);
+    order(1, "2026-09", viaMedium, OrderStatus.CONFIRMED, false, 100);
+    order(1, "2026-09", viaMedium, OrderStatus.IN_SERVICE, false, 100);
+    order(1, "2026-10", viaMedium, OrderStatus.COMPLETED, false, 100);
+    order(1, "2026-09", OrderAcquisition.UNSET, OrderStatus.COMPLETED, false, 0);
+    order(
+        1,
+        "2026-09",
+        new OrderAcquisition(AcquisitionSource.REPEAT, null),
+        OrderStatus.COMPLETED,
+        false,
+        100);
+    order(2, "2026-09", OrderAcquisition.UNSET, OrderStatus.COMPLETED, false, 100);
     var compare = context.getBean(AdvertisingOrderCostService.class);
     var report = compare.view(1L, "2026-09").report();
     assertThat(report.costEntryCount()).isEqualTo(1);
     assertThat(report.recordedSalesAmount()).isEqualTo(100);
     assertThat(report.validCompletedOrderCount()).isEqualTo(4);
     assertThat(report.zeroAmountOrderCount()).isEqualTo(2);
-    assertThat(report.unnamedMediaOrderCount()).isEqualTo(4);
+    assertThat(report.unnamedMediaOrderCount()).isEqualTo(1);
+    assertThat(report.otherRouteOrderCount()).isEqualTo(1);
     assertThat(report.rows())
         .singleElement()
         .satisfies(
             row -> {
               assertThat(row.medium().id()).isEqualTo(medium);
-              assertThat(row.validCompletedOrderCount()).isZero();
-              assertThat(row.costPerOrder()).isNull();
+              assertThat(row.validCompletedOrderCount()).isEqualTo(2);
+              assertThat(row.zeroAmountOrderCount()).isEqualTo(1);
+              assertThat(row.costPerOrder()).isEqualTo("50.00");
               assertThat(row.calculationStatus())
-                  .isEqualTo(AdvertisingOrderCostReport.Status.NO_VALID_ORDERS);
+                  .isEqualTo(AdvertisingOrderCostReport.Status.CALCULATED);
             });
     jdbc.update("update t_orders set completion_invalidated=true where id=?", free);
-    assertThat(compare.view(1L, "2026-09").report().unnamedMediaOrderCount()).isEqualTo(3);
+    assertThat(compare.view(1L, "2026-09").report().rows().getFirst().costPerOrder())
+        .isEqualTo("100.00");
     service.delete(
         1L, cost.id(), new DeleteRequest(cost.version(), "訂正", UUID.randomUUID()), "actor");
     assertThat(compare.view(1L, "2026-09").report().recordedSalesAmount()).isNull();
@@ -540,7 +558,7 @@ class AdvertisingIntegrationTest {
   @Test
   void orderAndCostChangesShareOneSnapshotAndReadLimitFailsClosed() throws Exception {
     service.create(1L, create("2026-09", null, 100, UUID.randomUUID()), "actor");
-    order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 100);
+    order(1, "2026-09", OrderAcquisition.UNSET, OrderStatus.COMPLETED, false, 100);
     var changed = new AtomicInteger();
     doAnswer(
             invocation -> {
@@ -551,7 +569,13 @@ class AdvertisingIntegrationTest {
                           () -> {
                             service.create(
                                 1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
-                            order(1, "2026-09", "媒体", OrderStatus.COMPLETED, false, 0);
+                            order(
+                                1,
+                                "2026-09",
+                                OrderAcquisition.UNSET,
+                                OrderStatus.COMPLETED,
+                                false,
+                                0);
                           })
                       .get(5, TimeUnit.SECONDS);
                 }

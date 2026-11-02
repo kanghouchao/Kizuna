@@ -168,9 +168,13 @@ databaseChangeLog:
                   type: VARCHAR(100)
                   remarks: キャリア/Carrier
               - column:
-                  name: media_name
-                  type: VARCHAR(100)
-                  remarks: 媒体名
+                  name: acquisition_source
+                  type: VARCHAR(20)
+                  remarks: 知った経路（MEDIA=媒体/REPEAT=リピート/REFERRAL=紹介/OTHER=その他、NULL=未入力）
+              - column:
+                  name: medium_id
+                  type: VARCHAR(64)
+                  remarks: 知った媒体。知った経路が MEDIA のときだけ持つ
               - column:
                   name: location_address
                   type: VARCHAR(500)
@@ -409,6 +413,19 @@ databaseChangeLog:
               ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_invalidation CHECK
                 (NOT completion_invalidated OR (status = 'COMPLETED' AND total_fee = 0 AND accrued_remuneration = 0));
               ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_replacement CHECK (replacement_for_order_id <> id);
+              -- 経路が NULL のとき比較は unknown で CHECK を通すため、IS DISTINCT FROM で NULL も偽に倒す。
+              ALTER TABLE t_orders ADD CONSTRAINT ck_t_orders_acquisition CHECK (
+                (acquisition_source IS NULL OR acquisition_source IN ('MEDIA','REPEAT','REFERRAL','OTHER'))
+                AND (medium_id IS NULL) = (acquisition_source IS DISTINCT FROM 'MEDIA'));
+              CREATE INDEX idx_t_orders_medium ON t_orders (store_id, medium_id);
+        # 受注が指す媒体の削除は止める。拒否を 409 の案内へ写すので NO ACTION。複合 FK で同一店舗の媒体だけを許す。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_orders_medium
+            baseTableName: t_orders
+            baseColumnNames: medium_id, store_id
+            referencedTableName: t_media
+            referencedColumnNames: id, store_id
+            onDelete: NO ACTION
 
         - sql:
             sql: |

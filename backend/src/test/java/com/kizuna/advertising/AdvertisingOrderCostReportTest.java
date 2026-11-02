@@ -23,11 +23,15 @@ class AdvertisingOrderCostReportTest {
   }
 
   static Order order(String name, boolean zero) {
-    return new Order(name == null ? null : medium(name, name), zero);
+    return new Order(name == null ? null : medium(name, name), false, zero);
+  }
+
+  static Order otherRoute(boolean zero) {
+    return new Order(null, true, zero);
   }
 
   @Test
-  void comparesByMediumIdAndRetainsBothUnmatchedSidesAndUnnamedOrders() {
+  void comparesByMediumIdAndCountsOtherRoutesAndUnsetOrdersApart() {
     var report =
         AdvertisingOrderCostReport.aggregate(
             List.of(cost("ABC", 100), cost("ABC", 0), cost("費用のみ", 500), cost("零", 0)),
@@ -38,12 +42,16 @@ class AdvertisingOrderCostReportTest {
                 order("受注のみ", false),
                 order("零", true),
                 order(null, true),
-                order(null, false)));
+                order(null, false),
+                otherRoute(true),
+                otherRoute(false),
+                otherRoute(false)));
     assertThat(report.costEntryCount()).isEqualTo(4);
     assertThat(report.recordedSalesAmount()).isEqualTo(600);
-    assertThat(report.validCompletedOrderCount()).isEqualTo(7);
-    assertThat(report.zeroAmountOrderCount()).isEqualTo(3);
+    assertThat(report.validCompletedOrderCount()).isEqualTo(10);
+    assertThat(report.zeroAmountOrderCount()).isEqualTo(4);
     assertThat(report.unnamedMediaOrderCount()).isEqualTo(2);
+    assertThat(report.otherRouteOrderCount()).isEqualTo(3);
     assertThat(report.rows())
         .extracting(r -> r.medium().name())
         .containsExactly("ABC", "受注のみ", "費用のみ", "零");
@@ -70,7 +78,7 @@ class AdvertisingOrderCostReportTest {
                 new Cost(medium("b", "同名"), 10),
                 new Cost(medium("aF", "同名"), 20),
                 new Cost(medium("z", "A"), 30)),
-            List.of(new Order(medium("aF", "同名"), false)));
+            List.of(new Order(medium("aF", "同名"), false, false)));
     assertThat(report.rows()).extracting(r -> r.medium().id()).containsExactly("z", "aF", "b");
     assertThat(report.rows().get(1).costPerOrder()).isEqualTo("20.00");
     assertThat(report.rows().get(2).calculationStatus()).isEqualTo(Status.NO_VALID_ORDERS);

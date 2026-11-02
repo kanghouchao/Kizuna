@@ -242,15 +242,15 @@ class OrderConfirmationTest {
               token ->
                   new OrderCreateCommand(
                       null, null, token, "c", null, null, null, null, null, null, null, null, null,
-                      "cast", 1, null, null, null, null, null, null),
+                      "cast", 1, null, null, null, null, null, null, null),
               token ->
                   new OrderUpdateCommand(
                       null, token, "c", 1L, null, null, null, null, null, 1, null, null, null, null,
-                      null, null, null, null, null, null),
+                      null, null, null, null, null, null, null),
               token ->
                   new OrderApplicationConfirmationCommand(
                       null, null, token, "c", null, null, null, null, null, null, 1, null, null,
-                      null),
+                      null, null, null),
               token -> new OrderCorrectionInput(null, token, null, 1L, "理由", null, null, List.of()),
               token -> command(300, token))) {
         String issued =

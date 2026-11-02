@@ -4,8 +4,10 @@ import { useForm, useWatch } from 'react-hook-form';
 import {
   receptionChannelLabels,
   sourceTypeLabels,
+  type ApplicantMedium,
   type ApplicantIntake,
 } from '@/entities/applicant';
+import { MediumSelect } from '@/entities/medium';
 import {
   Button,
   Form,
@@ -26,7 +28,7 @@ const defaults: ApplicantIntake = {
   name: '',
   channel: 'WEB',
   source_type: 'DIRECT',
-  source_media: '',
+  medium_id: '',
   referrer: '',
   assignee: '',
   phone: '',
@@ -37,7 +39,6 @@ const defaults: ApplicantIntake = {
 };
 const textFields = [
   ['name', '氏名', 100],
-  ['source_media', '応募元媒体名', 200],
   ['referrer', '紹介者・スカウト名', 100],
   ['assignee', '担当者名（記録用）', 100],
   ['phone', '電話番号', 50],
@@ -52,14 +53,19 @@ export function ApplicantIntakeForm({
   onDirtyChange,
 }: {
   onDirtyChange?: (dirty: boolean) => void;
-  initial?: ApplicantIntake;
+  /** 編集では詳細をそのまま渡す。媒体は ID だけを本文へ写し、停止中でも選択肢に残す。 */
+  initial?: Omit<ApplicantIntake, 'medium_id'> & { medium: ApplicantMedium | null };
   onSave: (data: ApplicantIntake) => Promise<void>;
 }) {
+  const seed: Partial<ApplicantIntake> | undefined = initial && {
+    ...initial,
+    medium_id: initial.medium?.id ?? null,
+  };
   const form = useForm<ApplicantIntake>({
     defaultValues: Object.fromEntries(
       Object.entries(defaults).map(([key, value]) => [
         key,
-        initial?.[key as keyof ApplicantIntake] ?? value,
+        seed?.[key as keyof ApplicantIntake] ?? value,
       ])
     ) as unknown as ApplicantIntake,
   });
@@ -100,7 +106,7 @@ export function ApplicantIntakeForm({
                           if (!value) return;
                           field.onChange(value);
                           if (name === 'source_type') {
-                            form.setValue('source_media', '');
+                            form.setValue('medium_id', '');
                             form.setValue('referrer', '');
                           }
                         }}
@@ -124,8 +130,26 @@ export function ApplicantIntakeForm({
                 />
               );
             })}
+            {source === 'MEDIA' && (
+              <FormField
+                control={form.control}
+                name="medium_id"
+                rules={{ required: '応募元媒体を選択してください' }}
+                render={({ field }) => (
+                  <FormItem className="min-w-0">
+                    <FormLabel>応募元媒体</FormLabel>
+                    <MediumSelect
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      current={initial?.medium}
+                      triggerRef={field.ref}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             {textFields
-              .filter(([name]) => name !== 'source_media' || source === 'MEDIA')
               .filter(
                 ([name]) => name !== 'referrer' || source === 'REFERRAL' || source === 'SCOUT'
               )
@@ -137,8 +161,7 @@ export function ApplicantIntakeForm({
                   rules={{
                     maxLength: { value: max, message: `${max}文字以内で入力してください` },
                     validate: value => {
-                      const required =
-                        name === 'name' || name === 'source_media' || name === 'referrer';
+                      const required = name === 'name' || name === 'referrer';
                       if (required && !value?.trim()) return `${label}を入力してください`;
                       if (
                         name === 'email' &&
@@ -161,9 +184,7 @@ export function ApplicantIntakeForm({
                             value={field.value ?? ''}
                             maxLength={max}
                             type={name === 'email' ? 'email' : name === 'phone' ? 'tel' : 'text'}
-                            required={
-                              name === 'name' || name === 'source_media' || name === 'referrer'
-                            }
+                            required={name === 'name' || name === 'referrer'}
                           />
                         )}
                       </FormControl>

@@ -143,7 +143,7 @@ class ApplicantControllerTest {
             "status",
             "channel",
             "sourceType",
-            "sourceMedia",
+            "medium",
             "assignee",
             "createdAt",
             "version",

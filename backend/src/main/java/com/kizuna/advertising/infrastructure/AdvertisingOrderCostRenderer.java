@@ -35,6 +35,8 @@ public class AdvertisingOrderCostRenderer {
           "算出状況",
           "解釈");
   private static final String MEDIA = "受注あたり記録広告費";
+  // 列数を変えずに経路別の件数を残すため、媒体以外の経路は集計条件と同じシートの別種別の行に置く。
+  private static final String OTHER_ROUTES = "媒体以外の経路";
 
   public byte[] render(Snapshot source, String format, DocumentBudget budget) throws IOException {
     var output = budget.output();
@@ -51,10 +53,23 @@ public class AdvertisingOrderCostRenderer {
             "",
             "",
             "同月同媒体の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。0円の有効完了受注を含み、小数第3位を四捨五入しています。"));
+    var otherRoutes = common(source, OTHER_ROUTES);
+    otherRoutes.addAll(
+        List.of(
+            "",
+            "",
+            "",
+            report.otherRouteOrderCount(),
+            "",
+            "",
+            "",
+            "",
+            "リピート・紹介・その他の経路で知った有効完了受注の件数で、有効完了受注件数の内数です。媒体への割当てと単価算出から除外しています。"));
     if (format.equals("csv")) {
       output.write(new byte[] {(byte) 0xef, (byte) 0xbb, (byte) 0xbf});
       writeCsv(output, HEADER, budget);
       writeCsv(output, criteria, budget);
+      writeCsv(output, otherRoutes, budget);
       for (var row : report.rows()) writeCsv(output, media(source, row), budget);
     } else {
       try (var book = new SXSSFWorkbook(100)) {
@@ -66,6 +81,7 @@ public class AdvertisingOrderCostRenderer {
         totals.createFreezePane(0, 1);
         media.createFreezePane(0, 1);
         writeXlsx(totals, criteria, budget);
+        writeXlsx(totals, otherRoutes, budget);
         for (var row : report.rows()) writeXlsx(media, media(source, row), budget);
         budget.check();
         book.write(output);

@@ -67,6 +67,9 @@ public interface OrderMapper {
   @Mapping(target = "totalDurationMinutes", ignore = true)
   @Mapping(target = "totalRemuneration", ignore = true)
   @Mapping(target = "specialServices", ignore = true)
+  @Mapping(
+      target = "medium",
+      expression = "java(OrderMediumResponse.of(view.getMediumId(), view.getMediumName()))")
   OrderResponse toResponse(OrderView view);
 
   List<OrderFeeLineInput> toFeeLineInputs(List<OrderFeeLineRequest> requests);

@@ -16,6 +16,7 @@ import { OrderFeeLineInput, ReceptionRoute, WebApplicationReceptionRoute } from 
 import { CastSearchCombobox } from './CastSearchCombobox';
 import { OrderReceptionistField } from './OrderReceptionistField';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
+import { OrderAcquisitionFields, type AcquisitionValues } from './OrderAcquisitionFields';
 import {
   Button,
   Form,
@@ -38,7 +39,7 @@ import {
 // 選択肢が 1 つでもセレクトを残すのは、受付経路が記録項目であって、値の追加は行の追加だから。
 const RECEPTION_ROUTE_OPTIONS = [{ value: 'PHONE', label: '電話受付' }];
 
-export interface OrderFormData {
+export interface OrderFormData extends AcquisitionValues {
   receptionist_id: string;
   business_date: string;
   arrival_scheduled_start_time: string;
@@ -57,7 +58,6 @@ export interface OrderFormData {
   course_id: string;
   fee_lines: OrderFeeLineInput[];
   carrier: string;
-  media_name: string;
   remarks: string;
   cast_driver_message: string;
 }
@@ -81,6 +81,8 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
       special_service_ids: [],
       course_id: '',
       fee_lines: [],
+      acquisition_source: '',
+      medium_id: '',
     },
   });
   const { register, handleSubmit, control } = form;
@@ -126,6 +128,7 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
           description="顧客と今回の連絡先を別々に指定してください。"
         >
           <OrderCustomerField />
+          <OrderAcquisitionFields allowUnset />
           <OrderContactFields />
           <OrderBusinessContactFields />
           <div className="grid grid-cols-2 gap-6">

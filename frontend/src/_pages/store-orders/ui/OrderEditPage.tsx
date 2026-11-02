@@ -40,7 +40,14 @@ import { formatDateTime } from '../lib/formatDateTime';
 import { customerHeadingText } from '../lib/customerLabel';
 // 日付・時刻・数値の空欄は「送らない」。この契約は null を「変更しない」と読むため空への書き換えを
 // 表現する形が無く、空にしたつもりの欄は元の値が残る（空文字を送ると型の変換に失敗して 400）。
-import { optionalDate, optionalNumber, optionalTime, toTimeInput } from '../lib/formValues';
+import {
+  acquisitionPayload,
+  optionalDate,
+  optionalNumber,
+  optionalTime,
+  toTimeInput,
+} from '../lib/formValues';
+import { OrderAcquisitionFields, type AcquisitionValues } from './OrderAcquisitionFields';
 import { CastSearchCombobox } from './CastSearchCombobox';
 import { OrderReceptionistField } from './OrderReceptionistField';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
@@ -57,7 +64,7 @@ import {
   Textarea,
 } from '@/shared/ui';
 
-interface OrderEditFormValues {
+interface OrderEditFormValues extends AcquisitionValues {
   receptionist_id: string;
   /** 指名するキャストの id。 */
   cast_id: string;
@@ -73,7 +80,6 @@ interface OrderEditFormValues {
   location_address: string;
   location_building: string;
   carrier: string;
-  media_name: string;
   remarks: string;
   cast_driver_message: string;
   contact_snapshot: ContactSnapshot;
@@ -94,7 +100,8 @@ const EMPTY_VALUES: OrderEditFormValues = {
   location_address: '',
   location_building: '',
   carrier: '',
-  media_name: '',
+  acquisition_source: '',
+  medium_id: '',
   remarks: '',
   cast_driver_message: '',
   contact_snapshot: {},
@@ -164,7 +171,8 @@ export default function OrderEditPage() {
         location_address: current.location_address ?? '',
         location_building: current.location_building ?? '',
         carrier: current.carrier ?? '',
-        media_name: current.media_name ?? '',
+        acquisition_source: current.acquisition_source ?? '',
+        medium_id: current.medium?.id ?? '',
         remarks: current.remarks ?? '',
         cast_driver_message: current.cast_driver_message ?? '',
         contact_snapshot: current.contact_snapshot ?? {},
@@ -195,7 +203,6 @@ export default function OrderEditPage() {
       location_address: values.location_address.trim(),
       location_building: values.location_building.trim(),
       carrier: values.carrier.trim(),
-      media_name: values.media_name.trim(),
       remarks: values.remarks.trim(),
       cast_driver_message: values.cast_driver_message.trim(),
       contact_snapshot: values.contact_snapshot,
@@ -218,6 +225,10 @@ export default function OrderEditPage() {
         : current.receptionist_id,
       cast_id: values.cast_id || current.cast_id,
       ...pickEdited(edited, dirtyFields),
+      // 経路と媒体は組で置き換わる契約なので、どちらかを触ったら両方を運ぶ（媒体だけを送ると 400）。
+      ...(dirtyFields.acquisition_source || dirtyFields.medium_id
+        ? acquisitionPayload(values.acquisition_source, values.medium_id)
+        : {}),
       // 明細は行の集合なので、他の欄のような「触ったか」の真偽が付かない。播いた内容と
       // 突き合わせて、変わったときだけ運ぶ（送れば内訳ごと差し替わるため）。
       ...(feeLinesChanged(values.fee_lines, storeEditableFeeLines(current.fee_lines))
@@ -497,8 +508,12 @@ export default function OrderEditPage() {
 
               <OrderEditorSection
                 title="受付情報"
-                description="キャリアと受付時の媒体情報を記録します。"
+                description="キャリアと、お客様が店を知った経路を記録します。"
               >
+                <OrderAcquisitionFields
+                  allowUnset={current?.acquisition_source == null}
+                  currentMedium={current?.medium}
+                />
                 <div className="grid grid-cols-2 gap-6">
                   <FormField
                     control={control}
@@ -506,18 +521,6 @@ export default function OrderEditPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>キャリア</FormLabel>
-                        <FormControl>
-                          <Input type="text" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="media_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>知った媒体</FormLabel>
                         <FormControl>
                           <Input type="text" {...field} />
                         </FormControl>

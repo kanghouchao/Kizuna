@@ -3,6 +3,7 @@
 import { useOrderConfirmation } from './useOrderConfirmation';
 
 import { OrderForm, OrderFormData } from './OrderForm';
+import { acquisitionPayload } from '../lib/formValues';
 import { RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -27,11 +28,12 @@ function CreateOrder({ replacement }: { replacement?: string }) {
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (data: OrderFormData) => {
+  const handleSubmit = async ({ acquisition_source, medium_id, ...data }: OrderFormData) => {
     setIsSubmitting(true);
     try {
       const request: OrderCreateRequest = {
         ...data,
+        ...acquisitionPayload(acquisition_source, medium_id),
         replacement_for_order_id: replacement,
         // 未選択は「自分」の意。項目ごと送らないことでサーバが実行者本人を受付担当に据える
         // （JWT にも /me にも利用者 id が無いため、画面の側で自分を選択値にはできない）

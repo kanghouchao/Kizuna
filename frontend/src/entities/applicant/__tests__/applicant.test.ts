@@ -14,7 +14,7 @@ const intake: ApplicantIntake = {
   name: '応募者',
   channel: 'PHONE',
   source_type: 'MEDIA',
-  source_media: '媒体A',
+  medium_id: 'm1',
   referrer: null,
   assignee: null,
   phone: '000',

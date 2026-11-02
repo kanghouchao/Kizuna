@@ -50,7 +50,8 @@ public class Order extends StoreScopedEntity {
             .pax(terms.pax())
             .receptionRoute(terms.receptionRoute())
             .carrier(terms.carrier())
-            .mediaName(terms.mediaName())
+            .acquisitionSource(terms.acquisition().source())
+            .mediumId(terms.acquisition().mediumId())
             .remarks(terms.remarks())
             .castDriverMessage(terms.castDriverMessage())
             .status(OrderStatus.CONFIRMED)
@@ -72,6 +73,8 @@ public class Order extends StoreScopedEntity {
             .arrivalScheduledEndTime(details.arrivalScheduledEndTime())
             .pax(details.pax())
             .remarks(details.remarks())
+            .acquisitionSource(details.acquisition().source())
+            .mediumId(details.acquisition().mediumId())
             .status(OrderStatus.CONFIRMED)
             .receptionRoute(
                 application.isGuest() ? ReceptionRoute.GUEST_WEB : ReceptionRoute.MEMBER_WEB)
@@ -129,8 +132,16 @@ public class Order extends StoreScopedEntity {
   @Column(name = "carrier")
   private String carrier;
 
-  @Column(name = "media_name")
-  private String mediaName;
+  @Enumerated(EnumType.STRING)
+  @Column(name = "acquisition_source")
+  private AcquisitionSource acquisitionSource;
+
+  @Column(name = "medium_id")
+  private String mediumId;
+
+  public OrderAcquisition getAcquisition() {
+    return new OrderAcquisition(acquisitionSource, mediumId);
+  }
 
   /**
    * 会計金額は有効な明細の帯符号総和。無効化後は原明細を保持し、システム専有行だけを有効額に含める。
@@ -396,8 +407,9 @@ public class Order extends StoreScopedEntity {
     if (patch.carrier() != null) {
       this.carrier = patch.carrier();
     }
-    if (patch.mediaName() != null) {
-      this.mediaName = patch.mediaName();
+    if (patch.acquisition() != null) {
+      this.acquisitionSource = patch.acquisition().source();
+      this.mediumId = patch.acquisition().mediumId();
     }
     if (patch.remarks() != null) {
       this.remarks = patch.remarks();

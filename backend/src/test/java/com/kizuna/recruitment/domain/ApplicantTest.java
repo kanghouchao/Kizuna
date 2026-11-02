@@ -167,7 +167,7 @@ class ApplicantTest {
             null,
             null);
     assertThat(media.channel()).isEqualTo(ReceptionChannel.PHONE);
-    assertThat(media.sourceMedia()).isEqualTo("媒体A");
+    assertThat(media.mediumId()).isEqualTo("媒体A");
     for (ApplicantSourceType type : ApplicantSourceType.values()) {
       assertThatThrownBy(
               () ->
@@ -269,7 +269,7 @@ class ApplicantTest {
     applicant.recordEnrollment("e1");
     ReflectionTestUtils.setField(applicant, "referrer", "紹介者");
     ReflectionTestUtils.setField(applicant, "email", "a@example.com");
-    ReflectionTestUtils.setField(applicant, "sourceMedia", "求人誌");
+    ReflectionTestUtils.setField(applicant, "mediumId", "求人誌");
     var now = OffsetDateTime.parse("2026-10-30T00:15:00+09:00");
     applicant.anonymize(now);
     assertThat(applicant.getName()).isEqualTo(Applicant.ANONYMIZED_NAME);
@@ -284,7 +284,7 @@ class ApplicantTest {
     assertThat(applicant.getInterview().interviewAt()).isEqualTo(interview().interviewAt());
     assertThat(applicant.getInterview().interviewer()).isEqualTo("面接担当");
     assertThat(applicant.getAssignee()).isEqualTo("担当者");
-    assertThat(applicant.getSourceMedia()).isEqualTo("求人誌");
+    assertThat(applicant.getMediumId()).isEqualTo("求人誌");
     assertThat(applicant.getStatus()).isEqualTo(ApplicantStatus.HIRED);
     assertThat(applicant.getEnrollmentId()).isEqualTo("e1");
     assertThat(applicant.getAnonymizedAt()).isEqualTo(now);

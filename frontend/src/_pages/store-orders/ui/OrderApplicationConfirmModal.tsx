@@ -11,6 +11,8 @@ import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import { OrderCustomerField } from './OrderCustomerField';
 import { OrderContactFields } from './OrderContactFields';
+import { OrderAcquisitionFields, type AcquisitionValues } from './OrderAcquisitionFields';
+import { acquisitionPayload } from '../lib/formValues';
 import { CustomerSelection, ContactSnapshot, GuestContactImportInput } from '@/entities/order';
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -41,7 +43,7 @@ import {
   Textarea,
 } from '@/shared/ui';
 
-interface ConfirmFormValues {
+interface ConfirmFormValues extends AcquisitionValues {
   contact_imports: GuestContactImportInput[];
   fee_lines: OrderFeeLineInput[];
   /** '' は受付担当なし（実行者本人が候補の条件を満たせばサーバが補う）。 */
@@ -77,7 +79,7 @@ interface OrderApplicationConfirmModalProps {
  * そのまま受注になる（申請原文は不変のまま残り、対照できる）。
  *
  * 確定前に申請だけを書き換える口は無い — 原文を直せると「不変のまま対照できる」が成り立たない（ADR 0017）。
- * ここに無い項目（割引・媒体など）は、確定後の受注を汎用更新で整える。
+ * ここに無い項目（割引・キャリアなど）は、確定後の受注を汎用更新で整える。
  */
 export function OrderApplicationConfirmModal({
   open,
@@ -105,6 +107,8 @@ export function OrderApplicationConfirmModal({
       course_id: '',
       fee_lines: [],
       remarks: '',
+      acquisition_source: '',
+      medium_id: '',
       cast_id: '',
       clear_cast: false,
       customer_selection: { mode: 'NONE' },
@@ -134,6 +138,8 @@ export function OrderApplicationConfirmModal({
       course_id: '',
       fee_lines: [],
       remarks: application.remarks ?? '',
+      acquisition_source: '',
+      medium_id: '',
       cast_id: application.cast_id ?? '',
       clear_cast: false,
       customer_selection: { mode: 'NONE' },
@@ -159,6 +165,7 @@ export function OrderApplicationConfirmModal({
         course_id: values.course_id,
         fee_lines: toFeeLineInputs(values.fee_lines),
         remarks: values.remarks ? values.remarks : undefined,
+        ...acquisitionPayload(values.acquisition_source, values.medium_id),
         contact_imports: isGuest ? values.contact_imports : undefined,
         customer_selection: isGuest ? values.customer_selection : undefined,
         contact_snapshot: values.contact_snapshot,
@@ -334,6 +341,7 @@ export function OrderApplicationConfirmModal({
                   />
                 )}
                 <OrderContactFields />
+                <OrderAcquisitionFields allowUnset />
                 <FormField
                   control={control}
                   name="remarks"

@@ -77,6 +77,8 @@ export interface OrderCostReport {
   valid_completed_order_count: number;
   zero_amount_order_count: number;
   unnamed_media_order_count: number;
+  /** リピート・紹介・その他の経路で知った有効完了受注の件数（媒体への割当てと単価算出の対象外）。 */
+  other_route_order_count: number;
   rows: Page<OrderCostSummary>;
 }
 export interface RecruitmentRetention {

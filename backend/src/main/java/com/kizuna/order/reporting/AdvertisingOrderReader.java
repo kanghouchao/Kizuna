@@ -16,7 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdvertisingOrderReader {
   private final EntityManager em;
 
-  public record Order(boolean zeroAmount) {}
+  /** 媒体 ID は経路が媒体のときだけ持つ。otherRoute は媒体以外の経路（リピート・紹介・その他）が記録されていること。 */
+  public record Order(String mediumId, boolean otherRoute, boolean zeroAmount) {}
 
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
@@ -27,6 +28,10 @@ public class AdvertisingOrderReader {
         em.createQuery(
                 """
         select new com.kizuna.order.reporting.AdvertisingOrderReader$Order(
+          o.mediumId,
+          case when o.acquisitionSource is not null
+            and o.acquisitionSource <> com.kizuna.order.domain.AcquisitionSource.MEDIA
+            then true else false end,
           case when o.totalFee = 0 then true else false end)
         from com.kizuna.order.domain.Order o
         where o.storeId = :store and o.businessDate >= :from and o.businessDate <= :to

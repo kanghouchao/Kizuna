@@ -55,10 +55,12 @@ class AdvertisingOrderCostRendererTest {
         snapshot(
             costs,
             List.of(
-                new Order(medium("00001"), true),
-                new Order(medium("00002"), false),
-                new Order(medium("注文のみ"), false),
-                new Order(null, true)));
+                new Order(medium("00001"), false, true),
+                new Order(medium("00002"), false, false),
+                new Order(medium("注文のみ"), false, false),
+                new Order(null, false, true),
+                new Order(null, true, false),
+                new Order(null, true, true)));
     var page = AdvertisingOrderCostResponse.of(report, PageRequest.of(1, 20));
     assertThat(page.rows().getContent()).hasSize(20);
     assertThat(page.rows().getTotalElements()).isEqualTo(2002);
@@ -78,7 +80,7 @@ class AdvertisingOrderCostRendererTest {
             "\"'小数第3位を四捨五入（円）\"",
             "\"'一件あたり記録費用（円）\"",
             "同月同媒体の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。");
-    assertThat(csv.split("\r\n")).hasSize(2004);
+    assertThat(csv.split("\r\n")).hasSize(2005);
     assertThat(ExportCells.letterRuns(csv)).containsExactlyInAnyOrder("ID", "ROI");
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {
@@ -95,6 +97,10 @@ class AdvertisingOrderCostRendererTest {
       assertThat(sheet.getRow(2).getCell(15).getStringCellValue()).isEqualTo("0.00");
       assertThat(sheet.getRow(2002).getCell(11).getStringCellValue()).isEmpty();
       assertThat(book.getSheetAt(0).getRow(1).getCell(14).getNumericCellValue()).isEqualTo(1);
+      var otherRoutes = book.getSheetAt(0).getRow(2);
+      assertThat(otherRoutes.getCell(0).getStringCellValue()).isEqualTo("媒体以外の経路");
+      assertThat(otherRoutes.getCell(12).getNumericCellValue()).isEqualTo(2);
+      assertThat(otherRoutes.getLastCellNum()).isEqualTo((short) 18);
       for (var s : book)
         for (var row : s)
           for (var cell : row) assertThat(cell.getCellType()).isNotEqualTo(CellType.FORMULA);
@@ -109,7 +115,7 @@ class AdvertisingOrderCostRendererTest {
     var huge =
         snapshot(
             List.of(new Cost(medium("媒体"), 1_000_000_000_000_000L)),
-            List.of(new Order(medium("媒体"), false)));
+            List.of(new Order(medium("媒体"), false, false)));
     assertThatThrownBy(() -> renderer.render(huge, "xlsx", budget()))
         .isInstanceOf(ServiceUnavailableException.class);
     var settings = new AppProperties.OperationalReport();

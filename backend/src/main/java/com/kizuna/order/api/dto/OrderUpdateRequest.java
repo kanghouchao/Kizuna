@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.domain.AcquisitionSource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -68,9 +69,11 @@ public class OrderUpdateRequest {
   @Size(max = 100, message = "キャリアは 100 文字以内です")
   private String carrier;
 
-  /** 媒体（知った媒体）。上限は {@code t_orders.media_name} = VARCHAR(100)。 */
-  @Size(max = 100, message = "媒体名は 100 文字以内です")
-  private String mediaName;
+  /** 知った経路。省略すると経路も媒体も変えず、指定すると媒体 ID と組で置き換える（媒体 ID は MEDIA のときだけ）。 */
+  private AcquisitionSource acquisitionSource;
+
+  @Size(max = 64)
+  private String mediumId;
 
   private String remarks;
   private String castDriverMessage;
