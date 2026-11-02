@@ -1534,9 +1534,33 @@ export async function cancelBonusAward(
   expect(response.status(), await response.text()).toBe(200);
 }
 
+/**
+ * 店舗の媒体を名前で用意して ID を返す。媒体名は店舗内で一意で月をまたいで残るため、
+ * 既にあれば（停止中なら再開して）その ID を使い、再試行や別シナリオと衝突させない。
+ */
+export async function ensureMedium(
+  request: APIRequestContext, token: string, name: string, storeId = STORE1_ID,
+): Promise<string> {
+  const headers = { 'X-Store-ID': storeId, Authorization: `Bearer ${token}` };
+  const created = await request.post('/api/media', { headers, data: { name } });
+  if (created.status() === 201) return (await created.json()).id;
+  expect(created.status(), await created.text()).toBe(409);
+  const list = await request.get('/api/media', { headers });
+  expect(list.status(), await list.text()).toBe(200);
+  const found = (await list.json()).items.find((m: { name: string }) => m.name === name.trim());
+  expect(found, `媒体「${name}」が見つかりません`).toBeTruthy();
+  if (found.status === 'STOPPED') {
+    const resumed = await request.post(`/api/media/${found.id}/resume`, {
+      headers, data: { version: found.version },
+    });
+    expect(resumed.status(), await resumed.text()).toBe(200);
+  }
+  return found.id;
+}
+
 export type AdvertisingCostValues = {
   category: 'SALES' | 'RECRUITMENT';
-  media_name: string;
+  medium_id: string;
   agency_name: string | null;
   plan_name: string | null;
   inquiry_count: number | null;

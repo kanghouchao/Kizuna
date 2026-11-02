@@ -39,6 +39,9 @@ public enum DbConstraint {
   /** t_media の (store_id, name) 一意制約。 */
   UQ_T_MEDIA_STORE_NAME("uq_t_media_store_name"),
 
+  /** t_advertising_costs → t_media(id, store_id) の複合 FK。広告費（削除済みを含む）が指す媒体の削除を拒む。 */
+  FK_T_ADVERTISING_COSTS_MEDIUM("fk_t_advertising_costs_medium"),
+
   /** t_roles.name の一意制約。 */
   UQ_T_ROLES_NAME("uq_t_roles_name"),
 

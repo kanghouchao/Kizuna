@@ -22,8 +22,8 @@ import {
   submitConfirmedStoreRequest,
   switchStoreOnRail,
   createEnrolledHire,
-  withdrawCast,
   openLoginForm,
+  ensureMedium,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const base = "/api/advertising-costs",
@@ -49,21 +49,41 @@ const h = (t = token, store = storeId) => ({
   "X-Store-ID": store,
   Authorization: `Bearer ${t}`,
 });
-const values = {
+const values: Record<string, unknown> = {
   category: "SALES",
-  media_name: "媒体",
+  medium_id: "",
   agency_name: null,
   plan_name: "標準",
   inquiry_count: null,
   amount: 100,
 };
+const mediumIds = new Map<string, string>();
+async function medium(
+  request: APIRequestContext,
+  name: string,
+  store = storeId,
+) {
+  const key = JSON.stringify([store, name]);
+  if (!mediumIds.has(key))
+    mediumIds.set(key, await ensureMedium(request, token, name, store));
+  return mediumIds.get(key)!;
+}
+/** overrides.medium は媒体名。既定の媒体以外は名前で用意してから媒体 ID で送る。 */
 async function add(
   request: APIRequestContext,
-  overrides: Record<string, unknown> = {},
+  { medium: name, ...overrides }: Record<string, unknown> = {},
 ) {
   const r = await request.post(base, {
     headers: h(),
-    data: { ...values, month, request_id: randomUUID(), ...overrides },
+    data: {
+      ...values,
+      ...(typeof name === "string"
+        ? { medium_id: await medium(request, name) }
+        : {}),
+      month,
+      request_id: randomUUID(),
+      ...overrides,
+    },
   });
   expect(r.status(), await r.text()).toBe(201);
   return r.json();
@@ -89,6 +109,11 @@ async function login(page: Page, address = email) {
   await page.goto(`${APP_URL}/store/advertising-costs`);
   await expect(page.getByRole("heading", { name: "広告費管理" })).toBeVisible();
   await selectMonth(page, month);
+}
+const longMediumName = "非常に長い媒体名".repeat(12);
+async function pickMedium(page: Page, name: string) {
+  await page.getByRole("combobox", { name: "媒体", exact: true }).click();
+  await page.getByRole("option", { name, exact: true }).click();
 }
 Given(
   "広告費検証用の権限と店舗がある",
@@ -158,6 +183,8 @@ Given(
       tokens.push(await loginUser(request, address, password));
     }
     [token, reader, exporter] = tokens;
+    mediumIds.clear();
+    values.medium_id = await medium(request, "媒体");
     orderReader = effects ? "" : (tokens[3] ?? "");
     recruitmentReader = effects ? tokens[3] : "";
   },
@@ -301,7 +328,9 @@ Then("広告費の履歴と冪等性と店舗分離が守られる", async ({ re
     { category: 0 },
     { amount: "10" },
     { amount: 1.5 },
-    { media_name: 3 },
+    { medium_id: 3 },
+    { medium_id: "存在しない媒体" },
+    { medium_id: await medium(request, "媒体", foreign) },
     { month: "0000-01" },
   ])
     expect(
@@ -312,20 +341,75 @@ Then("広告費の履歴と冪等性と店舗分離が守られる", async ({ re
         })
       ).status(),
     ).toBe(400);
+  const media = "/api/media";
+  const referencedName = `参照中-${randomUUID()}`;
+  const referenced = await add(request, { medium: referencedName });
+  const referencedId = await medium(request, referencedName);
+  expect(
+    (
+      await request.delete(`${base}/${referenced.id}`, {
+        headers: h(),
+        data: {
+          version: referenced.version,
+          reason: "参照の検証",
+          request_id: randomUUID(),
+        },
+      })
+    ).status(),
+  ).toBe(204);
+  // 削除済みの広告費も媒体を指し続けるため、参照のある媒体は削除できない。
+  const blocked = await request.delete(`${media}/${referencedId}`, {
+    headers: h(),
+    params: { version: 0 },
+  });
+  expect(blocked.status(), await blocked.text()).toBe(409);
+  const unused = await ensureMedium(request, token, `未使用-${randomUUID()}`, storeId);
+  expect(
+    (
+      await request.delete(`${media}/${unused}`, {
+        headers: h(),
+        params: { version: 0 },
+      })
+    ).status(),
+  ).toBe(204);
+  const stopped = await request.post(`${media}/${referencedId}/stop`, {
+    headers: h(),
+    data: { version: 0 },
+  });
+  expect(stopped.status(), await stopped.text()).toBe(200);
+  expect(
+    (
+      await request.post(base, {
+        headers: h(),
+        data: {
+          ...values,
+          medium_id: referencedId,
+          month,
+          request_id: randomUUID(),
+        },
+      })
+    ).status(),
+  ).toBe(400);
 });
 When("広告費を2001行用意する", async ({ request }) => {
   const seed = await add(request, {
-    media_name: "=媒体先頭",
+    medium: "=媒体先頭",
     inquiry_count: 0,
   });
   if (process.env.PGHOST !== "database")
     throw new Error("専用 E2E DB でのみ実行できます");
   const db = new Client({ application_name: "advertising389-bdd" });
   await db.connect();
+  const run = randomUUID();
   try {
+    // 媒体別集計の出力も 2001 行になるよう、費用ごとに別の媒体を持たせる。
     await db.query(
-      `INSERT INTO t_advertising_costs(id,store_id,month,category,media_name,agency_name,plan_name,inquiry_count,amount,deleted,revision,version,created_at,updated_at) SELECT ('ad389-' || $2 || '-' || lpad(n::text,4,'0')),store_id,month,category,('=媒体' || lpad(n::text,4,'0')),NULL,NULL,CASE WHEN n%2=0 THEN 0 ELSE NULL END,100,false,0,0,created_at,updated_at FROM t_advertising_costs CROSS JOIN generate_series(1,2000) n WHERE id=$1`,
-      [seed.id, randomUUID()],
+      `INSERT INTO t_media(id,store_id,name,status,version,created_at,updated_at) SELECT ('ad389m-' || $2 || '-' || lpad(n::text,4,'0')),store_id,('=媒体' || lpad(n::text,4,'0') || '-' || left($2,8)),'ACTIVE',0,created_at,updated_at FROM t_advertising_costs CROSS JOIN generate_series(1,2000) n WHERE id=$1`,
+      [seed.id, run],
+    );
+    await db.query(
+      `INSERT INTO t_advertising_costs(id,store_id,month,category,medium_id,agency_name,plan_name,inquiry_count,amount,deleted,revision,version,created_at,updated_at) SELECT ('ad389-' || $2 || '-' || lpad(n::text,4,'0')),store_id,month,category,('ad389m-' || $2 || '-' || lpad(n::text,4,'0')),NULL,NULL,CASE WHEN n%2=0 THEN 0 ELSE NULL END,100,false,0,0,created_at,updated_at FROM t_advertising_costs CROSS JOIN generate_series(1,2000) n WHERE id=$1`,
+      [seed.id, run],
     );
   } finally {
     await db.end();
@@ -394,19 +478,23 @@ Then(
 When(
   "広告費画面で取消と二重送信と応答消失を操作する",
   async ({ page, request }) => {
+    for (const name of ["応答消失検証", "切替中に保存", longMediumName])
+      await medium(request, name);
     await login(page);
     await page
       .getByRole("button", { name: "広告費を登録", exact: true })
       .click();
-    await page.getByLabel("媒体", { exact: true }).fill("破棄する入力");
+    await pickMedium(page, "応答消失検証");
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     await page
       .getByRole("button", { name: "広告費を登録", exact: true })
       .click();
-    await expect(page.getByLabel("媒体", { exact: true })).toHaveValue("");
+    await expect(
+      page.getByRole("combobox", { name: "媒体", exact: true }),
+    ).toHaveText("媒体を選択");
     await page.getByRole("button", { name: "保存する" }).click();
-    await expect(page.getByText("媒体を入力してください")).toBeVisible();
-    await page.getByLabel("媒体", { exact: true }).fill("応答消失検証");
+    await expect(page.getByText("媒体を選択してください")).toBeVisible();
+    await pickMedium(page, "応答消失検証");
     await page.getByLabel("金額（円）").fill("100");
     let count = 0;
     const requests: string[] = [];
@@ -471,7 +559,7 @@ Then(
     await page
       .getByRole("button", { name: "広告費を登録", exact: true })
       .click();
-    await page.getByLabel("媒体", { exact: true }).fill("切替中に保存");
+    await pickMedium(page, "切替中に保存");
     await page.getByLabel("金額（円）").fill("200");
     await page.getByRole("button", { name: "保存する" }).click();
     await expect(
@@ -540,9 +628,27 @@ Then(
     // 保留中操作の再確認トーストも role=dialog なので、登録ダイアログを名前で指す。
     const registration = page.getByRole("dialog", { name: "広告費の登録" });
     await expect(registration).toBeVisible();
-    await page
-      .getByLabel("媒体", { exact: true })
-      .fill("非常に長い媒体名".repeat(20));
+    // 媒体の選択はキーボードで開閉でき、長い媒体名でも候補と選択値が画面幅に収まる。
+    const trigger = page.getByRole("combobox", { name: "媒体", exact: true });
+    await expect(trigger).toBeEnabled();
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const option = page.getByRole("option", {
+      name: longMediumName,
+      exact: true,
+    });
+    await option.scrollIntoViewIfNeeded();
+    await expect(option).toBeVisible();
+    await page.screenshot({
+      path: $testInfo.outputPath("advertising-narrow-options.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
+    await option.click();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveText(longMediumName);
+    const box = (await trigger.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(760);
     await page.getByLabel("金額（円）").fill("0");
     await page.screenshot({
       path: $testInfo.outputPath("advertising-narrow.png"),
@@ -570,12 +676,19 @@ Then(
 );
 
 const mediaBase = "/api/advertising-media-summaries";
+const longSummaryName = "長い媒体名".repeat(20);
+// 改名する媒体は店舗に残り続けるため、実行ごとに別の名前で用意する。
+let sharedName = "",
+  renamedName = "";
 When(
-  "同名媒体の費用と問い合わせ人数の入力状態を用意する",
+  "同じ媒体の費用と問い合わせ人数の入力状態を用意する",
   async ({ request }) => {
-    for (const [media_name, inquiry_count] of [
-      ["同名", 5],
-      ["同名", null],
+    const tag = randomUUID().slice(0, 8);
+    sharedName = `同一媒体-${tag}`;
+    renamedName = `改名後-${tag}`;
+    for (const [name, inquiry_count] of [
+      [sharedName, 5],
+      [sharedName, null],
       ["全空", null],
       ["全空", null],
       ["既知零", 0],
@@ -587,33 +700,33 @@ When(
       ["ＡＢＣ", 3],
       ['=媒体,"試験"', null],
     ] as const)
-      await add(request, { media_name, inquiry_count });
+      await add(request, { medium: name, inquiry_count });
     await add(request, {
-      media_name: "同名",
+      medium: sharedName,
       category: "RECRUITMENT",
       inquiry_count: 9,
       amount: 500,
     });
     for (let i = 0; i < 25; i++)
       await add(request, {
-        media_name: `追加媒体${String(i).padStart(2, "0")}`,
+        medium: `追加媒体${String(i).padStart(2, "0")}`,
         inquiry_count: 0,
         amount: 0,
       });
     await add(request, {
-      media_name: "長い媒体名".repeat(35),
+      medium: longSummaryName,
       inquiry_count: null,
       amount: 0,
     });
     original = await add(request, {
-      media_name: "原月変更",
+      medium: "原月変更",
       inquiry_count: 2,
       amount: 400,
     });
   },
 );
 Then(
-  "媒体別集計と全件出力と古い応答の破棄を確認できる",
+  "媒体別集計と改名と全件出力と古い応答の破棄を確認できる",
   async ({ request, page, $testInfo }) => {
     $testInfo.setTimeout(120000);
     const read = async (t = token, store = storeId) =>
@@ -623,19 +736,19 @@ Then(
       });
     const response = await read();
     expect(response.status(), await response.text()).toBe(200);
-    const report = await response.json();
+    let report = await response.json();
     expect(report.recorded_total_amount).toBe(2100);
     const group = (name: string, category = "SALES") =>
       report.rows.content.find(
-        (r: any) => r.media_name === name && r.category === category,
+        (r: any) => r.medium?.name === name && r.category === category,
       );
-    expect(group("同名")).toMatchObject({
+    expect(group(sharedName)).toMatchObject({
       recorded_amount: 200,
       recorded_inquiry_count_sum: 5,
       unrecorded_inquiry_entry_count: 1,
       inquiry_status: "PARTIAL",
     });
-    expect(group("同名", "RECRUITMENT")).toMatchObject({
+    expect(group(sharedName, "RECRUITMENT")).toMatchObject({
       recorded_amount: 500,
       recorded_inquiry_count_sum: 9,
       inquiry_status: "RECORDED",
@@ -701,7 +814,7 @@ Then(
       headers: h(),
       data: {
         ...values,
-        media_name: "原月変更",
+        medium_id: await medium(request, "原月変更"),
         inquiry_count: 4,
         amount: 600,
         version: original.version,
@@ -725,6 +838,33 @@ Then(
       ).status(),
     ).toBe(204);
     expect((await (await read()).json()).recorded_total_amount).toBe(1700);
+    // 改名しても集計は媒体 ID でまとまったままで、表示だけが現在の名前に替わる。
+    const sharedId = await medium(request, sharedName);
+    const before = group(sharedName);
+    const renamed = await request.put(`/api/media/${sharedId}`, {
+      headers: h(),
+      data: { name: renamedName, version: 0 },
+    });
+    expect(renamed.status(), await renamed.text()).toBe(200);
+    report = await (await read()).json();
+    expect(group(sharedName)).toBeUndefined();
+    expect(group(renamedName)).toEqual({
+      ...before,
+      medium: { id: sharedId, name: renamedName },
+    });
+    expect(group(renamedName, "RECRUITMENT")).toMatchObject({
+      medium: { id: sharedId, name: renamedName },
+      recorded_amount: 500,
+    });
+    const costs = await request.get(base, {
+      headers: h(),
+      params: { month, size: 100 },
+    });
+    const sharedCosts = (await costs.json()).content.filter(
+      (c: any) => c.medium.id === sharedId,
+    );
+    expect(sharedCosts).toHaveLength(3);
+    for (const c of sharedCosts) expect(c.medium.name).toBe(renamedName);
     await login(page);
     await page.getByRole("tab", { name: "媒体別集計", exact: true }).focus();
     await page.keyboard.press("Enter");
@@ -732,7 +872,7 @@ Then(
       page.getByRole("heading", { name: "媒体別集計", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("row", { name: /営業広告 同名/ }),
+      page.getByRole("row", { name: new RegExp(`営業広告 ${renamedName}`) }),
     ).toContainText("5人");
     await expect(
       page.getByRole("row", { name: /営業広告 全空/ }),
@@ -767,7 +907,7 @@ Then(
       .getByRole("button")
       .click();
     await expect(
-      page.getByRole("row", { name: /営業広告 同名/ }),
+      page.getByRole("row", { name: new RegExp(`営業広告 ${renamedName}`) }),
     ).toBeVisible();
     let releasePage!: () => void, enterPage!: () => void;
     const pageGate = new Promise<void>((r) => {
@@ -795,7 +935,7 @@ Then(
     await page.getByRole("tab", { name: "費用記録", exact: true }).click();
     await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
     await expect(
-      page.getByRole("row", { name: /営業広告 同名/ }),
+      page.getByRole("row", { name: new RegExp(`営業広告 ${renamedName}`) }),
     ).toBeVisible();
     releasePage();
     await page.unroute("**/api/advertising-media-summaries?**");
@@ -837,7 +977,7 @@ Then(
     await page.getByRole("tab", { name: "費用記録", exact: true }).click();
     await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
     await expect(
-      page.getByRole("row", { name: /営業広告 同名/ }),
+      page.getByRole("row", { name: new RegExp(`営業広告 ${renamedName}`) }),
     ).toBeVisible();
     releaseExport();
     await exportFinished;
@@ -865,11 +1005,11 @@ Then(
       .last()
       .click();
     await expect(
-      page.getByRole("cell", { name: "長い媒体名".repeat(35), exact: true }),
+      page.getByRole("cell", { name: longSummaryName, exact: true }),
     ).toBeVisible();
     await page.setViewportSize({ width: 760, height: 900 });
     await page
-      .getByRole("cell", { name: "長い媒体名".repeat(35), exact: true })
+      .getByRole("cell", { name: longSummaryName, exact: true })
       .scrollIntoViewIfNeeded();
     await page.screenshot({
       path: $testInfo.outputPath("advertising-media-narrow.png"),
@@ -904,13 +1044,13 @@ Then(
     ).toBeVisible();
     release();
     await expect(
-      page.getByRole("cell", { name: "同名", exact: true }),
+      page.getByRole("cell", { name: renamedName, exact: true }),
     ).toHaveCount(0);
     await page.getByRole("tab", { name: "費用記録", exact: true }).click();
     await login(page, readerEmail);
     await page.getByRole("tab", { name: "媒体別集計", exact: true }).click();
     await expect(
-      page.getByRole("row", { name: /営業広告 同名/ }),
+      page.getByRole("row", { name: new RegExp(`営業広告 ${renamedName}`) }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "CSV 全件出力" }),
@@ -992,21 +1132,21 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
     return id;
   }
   original = await add(request, {
-    media_name: "ABC",
+    medium: "ABC",
     amount: 100,
     inquiry_count: 999,
   });
   orderCostSeed = original.id;
   await add(request, {
     category: "RECRUITMENT",
-    media_name: "ABC",
+    medium: "ABC",
     amount: 10000,
   });
-  await add(request, { media_name: "零", amount: 0 });
-  await add(request, { media_name: "費用のみ", amount: 500 });
-  await add(request, { media_name: "ＡＢＣ", amount: 200 });
-  await add(request, { media_name: "abc", amount: 300 });
-  await add(request, { media_name: "長い媒体名".repeat(35), amount: 0 });
+  await add(request, { medium: "零", amount: 0 });
+  await add(request, { medium: "費用のみ", amount: 500 });
+  await add(request, { medium: "ＡＢＣ", amount: 200 });
+  await add(request, { medium: "abc", amount: 300 });
+  await add(request, { medium: longSummaryName, amount: 0 });
   await order("ABC");
   orderCostInvalidation = await order("ABC", true);
   await order("ABC");
@@ -1033,36 +1173,29 @@ Then(
     let response = await read();
     expect(response.status(), await response.text()).toBe(200);
     let report = await response.json();
+    // 受注はまだ媒体を持たないため、有効完了受注はすべて媒体未入力として別掲され、
+    // 行は登録した営業広告費の媒体だけになる。
     expect(report).toMatchObject({
       recorded_sales_amount: 1100,
       cost_entry_count: 6,
       valid_completed_order_count: 10,
       zero_amount_order_count: 3,
-      unnamed_media_order_count: 2,
+      unnamed_media_order_count: 10,
     });
     const row = (name: string) =>
-      report.rows.content.find((r: any) => r.media_name === name);
-    expect(row("ABC")).toMatchObject({
-      cost_per_order: "33.33",
-      valid_completed_order_count: 3,
-      zero_amount_order_count: 1,
-    });
-    expect(row("零")).toMatchObject({
-      cost_per_order: "0.00",
-      recorded_sales_amount: 0,
-    });
-    expect(row("費用のみ")).toMatchObject({
-      cost_per_order: null,
-      calculation_status: "NO_VALID_ORDERS",
-    });
-    expect(row("注文のみ")).toMatchObject({
-      recorded_sales_amount: null,
-      cost_per_order: null,
-      calculation_status: "NO_COST_RECORDS",
-    });
-    expect(row(" ABC ").calculation_status).toBe("NO_COST_RECORDS");
-    expect(row("ＡＢＣ").cost_per_order).toBe("200.00");
-    expect(row("abc").cost_per_order).toBe("300.00");
+      report.rows.content.find((r: any) => r.medium?.name === name);
+    expect(
+      report.rows.content.map((r: any) => r.medium.name).sort(),
+    ).toEqual(["ABC", "abc", "ＡＢＣ", "零", "費用のみ", longSummaryName].sort());
+    for (const r of report.rows.content)
+      expect(r).toMatchObject({
+        valid_completed_order_count: 0,
+        cost_per_order: null,
+        calculation_status: "NO_VALID_ORDERS",
+      });
+    expect(row("ABC").recorded_sales_amount).toBe(100);
+    expect(row("零").recorded_sales_amount).toBe(0);
+    expect(row("ＡＢＣ").recorded_sales_amount).toBe(200);
     for (const t of [reader, exporter])
       expect((await read(t)).status()).toBe(403);
     // 店長は既定授与で広告費 VIEW と ORDER_MANAGE を併せ持つ。
@@ -1104,12 +1237,16 @@ Then(
       storeId,
     );
     report = await (await read()).json();
-    expect(row("ABC").cost_per_order).toBe("50.00");
+    expect(report).toMatchObject({
+      valid_completed_order_count: 9,
+      zero_amount_order_count: 2,
+      unnamed_media_order_count: 9,
+    });
     const updated = await request.put(`${base}/${original.id}`, {
       headers: h(),
       data: {
         ...values,
-        media_name: "ABC",
+        medium_id: await medium(request, "ABC"),
         amount: 200,
         version: original.version,
         reason: "原月の費用訂正",
@@ -1119,23 +1256,24 @@ Then(
     expect(updated.status()).toBe(200);
     original = await updated.json();
     report = await (await read()).json();
-    expect(row("ABC").cost_per_order).toBe("100.00");
+    expect(report.recorded_sales_amount).toBe(1200);
+    expect(row("ABC").recorded_sales_amount).toBe(200);
 
     await login(page);
     await page
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
       .focus();
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("row", { name: /^ABC .*約 100\.00円/ }),
-    ).toContainText("約 100.00円");
+    await expect(page.getByRole("row", { name: /^ABC 200円/ })).toContainText(
+      "有効完了受注が0件",
+    );
     await expect(page.getByRole("row", { name: /^零 / })).toContainText(
-      "約 0.00円",
+      "未算出",
+    );
+    await expect(page.getByLabel("受注比較の月合計")).toContainText(
+      "媒体未入力の有効完了受注：9件",
     );
     await expect(page.getByText(/新客単価は未提供/)).toBeVisible();
-    await expect(
-      page.getByText("前後に空白あり", { exact: true }),
-    ).toBeVisible();
     for (const theme of ["ライト", "ダーク"]) {
       await page
         .getByRole("button", { name: "表示モード", exact: true })
@@ -1153,7 +1291,7 @@ Then(
     }
     await page.setViewportSize({ width: 760, height: 900 });
     await page
-      .getByRole("cell", { name: "長い媒体名".repeat(35), exact: true })
+      .getByRole("cell", { name: longSummaryName, exact: true })
       .scrollIntoViewIfNeeded();
     await page.screenshot({
       path: $testInfo.outputPath("advertising-order-cost-narrow.png"),
@@ -1199,7 +1337,7 @@ Then(
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
       .click();
     await expect(
-      page.getByRole("row", { name: /^ABC .*約 100\.00円/ }),
+      page.getByRole("row", { name: /^ABC 200円/ }),
     ).toBeVisible();
     release();
     await done;
@@ -1244,7 +1382,7 @@ Then(
     await page.getByLabel("対象月", { exact: true }).fill(month);
     await page.getByRole("button", { name: "表示", exact: true }).click();
     await expect(
-      page.getByRole("row", { name: /^ABC .*約 100\.00円/ }),
+      page.getByRole("row", { name: /^ABC 200円/ }),
     ).toBeVisible();
     let releaseStore!: () => void,
       enterStore!: () => void,
@@ -1297,7 +1435,7 @@ Then(
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })
       .click();
     await expect(
-      page.getByRole("row", { name: /^ABC .*約 100\.00円/ }),
+      page.getByRole("row", { name: /^ABC 200円/ }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "CSV 全件出力" }),
@@ -1310,8 +1448,14 @@ Then(
     const prefix = "order-cost-" + randomUUID();
     try {
       await db.query(
-        `INSERT INTO t_advertising_costs(id,store_id,month,category,media_name,amount,deleted,revision,version,created_at,updated_at)
-      SELECT ($2 || '-' || n),store_id,month,category,('=検証媒体' || lpad(n::text,4,'0')),0,false,0,0,created_at,updated_at
+        `INSERT INTO t_media(id,store_id,name,status,version,created_at,updated_at)
+      SELECT ($2 || '-m' || n),store_id,('=検証媒体' || lpad(n::text,4,'0') || '-' || right($2,8)),'ACTIVE',0,created_at,updated_at
+      FROM t_advertising_costs CROSS JOIN generate_series(1,2001) n WHERE id=$1`,
+        [orderCostSeed, prefix],
+      );
+      await db.query(
+        `INSERT INTO t_advertising_costs(id,store_id,month,category,medium_id,amount,deleted,revision,version,created_at,updated_at)
+      SELECT ($2 || '-' || n),store_id,month,category,($2 || '-m' || n),0,false,0,0,created_at,updated_at
       FROM t_advertising_costs CROSS JOIN generate_series(1,2001) n WHERE id=$1`,
         [orderCostSeed, prefix],
       );
@@ -1364,30 +1508,31 @@ Then(
     await page.unroute("**/api/advertising-order-costs?**");
     await alert.getByRole("button").click();
     await expect(
-      page.getByRole("cell", { name: "=検証媒体0001", exact: true }),
+      page.getByRole("cell", { name: /^=検証媒体0001-/ }),
     ).toBeVisible();
   },
 );
 
 const effectBase = "/api/advertising-recruitment-effects";
 let effectMedia = "";
-When("採用広告費と媒体別の入店と退店の記録を用意する", async ({ request }) => {
+When("採用広告費と媒体別の入店の記録を用意する", async ({ request }) => {
   effectMedia = `求人-${randomUUID()}`;
   const startedOn = `${month}-10`;
   await add(request, {
     category: "RECRUITMENT",
-    media_name: effectMedia,
+    medium: effectMedia,
     amount: 30000,
   });
   await add(request, {
     category: "RECRUITMENT",
-    media_name: `${effectMedia}-費用だけ`,
+    medium: `${effectMedia}-費用だけ`,
     amount: 500,
   });
+  // 応募者はまだ媒体を持たないため、応募元の媒体名が費用の媒体名と同じでも突き合わせない。
   const hire = (sourceType: "MEDIA" | "REFERRAL", sourceMedia: string | null) =>
     createEnrolledHire(request, token, { sourceType, sourceMedia, startedOn }, storeId);
   await hire("MEDIA", effectMedia);
-  const leaver = await hire("MEDIA", effectMedia);
+  await hire("MEDIA", effectMedia);
   await hire("MEDIA", `${effectMedia}-入店だけ`);
   await hire("REFERRAL", null);
   await createEnrolledHire(
@@ -1396,23 +1541,9 @@ When("採用広告費と媒体別の入店と退店の記録を用意する", as
     { sourceType: "MEDIA", sourceMedia: effectMedia, startedOn: `${month}-30` },
     storeId,
   );
-  await withdrawCast(request, token, leaver, storeId);
-  // 退店日は API では当日にしかならないため、2 か月時点と 3 か月時点の間へ寄せる。
-  if (process.env.PGHOST !== "database")
-    throw new Error("専用 E2E DB でのみ実行できます");
-  const db = new Client({ application_name: "recruitment-effect-bdd" });
-  await db.connect();
-  try {
-    await db.query(
-      "UPDATE t_cast_enrollments SET ended_at = $2::date + interval '12 hours' WHERE id = $1",
-      [leaver, `${Number(month.slice(0, 4))}-12-01`],
-    );
-  } finally {
-    await db.end();
-  }
 });
 Then(
-  "採用効果の行形状と未算出理由と定着の可判定が守られる",
+  "採用効果の行形状と入店の媒体未入力が守られる",
   async ({ request, page, $testInfo }) => {
     const read = (t = token, store = storeId) =>
       request.get(effectBase, {
@@ -1427,35 +1558,32 @@ Then(
       cost_entry_count: 2,
       recorded_recruitment_amount: 30500,
       hire_count: 5,
-      unnamed_media_hire_count: 1,
+      unnamed_media_hire_count: 5,
     });
     const row = (name: string) =>
-      report.rows.content.find((r: any) => r.media_name === name);
+      report.rows.content.find((r: any) => r.medium?.name === name);
+    const noHires = [2, 3, 4].map((months) => ({
+      months,
+      judgeable_count: 0,
+      retained_count: 0,
+    }));
     expect(row(effectMedia)).toEqual({
-      media_name: effectMedia,
+      medium: { id: await medium(request, effectMedia), name: effectMedia },
       cost_entry_count: 1,
       recorded_recruitment_amount: 30000,
-      hire_count: 3,
-      cost_per_hire: "10000.00",
-      calculation_status: "CALCULATED",
-      retention: [
-        { months: 2, judgeable_count: 3, retained_count: 3 },
-        { months: 3, judgeable_count: 3, retained_count: 2 },
-        { months: 4, judgeable_count: 3, retained_count: 2 },
-      ],
-    });
-    expect(row(`${effectMedia}-費用だけ`)).toMatchObject({
       hire_count: 0,
       cost_per_hire: null,
       calculation_status: "NO_HIRES",
+      retention: noHires,
     });
-    expect(row(`${effectMedia}-入店だけ`)).toMatchObject({
-      recorded_recruitment_amount: null,
-      hire_count: 1,
+    expect(row(`${effectMedia}-費用だけ`)).toMatchObject({
+      recorded_recruitment_amount: 500,
+      hire_count: 0,
       cost_per_hire: null,
-      calculation_status: "NO_COST_RECORDS",
+      calculation_status: "NO_HIRES",
+      retention: noHires,
     });
-    expect(report.rows.content).toHaveLength(3);
+    expect(report.rows.content).toHaveLength(2);
     const body = JSON.stringify(report);
     expect(body).not.toContain("採用効果の検証応募者");
     expect(body).not.toContain("applicant");
@@ -1469,14 +1597,13 @@ Then(
 
     await login(page);
     await page.getByRole("tab", { name: "採用効果", exact: true }).click();
-    await expect(
-      page.getByRole("row", { name: new RegExp(`^${effectMedia} `) }),
-    ).toContainText("約 10,000.00円");
-    await expect(
-      page.getByRole("row", { name: new RegExp(`^${effectMedia} `) }),
-    ).toContainText("2 / 3人");
+    const effectRow = page.getByRole("row", {
+      name: new RegExp(`^${effectMedia} `),
+    });
+    await expect(effectRow).toContainText("入店人数が0人");
+    await expect(effectRow.getByText("対象なし")).toHaveCount(3);
     await expect(page.getByLabel("採用効果の月合計")).toContainText(
-      "媒体未入力の入店：1人",
+      "媒体未入力の入店：5人",
     );
     await expect(page.getByText(/ROIを示しません/)).toBeVisible();
     for (const theme of ["ライト", "ダーク"]) {

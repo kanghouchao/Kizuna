@@ -21,7 +21,11 @@ import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
+import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
+import com.kizuna.medium.domain.Medium;
+import com.kizuna.medium.domain.MediumRepository;
+import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderStatus;
@@ -89,6 +93,8 @@ class AdvertisingIntegrationTest {
   AnnotationConfigApplicationContext context;
   AdvertisingService service;
   JdbcTemplate jdbc;
+  String medium;
+  String otherStoreMedium;
 
   @BeforeAll
   void connect() {
@@ -109,7 +115,7 @@ class AdvertisingIntegrationTest {
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE t_advertising_changes,t_advertising_requests,t_advertising_costs,t_advertising_months");
+        "TRUNCATE t_advertising_changes,t_advertising_requests,t_advertising_costs,t_advertising_months,t_media");
     jdbc.execute("TRUNCATE t_orders CASCADE");
     SecurityContextHolder.getContext()
         .setAuthentication(
@@ -118,11 +124,24 @@ class AdvertisingIntegrationTest {
     reset(context.getBean(AdvertisingRecords.class));
     reset((BusinessAudit) AopTestUtils.getTargetObject(context.getBean(BusinessAudit.class)));
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(20000);
+    medium = medium(1L, "媒体");
+    otherStoreMedium = medium(2L, "媒体");
+  }
+
+  String medium(long store, String name) {
+    return new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
+        .execute(
+            tx -> {
+              var row = Medium.builder().name(name).build();
+              row.setStoreId(store);
+              context.getBean(EntityManager.class).persist(row);
+              return row.getId();
+            });
   }
 
   CreateRequest create(String month, Integer count, int amount, UUID key) {
     return new CreateRequest(
-        month, AdvertisingCategory.SALES, " 媒体 ", null, "プラン", count, amount, key);
+        month, AdvertisingCategory.SALES, " " + medium + " ", null, "プラン", count, amount, key);
   }
 
   @Test
@@ -133,7 +152,7 @@ class AdvertisingIntegrationTest {
     var update =
         new ReplaceRequest(
             AdvertisingCategory.RECRUITMENT,
-            "媒体",
+            medium,
             null,
             null,
             0,
@@ -176,7 +195,7 @@ class AdvertisingIntegrationTest {
         c.id(),
         new ReplaceRequest(
             AdvertisingCategory.SALES,
-            "媒体",
+            medium,
             null,
             null,
             null,
@@ -276,7 +295,7 @@ class AdvertisingIntegrationTest {
                     c.id(),
                     new ReplaceRequest(
                         AdvertisingCategory.SALES,
-                        "媒体",
+                        medium,
                         null,
                         null,
                         0,
@@ -291,7 +310,7 @@ class AdvertisingIntegrationTest {
                     c.id(),
                     new ReplaceRequest(
                         AdvertisingCategory.SALES,
-                        "媒体",
+                        medium,
                         null,
                         null,
                         0,
@@ -351,7 +370,18 @@ class AdvertisingIntegrationTest {
   void mediaSummaryKeepsInquiryAmountAndRevisionTogetherAndRecalculatesAfterDeletion() {
     var first = service.create(1L, create("2026-09", 5, 100, UUID.randomUUID()), "actor");
     var media = new AdvertisingMediaService(service, context.getBean(AppProperties.class));
-    service.create(2L, create("2026-09", 100, 10000, UUID.randomUUID()), "actor");
+    service.create(
+        2L,
+        new CreateRequest(
+            "2026-09",
+            AdvertisingCategory.SALES,
+            otherStoreMedium,
+            null,
+            null,
+            100,
+            10000,
+            UUID.randomUUID()),
+        "actor");
     doAnswer(
             invocation -> {
               var rows = invocation.callRealMethod();
@@ -466,7 +496,7 @@ class AdvertisingIntegrationTest {
         new CreateRequest(
             "2026-09",
             AdvertisingCategory.RECRUITMENT,
-            "媒体",
+            medium,
             null,
             null,
             null,
@@ -489,11 +519,19 @@ class AdvertisingIntegrationTest {
     assertThat(report.recordedSalesAmount()).isEqualTo(100);
     assertThat(report.validCompletedOrderCount()).isEqualTo(4);
     assertThat(report.zeroAmountOrderCount()).isEqualTo(2);
-    assertThat(report.unnamedMediaOrderCount()).isEqualTo(1);
-    assertThat(report.rows().getLast().costPerOrder()).isEqualTo("50.00");
+    assertThat(report.unnamedMediaOrderCount()).isEqualTo(4);
+    assertThat(report.rows())
+        .singleElement()
+        .satisfies(
+            row -> {
+              assertThat(row.medium().id()).isEqualTo(medium);
+              assertThat(row.validCompletedOrderCount()).isZero();
+              assertThat(row.costPerOrder()).isNull();
+              assertThat(row.calculationStatus())
+                  .isEqualTo(AdvertisingOrderCostReport.Status.NO_VALID_ORDERS);
+            });
     jdbc.update("update t_orders set completion_invalidated=true where id=?", free);
-    assertThat(compare.view(1L, "2026-09").report().rows().getLast().costPerOrder())
-        .isEqualTo("100.00");
+    assertThat(compare.view(1L, "2026-09").report().unnamedMediaOrderCount()).isEqualTo(3);
     service.delete(
         1L, cost.id(), new DeleteRequest(cost.version(), "訂正", UUID.randomUUID()), "actor");
     assertThat(compare.view(1L, "2026-09").report().recordedSalesAmount()).isNull();
@@ -525,12 +563,13 @@ class AdvertisingIntegrationTest {
     var compare = context.getBean(AdvertisingOrderCostService.class);
     var first = compare.view(1L, "2026-09");
     assertThat(first.monthVersion()).isEqualTo(1);
-    assertThat(first.report().rows().getFirst().costPerOrder()).isEqualTo("100.00");
+    assertThat(first.report().recordedSalesAmount()).isEqualTo(100);
     assertThat(first.report().validCompletedOrderCount()).isEqualTo(1);
     reset(context.getBean(AdvertisingRecords.class));
     var second = compare.view(1L, "2026-09");
     assertThat(second.monthVersion()).isEqualTo(2);
-    assertThat(second.report().rows().getFirst().costPerOrder()).isEqualTo("150.00");
+    assertThat(second.report().recordedSalesAmount()).isEqualTo(300);
+    assertThat(second.report().validCompletedOrderCount()).isEqualTo(2);
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(1);
     assertThatThrownBy(() -> compare.view(1L, "2026-09"))
         .isInstanceOf(ServiceUnavailableException.class);
@@ -544,12 +583,14 @@ class AdvertisingIntegrationTest {
 
   @Configuration
   @EnableTransactionManagement
-  @EnableJpaRepositories(basePackageClasses = AdvertisingChangeRepository.class)
+  @EnableJpaRepositories(
+      basePackageClasses = {AdvertisingChangeRepository.class, MediumRepository.class})
   @EnableMethodSecurity
   @Import({
     AdvertisingService.class,
     AdvertisingOrderCostService.class,
-    AdvertisingOrderReader.class
+    AdvertisingOrderReader.class,
+    MediumLookup.class
   })
   static class Config {
     @Bean
@@ -567,7 +608,8 @@ class AdvertisingIntegrationTest {
         DataSource source, ConfigurableListableBeanFactory beans) {
       var f = new LocalContainerEntityManagerFactoryBean();
       f.setDataSource(source);
-      f.setPackagesToScan("com.kizuna.advertising.domain", "com.kizuna.order.domain");
+      f.setPackagesToScan(
+          "com.kizuna.advertising.domain", "com.kizuna.order.domain", "com.kizuna.medium.domain");
       f.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
       f.setJpaPropertyMap(
           Map.of(

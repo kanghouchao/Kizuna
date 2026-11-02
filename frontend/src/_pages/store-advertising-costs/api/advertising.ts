@@ -1,25 +1,33 @@
 import { apiClient, type Page } from '@/shared/api';
 import { getCurrentStoreId } from '@/shared/lib';
 export type Category = 'SALES' | 'RECRUITMENT';
-export interface CostValues {
+export interface MediumRef {
+  id: string;
+  name: string;
+}
+interface CostFields {
   category: Category;
-  media_name: string;
   agency_name: string | null;
   plan_name: string | null;
   inquiry_count: number | null;
   amount: number;
 }
-export interface Cost extends CostValues {
+export interface CostValues extends CostFields {
+  medium_id: string;
+}
+/** medium.name は一覧・詳細では現在名、変更履歴の前後ではその時点の名前。 */
+export interface Cost extends CostFields {
   id: string;
   store_id: number;
   month: string;
+  medium: MediumRef;
   version: number;
   created_at?: string;
   updated_at: string;
 }
 export interface MediaSummary {
   category: Category;
-  media_name: string;
+  medium: MediumRef | null;
   entry_count: number;
   recorded_amount: number;
   recorded_inquiry_entry_count: number;
@@ -33,7 +41,7 @@ export interface MediaReport {
   month_version: number;
   generated_at: string;
   basis: 'advertising-media-records-v1';
-  media_matching: 'EXACT_STORED_NAME';
+  media_matching: 'MEDIUM_ID';
   inquiry_basis: 'MANUAL_RECORDED_SUM_NOT_DEDUPLICATED';
   entry_count: number;
   recorded_total_amount: number;
@@ -47,7 +55,7 @@ export const advertisingExports = {
   orders: { resource: 'advertising-order-costs', label: '受注あたり記録広告費出力' },
 } satisfies Record<ExportKind, { resource: string; label: string }>;
 export interface OrderCostSummary {
-  media_name: string;
+  medium: MediumRef | null;
   cost_entry_count: number;
   recorded_sales_amount: number | null;
   valid_completed_order_count: number;
@@ -61,7 +69,7 @@ export interface OrderCostReport {
   month_version: number;
   generated_at: string;
   basis: 'recorded-sales-cost-per-valid-order-v1';
-  media_matching: 'EXACT_STORED_NAME';
+  media_matching: 'MEDIUM_ID';
   order_basis: 'VALID_COMPLETED_ORIGINAL_BUSINESS_DATE_INCLUDING_ZERO';
   rounding: 'HALF_UP_2_DECIMAL_YEN';
   cost_entry_count: number;
@@ -77,7 +85,7 @@ export interface RecruitmentRetention {
   retained_count: number;
 }
 export interface RecruitmentEffectSummary {
-  media_name: string;
+  medium: MediumRef | null;
   cost_entry_count: number;
   recorded_recruitment_amount: number | null;
   hire_count: number;
@@ -92,7 +100,7 @@ export interface RecruitmentEffectReport {
   generated_at: string;
   retention_as_of: string;
   basis: 'recorded-recruitment-cost-per-hire-v1';
-  media_matching: 'EXACT_STORED_NAME';
+  media_matching: 'MEDIUM_ID';
   hire_basis: 'HIRED_APPLICANT_ENROLLMENT_STARTED_IN_MONTH';
   retention_basis: 'NOT_ENDED_AFTER_STARTED_ON_PLUS_MONTHS';
   rounding: 'HALF_UP_2_DECIMAL_YEN';
@@ -257,4 +265,8 @@ export function previousMonth(month: string) {
   if (!validMonth(month) || month === '0001-01') return null;
   const [year, part] = month.split('-').map(Number);
   return `${String(part === 1 ? year - 1 : year).padStart(4, '0')}-${String(part === 1 ? 12 : part - 1).padStart(2, '0')}`;
+}
+/** 集計行の媒体は契約上 null を取りうる。空欄にせず未入力と示す。 */
+export function mediumName(medium: MediumRef | null) {
+  return medium?.name ?? '媒体未入力';
 }

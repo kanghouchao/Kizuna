@@ -29,8 +29,8 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: media_name
-                  type: VARCHAR(200)
+                  name: medium_id
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
               - column:
@@ -84,10 +84,19 @@ databaseChangeLog:
             referencedColumnNames: id
             constraintName: fk_t_advertising_costs_store_id
             onDelete: CASCADE
+        # 広告費は削除済みの行も媒体を指し続け、参照のある媒体の削除を拒む。複合 FK で同一店舗の媒体だけを許す。
+        - addForeignKeyConstraint:
+            baseTableName: t_advertising_costs
+            baseColumnNames: medium_id, store_id
+            referencedTableName: t_media
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_advertising_costs_medium
+            onDelete: NO ACTION
         - sql:
             sql: |
               ALTER TABLE t_advertising_costs ADD CONSTRAINT ck_t_advertising_costs_values CHECK (amount >= 0 AND (inquiry_count IS NULL OR inquiry_count >= 0) AND category IN ('SALES','RECRUITMENT'));
               CREATE INDEX idx_t_advertising_costs_month ON t_advertising_costs(store_id, month, id) WHERE deleted = false;
+              CREATE INDEX idx_t_advertising_costs_medium ON t_advertising_costs(store_id, medium_id);
   - changeSet:
       id: store-v0100-019-advertising_months
       author: kizuna

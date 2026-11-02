@@ -4,8 +4,10 @@ import static com.kizuna.advertising.domain.AdvertisingMediaReport.safeAdd;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.TreeMap;
+import java.util.Map;
 
 public record AdvertisingOrderCostReport(
     long costEntryCount,
@@ -15,13 +17,14 @@ public record AdvertisingOrderCostReport(
     long unnamedMediaOrderCount,
     List<Row> rows) {
   public static final String BASIS = "recorded-sales-cost-per-valid-order-v1";
-  public static final String MATCHING = "EXACT_STORED_NAME";
+  public static final String MATCHING = "MEDIUM_ID";
   public static final String ORDER_BASIS = "VALID_COMPLETED_ORIGINAL_BUSINESS_DATE_INCLUDING_ZERO";
   public static final String ROUNDING = "HALF_UP_2_DECIMAL_YEN";
 
-  public record Cost(String mediaName, long amount) {}
+  public record Cost(AdvertisingMedium medium, long amount) {}
 
-  public record Order(String mediaName, boolean zeroAmount) {}
+  /** medium が null の受注は媒体未入力として件数だけ別掲する。 */
+  public record Order(AdvertisingMedium medium, boolean zeroAmount) {}
 
   public enum Status {
     CALCULATED,
@@ -30,7 +33,7 @@ public record AdvertisingOrderCostReport(
   }
 
   public record Row(
-      String mediaName,
+      AdvertisingMedium medium,
       long costEntryCount,
       Long recordedSalesAmount,
       long validCompletedOrderCount,
@@ -39,21 +42,21 @@ public record AdvertisingOrderCostReport(
       Status calculationStatus) {}
 
   public static AdvertisingOrderCostReport aggregate(List<Cost> costs, List<Order> orders) {
-    var groups = new TreeMap<String, Totals>();
+    var groups = new HashMap<String, Totals>();
     long amount = 0, zero = 0, unnamed = 0;
     for (var cost : costs) {
-      var group = groups.computeIfAbsent(cost.mediaName(), ignored -> new Totals());
+      var group = group(groups, cost.medium());
       group.costs = safeAdd(group.costs, 1);
       group.amount = safeAdd(group.amount, cost.amount());
       amount = safeAdd(amount, cost.amount());
     }
     for (var order : orders) {
       if (order.zeroAmount()) zero = safeAdd(zero, 1);
-      if (order.mediaName() == null || order.mediaName().isBlank()) {
+      if (order.medium() == null) {
         unnamed = safeAdd(unnamed, 1);
         continue;
       }
-      var group = groups.computeIfAbsent(order.mediaName(), ignored -> new Totals());
+      var group = group(groups, order.medium());
       group.orders = safeAdd(group.orders, 1);
       if (order.zeroAmount()) group.zero = safeAdd(group.zero, 1);
     }
@@ -63,13 +66,25 @@ public record AdvertisingOrderCostReport(
         orders.size(),
         zero,
         unnamed,
-        groups.entrySet().stream().map(e -> e.getValue().row(e.getKey())).toList());
+        groups.values().stream()
+            .map(Totals::row)
+            .sorted(Comparator.comparing(Row::medium, AdvertisingMedium.BY_NAME_THEN_ID))
+            .toList());
+  }
+
+  private static Totals group(Map<String, Totals> groups, AdvertisingMedium medium) {
+    return groups.computeIfAbsent(medium.id(), ignored -> new Totals(medium));
   }
 
   private static class Totals {
+    final AdvertisingMedium medium;
     long costs, amount, orders, zero;
 
-    Row row(String name) {
+    Totals(AdvertisingMedium medium) {
+      this.medium = medium;
+    }
+
+    Row row() {
       var status =
           costs == 0
               ? Status.NO_COST_RECORDS
@@ -80,7 +95,7 @@ public record AdvertisingOrderCostReport(
                   .divide(BigDecimal.valueOf(orders), 2, RoundingMode.HALF_UP)
                   .toPlainString()
               : null;
-      return new Row(name, costs, costs == 0 ? null : amount, orders, zero, ratio, status);
+      return new Row(medium, costs, costs == 0 ? null : amount, orders, zero, ratio, status);
     }
   }
 }

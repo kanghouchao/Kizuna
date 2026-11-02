@@ -92,7 +92,12 @@ public class MediumService {
     var medium = find(storeId, id, version);
     var before = snapshot(medium);
     media.delete(medium);
-    media.flush();
+    IntegrityViolations.translateOnFailure(
+        () -> {
+          media.flush();
+          return null;
+        },
+        Map.of(DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, MediumService::referenced));
     audit.recordCurrent(storeId, "MEDIUM_DELETED", TARGET, id, before, Map.of("exists", "false"));
   }
 
@@ -117,6 +122,10 @@ public class MediumService {
           return null;
         },
         Map.of(DbConstraint.UQ_T_MEDIA_STORE_NAME, MediumService::duplicate));
+  }
+
+  private static ConflictException referenced() {
+    return new ConflictException("記録から参照されている媒体は削除できません。使わない場合は停止してください");
   }
 
   private static ConflictException duplicate() {

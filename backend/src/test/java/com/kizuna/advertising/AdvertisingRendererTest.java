@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
+import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
 import com.kizuna.advertising.application.AdvertisingService.ExportSnapshot;
 import com.kizuna.advertising.domain.AdvertisingCategory;
@@ -34,7 +35,7 @@ class AdvertisingRendererTest {
                         1L,
                         "2026-09",
                         AdvertisingCategory.SALES,
-                        "=媒体,\"試験\"",
+                        new MediumResponse("900000", "=媒体,\"試験\""),
                         null,
                         "00001",
                         i == 0 ? null : 0,

@@ -12,7 +12,7 @@ function report(month = '2026-09', name = '既知零'): OrderCostReport {
     month_version: 1,
     generated_at: '2026-10-09T00:00:00Z',
     basis: 'recorded-sales-cost-per-valid-order-v1',
-    media_matching: 'EXACT_STORED_NAME',
+    media_matching: 'MEDIUM_ID',
     order_basis: 'VALID_COMPLETED_ORIGINAL_BUSINESS_DATE_INCLUDING_ZERO',
     rounding: 'HALF_UP_2_DECIMAL_YEN',
     cost_entry_count: 1,
@@ -23,7 +23,7 @@ function report(month = '2026-09', name = '既知零'): OrderCostReport {
     rows: {
       content: [
         {
-          media_name: name,
+          medium: { id: `medium-${name}`, name },
           cost_entry_count: 1,
           recorded_sales_amount: 0,
           valid_completed_order_count: 1,
@@ -32,7 +32,7 @@ function report(month = '2026-09', name = '既知零'): OrderCostReport {
           calculation_status: 'CALCULATED',
         },
         {
-          media_name: '費用なし',
+          medium: { id: 'medium-費用なし', name: '費用なし' },
           cost_entry_count: 0,
           recorded_sales_amount: null,
           valid_completed_order_count: 1,
@@ -126,10 +126,4 @@ it('店舗と月の切替後に古い照会と遅延出力を反映しない', a
   });
   expect(screen.queryByRole('cell', { name: '既知零' })).not.toBeInTheDocument();
   expect(createUrl).not.toHaveBeenCalled();
-});
-
-it('前後の空白を持つ媒体を見分けられる', async () => {
-  jest.mocked(advertisingApi.orderCosts).mockResolvedValue(report('2026-09', ' ABC '));
-  render(<OrderCostPage store="1" month="2026-09" canExport={false} />);
-  expect(await screen.findByText('前後に空白あり')).toBeVisible();
 });

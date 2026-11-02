@@ -2,6 +2,7 @@ package com.kizuna.advertising;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport.Cost;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport.Hire;
@@ -20,36 +21,50 @@ class AdvertisingRecruitmentEffectReportTest {
   private static final LocalDate MAY_2 = LocalDate.of(2026, 5, 2);
 
   private static Row row(AdvertisingRecruitmentEffectReport report, String name) {
-    return report.rows().stream().filter(r -> r.mediaName().equals(name)).findFirst().orElseThrow();
+    return report.rows().stream()
+        .filter(r -> r.medium().name().equals(name))
+        .findFirst()
+        .orElseThrow();
+  }
+
+  private static AdvertisingMedium medium(String name) {
+    return new AdvertisingMedium(name, name);
+  }
+
+  private static Cost cost(String name, long amount) {
+    return new Cost(medium(name), amount);
+  }
+
+  private static Hire hire(String name, LocalDate startedOn, OffsetDateTime endedAt) {
+    return new Hire(name == null ? null : medium(name), startedOn, endedAt);
   }
 
   @Test
-  void comparesExactNamesAndKeepsCostOnlyHireOnlyAndUnnamedHiresApart() {
+  void comparesByMediumIdAndKeepsCostOnlyHireOnlyAndUnnamedHiresApart() {
     var report =
         AdvertisingRecruitmentEffectReport.aggregate(
-            List.of(new Cost("求人A", 30000), new Cost("求人A", 1), new Cost("費用だけ", 500)),
+            List.of(cost("求人A", 30000), cost("求人A", 1), cost("費用だけ", 500)),
             List.of(
-                new Hire("求人A", MAY_1, null),
-                new Hire("求人A", MAY_1, null),
-                new Hire("求人A", MAY_1, null),
-                new Hire("求人ａ", MAY_1, null),
-                new Hire(" 求人A", MAY_1, null),
-                new Hire(null, MAY_1, null),
-                new Hire(" ", MAY_1, null)),
+                hire("求人A", MAY_1, null),
+                hire("求人A", MAY_1, null),
+                hire("求人A", MAY_1, null),
+                hire("入店だけ", MAY_1, null),
+                hire(null, MAY_1, null),
+                hire(null, MAY_1, null)),
             LocalDate.of(2026, 5, 31),
             TOKYO);
     assertThat(report.costEntryCount()).isEqualTo(3);
     assertThat(report.recordedRecruitmentAmount()).isEqualTo(30501);
-    assertThat(report.hireCount()).isEqualTo(7);
+    assertThat(report.hireCount()).isEqualTo(6);
     assertThat(report.unnamedMediaHireCount()).isEqualTo(2);
     assertThat(report.rows())
-        .extracting(Row::mediaName)
-        .containsExactly(" 求人A", "求人A", "求人ａ", "費用だけ");
+        .extracting(r -> r.medium().name())
+        .containsExactly("入店だけ", "求人A", "費用だけ");
     var matched = row(report, "求人A");
     assertThat(matched.hireCount()).isEqualTo(3);
     assertThat(matched.costPerHire()).isEqualTo("10000.33");
     assertThat(matched.calculationStatus()).isEqualTo(Status.CALCULATED);
-    var hireOnly = row(report, "求人ａ");
+    var hireOnly = row(report, "入店だけ");
     assertThat(hireOnly.recordedRecruitmentAmount()).isNull();
     assertThat(hireOnly.costPerHire()).isNull();
     assertThat(hireOnly.calculationStatus()).isEqualTo(Status.NO_COST_RECORDS);
@@ -62,17 +77,33 @@ class AdvertisingRecruitmentEffectReportTest {
   }
 
   @Test
+  void sameNamedMediaStaySeparateAndSortByNameThenId() {
+    // "b" はハッシュ順で "aF" より先に並ぶので、id による並べ替えがなければ順序が崩れる。
+    var report =
+        AdvertisingRecruitmentEffectReport.aggregate(
+            List.of(
+                new Cost(new AdvertisingMedium("b", "同名"), 10),
+                new Cost(new AdvertisingMedium("aF", "同名"), 20),
+                new Cost(new AdvertisingMedium("z", "A"), 30)),
+            List.of(new Hire(new AdvertisingMedium("aF", "同名"), MAY_1, null)),
+            MAY_1,
+            TOKYO);
+    assertThat(report.rows()).extracting(r -> r.medium().id()).containsExactly("z", "aF", "b");
+    assertThat(report.rows().get(1).costPerHire()).isEqualTo("20.00");
+    assertThat(report.rows().getLast().calculationStatus()).isEqualTo(Status.NO_HIRES);
+  }
+
+  @Test
   void checkpointOnTodayIsJudgeableAndEndingOnTheCheckpointIsNotRetained() {
     var checkpoint = MAY_1.plusMonths(2);
     var report =
         AdvertisingRecruitmentEffectReport.aggregate(
             List.of(),
             List.of(
-                new Hire("媒体", MAY_1, null),
-                new Hire("媒体", MAY_1, checkpoint.atTime(23, 59).atZone(TOKYO).toOffsetDateTime()),
-                new Hire(
-                    "媒体", MAY_1, checkpoint.plusDays(1).atStartOfDay(TOKYO).toOffsetDateTime()),
-                new Hire("媒体", MAY_2, null)),
+                hire("媒体", MAY_1, null),
+                hire("媒体", MAY_1, checkpoint.atTime(23, 59).atZone(TOKYO).toOffsetDateTime()),
+                hire("媒体", MAY_1, checkpoint.plusDays(1).atStartOfDay(TOKYO).toOffsetDateTime()),
+                hire("媒体", MAY_2, null)),
             checkpoint,
             TOKYO);
     assertThat(row(report, "媒体").retention())
@@ -85,7 +116,7 @@ class AdvertisingRecruitmentEffectReportTest {
     var ended = OffsetDateTime.parse("2026-07-01T15:30:00Z");
     var report =
         AdvertisingRecruitmentEffectReport.aggregate(
-            List.of(), List.of(new Hire("媒体", MAY_1, ended)), LocalDate.of(2026, 9, 30), TOKYO);
+            List.of(), List.of(hire("媒体", MAY_1, ended)), LocalDate.of(2026, 9, 30), TOKYO);
     assertThat(row(report, "媒体").retention())
         .containsExactly(new Retention(2, 1, 1), new Retention(3, 1, 0), new Retention(4, 1, 0));
   }
@@ -95,7 +126,7 @@ class AdvertisingRecruitmentEffectReportTest {
     var report =
         AdvertisingRecruitmentEffectReport.aggregate(
             List.of(),
-            List.of(new Hire("媒体", LocalDate.of(2026, 12, 31), null)),
+            List.of(hire("媒体", LocalDate.of(2026, 12, 31), null)),
             LocalDate.of(2027, 2, 28),
             TOKYO);
     assertThat(row(report, "媒体").retention())

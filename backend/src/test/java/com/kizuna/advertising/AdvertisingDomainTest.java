@@ -16,7 +16,7 @@ class AdvertisingDomainTest {
   @Test
   void normalizesTextAndDistinguishesUnknownFromZeroWhenCopying() {
     var zero = new AdvertisingValues(AdvertisingCategory.SALES, " 媒体 ", " ", null, 0, 0);
-    assertThat(zero.mediaName()).isEqualTo("媒体");
+    assertThat(zero.mediumId()).isEqualTo("媒体");
     assertThat(zero.agencyName()).isNull();
     assertThat(zero.inquiryCount()).isZero();
     assertThat(zero.copied().inquiryCount()).isNull();

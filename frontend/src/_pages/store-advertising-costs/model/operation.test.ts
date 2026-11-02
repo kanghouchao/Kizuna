@@ -11,7 +11,7 @@ const op: Operation = {
     kind: 'create',
     values: {
       category: 'SALES',
-      media_name: '媒体',
+      medium_id: 'medium-1',
       agency_name: null,
       plan_name: null,
       inquiry_count: null,

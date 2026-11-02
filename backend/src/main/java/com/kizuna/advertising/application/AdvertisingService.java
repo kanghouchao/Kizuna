@@ -16,8 +16,12 @@ import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingCost;
 import com.kizuna.advertising.domain.AdvertisingRequest;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
+import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.user.application.ActorIdentityService;
@@ -25,10 +29,14 @@ import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +49,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class AdvertisingService {
   private final AdvertisingRecords records;
+  private final MediumLookup mediumLookup;
   private final AdvertisingChangeRepository changes;
   private final ActorIdentityService actors;
   private final BusinessAudit audit;
@@ -53,12 +62,14 @@ public class AdvertisingService {
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public Page<CostSummary> list(Long storeId, String month, Pageable pageable) {
-    return records.list(storeId, AdvertisingInput.month(month), pageable).map(CostSummary::of);
+    var page = records.list(storeId, AdvertisingInput.month(month), pageable);
+    var names = media(storeId, page.getContent());
+    return page.map(c -> CostSummary.of(c, name(names, c.getMediumId())));
   }
 
   @Transactional(readOnly = true)
   public CostResponse get(Long storeId, String id) {
-    return CostResponse.of(records.cost(storeId, id));
+    return response(storeId, records.cost(storeId, id));
   }
 
   @Transactional(
@@ -106,13 +117,15 @@ public class AdvertisingService {
         request,
         CostResponse.class,
         () -> {
+          var selected = mediumLookup.findAll(storeId, Set.of(values.mediumId()));
+          requireSelectable(selected, values.mediumId(), null);
           records.lockMonth(storeId, month);
           var cost = AdvertisingCost.builder().month(month).values(values).build();
           cost.setStoreId(storeId);
           records.persist(cost);
           records.advance(storeId, month);
-          records.flush();
-          var after = CostResponse.of(cost);
+          flushMedium();
+          var after = CostResponse.of(cost, name(selected, cost.getMediumId()));
           change(storeId, actor, month, "CREATED", null, after, null, null);
           return after;
         });
@@ -131,11 +144,16 @@ public class AdvertisingService {
         () -> {
           var cost = locked(storeId, id);
           cost.requireVersion(request.version());
-          var before = CostResponse.of(cost);
+          var current = cost.getMediumId();
+          var selected =
+              mediumLookup.findAll(
+                  storeId, Stream.of(current, values.mediumId()).collect(Collectors.toSet()));
+          requireSelectable(selected, values.mediumId(), current);
+          var before = CostResponse.of(cost, name(selected, current));
           cost.replace(values);
           records.advance(storeId, cost.getMonth());
-          records.flush();
-          var after = CostResponse.of(cost);
+          flushMedium();
+          var after = CostResponse.of(cost, name(selected, cost.getMediumId()));
           change(storeId, actor, cost.getMonth(), "UPDATED", before, after, request.reason(), null);
           return after;
         });
@@ -153,7 +171,7 @@ public class AdvertisingService {
         () -> {
           var cost = locked(storeId, id);
           cost.requireVersion(request.version());
-          var before = CostResponse.of(cost);
+          var before = response(storeId, cost);
           cost.delete();
           records.advance(storeId, cost.getMonth());
           records.flush();
@@ -191,6 +209,7 @@ public class AdvertisingService {
             throw new ConflictException("対象月に広告費があります。空の月にだけコピーできます");
           var originals = bounded(storeId, source);
           if (originals.isEmpty()) throw new ServiceException("前月にコピーできる広告費がありません");
+          var names = media(storeId, originals);
           var targetMonth = records.advance(storeId, target);
           String copyId = UUID.randomUUID().toString();
           for (var original : originals) {
@@ -205,7 +224,7 @@ public class AdvertisingService {
                 target,
                 "COPIED",
                 null,
-                CostResponse.of(cost),
+                CostResponse.of(cost, name(names, cost.getMediumId())),
                 request.reason(),
                 original.getId());
           }
@@ -262,8 +281,49 @@ public class AdvertisingService {
       timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public ExportSnapshot snapshot(Long storeId, String month) {
     AdvertisingInput.month(month);
-    var costs = bounded(storeId, month).stream().map(CostResponse::of).toList();
+    var rows = bounded(storeId, month);
+    var names = media(storeId, rows);
+    var costs = rows.stream().map(c -> CostResponse.of(c, name(names, c.getMediumId()))).toList();
     return new ExportSnapshot(summary(storeId, month), costs);
+  }
+
+  // 検査の後に媒体が削除された場合も、FK 違反を同じ入力エラーに揃える。
+  private void flushMedium() {
+    IntegrityViolations.translateOnFailure(
+        () -> {
+          records.flush();
+          return null;
+        },
+        Map.of(DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, AdvertisingService::mediumMissing));
+  }
+
+  private static ServiceException mediumMissing() {
+    return new ServiceException("媒体が見つかりません。一覧から選択してください");
+  }
+
+  // 選べるのは店舗内の有効な媒体だけ。既に持つ停止中の媒体は付け替えでないので保てる。
+  private static void requireSelectable(
+      Map<String, MediumReference> selected, String mediumId, String current) {
+    var medium = selected.get(mediumId);
+    if (medium == null) throw mediumMissing();
+    if (!medium.active() && !mediumId.equals(current)) throw new ServiceException("停止中の媒体は選択できません");
+  }
+
+  private CostResponse response(Long storeId, AdvertisingCost cost) {
+    var names = media(storeId, List.of(cost));
+    return CostResponse.of(cost, name(names, cost.getMediumId()));
+  }
+
+  private Map<String, MediumReference> media(Long storeId, Collection<AdvertisingCost> costs) {
+    return mediumLookup.findAll(
+        storeId, costs.stream().map(AdvertisingCost::getMediumId).collect(Collectors.toSet()));
+  }
+
+  // 複合 FK が同一店舗の媒体の実在を保証するので、引けないのは不変条件の破れ。
+  private static String name(Map<String, MediumReference> media, String mediumId) {
+    var medium = media.get(mediumId);
+    if (medium == null) throw new IllegalStateException("広告費の媒体が見つかりません");
+    return medium.name();
   }
 
   private List<AdvertisingCost> bounded(Long storeId, String month) {

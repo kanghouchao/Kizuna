@@ -14,26 +14,26 @@ public final class AdvertisingRequests {
           @JsonDeserialize(using = AdvertisingStringDeserializer.class)
           String month,
       @JsonDeserialize(using = AdvertisingCategoryDeserializer.class) AdvertisingCategory category,
-      @JsonDeserialize(using = AdvertisingStringDeserializer.class) String mediaName,
+      @JsonDeserialize(using = AdvertisingStringDeserializer.class) String mediumId,
       @JsonDeserialize(using = AdvertisingStringDeserializer.class) String agencyName,
       @JsonDeserialize(using = AdvertisingStringDeserializer.class) String planName,
       @JsonDeserialize(using = AdvertisingIntegerDeserializer.class) Integer inquiryCount,
       @JsonDeserialize(using = AdvertisingIntegerDeserializer.class) Integer amount,
       @NotNull(message = "要求識別子を指定してください") UUID requestId) {
     public CreateRequest {
-      mediaName = AdvertisingValues.text(mediaName, 200);
+      mediumId = AdvertisingValues.text(mediumId, 64);
       agencyName = AdvertisingValues.text(agencyName, 200);
       planName = AdvertisingValues.text(planName, 200);
     }
 
     public AdvertisingValues values() {
-      return new AdvertisingValues(category, mediaName, agencyName, planName, inquiryCount, amount);
+      return new AdvertisingValues(category, mediumId, agencyName, planName, inquiryCount, amount);
     }
   }
 
   public record ReplaceRequest(
       @JsonDeserialize(using = AdvertisingCategoryDeserializer.class) AdvertisingCategory category,
-      @JsonDeserialize(using = AdvertisingStringDeserializer.class) String mediaName,
+      @JsonDeserialize(using = AdvertisingStringDeserializer.class) String mediumId,
       @JsonDeserialize(using = AdvertisingStringDeserializer.Required.class) String agencyName,
       @JsonDeserialize(using = AdvertisingStringDeserializer.Required.class) String planName,
       @JsonDeserialize(using = AdvertisingIntegerDeserializer.Required.class) Integer inquiryCount,
@@ -44,14 +44,14 @@ public final class AdvertisingRequests {
       @JsonDeserialize(using = AdvertisingStringDeserializer.class) String reason,
       @NotNull(message = "要求識別子を指定してください") UUID requestId) {
     public ReplaceRequest {
-      mediaName = AdvertisingValues.text(mediaName, 200);
+      mediumId = AdvertisingValues.text(mediumId, 64);
       agencyName = AdvertisingValues.text(agencyName, 200);
       planName = AdvertisingValues.text(planName, 200);
       reason = AdvertisingValues.reason(reason);
     }
 
     public AdvertisingValues values() {
-      return new AdvertisingValues(category, mediaName, agencyName, planName, inquiryCount, amount);
+      return new AdvertisingValues(category, mediumId, agencyName, planName, inquiryCount, amount);
     }
   }
 

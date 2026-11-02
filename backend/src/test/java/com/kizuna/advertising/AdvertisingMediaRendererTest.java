@@ -8,6 +8,7 @@ import com.kizuna.advertising.application.AdvertisingMediaService.Snapshot;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingMediaReport.Entry;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.infrastructure.AdvertisingMediaRenderer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
@@ -35,6 +36,11 @@ class AdvertisingMediaRendererTest {
         AdvertisingMediaReport.aggregate(entries));
   }
 
+  /** id は表示されない数字列にして、出力の媒体列が現在名であることを区別する。 */
+  static AdvertisingMedium medium(String name) {
+    return new AdvertisingMedium("9" + name, name);
+  }
+
   DocumentBudget budget() {
     return new DocumentBudget(new AppProperties.OperationalReport());
   }
@@ -47,7 +53,7 @@ class AdvertisingMediaRendererTest {
                 i ->
                     new Entry(
                         AdvertisingCategory.SALES,
-                        String.format("%05d", i),
+                        medium(String.format("%05d", i)),
                         100,
                         i == 0 ? null : 0L))
             .toList();
@@ -102,7 +108,7 @@ class AdvertisingMediaRendererTest {
               "入力済み人数の合計（重複未除外）",
               "入力状況");
       assertThat(sheet.getRow(1).getCell(2).getStringCellValue()).isEqualTo("媒体別の広告費登録の集計（第1版）");
-      assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("保存媒体名の完全一致");
+      assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("媒体 ID で照合（表示は現在の媒体名）");
       assertThat(sheet.getRow(1).getCell(4).getStringCellValue())
           .isEqualTo("費用行に手入力された人数の合計（重複未除外）");
       assertThat(sheet.getLastRowNum()).isEqualTo(2001);
@@ -121,11 +127,14 @@ class AdvertisingMediaRendererTest {
 
   @Test
   void protectsTextAndRejectsPrecisionAndBudgetOverflow() throws Exception {
-    var report = snapshot(List.of(new Entry(AdvertisingCategory.SALES, "=媒体,\"試験\"", 100, null)));
+    var report =
+        snapshot(List.of(new Entry(AdvertisingCategory.SALES, medium("=媒体,\"試験\""), 100, null)));
     assertThat(new String(renderer.render(report, "csv", budget()), StandardCharsets.UTF_8))
         .contains("'=媒体,\"\"試験\"\"");
     var huge =
-        snapshot(List.of(new Entry(AdvertisingCategory.SALES, "媒体", 1_000_000_000_000_000L, 0L)));
+        snapshot(
+            List.of(
+                new Entry(AdvertisingCategory.SALES, medium("媒体"), 1_000_000_000_000_000L, 0L)));
     assertThatThrownBy(() -> renderer.render(huge, "xlsx", budget()))
         .isInstanceOf(ServiceUnavailableException.class);
     var settings = new AppProperties.OperationalReport();

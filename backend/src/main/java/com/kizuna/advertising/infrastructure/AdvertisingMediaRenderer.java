@@ -93,7 +93,7 @@ public class AdvertisingMediaRenderer {
             type,
             source.generatedAt().toString(),
             "媒体別の広告費登録の集計（第1版）",
-            AdvertisingLabels.EXACT_NAME,
+            AdvertisingLabels.MEDIUM_ID_MATCHING,
             "費用行に手入力された人数の合計（重複未除外）",
             source.storeId(),
             source.month(),
@@ -105,7 +105,7 @@ public class AdvertisingMediaRenderer {
     row.addAll(
         List.of(
             AdvertisingLabels.category(value.category()),
-            value.mediaName(),
+            value.medium().name(),
             value.entryCount(),
             value.recordedAmount(),
             value.recordedInquiryEntryCount(),

@@ -113,7 +113,7 @@ function Snapshot({ title, cost }: { title: string; cost: Cost | null }) {
         <dl className="space-y-1 break-words">
           {Object.entries({
             区分: categoryLabels[cost.category],
-            媒体: cost.media_name,
+            媒体: cost.medium.name,
             広告会社: cost.agency_name ?? '未設定',
             プラン: cost.plan_name ?? '未設定',
             問い合わせ人数: cost.inquiry_count === null ? '未計測' : `${cost.inquiry_count}人`,

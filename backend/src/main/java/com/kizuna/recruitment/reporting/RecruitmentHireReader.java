@@ -17,8 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RecruitmentHireReader {
   private final EntityManager em;
 
-  /** 応募元が媒体でない入店は mediaName が null。 */
-  public record Hire(String mediaName, LocalDate startedOn, OffsetDateTime endedAt) {}
+  public record Hire(LocalDate startedOn, OffsetDateTime endedAt) {}
 
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
@@ -29,8 +28,6 @@ public class RecruitmentHireReader {
         em.createQuery(
                 """
         select new com.kizuna.recruitment.reporting.RecruitmentHireReader$Hire(
-          case when a.sourceType = com.kizuna.recruitment.domain.ApplicantSourceType.MEDIA
-            then a.sourceMedia else null end,
           e.startedOn, e.endedAt)
         from com.kizuna.recruitment.domain.Applicant a
         join com.kizuna.cast.domain.CastEnrollment e

@@ -2,6 +2,7 @@ package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
 import com.kizuna.recruitment.reporting.RecruitmentHireReader;
 import com.kizuna.shared.config.AppProperties;
@@ -49,8 +50,9 @@ public class AdvertisingRecruitmentEffectService {
             .filter(c -> c.category() == AdvertisingCategory.RECRUITMENT)
             .map(
                 c -> {
-                  budget.text(c.mediaName());
-                  return new AdvertisingRecruitmentEffectReport.Cost(c.mediaName(), c.amount());
+                  budget.text(c.medium().name());
+                  return new AdvertisingRecruitmentEffectReport.Cost(
+                      new AdvertisingMedium(c.medium().id(), c.medium().name()), c.amount());
                 })
             .toList();
     var hired =
@@ -61,12 +63,7 @@ public class AdvertisingRecruitmentEffectService {
                 period.atEndOfMonth(),
                 properties.getAdvertisingCost().getMaxOrders())
             .stream()
-            .map(
-                h -> {
-                  budget.text(h.mediaName() == null ? "" : h.mediaName());
-                  return new AdvertisingRecruitmentEffectReport.Hire(
-                      h.mediaName(), h.startedOn(), h.endedAt());
-                })
+            .map(h -> new AdvertisingRecruitmentEffectReport.Hire(null, h.startedOn(), h.endedAt()))
             .toList();
     var today = LocalDate.now(clock);
     var report =

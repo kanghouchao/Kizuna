@@ -83,7 +83,7 @@ public class AdvertisingRenderer {
               cost.id(),
               Long.toString(cost.version()),
               AdvertisingLabels.category(cost.category()),
-              cost.mediaName(),
+              cost.medium().name(),
               blank(cost.agencyName()),
               blank(cost.planName()),
               blank(cost.inquiryCount()),

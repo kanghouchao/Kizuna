@@ -50,7 +50,7 @@ public class AdvertisingOrderCostRenderer {
             report.unnamedMediaOrderCount(),
             "",
             "",
-            "同月同名の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。0円の有効完了受注を含み、小数第3位を四捨五入しています。"));
+            "同月同媒体の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。0円の有効完了受注を含み、小数第3位を四捨五入しています。"));
     if (format.equals("csv")) {
       output.write(new byte[] {(byte) 0xef, (byte) 0xbb, (byte) 0xbf});
       writeCsv(output, HEADER, budget);
@@ -81,7 +81,7 @@ public class AdvertisingOrderCostRenderer {
             type,
             source.generatedAt().toString(),
             "登録営業広告費 ÷ 有効完了受注件数（第1版）",
-            AdvertisingLabels.EXACT_NAME,
+            AdvertisingLabels.MEDIUM_ID_MATCHING,
             "原営業日が対象月の有効完了受注（0円を含む）",
             "小数第3位を四捨五入（円）",
             source.storeId(),
@@ -93,7 +93,7 @@ public class AdvertisingOrderCostRenderer {
     var row = common(source, MEDIA);
     row.addAll(
         List.of(
-            value.mediaName(),
+            value.medium().name(),
             value.costEntryCount(),
             value(value.recordedSalesAmount()),
             value.validCompletedOrderCount(),
