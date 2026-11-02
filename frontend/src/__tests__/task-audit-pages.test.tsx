@@ -73,7 +73,9 @@ test('実行要求の応答を受け取れなくても同じ入力の再送に�
   fireEvent.click(screen.getByRole('button', { name: '実行確認を記録' }));
   await waitFor(() => expect(notify.error).toHaveBeenCalledTimes(1));
   const first = tasks.create.mock.calls[0][0];
-  expect(first.logical_key).toMatch(/^[a-f0-9]{32}$/);
+  expect(first.logical_key).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+  );
   fireEvent.click(screen.getByRole('button', { name: '実行確認を記録' }));
   const modal = await screen.findByRole('dialog');
   expect(await within(modal).findByText('成功', { exact: true })).toBeVisible();
