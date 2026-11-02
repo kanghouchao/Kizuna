@@ -11,7 +11,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.store.StoreShortNames;
-import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -27,7 +26,6 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
@@ -245,10 +243,5 @@ class OperationReceiptsIntegrationTest {
   @EntityScan("com.kizuna.receipt")
   @EnableJpaRepositories("com.kizuna.receipt")
   @Import(OperationReceipts.class)
-  static class Config {
-    @Bean
-    Clock clock() {
-      return Clock.systemUTC();
-    }
-  }
+  static class Config {}
 }

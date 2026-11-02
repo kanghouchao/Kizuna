@@ -4,8 +4,6 @@ import com.kizuna.receipt.domain.OperationReceipt;
 import com.kizuna.receipt.domain.OperationReceiptRepository;
 import com.kizuna.shared.exception.ConflictException;
 import jakarta.persistence.EntityManager;
-import java.time.Clock;
-import java.time.OffsetDateTime;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +23,6 @@ public class OperationReceipts {
 
   private final OperationReceiptRepository receipts;
   private final EntityManager em;
-  private final Clock clock;
 
   @Transactional(propagation = Propagation.MANDATORY)
   public <R> R once(
@@ -43,8 +40,7 @@ public class OperationReceipts {
                 fingerprint,
                 committed.operation(),
                 committed.targetId(),
-                committed.facts(),
-                OffsetDateTime.now(clock)));
+                committed.facts()));
     return respond.apply(view(receipt, false));
   }
 

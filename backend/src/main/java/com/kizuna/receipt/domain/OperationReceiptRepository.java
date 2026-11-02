@@ -1,11 +1,9 @@
 package com.kizuna.receipt.domain;
 
+import com.kizuna.shared.persistence.StoreScopedRepository;
 import java.util.Optional;
-import org.springframework.data.repository.Repository;
 
-public interface OperationReceiptRepository extends Repository<OperationReceipt, String> {
-  OperationReceipt saveAndFlush(OperationReceipt receipt);
-
+public interface OperationReceiptRepository extends StoreScopedRepository<OperationReceipt> {
   Optional<OperationReceipt> findByStoreIdAndActorIdAndOperationKey(
       Long storeId, Long actorId, String operationKey);
 }
