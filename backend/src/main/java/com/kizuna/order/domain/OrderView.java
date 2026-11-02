@@ -72,7 +72,12 @@ public interface OrderView {
 
   String getCarrier();
 
-  String getMediaName();
+  AcquisitionSource getAcquisitionSource();
+
+  /** 知った媒体の ID と現在名。経路が MEDIA でない受注では null。 */
+  String getMediumId();
+
+  String getMediumName();
 
   /** 明細の総和。ポイント利用の減算も含むため、ポイント控除後の請求額にあたる。 */
   Integer getTotalFee();

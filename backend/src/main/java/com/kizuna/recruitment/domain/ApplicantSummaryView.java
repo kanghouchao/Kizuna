@@ -13,7 +13,7 @@ public interface ApplicantSummaryView {
 
   ApplicantSourceType getSourceType();
 
-  String getSourceMedia();
+  String getMediumId();
 
   String getAssignee();
 

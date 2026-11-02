@@ -236,7 +236,7 @@ export async function createUnpublishedCast(
 export async function createEnrolledHire(
   request: APIRequestContext,
   token: string,
-  hire: { sourceType: "DIRECT" | "MEDIA" | "REFERRAL" | "SCOUT"; sourceMedia: string | null; startedOn: string },
+  hire: { sourceType: "DIRECT" | "MEDIA" | "REFERRAL" | "SCOUT"; mediumId: string | null; startedOn: string },
   storeId: string = STORE1_ID,
 ): Promise<string> {
   const headers = { ...STORE_HEADERS, "X-Store-ID": storeId, Authorization: `Bearer ${token}` };
@@ -247,7 +247,7 @@ export async function createEnrolledHire(
       name: "採用効果の検証応募者",
       channel: "PHONE",
       source_type: hire.sourceType,
-      source_media: hire.sourceMedia,
+      medium_id: hire.mediumId,
       referrer: introduced ? "検証紹介者" : null,
     },
   });

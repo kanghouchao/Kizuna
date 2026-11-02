@@ -42,6 +42,12 @@ public enum DbConstraint {
   /** t_advertising_costs → t_media(id, store_id) の複合 FK。広告費（削除済みを含む）が指す媒体の削除を拒む。 */
   FK_T_ADVERTISING_COSTS_MEDIUM("fk_t_advertising_costs_medium"),
 
+  /** t_orders → t_media(id, store_id) の複合 FK。受注が知った媒体として指す媒体の削除を拒む。 */
+  FK_T_ORDERS_MEDIUM("fk_t_orders_medium"),
+
+  /** t_applicants → t_media(id, store_id) の複合 FK。応募者が応募元として指す媒体の削除を拒む。 */
+  FK_T_APPLICANTS_MEDIUM("fk_t_applicants_medium"),
+
   /** t_roles.name の一意制約。 */
   UQ_T_ROLES_NAME("uq_t_roles_name"),
 

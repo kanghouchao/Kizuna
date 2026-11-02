@@ -97,7 +97,10 @@ public class MediumService {
           media.flush();
           return null;
         },
-        Map.of(DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, MediumService::referenced));
+        Map.of(
+            DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, MediumService::referenced,
+            DbConstraint.FK_T_ORDERS_MEDIUM, MediumService::referenced,
+            DbConstraint.FK_T_APPLICANTS_MEDIUM, MediumService::referenced));
     audit.recordCurrent(storeId, "MEDIUM_DELETED", TARGET, id, before, Map.of("exists", "false"));
   }
 

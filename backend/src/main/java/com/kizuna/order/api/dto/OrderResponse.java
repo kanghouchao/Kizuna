@@ -1,6 +1,7 @@
 package com.kizuna.order.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.kizuna.order.domain.AcquisitionSource;
 import com.kizuna.order.domain.ContactSnapshot;
 import com.kizuna.order.domain.OrderCourse;
 import java.time.LocalDate;
@@ -57,7 +58,12 @@ public class OrderResponse {
   private List<OrderFeeLineResponse> feeLines;
 
   private String carrier;
-  private String mediaName;
+
+  @JsonInclude(JsonInclude.Include.ALWAYS)
+  private AcquisitionSource acquisitionSource;
+
+  @JsonInclude(JsonInclude.Include.ALWAYS)
+  private OrderMediumResponse medium;
 
   /** 明細の総和。ポイント利用の減算も含むため、ポイント控除後の請求額にあたる。 */
   private Integer totalFee;

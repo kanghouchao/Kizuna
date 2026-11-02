@@ -1,6 +1,7 @@
 package com.kizuna.order.application;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.kizuna.order.domain.AcquisitionSource;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -21,7 +22,8 @@ public record OrderUpdateCommand(
     String locationAddress,
     String locationBuilding,
     String carrier,
-    String mediaName,
+    AcquisitionSource acquisitionSource,
+    String mediumId,
     String remarks,
     String castDriverMessage,
     CustomerSelection customerSelection,

@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.domain.AcquisitionSource;
 import com.kizuna.order.domain.ReceptionRoute;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -70,9 +71,11 @@ public class OrderCreateRequest {
   @Size(max = 100, message = "キャリアは 100 文字以内です")
   private String carrier;
 
-  /** t_orders.media_name = VARCHAR(100)。 */
-  @Size(max = 100, message = "媒体名は 100 文字以内です")
-  private String mediaName;
+  /** 知った経路。媒体（MEDIA）のときだけ媒体 ID を伴う。未指定は未入力。 */
+  private AcquisitionSource acquisitionSource;
+
+  @Size(max = 64)
+  private String mediumId;
 
   // 備考とメッセージの行き先は TEXT のため上限を持たない
   private String remarks;

@@ -108,7 +108,8 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
              o.extensionMinutes as extensionMinutes,
              o.actualArrivalTime as actualArrivalTime, o.actualEndTime as actualEndTime,
              o.carrier as carrier,
-             o.mediaName as mediaName, o.totalFee as totalFee,
+             o.acquisitionSource as acquisitionSource,
+             o.mediumId as mediumId, md.name as mediumName, o.totalFee as totalFee,
              (select cast(coalesce(sum(-fl.amount), 0) as Integer)
                 from com.kizuna.order.domain.OrderFeeLine fl
                where fl.orderId = o.id and fl.storeId = o.storeId
@@ -133,6 +134,8 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
           on k.enrollmentId = ce.id and k.storeId = o.storeId
         left join com.kizuna.user.domain.User u on u.id = o.receptionistId
         left join com.kizuna.user.domain.User cu on cu.id = o.cancelledBy
+        left join com.kizuna.medium.domain.Medium md
+          on md.id = o.mediumId and md.storeId = o.storeId
       """;
 
   @Query(

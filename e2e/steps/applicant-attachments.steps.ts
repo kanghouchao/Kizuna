@@ -184,7 +184,7 @@ Then("添付は認証取得だけに公開され店外と権限不足を拒否�
     expect((await request.get(contentPath, { headers: { ...headers(), 'X-Store-ID': String(other) } })).status()).toBe(403);
     expect((await request.get(operationPath, { headers: { ...headers(), 'X-Store-ID': String(other) } })).status()).toBe(403);
     const hidden = `outside-${randomUUID()}`;
-    await client.query('INSERT INTO t_applicants (id,store_id,name,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence) SELECT $1,$2,$3,channel,source_type,source_media,referrer,status,created_at,updated_at,version,modified_by,edit_sequence FROM t_applicants WHERE id=$4', [hidden,other,'別店舗応募者',applicantId]);
+    await client.query('INSERT INTO t_applicants (id,store_id,name,channel,source_type,medium_id,referrer,status,created_at,updated_at,version,modified_by,edit_sequence) SELECT $1,$2,$3,channel,source_type,medium_id,referrer,status,created_at,updated_at,version,modified_by,edit_sequence FROM t_applicants WHERE id=$4', [hidden,other,'別店舗応募者',applicantId]);
     try { expect((await request.get(`/api/applicants/${hidden}/attachment-operations/${key}`, { headers: headers() })).status()).toBe(404); }
     finally { await client.query('delete from t_applicants where id=$1',[hidden]); }
 

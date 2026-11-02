@@ -1,3 +1,5 @@
+import type { AcquisitionSource } from '@/entities/order';
+
 /**
  * 受注のフォーム値と契約の値の往復。
  *
@@ -26,4 +28,16 @@ export function optionalNumber(value: string): number | undefined {
 
 export function optionalDate(value: string): string | undefined {
   return value === '' ? undefined : value;
+}
+
+/** 経路の空欄は送らない。媒体 ID は経路が媒体のときだけ送る（後端は組が合わない要求を 400 で撥ねる）。 */
+export function acquisitionPayload(
+  source: string,
+  mediumId: string
+): { acquisition_source?: AcquisitionSource; medium_id?: string } {
+  if (source === '') return {};
+  return {
+    acquisition_source: source as AcquisitionSource,
+    medium_id: source === 'MEDIA' ? mediumId : undefined,
+  };
 }

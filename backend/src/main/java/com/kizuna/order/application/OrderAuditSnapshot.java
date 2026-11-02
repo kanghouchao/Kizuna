@@ -31,6 +31,8 @@ record OrderAuditSnapshot(Map<String, String> values, Map<String, Object> redact
     put(values, "actual_end", order.getActualEndTime());
     put(values, "pax", order.getPax());
     put(values, "reception_route", order.getReceptionRoute());
+    put(values, "acquisition_source", order.getAcquisitionSource());
+    put(values, "medium_id", order.getMediumId());
     put(
         values,
         "course_revision_id",
@@ -55,7 +57,6 @@ record OrderAuditSnapshot(Map<String, String> values, Map<String, Object> redact
     var redacted = new LinkedHashMap<String, Object>();
     redacted.put("contact", order.getContactSnapshot());
     redacted.put("carrier", order.getCarrier());
-    redacted.put("media_name", order.getMediaName());
     redacted.put("survey_status", order.getSurveyStatus());
     redacted.put("location_address", order.getLocationAddress());
     redacted.put("location_building", order.getLocationBuilding());

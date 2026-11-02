@@ -3,6 +3,7 @@ package com.kizuna.medium.lookup;
 import com.kizuna.medium.domain.Medium;
 import com.kizuna.medium.domain.MediumRepository;
 import com.kizuna.medium.domain.MediumStatus;
+import com.kizuna.shared.exception.ServiceException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
@@ -30,6 +31,25 @@ public class MediumLookup {
     return media.findAllByStoreIdAndIdIn(storeId, ids).stream()
         .map(MediumLookup::reference)
         .collect(Collectors.toUnmodifiableMap(MediumReference::id, Function.identity()));
+  }
+
+  /** 記録に付ける媒体を引き、{@link #selectable} の規則で検査する。 */
+  @Transactional(readOnly = true)
+  public MediumReference requireSelectable(Long storeId, String id, String current) {
+    return selectable(find(storeId, id).orElse(null), current);
+  }
+
+  /** 選べるのは店舗内の有効な媒体だけ。記録が既に持つ停止中の媒体（current）は付け替えでないので保てる。 */
+  public static MediumReference selectable(MediumReference medium, String current) {
+    if (medium == null) throw missing();
+    if (!medium.active() && !medium.id().equals(current))
+      throw new ServiceException("停止中の媒体は選択できません");
+    return medium;
+  }
+
+  /** 他店・存在しない媒体、または検査の後に削除された媒体（FK 違反）を指す要求への入力エラー。 */
+  public static ServiceException missing() {
+    return new ServiceException("媒体が見つかりません。一覧から選択してください");
   }
 
   private static MediumReference reference(Medium m) {

@@ -1,6 +1,7 @@
 package com.kizuna.order.application;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.kizuna.order.domain.AcquisitionSource;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -19,5 +20,7 @@ public record OrderApplicationConfirmationCommand(
     String castId,
     Integer pax,
     String remarks,
+    AcquisitionSource acquisitionSource,
+    String mediumId,
     CustomerSelection customerSelection,
     ContactSnapshotInput contactSnapshot) {}

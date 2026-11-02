@@ -1,5 +1,6 @@
 package com.kizuna.order.api.dto;
 
+import com.kizuna.order.domain.AcquisitionSource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -13,7 +14,8 @@ import lombok.Data;
 /**
  * 予約申請の確定内容。確定は申請内容を予填した<b>受注の作成操作</b>で、店舗が補完・調整した値がそのまま受注になる（申請原文は動かない）。
  *
- * <p>ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新（{@code PUT /orders/{id}}）で整える — 確定は来店の約束に要る項目だけを決める。
+ * <p>ここに無い項目（割引・キャリア・派遣先など）は、確定後の受注を汎用更新（{@code PUT /orders/{id}}）で整える — 確定は来店の約束に要る項目と、
+ * 受付時に聞き取る知った経路だけを決める。
  */
 @Data
 public class OrderApplicationConfirmationRequest {
@@ -46,6 +48,12 @@ public class OrderApplicationConfirmationRequest {
 
   // 備考の行き先（t_orders.remarks）は TEXT のため上限を持たない
   private String remarks;
+
+  /** 知った経路。媒体（MEDIA）のときだけ媒体 ID を伴う。未指定は未入力。 */
+  private AcquisitionSource acquisitionSource;
+
+  @Size(max = 64)
+  private String mediumId;
 
   @Valid private CustomerSelectionRequest customerSelection;
   @Valid private ContactSnapshotRequest contactSnapshot;

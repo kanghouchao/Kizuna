@@ -19,11 +19,10 @@ export const sourceTypeLabels = {
   REFERRAL: '紹介',
   SCOUT: 'スカウト',
 } as const;
-export interface ApplicantIntake {
+interface ApplicantIntakeFields {
   name: string;
   channel: keyof typeof receptionChannelLabels;
   source_type: keyof typeof sourceTypeLabels;
-  source_media: string | null;
   referrer: string | null;
   assignee: string | null;
   phone: string | null;
@@ -32,12 +31,21 @@ export interface ApplicantIntake {
   experience: string | null;
   desired_conditions: string | null;
 }
+/** 受付の登録・更新の本文。媒体 ID は応募元区分が媒体のときだけ持つ。 */
+export interface ApplicantIntake extends ApplicantIntakeFields {
+  medium_id: string | null;
+}
+/** 応募者が応募元として指す媒体。名前は現在の媒体名。 */
+export interface ApplicantMedium {
+  id: string;
+  name: string;
+}
 export interface ApplicantSummary {
   id: string;
   name: string;
   channel: ApplicantIntake['channel'];
   source_type: ApplicantIntake['source_type'];
-  source_media?: string | null;
+  medium: ApplicantMedium | null;
   assignee?: string | null;
   status: ApplicantStatus;
   created_at: string;
@@ -52,7 +60,8 @@ export interface ApplicantInterview {
   notes: string | null;
   checklist: Record<string, boolean>;
 }
-export interface ApplicantDetail extends ApplicantIntake {
+export interface ApplicantDetail extends ApplicantIntakeFields {
+  medium: ApplicantMedium | null;
   id: string;
   status: ApplicantStatus;
   created_at: string;

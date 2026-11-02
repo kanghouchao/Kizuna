@@ -9,4 +9,5 @@ public record ConfirmedOrderDetails(
     LocalTime arrivalScheduledStartTime,
     LocalTime arrivalScheduledEndTime,
     Integer pax,
-    String remarks) {}
+    String remarks,
+    OrderAcquisition acquisition) {}

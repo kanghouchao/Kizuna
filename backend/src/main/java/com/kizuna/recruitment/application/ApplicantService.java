@@ -1,11 +1,14 @@
 package com.kizuna.recruitment.application;
 
 import com.kizuna.cast.application.CastService;
+import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantHistoryResponse;
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
 import com.kizuna.recruitment.api.dto.ApplicantMapper;
+import com.kizuna.recruitment.api.dto.ApplicantMediumResponse;
 import com.kizuna.recruitment.api.dto.ApplicantResponse;
 import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
 import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
@@ -18,6 +21,8 @@ import com.kizuna.recruitment.domain.ApplicantStatusHistory;
 import com.kizuna.recruitment.domain.ApplicantStatusHistoryRepository;
 import com.kizuna.recruitment.domain.ApplicantSummaryView;
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -28,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -47,6 +53,7 @@ public class ApplicantService {
   private final BusinessAudit audit;
   private final SystemConfigService systemConfigs;
   private final CastService casts;
+  private final MediumLookup mediumLookup;
 
   public RecruitmentPolicyResponse policy() {
     return RecruitmentPolicyResponse.from(systemConfigs.applicantRetentionSettings());
@@ -78,25 +85,34 @@ public class ApplicantService {
             pageable.getPageNumber(),
             Math.clamp(pageable.getPageSize(), 1, 100),
             Sort.by(Sort.Direction.DESC, Applicant::getCreatedAt, Applicant::getId));
-    return applicants
-        .findBy(spec, query -> query.as(ApplicantSummaryView.class).page(bounded))
-        .map(mapper::toSummary);
+    var page = applicants.findBy(spec, query -> query.as(ApplicantSummaryView.class).page(bounded));
+    var media =
+        mediumLookup.findAll(
+            storeId,
+            page.stream()
+                .map(ApplicantSummaryView::getMediumId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+    return page.map(a -> mapper.toSummary(a, medium(a.getMediumId(), media.get(a.getMediumId()))));
   }
 
   @Transactional(readOnly = true)
   public ApplicantResponse get(Long storeId, String id) {
-    return mapper.toResponse(require(storeId, id));
+    return response(require(storeId, id));
   }
 
   @Transactional
   public ApplicantResponse create(Long storeId, ApplicantIntakeRequest request, String actorEmail) {
     Long actorId = actorId(actorEmail);
-    Applicant applicant = Applicant.receive(storeId, request.toIntake());
+    var intake = request.toIntake();
+    requireSelectable(storeId, intake.mediumId(), null);
+    Applicant applicant = Applicant.receive(storeId, intake);
     applicant.recordEditor(actorId);
-    applicants.saveAndFlush(applicant);
+    applicants.save(applicant);
+    flushMedium();
     record(applicant, null, actorId, "応募受付");
     recordAudit(applicant, "APPLICANT_RECEIVED", Map.of());
-    return mapper.toResponse(applicant);
+    return response(applicant);
   }
 
   @Transactional
@@ -104,11 +120,13 @@ public class ApplicantService {
       Long storeId, String id, ApplicantUpdateRequest request, String actorEmail) {
     Applicant applicant = locked(storeId, id, request.version());
     var before = auditValues(applicant);
-    applicant.replaceIntake(request.intake().toIntake());
+    var intake = request.intake().toIntake();
+    requireSelectable(storeId, intake.mediumId(), applicant.getMediumId());
+    applicant.replaceIntake(intake);
     applicant.recordEditor(actorId(actorEmail));
-    applicants.flush();
+    flushMedium();
     recordAudit(applicant, "APPLICANT_INTAKE_UPDATED", before);
-    return mapper.toResponse(applicant);
+    return response(applicant);
   }
 
   @Transactional
@@ -120,7 +138,7 @@ public class ApplicantService {
     applicant.recordEditor(actorId(actorEmail));
     applicants.flush();
     recordAudit(applicant, "APPLICANT_INTERVIEW_UPDATED", before);
-    return mapper.toResponse(applicant);
+    return response(applicant);
   }
 
   @Transactional
@@ -135,7 +153,7 @@ public class ApplicantService {
     record(applicant, previous, actorId, request.reason().strip());
     applicants.flush();
     recordAudit(applicant, "APPLICANT_STATUS_CHANGED", before);
-    return mapper.toResponse(applicant);
+    return response(applicant);
   }
 
   @Transactional
@@ -150,7 +168,7 @@ public class ApplicantService {
     record(applicant, previous, actorId, request.reason().strip());
     applicants.flush();
     recordAudit(applicant, "APPLICANT_DECIDED", before);
-    return mapper.toResponse(applicant);
+    return response(applicant);
   }
 
   /** 在籍の作成・応募者の更新・双方の監査を一つのトランザクションで確定する。招待は発行しない（在籍側で手動発行する）。 */
@@ -172,7 +190,7 @@ public class ApplicantService {
         applicant.getId(),
         before,
         enrollmentAuditValues(applicant));
-    return mapper.toResponse(applicant);
+    return response(applicant);
   }
 
   @Transactional(readOnly = true)
@@ -189,6 +207,38 @@ public class ApplicantService {
         applicant.getId(),
         before,
         auditValues(applicant));
+  }
+
+  private void requireSelectable(Long storeId, String mediumId, String current) {
+    if (mediumId != null) mediumLookup.requireSelectable(storeId, mediumId, current);
+  }
+
+  // 検査の後に媒体が削除された場合も、FK 違反を同じ入力エラーに揃える。
+  private void flushMedium() {
+    IntegrityViolations.translateOnFailure(
+        () -> {
+          applicants.flush();
+          return null;
+        },
+        Map.of(DbConstraint.FK_T_APPLICANTS_MEDIUM, MediumLookup::missing));
+  }
+
+  private ApplicantResponse response(Applicant applicant) {
+    var mediumId = applicant.getMediumId();
+    return mapper.toResponse(
+        applicant,
+        medium(
+            mediumId,
+            mediumId == null
+                ? null
+                : mediumLookup.find(applicant.getStoreId(), mediumId).orElse(null)));
+  }
+
+  // 複合 FK が同一店舗の媒体の実在を保証するので、媒体 ID を持つのに引けないのは不変条件の破れ。
+  private static ApplicantMediumResponse medium(String mediumId, MediumReference medium) {
+    if (mediumId == null) return null;
+    if (medium == null) throw new IllegalStateException("応募者の媒体が見つかりません");
+    return new ApplicantMediumResponse(medium.id(), medium.name());
   }
 
   // 非公開の連絡先・面接内容・理由を、別の閲覧権限を持つ汎用監査へ複製しない。

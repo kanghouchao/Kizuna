@@ -4,11 +4,14 @@ import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
+import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -23,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdvertisingOrderCostService {
   private final AdvertisingService costs;
   private final AdvertisingOrderReader orders;
+  private final MediumLookup mediumLookup;
   private final AppProperties properties;
 
   public record Snapshot(
@@ -55,15 +59,26 @@ public class AdvertisingOrderCostService {
                       new AdvertisingMedium(c.medium().id(), c.medium().name()), c.amount());
                 })
             .toList();
+    var read =
+        orders.read(
+            storeId,
+            period.atDay(1),
+            period.atEndOfMonth(),
+            properties.getAdvertisingCost().getMaxOrders());
+    var media =
+        mediumLookup.findAll(
+            storeId,
+            read.stream()
+                .map(AdvertisingOrderReader.Order::mediumId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+    media.values().forEach(m -> budget.text(m.name()));
     var validOrders =
-        orders
-            .read(
-                storeId,
-                period.atDay(1),
-                period.atEndOfMonth(),
-                properties.getAdvertisingCost().getMaxOrders())
-            .stream()
-            .map(o -> new AdvertisingOrderCostReport.Order(null, o.zeroAmount()))
+        read.stream()
+            .map(
+                o ->
+                    new AdvertisingOrderCostReport.Order(
+                        AdvertisingMedia.of(media, o.mediumId()), o.otherRoute(), o.zeroAmount()))
             .toList();
     var report = AdvertisingOrderCostReport.aggregate(sales, validOrders);
     budget.check();

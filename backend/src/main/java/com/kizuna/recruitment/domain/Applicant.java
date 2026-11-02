@@ -35,8 +35,8 @@ public class Applicant extends StoreScopedEntity {
   @Column(nullable = false, length = 30)
   private ApplicantSourceType sourceType;
 
-  @Column(length = 200)
-  private String sourceMedia;
+  @Column(length = 64)
+  private String mediumId;
 
   @Column(length = 100)
   private String referrer;
@@ -95,7 +95,7 @@ public class Applicant extends StoreScopedEntity {
     name = intake.name();
     channel = intake.channel();
     sourceType = intake.sourceType();
-    sourceMedia = intake.sourceMedia();
+    mediumId = intake.mediumId();
     referrer = intake.referrer();
     assignee = intake.assignee();
     phone = intake.phone();

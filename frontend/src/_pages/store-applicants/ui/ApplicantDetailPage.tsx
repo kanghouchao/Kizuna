@@ -167,7 +167,7 @@ export default function ApplicantDetailPage() {
           {[
             ['受付チャネル', receptionChannelLabels[applicant.channel]],
             ['応募元区分', sourceTypeLabels[applicant.source_type]],
-            ['応募元媒体', applicant.source_media],
+            ['応募元媒体', applicant.medium?.name],
             ['紹介者・スカウト名', applicant.referrer],
             ['担当者名（記録用）', applicant.assignee],
             ['電話番号', applicant.phone],

@@ -502,7 +502,7 @@ class OrderTest {
             "中央区銀座 1-2-3",
             "グランドホテル 1204",
             "ドコモ",
-            "自社サイト",
+            new OrderAcquisition(AcquisitionSource.MEDIA, "m1"),
             null,
             null));
 
@@ -510,7 +510,8 @@ class OrderTest {
     assertThat(order.getLocationAddress()).isEqualTo("中央区銀座 1-2-3");
     assertThat(order.getLocationBuilding()).isEqualTo("グランドホテル 1204");
     assertThat(order.getCarrier()).isEqualTo("ドコモ");
-    assertThat(order.getMediaName()).isEqualTo("自社サイト");
+    assertThat(order.getAcquisition())
+        .isEqualTo(new OrderAcquisition(AcquisitionSource.MEDIA, "m1"));
   }
 
   @Test

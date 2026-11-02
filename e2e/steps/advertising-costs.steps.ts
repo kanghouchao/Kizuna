@@ -1076,8 +1076,9 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
     "広告費比較コース",
     storeId,
   );
+  // 文字列は媒体名（経路 MEDIA）、REPEAT は媒体以外の経路、null は経路の未入力。
   async function order(
-    media: string | null,
+    source: string | "REPEAT" | null,
     zero = false,
     state = "COMPLETED",
     date = month + "-01",
@@ -1096,7 +1097,11 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
         customer_selection: { mode: "NONE" },
         contact_snapshot: { name: "出力禁止の顧客資料" },
         business_date: date,
-        media_name: media,
+        ...(source === null
+          ? {}
+          : source === "REPEAT"
+            ? { acquisition_source: "REPEAT" }
+            : { acquisition_source: "MEDIA", medium_id: await medium(request, source) }),
       },
       "post",
       storeId,
@@ -1157,10 +1162,10 @@ When("営業広告と零円を含む有効受注の記録を用意する", async
   await order("零", true);
   await order("ＡＢＣ");
   await order("abc");
-  await order(" ABC ");
+  await order("REPEAT");
   await order("注文のみ");
   await order(null, true);
-  await order(" \t");
+  await order(null);
 });
 Then(
   "受注あたり記録費用の意味と全件出力と切替が守られる",
@@ -1173,26 +1178,36 @@ Then(
     let response = await read();
     expect(response.status(), await response.text()).toBe(200);
     let report = await response.json();
-    // 受注はまだ媒体を持たないため、有効完了受注はすべて媒体未入力として別掲され、
-    // 行は登録した営業広告費の媒体だけになる。
+    // 受注は媒体 ID でまとまり、媒体以外の経路と経路の未入力は件数だけ別掲される。
     expect(report).toMatchObject({
       recorded_sales_amount: 1100,
       cost_entry_count: 6,
       valid_completed_order_count: 10,
       zero_amount_order_count: 3,
-      unnamed_media_order_count: 10,
+      unnamed_media_order_count: 2,
+      other_route_order_count: 1,
     });
     const row = (name: string) =>
       report.rows.content.find((r: any) => r.medium?.name === name);
     expect(
       report.rows.content.map((r: any) => r.medium.name).sort(),
-    ).toEqual(["ABC", "abc", "ＡＢＣ", "零", "費用のみ", longSummaryName].sort());
-    for (const r of report.rows.content)
-      expect(r).toMatchObject({
-        valid_completed_order_count: 0,
-        cost_per_order: null,
-        calculation_status: "NO_VALID_ORDERS",
-      });
+    ).toEqual(
+      ["ABC", "abc", "ＡＢＣ", "零", "費用のみ", "注文のみ", longSummaryName].sort(),
+    );
+    expect(row("ABC")).toMatchObject({
+      valid_completed_order_count: 3,
+      zero_amount_order_count: 1,
+      cost_per_order: "33.33",
+      calculation_status: "CALCULATED",
+    });
+    expect(row("ＡＢＣ").cost_per_order).toBe("200.00");
+    expect(row("零").cost_per_order).toBe("0.00");
+    expect(row("注文のみ")).toMatchObject({
+      recorded_sales_amount: null,
+      valid_completed_order_count: 1,
+      calculation_status: "NO_COST_RECORDS",
+    });
+    expect(row("費用のみ").calculation_status).toBe("NO_VALID_ORDERS");
     expect(row("ABC").recorded_sales_amount).toBe(100);
     expect(row("零").recorded_sales_amount).toBe(0);
     expect(row("ＡＢＣ").recorded_sales_amount).toBe(200);
@@ -1240,8 +1255,10 @@ Then(
     expect(report).toMatchObject({
       valid_completed_order_count: 9,
       zero_amount_order_count: 2,
-      unnamed_media_order_count: 9,
+      unnamed_media_order_count: 2,
+      other_route_order_count: 1,
     });
+    expect(row("ABC").valid_completed_order_count).toBe(2);
     const updated = await request.put(`${base}/${original.id}`, {
       headers: h(),
       data: {
@@ -1265,13 +1282,13 @@ Then(
       .focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("row", { name: /^ABC 200円/ })).toContainText(
-      "有効完了受注が0件",
+      "記録値から算出",
     );
     await expect(page.getByRole("row", { name: /^零 / })).toContainText(
       "未算出",
     );
     await expect(page.getByLabel("受注比較の月合計")).toContainText(
-      "媒体未入力の有効完了受注：9件",
+      "知った経路が未入力の有効完了受注：2件",
     );
     await expect(page.getByText(/新客単価は未提供/)).toBeVisible();
     for (const theme of ["ライト", "ダーク"]) {
@@ -1513,6 +1530,105 @@ Then(
   },
 );
 
+Then(
+  "受注担当と採用担当は広告費を見ずに媒体を選べ受注は自店の有効な媒体だけを持てる",
+  async ({ request }) => {
+    const owner = await loginUser(request, "admin@kizuna.test", ADMIN_PASSWORD);
+    const suffix = randomUUID();
+    const staff = async (label: string, perms: string[]) => {
+      const role = await createPermissionRole(request, owner, `媒体選択-${label}-${suffix}`, [
+        "STORE_VIEW",
+        ...perms,
+      ]);
+      const address = `medium-${label}-${suffix}@example.test`;
+      await createStoreStaffFixture(
+        request,
+        orderCostWriter,
+        address,
+        password,
+        [role],
+        [Number(storeId)],
+        storeId,
+      );
+      return loginUser(request, address, password);
+    };
+    const receptionist = await staff("order", ["ORDER_MANAGE"]);
+    const recruiter = await staff("recruitment", ["RECRUITMENT_MANAGE"]);
+    const active = await medium(request, "受付で選ぶ媒体");
+    for (const t of [receptionist, recruiter]) {
+      const options = await request.get("/api/media/options", { headers: h(t) });
+      expect(options.status(), await options.text()).toBe(200);
+      expect((await options.json()).items).toContainEqual({ id: active, name: "受付で選ぶ媒体" });
+      expect((await request.get("/api/media", { headers: h(t) })).status()).toBe(403);
+      expect((await request.get(orderCostBase, { headers: h(t), params: { month } })).status()).toBe(
+        403,
+      );
+    }
+
+    const cast = await createCast(request, orderCostWriter, "媒体選択検証", storeId);
+    const course = await createCourse(request, orderCostWriter, "媒体選択コース", storeId);
+    const body = {
+      cast_id: cast,
+      course_id: course,
+      customer_selection: { mode: "NONE" },
+      business_date: month + "-02",
+    };
+    const create = async (acquisition: object) => {
+      const data = { ...body, ...acquisition };
+      const preview = await request.post("/api/orders/preview", {
+        headers: h(receptionist),
+        data,
+      });
+      expect(preview.status(), await preview.text()).toBe(200);
+      return request.post("/api/orders", {
+        headers: h(receptionist),
+        data: { ...data, confirmation_token: (await preview.json()).confirmation_token },
+      });
+    };
+    const stopped = await medium(request, `停止した媒体-${suffix}`);
+    const stoppedRow = (await (await request.get("/api/media", { headers: h() })).json()).items.find(
+      (m: { id: string }) => m.id === stopped,
+    );
+    expect(
+      (
+        await request.post(`/api/media/${stopped}/stop`, {
+          headers: h(),
+          data: { version: stoppedRow.version },
+        })
+      ).status(),
+    ).toBe(200);
+    for (const [acquisition, message] of [
+      [{ acquisition_source: "MEDIA" }, "知った経路が媒体のときは媒体を選択してください"],
+      [{ acquisition_source: "REPEAT", medium_id: active }, "媒体は知った経路が媒体のときだけ指定できます"],
+      [{ medium_id: active }, "媒体は知った経路が媒体のときだけ指定できます"],
+      [
+        { acquisition_source: "MEDIA", medium_id: await medium(request, "他店の媒体", foreign) },
+        "媒体が見つかりません。一覧から選択してください",
+      ],
+      [{ acquisition_source: "MEDIA", medium_id: stopped }, "停止中の媒体は選択できません"],
+    ] as const) {
+      const rejected = await create(acquisition);
+      expect(rejected.status(), await rejected.text()).toBe(400);
+      expect((await rejected.json()).error).toBe(message);
+    }
+
+    const created = await create({ acquisition_source: "MEDIA", medium_id: active });
+    expect(created.status(), await created.text()).toBe(201);
+    const order = await getOrder(request, receptionist, storeId, (await created.json()).id);
+    expect(order).toMatchObject({
+      acquisition_source: "MEDIA",
+      medium: { id: active, name: "受付で選ぶ媒体" },
+    });
+    const activeRow = (await (await request.get("/api/media", { headers: h() })).json()).items.find(
+      (m: { id: string }) => m.id === active,
+    );
+    const removal = await request.delete(`/api/media/${active}`, {
+      headers: h(),
+      params: { version: activeRow.version },
+    });
+    expect(removal.status(), await removal.text()).toBe(409);
+  },
+);
 const effectBase = "/api/advertising-recruitment-effects";
 let effectMedia = "";
 When("採用広告費と媒体別の入店の記録を用意する", async ({ request }) => {
@@ -1528,19 +1644,21 @@ When("採用広告費と媒体別の入店の記録を用意する", async ({ re
     medium: `${effectMedia}-費用だけ`,
     amount: 500,
   });
-  // 応募者はまだ媒体を持たないため、応募元の媒体名が費用の媒体名と同じでも突き合わせない。
-  const hire = (sourceType: "MEDIA" | "REFERRAL", sourceMedia: string | null) =>
-    createEnrolledHire(request, token, { sourceType, sourceMedia, startedOn }, storeId);
-  await hire("MEDIA", effectMedia);
-  await hire("MEDIA", effectMedia);
-  await hire("MEDIA", `${effectMedia}-入店だけ`);
-  await hire("REFERRAL", null);
-  await createEnrolledHire(
-    request,
-    token,
-    { sourceType: "MEDIA", sourceMedia: effectMedia, startedOn: `${month}-30` },
-    storeId,
-  );
+  // 応募者の媒体 ID で入店をまとめる。媒体以外の応募元（紹介）の入店は媒体未入力に別掲される。
+  const hire = async (name: string | null, on = startedOn) =>
+    createEnrolledHire(
+      request,
+      token,
+      name === null
+        ? { sourceType: "REFERRAL", mediumId: null, startedOn: on }
+        : { sourceType: "MEDIA", mediumId: await medium(request, name), startedOn: on },
+      storeId,
+    );
+  await hire(effectMedia);
+  await hire(effectMedia);
+  await hire(`${effectMedia}-入店だけ`);
+  await hire(null);
+  await hire(effectMedia, `${month}-30`);
 });
 Then(
   "採用効果の行形状と入店の媒体未入力が守られる",
@@ -1558,7 +1676,7 @@ Then(
       cost_entry_count: 2,
       recorded_recruitment_amount: 30500,
       hire_count: 5,
-      unnamed_media_hire_count: 5,
+      unnamed_media_hire_count: 1,
     });
     const row = (name: string) =>
       report.rows.content.find((r: any) => r.medium?.name === name);
@@ -1567,14 +1685,24 @@ Then(
       judgeable_count: 0,
       retained_count: 0,
     }));
+    // 対象月は遠い過去なので、退店していない入店は全時点で可判定かつ定着。
     expect(row(effectMedia)).toEqual({
       medium: { id: await medium(request, effectMedia), name: effectMedia },
       cost_entry_count: 1,
       recorded_recruitment_amount: 30000,
-      hire_count: 0,
-      cost_per_hire: null,
-      calculation_status: "NO_HIRES",
-      retention: noHires,
+      hire_count: 3,
+      cost_per_hire: "10000.00",
+      calculation_status: "CALCULATED",
+      retention: [2, 3, 4].map((months) => ({
+        months,
+        judgeable_count: 3,
+        retained_count: 3,
+      })),
+    });
+    expect(row(`${effectMedia}-入店だけ`)).toMatchObject({
+      recorded_recruitment_amount: null,
+      hire_count: 1,
+      calculation_status: "NO_COST_RECORDS",
     });
     expect(row(`${effectMedia}-費用だけ`)).toMatchObject({
       recorded_recruitment_amount: 500,
@@ -1583,7 +1711,7 @@ Then(
       calculation_status: "NO_HIRES",
       retention: noHires,
     });
-    expect(report.rows.content).toHaveLength(2);
+    expect(report.rows.content).toHaveLength(3);
     const body = JSON.stringify(report);
     expect(body).not.toContain("採用効果の検証応募者");
     expect(body).not.toContain("applicant");
@@ -1600,10 +1728,9 @@ Then(
     const effectRow = page.getByRole("row", {
       name: new RegExp(`^${effectMedia} `),
     });
-    await expect(effectRow).toContainText("入店人数が0人");
-    await expect(effectRow.getByText("対象なし")).toHaveCount(3);
+    await expect(effectRow).toContainText("記録値から算出");
     await expect(page.getByLabel("採用効果の月合計")).toContainText(
-      "媒体未入力の入店：5人",
+      "媒体未入力の入店：1人",
     );
     await expect(page.getByText(/ROIを示しません/)).toBeVisible();
     for (const theme of ["ライト", "ダーク"]) {

@@ -70,6 +70,22 @@ export function isWebApplicationRoute(
   return route in WEB_APPLICATION_ROUTE_LABELS;
 }
 
+/** 知った経路。媒体（MEDIA）だけが媒体を伴う。未入力は null（作成時は項目を送らない）。 */
+export type AcquisitionSource = 'MEDIA' | 'REPEAT' | 'REFERRAL' | 'OTHER';
+
+export const ACQUISITION_SOURCE_LABELS: Record<AcquisitionSource, string> = {
+  MEDIA: '媒体',
+  REPEAT: 'リピート',
+  REFERRAL: '紹介',
+  OTHER: 'その他',
+};
+
+/** 受注が知った媒体として指す媒体。名前は現在の媒体名。 */
+export interface OrderMedium {
+  id: string;
+  name: string;
+}
+
 /** 受注ステータスの日本語表示。 */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   CONFIRMED: '確定',
@@ -213,7 +229,8 @@ export interface Order {
   /** 受注金額の内訳。明細がない場合も空配列で返る。減項は正値で返る。 */
   fee_lines: OrderFeeLine[];
   carrier?: string;
-  media_name?: string;
+  acquisition_source?: AcquisitionSource | null;
+  medium?: OrderMedium | null;
   /** 明細の総和。ポイント利用の減算も含むため、ポイント控除後の請求額にあたる。 */
   total_fee?: number;
   /** 会計で利用したポイント。明細のポイント利用行からの導出値。 */
@@ -411,7 +428,9 @@ export interface OrderUpdateRequest {
   location_address?: string;
   location_building?: string;
   carrier?: string;
-  media_name?: string;
+  /** 省略すると経路も媒体も変えない。指定すると媒体 ID と組で置き換える（媒体 ID は MEDIA のときだけ）。 */
+  acquisition_source?: AcquisitionSource;
+  medium_id?: string;
   remarks?: string;
   cast_driver_message?: string;
   /** 省略は変更なし。指定したオブジェクトで写し全体を置換し、空オブジェクトなら消去する。 */
@@ -513,7 +532,8 @@ export interface OrderCreateRequest {
   /** 受付経路。Web 申請の群は予約申請の確定だけが名乗るため、この契約では拒否される（400）。 */
   reception_route?: Exclude<ReceptionRoute, WebApplicationReceptionRoute>;
   carrier?: string;
-  media_name?: string;
+  acquisition_source?: AcquisitionSource;
+  medium_id?: string;
   remarks?: string;
   cast_driver_message?: string;
   address?: string;
@@ -552,7 +572,7 @@ export interface OrderApplicationRow {
  * 予約申請の確定内容（POST /order-applications/{id}/confirmation）。確定は申請内容を予填した
  * 受注の作成操作で、送った内容がそのまま受注になる（申請原文は動かない）。
  *
- * ここに無い項目（割引・媒体・派遣先など）は、確定後の受注を汎用更新で整える。
+ * ここに無い項目（割引・キャリア・派遣先など）は、確定後の受注を汎用更新で整える。
  */
 export interface OrderApplicationConfirmationRequest {
   contact_imports?: GuestContactImportInput[];
@@ -570,6 +590,8 @@ export interface OrderApplicationConfirmationRequest {
   pax?: number;
   /** 適用するコース名の写し。確定は受注の出生なので、快照はここで写る。 */
   remarks?: string;
+  acquisition_source?: AcquisitionSource;
+  medium_id?: string;
   customer_selection?: CustomerSelection;
   contact_snapshot?: ContactSnapshot;
 }

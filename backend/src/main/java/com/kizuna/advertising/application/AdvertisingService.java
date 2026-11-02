@@ -118,7 +118,7 @@ public class AdvertisingService {
         CostResponse.class,
         () -> {
           var selected = mediumLookup.findAll(storeId, Set.of(values.mediumId()));
-          requireSelectable(selected, values.mediumId(), null);
+          MediumLookup.selectable(selected.get(values.mediumId()), null);
           records.lockMonth(storeId, month);
           var cost = AdvertisingCost.builder().month(month).values(values).build();
           cost.setStoreId(storeId);
@@ -148,7 +148,7 @@ public class AdvertisingService {
           var selected =
               mediumLookup.findAll(
                   storeId, Stream.of(current, values.mediumId()).collect(Collectors.toSet()));
-          requireSelectable(selected, values.mediumId(), current);
+          MediumLookup.selectable(selected.get(values.mediumId()), current);
           var before = CostResponse.of(cost, name(selected, current));
           cost.replace(values);
           records.advance(storeId, cost.getMonth());
@@ -294,19 +294,7 @@ public class AdvertisingService {
           records.flush();
           return null;
         },
-        Map.of(DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, AdvertisingService::mediumMissing));
-  }
-
-  private static ServiceException mediumMissing() {
-    return new ServiceException("媒体が見つかりません。一覧から選択してください");
-  }
-
-  // 選べるのは店舗内の有効な媒体だけ。既に持つ停止中の媒体は付け替えでないので保てる。
-  private static void requireSelectable(
-      Map<String, MediumReference> selected, String mediumId, String current) {
-    var medium = selected.get(mediumId);
-    if (medium == null) throw mediumMissing();
-    if (!medium.active() && !mediumId.equals(current)) throw new ServiceException("停止中の媒体は選択できません");
+        Map.of(DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, MediumLookup::missing));
   }
 
   private CostResponse response(Long storeId, AdvertisingCost cost) {

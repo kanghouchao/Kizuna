@@ -109,9 +109,11 @@ export function OrderCostPage({
             </p>
           </div>
           <p>
-            媒体未入力の有効完了受注：
+            媒体以外の経路（リピート・紹介・その他）の有効完了受注：
+            <strong>{visible.other_route_order_count.toLocaleString()}件</strong>／
+            知った経路が未入力の有効完了受注：
             <strong>{visible.unnamed_media_order_count.toLocaleString()}件</strong>
-            。上記注文件数の内数で、媒体への割当てと単価算出から除外しています。
+            。どちらも上記注文件数の内数で、媒体への割当てと単価算出から除外しています。
           </p>
         </section>
       )}

@@ -20,6 +20,7 @@ function report(month = '2026-09', name = '既知零'): OrderCostReport {
     valid_completed_order_count: 3,
     zero_amount_order_count: 1,
     unnamed_media_order_count: 1,
+    other_route_order_count: 2,
     rows: {
       content: [
         {
@@ -59,7 +60,10 @@ it('既知零・未登録・未算出と媒体未入力を区別する', async (
   expect(within(missing).getByText('未登録')).toBeVisible();
   expect(within(missing).getByText('未算出')).toBeVisible();
   expect(screen.getByLabelText('受注比較の月合計')).toHaveTextContent(
-    '媒体未入力の有効完了受注：1件'
+    '媒体以外の経路（リピート・紹介・その他）の有効完了受注：2件'
+  );
+  expect(screen.getByLabelText('受注比較の月合計')).toHaveTextContent(
+    '知った経路が未入力の有効完了受注：1件'
   );
   expect(screen.getByText(/新客単価は未提供/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'CSV 全件出力' })).not.toBeInTheDocument();

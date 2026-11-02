@@ -1,5 +1,6 @@
 package com.kizuna.recruitment.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.kizuna.recruitment.domain.ApplicantInterview;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
 import com.kizuna.recruitment.domain.ApplicantStatus;
@@ -12,7 +13,7 @@ public record ApplicantResponse(
     ApplicantStatus status,
     ReceptionChannel channel,
     ApplicantSourceType sourceType,
-    String sourceMedia,
+    @JsonInclude(JsonInclude.Include.ALWAYS) ApplicantMediumResponse medium,
     String assignee,
     OffsetDateTime createdAt,
     Long version,

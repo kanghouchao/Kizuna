@@ -7,7 +7,7 @@ public record ApplicantIntake(
     String name,
     ReceptionChannel channel,
     ApplicantSourceType sourceType,
-    String sourceMedia,
+    String mediumId,
     String referrer,
     String assignee,
     String phone,
@@ -17,7 +17,7 @@ public record ApplicantIntake(
     String desiredConditions) {
   public ApplicantIntake {
     name = text(name, 100);
-    sourceMedia = text(sourceMedia, 200);
+    mediumId = text(mediumId, 64);
     referrer = text(referrer, 100);
     assignee = text(assignee, 100);
     phone = text(phone, 50);
@@ -27,10 +27,10 @@ public record ApplicantIntake(
     desiredConditions = text(desiredConditions, 3000);
     if (name == null || channel == null || sourceType == null)
       throw new ServiceException("氏名・受付チャネル・応募元区分は必須です");
-    if (sourceType == ApplicantSourceType.MEDIA && sourceMedia == null)
-      throw new ServiceException("媒体経由の応募には媒体名が必要です");
-    if (sourceType != ApplicantSourceType.MEDIA && sourceMedia != null)
-      throw new ServiceException("媒体名は媒体経由の応募にのみ指定できます");
+    if (sourceType == ApplicantSourceType.MEDIA && mediumId == null)
+      throw new ServiceException("媒体経由の応募には媒体を選択してください");
+    if (sourceType != ApplicantSourceType.MEDIA && mediumId != null)
+      throw new ServiceException("媒体は媒体経由の応募にのみ指定できます");
     boolean introduced =
         sourceType == ApplicantSourceType.REFERRAL || sourceType == ApplicantSourceType.SCOUT;
     if (introduced != (referrer != null))

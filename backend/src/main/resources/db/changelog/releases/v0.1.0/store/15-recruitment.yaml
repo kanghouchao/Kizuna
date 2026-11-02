@@ -50,8 +50,8 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: source_media
-                  type: varchar(200)
+                  name: medium_id
+                  type: varchar(64)
                   constraints:
                     nullable: true
               - column:
@@ -145,10 +145,21 @@ databaseChangeLog:
             referencedColumnNames: id, store_id
             constraintName: fk_t_applicants_enrollment
             onDelete: NO ACTION
+        # 応募者が指す媒体の削除は止める。拒否を 409 の案内へ写すので NO ACTION。複合 FK で同一店舗の媒体だけを許す。
+        - addForeignKeyConstraint:
+            baseTableName: t_applicants
+            baseColumnNames: medium_id, store_id
+            referencedTableName: t_media
+            referencedColumnNames: id, store_id
+            constraintName: fk_t_applicants_medium
+            onDelete: NO ACTION
         # 一つの在籍を指せる応募者は最大一つ。
         - sql:
             sql: |
               CREATE UNIQUE INDEX uq_t_applicants_enrollment ON t_applicants (enrollment_id) WHERE enrollment_id IS NOT NULL
+        - sql:
+            sql: |
+              CREATE INDEX idx_t_applicants_medium ON t_applicants (store_id, medium_id)
         - createIndex:
             tableName: t_applicants
             indexName: idx_t_applicants_store_created
@@ -260,9 +271,9 @@ databaseChangeLog:
                 CHECK (channel IN ('PHONE', 'WEB', 'MEDIA', 'OTHER'));
               -- 匿名化は紹介者を消すが、応募元の種別は選考の記録として残す。
               ALTER TABLE t_applicants ADD CONSTRAINT ck_t_applicants_source
-                CHECK ((source_type = 'MEDIA' AND source_media IS NOT NULL AND referrer IS NULL)
-                  OR (source_type IN ('REFERRAL', 'SCOUT') AND source_media IS NULL AND (referrer IS NOT NULL OR anonymized_at IS NOT NULL))
-                  OR (source_type = 'DIRECT' AND source_media IS NULL AND referrer IS NULL));
+                CHECK ((source_type = 'MEDIA' AND medium_id IS NOT NULL AND referrer IS NULL)
+                  OR (source_type IN ('REFERRAL', 'SCOUT') AND medium_id IS NULL AND (referrer IS NOT NULL OR anonymized_at IS NOT NULL))
+                  OR (source_type = 'DIRECT' AND medium_id IS NULL AND referrer IS NULL));
         - createTable:
             tableName: t_applicant_attachment_uploads
             columns:

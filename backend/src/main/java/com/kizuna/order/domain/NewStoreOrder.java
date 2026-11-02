@@ -14,6 +14,6 @@ public record NewStoreOrder(
     Integer pax,
     ReceptionRoute receptionRoute,
     String carrier,
-    String mediaName,
+    OrderAcquisition acquisition,
     String remarks,
     String castDriverMessage) {}

@@ -126,7 +126,7 @@ export default function ApplicantsPage() {
               </TableCell>
               <TableCell>{receptionChannelLabels[row.channel]}</TableCell>
               <TableCell className="max-w-48 truncate">
-                {row.source_media || sourceTypeLabels[row.source_type]}
+                {row.medium?.name ?? sourceTypeLabels[row.source_type]}
               </TableCell>
               <TableCell className="max-w-40 truncate">{row.assignee || '未設定'}</TableCell>
               <TableCell>{new Date(row.created_at).toLocaleDateString('ja-JP')}</TableCell>

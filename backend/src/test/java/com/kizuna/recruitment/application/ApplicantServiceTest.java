@@ -17,10 +17,13 @@ import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
 import com.kizuna.recruitment.api.dto.ApplicantMapper;
+import com.kizuna.recruitment.api.dto.ApplicantMediumResponse;
 import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
 import com.kizuna.recruitment.api.dto.ApplicantUpdateRequest;
 import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
@@ -65,6 +68,7 @@ class ApplicantServiceTest {
   @Mock BusinessAudit audit;
   @Mock SystemConfigService systemConfigs;
   @Mock CastService casts;
+  @Mock MediumLookup mediumLookup;
   ApplicantService service;
   Applicant applicant;
   ApplicantIntakeRequest intake =
@@ -91,7 +95,11 @@ class ApplicantServiceTest {
             Mappers.getMapper(ApplicantMapper.class),
             audit,
             systemConfigs,
-            casts);
+            casts,
+            mediumLookup);
+    lenient()
+        .when(mediumLookup.find(STORE_ID, "媒体"))
+        .thenReturn(Optional.of(new MediumReference("媒体", "求人誌", true)));
     applicant = Applicant.receive(STORE_ID, intake.toIntake());
     applicant.setId("a");
     ReflectionTestUtils.setField(applicant, "version", 0L);
@@ -108,6 +116,25 @@ class ApplicantServiceTest {
   }
 
   @Test
+  void anUnselectableMediumRejectsTheIntakeBeforeAnythingIsWritten() {
+    actor();
+    when(mediumLookup.requireSelectable(STORE_ID, "媒体", null))
+        .thenThrow(new ServiceException("停止中の媒体は選択できません"));
+    assertThatThrownBy(() -> service.create(STORE_ID, intake, "actor"))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage("停止中の媒体は選択できません");
+    verify(applicants, never()).save(any());
+  }
+
+  @Test
+  void updateKeepsTheMediumTheApplicantAlreadyHasSelectable() {
+    actor();
+    lock();
+    service.update(STORE_ID, "a", new ApplicantUpdateRequest(0L, intake), "actor");
+    verify(mediumLookup).requireSelectable(STORE_ID, "媒体", "媒体");
+  }
+
+  @Test
   void policyReturnsEachTerminalStatusRetention() {
     when(systemConfigs.applicantRetentionSettings())
         .thenReturn(new ApplicantRetentionSettings(6, 12, 36));
@@ -119,7 +146,7 @@ class ApplicantServiceTest {
   @Test
   void createsPrivateApplicantAndInitialHistory() {
     actor();
-    when(applicants.saveAndFlush(any()))
+    when(applicants.save(any()))
         .thenAnswer(
             call -> {
               Applicant value = call.getArgument(0);
@@ -128,6 +155,8 @@ class ApplicantServiceTest {
               return value;
             });
     var response = service.create(STORE_ID, intake, "actor");
+    verify(mediumLookup).requireSelectable(STORE_ID, "媒体", null);
+    assertThat(response.medium()).isEqualTo(new ApplicantMediumResponse("媒体", "求人誌"));
     assertThat(response.status()).isEqualTo(ApplicantStatus.RECEIVED);
     assertThat(response.address()).isEqualTo("住所");
     assertThat(response.modifiedBy()).isEqualTo(9L);
