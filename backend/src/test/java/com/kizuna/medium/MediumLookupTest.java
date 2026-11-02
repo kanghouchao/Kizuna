@@ -9,6 +9,7 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.ServiceException;
 import java.sql.SQLException;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
@@ -62,7 +63,7 @@ class MediumLookupTest {
     assertThatThrownBy(() -> MediumLookup.referenced(Map.of(), "m1"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("記録の媒体が見つかりません");
-    assertThatThrownBy(() -> MediumLookup.referenced(null))
+    assertThatThrownBy(() -> MediumLookup.referenced(Optional.empty()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("記録の媒体が見つかりません");
   }

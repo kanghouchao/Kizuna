@@ -219,9 +219,7 @@ public class ApplicantService {
         applicant,
         mediumId == null
             ? null
-            : medium(
-                MediumLookup.referenced(
-                    mediumLookup.find(applicant.getStoreId(), mediumId).orElse(null))));
+            : medium(MediumLookup.referenced(mediumLookup.find(applicant.getStoreId(), mediumId))));
   }
 
   private static ApplicantMediumResponse medium(MediumReference medium) {

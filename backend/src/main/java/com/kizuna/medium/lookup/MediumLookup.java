@@ -66,13 +66,12 @@ public class MediumLookup {
 
   /** 記録が持つ媒体 ID を {@link #findAll} の結果から引く。媒体を持たない記録（id が null）は null。 */
   public static MediumReference referenced(Map<String, MediumReference> media, String id) {
-    return id == null ? null : referenced(media.get(id));
+    return id == null ? null : referenced(Optional.ofNullable(media.get(id)));
   }
 
   // 複合 FK が同一店舗の媒体の実在を保証するので、記録が指す媒体を引けないのは不変条件の破れ。
-  public static MediumReference referenced(MediumReference found) {
-    if (found == null) throw new IllegalStateException("記録の媒体が見つかりません");
-    return found;
+  public static MediumReference referenced(Optional<MediumReference> found) {
+    return found.orElseThrow(() -> new IllegalStateException("記録の媒体が見つかりません"));
   }
 
   private static MediumReference reference(Medium m) {
