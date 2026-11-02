@@ -180,6 +180,18 @@ class MediumIntegrationTest {
 
     assertThat(renamed).returns("新名", MediumSummary::name).returns(1L, MediumSummary::version);
     assertThat(audits(id)).containsExactly("MEDIUM_CREATED", "MEDIUM_RENAMED");
+    assertThat(
+            jdbc.queryForObject(
+                "select after_values ->> 'redacted_fields_changed' from t_audit_events where target_id = ? and action = 'MEDIUM_RENAMED'",
+                String.class,
+                id))
+        .isEqualTo("name");
+    assertThat(
+            jdbc.queryForList(
+                "select before_values::text || after_values::text from t_audit_events where target_id = ?",
+                String.class,
+                id))
+        .noneMatch(values -> values.contains("旧名") || values.contains("新名"));
   }
 
   @Test
