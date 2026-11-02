@@ -16,7 +16,6 @@ import com.kizuna.user.domain.RoleInUseException;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StaleRoleUpdateException;
 import com.kizuna.user.domain.SystemRoleImmutableException;
-import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import java.util.Map;
@@ -98,16 +97,10 @@ public class RoleService {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
     }
     var before = snapshot(role);
-    // トークンの権限は発行時にロールから写したものなので、保持者全員を再ログインさせる（操作者本人も含む）。
     // ロール行を最初に押さえたので、並行する付与は確定して保持者に入るか、この確定を待つ。改名の保存は一意列の更新で
     // ロール行を FOR UPDATE に上げて外部キー検査の KEY SHARE を締め出すが、付与はその前の FOR SHARE で既に待っている。
-    if (!role.getPermissionIds().equals(codesById.keySet())) {
-      List<User> holders = roleManageHolderGuard.lockRoleHolders(role.getId());
-      holders.forEach(credentialOperations::invalidateSessions);
-      userRepository.saveAllAndFlush(holders);
-    }
+    credentialOperations.replaceRolePermissions(role, codesById.keySet());
     role.rename(req.getName());
-    role.replacePermissions(codesById.keySet());
     save(role);
     if (!before.equals(snapshot(role)))
       businessAudit.recordCurrent(

@@ -25,6 +25,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.CredentialOperations;
+import com.kizuna.user.application.RoleManageHolderGuard;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
@@ -71,7 +72,12 @@ class AuthServiceTest {
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private JwtIssuer jwtIssuer;
   @Mock private SessionTokenDecoder sessionTokenDecoder;
-  @Spy private CredentialOperations credentialOperations = new CredentialOperations(event -> {});
+
+  @Spy
+  private CredentialOperations credentialOperations =
+      new CredentialOperations(
+          event -> {}, mock(RoleManageHolderGuard.class), mock(UserRepository.class));
+
   @Mock private AuthenticationManager authenticationManager;
   @Mock private Authentication authentication;
   @Mock private LoginBenefitTrigger loginBenefitTrigger;

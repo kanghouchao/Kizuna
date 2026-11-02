@@ -1,10 +1,13 @@
 package com.kizuna.user.application;
 
+import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -19,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.MANDATORY)
 public class CredentialOperations {
   private final ApplicationEventPublisher eventPublisher;
+  private final RoleManageHolderGuard roleManageHolderGuard;
+  private final UserRepository userRepository;
 
   public void stop(User user) {
     user.stop();
@@ -40,6 +45,19 @@ public class CredentialOperations {
   public void invalidateSessions(User user) {
     user.invalidateSessions();
     notifyCredentialsChanged(user);
+  }
+
+  /**
+   * ロールの権限集合を置き換え、保持者全員の版を進める（操作者本人も含む）— トークンの権限は発行時にロールから写したものだから。
+   * ロール行は呼出元が先に押さえている前提で、保持者の確定と保存をロール行の保存より先に行う。集合が変わらない編集は保持者に触れない。
+   */
+  public void replaceRolePermissions(Role role, Set<Long> permissionIds) {
+    if (!role.getPermissionIds().equals(permissionIds)) {
+      List<User> holders = roleManageHolderGuard.lockRoleHolders(role.getId());
+      holders.forEach(this::invalidateSessions);
+      userRepository.saveAllAndFlush(holders);
+    }
+    role.replacePermissions(permissionIds);
   }
 
   /** 会員退会。停止で旧トークンを即時失効させ、退会済みにして識別子を解放する（ADR 0029）。 */

@@ -247,14 +247,14 @@ class CredentialRevocationIntegrationTest {
               () ->
                   transaction.executeWithoutResult(
                       status -> {
-                        invalidateHolders(role);
+                        replaceRolePermissions(role);
                         locked.countDown();
                         await(release);
                       }));
       assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
       Future<?> second =
           executor.submit(
-              () -> transaction.executeWithoutResult(status -> invalidateHolders(role)));
+              () -> transaction.executeWithoutResult(status -> replaceRolePermissions(role)));
       awaitLockWait();
       release.countDown();
       first.get(10, TimeUnit.SECONDS);
@@ -292,7 +292,7 @@ class CredentialRevocationIntegrationTest {
                         users.saveAndFlush(stale);
                       }));
       assertThat(read.await(10, TimeUnit.SECONDS)).isTrue();
-      transaction.executeWithoutResult(status -> invalidateHolders(role));
+      transaction.executeWithoutResult(status -> replaceRolePermissions(role));
       proceed.countDown();
       assertThatThrownBy(() -> edit.get(10, TimeUnit.SECONDS))
           .hasCauseInstanceOf(ObjectOptimisticLockingFailureException.class);
@@ -326,7 +326,7 @@ class CredentialRevocationIntegrationTest {
       assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
       Future<?> fanOut =
           executor.submit(
-              () -> transaction.executeWithoutResult(status -> invalidateHolders(role)));
+              () -> transaction.executeWithoutResult(status -> replaceRolePermissions(role)));
       awaitLockWaiters(1);
       Future<?> suspension =
           executor.submit(
@@ -551,11 +551,20 @@ class CredentialRevocationIntegrationTest {
         .getTokenValue();
   }
 
-  /** RoleService.update が権限集合を変えたときに保持者に対して行うことと同じ（RoleService はこの試験の文脈に載せない）。 */
-  private void invalidateHolders(long roleId) {
-    List<User> holders = guard.lockRoleHolders(roleId);
-    holders.forEach(credentials::invalidateSessions);
-    users.saveAllAndFlush(holders);
+  /** ロールの権限集合を別の 1 権限へ切り替えて保持者の版を進める。ロール行の先行ロックは RoleService.update と同じ。 */
+  private void replaceRolePermissions(long roleId) {
+    Role role = roles.findByIdForUpdate(roleId).orElseThrow();
+    long next =
+        role.getPermissionIds().contains(permissionId(PermissionCode.ORDER_MANAGE))
+            ? permissionId(PermissionCode.CUSTOMER_MANAGE)
+            : permissionId(PermissionCode.ORDER_MANAGE);
+    credentials.replaceRolePermissions(role, Set.of(next));
+    roles.saveAndFlush(role);
+  }
+
+  private long permissionId(PermissionCode permission) {
+    return jdbc.queryForObject(
+        "select id from t_permissions where code = ?", Long.class, permission.name());
   }
 
   private long createRole() {
@@ -570,12 +579,7 @@ class CredentialRevocationIntegrationTest {
                     Role.builder()
                         .name("失効検証-" + UUID.randomUUID())
                         .systemRole(false)
-                        .permissionIds(
-                            Set.of(
-                                jdbc.queryForObject(
-                                    "select id from t_permissions where code = ?",
-                                    Long.class,
-                                    permission.name())))
+                        .permissionIds(Set.of(permissionId(permission)))
                         .build())
                 .getId());
   }
