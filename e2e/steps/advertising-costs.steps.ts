@@ -88,6 +88,10 @@ async function add(
   expect(r.status(), await r.text()).toBe(201);
   return r.json();
 }
+function withoutTimes(cost: Record<string, unknown>) {
+  const { created_at: _created, updated_at: _updated, ...rest } = cost;
+  return rest;
+}
 async function summary(request: APIRequestContext, m = month) {
   const r = await request.get(`${months}/${m}`, { headers: h() });
   expect(r.status(), await r.text()).toBe(200);
@@ -212,7 +216,8 @@ When("広告費を登録変更コピー削除する", async ({ request }) => {
     data: { ...values, month, request_id: key },
   });
   expect(replay.status()).toBe(201);
-  expect(await replay.json()).toEqual(original);
+  // 再送は初回の写しではなく対象の現在の状態を返す。時刻は初回応答がメモリ上の精度、読み直しが DB の精度なので比べない。
+  expect(withoutTimes(await replay.json())).toEqual(withoutTimes(current));
   const stale = await request.put(`${base}/${current.id}`, {
     headers: h(),
     data: { ...updated, request_id: randomUUID() },
