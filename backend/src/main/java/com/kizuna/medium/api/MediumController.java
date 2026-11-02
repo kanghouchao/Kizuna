@@ -22,16 +22,18 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequestMapping("/media")
 @RequiredArgsConstructor
 public class MediumController {
   private final MediumService service;
 
-  @GetMapping("/media")
+  @GetMapping
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
   public ResponseEntity<MediumItemsResponse<MediumSummary>> list(
       @CurrentStore Long storeId, @RequestParam(required = false) MediumStatus status) {
@@ -41,7 +43,7 @@ public class MediumController {
   }
 
   // 受付・採用担当が広告費を見る権限なしに媒体を選べるよう、選ぶ側の権限のどれか一つで許す。
-  @GetMapping("/media/options")
+  @GetMapping("/options")
   @PreAuthorize(
       "hasAnyAuthority('PERM_ADVERTISING_COST_VIEW', 'PERM_ORDER_MANAGE', 'PERM_RECRUITMENT_MANAGE')")
   public ResponseEntity<MediumItemsResponse<MediumOptionResponse>> options(
@@ -51,7 +53,7 @@ public class MediumController {
         .body(new MediumItemsResponse<>(service.options(storeId)));
   }
 
-  @PostMapping("/media")
+  @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public MediumCreatedResponse create(
@@ -59,7 +61,7 @@ public class MediumController {
     return new MediumCreatedResponse(service.create(storeId, request.name()));
   }
 
-  @PutMapping("/media/{id}")
+  @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public MediumSummary rename(
       @CurrentStore Long storeId,
@@ -68,7 +70,7 @@ public class MediumController {
     return service.rename(storeId, id, request.name(), request.version());
   }
 
-  @PostMapping("/media/{id}/stop")
+  @PostMapping("/{id}/stop")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public MediumSummary stop(
       @CurrentStore Long storeId,
@@ -77,7 +79,7 @@ public class MediumController {
     return service.stop(storeId, id, request.version());
   }
 
-  @PostMapping("/media/{id}/resume")
+  @PostMapping("/{id}/resume")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public MediumSummary resume(
       @CurrentStore Long storeId,
@@ -86,7 +88,7 @@ public class MediumController {
     return service.resume(storeId, id, request.version());
   }
 
-  @DeleteMapping("/media/{id}")
+  @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public void delete(
