@@ -32,21 +32,8 @@ export function setCurrentStore(id: number | string, expiresAt?: number): void {
 }
 
 export function clearSession(): void {
-  try {
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const key = sessionStorage.key(i);
-      if (key?.startsWith('pending-operation:')) sessionStorage.removeItem(key);
-    }
-  } catch {
-    // 保存領域が利用不能でもログアウトは完了させる。
-  }
   Cookies.remove(SESSION_KIND_COOKIE);
   Cookies.remove(CURRENT_STORE_ID_COOKIE);
-}
-
-/** session-kind cookie の存在でセッションかどうかを判定する（fail-closed ではなく単なる存在確認）。 */
-export function hasSession(): boolean {
-  return !!getSessionKind();
 }
 
 /**

@@ -73,10 +73,6 @@ export type PermissionCode =
   | 'RECRUITMENT_ATTACHMENT_VIEW'
   | 'RECRUITMENT_ATTACHMENT_MANAGE';
 
-// セッションの種別（session-kind cookie の値）。従業員は本人種別 STAFF で単一の管理画面 admin に入り、
-// CAST / MEMBER はそれぞれの portal に入る。値はサーバの /me の user_type から画面側が決める。
-export type SessionKind = 'admin' | 'cast' | 'member';
-
 // ユーザーの店舗作用域種別
 export type StoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';
 

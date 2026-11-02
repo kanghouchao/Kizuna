@@ -3,7 +3,7 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
 import { authApi } from '@/entities/user';
 import type { MeResponse } from '@/entities/user';
-import { apiClient, clearSessionToken, getSessionAlert } from '@/shared/api';
+import { apiClient, endSession, getSessionAlert } from '@/shared/api';
 import { rememberMemberReturnPath, takeMemberReturnPath } from '@/shared/lib';
 import { SessionResume } from '../SessionResume';
 
@@ -43,7 +43,7 @@ describe('SessionResume（ログイン画面を開いたときの継続ログイ
 
   beforeEach(() => {
     jest.clearAllMocks();
-    clearSessionToken();
+    endSession('resume-failed');
   });
 
   afterEach(() => {

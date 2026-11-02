@@ -1,3 +1,12 @@
+// 桶（@/shared/lib）経由だと useOperation が本モジュールを読み、初期化の循環になる
+import { forgetAll } from '@/shared/lib/operation-store';
+import {
+  clearSession,
+  getSessionKind,
+  rememberMemberReturnPath,
+  startSession,
+  takeMemberReturnPath,
+} from '@/shared/lib/session';
 import type { TokenResponse } from './types';
 
 /**
@@ -19,8 +28,80 @@ export function getSessionUserId(): number | undefined {
   return current?.userId;
 }
 
-export function clearSessionToken(): void {
+// session-kind cookie の値。従業員は単一の管理画面 admin に入り、キャスト・会員はそれぞれの portal に入る。
+export type SessionKind = 'admin' | 'cast' | 'member';
+
+/**
+ * トークンを持った後のセッションを始め、着地パスを返す。session-kind の期限はリフレッシュトークンに揃える。
+ * 戻り先は種別の判定より前に必ず取り出す — 会員以外のログインで残すと、同じタブで後からログインした会員が
+ * その戻り先へ運ばれる（申領画面は開いた時点で伝票を取り込む）。呼出側は /me の成功後に呼ぶ: 1 度きりの
+ * 取り出しなので、ログインの確定前に消すと通信の失敗でやり直したときに戻り先が残っていない。
+ */
+export function landSession(kind: SessionKind, refreshExpiresAt: number): string {
+  const memberReturnPath = takeMemberReturnPath();
+  startSession(kind, refreshExpiresAt);
+  // 従業員は一つの管理画面へ入り、着地は全員ダッシュボード（集計カードは権限で出し分ける）。
+  if (kind === 'admin') return '/admin/dashboard/';
+  if (kind === 'cast') return '/cast/schedule/';
+  return memberReturnPath ?? '/member/';
+}
+
+/** リフレッシュの成功で session-kind の期限を延ばす。戻り先は取り出さない（着地ではない）。 */
+export function extendSession(refreshExpiresAt: number): void {
+  const kind = getSessionKind();
+  if (kind) startSession(kind, refreshExpiresAt);
+}
+
+export type EndReason =
+  | 'logout'
+  | 'unsupported'
+  | 'expired'
+  | 'other-tab'
+  | 'credential-changed'
+  | 'relogin'
+  | 'resume-failed';
+
+interface EndScope {
+  /** session-kind / current-store cookie */
+  cookies: boolean;
+  /** 再読込を越えて保持した結果不明の操作 */
+  operations: boolean;
+  broadcast: boolean;
+  returnPath: 'keep' | 'remember' | 'discard';
+}
+
+/**
+ * 終了理由ごとに消す範囲。トークンはどの理由でも消す。結果不明の操作は再送が決着するまで忘れない
+ * （GLOSSARY「操作の受領」）ので、消すのはセッションごと捨てる理由だけ。unsupported の discard は
+ * landSession と同じ理由で、着地しないログインでも戻り先を残さない。
+ */
+const END_SCOPES: Record<EndReason, EndScope> = {
+  logout: { cookies: true, operations: true, broadcast: true, returnPath: 'keep' },
+  unsupported: { cookies: true, operations: true, broadcast: false, returnPath: 'discard' },
+  expired: { cookies: false, operations: false, broadcast: false, returnPath: 'remember' },
+  'other-tab': { cookies: false, operations: false, broadcast: false, returnPath: 'keep' },
+  'credential-changed': { cookies: false, operations: false, broadcast: false, returnPath: 'keep' },
+  relogin: { cookies: true, operations: true, broadcast: false, returnPath: 'remember' },
+  'resume-failed': { cookies: false, operations: false, broadcast: false, returnPath: 'keep' },
+};
+
+/** セッションを終える。消す範囲は END_SCOPES で決まり、画面遷移は呼出側が行う。 */
+export function endSession(reason: EndReason): void {
+  const scope = END_SCOPES[reason];
+  const userId = current?.userId;
   current = null;
+  if (scope.cookies) clearSession();
+  if (scope.operations) forgetAll();
+  if (scope.broadcast && userId !== undefined) broadcastLogout(userId);
+  if (scope.returnPath === 'discard') takeMemberReturnPath();
+  // 会員ポータルの現在地（店舗つき・フラグメントつき）を預ける。白名単の外（店舗コンソール・ログイン画面等）は
+  // rememberMemberReturnPath が黙って捨てる。フラグメントは申領画面の伝票トークンのように、画面が読み取る値が
+  // そこにしか無い経路のために持ち越す。
+  if (scope.returnPath === 'remember' && typeof window !== 'undefined')
+    rememberMemberReturnPath(
+      `${window.location.pathname}${window.location.search}`,
+      window.location.hash
+    );
 }
 
 /**
@@ -54,7 +135,7 @@ const LOGOUT_CHANNEL = 'kizuna-logout';
  * 同じブラウザの他のタブへログアウトを知らせる。送信元には届かないので、送信元は自分で消す。
  * 照合は利用者 ID で行う（フロントは JWT を解読しないので sid は使えない）。
  */
-export function broadcastLogout(userId: number): void {
+function broadcastLogout(userId: number): void {
   if (typeof BroadcastChannel === 'undefined') return;
   const channel = new BroadcastChannel(LOGOUT_CHANNEL);
   channel.postMessage({ user_id: userId });

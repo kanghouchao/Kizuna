@@ -6,12 +6,15 @@ let sessionKindValue: string | undefined;
 jest.mock('@/shared/lib', () => ({
   // 引数をそのまま渡す。握り潰すと理由コードが未配線でもテストが緑のままになる。
   redirectToLogin: (reason?: string) => redirectMock(reason),
+  getCurrentStoreId: () => undefined,
+}));
+jest.mock('@/shared/lib/session', () => ({
   clearSession: () => clearSessionMock(),
   rememberMemberReturnPath: (value: string, fragment?: string) =>
     rememberMemberReturnPathMock(value, fragment),
   getSessionKind: () => sessionKindValue,
-  getCurrentStoreId: () => undefined,
   startSession: jest.fn(),
+  takeMemberReturnPath: jest.fn(),
 }));
 
 import { apiClient, getSessionUserId, storeSessionToken } from '@/shared/api';
@@ -60,27 +63,6 @@ describe('apiClient 401/403 interceptor', () => {
     expect(getSessionUserId()).toBe(7);
     expect(redirectMock).not.toHaveBeenCalled();
   });
-
-  it('clears session and redirects on 403 when the session-kind cookie holds a legacy role value (旧トークンのデッドロック回避)', async () => {
-    sessionKindValue = 'MANAGER';
-    await withRejectingAdapter(403, () => apiClient.get('/orders'));
-
-    expect(getSessionUserId()).toBeUndefined();
-    expect(clearSessionMock).toHaveBeenCalled();
-    // 401 と同じ理由コード。こちらのトークンは期限内で、古いのは cookie の形式である。
-    expect(redirectMock).toHaveBeenCalledWith('expired');
-  });
-
-  it.each(['platform', 'store'])(
-    'clears session on 403 when the session-kind cookie holds the retired console value %s',
-    async value => {
-      sessionKindValue = value;
-      await withRejectingAdapter(403, () => apiClient.get('/orders'));
-
-      expect(getSessionUserId()).toBeUndefined();
-      expect(clearSessionMock).toHaveBeenCalled();
-    }
-  );
 
   it('does nothing on 403 when the session-kind cookie holds the admin session value (正当な権限不足はセッションを壊さない)', async () => {
     sessionKindValue = 'admin';

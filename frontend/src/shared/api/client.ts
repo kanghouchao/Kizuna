@@ -1,16 +1,9 @@
 import axios from 'axios';
 import type { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
+import { getCurrentStoreId, isStorePath, redirectToLogin } from '@/shared/lib';
 import {
-  clearSession,
-  getSessionKind,
-  getCurrentStoreId,
-  isStorePath,
-  redirectToLogin,
-  rememberMemberReturnPath,
-  startSession,
-} from '@/shared/lib';
-import {
-  clearSessionToken,
+  endSession,
+  extendSession,
   getAccessToken,
   getSessionAlert,
   getSessionUserId,
@@ -95,8 +88,7 @@ export async function requestRefresh(): Promise<RefreshResult> {
       headers: userId === undefined ? undefined : { 'X-Session-User-Id': String(userId) },
     });
     storeSessionToken(data);
-    const sessionKind = getSessionKind();
-    if (sessionKind) startSession(sessionKind, data.refresh_expires_at);
+    extendSession(data.refresh_expires_at);
     return { status: 'ok', refreshExpiresAt: data.refresh_expires_at };
   } catch (error) {
     const response = (error as AxiosError).response;
@@ -115,15 +107,8 @@ function sendToLogin(): void {
   if (getSessionAlert() === 'credential_changed') return;
   // 失効を名乗るのはトークンを持っていたときだけ（未ログインの来訪者には言わない）。
   const hadToken = getAccessToken() !== undefined;
-  clearSessionToken();
-  if (typeof window === 'undefined' || window.location.pathname.includes('/login')) return;
-  // 画面遷移の守衛は無く、未ログイン・失効の差し戻しはここが唯一の経路。白名単の外（店舗コンソール等）は
-  // rememberMemberReturnPath が黙って捨てる。フラグメントも預ける — 申領画面のように、画面が読み取る値が
-  // そこにしか無い経路がある。
-  rememberMemberReturnPath(
-    `${window.location.pathname}${window.location.search}`,
-    window.location.hash
-  );
+  // 画面遷移の守衛は無く、未ログイン・失効の差し戻しはここが唯一の経路。
+  endSession('expired');
   redirectToLogin(hadToken ? 'expired' : undefined);
 }
 
@@ -143,7 +128,7 @@ export function restoreSession(): Promise<RefreshResult> {
     .then(result => {
       if (result.status === 'unauthenticated') sendToLogin();
       if (result.status === 'credential_changed') {
-        clearSessionToken();
+        endSession('credential-changed');
         setSessionAlert('credential_changed');
       }
       if (result.status === 'conflict') setSessionAlert('conflict');
@@ -178,25 +163,6 @@ apiClient.interceptors.response.use(
         return resend(config);
       } else if ((await restoreSession()).status === 'ok') {
         return resend(config);
-      }
-    }
-    if (error.response?.status === 403) {
-      // 旧形式（ロール名・廃止済みのコンソール値）の session-kind cookie を持つ有効期限内トークンは
-      // 403 を受けても 401 経路に乗らず、再ログイン導線が無いままデッドロックする。cookie 値が現行の
-      // セッション種別（admin/cast/member）でない場合に限りセッションを破棄して再ログインへ促す
-      // （現行のセッションで正当に 403 を受けた場合は何もしない）。
-      const sessionKind = getSessionKind();
-      if (
-        sessionKind &&
-        sessionKind !== 'admin' &&
-        sessionKind !== 'cast' &&
-        sessionKind !== 'member'
-      ) {
-        clearSessionToken();
-        clearSession();
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          redirectToLogin('expired');
-        }
       }
     }
     return Promise.reject(error);

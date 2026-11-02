@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/entities/user';
-import { clearSessionToken, requestRefresh } from '@/shared/api';
+import { endSession, requestRefresh } from '@/shared/api';
 import { hasMemberReturnPath } from '@/shared/lib';
 import { landSession } from '../model/completeLogin';
 
@@ -38,7 +38,7 @@ export function SessionResume({ children }: { children: React.ReactNode }) {
         } catch {
           // 着地先を決められなければフォームから入り直させる
         }
-        clearSessionToken();
+        endSession('resume-failed');
       }
       if (active) setShowForm(true);
     })();

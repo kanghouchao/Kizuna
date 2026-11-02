@@ -3,7 +3,6 @@ import {
   clearSession,
   getSessionKind,
   getCurrentStoreId,
-  hasSession,
   setCurrentStore,
   isSafeMemberReturnPath,
   rememberMemberReturnPath,
@@ -24,12 +23,6 @@ describe('session', () => {
   it('setCurrentStore sets the current-store-id cookie, readable via getCurrentStoreId', () => {
     setCurrentStore(2);
     expect(getCurrentStoreId()).toBe('2');
-  });
-
-  it('hasSession is true only when session-kind cookie is present', () => {
-    expect(hasSession()).toBe(false);
-    startSession('admin');
-    expect(hasSession()).toBe(true);
   });
 
   it('clearSession removes both cookies', () => {

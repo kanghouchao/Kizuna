@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import {
-  clearSessionToken,
+  endSession,
   getSessionAlert,
   restoreSession,
   subscribeLogout,
   setSessionAlert,
   subscribeSessionAlert,
 } from '@/shared/api';
-import { clearSession, redirectToLogin, rememberMemberReturnPath } from '@/shared/lib';
+import { redirectToLogin } from '@/shared/lib';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +42,7 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
   useEffect(
     () =>
       subscribeLogout(() => {
-        clearSessionToken();
+        endSession('other-tab');
         redirectToLogin();
       }),
     []
@@ -84,13 +84,8 @@ function SessionAlertDialog() {
           <AlertDialogFooter>
             <AlertDialogAction
               onClick={() => {
-                clearSession();
+                endSession('relogin');
                 setSessionAlert(null);
-                // 401 で差し戻す経路と同じく、会員ポータルの現在地（伝票のフラグメントを含む）を預ける。
-                rememberMemberReturnPath(
-                  `${window.location.pathname}${window.location.search}`,
-                  window.location.hash
-                );
                 redirectToLogin();
               }}
             >

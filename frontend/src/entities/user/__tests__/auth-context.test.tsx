@@ -4,11 +4,14 @@ import { AuthProvider, useAuth } from '../model/AuthContext';
 import { authApi } from '../api/auth';
 import { getSessionUserId, storeSessionToken } from '@/shared/api';
 
+// 他タブへの通知はセッションモジュールの内側で送られるので、送信路（BroadcastChannel）で受け取る。
 const mockBroadcastLogout = jest.fn();
-jest.mock('@/shared/api/session', () => ({
-  ...jest.requireActual('@/shared/api/session'),
-  broadcastLogout: (userId: number) => mockBroadcastLogout(userId),
-}));
+class FakeBroadcastChannel {
+  postMessage(message: { user_id: number }) {
+    mockBroadcastLogout(message.user_id);
+  }
+  close() {}
+}
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -21,10 +24,8 @@ jest.mock('@/shared/notify', () => ({
 }));
 
 const mockClearSession = jest.fn();
-jest.mock('@/shared/lib', () => ({
-  // loginPath は本物を使う。差し替えると着地先の組み立てを試験が自前で持つことになり、
-  // 実装がずれても緑のままになる。
-  ...jest.requireActual('@/shared/lib'),
+jest.mock('@/shared/lib/session', () => ({
+  ...jest.requireActual('@/shared/lib/session'),
   clearSession: () => mockClearSession(),
 }));
 
@@ -34,6 +35,13 @@ function Consumer({ reason }: { reason?: string } = {}) {
 }
 
 describe('AuthProvider', () => {
+  const originalChannel = globalThis.BroadcastChannel;
+  beforeAll(() => {
+    globalThis.BroadcastChannel = FakeBroadcastChannel as unknown as typeof BroadcastChannel;
+  });
+  afterAll(() => {
+    globalThis.BroadcastChannel = originalChannel;
+  });
   afterEach(() => {
     jest.clearAllMocks();
   });

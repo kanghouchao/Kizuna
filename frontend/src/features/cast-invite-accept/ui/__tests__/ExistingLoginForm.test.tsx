@@ -4,8 +4,8 @@ import Cookies from 'js-cookie';
 import { ExistingLoginForm } from '../ExistingLoginForm';
 import { castInvitationAcceptanceApi } from '@/entities/cast';
 import { authApi } from '@/entities/user';
-import { clearSessionToken, getSessionUserId, storeSessionToken } from '@/shared/api';
-import { getSessionKind, getCurrentStoreId, setCurrentStore, startSession } from '@/shared/lib';
+import { endSession, getSessionUserId, storeSessionToken } from '@/shared/api';
+import { getSessionKind, getCurrentStoreId, setCurrentStore } from '@/shared/lib';
 
 jest.mock('@/entities/cast', () => {
   const actual = jest.requireActual('@/entities/cast');
@@ -58,14 +58,14 @@ describe('ExistingLoginForm', () => {
       user_id: 3,
       refresh_expires_at: 2,
     });
-    startSession('admin');
+    Cookies.set('session-kind', 'admin');
     setCurrentStore('7');
   });
 
   afterEach(() => {
     Cookies.remove('session-kind');
     Cookies.remove('current-store-id');
-    clearSessionToken();
+    endSession('resume-failed');
   });
 
   it('資格情報と招待トークンを一回の受諾要求で送り、ログインは呼ばない', async () => {
