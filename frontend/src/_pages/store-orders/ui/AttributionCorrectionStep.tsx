@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { OrderAttributionCorrection, orderApi } from '@/entities/order';
 import {
+  createUuid,
   getApiErrorMessage,
   integerRule,
   useKeyedResource,
@@ -141,7 +142,7 @@ function CorrectionForm({
 
   // この段を開いた 1 回の人間の操作としてキーを発行する。失敗後の再送信でも変えない —
   // サーバはこのキーで「commit 済みの初回への再送」を見分けて二重記帳を遮断する（ADR 0007）。
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => createUuid());
 
   const submit = async (values: CorrectionFormValues) => {
     const operation = capture();

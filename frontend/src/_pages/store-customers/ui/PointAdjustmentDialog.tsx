@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { CustomerPointBalanceResponse, customerApi } from '@/entities/customer';
-import { getApiErrorMessage, integerRule } from '@/shared/lib';
+import { createUuid, getApiErrorMessage, integerRule } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -96,7 +96,7 @@ export function PointAdjustmentDialog({
 
   useEffect(() => {
     if (!open) return;
-    idempotencyKeyRef.current = crypto.randomUUID();
+    idempotencyKeyRef.current = createUuid();
     reset({ delta: NaN, reason_category: '', reason: '', expires_on: '' });
   }, [open, reset]);
 
