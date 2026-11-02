@@ -43,7 +43,7 @@ function report(total: number): OperationalReport {
     from: '2026-09-01',
     to: '2026-09-30',
     group_by: 'day',
-    generated_at: '2026-10-01T12:00:00+09:00',
+    generated_at: '2026-10-01T03:00:00.123456Z',
     basis: 'completed-orders-current-v1',
     stores: [{ store_id: 1, store_name: '日本語店舗' }],
     total_order_count: 1,
@@ -76,6 +76,7 @@ test('view permission does not show export and failures clear totals before retr
   render(<StoreOperationalReportsPage />);
   fireEvent.click(await screen.findByRole('button', { name: '照会' }));
   expect(await screen.findByLabelText('請求額（円）')).toHaveTextContent('12,000');
+  expect(screen.getByText(/生成: 2026\/10\/1 12:00:00/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'CSV 全件出力' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '照会' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('集計を取得できませんでした');

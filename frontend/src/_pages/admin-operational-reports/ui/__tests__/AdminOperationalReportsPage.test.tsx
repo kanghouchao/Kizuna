@@ -30,7 +30,7 @@ function report(total: number): OperationalReport {
     from: '2026-09-01',
     to: '2026-09-30',
     group_by: 'day',
-    generated_at: '2026-10-01T12:00:00+09:00',
+    generated_at: '2026-10-01T03:00:00.123456Z',
     basis: 'completed-orders-current-v1',
     stores: [{ store_id: 1, store_name: '日本語店舗' }],
     total_order_count: 1,
