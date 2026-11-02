@@ -47,10 +47,7 @@ public final class SurveyValues {
     }
 
     public boolean targetsAnswer() {
-      return this == RECEIVED
-          || this == WITHDRAWN
-          || this == CORRECTION_RECEIVED
-          || this == CORRECTION_LINKED;
+      return this == RECEIVED || this == WITHDRAWN || this == CORRECTION_RECEIVED;
     }
   }
 }
