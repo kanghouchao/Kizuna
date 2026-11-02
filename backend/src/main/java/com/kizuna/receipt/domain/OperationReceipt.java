@@ -6,6 +6,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.io.Serializable;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.AccessLevel;
@@ -42,7 +43,7 @@ public class OperationReceipt {
 
   @Type(JsonBinaryType.class)
   @Column(updatable = false, columnDefinition = "jsonb")
-  private Map<String, Object> committedFacts;
+  private Map<String, Serializable> committedFacts;
 
   @Column(nullable = false, updatable = false)
   private OffsetDateTime createdAt;
@@ -54,7 +55,7 @@ public class OperationReceipt {
       String fingerprint,
       String operation,
       String targetId,
-      Map<String, Object> committedFacts,
+      Map<String, Serializable> committedFacts,
       OffsetDateTime now) {
     var receipt = new OperationReceipt();
     receipt.storeId = storeId;
