@@ -4,8 +4,8 @@ import React, { createContext, useContext } from 'react';
 import { authApi } from '../api/auth';
 import { isAxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
-import { broadcastLogout, clearSessionToken, getSessionUserId } from '@/shared/api';
-import { clearSession, loginPath } from '@/shared/lib';
+import { endSession, getSessionUserId } from '@/shared/api';
+import { loginPath } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 
 interface AuthContextType {
@@ -47,9 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
     }
-    clearSessionToken();
-    clearSession();
-    if (userId !== undefined) broadcastLogout(userId);
+    endSession('logout', userId);
     router.push(loginPath(reason));
   };
 

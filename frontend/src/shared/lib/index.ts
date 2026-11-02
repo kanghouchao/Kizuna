@@ -13,25 +13,19 @@ export { useManagedList } from './hooks/useManagedList';
 export { useListPage } from './hooks/useListPage';
 export { useResource } from './hooks/useResource';
 export { useDeleteAction } from './hooks/useDeleteAction';
-export {
-  memoryOperationStore,
-  sessionOperationStore,
-  useOperation,
-  useOperationRevision,
-} from './hooks/useOperation';
-export type { OperationStore, PendingOperation, SendOperation } from './hooks/useOperation';
+export { memoryOperationStore, sessionOperationStore } from './operation-store';
+export type { OperationStore } from './operation-store';
+export { useOperation, useOperationRevision } from './hooks/useOperation';
+export type { PendingOperation, SendOperation } from './hooks/useOperation';
 export { createUuid } from './uuid';
 export {
-  clearSession,
   hasMemberReturnPath,
   isSafeMemberReturnPath,
   rememberMemberReturnPath,
   takeMemberReturnPath,
   getSessionKind,
   getCurrentStoreId,
-  hasSession,
   setCurrentStore,
-  startSession,
 } from './session';
 export { isStorePath, storePath } from './store-route';
 export { cn } from './utils';

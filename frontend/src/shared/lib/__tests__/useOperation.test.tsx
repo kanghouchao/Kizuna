@@ -1,12 +1,11 @@
 import { act, renderHook } from '@testing-library/react';
 import Cookies from 'js-cookie';
+import { useOperation, useOperationRevision } from '../hooks/useOperation';
 import {
   memoryOperationStore,
   sessionOperationStore,
-  useOperation,
-  useOperationRevision,
   type OperationStore,
-} from '../hooks/useOperation';
+} from '../operation-store';
 import { ClientDataError } from '../apiError';
 
 jest.mock('js-cookie');

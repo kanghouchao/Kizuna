@@ -1,6 +1,6 @@
 import Cookies from 'js-cookie';
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
-import { apiClient, clearSessionToken, storeSessionToken } from '@/shared/api';
+import { apiClient, endSession, storeSessionToken } from '@/shared/api';
 
 jest.mock('js-cookie');
 
@@ -9,7 +9,7 @@ describe('apiClient request interceptor', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    clearSessionToken();
+    endSession('resume-failed');
     apiClient.defaults.adapter = (async (config: InternalAxiosRequestConfig) => ({
       data: {},
       status: 200,

@@ -4,7 +4,7 @@ import { notify } from '@/shared/notify';
 import { MemberRegisterForm } from '../MemberRegisterForm';
 import { memberApi } from '@/entities/member';
 import { authApi } from '@/entities/user';
-import { clearSessionToken, getSessionUserId } from '@/shared/api';
+import { endSession, getSessionUserId } from '@/shared/api';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -49,7 +49,7 @@ describe('MemberRegisterForm', () => {
   });
 
   afterEach(() => {
-    clearSessionToken();
+    endSession('resume-failed');
     Cookies.remove('session-kind');
     Cookies.remove('member-return-path');
     sessionStorage.clear();

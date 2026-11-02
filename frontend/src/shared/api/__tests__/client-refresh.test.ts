@@ -7,18 +7,21 @@ let currentStoreId: string | undefined;
 let onStorePage = false;
 jest.mock('@/shared/lib', () => ({
   redirectToLogin: (reason?: string) => redirectMock(reason),
+  getCurrentStoreId: () => currentStoreId,
+  isStorePath: () => onStorePage,
+}));
+jest.mock('@/shared/lib/session', () => ({
   clearSession: jest.fn(),
   rememberMemberReturnPath: (value: string, fragment?: string) =>
     rememberMemberReturnPathMock(value, fragment),
   getSessionKind: () => 'admin',
-  getCurrentStoreId: () => currentStoreId,
-  isStorePath: () => onStorePage,
   startSession: (kind: string, expiresAt?: number) => startSessionMock(kind, expiresAt),
+  takeMemberReturnPath: jest.fn(),
 }));
 
 import {
   apiClient,
-  clearSessionToken,
+  endSession,
   getSessionAlert,
   getSessionUserId,
   restoreSession,
@@ -67,7 +70,7 @@ describe('apiClient のリフレッシュ経路', () => {
     jest.clearAllMocks();
     currentStoreId = undefined;
     onStorePage = false;
-    clearSessionToken();
+    endSession('resume-failed');
     setSessionAlert(null);
   });
 

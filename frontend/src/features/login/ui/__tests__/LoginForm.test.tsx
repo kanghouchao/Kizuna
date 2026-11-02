@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import LoginForm from '../LoginForm';
 import { authApi } from '@/entities/user';
-import { clearSessionToken, getSessionUserId } from '@/shared/api';
+import { endSession, getSessionUserId } from '@/shared/api';
 import type { MeResponse } from '@/entities/user';
 
 const mockPush = jest.fn();
@@ -60,7 +60,7 @@ describe('LoginForm の利用者種別による分岐', () => {
   });
 
   afterEach(() => {
-    clearSessionToken();
+    endSession('resume-failed');
     Cookies.remove('session-kind');
     Cookies.remove('current-store-id');
   });

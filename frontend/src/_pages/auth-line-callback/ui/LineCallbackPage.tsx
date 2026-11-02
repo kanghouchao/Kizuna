@@ -4,15 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/shared/notify';
-import { storeSessionToken } from '@/shared/api';
+import { landSession, storeSessionToken } from '@/shared/api';
 import { LineAuthorizationRequest, authApi, lineApi } from '@/entities/user';
 import { completeLogin } from '@/features/login';
 import {
   consumeLineAuthorization,
   getApiErrorMessage,
   lineCallbackRedirectUri,
-  startSession,
-  takeMemberReturnPath,
 } from '@/shared/lib';
 import { AuthLayout } from '@/shared/ui';
 import LineRegisterStep, { LineRegisterValues } from './LineRegisterStep';
@@ -134,12 +132,8 @@ export default function LineCallbackPage() {
         email: values.email,
       });
       storeSessionToken(issued);
-      startSession('member', issued.refresh_expires_at);
-      // 会員ポータルで弾かれた人が LINE 登録へ回ってくる経路がある（伝票の QR を未登録で開いた等）。
-      // 預かった戻り先は会員セッションが立った時点で必ず消費する — 残すと、同じタブで後からログインした
-      // 別の会員がその戻り先へ運ばれる。
       // 消費済みのコールバック URL と使用済みフォームを履歴に残さない
-      router.replace(takeMemberReturnPath() ?? '/member/');
+      router.replace(landSession('member', issued.refresh_expires_at));
     } catch (error) {
       notify.error(getApiErrorMessage(error, '会員登録に失敗しました'));
     }

@@ -2,13 +2,16 @@ import React from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../model/AuthContext';
 import { authApi } from '../api/auth';
-import { getSessionUserId, storeSessionToken } from '@/shared/api';
+import { endSession, getSessionUserId, storeSessionToken } from '@/shared/api';
 
+// 他タブへの通知はセッションモジュールの内側で送られるので、送信路（BroadcastChannel）で受け取る。
 const mockBroadcastLogout = jest.fn();
-jest.mock('@/shared/api/session', () => ({
-  ...jest.requireActual('@/shared/api/session'),
-  broadcastLogout: (userId: number) => mockBroadcastLogout(userId),
-}));
+class FakeBroadcastChannel {
+  postMessage(message: { user_id: number }) {
+    mockBroadcastLogout(message.user_id);
+  }
+  close() {}
+}
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -21,10 +24,8 @@ jest.mock('@/shared/notify', () => ({
 }));
 
 const mockClearSession = jest.fn();
-jest.mock('@/shared/lib', () => ({
-  // loginPath は本物を使う。差し替えると着地先の組み立てを試験が自前で持つことになり、
-  // 実装がずれても緑のままになる。
-  ...jest.requireActual('@/shared/lib'),
+jest.mock('@/shared/lib/session', () => ({
+  ...jest.requireActual('@/shared/lib/session'),
   clearSession: () => mockClearSession(),
 }));
 
@@ -34,6 +35,13 @@ function Consumer({ reason }: { reason?: string } = {}) {
 }
 
 describe('AuthProvider', () => {
+  const originalChannel = globalThis.BroadcastChannel;
+  beforeAll(() => {
+    globalThis.BroadcastChannel = FakeBroadcastChannel as unknown as typeof BroadcastChannel;
+  });
+  afterAll(() => {
+    globalThis.BroadcastChannel = originalChannel;
+  });
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -57,6 +65,22 @@ describe('AuthProvider', () => {
     expect(mockClearSession).toHaveBeenCalled();
     expect(mockBroadcastLogout).toHaveBeenCalledWith(7);
     expect(mockPush).toHaveBeenCalledWith('/auth/login');
+  });
+
+  it('端点を待つ間に別の要求の 401 がトークンを消しても、呼ぶ前の利用者 ID で他のタブへ知らせる', async () => {
+    storeSessionToken({ token: 'tkn', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
+    (authApi.logout as jest.Mock).mockImplementationOnce(async () => {
+      // 端点がセッションを失効させた直後、並行する要求の 401 が差し戻しでトークンを消す
+      endSession('expired');
+    });
+    const { getByText } = render(
+      <AuthProvider>
+        <Consumer />
+      </AuthProvider>
+    );
+    getByText('out').click();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/auth/login'));
+    expect(mockBroadcastLogout).toHaveBeenCalledWith(7);
   });
 
   it('ログアウト要求が通信の失敗で届かなければ、セッションを残して知らせ、ログイン画面へは移らない', async () => {

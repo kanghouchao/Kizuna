@@ -1,11 +1,9 @@
 import redirectToLogin, { __setNavigatorForTests, __resetNavigator } from '../navigation';
-import { clearSession } from '../session';
 
 describe('navigation helper', () => {
   afterEach(() => {
     __resetNavigator();
     jest.restoreAllMocks();
-    clearSession();
   });
 
   it('calls provided navigator with /auth/login when available', () => {

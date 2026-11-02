@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/entities/user';
-import { clearSessionToken, requestRefresh } from '@/shared/api';
+import { endSession, requestRefresh } from '@/shared/api';
 import { hasMemberReturnPath } from '@/shared/lib';
-import { landSession } from '../model/completeLogin';
+import { landFromMe } from '../model/completeLogin';
 
 /**
  * ログイン画面を開いたときにリフレッシュを 1 回試し、ログイン済みならフォームを出さずに着地先へ移す。
@@ -30,7 +30,7 @@ export function SessionResume({ children }: { children: React.ReactNode }) {
           const landing =
             me.user_type !== 'MEMBER' && hasMemberReturnPath()
               ? null
-              : landSession(me, result.refreshExpiresAt);
+              : landFromMe(me, result.refreshExpiresAt);
           if (landing?.status === 'ok') {
             router.replace(landing.path);
             return;
@@ -38,7 +38,7 @@ export function SessionResume({ children }: { children: React.ReactNode }) {
         } catch {
           // 着地先を決められなければフォームから入り直させる
         }
-        clearSessionToken();
+        endSession('resume-failed');
       }
       if (active) setShowForm(true);
     })();

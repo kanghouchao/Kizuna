@@ -3,16 +3,10 @@
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/shared/notify';
-import { storeSessionToken } from '@/shared/api';
+import { landSession, storeSessionToken } from '@/shared/api';
 import { memberApi, MemberRegisterRequest } from '@/entities/member';
 import { authApi } from '@/entities/user';
-import {
-  EMAIL_PATTERN,
-  EMAIL_PATTERN_MESSAGE,
-  getApiErrorMessage,
-  startSession,
-  takeMemberReturnPath,
-} from '@/shared/lib';
+import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
 
 /**
  * 会員の新規登録フォーム（メール + パスワード + 表示名の 3 項目）。
@@ -38,11 +32,7 @@ export function MemberRegisterForm() {
     try {
       const issued = await authApi.login({ email: values.email, password: values.password });
       storeSessionToken(issued);
-      startSession('member', issued.refresh_expires_at);
-      // 会員ポータルで弾かれた人がこの登録画面へ回ってくる経路がある（伝票の QR を未登録で開いた等）。
-      // 預かった戻り先は会員セッションが立った時点で必ず消費する — 残すと、同じタブで後からログインした
-      // 別の会員がその戻り先へ運ばれる。
-      router.push(takeMemberReturnPath() ?? '/member/');
+      router.push(landSession('member', issued.refresh_expires_at));
     } catch {
       // 登録自体は完了している。自動ログインだけが失敗した稀な場合はログイン画面から再開させる。
       notify.success('登録が完了しました。ログインしてください');

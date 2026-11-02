@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 import LineCallbackPage from '../ui/LineCallbackPage';
 import { authApi, lineApi } from '@/entities/user';
 import { completeLogin } from '@/features/login';
-import { clearSessionToken, getSessionUserId } from '@/shared/api';
+import { endSession, getSessionUserId } from '@/shared/api';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -57,7 +57,7 @@ describe('LineCallbackPage', () => {
   });
 
   afterEach(() => {
-    clearSessionToken();
+    endSession('resume-failed');
     Cookies.remove('session-kind');
     Cookies.remove('member-return-path');
   });

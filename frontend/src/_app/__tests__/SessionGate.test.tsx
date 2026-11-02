@@ -7,13 +7,7 @@ jest.mock('@/shared/lib', () => ({
   redirectToLogin: (reason?: string) => redirectMock(reason),
 }));
 
-import {
-  apiClient,
-  clearSessionToken,
-  getSessionUserId,
-  setSessionAlert,
-  storeSessionToken,
-} from '@/shared/api';
+import { apiClient, endSession, getSessionUserId, setSessionAlert } from '@/shared/api';
 import { takeMemberReturnPath } from '@/shared/lib';
 import { SessionGate } from '../SessionGate';
 
@@ -71,7 +65,7 @@ describe('SessionGate', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    clearSessionToken();
+    endSession('resume-failed');
     setSessionAlert(null);
     FakeBroadcastChannel.open = [];
     globalThis.BroadcastChannel = FakeBroadcastChannel as unknown as typeof BroadcastChannel;
