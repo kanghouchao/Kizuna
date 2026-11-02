@@ -14,10 +14,13 @@ import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingCost;
-import com.kizuna.advertising.domain.AdvertisingRequest;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.medium.lookup.MediumReference;
+import com.kizuna.receipt.once.Committed;
+import com.kizuna.receipt.once.OperationReceipts;
+import com.kizuna.receipt.once.Receipt;
+import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
@@ -34,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +53,7 @@ public class AdvertisingService {
   private final AdvertisingRecords records;
   private final MediumLookup mediumLookup;
   private final AdvertisingChangeRepository changes;
+  private final OperationReceipts receipts;
   private final ActorIdentityService actors;
   private final BusinessAudit audit;
   private final ObjectMapper json;
@@ -109,13 +112,9 @@ public class AdvertisingService {
   public CostResponse create(Long storeId, CreateRequest request, String actor) {
     var month = AdvertisingInput.month(request.month());
     var values = request.values();
-    return once(
-        storeId,
-        actor,
-        request.requestId(),
-        "CREATE",
-        request,
-        CostResponse.class,
+    return receipts.once(
+        key(storeId, actor, request.requestId()),
+        request.fingerprint(),
         () -> {
           var selected = mediumLookup.findAll(storeId, Set.of(values.mediumId()));
           MediumLookup.selectable(selected.get(values.mediumId()), null);
@@ -127,20 +126,17 @@ public class AdvertisingService {
           flushMedium();
           var after = CostResponse.of(cost, name(selected, cost.getMediumId()));
           change(storeId, actor, month, "CREATED", null, after, null, null);
-          return after;
-        });
+          return committed("CREATED", cost);
+        },
+        receipt -> recorded(storeId, receipt));
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public CostResponse replace(Long storeId, String id, ReplaceRequest request, String actor) {
     var values = request.values();
-    return once(
-        storeId,
-        actor,
-        request.requestId(),
-        "REPLACE:" + id,
-        request,
-        CostResponse.class,
+    return receipts.once(
+        key(storeId, actor, request.requestId()),
+        request.fingerprint(id),
         () -> {
           var cost = locked(storeId, id);
           cost.requireVersion(request.version());
@@ -155,19 +151,23 @@ public class AdvertisingService {
           flushMedium();
           var after = CostResponse.of(cost, name(selected, cost.getMediumId()));
           change(storeId, actor, cost.getMonth(), "UPDATED", before, after, request.reason(), null);
-          return after;
-        });
+          return committed("UPDATED", cost);
+        },
+        receipt -> recorded(storeId, receipt));
+  }
+
+  /** 作成と置換の要求キーの一意制約に敗れた要求を、成立済みの受領から解決する。 */
+  @Transactional(readOnly = true)
+  public CostResponse replayCost(Long storeId, UUID requestId, String fingerprint, String actor) {
+    return receipts.replayOnly(
+        key(storeId, actor, requestId), fingerprint, receipt -> recorded(storeId, receipt));
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public void delete(Long storeId, String id, DeleteRequest request, String actor) {
-    once(
-        storeId,
-        actor,
-        request.requestId(),
-        "DELETE:" + id,
-        request,
-        Boolean.class,
+    receipts.once(
+        key(storeId, actor, request.requestId()),
+        request.fingerprint(id),
         () -> {
           var cost = locked(storeId, id);
           cost.requireVersion(request.version());
@@ -176,8 +176,15 @@ public class AdvertisingService {
           records.advance(storeId, cost.getMonth());
           records.flush();
           change(storeId, actor, cost.getMonth(), "DELETED", before, null, request.reason(), null);
-          return true;
-        });
+          return committed("DELETED", cost);
+        },
+        receipt -> null);
+  }
+
+  @Transactional(readOnly = true)
+  public void replayDelete(Long storeId, String id, DeleteRequest request, String actor) {
+    receipts.replayOnly(
+        key(storeId, actor, request.requestId()), request.fingerprint(id), receipt -> null);
   }
 
   private AdvertisingCost locked(Long storeId, String id) {
@@ -188,17 +195,10 @@ public class AdvertisingService {
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public CopyResponse copy(Long storeId, String target, CopyRequest request, String actor) {
-    AdvertisingInput.month(target);
-    var parsed = YearMonth.parse(target);
-    if (parsed.equals(YearMonth.of(1, 1))) throw new ServiceException("この月には前月がありません");
-    String source = parsed.minusMonths(1).toString();
-    return once(
-        storeId,
-        actor,
-        request.requestId(),
-        "COPY:" + target,
-        request,
-        CopyResponse.class,
+    String source = source(target);
+    return receipts.once(
+        key(storeId, actor, request.requestId()),
+        request.fingerprint(target),
         () -> {
           records.lockMonth(storeId, source);
           records.lockMonth(storeId, target);
@@ -211,7 +211,6 @@ public class AdvertisingService {
           if (originals.isEmpty()) throw new ServiceException("前月にコピーできる広告費がありません");
           var names = media(storeId, originals);
           var targetMonth = records.advance(storeId, target);
-          String copyId = UUID.randomUUID().toString();
           for (var original : originals) {
             var cost =
                 AdvertisingCost.builder().month(target).values(original.values().copied()).build();
@@ -228,16 +227,51 @@ public class AdvertisingService {
                 request.reason(),
                 original.getId());
           }
-          return new CopyResponse(
-              copyId,
-              storeId,
-              source,
+          return new Committed(
+              "ADVERTISING_COST_COPIED",
               target,
-              originals.size(),
-              request.sourceVersion(),
-              targetMonth.getRevision(),
-              OffsetDateTime.now(clock));
-        });
+              Map.of(
+                  "copy_id",
+                  UUID.randomUUID().toString(),
+                  "copied_count",
+                  originals.size(),
+                  "source_version",
+                  request.sourceVersion(),
+                  "target_version",
+                  targetMonth.getRevision(),
+                  "created_at",
+                  OffsetDateTime.now(clock).toString()));
+        },
+        receipt -> copied(storeId, receipt));
+  }
+
+  @Transactional(readOnly = true)
+  public CopyResponse replayCopy(Long storeId, String target, CopyRequest request, String actor) {
+    source(target);
+    return receipts.replayOnly(
+        key(storeId, actor, request.requestId()),
+        request.fingerprint(target),
+        receipt -> copied(storeId, receipt));
+  }
+
+  private static String source(String target) {
+    AdvertisingInput.month(target);
+    var parsed = YearMonth.parse(target);
+    if (parsed.equals(YearMonth.of(1, 1))) throw new ServiceException("この月には前月がありません");
+    return parsed.minusMonths(1).toString();
+  }
+
+  // コピーの ID・件数・成立時の各月の版は行や履歴に残らないので、受領の事実だけから組む。
+  private static CopyResponse copied(Long storeId, Receipt receipt) {
+    return new CopyResponse(
+        receipt.textFact("copy_id"),
+        storeId,
+        source(receipt.targetId()),
+        receipt.targetId(),
+        Math.toIntExact(receipt.longFact("copied_count")),
+        receipt.longFact("source_version"),
+        receipt.longFact("target_version"),
+        OffsetDateTime.parse(receipt.textFact("created_at")));
   }
 
   @Transactional(readOnly = true)
@@ -326,35 +360,22 @@ public class AdvertisingService {
     return new ServiceUnavailableException("広告費が処理可能な上限を超えています。対象を確認してください");
   }
 
-  private <T> T once(
-      Long storeId,
-      String actor,
-      UUID key,
-      String operation,
-      Object request,
-      Class<T> type,
-      Supplier<T> work) {
-    Long actorId = actors.requireUserId(actor);
-    records.lock("request:" + storeId + ":" + actorId + ":" + key);
-    String value = operation + "\n" + json.writeValueAsString(request);
-    var receipt = records.receipt(storeId, actorId, key);
-    if (receipt.isPresent()) {
-      if (!receipt.get().getRequestValue().equals(value))
-        throw new ConflictException("同じ要求識別子に別の内容は指定できません");
-      return json.readValue(receipt.get().getResponseValue(), type);
-    }
-    T result = work.get();
-    var receiptRow =
-        AdvertisingRequest.builder()
-            .actorId(actorId)
-            .requestId(key)
-            .requestValue(value)
-            .responseValue(json.writeValueAsString(result))
-            .build();
-    receiptRow.setStoreId(storeId);
-    records.persist(receiptRow);
-    records.flush();
-    return json.readValue(json.writeValueAsString(result), type);
+  private ReceiptKey key(Long storeId, String actor, UUID requestId) {
+    return new ReceiptKey(storeId, actors.requireUserId(actor), requestId.toString());
+  }
+
+  private static Committed committed(String action, AdvertisingCost cost) {
+    return new Committed(
+        "ADVERTISING_COST_" + action, cost.getId(), Map.of("committed_version", cost.getVersion()));
+  }
+
+  // 受領を持つ広告費は論理削除で終わるので、行が無いのは不変条件の破れであって業務拒否ではない。
+  private CostResponse recorded(Long storeId, Receipt receipt) {
+    var cost =
+        records
+            .recorded(storeId, receipt.targetId())
+            .orElseThrow(() -> new IllegalStateException("受領の対象の広告費が見つかりません"));
+    return response(storeId, cost);
   }
 
   private void change(

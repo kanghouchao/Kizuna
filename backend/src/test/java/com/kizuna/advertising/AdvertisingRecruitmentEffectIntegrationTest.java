@@ -17,6 +17,8 @@ import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport.Status;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.medium.domain.MediumRepository;
 import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.receipt.domain.OperationReceiptRepository;
+import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.recruitment.reporting.RecruitmentHireReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
@@ -236,13 +238,18 @@ class AdvertisingRecruitmentEffectIntegrationTest {
   @EnableMethodSecurity
   @EntityScan("com.kizuna")
   @EnableJpaRepositories(
-      basePackageClasses = {AdvertisingChangeRepository.class, MediumRepository.class})
+      basePackageClasses = {
+        AdvertisingChangeRepository.class,
+        MediumRepository.class,
+        OperationReceiptRepository.class
+      })
   @Import({
     AdvertisingService.class,
     AdvertisingRecords.class,
     MediumLookup.class,
     AdvertisingRecruitmentEffectService.class,
-    RecruitmentHireReader.class
+    RecruitmentHireReader.class,
+    OperationReceipts.class
   })
   static class Config {
     @Bean

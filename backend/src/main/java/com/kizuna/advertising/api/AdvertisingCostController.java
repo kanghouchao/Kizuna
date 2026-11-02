@@ -13,7 +13,9 @@ import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingFailures;
 import com.kizuna.advertising.application.AdvertisingService;
+import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -69,7 +71,14 @@ public class AdvertisingCostController {
       "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public CostResponse create(
       @CurrentStore Long storeId, @Valid @RequestBody CreateRequest request, Principal actor) {
-    return AdvertisingFailures.run(() -> service.create(storeId, request, actor.getName()));
+    return AdvertisingFailures.run(
+        () ->
+            Replays.write(
+                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                () -> service.create(storeId, request, actor.getName()),
+                () ->
+                    service.replayCost(
+                        storeId, request.requestId(), request.fingerprint(), actor.getName())));
   }
 
   @PutMapping("/advertising-costs/{id}")
@@ -80,7 +89,14 @@ public class AdvertisingCostController {
       @PathVariable String id,
       @Valid @RequestBody ReplaceRequest request,
       Principal actor) {
-    return AdvertisingFailures.run(() -> service.replace(storeId, id, request, actor.getName()));
+    return AdvertisingFailures.run(
+        () ->
+            Replays.write(
+                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                () -> service.replace(storeId, id, request, actor.getName()),
+                () ->
+                    service.replayCost(
+                        storeId, request.requestId(), request.fingerprint(id), actor.getName())));
   }
 
   @DeleteMapping("/advertising-costs/{id}")
@@ -93,10 +109,17 @@ public class AdvertisingCostController {
       @Valid @RequestBody DeleteRequest request,
       Principal actor) {
     AdvertisingFailures.run(
-        () -> {
-          service.delete(storeId, id, request, actor.getName());
-          return true;
-        });
+        () ->
+            Replays.write(
+                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                () -> {
+                  service.delete(storeId, id, request, actor.getName());
+                  return true;
+                },
+                () -> {
+                  service.replayDelete(storeId, id, request, actor.getName());
+                  return true;
+                }));
   }
 
   @GetMapping("/advertising-cost-months/{month}")
@@ -117,7 +140,12 @@ public class AdvertisingCostController {
       @PathVariable String month,
       @Valid @RequestBody CopyRequest request,
       Principal actor) {
-    return AdvertisingFailures.run(() -> service.copy(storeId, month, request, actor.getName()));
+    return AdvertisingFailures.run(
+        () ->
+            Replays.write(
+                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                () -> service.copy(storeId, month, request, actor.getName()),
+                () -> service.replayCopy(storeId, month, request, actor.getName())));
   }
 
   @GetMapping("/advertising-cost-months/{month}/changes")

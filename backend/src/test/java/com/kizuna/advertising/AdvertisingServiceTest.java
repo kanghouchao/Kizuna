@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -18,30 +19,37 @@ import static org.mockito.Mockito.when;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CopyRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.ReplaceRequest;
+import com.kizuna.advertising.api.dto.AdvertisingResponses.CopyResponse;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingCost;
 import com.kizuna.advertising.domain.AdvertisingMonth;
-import com.kizuna.advertising.domain.AdvertisingRequest;
 import com.kizuna.advertising.domain.AdvertisingValues;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.medium.lookup.MediumReference;
+import com.kizuna.receipt.once.Committed;
+import com.kizuna.receipt.once.OperationReceipts;
+import com.kizuna.receipt.once.Receipt;
+import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,7 +61,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 広告費の service が引数の店舗で記録と媒体を引き、選べる媒体だけを受け付けることの単体テスト。 */
+/** 広告費の service が引数の店舗で記録と媒体を引き、選べる媒体だけを受け付け、書き込みが受領を経由すること。受領の振る舞いは receipt モジュールの試験が持つ。 */
 class AdvertisingServiceTest {
   static final Long STORE_ID = 7L;
 
@@ -61,11 +69,13 @@ class AdvertisingServiceTest {
   MediumLookup media = mock(MediumLookup.class);
   ActorIdentityService actors = mock(ActorIdentityService.class);
   BusinessAudit audit = mock(BusinessAudit.class);
+  OperationReceipts operations = mock(OperationReceipts.class);
   AdvertisingService service =
       new AdvertisingService(
           records,
           media,
           mock(AdvertisingChangeRepository.class),
+          operations,
           actors,
           audit,
           JsonMapper.builder().build(),
@@ -75,15 +85,30 @@ class AdvertisingServiceTest {
   @BeforeEach
   void setup() {
     when(actors.requireUserId("actor")).thenReturn(42L);
-    when(records.receipt(eq(STORE_ID), eq(42L), any())).thenReturn(Optional.empty());
     doAnswer(
             invocation -> {
               Object row = invocation.getArgument(0);
+              ReflectionTestUtils.setField(row, "id", "new");
               ReflectionTestUtils.setField(row, "version", 0L);
+              if (row instanceof AdvertisingCost cost)
+                when(records.recorded(STORE_ID, "new")).thenReturn(Optional.of(cost));
               return null;
             })
         .when(records)
         .persist(any());
+    when(operations.once(any(), anyString(), any(), any()))
+        .thenAnswer(
+            call -> {
+              Committed committed = call.<Supplier<Committed>>getArgument(2).get();
+              return call.<Function<Receipt, Object>>getArgument(3)
+                  .apply(
+                      new Receipt(
+                          "r",
+                          committed.operation(),
+                          committed.targetId(),
+                          committed.facts(),
+                          false));
+            });
   }
 
   @Test
@@ -116,16 +141,19 @@ class AdvertisingServiceTest {
 
     assertThat(created.storeId()).isEqualTo(STORE_ID);
     assertThat(created.medium().name()).isEqualTo("媒体");
-    verify(media).findAll(STORE_ID, Set.of("m1"));
-    verify(records).lock("request:" + STORE_ID + ":42:" + key);
-    verify(records).receipt(STORE_ID, 42L, key);
+    verify(operations)
+        .once(
+            eq(new ReceiptKey(STORE_ID, 42L, key.toString())),
+            eq(create("m1", key).fingerprint()),
+            any(),
+            any());
+    verify(media, atLeastOnce()).findAll(STORE_ID, Set.of("m1"));
     verify(records).lockMonth(STORE_ID, "2026-09");
     verify(records).advance(STORE_ID, "2026-09");
     var persisted = ArgumentCaptor.forClass(Object.class);
-    verify(records, times(3)).persist(persisted.capture());
+    verify(records, times(2)).persist(persisted.capture());
     assertThat(persisted.getAllValues())
-        .hasExactlyElementsOfTypes(
-            AdvertisingCost.class, AdvertisingChange.class, AdvertisingRequest.class);
+        .hasExactlyElementsOfTypes(AdvertisingCost.class, AdvertisingChange.class);
     assertThat(persisted.getAllValues())
         .allSatisfy(row -> assertThat(((StoreScopedEntity) row).getStoreId()).isEqualTo(STORE_ID));
     verify(audit)
@@ -200,9 +228,9 @@ class AdvertisingServiceTest {
 
     assertThat(kept.medium().id()).isEqualTo("m1");
     assertThat(kept.medium().name()).isEqualTo("停止中");
-    var persisted = ArgumentCaptor.forClass(Object.class);
-    verify(records, times(2)).persist(persisted.capture());
-    var change = (AdvertisingChange) persisted.getAllValues().getFirst();
+    var persisted = ArgumentCaptor.forClass(AdvertisingChange.class);
+    verify(records).persist(persisted.capture());
+    var change = persisted.getValue();
     assertThat(change.getBeforeValue()).contains("\"id\":\"m1\"", "\"name\":\"停止中\"");
     assertThat(change.getAfterValue()).contains("\"id\":\"m1\"", "\"name\":\"停止中\"");
   }
@@ -221,25 +249,68 @@ class AdvertisingServiceTest {
 
     assertThat(copied.copiedCount()).isEqualTo(1);
     var persisted = ArgumentCaptor.forClass(Object.class);
-    verify(records, times(3)).persist(persisted.capture());
+    verify(records, times(2)).persist(persisted.capture());
     assertThat(persisted.getAllValues().getFirst())
         .isInstanceOfSatisfying(
             AdvertisingCost.class, c -> assertThat(c.getMediumId()).isEqualTo("m1"));
   }
 
   @Test
-  void replayOfAStoredReceiptDoesNotConsultTheMediumAgain() {
-    known(new MediumReference("m1", "媒体", true));
-    var key = UUID.randomUUID();
-    var first = service.create(STORE_ID, create("m1", key), "actor");
-    var persisted = ArgumentCaptor.forClass(Object.class);
-    verify(records, times(3)).persist(persisted.capture());
-    var receipt = (AdvertisingRequest) persisted.getAllValues().getLast();
-    when(records.receipt(STORE_ID, 42L, key)).thenReturn(Optional.of(receipt));
-    reset(media);
+  void aReplayReadsTheCurrentCostWithoutWriting() {
+    known(new MediumReference("m1", "現在名", true));
+    lockedCost("m1");
+    replayed(new Receipt("r", "ADVERTISING_COST_UPDATED", "c", Map.of(), true));
 
-    assertThat(service.create(STORE_ID, create("m1", key), "actor")).isEqualTo(first);
-    verifyNoInteractions(media);
+    var current = service.replace(STORE_ID, "c", replace("m1"), "actor");
+
+    assertThat(current.medium().name()).isEqualTo("現在名");
+    verify(records, never()).lockMonth(any(), any());
+    verify(records, never()).persist(any());
+    verifyNoInteractions(audit);
+  }
+
+  @Test
+  void aReplayedCopyAnswersFromTheCommittedFactsAlone() {
+    replayed(
+        new Receipt(
+            "r",
+            "ADVERTISING_COST_COPIED",
+            "2026-10",
+            Map.of(
+                "copy_id",
+                "copy",
+                "copied_count",
+                2,
+                "source_version",
+                3,
+                "target_version",
+                1,
+                "created_at",
+                "2026-10-01T00:00Z"),
+            true));
+
+    var copied =
+        service.copy(
+            STORE_ID, "2026-10", new CopyRequest(3L, 0L, "引継ぎ", UUID.randomUUID()), "actor");
+
+    assertThat(copied)
+        .isEqualTo(
+            new CopyResponse(
+                "copy",
+                STORE_ID,
+                "2026-09",
+                "2026-10",
+                2,
+                3,
+                1,
+                OffsetDateTime.parse("2026-10-01T00:00Z")));
+    verifyNoInteractions(records, media, audit);
+  }
+
+  private void replayed(Receipt receipt) {
+    doAnswer(call -> call.<Function<Receipt, Object>>getArgument(3).apply(receipt))
+        .when(operations)
+        .once(any(), anyString(), any(), any());
   }
 
   private void known(MediumReference... references) {
@@ -260,6 +331,7 @@ class AdvertisingServiceTest {
     var cost = cost(mediumId);
     when(records.cost(STORE_ID, "c")).thenReturn(cost);
     when(records.refresh(cost)).thenReturn(cost);
+    when(records.recorded(STORE_ID, "c")).thenReturn(Optional.of(cost));
   }
 
   private static CreateRequest create(String mediumId, UUID key) {

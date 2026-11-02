@@ -32,6 +32,8 @@ import com.kizuna.order.domain.OrderAcquisition;
 import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
+import com.kizuna.receipt.domain.OperationReceiptRepository;
+import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
@@ -105,7 +107,7 @@ class AdvertisingIntegrationTest {
     jdbc = new JdbcTemplate(context.getBean(DataSource.class));
     jdbc.execute("CREATE UNIQUE INDEX uq_ad_test_month ON t_advertising_months(store_id,month)");
     jdbc.execute(
-        "CREATE UNIQUE INDEX uq_ad_test_request ON t_advertising_requests(store_id,actor_id,request_id)");
+        "CREATE UNIQUE INDEX uq_t_operation_receipts_key ON t_operation_receipts(store_id,actor_id,operation_key)");
   }
 
   @AfterAll
@@ -117,7 +119,7 @@ class AdvertisingIntegrationTest {
   @BeforeEach
   void setup() {
     jdbc.execute(
-        "TRUNCATE t_advertising_changes,t_advertising_requests,t_advertising_costs,t_advertising_months,t_media");
+        "TRUNCATE t_advertising_changes,t_operation_receipts,t_advertising_costs,t_advertising_months,t_media");
     jdbc.execute("TRUNCATE t_orders CASCADE");
     SecurityContextHolder.getContext()
         .setAuthentication(
@@ -147,7 +149,7 @@ class AdvertisingIntegrationTest {
   }
 
   @Test
-  void lifecycleReplaysOldSuccessAndRetainsDeletedHistory() {
+  void lifecycleReplaysTheCurrentStateAndRetainsDeletedHistory() {
     var request = create("2026-09", null, 100, UUID.randomUUID());
     var first = service.create(1L, request, "actor");
     assertThat(first.inquiryCount()).isNull();
@@ -165,11 +167,19 @@ class AdvertisingIntegrationTest {
     var second = service.replace(1L, first.id(), update, "actor");
     assertThat(second.version()).isGreaterThan(first.version());
     assertThat(second.inquiryCount()).isZero();
-    assertThat(service.create(1L, request, "actor")).isEqualTo(first);
-    assertThat(service.replace(1L, first.id(), update, "actor")).isEqualTo(second);
+    assertThat(service.create(1L, request, "actor"))
+        .usingRecursiveComparison()
+        .ignoringFields("createdAt", "updatedAt")
+        .isEqualTo(second);
+    assertThat(service.replace(1L, first.id(), update, "actor"))
+        .usingRecursiveComparison()
+        .ignoringFields("createdAt", "updatedAt")
+        .isEqualTo(second);
     var deletion = new DeleteRequest(second.version(), "誤入力", UUID.randomUUID());
     service.delete(1L, first.id(), deletion, "actor");
     service.delete(1L, first.id(), deletion, "actor");
+    assertThat(service.replace(1L, first.id(), update, "actor").version())
+        .isGreaterThan(second.version());
     assertThatThrownBy(() -> service.get(1L, first.id())).isInstanceOf(NotFoundException.class);
     assertThat(service.month(1L, "2026-09").recordedTotalAmount()).isZero();
     assertThat(service.month(1L, "2026-09").version()).isEqualTo(3);
@@ -259,9 +269,13 @@ class AdvertisingIntegrationTest {
     assertThatThrownBy(
             () -> service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor"))
         .isInstanceOf(IllegalStateException.class);
-    for (var name : List.of("costs", "months", "changes", "requests"))
-      assertThat(jdbc.queryForObject("SELECT count(*) FROM t_advertising_" + name, Long.class))
-          .isZero();
+    for (var table :
+        List.of(
+            "t_advertising_costs",
+            "t_advertising_months",
+            "t_advertising_changes",
+            "t_operation_receipts"))
+      assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table, Long.class)).isZero();
   }
 
   @Test
@@ -270,7 +284,10 @@ class AdvertisingIntegrationTest {
     var result =
         race(
             () -> service.create(1L, request, "actor"), () -> service.create(1L, request, "actor"));
-    assertThat(result.get(0)).isEqualTo(result.get(1));
+    assertThat(result.get(0))
+        .usingRecursiveComparison()
+        .ignoringFields("createdAt", "updatedAt")
+        .isEqualTo(result.get(1));
     assertThat(service.month(1L, "2026-09").entryCount()).isEqualTo(1);
     assertThat(service.changes(1L, "2026-09", PageRequest.of(0, 20, NEWEST_FIRST)).getContent())
         .hasSize(1);
@@ -608,13 +625,18 @@ class AdvertisingIntegrationTest {
   @Configuration
   @EnableTransactionManagement
   @EnableJpaRepositories(
-      basePackageClasses = {AdvertisingChangeRepository.class, MediumRepository.class})
+      basePackageClasses = {
+        AdvertisingChangeRepository.class,
+        MediumRepository.class,
+        OperationReceiptRepository.class
+      })
   @EnableMethodSecurity
   @Import({
     AdvertisingService.class,
     AdvertisingOrderCostService.class,
     AdvertisingOrderReader.class,
-    MediumLookup.class
+    MediumLookup.class,
+    OperationReceipts.class
   })
   static class Config {
     @Bean
@@ -633,7 +655,10 @@ class AdvertisingIntegrationTest {
       var f = new LocalContainerEntityManagerFactoryBean();
       f.setDataSource(source);
       f.setPackagesToScan(
-          "com.kizuna.advertising.domain", "com.kizuna.order.domain", "com.kizuna.medium.domain");
+          "com.kizuna.advertising.domain",
+          "com.kizuna.order.domain",
+          "com.kizuna.medium.domain",
+          "com.kizuna.receipt.domain");
       f.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
       f.setJpaPropertyMap(
           Map.of(

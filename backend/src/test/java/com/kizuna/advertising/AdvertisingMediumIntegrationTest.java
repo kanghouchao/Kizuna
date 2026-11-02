@@ -19,6 +19,8 @@ import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.medium.application.MediumService;
 import com.kizuna.medium.domain.MediumRepository;
 import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.receipt.domain.OperationReceiptRepository;
+import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
@@ -206,13 +208,18 @@ class AdvertisingMediumIntegrationTest {
   @EnableAutoConfiguration
   @EntityScan("com.kizuna")
   @EnableJpaRepositories(
-      basePackageClasses = {AdvertisingChangeRepository.class, MediumRepository.class})
+      basePackageClasses = {
+        AdvertisingChangeRepository.class,
+        MediumRepository.class,
+        OperationReceiptRepository.class
+      })
   @Import({
     AdvertisingService.class,
     AdvertisingRecords.class,
     AdvertisingMediaService.class,
     MediumService.class,
-    MediumLookup.class
+    MediumLookup.class,
+    OperationReceipts.class
   })
   static class Config {
     @Bean

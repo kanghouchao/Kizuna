@@ -30,6 +30,13 @@ class ReceiptValuesTest {
   }
 
   @Test
+  void textFactsReadBackOnlyAsText() {
+    var receipt = new Receipt("1", "OP", "9", Map.of("copy_id", "c", "version", 3), true);
+    assertThat(receipt.textFact("copy_id")).isEqualTo("c");
+    assertThatThrownBy(() -> receipt.textFact("version")).isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
   void recordKeepsTheKeyFingerprintAndCommittedFacts() {
     var row = OperationReceipt.record(1L, 2L, "key", "hash", "OP", "9", Map.of("v", 1L));
     assertThat(row)

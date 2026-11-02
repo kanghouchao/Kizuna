@@ -3,13 +3,11 @@ package com.kizuna.advertising.infrastructure;
 import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingCost;
 import com.kizuna.advertising.domain.AdvertisingMonth;
-import com.kizuna.advertising.domain.AdvertisingRequest;
 import com.kizuna.shared.exception.NotFoundException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -29,15 +27,11 @@ public class AdvertisingRecords {
     em.flush();
   }
 
-  public void lock(String key) {
-    // 未作成の月と成功受領記録も、同じ論理キーで作成前から直列化する。
-    em.createNativeQuery("select pg_advisory_xact_lock(389,:key)", Object.class)
-        .setParameter("key", key.hashCode())
-        .getSingleResult();
-  }
-
   public void lockMonth(Long store, String month) {
-    lock("month:" + store + ":" + month);
+    // 未作成の月も、同じ論理キーで作成前から直列化する。
+    em.createNativeQuery("select pg_advisory_xact_lock(389,:key)", Object.class)
+        .setParameter("key", ("month:" + store + ":" + month).hashCode())
+        .getSingleResult();
   }
 
   public Optional<AdvertisingMonth> month(Long store, String month) {
@@ -73,6 +67,17 @@ public class AdvertisingRecords {
         .getResultStream()
         .findFirst()
         .orElseThrow(() -> new NotFoundException("広告費が見つかりません"));
+  }
+
+  /** 論理削除の有無を問わず読む。受領の対象の現在の状態を返すためにだけ使う。 */
+  public Optional<AdvertisingCost> recorded(Long store, String id) {
+    return em.createQuery(
+            "select c from AdvertisingCost c where c.storeId=:store and c.id=:id",
+            AdvertisingCost.class)
+        .setParameter("store", store)
+        .setParameter("id", id)
+        .getResultStream()
+        .findFirst();
   }
 
   public AdvertisingCost refresh(AdvertisingCost cost) {
@@ -120,17 +125,6 @@ public class AdvertisingRecords {
         .setParameter("store", store)
         .setParameter("month", month)
         .getResultList();
-  }
-
-  public Optional<AdvertisingRequest> receipt(Long store, Long actor, UUID request) {
-    return em.createQuery(
-            "select r from AdvertisingRequest r where r.storeId=:store and r.actorId=:actor and r.requestId=:request",
-            AdvertisingRequest.class)
-        .setParameter("store", store)
-        .setParameter("actor", actor)
-        .setParameter("request", request)
-        .getResultStream()
-        .findFirst();
   }
 
   public AdvertisingChange change(Long store, String month, String id) {

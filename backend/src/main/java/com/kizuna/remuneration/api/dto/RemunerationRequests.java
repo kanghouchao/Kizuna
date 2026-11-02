@@ -1,5 +1,6 @@
 package com.kizuna.remuneration.api.dto;
 
+import com.kizuna.receipt.once.Fingerprint;
 import com.kizuna.remuneration.domain.GuaranteeState;
 import com.kizuna.shared.exception.ServiceException;
 import jakarta.validation.constraints.NotBlank;
@@ -26,6 +27,11 @@ public final class RemunerationRequests {
       if (effectiveFrom != null && (effectiveFrom.getYear() < 1 || effectiveFrom.getYear() > 9999))
         throw new ServiceException("日付は西暦1年から9999年の範囲で指定してください");
     }
+
+    public String fingerprint() {
+      return Fingerprint.of(
+          "GUARANTEE_CREATE", personId, effectiveFrom, state, dailyAmount, reason, expectedVersion);
+    }
   }
 
   public record GuaranteeCorrectionRequest(
@@ -42,6 +48,18 @@ public final class RemunerationRequests {
       if (effectiveFrom != null && (effectiveFrom.getYear() < 1 || effectiveFrom.getYear() > 9999))
         throw new ServiceException("日付は西暦1年から9999年の範囲で指定してください");
     }
+
+    public String fingerprint(String id) {
+      return Fingerprint.of(
+          "GUARANTEE_CORRECT",
+          id,
+          effectiveFrom,
+          state,
+          dailyAmount,
+          reason,
+          correctionReason,
+          expectedVersion);
+    }
   }
 
   public record BonusCreateRequest(
@@ -54,6 +72,10 @@ public final class RemunerationRequests {
       reason = reason == null ? null : reason.strip();
       if (awardDate != null && (awardDate.getYear() < 1 || awardDate.getYear() > 9999))
         throw new ServiceException("日付は西暦1年から9999年の範囲で指定してください");
+    }
+
+    public String fingerprint() {
+      return Fingerprint.of("BONUS_CREATE", personId, awardDate, amount, reason);
     }
   }
 
@@ -70,6 +92,11 @@ public final class RemunerationRequests {
       if (awardDate != null && (awardDate.getYear() < 1 || awardDate.getYear() > 9999))
         throw new ServiceException("日付は西暦1年から9999年の範囲で指定してください");
     }
+
+    public String fingerprint(String id) {
+      return Fingerprint.of(
+          "BONUS_CORRECT", id, awardDate, amount, reason, correctionReason, expectedVersion);
+    }
   }
 
   public record CancellationRequest(
@@ -78,6 +105,15 @@ public final class RemunerationRequests {
       @NotNull UUID requestId) {
     public CancellationRequest {
       reason = reason == null ? null : reason.strip();
+    }
+
+    // 保証条件とボーナスの取消は同じ形の要求なので、取り消す対象の種類を指紋に含める。
+    public String guaranteeFingerprint(String id) {
+      return Fingerprint.of("GUARANTEE_CANCEL", id, reason, expectedVersion);
+    }
+
+    public String bonusFingerprint(String id) {
+      return Fingerprint.of("BONUS_CANCEL", id, reason, expectedVersion);
     }
   }
 }
