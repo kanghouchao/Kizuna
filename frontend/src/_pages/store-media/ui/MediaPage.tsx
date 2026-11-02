@@ -5,7 +5,7 @@ import { ArrowLeftIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { mediumApi, type MediumSummary } from '@/entities/medium';
 import { MePending, hasPermission, useMe } from '@/entities/user';
-import { getApiErrorMessage, storePath, useDeleteAction, useManagedList } from '@/shared/lib';
+import { getApiErrorMessage, storePath, useDeleteAction, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Badge,
@@ -31,9 +31,13 @@ export default function MediaPage() {
 }
 
 function MediaList({ manage }: { manage: boolean }) {
-  const { items, isLoading, failed, refetch } = useManagedList<MediumSummary>(() =>
+  const { data, setData, isLoading, failure, reload } = useResource<MediumSummary[]>(() =>
     mediumApi.list()
   );
+  const items = data ?? [];
+  // 更新の応答で行だけを差し替える。取り直すと表が読み込み中に外れ、押したボタンのフォーカスが失われる。
+  const replace = (updated: MediumSummary) =>
+    setData(rows => rows?.map(row => (row.id === updated.id ? updated : row)) ?? rows);
   const [modalOpen, setModalOpen] = useState(false);
   const [renaming, setRenaming] = useState<MediumSummary | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -41,17 +45,20 @@ function MediaList({ manage }: { manage: boolean }) {
     remove: medium => mediumApi.delete(medium.id, medium.version),
     successMessage: '媒体を削除しました',
     errorMessage: '媒体の削除に失敗しました',
-    onDeleted: refetch,
+    onDeleted: () => void reload(),
   });
 
   const toggle = async (medium: MediumSummary) => {
+    if (busy !== null) return;
     const stopping = medium.status === 'ACTIVE';
     setBusy(medium.id);
     try {
-      if (stopping) await mediumApi.stop(medium.id, medium.version);
-      else await mediumApi.resume(medium.id, medium.version);
+      replace(
+        stopping
+          ? await mediumApi.stop(medium.id, medium.version)
+          : await mediumApi.resume(medium.id, medium.version)
+      );
       notify.success(stopping ? '媒体を停止しました' : '媒体を再開しました');
-      void refetch();
     } catch (error) {
       notify.error(
         getApiErrorMessage(
@@ -90,10 +97,10 @@ function MediaList({ manage }: { manage: boolean }) {
             </Button>
           )
         }
-        state={{ rows: items, isLoading, failed }}
+        state={{ rows: items, isLoading, failed: failure !== null }}
         emptyMessage="媒体が登録されていません"
         errorMessage="媒体一覧の取得に失敗しました"
-        onRetry={refetch}
+        onRetry={() => void reload()}
       >
         <Table>
           <TableHeader>
@@ -143,7 +150,7 @@ function MediaList({ manage }: { manage: boolean }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={busy === medium.id}
+                        aria-disabled={busy === medium.id}
                         aria-label={`「${medium.name}」を${medium.status === 'ACTIVE' ? '停止' : '再開'}`}
                         onClick={() => void toggle(medium)}
                       >
@@ -170,7 +177,7 @@ function MediaList({ manage }: { manage: boolean }) {
         open={modalOpen}
         medium={renaming}
         onClose={() => setModalOpen(false)}
-        onSaved={refetch}
+        onSaved={updated => (updated ? replace(updated) : void reload())}
       />
       <ConfirmDialog
         open={deletion.open}

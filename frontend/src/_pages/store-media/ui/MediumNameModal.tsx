@@ -24,7 +24,8 @@ interface MediumNameModalProps {
   /** 改名する媒体。null なら新規作成。 */
   medium: MediumSummary | null;
   onClose: () => void;
-  onSaved: () => void;
+  /** 改名なら応答の媒体、新規作成なら引数なし。 */
+  onSaved: (updated?: MediumSummary) => void;
 }
 
 const NAME_REQUIRED = '媒体名を入力してください';
@@ -45,10 +46,11 @@ export function MediumNameModal({ open, medium, onClose, onSaved }: MediumNameMo
 
   const submit = async ({ name }: { name: string }) => {
     try {
-      if (medium) await mediumApi.rename(medium.id, name.trim(), medium.version);
+      let updated: MediumSummary | undefined;
+      if (medium) updated = await mediumApi.rename(medium.id, name.trim(), medium.version);
       else await mediumApi.create(name.trim());
       notify.success(medium ? '媒体名を変更しました' : '媒体を登録しました');
-      onSaved();
+      onSaved(updated);
       onClose();
     } catch (error) {
       notify.error(
