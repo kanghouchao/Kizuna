@@ -17,7 +17,7 @@ function report(month = '2026-09', name = '既知零'): OrderCostReport {
     rounding: 'HALF_UP_2_DECIMAL_YEN',
     cost_entry_count: 1,
     recorded_sales_amount: 0,
-    valid_completed_order_count: 3,
+    valid_completed_order_count: 5,
     zero_amount_order_count: 1,
     unnamed_media_order_count: 1,
     other_route_order_count: 2,
