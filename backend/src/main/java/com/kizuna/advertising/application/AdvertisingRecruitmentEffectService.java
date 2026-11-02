@@ -5,6 +5,7 @@ import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
 import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.recruitment.reporting.RecruitmentHireReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
@@ -78,7 +79,9 @@ public class AdvertisingRecruitmentEffectService {
             .map(
                 h ->
                     new AdvertisingRecruitmentEffectReport.Hire(
-                        AdvertisingMedia.of(media, h.mediumId()), h.startedOn(), h.endedAt()))
+                        medium(MediumLookup.referenced(media, h.mediumId())),
+                        h.startedOn(),
+                        h.endedAt()))
             .toList();
     var today = LocalDate.now(clock);
     var report =
@@ -92,5 +95,9 @@ public class AdvertisingRecruitmentEffectService {
         summary.generatedAt(),
         today,
         report);
+  }
+
+  private static AdvertisingMedium medium(MediumReference medium) {
+    return medium == null ? null : new AdvertisingMedium(medium.id(), medium.name());
   }
 }

@@ -3,6 +3,8 @@ package com.kizuna.medium.lookup;
 import com.kizuna.medium.domain.Medium;
 import com.kizuna.medium.domain.MediumRepository;
 import com.kizuna.medium.domain.MediumStatus;
+import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.Collection;
 import java.util.Map;
@@ -50,6 +52,27 @@ public class MediumLookup {
   /** 他店・存在しない媒体、または検査の後に削除された媒体（FK 違反）を指す要求への入力エラー。 */
   public static ServiceException missing() {
     return new ServiceException("媒体が見つかりません。一覧から選択してください");
+  }
+
+  /** 記録を flush する。検査の後に媒体が削除された場合も、媒体を指す FK（mediumFk）の違反を同じ入力エラーに揃える。 */
+  public static void flush(Runnable flush, DbConstraint mediumFk) {
+    IntegrityViolations.translateOnFailure(
+        () -> {
+          flush.run();
+          return null;
+        },
+        Map.of(mediumFk, MediumLookup::missing));
+  }
+
+  /** 記録が持つ媒体 ID を {@link #findAll} の結果から引く。媒体を持たない記録（id が null）は null。 */
+  public static MediumReference referenced(Map<String, MediumReference> media, String id) {
+    return id == null ? null : referenced(media.get(id));
+  }
+
+  // 複合 FK が同一店舗の媒体の実在を保証するので、記録が指す媒体を引けないのは不変条件の破れ。
+  public static MediumReference referenced(MediumReference found) {
+    if (found == null) throw new IllegalStateException("記録の媒体が見つかりません");
+    return found;
   }
 
   private static MediumReference reference(Medium m) {

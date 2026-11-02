@@ -24,7 +24,6 @@ import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.user.application.ActorIdentityService;
@@ -67,7 +66,7 @@ public class AdvertisingService {
   public Page<CostSummary> list(Long storeId, String month, Pageable pageable) {
     var page = records.list(storeId, AdvertisingInput.month(month), pageable);
     var names = media(storeId, page.getContent());
-    return page.map(c -> CostSummary.of(c, name(names, c.getMediumId())));
+    return page.map(c -> CostSummary.of(c, MediumLookup.referenced(names, c.getMediumId()).name()));
   }
 
   @Transactional(readOnly = true)
@@ -123,8 +122,9 @@ public class AdvertisingService {
           cost.setStoreId(storeId);
           records.persist(cost);
           records.advance(storeId, month);
-          flushMedium();
-          var after = CostResponse.of(cost, name(selected, cost.getMediumId()));
+          MediumLookup.flush(records::flush, DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM);
+          var after =
+              CostResponse.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
           change(storeId, actor, month, "CREATED", null, after, null, null);
           return committed("CREATED", cost);
         },
@@ -145,11 +145,12 @@ public class AdvertisingService {
               mediumLookup.findAll(
                   storeId, Stream.of(current, values.mediumId()).collect(Collectors.toSet()));
           MediumLookup.selectable(selected.get(values.mediumId()), current);
-          var before = CostResponse.of(cost, name(selected, current));
+          var before = CostResponse.of(cost, MediumLookup.referenced(selected, current).name());
           cost.replace(values);
           records.advance(storeId, cost.getMonth());
-          flushMedium();
-          var after = CostResponse.of(cost, name(selected, cost.getMediumId()));
+          MediumLookup.flush(records::flush, DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM);
+          var after =
+              CostResponse.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
           change(storeId, actor, cost.getMonth(), "UPDATED", before, after, request.reason(), null);
           return committed("UPDATED", cost);
         },
@@ -223,7 +224,7 @@ public class AdvertisingService {
                 target,
                 "COPIED",
                 null,
-                CostResponse.of(cost, name(names, cost.getMediumId())),
+                CostResponse.of(cost, MediumLookup.referenced(names, cost.getMediumId()).name()),
                 request.reason(),
                 original.getId());
           }
@@ -317,35 +318,21 @@ public class AdvertisingService {
     AdvertisingInput.month(month);
     var rows = bounded(storeId, month);
     var names = media(storeId, rows);
-    var costs = rows.stream().map(c -> CostResponse.of(c, name(names, c.getMediumId()))).toList();
+    var costs =
+        rows.stream()
+            .map(c -> CostResponse.of(c, MediumLookup.referenced(names, c.getMediumId()).name()))
+            .toList();
     return new ExportSnapshot(summary(storeId, month), costs);
-  }
-
-  // 検査の後に媒体が削除された場合も、FK 違反を同じ入力エラーに揃える。
-  private void flushMedium() {
-    IntegrityViolations.translateOnFailure(
-        () -> {
-          records.flush();
-          return null;
-        },
-        Map.of(DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, MediumLookup::missing));
   }
 
   private CostResponse response(Long storeId, AdvertisingCost cost) {
     var names = media(storeId, List.of(cost));
-    return CostResponse.of(cost, name(names, cost.getMediumId()));
+    return CostResponse.of(cost, MediumLookup.referenced(names, cost.getMediumId()).name());
   }
 
   private Map<String, MediumReference> media(Long storeId, Collection<AdvertisingCost> costs) {
     return mediumLookup.findAll(
         storeId, costs.stream().map(AdvertisingCost::getMediumId).collect(Collectors.toSet()));
-  }
-
-  // 複合 FK が同一店舗の媒体の実在を保証するので、引けないのは不変条件の破れ。
-  private static String name(Map<String, MediumReference> media, String mediumId) {
-    var medium = media.get(mediumId);
-    if (medium == null) throw new IllegalStateException("広告費の媒体が見つかりません");
-    return medium.name();
   }
 
   private List<AdvertisingCost> bounded(Long storeId, String month) {

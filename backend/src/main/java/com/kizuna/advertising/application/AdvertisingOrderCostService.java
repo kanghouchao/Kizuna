@@ -5,6 +5,7 @@ import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
@@ -78,7 +79,9 @@ public class AdvertisingOrderCostService {
             .map(
                 o ->
                     new AdvertisingOrderCostReport.Order(
-                        AdvertisingMedia.of(media, o.mediumId()), o.otherRoute(), o.zeroAmount()))
+                        medium(MediumLookup.referenced(media, o.mediumId())),
+                        o.otherRoute(),
+                        o.zeroAmount()))
             .toList();
     var report = AdvertisingOrderCostReport.aggregate(sales, validOrders);
     budget.check();
@@ -89,5 +92,9 @@ public class AdvertisingOrderCostService {
         AdvertisingMediaReport.safeAdd(0, summary.version()),
         summary.generatedAt(),
         report);
+  }
+
+  private static AdvertisingMedium medium(MediumReference medium) {
+    return medium == null ? null : new AdvertisingMedium(medium.id(), medium.name());
   }
 }

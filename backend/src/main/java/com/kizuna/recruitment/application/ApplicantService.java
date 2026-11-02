@@ -22,7 +22,6 @@ import com.kizuna.recruitment.domain.ApplicantStatusHistoryRepository;
 import com.kizuna.recruitment.domain.ApplicantSummaryView;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -93,13 +92,8 @@ public class ApplicantService {
                 .map(ApplicantSummaryView::getMediumId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet()));
-    // findAll の結果は不変 Map で null キーを引けないため、媒体を持たない応募者は引かない。
     return page.map(
-        a ->
-            mapper.toSummary(
-                a,
-                medium(
-                    a.getMediumId(), a.getMediumId() == null ? null : media.get(a.getMediumId()))));
+        a -> mapper.toSummary(a, medium(MediumLookup.referenced(media, a.getMediumId()))));
   }
 
   @Transactional(readOnly = true)
@@ -115,7 +109,7 @@ public class ApplicantService {
     Applicant applicant = Applicant.receive(storeId, intake);
     applicant.recordEditor(actorId);
     applicants.save(applicant);
-    flushMedium();
+    MediumLookup.flush(applicants::flush, DbConstraint.FK_T_APPLICANTS_MEDIUM);
     record(applicant, null, actorId, "応募受付");
     recordAudit(applicant, "APPLICANT_RECEIVED", Map.of());
     return response(applicant);
@@ -130,7 +124,7 @@ public class ApplicantService {
     requireSelectable(storeId, intake.mediumId(), applicant.getMediumId());
     applicant.replaceIntake(intake);
     applicant.recordEditor(actorId(actorEmail));
-    flushMedium();
+    MediumLookup.flush(applicants::flush, DbConstraint.FK_T_APPLICANTS_MEDIUM);
     recordAudit(applicant, "APPLICANT_INTAKE_UPDATED", before);
     return response(applicant);
   }
@@ -219,32 +213,19 @@ public class ApplicantService {
     if (mediumId != null) mediumLookup.requireSelectable(storeId, mediumId, current);
   }
 
-  // 検査の後に媒体が削除された場合も、FK 違反を同じ入力エラーに揃える。
-  private void flushMedium() {
-    IntegrityViolations.translateOnFailure(
-        () -> {
-          applicants.flush();
-          return null;
-        },
-        Map.of(DbConstraint.FK_T_APPLICANTS_MEDIUM, MediumLookup::missing));
-  }
-
   private ApplicantResponse response(Applicant applicant) {
     var mediumId = applicant.getMediumId();
     return mapper.toResponse(
         applicant,
-        medium(
-            mediumId,
-            mediumId == null
-                ? null
-                : mediumLookup.find(applicant.getStoreId(), mediumId).orElse(null)));
+        mediumId == null
+            ? null
+            : medium(
+                MediumLookup.referenced(
+                    mediumLookup.find(applicant.getStoreId(), mediumId).orElse(null))));
   }
 
-  // 複合 FK が同一店舗の媒体の実在を保証するので、媒体 ID を持つのに引けないのは不変条件の破れ。
-  private static ApplicantMediumResponse medium(String mediumId, MediumReference medium) {
-    if (mediumId == null) return null;
-    if (medium == null) throw new IllegalStateException("応募者の媒体が見つかりません");
-    return new ApplicantMediumResponse(medium.id(), medium.name());
+  private static ApplicantMediumResponse medium(MediumReference medium) {
+    return medium == null ? null : new ApplicantMediumResponse(medium.id(), medium.name());
   }
 
   // 非公開の連絡先・面接内容・理由を、別の閲覧権限を持つ汎用監査へ複製しない。
