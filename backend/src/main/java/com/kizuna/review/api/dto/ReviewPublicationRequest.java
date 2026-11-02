@@ -1,6 +1,6 @@
 package com.kizuna.review.api.dto;
 
-import com.kizuna.review.domain.ReviewChange;
+import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.publication.Publication;
 import java.time.OffsetDateTime;
@@ -13,9 +13,9 @@ public record ReviewPublicationRequest(
     OffsetDateTime publishUntil,
     Integer displayOrder,
     String dedupeKey) {
-  public ReviewChange change(String id) {
+  public ReviewCommand.Publish publish(String id) {
     if (published == null) throw new ServiceException("公開・非公開を指定してください");
-    return ReviewChange.publication(
+    return new ReviewCommand.Publish(
         id,
         version,
         new Publication(published, publishFrom, publishUntil, displayOrder),

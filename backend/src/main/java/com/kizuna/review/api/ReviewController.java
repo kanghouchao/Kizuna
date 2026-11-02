@@ -13,16 +13,12 @@ import com.kizuna.review.api.dto.ReviewResponse;
 import com.kizuna.review.api.dto.ReviewSummaryResponse;
 import com.kizuna.review.api.dto.ReviewWriteResponse;
 import com.kizuna.review.application.ReviewService;
-import com.kizuna.review.domain.ReviewChange;
 import com.kizuna.review.domain.ReviewSearch;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
-import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
 import jakarta.annotation.security.PermitAll;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -49,36 +45,27 @@ public class ReviewController {
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
   public ResponseEntity<ReviewWriteResponse> create(
       @CurrentStore Long storeId, Authentication auth, @RequestBody ReviewCreateRequest request) {
-    var input = request.input();
-    ReviewWriteResponse result;
-    try {
-      result = reviews.create(storeId, auth.getName(), input, request.dedupeKey());
-    } catch (DataIntegrityViolationException conflict) {
-      if (!IntegrityViolations.violates(conflict, DbConstraint.UQ_T_REVIEW_OPERATIONS_KEY))
-        throw conflict;
-      result = reviews.replayCreate(storeId, auth.getName(), input, request.dedupeKey());
-    }
-    return ResponseEntity.status(result.operation().replayed() ? 200 : 201).body(result);
+    return ReviewWrites.write(reviews, storeId, auth, request.receipt(), true);
   }
 
   @PostMapping("/{id}/decisions")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MODERATE')")
-  public ReviewWriteResponse decide(
+  public ResponseEntity<ReviewWriteResponse> decide(
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewDecisionRequest request) {
-    return change(storeId, auth.getName(), request.change(id));
+    return ReviewWrites.write(reviews, storeId, auth, request.decide(id), false);
   }
 
   @PostMapping("/{id}/withdrawals")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
-  public ReviewWriteResponse withdraw(
+  public ResponseEntity<ReviewWriteResponse> withdraw(
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewActionRequest request) {
-    return change(storeId, auth.getName(), request.withdrawal(id));
+    return ReviewWrites.write(reviews, storeId, auth, request.withdrawal(id), false);
   }
 
   @PostMapping("/{id}/permissions")
@@ -88,28 +75,27 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewPermissionRequest request) {
-    var result = change(storeId, auth.getName(), request.change(id));
-    return ResponseEntity.status(result.operation().replayed() ? 200 : 201).body(result);
+    return ReviewWrites.write(reviews, storeId, auth, request.grant(id), true);
   }
 
   @PostMapping("/{id}/permission-revocations")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
-  public ReviewWriteResponse revoke(
+  public ResponseEntity<ReviewWriteResponse> revoke(
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewPermissionRevocationRequest request) {
-    return change(storeId, auth.getName(), request.change(id));
+    return ReviewWrites.write(reviews, storeId, auth, request.revoke(id), false);
   }
 
   @PutMapping("/{id}/publication")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MODERATE')")
-  public ReviewWriteResponse publish(
+  public ResponseEntity<ReviewWriteResponse> publish(
       @CurrentStore Long storeId,
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewPublicationRequest request) {
-    return change(storeId, auth.getName(), request.change(id));
+    return ReviewWrites.write(reviews, storeId, auth, request.publish(id), false);
   }
 
   @PostMapping("/{id}/corrections")
@@ -119,16 +105,7 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewCorrectionRequest request) {
-    var correction = request.correction(id);
-    ReviewWriteResponse result;
-    try {
-      result = reviews.correct(storeId, auth.getName(), correction);
-    } catch (DataIntegrityViolationException conflict) {
-      if (!IntegrityViolations.violates(conflict, DbConstraint.UQ_T_REVIEW_OPERATIONS_KEY))
-        throw conflict;
-      result = reviews.replayCorrection(storeId, auth.getName(), correction);
-    }
-    return ResponseEntity.status(result.operation().replayed() ? 200 : 201).body(result);
+    return ReviewWrites.write(reviews, storeId, auth, request.correction(id), true);
   }
 
   @GetMapping
@@ -177,15 +154,5 @@ public class ReviewController {
       @PathVariable String id,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
     return reviews.history(storeId, auth.getName(), id, pageable);
-  }
-
-  private ReviewWriteResponse change(Long storeId, String email, ReviewChange change) {
-    try {
-      return reviews.change(storeId, email, change);
-    } catch (DataIntegrityViolationException conflict) {
-      if (!IntegrityViolations.violates(conflict, DbConstraint.UQ_T_REVIEW_OPERATIONS_KEY))
-        throw conflict;
-      return reviews.replayChange(storeId, email, change);
-    }
   }
 }

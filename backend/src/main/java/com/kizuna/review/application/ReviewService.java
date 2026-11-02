@@ -7,10 +7,8 @@ import com.kizuna.review.api.dto.ReviewPublicResponse;
 import com.kizuna.review.api.dto.ReviewResponse;
 import com.kizuna.review.api.dto.ReviewSummaryResponse;
 import com.kizuna.review.api.dto.ReviewWriteResponse;
-import com.kizuna.review.domain.ReviewChange;
-import com.kizuna.review.domain.ReviewCorrection;
+import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.review.domain.ReviewDetailsView;
-import com.kizuna.review.domain.ReviewFingerprint;
 import com.kizuna.review.domain.ReviewHistory;
 import com.kizuna.review.domain.ReviewHistoryRepository;
 import com.kizuna.review.domain.ReviewHistoryView;
@@ -55,243 +53,36 @@ public class ReviewService {
   private final Clock clock;
 
   @Transactional
-  public ReviewWriteResponse create(Long storeId, String email, ReviewInput input, String key) {
-    var actor = intakeActor(storeId, email, input);
-    key = ReviewInput.key(key);
-    String fingerprint = ReviewFingerprint.receipt(input);
-    var existing = operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), key);
-    if (existing.isPresent()) return replay(storeId, existing.get(), fingerprint);
-    ReviewInput.requirePast(input.receivedAt(), OffsetDateTime.now(clock));
-    var origin = origin(storeId, input);
-    var row =
-        reviews.saveAndFlush(
-            ReviewRecord.receive(
-                storeId, input, actor.id(), actor.name(), origin.checkedAt(), origin.version()));
-    history.save(
-        ReviewHistory.record(
-            row, Operation.RECEIVED, actor.id(), actor.name(), null, null, null, null));
-    audit.record(
-        email,
-        row.getStoreId(),
-        "REVIEW_RECEIVED",
-        "REVIEW",
-        row.getId(),
-        null,
-        null,
-        Map.of(),
-        Map.of("status", "PENDING", "version", row.getVersion().toString()));
-    var operation =
-        operations.saveAndFlush(
-            ReviewOperation.record(actor.id(), key, fingerprint, Operation.RECEIVED, row));
-    return ReviewWriteResponse.of(response(storeId, row), operation, false);
-  }
-
-  @Transactional(readOnly = true)
-  public ReviewWriteResponse replayCreate(
-      Long storeId, String email, ReviewInput input, String key) {
-    var actor = intakeActor(storeId, email, input);
-    var operation =
-        operations
-            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), ReviewInput.key(key))
-            .orElseThrow(() -> new NotFoundException("口コミの受付結果が見つかりません"));
-    return replay(storeId, operation, ReviewFingerprint.receipt(input));
-  }
-
-  @Transactional
-  public ReviewWriteResponse change(Long storeId, String email, ReviewChange change) {
-    var actor = changeActor(storeId, email, change);
-    var existing =
-        operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), change.key());
-    if (existing.isPresent()) return replay(storeId, existing.get(), change.fingerprint());
-    var row =
-        reviews
-            .findByIdAndStoreIdForUpdate(change.reviewId(), storeId)
-            .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
-    existing = operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), change.key());
-    if (existing.isPresent()) return replay(storeId, existing.get(), change.fingerprint());
-    row.requireVersion(change.version());
-    var before = ReviewHistory.Before.of(row);
-    String permissionId = null;
-    if (change.eventAt() != null)
-      ReviewInput.requirePast(change.eventAt(), OffsetDateTime.now(clock));
-    switch (change.type()) {
-      case APPROVED -> row.approve();
-      case REJECTED -> row.reject();
-      case WITHDRAWN -> row.withdraw();
-      case PERMISSION_GRANTED -> {
-        row.grantPermission();
-        var p =
-            permissions.saveAndFlush(
-                ReviewPermission.grant(
-                    row,
-                    change.basis(),
-                    change.eventAt(),
-                    change.evidence(),
-                    actor.id(),
-                    actor.name()));
-        permissionId = p.getId();
-      }
-      case PERMISSION_REVOKED -> {
-        row.revokePermission();
-        var p =
-            permissions
-                .findByStoreIdAndReviewId(storeId, row.getId())
-                .orElseThrow(() -> new IllegalStateException("公開許可の記録が見つかりません"));
-        p.revoke(
-            change.eventAt(),
-            change.reason(),
-            actor.id(),
-            actor.name(),
-            ReviewInput.time(OffsetDateTime.now(clock)));
-        permissionId = p.getId();
-      }
-      case PUBLICATION_CHANGED -> row.changePublication(change.publication());
-      default -> throw new ServiceException("口コミの操作内容を確認してください");
-    }
-    reviews.flush();
-    history.save(
-        ReviewHistory.record(
-            row,
-            change.type(),
-            actor.id(),
-            actor.name(),
-            before,
-            change.reason(),
-            null,
-            permissionId));
-    audit.record(
-        email,
-        row.getStoreId(),
-        "REVIEW_" + change.type().name(),
-        "REVIEW",
-        row.getId(),
-        null,
-        null,
-        auditState(before, change.type()),
-        auditState(ReviewHistory.Before.of(row), change.type()));
+  public ReviewWriteResponse write(Long storeId, String email, ReviewCommand command) {
+    var actor = actor(storeId, email, command);
+    var target = lock(storeId, command);
+    var old = operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), command.key());
+    if (old.isPresent()) return replay(storeId, old.get(), command.fingerprint());
+    var result =
+        switch (command) {
+          case ReviewCommand.Receive c -> receive(storeId, email, actor, c);
+          case ReviewCommand.Decide c -> decide(email, actor, target, c);
+          case ReviewCommand.Withdraw c -> withdraw(email, actor, target, c);
+          case ReviewCommand.Grant c -> grant(email, actor, target, c);
+          case ReviewCommand.Revoke c -> revoke(storeId, email, actor, target, c);
+          case ReviewCommand.Publish c -> publish(email, actor, target, c);
+          case ReviewCommand.Correct c -> correct(storeId, email, actor, target, c);
+        };
     var operation =
         operations.saveAndFlush(
             ReviewOperation.record(
-                actor.id(), change.key(), change.fingerprint(), change.type(), row));
-    return ReviewWriteResponse.of(response(storeId, row), operation, false);
+                actor.id(), command.key(), command.fingerprint(), result.type(), result.row()));
+    return ReviewWriteResponse.of(response(storeId, result.row()), operation, false);
   }
 
   @Transactional(readOnly = true)
-  public ReviewWriteResponse replayChange(Long storeId, String email, ReviewChange change) {
-    var actor = changeActor(storeId, email, change);
+  public ReviewWriteResponse replayOnly(Long storeId, String email, ReviewCommand command) {
+    var actor = actor(storeId, email, command);
     var operation =
         operations
-            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), change.key())
+            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), command.key())
             .orElseThrow(() -> new NotFoundException("口コミの操作結果が見つかりません"));
-    return replay(storeId, operation, change.fingerprint());
-  }
-
-  @Transactional
-  public ReviewWriteResponse correct(Long storeId, String email, ReviewCorrection correction) {
-    var actor = intakeActor(storeId, email, correction.input());
-    var existing =
-        operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), correction.key());
-    if (existing.isPresent()) return replay(storeId, existing.get(), correction.fingerprint());
-    var old =
-        reviews
-            .findByIdAndStoreIdForUpdate(correction.reviewId(), storeId)
-            .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
-    existing =
-        operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), correction.key());
-    if (existing.isPresent()) return replay(storeId, existing.get(), correction.fingerprint());
-    old.requireVersion(correction.version());
-    ReviewInput.requirePast(correction.input().receivedAt(), OffsetDateTime.now(clock));
-    var origin = origin(storeId, correction.input());
-    var before = ReviewHistory.Before.of(old);
-    var row =
-        reviews.saveAndFlush(
-            ReviewRecord.correction(
-                old,
-                correction.input(),
-                actor.id(),
-                actor.name(),
-                origin.checkedAt(),
-                origin.version()));
-    old.linkCorrection(row.getId());
-    reviews.flush();
-    history.save(
-        ReviewHistory.record(
-            old,
-            Operation.CORRECTION_LINKED,
-            actor.id(),
-            actor.name(),
-            before,
-            correction.reason(),
-            row.getId(),
-            null));
-    history.save(
-        ReviewHistory.record(
-            row,
-            Operation.CORRECTION_RECEIVED,
-            actor.id(),
-            actor.name(),
-            null,
-            correction.reason(),
-            old.getId(),
-            null));
-    audit.record(
-        email,
-        old.getStoreId(),
-        "REVIEW_CORRECTION_LINKED",
-        "REVIEW",
-        old.getId(),
-        null,
-        null,
-        Map.of(
-            "status",
-            before.status().name(),
-            "permission_status",
-            before.permissionStatus().name(),
-            "version",
-            before.version().toString()),
-        Map.of(
-            "status",
-            old.getStatus().name(),
-            "permission_status",
-            old.getPermissionStatus().name(),
-            "version",
-            old.getVersion().toString()));
-    audit.record(
-        email,
-        row.getStoreId(),
-        "REVIEW_CORRECTION_RECEIVED",
-        "REVIEW",
-        row.getId(),
-        null,
-        null,
-        Map.of(),
-        Map.of(
-            "status",
-            row.getStatus().name(),
-            "permission_status",
-            row.getPermissionStatus().name(),
-            "version",
-            row.getVersion().toString()));
-    var operation =
-        operations.saveAndFlush(
-            ReviewOperation.record(
-                actor.id(),
-                correction.key(),
-                correction.fingerprint(),
-                Operation.CORRECTION_RECEIVED,
-                row));
-    return ReviewWriteResponse.of(response(storeId, row), operation, false);
-  }
-
-  @Transactional(readOnly = true)
-  public ReviewWriteResponse replayCorrection(
-      Long storeId, String email, ReviewCorrection correction) {
-    var actor = intakeActor(storeId, email, correction.input());
-    var operation =
-        operations
-            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), correction.key())
-            .orElseThrow(() -> new NotFoundException("訂正結果が見つかりません"));
-    return replay(storeId, operation, correction.fingerprint());
+    return replay(storeId, operation, command.fingerprint());
   }
 
   @Transactional(readOnly = true)
@@ -344,12 +135,6 @@ public class ReviewService {
         .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
   }
 
-  private AuditActor intakeActor(Long storeId, String email, ReviewInput input) {
-    var actor = actors.require(storeId, email, PermissionCode.REVIEW_MANAGE);
-    if (input.originOrderId() != null) actors.require(storeId, email, PermissionCode.ORDER_MANAGE);
-    return actor;
-  }
-
   private record OriginSnapshot(OffsetDateTime checkedAt, Long version) {}
 
   private OriginSnapshot origin(Long storeId, ReviewInput input) {
@@ -363,15 +148,155 @@ public class ReviewService {
     return new OriginSnapshot(ReviewInput.time(OffsetDateTime.now(clock)), facts.orderVersion());
   }
 
-  private AuditActor changeActor(Long storeId, String email, ReviewChange change) {
-    return actors.require(
-        storeId,
+  private record Result(ReviewRecord row, Operation type) {}
+
+  private Result receive(Long storeId, String email, AuditActor actor, ReviewCommand.Receive c) {
+    ReviewInput.requirePast(c.input().receivedAt(), now());
+    var origin = origin(storeId, c.input());
+    var row =
+        reviews.saveAndFlush(
+            ReviewRecord.receive(
+                storeId,
+                c.input(),
+                actor.id(),
+                actor.name(),
+                origin.checkedAt(),
+                origin.version()));
+    record(email, actor, row, Operation.RECEIVED, null, null, null, null);
+    return new Result(row, Operation.RECEIVED);
+  }
+
+  private Result decide(String email, AuditActor actor, ReviewRecord row, ReviewCommand.Decide c) {
+    var before = before(row, c.version());
+    if (c.type() == Operation.APPROVED) row.approve();
+    else row.reject();
+    return changed(email, actor, row, c.type(), before, c.reason(), null);
+  }
+
+  private Result withdraw(
+      String email, AuditActor actor, ReviewRecord row, ReviewCommand.Withdraw c) {
+    var before = before(row, c.version());
+    row.withdraw();
+    return changed(email, actor, row, Operation.WITHDRAWN, before, c.reason(), null);
+  }
+
+  private Result grant(String email, AuditActor actor, ReviewRecord row, ReviewCommand.Grant c) {
+    var before = before(row, c.version());
+    ReviewInput.requirePast(c.grantedAt(), now());
+    row.grantPermission();
+    var permission =
+        permissions.saveAndFlush(
+            ReviewPermission.grant(
+                row, c.basis(), c.grantedAt(), c.evidence(), actor.id(), actor.name()));
+    return changed(
+        email, actor, row, Operation.PERMISSION_GRANTED, before, null, permission.getId());
+  }
+
+  private Result revoke(
+      Long storeId, String email, AuditActor actor, ReviewRecord row, ReviewCommand.Revoke c) {
+    var before = before(row, c.version());
+    ReviewInput.requirePast(c.receivedAt(), now());
+    row.revokePermission();
+    var permission =
+        permissions
+            .findByStoreIdAndReviewId(storeId, row.getId())
+            .orElseThrow(() -> new IllegalStateException("公開許可の記録が見つかりません"));
+    permission.revoke(
+        c.receivedAt(), c.reason(), actor.id(), actor.name(), ReviewInput.time(now()));
+    return changed(
+        email, actor, row, Operation.PERMISSION_REVOKED, before, c.reason(), permission.getId());
+  }
+
+  private Result publish(
+      String email, AuditActor actor, ReviewRecord row, ReviewCommand.Publish c) {
+    var before = before(row, c.version());
+    row.changePublication(c.publication());
+    return changed(email, actor, row, Operation.PUBLICATION_CHANGED, before, null, null);
+  }
+
+  private Result correct(
+      Long storeId, String email, AuditActor actor, ReviewRecord old, ReviewCommand.Correct c) {
+    var before = before(old, c.version());
+    ReviewInput.requirePast(c.input().receivedAt(), now());
+    var origin = origin(storeId, c.input());
+    var row =
+        reviews.saveAndFlush(
+            ReviewRecord.correction(
+                old, c.input(), actor.id(), actor.name(), origin.checkedAt(), origin.version()));
+    old.linkCorrection(row.getId());
+    reviews.flush();
+    record(email, actor, old, Operation.CORRECTION_LINKED, before, c.reason(), row.getId(), null);
+    record(email, actor, row, Operation.CORRECTION_RECEIVED, null, c.reason(), old.getId(), null);
+    return new Result(row, Operation.CORRECTION_RECEIVED);
+  }
+
+  private AuditActor actor(Long storeId, String email, ReviewCommand command) {
+    AuditActor actor = null;
+    for (var permission : command.permissions()) actor = actors.require(storeId, email, permission);
+    return actor;
+  }
+
+  private ReviewRecord lock(Long storeId, ReviewCommand command) {
+    var id =
+        switch (command) {
+          case ReviewCommand.Receive _ -> null;
+          case ReviewCommand.Decide c -> c.reviewId();
+          case ReviewCommand.Withdraw c -> c.reviewId();
+          case ReviewCommand.Grant c -> c.reviewId();
+          case ReviewCommand.Revoke c -> c.reviewId();
+          case ReviewCommand.Publish c -> c.reviewId();
+          case ReviewCommand.Correct c -> c.reviewId();
+        };
+    if (id == null) return null;
+    return reviews
+        .findByIdAndStoreIdForUpdate(id, storeId)
+        .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
+  }
+
+  private static ReviewHistory.Before before(ReviewRecord row, Long version) {
+    row.requireVersion(version);
+    return ReviewHistory.Before.of(row);
+  }
+
+  private Result changed(
+      String email,
+      AuditActor actor,
+      ReviewRecord row,
+      Operation type,
+      ReviewHistory.Before before,
+      String reason,
+      String permissionId) {
+    reviews.flush();
+    record(email, actor, row, type, before, reason, null, permissionId);
+    return new Result(row, type);
+  }
+
+  private void record(
+      String email,
+      AuditActor actor,
+      ReviewRecord row,
+      Operation type,
+      ReviewHistory.Before before,
+      String reason,
+      String related,
+      String permissionId) {
+    history.save(
+        ReviewHistory.record(
+            row, type, actor.id(), actor.name(), before, reason, related, permissionId));
+    audit.record(
         email,
-        switch (change.type()) {
-          case APPROVED, REJECTED, PUBLICATION_CHANGED -> PermissionCode.REVIEW_MODERATE;
-          case WITHDRAWN, PERMISSION_GRANTED, PERMISSION_REVOKED -> PermissionCode.REVIEW_MANAGE;
-          default -> throw new ServiceException("口コミの操作内容を確認してください");
-        });
+        row.getStoreId(),
+        "REVIEW_" + type.name(),
+        "REVIEW",
+        row.getId(),
+        null,
+        null,
+        before == null ? Map.of() : auditState(before, type),
+        auditState(ReviewHistory.Before.of(row), type));
+  }
+
+  private OffsetDateTime now() {
+    return OffsetDateTime.now(clock);
   }
 
   private static Map<String, String> auditState(ReviewHistory.Before state, Operation type) {

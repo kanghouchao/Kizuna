@@ -1,8 +1,7 @@
 package com.kizuna.review.api.dto;
 
-import com.kizuna.review.domain.ReviewChange;
+import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.review.domain.ReviewValues.Basis;
-import com.kizuna.review.domain.ReviewValues.Operation;
 import java.time.OffsetDateTime;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
@@ -12,15 +11,7 @@ public record ReviewPermissionRequest(
     OffsetDateTime grantedAt,
     String evidenceNote,
     String dedupeKey) {
-  public ReviewChange change(String id) {
-    return new ReviewChange(
-        id,
-        version,
-        Operation.PERMISSION_GRANTED,
-        null,
-        dedupeKey,
-        basisType,
-        grantedAt,
-        evidenceNote);
+  public ReviewCommand.Grant grant(String id) {
+    return new ReviewCommand.Grant(id, version, basisType, grantedAt, evidenceNote, dedupeKey);
   }
 }
