@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.advertising.api.dto.AdvertisingOrderCostResponse;
 import com.kizuna.advertising.application.AdvertisingOrderCostService.Snapshot;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport.Cost;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport.Order;
@@ -35,6 +36,11 @@ class AdvertisingOrderCostRendererTest {
         AdvertisingOrderCostReport.aggregate(costs, orders));
   }
 
+  /** id は表示されない数字列にして、出力の媒体列が現在名であることを区別する。 */
+  static AdvertisingMedium medium(String name) {
+    return new AdvertisingMedium("9" + name, name);
+  }
+
   DocumentBudget budget() {
     return new DocumentBudget(new AppProperties.OperationalReport());
   }
@@ -43,15 +49,15 @@ class AdvertisingOrderCostRendererTest {
   void exportsEveryGroupBeyondPageAndPreservesDecimalTextNullAndZero() throws Exception {
     var costs =
         IntStream.range(0, 2001)
-            .mapToObj(i -> new Cost(String.format("%05d", i), i == 1 ? 0 : 100))
+            .mapToObj(i -> new Cost(medium(String.format("%05d", i)), i == 1 ? 0 : 100))
             .toList();
     var report =
         snapshot(
             costs,
             List.of(
-                new Order("00001", true),
-                new Order("00002", false),
-                new Order("注文のみ", false),
+                new Order(medium("00001"), true),
+                new Order(medium("00002"), false),
+                new Order(medium("注文のみ"), false),
                 new Order(null, true)));
     var page = AdvertisingOrderCostResponse.of(report, PageRequest.of(1, 20));
     assertThat(page.rows().getContent()).hasSize(20);
@@ -71,14 +77,14 @@ class AdvertisingOrderCostRendererTest {
             "\"'記録値から算出\"",
             "\"'小数第3位を四捨五入（円）\"",
             "\"'一件あたり記録費用（円）\"",
-            "同月同名の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。");
+            "同月同媒体の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。");
     assertThat(csv.split("\r\n")).hasSize(2004);
     assertThat(ExportCells.letterRuns(csv)).containsExactlyInAnyOrder("ID", "ROI");
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {
       assertThat(book.getNumberOfSheets()).isEqualTo(2);
       assertThat(book.getSheetAt(0).getRow(1).getCell(17).getStringCellValue())
-          .contains("同月同名の記録比較", "因果・利益・ROIを示しません", "0円の有効完了受注");
+          .contains("同月同媒体の記録比較", "因果・利益・ROIを示しません", "0円の有効完了受注");
       var sheet = book.getSheet("受注あたり記録広告費");
       assertThat(sheet.getLastRowNum()).isEqualTo(2002);
       assertThat(sheet.getRow(1).getCell(9).getStringCellValue()).isEqualTo("00000");
@@ -97,11 +103,13 @@ class AdvertisingOrderCostRendererTest {
 
   @Test
   void protectsTextPrecisionAndResourceLimitsIncludingEmptyExports() throws Exception {
-    var report = snapshot(List.of(new Cost("=媒体,\"試験\"", 100)), List.of());
+    var report = snapshot(List.of(new Cost(medium("=媒体,\"試験\""), 100)), List.of());
     assertThat(new String(renderer.render(report, "csv", budget()), StandardCharsets.UTF_8))
         .contains("'=媒体,\"\"試験\"\"");
     var huge =
-        snapshot(List.of(new Cost("媒体", 1_000_000_000_000_000L)), List.of(new Order("媒体", false)));
+        snapshot(
+            List.of(new Cost(medium("媒体"), 1_000_000_000_000_000L)),
+            List.of(new Order(medium("媒体"), false)));
     assertThatThrownBy(() -> renderer.render(huge, "xlsx", budget()))
         .isInstanceOf(ServiceUnavailableException.class);
     var settings = new AppProperties.OperationalReport();

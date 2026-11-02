@@ -13,7 +13,7 @@ function report(): RecruitmentEffectReport {
     generated_at: '2026-07-15T00:00:00Z',
     retention_as_of: '2026-07-15',
     basis: 'recorded-recruitment-cost-per-hire-v1',
-    media_matching: 'EXACT_STORED_NAME',
+    media_matching: 'MEDIUM_ID',
     hire_basis: 'HIRED_APPLICANT_ENROLLMENT_STARTED_IN_MONTH',
     retention_basis: 'NOT_ENDED_AFTER_STARTED_ON_PLUS_MONTHS',
     rounding: 'HALF_UP_2_DECIMAL_YEN',
@@ -24,7 +24,7 @@ function report(): RecruitmentEffectReport {
     rows: {
       content: [
         {
-          media_name: '求人A',
+          medium: { id: 'medium-求人A', name: '求人A' },
           cost_entry_count: 1,
           recorded_recruitment_amount: 30000,
           hire_count: 2,
@@ -37,7 +37,7 @@ function report(): RecruitmentEffectReport {
           ],
         },
         {
-          media_name: '入店だけ',
+          medium: { id: 'medium-入店だけ', name: '入店だけ' },
           cost_entry_count: 0,
           recorded_recruitment_amount: null,
           hire_count: 1,
@@ -50,7 +50,7 @@ function report(): RecruitmentEffectReport {
           ],
         },
         {
-          media_name: '費用だけ',
+          medium: { id: 'medium-費用だけ', name: '費用だけ' },
           cost_entry_count: 1,
           recorded_recruitment_amount: 500,
           hire_count: 0,

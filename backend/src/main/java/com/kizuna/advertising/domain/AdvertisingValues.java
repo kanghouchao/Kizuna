@@ -4,17 +4,17 @@ import com.kizuna.shared.exception.ServiceException;
 
 public record AdvertisingValues(
     AdvertisingCategory category,
-    String mediaName,
+    String mediumId,
     String agencyName,
     String planName,
     Integer inquiryCount,
     Integer amount) {
   public AdvertisingValues {
-    mediaName = text(mediaName, 200);
+    mediumId = text(mediumId, 64);
     agencyName = text(agencyName, 200);
     planName = text(planName, 200);
     if (category == null
-        || mediaName == null
+        || mediumId == null
         || amount == null
         || amount < 0
         || (inquiryCount != null && inquiryCount < 0))
@@ -36,6 +36,6 @@ public record AdvertisingValues(
   }
 
   public AdvertisingValues copied() {
-    return new AdvertisingValues(category, mediaName, agencyName, planName, null, amount);
+    return new AdvertisingValues(category, mediumId, agencyName, planName, null, amount);
   }
 }

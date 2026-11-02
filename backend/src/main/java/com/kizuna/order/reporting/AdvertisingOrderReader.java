@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdvertisingOrderReader {
   private final EntityManager em;
 
-  public record Order(String mediaName, boolean zeroAmount) {}
+  public record Order(boolean zeroAmount) {}
 
   @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
@@ -27,7 +27,7 @@ public class AdvertisingOrderReader {
         em.createQuery(
                 """
         select new com.kizuna.order.reporting.AdvertisingOrderReader$Order(
-          o.mediaName, case when o.totalFee = 0 then true else false end)
+          case when o.totalFee = 0 then true else false end)
         from com.kizuna.order.domain.Order o
         where o.storeId = :store and o.businessDate >= :from and o.businessDate <= :to
           and o.status = com.kizuna.order.domain.OrderStatus.COMPLETED

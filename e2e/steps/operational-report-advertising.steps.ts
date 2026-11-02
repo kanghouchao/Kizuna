@@ -10,7 +10,7 @@ import {
   createAdvertisingCost, updateAdvertisingCost, deleteAdvertisingCost,
   createCast, issueCastInvitation, acceptCastInvitation, recordAttendance,
   createCourse, createAgreedOrder, completeAgreedOrder, createBonusAward, cancelBonusAward, deleteService,
-  getRemunerationCandidates, createRemunerationGuarantee, type AdvertisingCostValues,
+  getRemunerationCandidates, createRemunerationGuarantee, type AdvertisingCostValues, ensureMedium,
   openLoginForm,
 } from './store-api';
 
@@ -21,8 +21,10 @@ let year = '', foreign = '', email = '', password = '', course = '', order = '',
 let sales = { id: '', version: 0 }, recruitment = { id: '', version: 0 }, bonus = { id: '', version: 0 };
 let archivedCsv = '';
 const secret = '=非公開の媒体・代理店・理由';
-const values = (amount: number, category: AdvertisingCostValues['category'] = 'SALES'): AdvertisingCostValues => ({
-  category, amount, media_name: secret, agency_name: secret, plan_name: secret, inquiry_count: null,
+// 店舗ごとの媒体 ID。媒体名も帳票へ出してはならない値として secret を名乗らせる。
+const media: Record<string, string> = {};
+const values = (amount: number, category: AdvertisingCostValues['category'] = 'SALES', storeId = STORE1_ID): AdvertisingCostValues => ({
+  category, amount, medium_id: media[storeId], agency_name: secret, plan_name: secret, inquiry_count: null,
 });
 const headers = (token = full, endpoint = admin, storeId = STORE1_ID) => ({
   ...(endpoint === store ? { ...STORE_HEADERS, 'X-Store-ID': storeId } : {}), Authorization: `Bearer ${token}`,
@@ -85,10 +87,11 @@ Given('広告費帳票用の二店舗に受注と保証と賞与と月次費用�
     tokens.push(await loginUser(request, address, password));
   }
   [full, restricted, storeOnly, adminOnly, viewOnly, exportOnly, legacy, noRemuneration] = tokens;
+  for (const storeId of [STORE1_ID, foreign]) media[storeId] = await ensureMedium(request, full, secret, storeId);
   sales = await createAdvertisingCost(request, full, `${year}-02`, values(400));
   recruitment = await createAdvertisingCost(request, full, `${year}-02`, { ...values(600, 'RECRUITMENT'), inquiry_count: 0 });
   await createAdvertisingCost(request, full, `${year}-03`, values(200));
-  await createAdvertisingCost(request, full, `${year}-02`, values(800), foreign);
+  await createAdvertisingCost(request, full, `${year}-02`, values(800, 'SALES', foreign), foreign);
   await createAdvertisingCost(request, full, `${year}-04`, values(0));
   const cast = await createCast(request, manager, `広告帳票本人-${suffix}`);
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, cast),
@@ -453,9 +456,9 @@ Then('広告費帳票の全件出力は2001行と精度と取得上限を守る'
   const db = await database();
   const range = { from: `${year}-06-01`, to: `${year}-06-30`, include_remuneration: false };
   try {
-    await db.query(`INSERT INTO t_advertising_costs(id,store_id,month,category,media_name,agency_name,plan_name,inquiry_count,amount,deleted,revision,version,created_at,updated_at)
-      SELECT $2 || lpad(n::text,5,'0'),store_id,month,category,$3,NULL,NULL,NULL,100,false,0,0,created_at,updated_at
-      FROM t_advertising_costs CROSS JOIN generate_series(1,2000) n WHERE id=$1`, [seed.id, prefix, secret]);
+    await db.query(`INSERT INTO t_advertising_costs(id,store_id,month,category,medium_id,agency_name,plan_name,inquiry_count,amount,deleted,revision,version,created_at,updated_at)
+      SELECT $2 || lpad(n::text,5,'0'),store_id,month,category,medium_id,NULL,NULL,NULL,100,false,0,0,created_at,updated_at
+      FROM t_advertising_costs CROSS JOIN generate_series(1,2000) n WHERE id=$1`, [seed.id, prefix]);
     expect((await report(request, range)).advertising).toEqual(recorded(2001, 200100));
     for (const format of ['csv', 'xlsx']) {
       const response = await request.get(admin + '/exports', {
@@ -505,9 +508,9 @@ Then('広告費帳票の全件出力は2001行と精度と取得上限を守る'
       await cancelBonusAward(request, full, boundary.id, boundary.version, secret);
       await cancelBonusAward(request, full, overflow.id, overflow.version, secret);
     }
-    await db.query(`INSERT INTO t_advertising_costs(id,store_id,month,category,media_name,agency_name,plan_name,inquiry_count,amount,deleted,revision,version,created_at,updated_at)
-      SELECT $2 || lpad(n::text,5,'0'),store_id,month,category,$3,NULL,NULL,NULL,100,false,0,0,created_at,updated_at
-      FROM t_advertising_costs CROSS JOIN generate_series(2001,20000) n WHERE id=$1`, [seed.id, prefix, secret]);
+    await db.query(`INSERT INTO t_advertising_costs(id,store_id,month,category,medium_id,agency_name,plan_name,inquiry_count,amount,deleted,revision,version,created_at,updated_at)
+      SELECT $2 || lpad(n::text,5,'0'),store_id,month,category,medium_id,NULL,NULL,NULL,100,false,0,0,created_at,updated_at
+      FROM t_advertising_costs CROSS JOIN generate_series(2001,20000) n WHERE id=$1`, [seed.id, prefix]);
     for (const format of [undefined, 'csv', 'xlsx']) {
       const response = await request.get(admin + (format ? '/exports' : ''), {
         headers: headers(), params: parameters({ ...range, ...(format ? { format } : {}) }),

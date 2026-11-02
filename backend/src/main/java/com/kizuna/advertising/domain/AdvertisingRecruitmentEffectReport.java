@@ -7,8 +7,10 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.TreeMap;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 public record AdvertisingRecruitmentEffectReport(
@@ -18,16 +20,16 @@ public record AdvertisingRecruitmentEffectReport(
     long unnamedMediaHireCount,
     List<Row> rows) {
   public static final String BASIS = "recorded-recruitment-cost-per-hire-v1";
-  public static final String MATCHING = "EXACT_STORED_NAME";
+  public static final String MATCHING = "MEDIUM_ID";
   public static final String HIRE_BASIS = "HIRED_APPLICANT_ENROLLMENT_STARTED_IN_MONTH";
   public static final String RETENTION_BASIS = "NOT_ENDED_AFTER_STARTED_ON_PLUS_MONTHS";
   public static final String ROUNDING = "HALF_UP_2_DECIMAL_YEN";
   public static final List<Integer> RETENTION_MONTHS = List.of(2, 3, 4);
 
-  public record Cost(String mediaName, long amount) {}
+  public record Cost(AdvertisingMedium medium, long amount) {}
 
-  /** mediaName が null または空白の入店は媒体へ割り当てない。 */
-  public record Hire(String mediaName, LocalDate startedOn, OffsetDateTime endedAt) {}
+  /** medium が null の入店は媒体へ割り当てず、件数だけ別掲する。 */
+  public record Hire(AdvertisingMedium medium, LocalDate startedOn, OffsetDateTime endedAt) {}
 
   public enum Status {
     CALCULATED,
@@ -38,7 +40,7 @@ public record AdvertisingRecruitmentEffectReport(
   public record Retention(int months, long judgeableCount, long retainedCount) {}
 
   public record Row(
-      String mediaName,
+      AdvertisingMedium medium,
       long costEntryCount,
       Long recordedRecruitmentAmount,
       long hireCount,
@@ -52,20 +54,20 @@ public record AdvertisingRecruitmentEffectReport(
    */
   public static AdvertisingRecruitmentEffectReport aggregate(
       List<Cost> costs, List<Hire> hires, LocalDate today, ZoneId zone) {
-    var groups = new TreeMap<String, Totals>();
+    var groups = new HashMap<String, Totals>();
     long amount = 0, unnamed = 0;
     for (var cost : costs) {
-      var group = groups.computeIfAbsent(cost.mediaName(), ignored -> new Totals());
+      var group = group(groups, cost.medium());
       group.costs = safeAdd(group.costs, 1);
       group.amount = safeAdd(group.amount, cost.amount());
       amount = safeAdd(amount, cost.amount());
     }
     for (var hire : hires) {
-      if (hire.mediaName() == null || hire.mediaName().isBlank()) {
+      if (hire.medium() == null) {
         unnamed = safeAdd(unnamed, 1);
         continue;
       }
-      var group = groups.computeIfAbsent(hire.mediaName(), ignored -> new Totals());
+      var group = group(groups, hire.medium());
       group.hires = safeAdd(group.hires, 1);
       for (int i = 0; i < RETENTION_MONTHS.size(); i++) {
         var checkpoint = hire.startedOn().plusMonths(RETENTION_MONTHS.get(i));
@@ -81,15 +83,27 @@ public record AdvertisingRecruitmentEffectReport(
         costs.isEmpty() ? null : amount,
         hires.size(),
         unnamed,
-        groups.entrySet().stream().map(e -> e.getValue().row(e.getKey())).toList());
+        groups.values().stream()
+            .map(Totals::row)
+            .sorted(Comparator.comparing(Row::medium, AdvertisingMedium.BY_NAME_THEN_ID))
+            .toList());
+  }
+
+  private static Totals group(Map<String, Totals> groups, AdvertisingMedium medium) {
+    return groups.computeIfAbsent(medium.id(), ignored -> new Totals(medium));
   }
 
   private static class Totals {
+    final AdvertisingMedium medium;
     long costs, amount, hires;
     final long[] judgeable = new long[RETENTION_MONTHS.size()];
     final long[] retained = new long[RETENTION_MONTHS.size()];
 
-    Row row(String name) {
+    Totals(AdvertisingMedium medium) {
+      this.medium = medium;
+    }
+
+    Row row() {
       var status =
           costs == 0 ? Status.NO_COST_RECORDS : hires == 0 ? Status.NO_HIRES : Status.CALCULATED;
       var ratio =
@@ -102,7 +116,7 @@ public record AdvertisingRecruitmentEffectReport(
           IntStream.range(0, RETENTION_MONTHS.size())
               .mapToObj(i -> new Retention(RETENTION_MONTHS.get(i), judgeable[i], retained[i]))
               .toList();
-      return new Row(name, costs, costs == 0 ? null : amount, hires, ratio, status, retention);
+      return new Row(medium, costs, costs == 0 ? null : amount, hires, ratio, status, retention);
     }
   }
 }

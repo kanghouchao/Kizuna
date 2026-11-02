@@ -54,7 +54,7 @@ export function CopyPreview({
     <div className="space-y-4">
       <p>
         {source} → {month}
-        。区分・媒体・広告会社・プラン・金額を全件コピーします。問い合わせ人数は未計測に戻します。
+        。区分・媒体（停止中の媒体を含む）・広告会社・プラン・金額を全件コピーします。問い合わせ人数は未計測に戻します。
       </p>
       {preview.isLoading ? (
         <p>コピー内容を読み込み中...</p>

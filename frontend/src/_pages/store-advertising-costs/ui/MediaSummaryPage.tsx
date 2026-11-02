@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import {
   advertisingApi,
   categoryLabels,
+  mediumName,
   type MediaSummary,
   type MediaReport,
 } from '../api/advertising';
@@ -35,7 +36,7 @@ export function MediaSummaryPage({
     <div className="space-y-6">
       <ListPage
         title="媒体別集計"
-        description={`${month} の登録記録。同じ区分・保存媒体名だけをまとめています。`}
+        description={`${month} の登録記録。同じ区分・同じ媒体の費用をまとめ、媒体名は現在の名前で表示します。`}
         state={list}
         emptyMessage={
           visible && visible.entry_count > 0
@@ -58,10 +59,10 @@ export function MediaSummaryPage({
           </TableHeader>
           <TableBody>
             {list.rows.map(row => (
-              <TableRow key={JSON.stringify([row.category, row.media_name])}>
+              <TableRow key={JSON.stringify([row.category, row.medium?.id])}>
                 <TableCell>{categoryLabels[row.category]}</TableCell>
                 <TableCell className="min-w-40 max-w-64 whitespace-normal break-all">
-                  {row.media_name}
+                  {mediumName(row.medium)}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {row.entry_count.toLocaleString()}

@@ -3,6 +3,7 @@ package com.kizuna.advertising.api.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingCost;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import java.time.OffsetDateTime;
 
 public final class AdvertisingResponses {
@@ -14,7 +15,7 @@ public final class AdvertisingResponses {
       Long storeId,
       String month,
       AdvertisingCategory category,
-      String mediaName,
+      MediumResponse medium,
       String agencyName,
       String planName,
       Integer inquiryCount,
@@ -22,13 +23,14 @@ public final class AdvertisingResponses {
       long version,
       OffsetDateTime createdAt,
       OffsetDateTime updatedAt) {
-    public static CostResponse of(AdvertisingCost c) {
+    /** mediumName は媒体の現在名。変更履歴にはこの応答をその時点の写しとして残す。 */
+    public static CostResponse of(AdvertisingCost c, String mediumName) {
       return new CostResponse(
           c.getId(),
           c.getStoreId(),
           c.getMonth(),
           c.getCategory(),
-          c.getMediaName(),
+          new MediumResponse(c.getMediumId(), mediumName),
           c.getAgencyName(),
           c.getPlanName(),
           c.getInquiryCount(),
@@ -45,26 +47,32 @@ public final class AdvertisingResponses {
       Long storeId,
       String month,
       AdvertisingCategory category,
-      String mediaName,
+      MediumResponse medium,
       String agencyName,
       String planName,
       Integer inquiryCount,
       int amount,
       long version,
       OffsetDateTime updatedAt) {
-    public static CostSummary of(AdvertisingCost c) {
+    public static CostSummary of(AdvertisingCost c, String mediumName) {
       return new CostSummary(
           c.getId(),
           c.getStoreId(),
           c.getMonth(),
           c.getCategory(),
-          c.getMediaName(),
+          new MediumResponse(c.getMediumId(), mediumName),
           c.getAgencyName(),
           c.getPlanName(),
           c.getInquiryCount(),
           c.getAmount(),
           c.getVersion(),
           c.getUpdatedAt());
+    }
+  }
+
+  public record MediumResponse(String id, String name) {
+    public static MediumResponse of(AdvertisingMedium medium) {
+      return medium == null ? null : new MediumResponse(medium.id(), medium.name());
     }
   }
 

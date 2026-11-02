@@ -12,7 +12,7 @@ function report(month = '2026-09', name = '媒体', count: number | null = 0): M
     month_version: 1,
     generated_at: '2026-10-09T00:00:00Z',
     basis: 'advertising-media-records-v1',
-    media_matching: 'EXACT_STORED_NAME',
+    media_matching: 'MEDIUM_ID',
     inquiry_basis: 'MANUAL_RECORDED_SUM_NOT_DEDUPLICATED',
     entry_count: 2,
     recorded_total_amount: 300,
@@ -24,7 +24,7 @@ function report(month = '2026-09', name = '媒体', count: number | null = 0): M
       content: [
         {
           category: 'SALES',
-          media_name: name,
+          medium: { id: `medium-${name}`, name },
           entry_count: 2,
           recorded_amount: 300,
           recorded_inquiry_entry_count: count === null ? 0 : 1,

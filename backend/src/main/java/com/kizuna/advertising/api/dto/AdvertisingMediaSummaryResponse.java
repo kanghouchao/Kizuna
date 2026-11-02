@@ -1,6 +1,7 @@
 package com.kizuna.advertising.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.application.AdvertisingMediaService.Snapshot;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
@@ -28,7 +29,7 @@ public record AdvertisingMediaSummaryResponse(
   @JsonInclude(JsonInclude.Include.ALWAYS)
   public record MediaSummary(
       AdvertisingCategory category,
-      String mediaName,
+      MediumResponse medium,
       long entryCount,
       long recordedAmount,
       long recordedInquiryEntryCount,
@@ -46,7 +47,7 @@ public record AdvertisingMediaSummaryResponse(
                 row ->
                     new MediaSummary(
                         row.category(),
-                        row.mediaName(),
+                        MediumResponse.of(row.medium()),
                         row.entryCount(),
                         row.recordedAmount(),
                         row.recordedInquiryEntryCount(),

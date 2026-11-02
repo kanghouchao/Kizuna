@@ -2,6 +2,7 @@ package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
 import com.kizuna.shared.config.AppProperties;
@@ -49,8 +50,9 @@ public class AdvertisingOrderCostService {
             .filter(c -> c.category() == AdvertisingCategory.SALES)
             .map(
                 c -> {
-                  budget.text(c.mediaName());
-                  return new AdvertisingOrderCostReport.Cost(c.mediaName(), c.amount());
+                  budget.text(c.medium().name());
+                  return new AdvertisingOrderCostReport.Cost(
+                      new AdvertisingMedium(c.medium().id(), c.medium().name()), c.amount());
                 })
             .toList();
     var validOrders =
@@ -61,11 +63,7 @@ public class AdvertisingOrderCostService {
                 period.atEndOfMonth(),
                 properties.getAdvertisingCost().getMaxOrders())
             .stream()
-            .map(
-                o -> {
-                  budget.text(o.mediaName() == null ? "" : o.mediaName());
-                  return new AdvertisingOrderCostReport.Order(o.mediaName(), o.zeroAmount());
-                })
+            .map(o -> new AdvertisingOrderCostReport.Order(null, o.zeroAmount()))
             .toList();
     var report = AdvertisingOrderCostReport.aggregate(sales, validOrders);
     budget.check();

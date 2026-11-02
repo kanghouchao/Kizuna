@@ -2,6 +2,7 @@ package com.kizuna.advertising;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -10,10 +11,12 @@ import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.application.AdvertisingRecruitmentEffectService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
-import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport.Retention;
+import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport.Row;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport.Status;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
+import com.kizuna.medium.domain.MediumRepository;
+import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.recruitment.reporting.RecruitmentHireReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
@@ -44,6 +47,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -51,7 +55,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-/** 実 PG（Liquibase の baseline）で、採用効果の媒体名完全一致・入店月の判定・定着時点の境界を確かめる。今日は東京 2026-07-01。 */
+/** 実 PG（Liquibase の baseline）で、採用効果の媒体 ID による費用のまとまりと入店月の判定を確かめる。今日は東京 2026-07-01。 */
 @EnabledIfIntegration
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AdvertisingRecruitmentEffectIntegrationTest {
@@ -106,16 +110,18 @@ class AdvertisingRecruitmentEffectIntegrationTest {
   }
 
   @Test
-  void mediaNamesMatchExactlyWithinTheStoreAndKeepBothUnmatchedSides() {
+  void costsGroupByMediumIdWithinTheStoreAndHiresStayUnnamed() {
     long store = store();
     long other = store();
-    cost(store, "2026-05", AdvertisingCategory.RECRUITMENT, "求人A", 30000);
-    cost(store, "2026-05", AdvertisingCategory.SALES, "求人A", 99999);
-    cost(store, "2026-05", AdvertisingCategory.RECRUITMENT, "費用だけ", 500);
-    cost(store, "2026-04", AdvertisingCategory.RECRUITMENT, "求人A", 70000);
+    String recruiting = medium(store, "求人A");
+    String costOnly = medium(store, "費用だけ");
+    cost(store, "2026-05", AdvertisingCategory.RECRUITMENT, recruiting, 30000);
+    cost(store, "2026-05", AdvertisingCategory.SALES, recruiting, 99999);
+    cost(store, "2026-05", AdvertisingCategory.RECRUITMENT, costOnly, 500);
+    cost(store, "2026-04", AdvertisingCategory.RECRUITMENT, recruiting, 70000);
+    cost(other, "2026-05", AdvertisingCategory.RECRUITMENT, medium(other, "求人A"), 1);
     hire(store, "MEDIA", "求人A", "HIRED", "ENROLLED", "2026-05-10", null);
     hire(store, "MEDIA", "求人A", "HIRED", "ENROLLED", "2026-05-11", null);
-    hire(store, "MEDIA", "求人ａ", "HIRED", "ENROLLED", "2026-05-12", null);
     hire(store, "REFERRAL", null, "HIRED", "ENROLLED", "2026-05-13", null);
     hire(store, "MEDIA", "求人A", "WITHDRAWN", "ENROLLED", "2026-05-14", null);
     hire(other, "MEDIA", "求人A", "HIRED", "ENROLLED", "2026-05-15", null);
@@ -123,19 +129,13 @@ class AdvertisingRecruitmentEffectIntegrationTest {
     var report = effects.view(store, "2026-05").report();
 
     assertThat(report.recordedRecruitmentAmount()).isEqualTo(30500);
-    assertThat(report.hireCount()).isEqualTo(4);
-    assertThat(report.unnamedMediaHireCount()).isEqualTo(1);
-    assertThat(report.rows()).extracting(Row::mediaName).containsExactly("求人A", "求人ａ", "費用だけ");
+    assertThat(report.hireCount()).isEqualTo(3);
+    assertThat(report.unnamedMediaHireCount()).isEqualTo(3);
+    assertThat(report.rows())
+        .extracting(r -> r.medium().id(), r -> r.medium().name())
+        .containsExactly(tuple(recruiting, "求人A"), tuple(costOnly, "費用だけ"));
     assertThat(report.rows().get(0))
-        .returns(2L, Row::hireCount)
-        .returns("15000.00", Row::costPerHire)
-        .returns(Status.CALCULATED, Row::calculationStatus);
-    assertThat(report.rows().get(1))
-        .returns(null, Row::recordedRecruitmentAmount)
-        .returns(Status.NO_COST_RECORDS, Row::calculationStatus);
-    assertThat(report.rows().get(2))
-        .returns(0L, Row::hireCount)
-        .returns(null, Row::costPerHire)
+        .returns(30000L, Row::recordedRecruitmentAmount)
         .returns(Status.NO_HIRES, Row::calculationStatus);
   }
 
@@ -148,23 +148,8 @@ class AdvertisingRecruitmentEffectIntegrationTest {
     var report = effects.view(store, "2026-05").report();
 
     assertThat(report.hireCount()).isEqualTo(2);
-    assertThat(report.rows()).singleElement().returns(2L, Row::hireCount);
-  }
-
-  @Test
-  void retentionJudgesOnlyReachedCheckpointsAndKeepsSuspendedEnrolled() {
-    long store = store();
-    hire(store, "MEDIA", "定着", "HIRED", "ENROLLED", "2026-05-01", null);
-    hire(store, "MEDIA", "定着", "HIRED", "SUSPENDED", "2026-05-01", null);
-    hire(store, "MEDIA", "定着", "HIRED", "WITHDRAWN", "2026-05-01", "2026-07-01T23:59:00+09:00");
-    hire(store, "MEDIA", "定着", "HIRED", "WITHDRAWN", "2026-05-01", "2026-07-01T15:30:00Z");
-    hire(store, "MEDIA", "定着", "HIRED", "ENROLLED", "2026-05-02", null);
-
-    var row = effects.view(store, "2026-05").report().rows().getFirst();
-
-    assertThat(row.hireCount()).isEqualTo(5);
-    assertThat(row.retention())
-        .containsExactly(new Retention(2, 4, 3), new Retention(3, 0, 0), new Retention(4, 0, 0));
+    assertThat(report.unnamedMediaHireCount()).isEqualTo(2);
+    assertThat(report.rows()).isEmpty();
   }
 
   @Test
@@ -192,11 +177,18 @@ class AdvertisingRecruitmentEffectIntegrationTest {
         UUID.randomUUID() + ".example.test");
   }
 
+  private String medium(long store, String name) {
+    String id = UUID.randomUUID().toString();
+    jdbc.update(
+        "insert into t_media(id,store_id,name,status) values (?,?,?,'ACTIVE')", id, store, name);
+    return id;
+  }
+
   private void cost(
-      long store, String month, AdvertisingCategory category, String media, int amount) {
+      long store, String month, AdvertisingCategory category, String mediumId, int amount) {
     costs.create(
         store,
-        new CreateRequest(month, category, media, null, null, null, amount, UUID.randomUUID()),
+        new CreateRequest(month, category, mediumId, null, null, null, amount, UUID.randomUUID()),
         "effect@example.test");
   }
 
@@ -236,9 +228,12 @@ class AdvertisingRecruitmentEffectIntegrationTest {
   @EnableAutoConfiguration
   @EnableMethodSecurity
   @EntityScan("com.kizuna")
+  @EnableJpaRepositories(
+      basePackageClasses = {AdvertisingChangeRepository.class, MediumRepository.class})
   @Import({
     AdvertisingService.class,
     AdvertisingRecords.class,
+    MediumLookup.class,
     AdvertisingRecruitmentEffectService.class,
     RecruitmentHireReader.class
   })

@@ -21,7 +21,9 @@ import com.kizuna.advertising.api.AdvertisingMediaController;
 import com.kizuna.advertising.api.AdvertisingOrderCostController;
 import com.kizuna.advertising.api.AdvertisingRecruitmentEffectController;
 import com.kizuna.advertising.api.dto.AdvertisingRecruitmentEffectResponse;
+import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
+import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingOrderCostService;
@@ -29,6 +31,7 @@ import com.kizuna.advertising.application.AdvertisingRecruitmentEffectService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
 import com.kizuna.settings.application.SystemConfigService;
@@ -114,7 +117,7 @@ class AdvertisingControllerTest {
   }
 
   private String body() {
-    return "{\"month\":\"2026-09\",\"category\":\"SALES\",\"media_name\":\"媒体\",\"amount\":0,\"inquiry_count\":null,\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}";
+    return "{\"month\":\"2026-09\",\"category\":\"SALES\",\"medium_id\":\"m1\",\"amount\":0,\"inquiry_count\":null,\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}";
   }
 
   @Test
@@ -151,7 +154,7 @@ class AdvertisingControllerTest {
                 1L,
                 "2026-09",
                 AdvertisingCategory.SALES,
-                "媒体",
+                new MediumResponse("m1", "媒体"),
                 null,
                 null,
                 null,
@@ -168,9 +171,15 @@ class AdvertisingControllerTest {
                     .content(body()))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.amount").value(0))
+            .andExpect(jsonPath("$.medium.id").value("m1"))
+            .andExpect(jsonPath("$.medium.name").value("媒体"))
+            .andExpect(jsonPath("$.media_name").doesNotExist())
             .andReturn();
     assertThat(result.getResponse().getContentAsString())
         .contains("\"inquiry_count\":null", "\"agency_name\":null", "\"plan_name\":null");
+    var request = ArgumentCaptor.forClass(CreateRequest.class);
+    verify(service).create(eq(1L), request.capture(), anyString());
+    assertThat(request.getValue().mediumId()).isEqualTo("m1");
   }
 
   @Test
@@ -183,7 +192,7 @@ class AdvertisingControllerTest {
                 7L,
                 "2026-09",
                 AdvertisingCategory.SALES,
-                "媒体",
+                new MediumResponse("m1", "媒体"),
                 null,
                 null,
                 null,
@@ -269,7 +278,7 @@ class AdvertisingControllerTest {
                 .with(permissions("VIEW", "MANAGE"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    "{\"category\":\"SALES\",\"media_name\":\"媒体\",\"amount\":0,\"version\":0,\"reason\":\"修正\",\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}"))
+                    "{\"category\":\"SALES\",\"medium_id\":\"m1\",\"amount\":0,\"version\":0,\"reason\":\"修正\",\"request_id\":\"b57cfd30-22c8-4fb7-b4ab-de479d723978\"}"))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(service);
   }
@@ -284,7 +293,8 @@ class AdvertisingControllerTest {
             OffsetDateTime.now(),
             AdvertisingMediaReport.aggregate(
                 List.of(
-                    new AdvertisingMediaReport.Entry(AdvertisingCategory.SALES, "媒体", 0, null))));
+                    new AdvertisingMediaReport.Entry(
+                        AdvertisingCategory.SALES, new AdvertisingMedium("m1", "媒体"), 0, null))));
     when(media.view(1L, "2026-09")).thenReturn(snapshot);
     var query =
         get("/advertising-media-summaries")
@@ -295,6 +305,9 @@ class AdvertisingControllerTest {
         mvc.perform(query)
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.rows.content[0].inquiry_status").value("UNRECORDED"))
+            .andExpect(jsonPath("$.media_matching").value("MEDIUM_ID"))
+            .andExpect(jsonPath("$.rows.content[0].medium.id").value("m1"))
+            .andExpect(jsonPath("$.rows.content[0].medium.name").value("媒体"))
             .andExpect(jsonPath("$.rows.size").value(20))
             .andReturn();
     assertThat(result.getResponse().getContentAsString())
@@ -390,7 +403,9 @@ class AdvertisingControllerTest {
   void orderCostsKeepMissingAmountsAndRatiosAndNormalizeOrRejectPaging() throws Exception {
     var report =
         AdvertisingOrderCostReport.aggregate(
-            List.of(), List.of(new AdvertisingOrderCostReport.Order("注文だけ", true)));
+            List.of(),
+            List.of(
+                new AdvertisingOrderCostReport.Order(new AdvertisingMedium("m9", "注文だけ"), true)));
     when(orderCosts.view(1L, "2026-09"))
         .thenReturn(
             new AdvertisingOrderCostService.Snapshot(
@@ -404,6 +419,8 @@ class AdvertisingControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.rows.size").value(20))
             .andExpect(jsonPath("$.rows.content[0].calculation_status").value("NO_COST_RECORDS"))
+            .andExpect(jsonPath("$.rows.content[0].medium.id").value("m9"))
+            .andExpect(jsonPath("$.rows.content[0].medium.name").value("注文だけ"))
             .andReturn();
     assertThat(result.getResponse().getContentAsString())
         .contains("\"recorded_sales_amount\":null", "\"cost_per_order\":null");
@@ -490,9 +507,12 @@ class AdvertisingControllerTest {
   void recruitmentEffectsKeepNotComputedRatiosAndRetentionCounts() throws Exception {
     var report =
         AdvertisingRecruitmentEffectReport.aggregate(
-            List.of(new AdvertisingRecruitmentEffectReport.Cost("費用だけ", 30000)),
             List.of(
-                new AdvertisingRecruitmentEffectReport.Hire("入店だけ", LocalDate.of(2026, 5, 1), null),
+                new AdvertisingRecruitmentEffectReport.Cost(
+                    new AdvertisingMedium("m2", "費用だけ"), 30000)),
+            List.of(
+                new AdvertisingRecruitmentEffectReport.Hire(
+                    new AdvertisingMedium("m1", "入店だけ"), LocalDate.of(2026, 5, 1), null),
                 new AdvertisingRecruitmentEffectReport.Hire(null, LocalDate.of(2026, 5, 2), null)),
             LocalDate.of(2026, 7, 15),
             ZoneOffset.UTC);
@@ -509,7 +529,8 @@ class AdvertisingControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.unnamed_media_hire_count").value(1))
             .andExpect(jsonPath("$.retention_as_of").value("2026-07-15"))
-            .andExpect(jsonPath("$.rows.content[0].media_name").value("入店だけ"))
+            .andExpect(jsonPath("$.rows.content[0].medium.id").value("m1"))
+            .andExpect(jsonPath("$.rows.content[0].medium.name").value("入店だけ"))
             .andExpect(jsonPath("$.rows.content[0].calculation_status").value("NO_COST_RECORDS"))
             .andExpect(jsonPath("$.rows.content[0].retention[0].months").value(2))
             .andExpect(jsonPath("$.rows.content[0].retention[0].judgeable_count").value(1))

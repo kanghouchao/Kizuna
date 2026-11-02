@@ -269,7 +269,9 @@ function MonthPage({
               ? '前月コピー'
               : pending.operation.mutation.kind === 'delete'
                 ? '削除'
-                : pending.operation.mutation.values.media_name}
+                : pending.operation.mutation.kind === 'replace'
+                  ? '変更'
+                  : '登録'}
           </p>
           {pending.phase === 'unknown' && (
             <Button disabled={!manage} onClick={() => void replay()}>

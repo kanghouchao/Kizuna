@@ -1,6 +1,7 @@
 package com.kizuna.advertising.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.application.AdvertisingOrderCostService.Snapshot;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import java.time.OffsetDateTime;
@@ -26,7 +27,7 @@ public record AdvertisingOrderCostResponse(
     Page<OrderCostSummary> rows) {
   @JsonInclude(JsonInclude.Include.ALWAYS)
   public record OrderCostSummary(
-      String mediaName,
+      MediumResponse medium,
       long costEntryCount,
       Long recordedSalesAmount,
       long validCompletedOrderCount,
@@ -43,7 +44,7 @@ public record AdvertisingOrderCostResponse(
             .map(
                 r ->
                     new OrderCostSummary(
-                        r.mediaName(),
+                        MediumResponse.of(r.medium()),
                         r.costEntryCount(),
                         r.recordedSalesAmount(),
                         r.validCompletedOrderCount(),

@@ -1,6 +1,7 @@
 package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
 import java.time.OffsetDateTime;
@@ -27,10 +28,10 @@ public class AdvertisingMediaService {
         source.costs().stream()
             .map(
                 cost -> {
-                  budget.text(cost.mediaName());
+                  budget.text(cost.medium().name());
                   return new AdvertisingMediaReport.Entry(
                       cost.category(),
-                      cost.mediaName(),
+                      new AdvertisingMedium(cost.medium().id(), cost.medium().name()),
                       cost.amount(),
                       cost.inquiryCount() == null ? null : cost.inquiryCount().longValue());
                 })

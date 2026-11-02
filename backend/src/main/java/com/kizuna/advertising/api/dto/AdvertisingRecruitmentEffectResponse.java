@@ -1,6 +1,7 @@
 package com.kizuna.advertising.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.application.AdvertisingRecruitmentEffectService.Snapshot;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
 import java.time.LocalDate;
@@ -29,7 +30,7 @@ public record AdvertisingRecruitmentEffectResponse(
     Page<RecruitmentEffectSummary> rows) {
   @JsonInclude(JsonInclude.Include.ALWAYS)
   public record RecruitmentEffectSummary(
-      String mediaName,
+      MediumResponse medium,
       long costEntryCount,
       Long recordedRecruitmentAmount,
       long hireCount,
@@ -49,7 +50,7 @@ public record AdvertisingRecruitmentEffectResponse(
             .map(
                 r ->
                     new RecruitmentEffectSummary(
-                        r.mediaName(),
+                        MediumResponse.of(r.medium()),
                         r.costEntryCount(),
                         r.recordedRecruitmentAmount(),
                         r.hireCount(),

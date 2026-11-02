@@ -32,7 +32,7 @@ export function CostTable({
         {rows.map(c => (
           <TableRow key={c.id}>
             <TableCell>{categoryLabels[c.category]}</TableCell>
-            <TableCell className="max-w-48 break-words">{c.media_name}</TableCell>
+            <TableCell className="max-w-48 break-words">{c.medium.name}</TableCell>
             <TableCell className="max-w-48 break-words">{c.agency_name ?? '未設定'}</TableCell>
             <TableCell className="max-w-48 break-words">{c.plan_name ?? '未設定'}</TableCell>
             <TableCell>

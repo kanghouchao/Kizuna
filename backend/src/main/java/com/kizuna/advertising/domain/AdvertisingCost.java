@@ -25,8 +25,8 @@ public class AdvertisingCost extends StoreScopedEntity {
   @Column(nullable = false, length = 20)
   private AdvertisingCategory category;
 
-  @Column(nullable = false, length = 200)
-  private String mediaName;
+  @Column(nullable = false, length = 64)
+  private String mediumId;
 
   @Column(length = 200)
   private String agencyName;
@@ -52,12 +52,12 @@ public class AdvertisingCost extends StoreScopedEntity {
   }
 
   public AdvertisingValues values() {
-    return new AdvertisingValues(category, mediaName, agencyName, planName, inquiryCount, amount);
+    return new AdvertisingValues(category, mediumId, agencyName, planName, inquiryCount, amount);
   }
 
   public void replace(AdvertisingValues values) {
     category = values.category();
-    mediaName = values.mediaName();
+    mediumId = values.mediumId();
     agencyName = values.agencyName();
     planName = values.planName();
     inquiryCount = values.inquiryCount();

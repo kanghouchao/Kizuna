@@ -1,5 +1,10 @@
 import { useEffect } from 'react';
-import { advertisingApi, type OrderCostSummary, type OrderCostReport } from '../api/advertising';
+import {
+  advertisingApi,
+  mediumName,
+  type OrderCostSummary,
+  type OrderCostReport,
+} from '../api/advertising';
 import { useListPage } from '@/shared/lib';
 import { fromSpringPage } from '@/shared/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui';
@@ -44,7 +49,7 @@ export function OrderCostPage({
     <div className="space-y-6">
       <ListPage
         title="受注あたり記録広告費"
-        description={`${month} の登録営業広告費と、同じ保存媒体名の有効完了受注を比較します。0円の受注も1件と数えます。`}
+        description={`${month} の登録営業広告費と、同じ媒体の有効完了受注を比較します。0円の受注も1件と数えます。`}
         state={list}
         emptyMessage={
           visible && list.total > 0
@@ -66,12 +71,9 @@ export function OrderCostPage({
           </TableHeader>
           <TableBody>
             {list.rows.map(row => (
-              <TableRow key={row.media_name}>
+              <TableRow key={row.medium?.id}>
                 <TableCell className="min-w-40 max-w-64 whitespace-normal break-all">
-                  <span className="whitespace-pre-wrap">{row.media_name}</span>
-                  {row.media_name !== row.media_name.trim() && (
-                    <p className="text-sm">前後に空白あり</p>
-                  )}
+                  {mediumName(row.medium)}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {yen(row.recorded_sales_amount)}
@@ -118,13 +120,14 @@ export function OrderCostPage({
           原営業日の自然月で集計します。取消・未完了・無効化は除外し、再提供は別の有効受注として数えます。採用広告費は含みません。
         </p>
         <p>
-          保存媒体名は空白・大小文字・全半角の違いを含めて完全一致だけで比較します。別名を統合せず、媒体未入力を推測で割り当てません。
+          媒体は名前ではなく媒体 ID
+          で照合し、表示は現在の媒体名です。媒体未入力の受注を推測で割り当てません。
         </p>
         <p>
           費用未登録と0円登録は別です。費用未登録または有効完了受注が0件なら単価は未算出です。単価は登録額を件数で割り、小数第3位を四捨五入しています。
         </p>
         <p>
-          同月同名の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。未登録は実費0の証明ではありません。
+          同月同媒体の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。未登録は実費0の証明ではありません。
         </p>
         <p>
           新客単価は未提供です。顧客未設定や過去記録の不足があり、顧客作成や最古の現存受注を初回とみなしていません。

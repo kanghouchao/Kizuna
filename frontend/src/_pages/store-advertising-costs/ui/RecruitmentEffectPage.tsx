@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import {
   advertisingApi,
+  mediumName,
   type RecruitmentEffectReport,
   type RecruitmentEffectSummary,
   type RecruitmentRetention,
@@ -49,7 +50,7 @@ export function RecruitmentEffectPage({ month }: { month: string }) {
     <div className="space-y-6">
       <ListPage
         title="採用効果（媒体別の入店・定着）"
-        description={`${month} の登録採用広告費と、同じ保存媒体名で当月に入店した人数・入店後の定着人数を比較します。`}
+        description={`${month} の登録採用広告費と、同じ媒体から当月に入店した人数・入店後の定着人数を比較します。`}
         state={list}
         emptyMessage={
           visible && list.total > 0
@@ -89,12 +90,9 @@ export function RecruitmentEffectPage({ month }: { month: string }) {
           </TableHeader>
           <TableBody>
             {list.rows.map(row => (
-              <TableRow key={row.media_name}>
+              <TableRow key={row.medium?.id}>
                 <TableCell className="min-w-40 max-w-64 whitespace-normal break-all">
-                  <span className="whitespace-pre-wrap">{row.media_name}</span>
-                  {row.media_name !== row.media_name.trim() && (
-                    <p className="text-sm">前後に空白あり</p>
-                  )}
+                  {mediumName(row.medium)}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {yen(row.recorded_recruitment_amount)}
@@ -134,7 +132,7 @@ export function RecruitmentEffectPage({ month }: { month: string }) {
           <p>
             媒体未入力の入店：
             <strong>{visible.unnamed_media_hire_count.toLocaleString()}人</strong>
-            。応募元が媒体でないか媒体名が空の入店で、上記人数の内数です。媒体への割当てと単価算出から除外しています。
+            。媒体が記録されていない入店で、上記人数の内数です。媒体への割当てと単価算出から除外しています。
           </p>
         </section>
       )}
@@ -143,7 +141,8 @@ export function RecruitmentEffectPage({ month }: { month: string }) {
           入店人数は、採用確定済みの応募者から登録した在籍のうち、入店日が対象月にあるものです。応募者の氏名・連絡先は表示しません。
         </p>
         <p>
-          応募者の応募元媒体名と採用広告費の媒体名を、空白・大小文字・全半角の違いを含めて完全一致だけで比較します。別名を統合せず、媒体未入力を推測で割り当てません。
+          媒体は名前ではなく媒体 ID
+          で照合し、表示は現在の媒体名です。媒体未入力の入店を推測で割り当てません。
         </p>
         <p>
           採用広告費が未登録か入店人数が0人なら一人あたり記録費用は未算出です。単価は登録額を人数で割り、小数第3位を四捨五入しています。
