@@ -81,7 +81,6 @@ class PublicationTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   void shownSpecificationReadsFieldsUnderTheHostAttribute() {
     Root<Host> root = mock();
     Path<Object> settings = mock();
