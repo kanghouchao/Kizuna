@@ -4,7 +4,7 @@ import React, { createContext, useContext } from 'react';
 import { authApi } from '../api/auth';
 import { isAxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
-import { endSession } from '@/shared/api';
+import { endSession, getSessionUserId } from '@/shared/api';
 import { loginPath } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 
@@ -35,6 +35,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const router = useRouter();
 
   const logout = async (reason?: string) => {
+    const userId = getSessionUserId();
     try {
       await authApi.logout();
     } catch (error) {
@@ -46,7 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
     }
-    endSession('logout');
+    endSession('logout', userId);
     router.push(loginPath(reason));
   };
 

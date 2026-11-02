@@ -85,10 +85,12 @@ const END_SCOPES: Record<EndReason, EndScope> = {
   'resume-failed': { cookies: false, operations: false, broadcast: false, returnPath: 'keep' },
 };
 
-/** セッションを終える。消す範囲は END_SCOPES で決まり、画面遷移は呼出側が行う。 */
-export function endSession(reason: EndReason): void {
+/**
+ * セッションを終える。消す範囲は END_SCOPES で決まり、画面遷移は呼出側が行う。放送の宛先 userId は既定で
+ * メモリの利用者。ログアウトは端点を待つ間に別の要求の 401 がトークンを消しうるので、呼ぶ前に控えた値を渡す。
+ */
+export function endSession(reason: EndReason, userId = current?.userId): void {
   const scope = END_SCOPES[reason];
-  const userId = current?.userId;
   current = null;
   if (scope.cookies) clearSession();
   if (scope.operations) forgetAll();

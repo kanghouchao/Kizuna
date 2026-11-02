@@ -2,7 +2,7 @@ import React from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../model/AuthContext';
 import { authApi } from '../api/auth';
-import { getSessionUserId, storeSessionToken } from '@/shared/api';
+import { endSession, getSessionUserId, storeSessionToken } from '@/shared/api';
 
 // 他タブへの通知はセッションモジュールの内側で送られるので、送信路（BroadcastChannel）で受け取る。
 const mockBroadcastLogout = jest.fn();
@@ -65,6 +65,22 @@ describe('AuthProvider', () => {
     expect(mockClearSession).toHaveBeenCalled();
     expect(mockBroadcastLogout).toHaveBeenCalledWith(7);
     expect(mockPush).toHaveBeenCalledWith('/auth/login');
+  });
+
+  it('端点を待つ間に別の要求の 401 がトークンを消しても、呼ぶ前の利用者 ID で他のタブへ知らせる', async () => {
+    storeSessionToken({ token: 'tkn', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
+    (authApi.logout as jest.Mock).mockImplementationOnce(async () => {
+      // 端点がセッションを失効させた直後、並行する要求の 401 が差し戻しでトークンを消す
+      endSession('expired');
+    });
+    const { getByText } = render(
+      <AuthProvider>
+        <Consumer />
+      </AuthProvider>
+    );
+    getByText('out').click();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/auth/login'));
+    expect(mockBroadcastLogout).toHaveBeenCalledWith(7);
   });
 
   it('ログアウト要求が通信の失敗で届かなければ、セッションを残して知らせ、ログイン画面へは移らない', async () => {
