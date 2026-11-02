@@ -15,6 +15,14 @@ updates:
     groups:
       all:
         patterns: ["*"]
+    # typescript-eslint が TS 7 を、eslint-plugin-react が ESLint 10 をまだ受け付けず lint が起動しない。
+    # TS 6.0 は typescript-eslint の対応範囲内なので、TS は 7 以上だけを除外する。
+    # 両プラグインの peerDependencies が新メジャーを含んだらこの除外を外す。
+    ignore:
+      - dependency-name: "typescript"
+        versions: [">=7"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "gradle"
     directory: "/backend"
