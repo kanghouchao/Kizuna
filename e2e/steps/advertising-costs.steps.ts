@@ -1284,7 +1284,11 @@ Then(
     await expect(page.getByRole("row", { name: /^ABC 200円/ })).toContainText(
       "記録値から算出",
     );
+    // 0 円登録の媒体に 0 円の受注が 1 件あれば単価は 0.00 円で、未登録とは区別される。
     await expect(page.getByRole("row", { name: /^零 / })).toContainText(
+      "約 0.00円",
+    );
+    await expect(page.getByRole("row", { name: /^注文のみ / })).toContainText(
       "未算出",
     );
     await expect(page.getByLabel("受注比較の月合計")).toContainText(
