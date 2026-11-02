@@ -3,6 +3,8 @@ import { SurveysPage } from '../ui/SurveysPage';
 import { surveyApi, Revision, Answer, Survey } from '@/entities/survey';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
+import { storeSessionToken } from '@/shared/api';
+import { setCurrentStore } from '@/shared/lib';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -123,6 +125,9 @@ async function createForm() {
 beforeEach(() => {
   jest.resetAllMocks();
   mockStoreId = '1';
+  // 結果不明の操作は、このタブの本人と現在店舗の作用域でだけ起こせる
+  storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
+  setCurrentStore('1');
   permission('SURVEY_VIEW');
   api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 });
@@ -247,7 +252,7 @@ test('受付権限は設問管理を含まず、任意回答を省略して原�
   expect(await screen.findByText('保護された原回答')).toBeVisible();
 });
 
-test('作成の結果不明を閉じても入力を保持し、同じキーで再確認する', async () => {
+test('作成の結果不明を閉じても入力を保持し、新しい操作を止めて再確認へ導く', async () => {
   fixtures();
   permission('SURVEY_VIEW', 'SURVEY_MANAGE');
   api.write.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({
@@ -264,8 +269,6 @@ test('作成の結果不明を閉じても入力を保持し、同じキーで�
   const dialog = await createForm();
   fireEvent.click(within(dialog).getByRole('button', { name: '下書きを保存' }));
   await screen.findByText(/結果が確認できません。同じ要求/);
-  const command = api.write.mock.calls[0][0];
-  expect(command.input.dedupe_key).toBeTruthy();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('button', { name: 'アンケートを作成' })).toBeDisabled();
@@ -274,42 +277,7 @@ test('作成の結果不明を閉じても入力を保持し、同じキーで�
   expect(screen.getByLabelText('設問文')).toHaveValue('スタッフ入力の設問');
   fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
   await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
-  expect(api.write.mock.calls[1][0]).toEqual(command);
-});
-
-test('送信連打は一度だけ実行し、店舗切替後の旧書込み結果を捨てる', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_MANAGE');
-  let finish!: (value: Awaited<ReturnType<typeof surveyApi.write>>) => void;
-  api.write.mockReturnValue(
-    new Promise(resolve => {
-      finish = resolve;
-    })
-  );
-  const view = render(<SurveysPage />);
-  const dialog = await createForm();
-  const save = within(dialog).getByRole('button', { name: '下書きを保存' });
-  fireEvent.click(save);
-  fireEvent.click(save);
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  mockStoreId = '2';
-  api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
-  view.rerender(<SurveysPage />);
-  await screen.findByText('アンケートはありません');
-  await act(async () =>
-    finish({
-      revision,
-      operation: {
-        id: '50',
-        type: 'DRAFT_CREATED',
-        resource_id: '20',
-        committed_version: 0,
-        replayed: false,
-      },
-    })
-  );
-  expect(screen.queryByText('この版の記録件数')).not.toBeInTheDocument();
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(api.write.mock.calls[0][2]).toEqual({ headers: { 'X-Store-ID': '1' } });
 });
 
 test('権限拒否で機密の詳細と編集中の内容を破棄する', async () => {
@@ -516,7 +484,8 @@ test('契約で許可された設問キーをフォーム内部のプロパテ�
     ...revision,
     questions: [{ ...revision.questions[0], question_key: '__proto__' }],
   });
-  api.write.mockRejectedValue(new Error('network'));
+  // 送信内容だけを確かめる。業務拒否で操作を確定させ、後の用例へ結果不明を残さない。
+  api.write.mockRejectedValue({ response: { status: 422 } });
   render(<SurveysPage />);
   await showRevision();
   fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));

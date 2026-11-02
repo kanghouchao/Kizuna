@@ -1,13 +1,20 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
-import { Review, ReviewCommand, ReviewSearch, reviewApi } from '@/entities/content/review';
+import {
+  Review,
+  ReviewCommand,
+  ReviewSearch,
+  ReviewWriteResponse,
+  reviewApi,
+} from '@/entities/content/review';
 import {
   useListPage,
   getApiErrorMessage,
-  isBadRequest,
   isConflict,
   isNotFound,
+  memoryOperationStore,
+  useOperation,
 } from '@/shared/lib';
 import {
   Button,
@@ -77,8 +84,12 @@ function Reviews({
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [latest, setLatest] = useState<Review | undefined>();
-  const [pending, setPending] = useState<ReviewCommand | null>(null);
-  const [uncertain, setUncertain] = useState(false);
+  const operation = useOperation('reviews', {
+    store: memoryOperationStore,
+    send: reviewApi.write,
+  });
+  const pending = operation.pending;
+  const uncertain = pending?.phase === 'unknown';
   const [denied, setDenied] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -92,18 +103,20 @@ function Reviews({
       active.current = false;
     };
   }, []);
-  const submit = async (command: ReviewCommand) => {
+  const run = async (
+    command: ReviewCommand,
+    send: () => Promise<{ value: ReviewWriteResponse } | null>
+  ) => {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
-    setPending(command);
+    // 業務拒否で操作が確定したとき、入力を失わずに直して送り直せるよう下書きを残す
     if (command.kind === 'CREATE' || command.kind === 'CORRECT')
       setEditor(current => (current ? { ...current, draft: command.input } : current));
     try {
-      const result = await reviewApi.write(command);
-      if (!active.current) return;
-      setPending(null);
-      setUncertain(false);
+      const done = await send();
+      if (!done || !active.current) return;
+      const result = done.value;
       setDenied(null);
       setConflict(false);
       setMissing(false);
@@ -115,59 +128,50 @@ function Reviews({
       notify.success('口コミの操作を記録しました');
     } catch (error) {
       if (!active.current) return;
-      if (
-        isBadRequest(error) ||
-        isConflict(error) ||
-        isNotFound(error) ||
-        accessError(error) !== null
-      ) {
-        if (!uncertain || isBadRequest(error) || isConflict(error) || isNotFound(error)) {
-          setPending(null);
-          setUncertain(false);
-        }
-        if (isConflict(error)) {
-          setConflict(true);
-          setEditOpen(false);
-          setLatest(undefined);
-        }
-        let deniedReason = accessError(error);
-        if (isNotFound(error)) {
-          let reviewMissing = command.kind !== 'CREATE';
-          if (command.kind === 'CORRECT') {
-            try {
-              await reviewApi.get(command.id);
-              reviewMissing = false;
-            } catch (lookupError) {
-              reviewMissing = isNotFound(lookupError);
-              deniedReason = accessError(lookupError);
-            }
-            if (!active.current) return;
+      if (isConflict(error)) {
+        setConflict(true);
+        setEditOpen(false);
+        setLatest(undefined);
+      }
+      let deniedReason = accessError(error);
+      if (isNotFound(error)) {
+        let reviewMissing = command.kind !== 'CREATE';
+        if (command.kind === 'CORRECT') {
+          try {
+            await reviewApi.get(command.id);
+            reviewMissing = false;
+          } catch (lookupError) {
+            reviewMissing = isNotFound(lookupError);
+            deniedReason = accessError(lookupError);
           }
-          if (reviewMissing) {
-            setMissing(true);
-            setEditOpen(false);
-            void list.reload();
-          } else setEditOpen(true);
+          if (!active.current) return;
         }
-        if (deniedReason !== null) {
-          setDenied(deniedReason);
-          setOpen(false);
-          void list.reload();
+        if (reviewMissing) {
+          setMissing(true);
           setEditOpen(false);
-        }
-      } else setUncertain(true);
+          void list.reload();
+        } else setEditOpen(true);
+      }
+      if (deniedReason !== null) {
+        setDenied(deniedReason);
+        setOpen(false);
+        void list.reload();
+        setEditOpen(false);
+      }
       notify.error(getApiErrorMessage(error, '口コミの操作結果が確認できません'));
     } finally {
       lock.current = false;
       if (active.current) setBusy(false);
     }
   };
+  const submit = (command: ReviewCommand) => run(command, () => operation.start(command));
+  const replay = () => pending && run(pending.payload, operation.replay);
   const feedback = (
     <>
-      {pending && uncertain && (
+      {uncertain && (
         <div role="alert" className="rounded-lg border p-4 space-y-3">
           <p>結果が確認できません。同じ要求で結果を確認するまで、新しい操作はできません。</p>
-          <Button variant="outline" disabled={busy} onClick={() => void submit(pending)}>
+          <Button variant="outline" disabled={busy} onClick={() => void replay()}>
             同じ要求で結果を確認
           </Button>
         </div>
@@ -308,7 +312,7 @@ function Reviews({
             <DialogTitle>{editor ? editorTitle(editor) : '口コミの操作'}</DialogTitle>
             <DialogDescription>理由と対象を確認して記録してください。</DialogDescription>
           </DialogHeader>
-          {pending && uncertain ? (
+          {uncertain ? (
             <p role="alert">
               結果が確認できません。閉じて「同じ要求で結果を確認」から再確認できます。
             </p>

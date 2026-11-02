@@ -34,11 +34,6 @@ export const operationLabels: Record<Operation, string> = {
   CORRECTION_LINKED: '訂正先を記録',
 };
 export const time = (value: string) => new Date(value).toLocaleString('ja-JP');
-export function requestKey() {
-  return Array.from(crypto.getRandomValues(new Uint8Array(16)), v =>
-    v.toString(16).padStart(2, '0')
-  ).join('');
-}
 export function accessError(error: unknown) {
   if (error && typeof error === 'object' && 'response' in error) {
     const status = (error as { response?: { status?: number } }).response?.status;

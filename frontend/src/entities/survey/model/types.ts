@@ -123,25 +123,24 @@ export interface AnswerInput {
   received_via: ReceivedVia;
   received_at: string;
   answers: AnswerValue[];
-  dedupe_key: string;
 }
 export interface ActionInput {
   version: number;
   reason: string;
-  dedupe_key: string;
 }
+/** 操作の内容。重複排除のキーは送信時に別に渡す（再送で内容とキーを変えないため）。 */
 export type SurveyCommand =
-  | { kind: 'CREATE'; input: DefinitionInput & { dedupe_key: string } }
+  | { kind: 'CREATE'; input: DefinitionInput }
   | {
       kind: 'REVISE';
       sid: string;
-      input: DefinitionInput & { based_on_revision_id: string; dedupe_key: string };
+      input: DefinitionInput & { based_on_revision_id: string };
     }
   | {
       kind: 'REPLACE';
       sid: string;
       rid: string;
-      input: DefinitionInput & { version: number; dedupe_key: string };
+      input: DefinitionInput & { version: number };
     }
   | { kind: 'OPEN' | 'CLOSE'; sid: string; rid: string; input: ActionInput }
   | { kind: 'RECEIVE'; sid: string; rid: string; input: AnswerInput & { revision_version: number } }

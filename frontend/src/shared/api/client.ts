@@ -51,10 +51,17 @@ apiClient.interceptors.request.use(
     // session-kind cookie は見ない（/store 配下を描くのは従業員のシェルだけ）。公開店舗サイトの匿名要求は呼び出し元が店舗を明示して渡す。
     // 受け入れの可否はバックエンドが授権店舗集合で判定する。
     try {
-      // 再送は最初の要求の店舗のまま送る。待つ間に別タブで切り替わった現在店舗を付け直すと、別の店舗へ書き込む。
+      // 再送と、店舗を名指した要求（結果不明の操作は起こした店舗に固定する）はその店舗のまま送る。待つ間に
+      // 別タブで切り替わった現在店舗を付け直すと、別の店舗へ書き込む。
+      const headers = config.headers as AxiosHeaders;
       const storeId = getCurrentStoreId();
-      if (!config.authRetried && storeId && isStorePath(window.location.pathname)) {
-        (config.headers as AxiosHeaders).set('X-Store-ID', storeId);
+      if (
+        !config.authRetried &&
+        !headers.has('X-Store-ID') &&
+        storeId &&
+        isStorePath(window.location.pathname)
+      ) {
+        headers.set('X-Store-ID', storeId);
       }
     } catch {
       // cookie が読めない環境ではヘッダ無しで送る（受け入れの可否はバックエンドが fail-closed に判定する）

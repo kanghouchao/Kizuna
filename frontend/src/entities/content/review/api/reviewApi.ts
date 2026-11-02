@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient, fromSpringPage, PageResult } from '@/shared/api';
 import {
   Review,
@@ -24,11 +25,16 @@ export const reviewApi = {
     fromSpringPage(
       (await apiClient.get(`${path}/${id}/history`, { params: { page, size: 20 } })).data
     ),
-  write: async (command: ReviewCommand): Promise<ReviewWriteResponse> =>
-    command.kind === 'CREATE'
-      ? (await apiClient.post(path, command.input)).data
-      : command.kind === 'PUBLISH'
-        ? (await apiClient.put(`${path}/${command.id}/${children.PUBLISH}`, command.input)).data
-        : (await apiClient.post(`${path}/${command.id}/${children[command.kind]}`, command.input))
-            .data,
+  write: async (
+    command: ReviewCommand,
+    dedupeKey: string,
+    config?: AxiosRequestConfig
+  ): Promise<ReviewWriteResponse> => {
+    const body = { ...command.input, dedupe_key: dedupeKey };
+    if (command.kind === 'CREATE') return (await apiClient.post(path, body, config)).data;
+    if (command.kind === 'PUBLISH')
+      return (await apiClient.put(`${path}/${command.id}/${children.PUBLISH}`, body, config)).data;
+    return (await apiClient.post(`${path}/${command.id}/${children[command.kind]}`, body, config))
+      .data;
+  },
 };

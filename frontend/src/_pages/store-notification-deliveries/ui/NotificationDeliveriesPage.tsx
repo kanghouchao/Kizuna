@@ -11,11 +11,10 @@ import {
 } from '@/entities/notification-delivery';
 import {
   getApiErrorMessage,
-  isBadRequest,
-  isForbidden,
   isNotFound,
-  isConflict,
+  memoryOperationStore,
   useListPage,
+  useOperation,
   useResource,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -290,66 +289,39 @@ function Detail({
   );
 }
 
-type Draft = Omit<DeliveryInput, 'channel' | 'purpose' | 'dedupe_key'>;
-function Create({
-  onCreated,
-  pending,
-  onPending,
-}: {
-  onCreated: (row: Delivery) => void;
-  pending: DeliveryInput | null;
-  onPending: (input: DeliveryInput | null) => void;
-}) {
+type Draft = Omit<DeliveryInput, 'channel' | 'purpose'>;
+function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
+  const operation = useOperation('notification-deliveries', {
+    store: memoryOperationStore,
+    send: notificationApi.create,
+  });
+  const pending = operation.pending;
+  const uncertain = pending?.phase === 'unknown';
   const form = useForm<Draft>({
     defaultValues: pending
-      ? { ...pending, scheduled_at: localInputTime(pending.scheduled_at) }
+      ? { ...pending.payload, scheduled_at: localInputTime(pending.payload.scheduled_at) }
       : { source_type: 'ORDER', source_id: '', subject: '', body: '', scheduled_at: '' },
   });
-  const key = useRef<string | null>(pending?.dedupe_key ?? null);
-  const submitted = useRef<DeliveryInput | null>(pending);
   const active = useActive();
-  const [uncertain, setUncertain] = useState(pending !== null);
-  const busy = useRef(false);
-  const save = async (values: Draft) => {
-    if (busy.current) return;
-    busy.current = true;
-    if (!key.current)
-      key.current = Array.from(crypto.getRandomValues(new Uint8Array(16)), value =>
-        value.toString(16).padStart(2, '0')
-      ).join('');
-    const input = submitted.current ?? {
-      ...values,
-      scheduled_at: new Date(values.scheduled_at).toISOString(),
-      channel: 'EMAIL' as const,
-      purpose: 'BUSINESS' as const,
-      dedupe_key: key.current,
-    };
-    submitted.current = input;
-    onPending(input);
+  const save = async (values?: Draft) => {
     try {
-      const row = await notificationApi.create(input);
-      if (active.current) {
-        onPending(null);
-        onCreated(row);
+      const done = values
+        ? await operation.start({
+            ...values,
+            scheduled_at: new Date(values.scheduled_at).toISOString(),
+            channel: 'EMAIL',
+            purpose: 'BUSINESS',
+          })
+        : await operation.replay();
+      if (done && active.current) {
+        onCreated(done.value);
         notify.success('通知の下書きを作成しました');
       }
     } catch (error) {
-      if (active.current) {
-        const rejected =
-          !uncertain &&
-          (isBadRequest(error) || isForbidden(error) || isNotFound(error) || isConflict(error));
-        if (rejected) {
-          submitted.current = null;
-          key.current = null;
-          onPending(null);
-        }
-        setUncertain(!rejected);
+      if (active.current)
         notify.error(
           getApiErrorMessage(error, '作成結果を確認できませんでした。同じ要求で確認してください')
         );
-      }
-    } finally {
-      busy.current = false;
     }
   };
   return (
@@ -357,9 +329,9 @@ function Create({
       <form
         noValidate
         onSubmit={event => {
-          if (submitted.current) {
+          if (pending) {
             event.preventDefault();
-            void save(submitted.current);
+            void save();
           } else {
             void form.handleSubmit(save)(event);
           }
@@ -369,7 +341,7 @@ function Create({
         <p className="text-sm text-muted-foreground">
           受注・ゲスト申請のIDを指定します。宛先は保存済みの許可から送信直前に解決します。
         </p>
-        <fieldset disabled={uncertain || form.formState.isSubmitting} className="space-y-4">
+        <fieldset disabled={pending !== null || form.formState.isSubmitting} className="space-y-4">
           <FormField
             control={form.control}
             name="source_type"
@@ -479,7 +451,10 @@ function Create({
             作成結果が確認できません。同じ内容・要求キーで再確認します。入力をやり直す場合は一覧で重複がないことを確認してください。
           </p>
         )}
-        <Button type="submit" disabled={form.formState.isSubmitting}>
+        <Button
+          type="submit"
+          disabled={pending?.phase === 'submitting' || form.formState.isSubmitting}
+        >
           {uncertain ? '同じ要求で結果を確認' : '下書きを作成'}
         </Button>
       </form>
@@ -491,7 +466,6 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [pending, setPending] = useState<DeliveryInput | null>(null);
   return (
     <>
       <ListPage
@@ -559,8 +533,6 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
             </DialogDescription>
           </DialogHeader>
           <Create
-            pending={pending}
-            onPending={setPending}
             onCreated={row => {
               setCreating(false);
               setSelected(row.id);

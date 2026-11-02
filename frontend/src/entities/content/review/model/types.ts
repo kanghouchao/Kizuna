@@ -89,9 +89,9 @@ export interface ReviewInput {
   received_via: ReceivedVia;
   received_at: string;
   origin_order_id: string | null;
-  dedupe_key: string;
 }
-export type ActionInput = { version: number; reason: string; dedupe_key: string };
+export type ActionInput = { version: number; reason: string };
+/** 操作の内容。重複排除のキーは送信時に別に渡す（再送で内容とキーを変えないため）。 */
 export type ReviewCommand =
   | { kind: 'CREATE'; input: ReviewInput }
   | { kind: 'CORRECT'; id: string; input: ReviewInput & ActionInput }
@@ -105,14 +105,13 @@ export type ReviewCommand =
         basis_type: Basis;
         granted_at: string;
         evidence_note: string;
-        dedupe_key: string;
       };
     }
   | { kind: 'REVOKE'; id: string; input: ActionInput & { withdrawal_received_at: string } }
   | {
       kind: 'PUBLISH';
       id: string;
-      input: Publication & { version: number; dedupe_key: string };
+      input: Publication & { version: number };
     };
 export interface ReviewSearch {
   q?: string;

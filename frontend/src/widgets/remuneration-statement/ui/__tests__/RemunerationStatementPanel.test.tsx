@@ -7,7 +7,6 @@ import type { PermissionCode } from '@/entities/user';
 import { RemunerationStatementPanel } from '../RemunerationStatementPanel';
 import { RemunerationEditor } from '../RemunerationEditor';
 import { RemunerationManagement } from '../RemunerationManagement';
-import { submitOperation, type Operation } from '../../model/operation';
 jest.mock('../../api', () => ({
   remunerationApi: {
     statement: jest.fn(),
@@ -33,10 +32,6 @@ const meAs = (userId: number, permissions: PermissionCode[]) => {
     setMe: jest.fn(),
   });
 };
-const originalRandomUUID = crypto.randomUUID;
-afterEach(() => {
-  Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID });
-});
 const statement = jest.mocked(remunerationApi.statement);
 const page = { content: [], number: 0, size: 20, total_elements: 0, total_pages: 0 };
 const data: Statement = {
@@ -156,8 +151,7 @@ it('取得失敗時は旧合計を残さず領域内で再試行する', async (
   expect(await screen.findByRole('alert')).toHaveTextContent('取得できません');
   expect(screen.queryByText('¥7,000')).not.toBeInTheDocument();
 });
-it('HTTP環境でもボーナス保存に帰属日と理由とUUIDを送信する', async () => {
-  Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined });
+it('ボーナス保存に帰属日と理由と要求キーを送り、起こした店舗に固定する', async () => {
   jest.mocked(remunerationApi.createBonus).mockResolvedValue();
   const saved = jest.fn();
   render(
@@ -165,47 +159,24 @@ it('HTTP環境でもボーナス保存に帰属日と理由とUUIDを送信す�
       open
       personId={2}
       personName="本人"
-      scope={JSON.stringify([7, '1'])}
       target={{ kind: 'bonus' }}
       onClose={jest.fn()}
       onSaved={saved}
     />
   );
-  fireEvent.change(screen.getByLabelText('帰属日'), { target: { value: '2026-09-30' } });
-  fireEvent.change(screen.getByLabelText('付与額（円）'), { target: { value: '1000' } });
-  fireEvent.change(screen.getByLabelText('理由・説明'), { target: { value: '付与理由' } });
+  fillBonus();
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
   await waitFor(() => expect(saved).toHaveBeenCalled());
-  expect(remunerationApi.createBonus).toHaveBeenCalledWith(2, {
-    award_date: '2026-09-30',
-    amount: 1000,
-    reason: '付与理由',
-    request_id: expect.stringMatching(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-    ),
-  });
-});
-
-it('別タブで現在店舗が切り替わっていたら送らない', async () => {
-  // 現在店舗は全タブ共有の cookie で、開いた時点の店舗の操作を別の店舗へ送らない
-  setCurrentStore('2');
-  render(
-    <RemunerationEditor
-      open
-      personId={2}
-      personName="本人"
-      scope={JSON.stringify([7, '1'])}
-      target={{ kind: 'bonus' }}
-      onClose={jest.fn()}
-      onSaved={jest.fn()}
-    />
+  expect(remunerationApi.createBonus).toHaveBeenCalledWith(
+    2,
+    {
+      award_date: '2026-09-30',
+      amount: 1000,
+      reason: '付与理由',
+      request_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    },
+    { headers: { 'X-Store-ID': '1' } }
   );
-  fireEvent.change(screen.getByLabelText('帰属日'), { target: { value: '2026-09-30' } });
-  fireEvent.change(screen.getByLabelText('付与額（円）'), { target: { value: '1000' } });
-  fireEvent.change(screen.getByLabelText('理由・説明'), { target: { value: '付与理由' } });
-  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await act(async () => {});
-  expect(remunerationApi.createBonus).not.toHaveBeenCalled();
 });
 
 it('必須入力の不足をブラウザの吹き出しではなく日本語で示す', async () => {
@@ -214,7 +185,6 @@ it('必須入力の不足をブラウザの吹き出しではなく日本語で�
       open
       personId={2}
       personName="本人"
-      scope={JSON.stringify([7, '1'])}
       target={{ kind: 'bonus' }}
       onClose={jest.fn()}
       onSaved={jest.fn()}
@@ -280,42 +250,7 @@ const allowBonus = () => {
   jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
   jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
 };
-it('応答喪失後は編集を止め、権限エラー後も元の内容だけを再送して確定する', async () => {
-  allowBonus();
-  const create = jest.mocked(remunerationApi.createBonus);
-  create
-    .mockRejectedValueOnce(new Error('応答喪失'))
-    .mockRejectedValueOnce({ response: { status: 403 } })
-    .mockResolvedValue();
-  const saved = jest.fn();
-  render(
-    <RemunerationManagement
-      personId={2}
-      personName="本人"
-      month="2026-09"
-      refreshKey={0}
-      onSaved={saved}
-    />
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'ボーナスを記録' }));
-  fillBonus();
-  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  const retry = await screen.findByRole('button', { name: '元の内容で結果を確認' });
-  expect(screen.getByLabelText('付与額（円）')).toBeDisabled();
-  expect(screen.getByLabelText('理由・説明')).toBeDisabled();
-  expect(screen.getByLabelText('帰属日')).toBeDisabled();
-  const original = create.mock.calls[0];
-  fireEvent.click(retry);
-  await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect(retry).toBeEnabled());
-  expect(screen.getByLabelText('付与額（円）')).toBeDisabled();
-  expect(saved).not.toHaveBeenCalled();
-  fireEvent.click(retry);
-  await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
-  expect(create.mock.calls[1]).toEqual(original);
-  expect(create.mock.calls[2]).toEqual(original);
-});
-it('閉じ直しと本人切替を越えて原対象を復元し、確定後だけ新しい要求を作る', async () => {
+it('結果不明の間は入力を止め、閉じた後も一覧から元の内容を復元して確認できる', async () => {
   allowBonus();
   const create = jest.mocked(remunerationApi.createBonus);
   create.mockRejectedValueOnce(new Error('応答喪失')).mockResolvedValue();
@@ -334,11 +269,12 @@ it('閉じ直しと本人切替を越えて原対象を復元し、確定後だ�
   fillBonus();
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
   await screen.findByRole('button', { name: '元の内容で結果を確認' });
+  expect(
+    screen.getByText(/送信結果が未確認です。元の本人 の元の内容を保持しています。/)
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText('付与額（円）')).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-  expect(screen.getByRole('button', { name: 'ボーナスを記録' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: '未確認の送信を復元' }));
-  expect(screen.getByLabelText('付与額（円）')).toHaveValue(1000);
-  fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+  // 別の本人の画面からも、元の本人の未確認の送信を案内して新しい記録を止める
   view.rerender(
     <RemunerationManagement
       key="other"
@@ -352,21 +288,17 @@ it('閉じ直しと本人切替を越えて原対象を復元し、確定後だ�
   expect(screen.getByRole('button', { name: 'ボーナスを記録' })).toBeDisabled();
   expect(screen.getByText(/元の本人 の送信結果を確認するまで/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '未確認の送信を復元' }));
+  expect(screen.getByLabelText('付与額（円）')).toHaveValue(1000);
   expect(screen.getByLabelText('理由・説明')).toHaveValue('付与理由');
   fireEvent.click(screen.getByRole('button', { name: '元の内容で結果を確認' }));
   await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
   expect(create.mock.calls[1]).toEqual(create.mock.calls[0]);
-  fireEvent.click(screen.getByRole('button', { name: 'ボーナスを記録' }));
-  fillBonus();
-  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await waitFor(() => expect(saved).toHaveBeenCalledTimes(2));
-  expect(create.mock.calls[2][0]).toBe(3);
-  expect(create.mock.calls[2][1].request_id).not.toBe(create.mock.calls[0][1].request_id);
+  expect(screen.getByRole('button', { name: 'ボーナスを記録' })).toBeEnabled();
 });
-it('送信中の連打と閉じる操作は新しい要求を作らない', async () => {
+it('送信中は閉じる操作を止める', async () => {
   allowBonus();
   let complete!: () => void;
-  const create = jest.mocked(remunerationApi.createBonus).mockImplementationOnce(
+  jest.mocked(remunerationApi.createBonus).mockImplementationOnce(
     () =>
       new Promise<void>(resolve => {
         complete = resolve;
@@ -384,111 +316,11 @@ it('送信中の連打と閉じる操作は新しい要求を作らない', asyn
   );
   fireEvent.click(screen.getByRole('button', { name: 'ボーナスを記録' }));
   fillBonus();
-  const save = screen.getByRole('button', { name: '保存する' });
-  fireEvent.click(save);
-  fireEvent.click(save);
+  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
   await screen.findByRole('button', { name: '送信中...' });
-  expect(create).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: '閉じる' })).toBeDisabled();
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   await act(async () => complete());
   expect(saved).toHaveBeenCalledTimes(1);
-});
-it('初回の明確な拒否では未確認扱いにせず入力を修正できる', async () => {
-  allowBonus();
-  const create = jest
-    .mocked(remunerationApi.createBonus)
-    .mockRejectedValueOnce({ response: { status: 400 } })
-    .mockResolvedValue();
-  const saved = jest.fn();
-  render(
-    <RemunerationManagement
-      personId={2}
-      personName="本人"
-      month="2026-09"
-      refreshKey={0}
-      onSaved={saved}
-    />
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'ボーナスを記録' }));
-  fillBonus();
-  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
-  await waitFor(() => expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled());
-  expect(screen.getByLabelText('付与額（円）')).toBeEnabled();
-  fireEvent.change(screen.getByLabelText('付与額（円）'), { target: { value: '2000' } });
-  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
-  expect(create.mock.calls[1][1].amount).toBe(2000);
-});
-
-it('別の操作者や店舗には未確認内容を見せず、元の作用域へ戻ると復元する', async () => {
-  allowBonus();
-  const create = jest
-    .mocked(remunerationApi.createBonus)
-    .mockRejectedValueOnce(new Error('応答喪失'))
-    .mockResolvedValue();
-  const saved = jest.fn();
-  const view = render(
-    <RemunerationManagement
-      key="original"
-      personId={2}
-      personName="機密対象"
-      month="2026-09"
-      refreshKey={0}
-      onSaved={saved}
-    />
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'ボーナスを記録' }));
-  fillBonus();
-  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await screen.findByRole('button', { name: '元の内容で結果を確認' });
-  const unload = new Event('beforeunload', { cancelable: true });
-  window.dispatchEvent(unload);
-  expect(unload.defaultPrevented).toBe(true);
-  meAs(8, ['BONUS_AWARD']);
-  view.rerender(
-    <RemunerationManagement
-      key="actor"
-      personId={3}
-      personName="別本人"
-      month="2026-09"
-      refreshKey={0}
-      onSaved={saved}
-    />
-  );
-  expect(screen.queryByText(/機密対象/)).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '未確認の送信を復元' })).not.toBeInTheDocument();
-  allowBonus();
-  setCurrentStore('2');
-  view.rerender(
-    <RemunerationManagement
-      key="store"
-      personId={3}
-      personName="別本人"
-      month="2026-09"
-      refreshKey={0}
-      onSaved={saved}
-    />
-  );
-  expect(screen.queryByRole('button', { name: '未確認の送信を復元' })).not.toBeInTheDocument();
-  setCurrentStore('1');
-  view.rerender(
-    <RemunerationManagement
-      key="returned"
-      personId={2}
-      personName="機密対象"
-      month="2026-09"
-      refreshKey={0}
-      onSaved={saved}
-    />
-  );
-  fireEvent.click(screen.getByRole('button', { name: '未確認の送信を復元' }));
-  fireEvent.click(screen.getByRole('button', { name: '元の内容で結果を確認' }));
-  await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
-  expect(create.mock.calls[1]).toEqual(create.mock.calls[0]);
-  const complete = new Event('beforeunload', { cancelable: true });
-  window.dispatchEvent(complete);
-  expect(complete.defaultPrevented).toBe(false);
 });

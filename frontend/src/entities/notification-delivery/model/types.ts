@@ -20,6 +20,7 @@ export interface Delivery extends DeliverySummary {
   transport_availability: 'AVAILABLE' | 'UNAVAILABLE';
   scheduling_availability: 'MANUAL_TASK_ONLY';
 }
+/** 下書きの内容。重複排除のキーは送信時に別に渡す（再送で内容とキーを変えないため）。 */
 export interface DeliveryInput {
   source_type: 'ORDER' | 'APPLICATION';
   source_id: string;
@@ -28,7 +29,6 @@ export interface DeliveryInput {
   subject: string;
   body: string;
   scheduled_at: string;
-  dedupe_key: string;
 }
 export interface DeliveryAttempt {
   id: string;

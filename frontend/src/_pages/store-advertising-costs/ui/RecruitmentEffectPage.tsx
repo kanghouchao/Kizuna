@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import {
   advertisingApi,
   mediumName,
@@ -10,6 +9,7 @@ import { useListPage } from '@/shared/lib';
 import { fromSpringPage } from '@/shared/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
+import { useReloadAfterOperation } from '../model/operation';
 
 const statusLabels: Record<RecruitmentEffectSummary['calculation_status'], string> = {
   CALCULATED: '記録値から算出',
@@ -39,12 +39,7 @@ export function RecruitmentEffectPage({ month }: { month: string }) {
     },
     undefined
   );
-  const reload = list.reload;
-  useEffect(() => {
-    const refresh = () => void reload();
-    window.addEventListener('advertising-operation', refresh);
-    return () => window.removeEventListener('advertising-operation', refresh);
-  }, [reload]);
+  useReloadAfterOperation(month, list.reload);
   const visible = !list.isLoading && !list.failed ? list.metadata : null;
   return (
     <div className="space-y-6">

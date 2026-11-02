@@ -2,9 +2,7 @@
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import {
-  createRequestId,
-  submitOperation,
-  usePendingOperation,
+  useRemunerationOperation,
   type EditTarget,
   type EditValues,
   type Operation,
@@ -33,7 +31,6 @@ export function RemunerationEditor({
   open,
   personId,
   personName,
-  scope,
   recovery,
   onClose,
   onSaved,
@@ -42,14 +39,14 @@ export function RemunerationEditor({
   open: boolean;
   personId: number;
   personName: string;
-  scope: string;
   recovery?: Operation;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
   const [pending, setPending] = useState<EditValues | null>(null);
-  const outstanding = usePendingOperation(scope);
+  const operation = useRemunerationOperation();
+  const outstanding = operation.pending;
   const sending = outstanding?.phase === 'submitting';
   const locked = outstanding !== null;
   const correcting = !!target.item;
@@ -67,18 +64,21 @@ export function RemunerationEditor({
   });
   const stopped = useWatch({ control: form.control, name: 'stopped' });
   const save = async (values?: EditValues) => {
-    const original = outstanding?.operation;
-    if (sending || (outstanding && !original)) return;
-    const operation = original ?? {
-      scope,
-      personId,
-      personName,
-      target: { ...target, ...(target.item ? { item: { ...target.item } } : {}) } as EditTarget,
-      values: { ...values! },
-      requestId: createRequestId(),
-    };
+    if (sending) return;
     try {
-      if (!(await submitOperation(operation, !!original))) return;
+      // 結果不明の操作は保持した元の内容で再送する。フォームの値は送らない。
+      const result = outstanding
+        ? await operation.replay()
+        : await operation.start({
+            personId,
+            personName,
+            target: {
+              ...target,
+              ...(target.item ? { item: { ...target.item } } : {}),
+            } as EditTarget,
+            values: { ...values! },
+          });
+      if (!result) return;
       notify.success(target.cancel ? '記録を取り消しました' : '記録を保存しました');
       onSaved();
       onClose();

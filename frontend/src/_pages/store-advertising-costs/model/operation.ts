@@ -1,70 +1,25 @@
-import { advertisingApi, type Operation } from '../api/advertising';
-const prefix = 'pending-operation:advertising:';
-export interface Pending {
-  operation: Operation;
-  phase: 'submitting' | 'unknown';
+import { useEffect, useRef } from 'react';
+import { sessionOperationStore, useOperation, useOperationRevision } from '@/shared/lib';
+import { advertisingApi, type Mutation } from '../api/advertising';
+
+const operationName = (month: string) => `advertising:${month}`;
+
+/** 広告費の書き込みは本人・店舗・対象月ごとに一つ。再読込を越えてタブ内に保持する。 */
+export function useAdvertisingOperation(month: string) {
+  return useOperation<Mutation, unknown>(operationName(month), {
+    store: sessionOperationStore,
+    send: (mutation, requestId, config) =>
+      advertisingApi.mutate(month, mutation, requestId, config),
+  });
 }
-const active = new Set<string>();
-export function operationKey(subject: string, store: string, month: string) {
-  return prefix + JSON.stringify([subject, store, month]);
-}
-export function readPending(key: string): Pending | null {
-  const saved = sessionStorage.getItem(key);
-  if (!saved) return null;
-  const parsed = JSON.parse(saved) as Operation;
-  if (operationKey(parsed.subject, parsed.store, parsed.month) !== key)
-    throw new Error('保存した操作の対象を確認できません。');
-  return { operation: parsed, phase: active.has(key) ? 'submitting' : 'unknown' };
-}
-export async function submitOperation(
-  operation: Operation,
-  replay: boolean,
-  onChange: (p: Pending | null) => void
-) {
-  const key = operationKey(operation.subject, operation.store, operation.month);
-  if (active.has(key)) return false;
-  const existing = readPending(key);
-  if (existing && (!replay || JSON.stringify(existing.operation) !== JSON.stringify(operation)))
-    return false;
-  if (replay && !existing) return false;
-  active.add(key);
-  let sent = false;
-  let completed = false;
-  try {
-    // 送信前にタブ内へ保存できなければ送らない。応答消失後も同一内容・同一キーで回復する。
-    sessionStorage.setItem(key, JSON.stringify(operation));
-    sent = true;
-    window.dispatchEvent(new Event('advertising-operation'));
-    onChange({ operation, phase: 'submitting' });
-    await advertisingApi.mutate(operation);
-    completed = true;
-    sessionStorage.removeItem(key);
-    onChange(null);
-    return true;
-  } catch (error) {
-    if (!sent) throw error;
-    const status = (error as { response?: { status?: number } }).response?.status;
-    // 成功受領を先に照会する API の業務拒否は未成功を確定する。認可拒否では確定できない。
-    if (
-      status !== undefined &&
-      ([400, 404, 409, 422].includes(status) || (!replay && [401, 403].includes(status)))
-    ) {
-      sessionStorage.removeItem(key);
-      onChange(null);
-    } else onChange({ operation, phase: 'unknown' });
-    throw error;
-  } finally {
-    active.delete(key);
-    if (sent)
-      window.dispatchEvent(
-        new CustomEvent('advertising-operation', { detail: { key, completed } })
-      );
-  }
-}
-export function requestId() {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 15) | 64;
-  bytes[8] = (bytes[8] & 63) | 128;
-  const hex = Array.from(bytes, v => v.toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+
+/** 対象月の操作が始まるか終わるたびに読み直す。費用記録の画面を離れている間の完了も拾う。 */
+export function useReloadAfterOperation(month: string, reload: () => void) {
+  const revision = useOperationRevision(operationName(month));
+  const seen = useRef(revision);
+  useEffect(() => {
+    if (seen.current === revision) return;
+    seen.current = revision;
+    reload();
+  }, [revision, reload]);
 }

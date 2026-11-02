@@ -114,6 +114,14 @@ describe('apiClient session branch', () => {
     expect(headers['X-Store-ID']).toBe('5');
   });
 
+  it('keeps an explicitly named store on a /store page instead of the current-store cookie', async () => {
+    // 結果不明の操作は起こした店舗に固定して送る。別タブの切替で変わった cookie で上書きしない。
+    window.history.pushState({}, '', '/store/reviews');
+    session('2');
+    const headers = await requestTo('/reviews', { 'X-Store-ID': '5' });
+    expect(headers['X-Store-ID']).toBe('5');
+  });
+
   it('does not inject X-Store-ID while no current store is resolved', async () => {
     window.history.pushState({}, '', '/store/orders');
     session(undefined);

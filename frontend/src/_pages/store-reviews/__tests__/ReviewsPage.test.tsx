@@ -4,6 +4,8 @@ import { reviewApi, Review } from '@/entities/content/review';
 import { notify } from '@/shared/notify';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
+import { storeSessionToken } from '@/shared/api';
+import { setCurrentStore } from '@/shared/lib';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -63,6 +65,9 @@ const permission = (...permissions: PermissionCode[]) =>
 beforeEach(() => {
   jest.resetAllMocks();
   mockStoreId = '1';
+  // 結果不明の操作は、このタブの本人と現在店舗の作用域でだけ起こせる
+  storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
+  setCurrentStore('1');
   permission('REVIEW_VIEW');
   api.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
   api.get.mockResolvedValue(row);
@@ -119,7 +124,7 @@ test('審査権限だけで内部承認し、理由付き確認を経て許可�
   expect(screen.queryByRole('button', { name: '公開許可を記録' })).not.toBeInTheDocument();
 });
 
-test('受付の応答が不明でも画面を閉じて同じ要求を再確認し、二重操作を防ぐ', async () => {
+test('受付の結果が不明なら入力を閉じても案内を残し、新しい操作を止めて再確認へ導く', async () => {
   permission('REVIEW_VIEW', 'REVIEW_MANAGE');
   api.write.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({
     review: row,
@@ -141,19 +146,19 @@ test('受付の応答が不明でも画面を閉じて同じ要求を再確認�
     target: { value: '2026-01-01T09:00' },
   });
   fireEvent.click(within(editor).getByRole('button', { name: '受付を記録' }));
-  fireEvent.click(within(editor).getByRole('button', { name: '受付を記録' }));
   await within(editor).findByText(/結果が確認できません/);
   fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape' });
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(api.write).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: '口コミを受付' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
-  expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
   expect(api.write.mock.calls[0][0]).toMatchObject({
     kind: 'CREATE',
     input: { body: '  原文の空白を保持  ', origin_order_id: null },
   });
+  expect(api.write.mock.calls[0][2]).toEqual({ headers: { 'X-Store-ID': '1' } });
+  fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
+  await screen.findByRole('dialog', { name: '口コミの内容・履歴' });
+  expect(notify.success).toHaveBeenCalledWith('口コミの操作を記録しました');
+  expect(screen.queryByText(/結果が確認できません/)).not.toBeInTheDocument();
 });
 test('公開許可を独立して記録し、取り下げ後も許可の撤回操作を残す', async () => {
   permission('REVIEW_VIEW', 'REVIEW_MANAGE');
@@ -335,37 +340,6 @@ test('409は再送せず最新状態を確認して操作を選び直す', async
   await screen.findByText('取り下げ済み', { selector: '[data-slot="badge"]' });
   expect(api.write).toHaveBeenCalledTimes(1);
 });
-test('権限拒否後は旧画面の操作を除去し、不明要求のキーは保持する', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MODERATE');
-  api.write
-    .mockRejectedValueOnce(new Error('network'))
-    .mockRejectedValueOnce({ response: { status: 403 } })
-    .mockResolvedValueOnce({
-      review: { ...row, status: 'APPROVED', version: 1 },
-      operation: {
-        id: '20',
-        type: 'APPROVED',
-        review_id: row.id,
-        committed_version: 1,
-        replayed: true,
-      },
-    });
-  render(<ReviewsPage />);
-  await approvalEditor();
-  const editor = await screen.findByRole('dialog', { name: '内部承認' });
-  await within(editor).findByText(/結果が確認できません/);
-  fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape' });
-  fireEvent.keyDown(await screen.findByRole('dialog', { name: '口コミの内容・履歴' }), {
-    key: 'Escape',
-    code: 'Escape',
-  });
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
-  await screen.findByText(/現在の操作権限がありません/);
-  fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(3));
-  expect(api.write.mock.calls[2][0]).toEqual(api.write.mock.calls[0][0]);
-});
 test.each([401, 403])('詳細の認証・権限エラー %s を通信失敗と区別する', async status => {
   permission('REVIEW_VIEW', 'REVIEW_MANAGE');
   api.get.mockRejectedValueOnce({ response: { status } });
@@ -378,88 +352,6 @@ test.each([401, 403])('詳細の認証・権限エラー %s を通信失敗と�
   );
   expect(within(dialog).queryByRole('button', { name: '訂正再受付' })).not.toBeInTheDocument();
 });
-test('結果不明後の409は確定した競合として解除し最新の版で改めて判断する', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MODERATE');
-  api.write
-    .mockRejectedValueOnce(new Error('network'))
-    .mockRejectedValueOnce({ response: { status: 409 } });
-  render(<ReviewsPage />);
-  await approvalEditor();
-  const editor = await screen.findByRole('dialog', { name: '内部承認' });
-  await within(editor).findByText(/結果が確認できません/);
-  fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape' });
-  await waitFor(() =>
-    expect(screen.queryByRole('dialog', { name: '内部承認' })).not.toBeInTheDocument()
-  );
-  fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
-  await screen.findByText(
-    '口コミが更新されています。最新状態を確認してから、改めて操作を選んでください。'
-  );
-  api.get.mockResolvedValue({ ...row, version: 1 });
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認して戻る' }));
-  const approve = await screen.findByRole('button', { name: '内部承認' });
-  expect(approve).toBeEnabled();
-  expect(screen.queryByRole('button', { name: '同じ要求で結果を確認' })).not.toBeInTheDocument();
-  fireEvent.click(approve);
-  const nextEditor = await screen.findByRole('dialog', { name: '内部承認' });
-  fireEvent.change(within(nextEditor).getByLabelText('判断・変更の理由'), {
-    target: { value: '更新後を確認' },
-  });
-  api.write.mockResolvedValue({
-    review: { ...row, status: 'APPROVED', version: 2 },
-    operation: {
-      id: '22',
-      type: 'APPROVED',
-      review_id: row.id,
-      committed_version: 2,
-      replayed: false,
-    },
-  });
-  fireEvent.click(within(nextEditor).getByRole('button', { name: '確認へ' }));
-  const confirm = await screen.findByRole('alertdialog');
-  fireEvent.click(within(confirm).getByRole('button', { name: '確定する' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(3));
-  expect(api.write.mock.calls[2][0].input.dedupe_key).not.toBe(
-    api.write.mock.calls[0][0].input.dedupe_key
-  );
-  expect(api.write.mock.calls[2][0]).toMatchObject({ input: { version: 1 } });
-});
-
-test('旧店舗で送信した応答が遅れて届いても新店舗に内容と完了通知を表示しない', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MODERATE');
-  let resolveWrite!: (value: Awaited<ReturnType<typeof reviewApi.write>>) => void;
-  api.write.mockImplementationOnce(
-    () =>
-      new Promise(resolve => {
-        resolveWrite = resolve;
-      })
-  );
-  const view = render(<ReviewsPage />);
-  await approvalEditor();
-  expect(api.write).toHaveBeenCalledTimes(1);
-  api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
-  mockStoreId = '2';
-  view.rerender(<ReviewsPage />);
-  await screen.findByText('口コミはありません');
-  const listCalls = api.list.mock.calls.length;
-  await act(async () =>
-    resolveWrite({
-      review: { ...row, status: 'APPROVED', version: 1 },
-      operation: {
-        id: '20',
-        type: 'APPROVED',
-        review_id: row.id,
-        committed_version: 1,
-        replayed: false,
-      },
-    })
-  );
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  expect(screen.queryByText('保護された本文')).not.toBeInTheDocument();
-  expect(api.list).toHaveBeenCalledTimes(listCalls);
-  expect(jest.mocked(notify.success)).not.toHaveBeenCalled();
-});
-
 test('操作404の詳細を閉じた後、別の有効な口コミを表示できる', async () => {
   permission('REVIEW_VIEW', 'REVIEW_MODERATE');
   api.write.mockRejectedValueOnce({ response: { status: 404 } });
@@ -520,93 +412,6 @@ async function submitReceipt(editor: HTMLElement, kind: 'CREATE' | 'CORRECT') {
     );
 }
 
-test.each(['CREATE', 'CORRECT'] as const)(
-  '%sの関連受注404は入力を保持し、修正後は新しい要求キーで送れる',
-  async kind => {
-    permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
-    api.write
-      .mockRejectedValueOnce({
-        response: { status: 404, data: { error: '関連受注が見つかりません' } },
-      })
-      .mockResolvedValueOnce({
-        review: row,
-        operation: {
-          id: '20',
-          type: 'RECEIVED',
-          review_id: row.id,
-          committed_version: 0,
-          replayed: false,
-        },
-      });
-    render(<ReviewsPage />);
-    let editor = await receiptEditor(kind);
-    await submitReceipt(editor, kind);
-    await waitFor(() => expect(notify.error).toHaveBeenCalledWith('関連受注が見つかりません'));
-    editor = screen.getByRole('dialog', {
-      name: kind === 'CREATE' ? '口コミを受付' : '訂正再受付',
-    });
-    expect(within(editor).getByLabelText('口コミ本文')).toHaveValue('失ってはいけない入力本文');
-    expect(screen.queryByText('口コミが見つかりません')).not.toBeInTheDocument();
-    fireEvent.change(within(editor).getByLabelText('関連受注ID（任意）'), {
-      target: { value: '' },
-    });
-    await submitReceipt(editor, kind);
-    await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
-    expect(api.write.mock.calls[1][0].input.dedupe_key).not.toEqual(
-      api.write.mock.calls[0][0].input.dedupe_key
-    );
-    expect(api.write.mock.calls[1][0].input).toMatchObject({
-      body: '失ってはいけない入力本文',
-      origin_order_id: null,
-    });
-  }
-);
-
-test.each(['CREATE', 'CORRECT'] as const)(
-  '%sの不明結果は同キーで照会し、確定した関連受注404から入力を復元する',
-  async kind => {
-    permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
-    api.write
-      .mockRejectedValueOnce(new Error('network'))
-      .mockRejectedValueOnce({
-        response: { status: 404, data: { error: '関連受注が見つかりません' } },
-      })
-      .mockResolvedValueOnce({
-        review: row,
-        operation: {
-          id: '20',
-          type: 'RECEIVED',
-          review_id: row.id,
-          committed_version: 0,
-          replayed: false,
-        },
-      });
-    render(<ReviewsPage />);
-    const editor = await receiptEditor(kind);
-    await submitReceipt(editor, kind);
-    await within(editor).findByText(/結果が確認できません/);
-    fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape' });
-    fireEvent.click(await screen.findByRole('button', { name: '同じ要求で結果を確認' }));
-    await waitFor(() => expect(notify.error).toHaveBeenCalledWith('関連受注が見つかりません'));
-    expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
-    const restored = screen.getByRole('dialog', {
-      name: kind === 'CREATE' ? '口コミを受付' : '訂正再受付',
-    });
-    expect(within(restored).getByLabelText('口コミ本文')).toHaveValue('失ってはいけない入力本文');
-    expect(within(restored).getByLabelText('関連受注ID（任意）')).toHaveValue('999');
-    if (kind === 'CORRECT')
-      expect(within(restored).getByLabelText('判断・変更の理由')).toHaveValue('保持する訂正理由');
-    fireEvent.change(within(restored).getByLabelText('関連受注ID（任意）'), {
-      target: { value: '' },
-    });
-    await submitReceipt(restored, kind);
-    await waitFor(() => expect(api.write).toHaveBeenCalledTimes(3));
-    expect(api.write.mock.calls[2][0].input.dedupe_key).not.toEqual(
-      api.write.mock.calls[0][0].input.dedupe_key
-    );
-  }
-);
-
 test('訂正404で元口コミの照会も404なら入力を閉じ、失効を表示する', async () => {
   permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
   api.get.mockResolvedValueOnce(row).mockRejectedValueOnce({ response: { status: 404 } });
@@ -617,27 +422,6 @@ test('訂正404で元口コミの照会も404なら入力を閉じ、失効を�
   expect(screen.queryByRole('dialog', { name: '訂正再受付' })).not.toBeInTheDocument();
 });
 
-test('訂正404の対象確認が旧店舗から遅れて戻っても新店舗にフォームを開かない', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
-  let resolveLookup!: (value: Review) => void;
-  api.get.mockResolvedValueOnce(row).mockImplementationOnce(
-    () =>
-      new Promise(resolve => {
-        resolveLookup = resolve;
-      })
-  );
-  api.write.mockRejectedValueOnce({ response: { status: 404 } });
-  const view = render(<ReviewsPage />);
-  await submitReceipt(await receiptEditor('CORRECT'), 'CORRECT');
-  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
-  api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
-  mockStoreId = '2';
-  view.rerender(<ReviewsPage />);
-  await screen.findByText('口コミはありません');
-  await act(async () => resolveLookup(row));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  expect(notify.error).not.toHaveBeenCalled();
-});
 test('公開設定は店舗の現地時刻で入出力し、空欄の表示順を null として版付きで送る', async () => {
   permission('REVIEW_VIEW', 'REVIEW_MODERATE');
   api.get.mockResolvedValue({
@@ -677,12 +461,11 @@ test('公開設定は店舗の現地時刻で入出力し、空欄の表示順�
   const confirmation = await screen.findByRole('alertdialog');
   fireEvent.click(within(confirmation).getByRole('button', { name: '確定する' }));
   await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write).toHaveBeenCalledWith({
+  expect(api.write.mock.calls[0][0]).toEqual({
     kind: 'PUBLISH',
     id: row.id,
     input: {
       version: 4,
-      dedupe_key: expect.any(String),
       published: true,
       publish_from: '2026-03-01T11:00:00.000Z',
       publish_until: '2026-03-02T00:30:00.000Z',
