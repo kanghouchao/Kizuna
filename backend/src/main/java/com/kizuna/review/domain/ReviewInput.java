@@ -41,6 +41,11 @@ public record ReviewInput(
     return value;
   }
 
+  public static Long version(Long value) {
+    if (value == null || value < 0) throw new ServiceException("口コミの操作内容を確認してください");
+    return value;
+  }
+
   public static OffsetDateTime time(OffsetDateTime value) {
     if (value == null) throw invalid();
     return value.withOffsetSameInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
@@ -51,7 +56,7 @@ public record ReviewInput(
       throw new ServiceException("日時は2000年以降、現在までで指定してください");
   }
 
-  private static ServiceException invalid() {
+  static ServiceException invalid() {
     return new ServiceException("口コミの入力内容と文字数を確認してください");
   }
 }

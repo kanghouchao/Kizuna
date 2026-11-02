@@ -1,8 +1,7 @@
 package com.kizuna.review.api.dto;
 
-import com.kizuna.review.domain.ReviewChange;
+import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.review.domain.ReviewValues.Operation;
-import com.kizuna.shared.exception.ServiceException;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record ReviewDecisionRequest(
@@ -15,12 +14,13 @@ public record ReviewDecisionRequest(
     REJECT
   }
 
-  public ReviewChange change(String id) {
-    if (decision == null) throw new ServiceException("審査結果を指定してください");
-    return new ReviewChange(
+  public ReviewCommand.Decide decide(String id) {
+    return new ReviewCommand.Decide(
         id,
         version,
-        decision == Decision.APPROVE ? Operation.APPROVED : Operation.REJECTED,
+        decision == null
+            ? null
+            : decision == Decision.APPROVE ? Operation.APPROVED : Operation.REJECTED,
         reason,
         dedupeKey);
   }

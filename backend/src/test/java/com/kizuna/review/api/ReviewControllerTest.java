@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.review.application.ReviewService;
-import com.kizuna.review.domain.ReviewChange;
+import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.review.domain.ReviewSearch;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -94,7 +94,7 @@ class ReviewControllerTest {
                     "{\"version\":0,\"decision\":\"APPROVE\",\"reason\":\"確認\",\"dedupe_key\":\"k\"}"))
         .andExpect(status().isOk());
 
-    verify(reviews).change(eq(STORE_ID), eq("user"), any(ReviewChange.class));
+    verify(reviews).write(eq(STORE_ID), eq("user"), any(ReviewCommand.Decide.class));
   }
 
   @Test
