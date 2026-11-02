@@ -7,7 +7,7 @@ import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import java.time.OffsetDateTime;
+import com.kizuna.shared.persistence.Timestamps;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +57,7 @@ public class GuestOrderApplicationService {
                     text.marketingText(),
                     true,
                     consent.marketingAllowed(),
-                    OffsetDateTime.now()))
+                    Timestamps.now()))
             .consentContact(contact)
             .status(OrderApplicationStatus.PENDING)
             .businessDate(command.businessDate())

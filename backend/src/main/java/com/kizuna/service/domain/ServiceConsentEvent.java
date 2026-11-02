@@ -1,6 +1,7 @@
 package com.kizuna.service.domain;
 
 import com.kizuna.shared.persistence.StoreScopedEntity;
+import com.kizuna.shared.persistence.Timestamps;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -47,7 +48,7 @@ public class ServiceConsentEvent extends StoreScopedEntity {
     event.termsVersion = consent.getTermsVersion();
     event.serviceRevisionId = consent.getServiceRevisionId();
     event.actorId = actorId;
-    event.occurredAt = OffsetDateTime.now();
+    event.occurredAt = Timestamps.now();
     return event;
   }
 }

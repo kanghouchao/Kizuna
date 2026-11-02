@@ -1,6 +1,7 @@
 package com.kizuna.service.domain;
 
 import com.kizuna.shared.persistence.StoreScopedEntity;
+import com.kizuna.shared.persistence.Timestamps;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.AttributeOverrides;
 import jakarta.persistence.Column;
@@ -89,7 +90,7 @@ public class ServiceRevision extends StoreScopedEntity {
             ? Operation.DELETED
             : before == null ? Operation.CREATED : Operation.UPDATED;
     revision.actorId = actorId;
-    revision.occurredAt = OffsetDateTime.now();
+    revision.occurredAt = Timestamps.now();
     revision.beforeTerms = before;
     revision.afterTerms = item.getTerms();
     return revision;

@@ -3,6 +3,7 @@ package com.kizuna.remuneration.domain;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
+import com.kizuna.shared.persistence.Timestamps;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -54,7 +55,7 @@ public class BonusAward extends StoreScopedEntity {
 
   public void cancel() {
     requireActive();
-    cancelledAt = OffsetDateTime.now();
+    cancelledAt = Timestamps.now();
   }
 
   private void requireActive() {

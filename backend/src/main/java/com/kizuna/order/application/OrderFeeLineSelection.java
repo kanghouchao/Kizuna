@@ -8,7 +8,7 @@ import com.kizuna.order.domain.OrderServiceAdoption;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
-import java.time.OffsetDateTime;
+import com.kizuna.shared.persistence.Timestamps;
 import java.util.HashSet;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -83,7 +83,7 @@ public class OrderFeeLineSelection {
                       terms.revisionId(),
                       terms.revisionNumber(),
                       historical ? "HISTORICAL_CORRECTION" : "CURRENT_SETTING",
-                      OffsetDateTime.now()));
+                      Timestamps.now()));
             })
         .toList();
   }

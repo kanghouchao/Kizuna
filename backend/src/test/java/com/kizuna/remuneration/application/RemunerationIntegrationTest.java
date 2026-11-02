@@ -340,6 +340,43 @@ class RemunerationIntegrationTest {
   }
 
   @Test
+  void cancellationResponsesCarryTheTimesThatAReadReturns() {
+    var guarantee =
+        management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email);
+    var cancelledGuarantee =
+        management
+            .cancelGuarantee(
+                storeId,
+                guarantee.guarantee().id(),
+                new CancellationRequest("誤記取消", 1L, UUID.randomUUID()),
+                email)
+            .guarantee();
+    assertThat(cancelledGuarantee.cancelledAt()).isNotNull();
+    assertThat(
+            management.guarantees(storeId, personId, PageRequest.of(0, 20)).entries().getContent())
+        .contains(cancelledGuarantee);
+
+    var bonus =
+        management
+            .createBonus(
+                storeId,
+                new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()),
+                email)
+            .bonus();
+    var cancelledBonus =
+        management
+            .cancelBonus(
+                storeId,
+                bonus.id(),
+                new CancellationRequest("誤記取消", bonus.version(), UUID.randomUUID()),
+                email)
+            .bonus();
+    assertThat(cancelledBonus.cancelledAt()).isNotNull();
+    assertThat(management.bonuses(storeId, personId, "2026-09", PageRequest.of(0, 20)).getContent())
+        .contains(cancelledBonus);
+  }
+
+  @Test
   void allPersonAndResourcePathsRejectForeignStore() {
     var bonus =
         management

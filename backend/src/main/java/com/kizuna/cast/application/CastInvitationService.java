@@ -10,6 +10,7 @@ import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import java.security.SecureRandom;
@@ -85,7 +86,7 @@ public class CastInvitationService {
         CastInvitation.builder()
             .castId(castId)
             .token(generateToken())
-            .expiresAt(OffsetDateTime.now().plus(CastInvitation.VALIDITY))
+            .expiresAt(Timestamps.now().plus(CastInvitation.VALIDITY))
             .build();
     invitation.setStoreId(cast.getStoreId());
     // 在籍の参照違反は事前照会と同じ 404 に揃える。並行発行の一意制約違反は全域ハンドラの 409 に委ねる。
@@ -117,7 +118,7 @@ public class CastInvitationService {
     if (casts.isEmpty()) {
       return Map.of();
     }
-    OffsetDateTime now = OffsetDateTime.now();
+    OffsetDateTime now = Timestamps.now();
     List<String> castIds = casts.stream().map(CastEnrollment::getId).toList();
 
     Map<String, List<CastInvitation>> invitationsByCast = new HashMap<>();

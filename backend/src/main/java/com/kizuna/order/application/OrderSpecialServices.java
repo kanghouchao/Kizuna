@@ -13,6 +13,7 @@ import com.kizuna.service.application.SpecialServiceRejectionHandler;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
@@ -114,7 +115,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
         t.price(),
         t.remuneration(),
         basis,
-        OffsetDateTime.now(),
+        Timestamps.now(),
         cast,
         t.consentEventId(),
         t.consentVersion());

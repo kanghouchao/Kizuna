@@ -29,12 +29,12 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ReceptionistEligibilityService;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -165,7 +165,7 @@ public class OrderService {
         ContactSnapshot.empty(),
         command.businessContactPermissions(),
         actorEmail,
-        OffsetDateTime.now());
+        Timestamps.now());
     auditOrder(saved, "ORDER_CREATED", actorEmail, null, null, null);
     return queryService.toDetail(storeId, saved);
   }
@@ -309,7 +309,7 @@ public class OrderService {
       order.assignReceptionist(receptionistId);
     }
 
-    var now = OffsetDateTime.now();
+    var now = Timestamps.now();
     specialServices.resolve(
         storeId, order, previousSpecials, previousTotal, previousCast, actorEmail, now);
     businessContactPermissions.record(
@@ -450,7 +450,7 @@ public class OrderService {
         contactImports);
     Order saved = orderRepository.save(order);
     flushMedium();
-    var now = OffsetDateTime.now();
+    var now = Timestamps.now();
     businessContactPermissions.record(
         saved,
         ContactSnapshot.empty(),
@@ -512,7 +512,7 @@ public class OrderService {
       throw new OrderConfirmationConflict("confirmation_token");
     calculated.requireRedeemable(usePoints, memberId != null);
 
-    var now = OffsetDateTime.now();
+    var now = Timestamps.now();
     var pointsPreview =
         orderPoints(
             memberId,
@@ -578,7 +578,7 @@ public class OrderService {
             orderId,
             generated.digest(),
             pointLedgerService.previewGrant(totalFee),
-            OffsetDateTime.now()));
+            Timestamps.now()));
     return generated.raw();
   }
 
@@ -789,7 +789,7 @@ public class OrderService {
             usePoints,
             false);
     var completed =
-        order.quoteCompletion(calculated, usePoints, points.grantPoints(), OffsetDateTime.now());
+        order.quoteCompletion(calculated, usePoints, points.grantPoints(), Timestamps.now());
     return calculation.preview(storeId, "COMPLETE", id, actorEmail, command, completed, points);
   }
 
@@ -894,7 +894,7 @@ public class OrderService {
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
     var before = OrderAuditSnapshot.of(order);
-    order.cancelWith(reason, actorIdentityService.requireUserId(actorEmail), OffsetDateTime.now());
+    order.cancelWith(reason, actorIdentityService.requireUserId(actorEmail), Timestamps.now());
     orderRepository.save(order);
     auditOrder(order, "ORDER_CANCELLED", actorEmail, before, null, null);
   }
@@ -910,7 +910,7 @@ public class OrderService {
     application.decline(
         reason,
         actorIdentityService.requireUserId(actorEmail),
-        OffsetDateTime.now(),
+        Timestamps.now(),
         businessDateService.currentBusinessDate());
     orderApplicationRepository.save(application);
     auditApplication(application, "ORDER_APPLICATION_DECLINED", actorEmail, before);
@@ -926,7 +926,7 @@ public class OrderService {
             .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
     order.requireVersion(expectedVersion);
     var before = OrderAuditSnapshot.of(order);
-    order.start(reason, actorIdentityService.requireUserId(actor), OffsetDateTime.now());
+    order.start(reason, actorIdentityService.requireUserId(actor), Timestamps.now());
     specialServices.requireProgress(storeId, order);
     orderRepository.saveAndFlush(order);
     auditOrder(order, "ORDER_STARTED", actor, before, null, null);

@@ -10,10 +10,10 @@ import com.kizuna.remuneration.domain.DailyGuarantee;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.RemunerationAmounts;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -105,7 +105,7 @@ public class RemunerationStatementService {
         person,
         identity.name(),
         month,
-        OffsetDateTime.now(),
+        Timestamps.now(),
         orderTotal,
         guaranteeKnown,
         complete ? guaranteeKnown : null,

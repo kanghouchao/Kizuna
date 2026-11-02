@@ -1,6 +1,7 @@
 package com.kizuna.customer.domain;
 
 import com.kizuna.shared.persistence.StoreScopedEntity;
+import com.kizuna.shared.persistence.Timestamps;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -120,7 +121,7 @@ public class CustomerContactHistory extends StoreScopedEntity {
     history.originCustomerId = contact.getOriginCustomerId();
     history.action = action;
     history.actorId = actorId;
-    history.occurredAt = OffsetDateTime.now();
+    history.occurredAt = Timestamps.now();
     history.before = before;
     history.after = contact.state();
     return history;

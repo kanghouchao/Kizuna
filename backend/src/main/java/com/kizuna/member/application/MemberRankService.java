@@ -8,7 +8,7 @@ import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.settings.application.MemberRankSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
-import java.time.OffsetDateTime;
+import com.kizuna.shared.persistence.Timestamps;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,7 +75,7 @@ public class MemberRankService {
             reached,
             triggeringAttributionId,
             triggeringEntryId,
-            OffsetDateTime.now()));
+            Timestamps.now()));
     return true;
   }
 
