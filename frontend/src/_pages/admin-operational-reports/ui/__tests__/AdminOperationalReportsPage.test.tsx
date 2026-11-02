@@ -62,6 +62,7 @@ test('view permission does not show export and failures clear totals before retr
   render(<AdminOperationalReportsPage />);
   fireEvent.click(await screen.findByRole('button', { name: '照会' }));
   expect(await screen.findByLabelText('請求額（円）')).toHaveTextContent('12,000');
+  expect(screen.getByText(/生成: 2026\/10\/1 12:00:00/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'CSV 全件出力' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '照会' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('集計を取得できませんでした');
