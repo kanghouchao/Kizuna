@@ -42,6 +42,19 @@ class ModularityTests {
         .containsExactlyInAnyOrder("MediumLookup", "MediumReference");
   }
 
+  // 受領は各業務モジュールから使われる側で、業務モジュールを呼ばず、入口と指紋の原語だけを公開する。
+  @Test
+  void receiptDependsOnNoBusinessModuleAndExposesOnlyItsEntry() {
+    var receipt = modules.getModuleByName("receipt").orElseThrow();
+    assertThat(receipt.getDirectDependencies(modules).uniqueModules())
+        .extracting(module -> module.getIdentifier().toString())
+        .containsExactly("shared");
+    assertThat(receipt.getNamedInterfaces().getByName("once").orElseThrow().asJavaClasses())
+        .extracting(type -> type.getSimpleName())
+        .containsExactlyInAnyOrder(
+            "OperationReceipts", "Fingerprint", "ReceiptKey", "Committed", "Receipt");
+  }
+
   @Test
   void writesModuleDocumentation() {
     new Documenter(modules).writeDocumentation();

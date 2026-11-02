@@ -37,6 +37,17 @@ public final class ReviewValues {
     PERMISSION_REVOKED,
     CORRECTION_RECEIVED,
     CORRECTION_LINKED,
-    PUBLICATION_CHANGED
+    PUBLICATION_CHANGED;
+
+    private static final String RECEIPT_PREFIX = "REVIEW_";
+
+    // 受領表は全モジュールで一つなので、操作名は監査の action と同じ接頭辞で区別する。
+    public String receiptName() {
+      return RECEIPT_PREFIX + name();
+    }
+
+    public static Operation ofReceipt(String receiptName) {
+      return valueOf(receiptName.substring(RECEIPT_PREFIX.length()));
+    }
   }
 }

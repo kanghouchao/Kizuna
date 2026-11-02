@@ -1,6 +1,8 @@
 package com.kizuna.survey.api;
 
+import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.Replays;
 import com.kizuna.survey.api.dto.SurveyAnswerActionRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerCorrectionRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerHistoryResponse;
@@ -38,8 +40,7 @@ public class SurveyResponseController {
       Authentication auth,
       @PathVariable String aid,
       @RequestBody SurveyAnswerActionRequest r) {
-    return SurveyWrites.write(
-        service,
+    return write(
         storeId,
         auth,
         new SurveyCommand.Withdraw(aid, r.version(), r.reason(), r.dedupeKey()),
@@ -53,8 +54,7 @@ public class SurveyResponseController {
       Authentication auth,
       @PathVariable String aid,
       @RequestBody SurveyAnswerCorrectionRequest r) {
-    return SurveyWrites.write(
-        service,
+    return write(
         storeId,
         auth,
         new SurveyCommand.Correct(aid, r.version(), r.reason(), r.input(), r.dedupeKey()),
@@ -76,5 +76,15 @@ public class SurveyResponseController {
       @PathVariable String aid,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
     return reads.answerHistory(storeId, auth.getName(), aid, pageable);
+  }
+
+  private ResponseEntity<SurveyWriteResponse> write(
+      Long storeId, Authentication auth, SurveyCommand command, boolean create) {
+    var result =
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> service.write(storeId, auth.getName(), command),
+            () -> service.replayOnly(storeId, auth.getName(), command));
+    return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }
 }

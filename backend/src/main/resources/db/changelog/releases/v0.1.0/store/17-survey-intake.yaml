@@ -279,102 +279,6 @@ databaseChangeLog:
             constraintName: fk_t_survey_responses_survey
             onDelete: NO ACTION
         - createTable:
-            tableName: t_survey_operations
-            columns:
-              - column:
-                  name: id
-                  type: VARCHAR(32)
-                  constraints:
-                    nullable: false
-                    primaryKey: true
-                    primaryKeyName: pk_t_survey_operations
-              - column:
-                  name: store_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-              - column:
-                  name: created_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: CURRENT_TIMESTAMP
-                  constraints:
-                    nullable: false
-              - column:
-                  name: updated_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: CURRENT_TIMESTAMP
-                  constraints:
-                    nullable: false
-              - column:
-                  name: version
-                  type: BIGINT
-                  defaultValueNumeric: 0
-                  constraints:
-                    nullable: false
-              - column:
-                  name: actor_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-              - column:
-                  name: dedupe_key
-                  type: VARCHAR(120)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: fingerprint
-                  type: VARCHAR(64)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: type
-                  type: VARCHAR(32)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: revision_id
-                  type: VARCHAR(32)
-              - column:
-                  name: response_id
-                  type: VARCHAR(32)
-              - column:
-                  name: committed_version
-                  type: BIGINT
-                  constraints:
-                    nullable: false
-        - addUniqueConstraint:
-            tableName: t_survey_operations
-            columnNames: id, store_id
-            constraintName: uq_t_survey_operations_id_store
-        - addForeignKeyConstraint:
-            baseTableName: t_survey_operations
-            baseColumnNames: store_id
-            referencedTableName: t_stores
-            referencedColumnNames: id
-            constraintName: fk_t_survey_operations_store
-            onDelete: CASCADE
-        - addForeignKeyConstraint:
-            baseTableName: t_survey_operations
-            baseColumnNames: actor_id
-            referencedTableName: t_users
-            referencedColumnNames: id
-            constraintName: fk_t_survey_operations_actor
-            onDelete: NO ACTION
-        - addForeignKeyConstraint:
-            baseTableName: t_survey_operations
-            baseColumnNames: revision_id, store_id
-            referencedTableName: t_survey_revisions
-            referencedColumnNames: id, store_id
-            constraintName: fk_t_survey_operations_revision
-            onDelete: NO ACTION
-        - addForeignKeyConstraint:
-            baseTableName: t_survey_operations
-            baseColumnNames: response_id, store_id
-            referencedTableName: t_survey_responses
-            referencedColumnNames: id, store_id
-            constraintName: fk_t_survey_operations_response
-            onDelete: NO ACTION
-        - createTable:
             tableName: t_survey_history
             columns:
               - column:
@@ -502,10 +406,6 @@ databaseChangeLog:
             tableName: t_survey_responses
             columnNames: superseded_by_id
             constraintName: uq_t_survey_responses_successor
-        - addUniqueConstraint:
-            tableName: t_survey_operations
-            columnNames: store_id, actor_id, dedupe_key
-            constraintName: uq_t_survey_operations_key
         - addForeignKeyConstraint:
             baseTableName: t_surveys
             baseColumnNames: latest_revision_id, id, store_id
@@ -561,7 +461,6 @@ databaseChangeLog:
                 status IN ('ACTIVE','WITHDRAWN') AND received_via IN ('PAPER','VERBAL','EXISTING_RECORD')
                 AND (supersedes_id IS NULL OR supersedes_id <> id)
                 AND (superseded_by_id IS NULL OR (superseded_by_id <> id AND status='WITHDRAWN')));
-              ALTER TABLE t_survey_operations ADD CONSTRAINT ck_t_survey_operations_target CHECK ((revision_id IS NULL) <> (response_id IS NULL));
               ALTER TABLE t_survey_history ADD CONSTRAINT ck_t_survey_history_target CHECK ((revision_id IS NULL) <> (response_id IS NULL));
               CREATE INDEX idx_t_survey_responses_received ON t_survey_responses(store_id,revision_id,received_at,id);
               CREATE INDEX idx_t_survey_responses_created ON t_survey_responses(store_id,revision_id,created_at,id);

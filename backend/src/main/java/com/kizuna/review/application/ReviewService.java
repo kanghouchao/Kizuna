@@ -2,6 +2,10 @@ package com.kizuna.review.application;
 
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.order.revieworigin.ReviewOriginLookup;
+import com.kizuna.receipt.once.Committed;
+import com.kizuna.receipt.once.OperationReceipts;
+import com.kizuna.receipt.once.Receipt;
+import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.review.api.dto.ReviewHistoryResponse;
 import com.kizuna.review.api.dto.ReviewPublicResponse;
 import com.kizuna.review.api.dto.ReviewResponse;
@@ -13,8 +17,6 @@ import com.kizuna.review.domain.ReviewHistory;
 import com.kizuna.review.domain.ReviewHistoryRepository;
 import com.kizuna.review.domain.ReviewHistoryView;
 import com.kizuna.review.domain.ReviewInput;
-import com.kizuna.review.domain.ReviewOperation;
-import com.kizuna.review.domain.ReviewOperationRepository;
 import com.kizuna.review.domain.ReviewPermission;
 import com.kizuna.review.domain.ReviewPermissionRepository;
 import com.kizuna.review.domain.ReviewPublicView;
@@ -47,7 +49,7 @@ public class ReviewService {
   private final ReviewOriginLookup origins;
   private final ReviewPermissionRepository permissions;
   private final ReviewHistoryRepository history;
-  private final ReviewOperationRepository operations;
+  private final OperationReceipts receipts;
   private final ReviewActors actors;
   private final BusinessAudit audit;
   private final Clock clock;
@@ -55,34 +57,34 @@ public class ReviewService {
   @Transactional
   public ReviewWriteResponse write(Long storeId, String email, ReviewCommand command) {
     var actor = actor(storeId, email, command);
-    var target = lock(storeId, command);
-    var old = operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), command.key());
-    if (old.isPresent()) return replay(storeId, old.get(), command.fingerprint());
-    var result =
-        switch (command) {
-          case ReviewCommand.Receive c -> receive(storeId, email, actor, c);
-          case ReviewCommand.Decide c -> decide(email, actor, target, c);
-          case ReviewCommand.Withdraw c -> withdraw(email, actor, target, c);
-          case ReviewCommand.Grant c -> grant(email, actor, target, c);
-          case ReviewCommand.Revoke c -> revoke(storeId, email, actor, target, c);
-          case ReviewCommand.Publish c -> publish(email, actor, target, c);
-          case ReviewCommand.Correct c -> correct(storeId, email, actor, target, c);
-        };
-    var operation =
-        operations.saveAndFlush(
-            ReviewOperation.record(
-                actor.id(), command.key(), command.fingerprint(), result.type(), result.row()));
-    return ReviewWriteResponse.of(response(storeId, result.row()), operation, false);
+    return receipts.once(
+        key(storeId, actor, command),
+        command.fingerprint(),
+        () -> {
+          var target = lock(storeId, command);
+          var result =
+              switch (command) {
+                case ReviewCommand.Receive c -> receive(storeId, email, actor, c);
+                case ReviewCommand.Decide c -> decide(email, actor, target, c);
+                case ReviewCommand.Withdraw c -> withdraw(email, actor, target, c);
+                case ReviewCommand.Grant c -> grant(email, actor, target, c);
+                case ReviewCommand.Revoke c -> revoke(storeId, email, actor, target, c);
+                case ReviewCommand.Publish c -> publish(email, actor, target, c);
+                case ReviewCommand.Correct c -> correct(storeId, email, actor, target, c);
+              };
+          return new Committed(
+              result.type().receiptName(),
+              result.row().getId(),
+              Map.of("committed_version", result.row().getVersion()));
+        },
+        receipt -> respond(storeId, receipt));
   }
 
   @Transactional(readOnly = true)
   public ReviewWriteResponse replayOnly(Long storeId, String email, ReviewCommand command) {
     var actor = actor(storeId, email, command);
-    var operation =
-        operations
-            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), command.key())
-            .orElseThrow(() -> new NotFoundException("口コミの操作結果が見つかりません"));
-    return replay(storeId, operation, command.fingerprint());
+    return receipts.replayOnly(
+        key(storeId, actor, command), command.fingerprint(), receipt -> respond(storeId, receipt));
   }
 
   @Transactional(readOnly = true)
@@ -314,10 +316,6 @@ public class ReviewService {
     return values;
   }
 
-  private ReviewResponse response(Long storeId, ReviewRecord row) {
-    return response(storeId, find(storeId, row.getId()));
-  }
-
   private ReviewResponse response(Long storeId, ReviewDetailsView row) {
     return ReviewResponse.of(
         row,
@@ -325,12 +323,16 @@ public class ReviewService {
         OffsetDateTime.now(clock));
   }
 
-  private ReviewWriteResponse replay(Long storeId, ReviewOperation operation, String hash) {
-    operation.requireSame(hash);
+  private static ReceiptKey key(Long storeId, AuditActor actor, ReviewCommand command) {
+    return new ReceiptKey(storeId, actor.id(), command.key());
+  }
+
+  private ReviewWriteResponse respond(Long storeId, Receipt receipt) {
+    // 受領を持つ口コミは物理削除しないので、対象が無いのは不変条件の破れであって業務拒否ではない。
     var row =
         reviews
-            .findProjectedByIdAndStoreId(operation.getReviewId(), storeId)
-            .orElseThrow(() -> new NotFoundException("口コミが見つかりません"));
-    return ReviewWriteResponse.of(response(storeId, row), operation, true);
+            .findProjectedByIdAndStoreId(receipt.targetId(), storeId)
+            .orElseThrow(() -> new IllegalStateException("受領の対象の口コミが見つかりません"));
+    return ReviewWriteResponse.of(response(storeId, row), receipt);
   }
 }

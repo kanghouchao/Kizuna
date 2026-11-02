@@ -11,6 +11,9 @@ databaseChangeLog:
       file: platform/02-user.yaml
       relativeToChangelogFile: true
   - include:
+      file: platform/15-operation-receipt.yaml
+      relativeToChangelogFile: true
+  - include:
       file: platform/03-authorization.yaml
       relativeToChangelogFile: true
   - include:

@@ -8,10 +8,15 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.recording.AuditActor;
+import com.kizuna.receipt.once.Committed;
+import com.kizuna.receipt.once.OperationReceipts;
+import com.kizuna.receipt.once.Receipt;
+import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -28,8 +33,6 @@ import com.kizuna.survey.domain.SurveyCommand;
 import com.kizuna.survey.domain.SurveyDefinition;
 import com.kizuna.survey.domain.SurveyHistory;
 import com.kizuna.survey.domain.SurveyHistoryRepository;
-import com.kizuna.survey.domain.SurveyOperation;
-import com.kizuna.survey.domain.SurveyOperationRepository;
 import com.kizuna.survey.domain.SurveyRevision;
 import com.kizuna.survey.domain.SurveyRevisionDetailView;
 import com.kizuna.survey.domain.SurveyRevisionRepository;
@@ -51,8 +54,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -63,14 +69,14 @@ class SurveyApplicationTest {
   private final SurveySeriesRepository surveys = mock(SurveySeriesRepository.class);
   private final SurveyRevisionRepository revisions = mock(SurveyRevisionRepository.class);
   private final SurveyAnswerRepository answers = mock(SurveyAnswerRepository.class);
-  private final SurveyOperationRepository operations = mock(SurveyOperationRepository.class);
+  private final OperationReceipts operations = mock(OperationReceipts.class);
   private final SurveyHistoryRepository history = mock(SurveyHistoryRepository.class);
   private final SurveyActors actors = mock(SurveyActors.class);
   private final BusinessAudit audit = mock(BusinessAudit.class);
   private final Map<String, SurveySeries> series = new HashMap<>();
   private final Map<String, SurveyRevision> versions = new HashMap<>();
   private final Map<String, SurveyAnswer> responses = new HashMap<>();
-  private final Map<String, SurveyOperation> receipts = new HashMap<>();
+  private final Map<String, Committed> receipts = new HashMap<>();
   private final AtomicLong ids = new AtomicLong(100);
   private final SpelAwareProxyProjectionFactory projections = new SpelAwareProxyProjectionFactory();
   private SurveyService service;
@@ -92,7 +98,23 @@ class SurveyApplicationTest {
     when(surveys.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), series));
     when(revisions.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), versions));
     when(answers.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), responses));
-    when(operations.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), receipts));
+    // 受領の照会・指紋照合・再送は receipt モジュールの試験が持つ。ここでは常に初回として業務を通す。
+    when(operations.once(any(), anyString(), any(), any()))
+        .thenAnswer(
+            call -> {
+              ReceiptKey key = call.getArgument(0);
+              assertThat(key.storeId()).isEqualTo(STORE_ID);
+              Committed committed = call.<Supplier<Committed>>getArgument(2).get();
+              receipts.put(key.operationKey(), committed);
+              return call.<Function<Receipt, Object>>getArgument(3)
+                  .apply(
+                      new Receipt(
+                          "r-" + key.operationKey(),
+                          committed.operation(),
+                          committed.targetId(),
+                          committed.facts(),
+                          false));
+            });
     when(history.save(any()))
         .thenAnswer(
             call -> {
@@ -134,11 +156,6 @@ class SurveyApplicationTest {
             call ->
                 scoped(responses, call.getArgument(0), call.getArgument(1))
                     .map(row -> projections.createProjection(SurveyAnswerDetailView.class, row)));
-    when(operations.findByStoreIdAndActorIdAndDedupeKey(anyLong(), anyLong(), anyString()))
-        .thenAnswer(
-            call ->
-                Optional.ofNullable(receipts.get(call.getArgument(2)))
-                    .filter(row -> row.getStoreId().equals(call.getArgument(0))));
   }
 
   private <T extends StoreScopedEntity> Optional<T> scoped(
@@ -154,8 +171,7 @@ class SurveyApplicationTest {
   private <T extends StoreScopedEntity> T store(T row, Map<String, T> rows) {
     assertThat(row.getStoreId()).isEqualTo(STORE_ID);
     metadata(row);
-    rows.put(
-        row instanceof SurveyOperation operation ? operation.getDedupeKey() : row.getId(), row);
+    rows.put(row.getId(), row);
     return row;
   }
 
@@ -254,18 +270,13 @@ class SurveyApplicationTest {
                 .revision(STORE_ID, "actor", first.revision().surveyId(), first.revision().id())
                 .title())
         .isEqualTo("差替設問");
-    assertThat(
-            ((SurveyRevisionWriteResponse) service.replayOnly(STORE_ID, "actor", nextCommand))
-                .revision()
-                .status())
-        .isEqualTo(RevisionStatus.OPEN);
     assertThatThrownBy(
             () -> service.write(STORE_ID, "actor", action(first, Operation.OPENED, "reopen")))
         .isInstanceOf(ConflictException.class);
   }
 
   @Test
-  void correctionAfterClosurePreservesOriginalAndReturnsCurrentSuccessorOnReplay() {
+  void correctionAfterClosurePreservesOriginalAndLinksTheSuccessor() {
     var revision = create();
     service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
     var original =
@@ -282,14 +293,6 @@ class SurveyApplicationTest {
     assertThat(previous.answers().getFirst().text()).isEqualTo("  原文\n二行目  ");
     assertThat(previous.status()).isEqualTo(AnswerStatus.WITHDRAWN);
     assertThat(previous.supersededById()).isEqualTo(successor.answer().id());
-    service.write(
-        STORE_ID,
-        "actor",
-        new SurveyCommand.Withdraw(successor.answer().id(), 0L, "取り下げ理由", "withdraw"));
-    var replay = (SurveyAnswerWriteResponse) service.replayOnly(STORE_ID, "actor", correction);
-    assertThat(replay.answer().status()).isEqualTo(AnswerStatus.WITHDRAWN);
-    assertThat(replay.operation().id()).isEqualTo(successor.operation().id());
-    assertThat(replay.operation().replayed()).isTrue();
     assertThatThrownBy(
             () ->
                 service.write(
@@ -333,57 +336,63 @@ class SurveyApplicationTest {
                 "actor",
                 new SurveyCommand.Correct(first.answer().id(), 0L, "訂正根拠", input("訂正"), "correct"));
     assertThat(corrected.answer().status()).isEqualTo(AnswerStatus.ACTIVE);
-    assertThat(
-            ((SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", withdrawal))
-                .answer()
-                .supersededById())
+    assertThat(service.answer(STORE_ID, "actor", first.answer().id()).supersededById())
         .isEqualTo(corrected.answer().id());
   }
 
   @Test
-  void replayNormalizesAnswerOrderButRejectsChangedMeaningAndRechecksAuthority() {
+  void writesGoThroughTheActorsReceiptAndRecordTheCommittedVersion() {
     var revision = create();
-    service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
-    var text = new SurveyAnswers.Answer("text", "自由回答", null);
-    var choice = new SurveyAnswers.Answer("choice", null, "yes");
-    var command =
-        new SurveyCommand.Receive(
-            revision.revision().surveyId(),
-            revision.revision().id(),
-            0L,
-            new SurveyAnswers(ReceivedVia.PAPER, AT, List.of(choice, text)),
-            "receive");
-    var original = (SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", command);
-    var reordered =
-        new SurveyCommand.Receive(
-            revision.revision().surveyId(),
-            revision.revision().id(),
-            0L,
-            new SurveyAnswers(ReceivedVia.PAPER, AT, List.of(text, choice)),
-            "receive");
-    assertThat(service.write(STORE_ID, "actor", reordered).operation().id())
-        .isEqualTo(original.operation().id());
-    assertThat(original.answer().answers())
-        .extracting("questionKey")
-        .containsExactly("text", "choice");
-    assertThatThrownBy(() -> service.write(STORE_ID, "actor", receive(revision, "receive")))
-        .isInstanceOf(ConflictException.class);
+    var opened =
+        (SurveyRevisionWriteResponse)
+            service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
+
+    assertThat(receipts.get("open"))
+        .isEqualTo(
+            new Committed(
+                "SURVEY_OPENED", revision.revision().id(), Map.of("committed_version", 0L)));
+    assertThat(opened.operation().type()).isEqualTo(Operation.OPENED);
+    assertThat(opened.operation().resourceId()).isEqualTo(revision.revision().id());
+    assertThat(opened.operation().committedVersion()).isZero();
+    assertThat(opened.revision().status()).isEqualTo(RevisionStatus.OPEN);
+    var answered =
+        (SurveyAnswerWriteResponse) service.write(STORE_ID, "actor", receive(revision, "receive"));
+    assertThat(answered.operation().resourceId()).isEqualTo(answered.answer().id());
+    verify(operations).once(eq(new ReceiptKey(STORE_ID, 1L, "receive")), anyString(), any(), any());
+
     doThrow(new AccessDeniedException("権限なし"))
         .when(actors)
         .require(STORE_ID, "actor", PermissionCode.SURVEY_RECORD);
-    assertThatThrownBy(() -> service.replayOnly(STORE_ID, "actor", reordered))
+    assertThatThrownBy(() -> service.replayOnly(STORE_ID, "actor", receive(revision, "receive")))
         .isInstanceOf(AccessDeniedException.class);
-    assertThatThrownBy(() -> service.write(STORE_ID, "actor", reordered))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(
-            ((SurveyRevisionWriteResponse)
-                    service.write(
-                        STORE_ID,
-                        "actor",
-                        new SurveyCommand.Create(definition("利用後アンケート"), "create")))
-                .revision()
-                .status())
-        .isEqualTo(RevisionStatus.OPEN);
+  }
+
+  @Test
+  void fingerprintIgnoresAnswerOrderButNotAnswerContent() {
+    var revision = create();
+    var text = new SurveyAnswers.Answer("text", "自由回答", null);
+    var choice = new SurveyAnswers.Answer("choice", null, "yes");
+    for (var values :
+        List.of(
+            List.of(choice, text),
+            List.of(text, choice),
+            List.of(text, new SurveyAnswers.Answer("choice", null, "no")))) {
+      service.replayOnly(
+          STORE_ID,
+          "actor",
+          new SurveyCommand.Receive(
+              revision.revision().surveyId(),
+              revision.revision().id(),
+              0L,
+              new SurveyAnswers(ReceivedVia.PAPER, AT, values),
+              "receive"));
+    }
+
+    var fingerprints = ArgumentCaptor.forClass(String.class);
+    verify(operations, times(3)).replayOnly(any(), fingerprints.capture(), any());
+    var values = fingerprints.getAllValues();
+    assertThat(values.get(1)).isEqualTo(values.get(0));
+    assertThat(values.get(2)).isNotEqualTo(values.get(0));
   }
 
   @Test
@@ -404,11 +413,6 @@ class SurveyApplicationTest {
     assertThatThrownBy(() -> service.revision(STORE_ID, "actor", "999", revision.revision().id()))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> service.answer(STORE_ID, "actor", "999"))
-        .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(
-            () ->
-                service.replayOnly(
-                    STORE_ID, "actor", new SurveyCommand.Create(definition("不存在"), "missing")))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
@@ -455,8 +459,7 @@ class SurveyApplicationTest {
                     new SurveyCommand.Withdraw(response.answer().id(), 1L, "理由", "stale-answer")))
         .isInstanceOf(ConflictException.class);
     assertThat(receipts)
-        .doesNotContainKeys(
-            "stale", "missing", "missing-series", "wrong-series", "future", "stale-answer");
+        .doesNotContainKeys("stale", "missing-series", "wrong-series", "future", "stale-answer");
   }
 
   @Test

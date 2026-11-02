@@ -1,6 +1,8 @@
 package com.kizuna.survey.api;
 
+import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.Replays;
 import com.kizuna.survey.api.dto.SurveyAnswerCreateRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerSummaryResponse;
 import com.kizuna.survey.api.dto.SurveyCreateRequest;
@@ -48,8 +50,7 @@ public class SurveyController {
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> create(
       @CurrentStore Long storeId, Authentication auth, @RequestBody SurveyCreateRequest r) {
-    return SurveyWrites.write(
-        service, storeId, auth, new SurveyCommand.Create(r.definition(), r.dedupeKey()), true);
+    return write(storeId, auth, new SurveyCommand.Create(r.definition(), r.dedupeKey()), true);
   }
 
   @PostMapping("/{sid}/revisions")
@@ -59,8 +60,7 @@ public class SurveyController {
       Authentication auth,
       @PathVariable String sid,
       @RequestBody SurveyRevisionCreateRequest r) {
-    return SurveyWrites.write(
-        service,
+    return write(
         storeId,
         auth,
         new SurveyCommand.Revise(sid, r.basedOnRevisionId(), r.definition(), r.dedupeKey()),
@@ -75,8 +75,7 @@ public class SurveyController {
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionReplaceRequest r) {
-    return SurveyWrites.write(
-        service,
+    return write(
         storeId,
         auth,
         new SurveyCommand.Replace(sid, rid, r.version(), r.definition(), r.dedupeKey()),
@@ -91,8 +90,7 @@ public class SurveyController {
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionActionRequest r) {
-    return SurveyWrites.write(
-        service,
+    return write(
         storeId,
         auth,
         new SurveyCommand.RevisionAction(
@@ -108,8 +106,7 @@ public class SurveyController {
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionActionRequest r) {
-    return SurveyWrites.write(
-        service,
+    return write(
         storeId,
         auth,
         new SurveyCommand.RevisionAction(
@@ -125,8 +122,7 @@ public class SurveyController {
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyAnswerCreateRequest r) {
-    return SurveyWrites.write(
-        service,
+    return write(
         storeId,
         auth,
         new SurveyCommand.Receive(sid, rid, r.revisionVersion(), r.input(), r.dedupeKey()),
@@ -216,5 +212,15 @@ public class SurveyController {
       @PathVariable String rid,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
     return reads.revisionHistory(storeId, auth.getName(), sid, rid, pageable);
+  }
+
+  private ResponseEntity<SurveyWriteResponse> write(
+      Long storeId, Authentication auth, SurveyCommand command, boolean create) {
+    var result =
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> service.write(storeId, auth.getName(), command),
+            () -> service.replayOnly(storeId, auth.getName(), command));
+    return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }
 }

@@ -4,12 +4,11 @@ import com.kizuna.customer.api.dto.CustomerPointAdjustmentRequest;
 import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
 import com.kizuna.customer.application.CustomerPointService;
 import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,12 +37,6 @@ public class CustomerPointController {
     return ResponseEntity.ok(customerPointService.balance(storeId, customerId));
   }
 
-  /**
-   * 同時再送で冪等キーの一意制約に敗れた場合だけ、初回の結果を読み直す再送処理へ回す（ADR 0007）。
-   *
-   * <p>この分岐はサービスのトランザクション境界の外に置かなければならない — 制約違反の時点で敗者のトランザクションは 作廃されており、内側で catch
-   * しても読み直せない。他の整合性違反は実装欠陥なのでそのまま上げ、全域ハンドラの分類に委ねる。
-   */
   @PostMapping("/point-adjustments")
   @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<CustomerPointBalanceResponse> adjust(
@@ -51,15 +44,12 @@ public class CustomerPointController {
       @PathVariable String customerId,
       @Valid @RequestBody CustomerPointAdjustmentRequest request,
       Principal principal) {
-    try {
-      return ResponseEntity.ok(
-          customerPointService.adjust(storeId, customerId, request, principal.getName()));
-    } catch (DataIntegrityViolationException ex) {
-      if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY)) {
-        throw ex;
-      }
-      return ResponseEntity.ok(
-          customerPointService.replayAdjust(storeId, customerId, request, principal.getName()));
-    }
+    return ResponseEntity.ok(
+        Replays.write(
+            DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY,
+            () -> customerPointService.adjust(storeId, customerId, request, principal.getName()),
+            () ->
+                customerPointService.replayAdjust(
+                    storeId, customerId, request, principal.getName())));
   }
 }

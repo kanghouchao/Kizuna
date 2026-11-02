@@ -1,8 +1,14 @@
 package com.kizuna.survey.application;
 
 import com.kizuna.audit.recording.AuditActor;
+import com.kizuna.receipt.once.Committed;
+import com.kizuna.receipt.once.Fingerprint;
+import com.kizuna.receipt.once.OperationReceipts;
+import com.kizuna.receipt.once.Receipt;
+import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.StoreScopedEntity;
 import com.kizuna.survey.api.dto.SurveyAnswerResponse;
 import com.kizuna.survey.api.dto.SurveyAnswerWriteResponse;
 import com.kizuna.survey.api.dto.SurveyOperationResponse;
@@ -12,13 +18,12 @@ import com.kizuna.survey.api.dto.SurveyRevisionWriteResponse;
 import com.kizuna.survey.api.dto.SurveyWriteResponse;
 import com.kizuna.survey.domain.SurveyAnswer;
 import com.kizuna.survey.domain.SurveyAnswerRepository;
+import com.kizuna.survey.domain.SurveyAnswers;
 import com.kizuna.survey.domain.SurveyCommand;
-import com.kizuna.survey.domain.SurveyFingerprint;
+import com.kizuna.survey.domain.SurveyDefinition;
 import com.kizuna.survey.domain.SurveyHistory;
 import com.kizuna.survey.domain.SurveyHistoryRepository;
 import com.kizuna.survey.domain.SurveyInput;
-import com.kizuna.survey.domain.SurveyOperation;
-import com.kizuna.survey.domain.SurveyOperationRepository;
 import com.kizuna.survey.domain.SurveyRevision;
 import com.kizuna.survey.domain.SurveyRevisionRepository;
 import com.kizuna.survey.domain.SurveySeries;
@@ -29,6 +34,9 @@ import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,7 +48,7 @@ public class SurveyService {
   private final SurveySeriesRepository surveys;
   private final SurveyRevisionRepository revisions;
   private final SurveyAnswerRepository answers;
-  private final SurveyOperationRepository operations;
+  private final OperationReceipts receipts;
   private final SurveyHistoryRepository history;
   private final SurveyActors actors;
   private final BusinessAudit audit;
@@ -49,48 +57,37 @@ public class SurveyService {
   @Transactional
   public SurveyWriteResponse write(Long storeId, String email, SurveyCommand command) {
     var actor = actors.require(storeId, email, permission(command));
-    lock(storeId, command);
-    command = normalize(storeId, command);
-    var hash = fingerprint(command);
-    var old = operations.findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), command.key());
-    if (old.isPresent()) return replay(storeId, old.get(), hash);
-    var result =
-        switch (command) {
-          case SurveyCommand.Create c -> create(storeId, email, actor, c);
-          case SurveyCommand.Revise c -> revise(storeId, email, actor, c);
-          case SurveyCommand.Replace c -> replace(storeId, email, actor, c);
-          case SurveyCommand.RevisionAction c -> transition(storeId, email, actor, c);
-          case SurveyCommand.Receive c -> receive(storeId, email, actor, c);
-          case SurveyCommand.Withdraw c -> withdraw(storeId, email, actor, c);
-          case SurveyCommand.Correct c -> correct(storeId, email, actor, c);
-        };
-    var receipt =
-        operations.saveAndFlush(
-            SurveyOperation.record(
-                actor.id(),
-                command.key(),
-                hash,
-                result.type(),
-                result.revision() == null ? result.answer() : result.revision(),
-                result.answer() != null));
-    return result.revision() == null
-        ? new SurveyAnswerWriteResponse(
-            SurveyAnswerResponse.of(result.answer()), SurveyOperationResponse.of(receipt, false))
-        : new SurveyRevisionWriteResponse(
-            SurveyRevisionResponse.of(result.revision()),
-            SurveyOperationResponse.of(receipt, false));
+    return receipts.once(
+        new ReceiptKey(storeId, actor.id(), command.key()),
+        fingerprint(command),
+        () -> {
+          lock(storeId, command);
+          var result =
+              switch (normalize(storeId, command)) {
+                case SurveyCommand.Create c -> create(storeId, email, actor, c);
+                case SurveyCommand.Revise c -> revise(storeId, email, actor, c);
+                case SurveyCommand.Replace c -> replace(storeId, email, actor, c);
+                case SurveyCommand.RevisionAction c -> transition(storeId, email, actor, c);
+                case SurveyCommand.Receive c -> receive(storeId, email, actor, c);
+                case SurveyCommand.Withdraw c -> withdraw(storeId, email, actor, c);
+                case SurveyCommand.Correct c -> correct(storeId, email, actor, c);
+              };
+          StoreScopedEntity row = result.revision() == null ? result.answer() : result.revision();
+          return new Committed(
+              result.type().receiptName(),
+              row.getId(),
+              Map.of("committed_version", row.getVersion()));
+        },
+        receipt -> respond(storeId, receipt));
   }
 
-  @Transactional
+  @Transactional(readOnly = true)
   public SurveyWriteResponse replayOnly(Long storeId, String email, SurveyCommand command) {
     var actor = actors.require(storeId, email, permission(command));
-    lock(storeId, command);
-    command = normalize(storeId, command);
-    var receipt =
-        operations
-            .findByStoreIdAndActorIdAndDedupeKey(storeId, actor.id(), command.key())
-            .orElseThrow(SurveyService::missing);
-    return replay(storeId, receipt, fingerprint(command));
+    return receipts.replayOnly(
+        new ReceiptKey(storeId, actor.id(), command.key()),
+        fingerprint(command),
+        receipt -> respond(storeId, receipt));
   }
 
   @Transactional(readOnly = true)
@@ -284,23 +281,51 @@ public class SurveyService {
     };
   }
 
-  private String fingerprint(SurveyCommand command) {
+  // 回答は設問キーの順に並べて要約し、並びだけが違う同じ回答を同じ内容として扱う。
+  private static String fingerprint(SurveyCommand command) {
     return switch (command) {
-      case SurveyCommand.Create c -> SurveyFingerprint.of("CREATE", c.definition());
+      case SurveyCommand.Create c -> Fingerprint.of("CREATE", parts(c.definition()));
       case SurveyCommand.Revise c ->
-          SurveyFingerprint.of("REVISE", c.surveyId(), c.basedOn(), c.definition());
+          Fingerprint.of("REVISE", c.surveyId(), c.basedOn(), parts(c.definition()));
       case SurveyCommand.Replace c ->
-          SurveyFingerprint.of(
-              "REPLACE", c.surveyId(), c.revisionId(), c.version(), c.definition());
+          Fingerprint.of(
+              "REPLACE", c.surveyId(), c.revisionId(), c.version(), parts(c.definition()));
       case SurveyCommand.RevisionAction c ->
-          SurveyFingerprint.of(c.type(), c.surveyId(), c.revisionId(), c.version(), c.reason());
+          Fingerprint.of(c.type(), c.surveyId(), c.revisionId(), c.version(), c.reason());
       case SurveyCommand.Receive c ->
-          SurveyFingerprint.of("RECEIVE", c.surveyId(), c.revisionId(), c.version(), c.input());
+          Fingerprint.of("RECEIVE", c.surveyId(), c.revisionId(), c.version(), parts(c.input()));
       case SurveyCommand.Withdraw c ->
-          SurveyFingerprint.of("WITHDRAW", c.responseId(), c.version(), c.reason());
+          Fingerprint.of("WITHDRAW", c.responseId(), c.version(), c.reason());
       case SurveyCommand.Correct c ->
-          SurveyFingerprint.of("CORRECT", c.responseId(), c.version(), c.reason(), c.input());
+          Fingerprint.of("CORRECT", c.responseId(), c.version(), c.reason(), parts(c.input()));
     };
+  }
+
+  private static List<Object> parts(SurveyDefinition d) {
+    return Arrays.asList(
+        d.title(),
+        d.questions().stream()
+            .map(
+                q ->
+                    Arrays.asList(
+                        q.questionKey(),
+                        q.type(),
+                        q.prompt(),
+                        q.required(),
+                        q.options().stream()
+                            .map(o -> Arrays.asList(o.optionKey(), o.label()))
+                            .toList()))
+            .toList());
+  }
+
+  private static List<Object> parts(SurveyAnswers a) {
+    return Arrays.asList(
+        a.receivedVia(),
+        a.receivedAt(),
+        a.answers().stream()
+            .sorted(Comparator.comparing(SurveyAnswers.Answer::questionKey))
+            .map(x -> Arrays.asList(x.questionKey(), x.text(), x.optionKey()))
+            .toList());
   }
 
   private PermissionCode permission(SurveyCommand command) {
@@ -311,18 +336,22 @@ public class SurveyService {
         : PermissionCode.SURVEY_MANAGE;
   }
 
-  private SurveyWriteResponse replay(Long storeId, SurveyOperation operation, String hash) {
-    operation.requireSame(hash);
-    var receipt = SurveyOperationResponse.of(operation, true);
-    if (operation.getResponseId() != null)
+  // 受領を持つ設問版・回答は物理削除しないので、対象が無いのは不変条件の破れであって業務拒否ではない。
+  private SurveyWriteResponse respond(Long storeId, Receipt receipt) {
+    var operation = SurveyOperationResponse.of(receipt);
+    if (operation.type().targetsAnswer())
       return new SurveyAnswerWriteResponse(
-          SurveyAnswerResponse.of(answerRow(storeId, operation.getResponseId())), receipt);
+          SurveyAnswerResponse.of(
+              answers
+                  .findByIdAndStoreId(receipt.targetId(), storeId)
+                  .orElseThrow(SurveyService::broken)),
+          operation);
     return new SurveyRevisionWriteResponse(
         SurveyRevisionResponse.of(
             revisions
-                .findByIdAndStoreId(operation.getRevisionId(), storeId)
-                .orElseThrow(SurveyService::missing)),
-        receipt);
+                .findByIdAndStoreId(receipt.targetId(), storeId)
+                .orElseThrow(SurveyService::broken)),
+        operation);
   }
 
   private SurveyRevision revisionRow(Long storeId, String surveyId, String id) {
@@ -337,6 +366,10 @@ public class SurveyService {
 
   private OffsetDateTime now() {
     return SurveyInput.time(OffsetDateTime.now(clock));
+  }
+
+  private static IllegalStateException broken() {
+    return new IllegalStateException("受領の対象のアンケート版・回答が見つかりません");
   }
 
   private static NotFoundException missing() {
