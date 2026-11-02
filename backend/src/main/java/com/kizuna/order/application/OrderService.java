@@ -26,7 +26,6 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.Timestamps;
@@ -159,7 +158,7 @@ public class OrderService {
     order.assignReceptionist(resolveReceptionist(storeId, command.receptionistId(), actorEmail));
 
     Order saved = orderRepository.save(order);
-    flushMedium();
+    MediumLookup.flush(orderRepository::flush, DbConstraint.FK_T_ORDERS_MEDIUM);
     businessContactPermissions.record(
         saved,
         ContactSnapshot.empty(),
@@ -175,16 +174,6 @@ public class OrderService {
     var acquisition = new OrderAcquisition(source, mediumId);
     if (mediumId != null) mediumLookup.requireSelectable(storeId, mediumId, current);
     return acquisition;
-  }
-
-  // 検査の後に媒体が削除された場合も、FK 違反を同じ入力エラーに揃える。
-  private void flushMedium() {
-    IntegrityViolations.translateOnFailure(
-        () -> {
-          orderRepository.flush();
-          return null;
-        },
-        Map.of(DbConstraint.FK_T_ORDERS_MEDIUM, MediumLookup::missing));
   }
 
   private void validateReplacement(Long storeId, String id) {
@@ -316,7 +305,7 @@ public class OrderService {
         order, previousContact, command.businessContactPermissions(), actorEmail, now);
 
     Order saved = orderRepository.save(order);
-    flushMedium();
+    MediumLookup.flush(orderRepository::flush, DbConstraint.FK_T_ORDERS_MEDIUM);
     auditOrder(saved, "ORDER_UPDATED", actorEmail, before, null, null);
     return queryService.toDetail(storeId, saved);
   }
@@ -449,7 +438,7 @@ public class OrderService {
         completionPoints(storeId, order.getCustomerId(), calculated, 0),
         contactImports);
     Order saved = orderRepository.save(order);
-    flushMedium();
+    MediumLookup.flush(orderRepository::flush, DbConstraint.FK_T_ORDERS_MEDIUM);
     var now = Timestamps.now();
     businessContactPermissions.record(
         saved,
