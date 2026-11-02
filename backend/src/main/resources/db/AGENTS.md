@@ -80,7 +80,7 @@ Integration tests / e2e need nothing: their stacks start from an empty DB every 
   `DbConstraintLiteralTests` enforces this for every enum member. The two are not synonyms —
   RESTRICT can never be deferred, NO ACTION can if declared DEFERRABLE — but every FK here is
   non-deferrable, and a parent CASCADE that removes the children in the same statement (store
-  deletion) behaves the same under both, measured on PG 18 (`StoreDeletionCascadeIT`). What
+  deletion) behaves the same under both, measured on PG 18. What
   actually differs is how the violation is reported.
 - **Partial (predicate) indexes and CHECK constraints use raw `sql` changes** — Liquibase OSS
   cannot express them declaratively.
