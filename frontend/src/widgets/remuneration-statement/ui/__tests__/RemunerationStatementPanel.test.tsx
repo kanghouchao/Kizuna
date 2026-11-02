@@ -20,6 +20,10 @@ jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
 }));
+jest.mock('@/entities/user/model/StoreContext', () => ({
+  ...jest.requireActual('@/entities/user/model/StoreContext'),
+  useStoreContext: () => ({ currentStoreId: '1' }),
+}));
 const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
 // 画面の /me と、このタブのトークンの利用者を同じ利用者に揃える
 const meAs = (userId: number, permissions: PermissionCode[]) => {
@@ -159,6 +163,7 @@ it('ボーナス保存に帰属日と理由と要求キーを送り、起こし�
       open
       personId={2}
       personName="本人"
+      storeId="1"
       target={{ kind: 'bonus' }}
       onClose={jest.fn()}
       onSaved={saved}
@@ -185,6 +190,7 @@ it('必須入力の不足をブラウザの吹き出しではなく日本語で�
       open
       personId={2}
       personName="本人"
+      storeId="1"
       target={{ kind: 'bonus' }}
       onClose={jest.fn()}
       onSaved={jest.fn()}

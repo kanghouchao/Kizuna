@@ -84,7 +84,9 @@ function Reviews({
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [latest, setLatest] = useState<Review | undefined>();
+  const storeId = useStoreContext().currentStoreId;
   const operation = useOperation('reviews', {
+    storeId,
     store: memoryOperationStore,
     send: reviewApi.write,
   });

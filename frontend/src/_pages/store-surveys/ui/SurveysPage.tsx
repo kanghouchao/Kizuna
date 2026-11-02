@@ -40,7 +40,11 @@ function Surveys({ canManage, canRecord }: { canManage: boolean; canRecord: bool
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorKey, setEditorKey] = useState(0);
   const [open, setOpen] = useState(false);
-  const operation = useOperation('surveys', { store: memoryOperationStore, send: surveyApi.write });
+  const operation = useOperation('surveys', {
+    storeId: useStoreContext().currentStoreId,
+    store: memoryOperationStore,
+    send: surveyApi.write,
+  });
   const pending = operation.pending;
   const uncertain = pending?.phase === 'unknown';
   const [conflict, setConflict] = useState(false);

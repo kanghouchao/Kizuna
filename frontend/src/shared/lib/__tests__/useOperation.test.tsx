@@ -33,7 +33,7 @@ const opened: {
 function setup(operationStore: OperationStore = memoryOperationStore, name = `test-${++sequence}`) {
   const send = jest.fn();
   const hook = renderHook(() =>
-    useOperation<{ amount: number }, string>(name, { store: operationStore, send })
+    useOperation<{ amount: number }, string>(name, { storeId: '1', store: operationStore, send })
   );
   const current = () => hook.result.current;
   opened.push({ send, current });
@@ -176,6 +176,27 @@ it.each([
   expect(current().pending?.phase).toBe('unknown');
 });
 
+it('別タブで現在店舗が切り替わった後に描き直しても、画面の店舗の操作として扱い新しい店舗へは送らない', async () => {
+  const { send, current, hook } = setup();
+  send.mockRejectedValueOnce(fail());
+  await attempt(() => current().start({ amount: 1 }));
+  store = '2';
+  hook.rerender();
+  expect(current().pending?.phase).toBe('unknown');
+  expect(await attempt(() => current().replay())).toBeInstanceOf(ClientDataError);
+  expect(send).toHaveBeenCalledTimes(1);
+  store = '1';
+});
+
+it('別タブで現在店舗が切り替わった後は、新しい操作も送らない', async () => {
+  const { send, current, hook } = setup();
+  store = '2';
+  hook.rerender();
+  expect(await attempt(() => current().start({ amount: 1 }))).toBeInstanceOf(ClientDataError);
+  expect(send).not.toHaveBeenCalled();
+  expect(current().pending).toBeNull();
+});
+
 it('本人か店舗が確定するまで操作を起こさない', async () => {
   userId = undefined;
   const { send, current } = setup();
@@ -199,13 +220,17 @@ it('結果不明の操作がある間はタブを閉じる前に確認する', a
 
 it('タブ内保存の操作は画面を開き直しても結果不明として残り、操作の版で購読側に知らせる', async () => {
   const { send, current, name, hook } = setup(sessionOperationStore);
-  const revision = renderHook(() => useOperationRevision(name));
+  const revision = renderHook(() => useOperationRevision(name, '1'));
   send.mockRejectedValueOnce(fail());
   await attempt(() => current().start({ amount: 1 }));
   expect(revision.result.current).toBe(2);
   hook.unmount();
   const reopened = renderHook(() =>
-    useOperation<{ amount: number }, string>(name, { store: sessionOperationStore, send })
+    useOperation<{ amount: number }, string>(name, {
+      storeId: '1',
+      store: sessionOperationStore,
+      send,
+    })
   );
   expect(reopened.result.current.pending).toMatchObject({
     phase: 'unknown',

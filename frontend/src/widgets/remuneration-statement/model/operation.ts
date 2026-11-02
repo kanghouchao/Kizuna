@@ -21,8 +21,12 @@ export interface Operation {
 }
 
 /** 保証・ボーナスの書き込みは本人・店舗ごとに一つ。金額・理由はブラウザの永続領域に置かない。 */
-export function useRemunerationOperation() {
-  return useOperation<Operation, void>('remuneration', { store: memoryOperationStore, send });
+export function useRemunerationOperation(storeId: string | undefined) {
+  return useOperation<Operation, void>('remuneration', {
+    storeId,
+    store: memoryOperationStore,
+    send,
+  });
 }
 
 async function send(
