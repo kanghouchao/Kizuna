@@ -10,6 +10,7 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.application.BusinessAudit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +61,9 @@ public class MediumService {
     var before = snapshot(medium);
     medium.rename(normalized);
     flushUnique(media::flush);
-    audit.recordCurrent(storeId, "MEDIUM_RENAMED", TARGET, id, before, snapshot(medium));
+    var after = new HashMap<>(snapshot(medium));
+    after.put("redacted_fields_changed", "name");
+    audit.recordCurrent(storeId, "MEDIUM_RENAMED", TARGET, id, before, after);
     return MediumSummary.of(medium);
   }
 
@@ -120,12 +123,11 @@ public class MediumService {
     return new ConflictException("同じ名前の媒体が既に登録されています");
   }
 
+  // 監査には利用者が入力した名前の原文を複製せず、改名は変更項目名だけで残す。
   private static Map<String, String> snapshot(Medium medium) {
     return Map.of(
         "exists",
         "true",
-        "name",
-        medium.getName(),
         "status",
         medium.getStatus().name(),
         "version",
