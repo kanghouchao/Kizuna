@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.medium.api.dto.MediumResponses.MediumOption;
+import com.kizuna.medium.api.dto.MediumResponses.MediumOptionResponse;
 import com.kizuna.medium.api.dto.MediumResponses.MediumSummary;
 import com.kizuna.medium.application.MediumService;
 import com.kizuna.medium.domain.MediumRepository;
@@ -236,7 +236,7 @@ class MediumIntegrationTest {
     media.stop(store, stopped, 0L);
 
     assertThat(media.options(store))
-        .containsExactly(new MediumOption(a, "A媒体"), new MediumOption(b, "B媒体"));
+        .containsExactly(new MediumOptionResponse(a, "A媒体"), new MediumOptionResponse(b, "B媒体"));
     assertThat(media.list(store, null))
         .extracting(MediumSummary::id)
         .containsExactly(a, b, stopped);

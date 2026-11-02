@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.medium.api.MediumController;
-import com.kizuna.medium.api.dto.MediumResponses.MediumOption;
+import com.kizuna.medium.api.dto.MediumResponses.MediumOptionResponse;
 import com.kizuna.medium.api.dto.MediumResponses.MediumSummary;
 import com.kizuna.medium.application.MediumService;
 import com.kizuna.medium.domain.MediumStatus;
@@ -98,7 +98,7 @@ class MediumControllerTest {
 
   @Test
   void optionsAreOpenToAnyOfTheThreeChoosersOnly() throws Exception {
-    when(service.options(1L)).thenReturn(List.of(new MediumOption("m1", "ヘブン")));
+    when(service.options(1L)).thenReturn(List.of(new MediumOptionResponse("m1", "ヘブン")));
     for (var permission : List.of("ADVERTISING_COST_VIEW", "ORDER_MANAGE", "RECRUITMENT_MANAGE")) {
       mvc.perform(get("/media/options").header("X-Store-ID", "1").with(permissions(permission)))
           .andExpect(status().isOk())

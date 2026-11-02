@@ -8,9 +8,9 @@ public final class MediumResponses {
   private MediumResponses() {}
 
   /** 一覧は一店舗の媒体だけで、手で登録する件数に収まるためページを切らない。 */
-  public record Items<T>(List<T> items) {}
+  public record MediumItemsResponse<T>(List<T> items) {}
 
-  public record Created(String id) {}
+  public record MediumCreatedResponse(String id) {}
 
   public record MediumSummary(String id, String name, MediumStatus status, Long version) {
     public static MediumSummary of(Medium medium) {
@@ -19,9 +19,9 @@ public final class MediumResponses {
     }
   }
 
-  public record MediumOption(String id, String name) {
-    public static MediumOption of(Medium medium) {
-      return new MediumOption(medium.getId(), medium.getName());
+  public record MediumOptionResponse(String id, String name) {
+    public static MediumOptionResponse of(Medium medium) {
+      return new MediumOptionResponse(medium.getId(), medium.getName());
     }
   }
 }

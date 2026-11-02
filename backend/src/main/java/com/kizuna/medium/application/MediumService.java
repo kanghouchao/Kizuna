@@ -1,6 +1,6 @@
 package com.kizuna.medium.application;
 
-import com.kizuna.medium.api.dto.MediumResponses.MediumOption;
+import com.kizuna.medium.api.dto.MediumResponses.MediumOptionResponse;
 import com.kizuna.medium.api.dto.MediumResponses.MediumSummary;
 import com.kizuna.medium.domain.Medium;
 import com.kizuna.medium.domain.MediumRepository;
@@ -33,9 +33,9 @@ public class MediumService {
   }
 
   @Transactional(readOnly = true)
-  public List<MediumOption> options(Long storeId) {
+  public List<MediumOptionResponse> options(Long storeId) {
     return media.findAllByStoreIdAndStatusOrderByNameAscIdAsc(storeId, MediumStatus.ACTIVE).stream()
-        .map(MediumOption::of)
+        .map(MediumOptionResponse::of)
         .toList();
   }
 
