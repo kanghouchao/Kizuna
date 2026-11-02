@@ -22,6 +22,8 @@ import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
 import com.kizuna.recruitment.api.dto.ApplicantMapperImpl;
+import com.kizuna.recruitment.api.dto.ApplicantMediumResponse;
+import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
@@ -53,6 +55,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -210,6 +213,30 @@ class ApplicantEnrollmentIntegrationTest {
                     "update t_applicants set enrollment_id=? where id=?", enrollment, local))
         .isInstanceOf(DataIntegrityViolationException.class)
         .hasMessageContaining("fk_t_applicants_enrollment");
+  }
+
+  @Test
+  void theListShowsTheCurrentMediumNameAndNoMediumForOtherSources() {
+    long store = store();
+    String medium = UUID.randomUUID().toString();
+    jdbc.update(
+        "insert into t_media(id,store_id,name,status) values (?,?,'求人誌','ACTIVE')", medium, store);
+    jdbc.update(
+        """
+        insert into t_applicants(id,store_id,created_at,updated_at,version,name,channel,source_type,
+          medium_id,status,modified_by,edit_sequence)
+        values (?,?,now(),now(),0,'媒体経由','PHONE','MEDIA',?,'RECEIVED',?,0)
+        """,
+        UUID.randomUUID().toString(),
+        store,
+        medium,
+        actorId);
+
+    hiredApplicant(store);
+
+    assertThat(applicants.list(store, null, null, PageRequest.of(0, 20)).getContent())
+        .extracting(ApplicantSummaryResponse::medium)
+        .containsExactlyInAnyOrder(new ApplicantMediumResponse(medium, "求人誌"), null);
   }
 
   @Test

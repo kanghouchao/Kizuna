@@ -93,7 +93,13 @@ public class ApplicantService {
                 .map(ApplicantSummaryView::getMediumId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet()));
-    return page.map(a -> mapper.toSummary(a, medium(a.getMediumId(), media.get(a.getMediumId()))));
+    // findAll の結果は不変 Map で null キーを引けないため、媒体を持たない応募者は引かない。
+    return page.map(
+        a ->
+            mapper.toSummary(
+                a,
+                medium(
+                    a.getMediumId(), a.getMediumId() == null ? null : media.get(a.getMediumId()))));
   }
 
   @Transactional(readOnly = true)
