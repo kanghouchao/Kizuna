@@ -200,10 +200,7 @@ class RemunerationIntegrationTest {
     var request = guarantee(10000, 0, UUID.randomUUID());
     var original = management.createGuarantee(storeId, request, email);
     when(clock.instant()).thenReturn(Instant.parse("2026-10-01T12:00:00Z"));
-    assertThat(management.createGuarantee(storeId, request, email))
-        .usingRecursiveComparison()
-        .ignoringFields("guarantee.createdAt", "guarantee.updatedAt")
-        .isEqualTo(original);
+    assertThat(management.createGuarantee(storeId, request, email)).isEqualTo(original);
     assertThatThrownBy(
             () ->
                 management.createGuarantee(storeId, guarantee(10000, 1, UUID.randomUUID()), email))
@@ -404,10 +401,7 @@ class RemunerationIntegrationTest {
                 authorize();
                 return management.createBonus(storeId, request, email);
               });
-      assertThat(first.get(10, TimeUnit.SECONDS))
-          .usingRecursiveComparison()
-          .ignoringFields("bonus.createdAt", "bonus.updatedAt")
-          .isEqualTo(second.get(10, TimeUnit.SECONDS));
+      assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(second.get(10, TimeUnit.SECONDS));
     }
     assertThat(
             management

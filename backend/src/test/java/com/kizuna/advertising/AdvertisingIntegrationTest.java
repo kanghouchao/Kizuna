@@ -167,14 +167,8 @@ class AdvertisingIntegrationTest {
     var second = service.replace(1L, first.id(), update, "actor");
     assertThat(second.version()).isGreaterThan(first.version());
     assertThat(second.inquiryCount()).isZero();
-    assertThat(service.create(1L, request, "actor"))
-        .usingRecursiveComparison()
-        .ignoringFields("createdAt", "updatedAt")
-        .isEqualTo(second);
-    assertThat(service.replace(1L, first.id(), update, "actor"))
-        .usingRecursiveComparison()
-        .ignoringFields("createdAt", "updatedAt")
-        .isEqualTo(second);
+    assertThat(service.create(1L, request, "actor")).isEqualTo(second);
+    assertThat(service.replace(1L, first.id(), update, "actor")).isEqualTo(second);
     var deletion = new DeleteRequest(second.version(), "誤入力", UUID.randomUUID());
     service.delete(1L, first.id(), deletion, "actor");
     service.delete(1L, first.id(), deletion, "actor");
@@ -194,6 +188,28 @@ class AdvertisingIntegrationTest {
     assertThat(change.actorId()).isEqualTo(42);
     assertThatThrownBy(() -> service.changeDetail(1L, "2026-10", change.id()))
         .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void writeResponsesCarryTheTimesThatAReadReturns() {
+    var created = service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    assertThat(service.get(1L, created.id())).isEqualTo(created);
+    var replaced =
+        service.replace(
+            1L,
+            created.id(),
+            new ReplaceRequest(
+                AdvertisingCategory.SALES,
+                medium,
+                null,
+                null,
+                0,
+                200,
+                created.version(),
+                "修正",
+                UUID.randomUUID()),
+            "actor");
+    assertThat(service.get(1L, created.id())).isEqualTo(replaced);
   }
 
   @Test
@@ -284,10 +300,7 @@ class AdvertisingIntegrationTest {
     var result =
         race(
             () -> service.create(1L, request, "actor"), () -> service.create(1L, request, "actor"));
-    assertThat(result.get(0))
-        .usingRecursiveComparison()
-        .ignoringFields("createdAt", "updatedAt")
-        .isEqualTo(result.get(1));
+    assertThat(result.get(0)).isEqualTo(result.get(1));
     assertThat(service.month(1L, "2026-09").entryCount()).isEqualTo(1);
     assertThat(service.changes(1L, "2026-09", PageRequest.of(0, 20, NEWEST_FIRST)).getContent())
         .hasSize(1);

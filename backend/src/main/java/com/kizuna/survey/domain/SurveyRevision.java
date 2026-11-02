@@ -85,7 +85,7 @@ public class SurveyRevision extends StoreScopedEntity {
     require(RevisionStatus.DRAFT);
     title = definition.title();
     questions = definition.questions();
-    setUpdatedAt(OffsetDateTime.now());
+    touch();
   }
 
   public void open(OffsetDateTime now) {
