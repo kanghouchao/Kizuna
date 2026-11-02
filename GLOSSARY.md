@@ -266,6 +266,11 @@ Order に紐づく 1 名のキャストが**指名**（参照先は店舗在籍 
 SENT はメール提供元の受理であって受信ではない。理由付きの再試行は確実に未送信の FAILED / BLOCKED だけで、受理の可能性がある UNKNOWN は再送しない（exactly-once は保証しない）。本文・件名は正本だけに置き、一覧・汎用監査・ログに載せない。権限は NOTIFICATION_VIEW / MANAGE / SEND。
 避ける表現・設計: 販促連絡・SMS・LINE への流用、宛先の写しの保存、UNKNOWN の自動再送
 
+**媒体（Medium）**:
+店舗ごとの媒体一覧の一行で、広告費・受注・応募者が同じ媒体を指すための安定した ID を与える。名前は前後の空白を除いた原文で店舗内一意（大小文字・全半角を同一視しない）、改名は自由。状態は ACTIVE / STOPPED で、停止は新規選択の候補から外すだけで過去の記録には残る。区分（SALES / RECRUITMENT）は持たない。削除は参照されていないときだけ受け付ける。作成・改名・停止・再開・削除は業務監査に残す。
+管理は ADVERTISING_COST_MANAGE、全件一覧は ADVERTISING_COST_VIEW、選択肢（ACTIVE のみ）の照会は ADVERTISING_COST_VIEW / ORDER_MANAGE / RECRUITMENT_MANAGE のいずれか。
+避ける表現・設計: 集団共通の媒体、他店舗の媒体を指すこと、参照のある媒体を削除すること（参照がある媒体は停止する）
+
 **広告費（AdvertisingCost）**:
 店舗×対象自然月に帰属する広告費の記録行。区分は SALES（営業広告）/ RECRUITMENT（採用広告）で、媒体名（入力時の記録名）・広告会社・プラン・問い合わせ人数・金額を持つ。問い合わせ人数は手入力で、null（未計測）と 0（計測済み零）を区別する。月次ロックは無く随時変更でき、更新・削除は理由必須で変更前後の履歴を残す。前月コピーは削除済みを除く全行を有効行の無い月へ写し、問い合わせ人数を null に戻す。
 権限は店舗級の ADVERTISING_COST_VIEW / MANAGE / EXPORT と、授権店舗集合を跨ぐ ADVERTISING_COST_SET_VIEW / SET_EXPORT。月費を日割りせず、登録額 0 や未登録は実費 0 の証明ではない。

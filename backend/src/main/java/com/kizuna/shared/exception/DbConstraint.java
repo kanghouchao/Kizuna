@@ -36,6 +36,9 @@ public enum DbConstraint {
   /** t_users.line_user_id の一意制約。 */
   UQ_T_USERS_LINE_USER_ID("uq_t_users_line_user_id"),
 
+  /** t_media の (store_id, name) 一意制約。 */
+  UQ_T_MEDIA_STORE_NAME("uq_t_media_store_name"),
+
   /** t_roles.name の一意制約。 */
   UQ_T_ROLES_NAME("uq_t_roles_name"),
 

@@ -30,6 +30,18 @@ class ModularityTests {
         .containsExactly(CredentialOperations.class.getName());
   }
 
+  // 広告費・受注・応募者が媒体を参照する向きだけを許し、媒体からは業務モジュールを呼ばない。
+  @Test
+  void mediumDependsOnNoBusinessModuleAndExposesOnlyItsLookup() {
+    var medium = modules.getModuleByName("medium").orElseThrow();
+    assertThat(medium.getDirectDependencies(modules).uniqueModules())
+        .extracting(module -> module.getIdentifier().toString())
+        .containsExactlyInAnyOrder("shared", "user");
+    assertThat(medium.getNamedInterfaces().getByName("lookup").orElseThrow().asJavaClasses())
+        .extracting(type -> type.getSimpleName())
+        .containsExactlyInAnyOrder("MediumLookup", "MediumReference");
+  }
+
   @Test
   void writesModuleDocumentation() {
     new Documenter(modules).writeDocumentation();

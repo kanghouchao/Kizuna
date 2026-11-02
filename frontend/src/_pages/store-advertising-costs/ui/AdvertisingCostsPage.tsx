@@ -2,7 +2,8 @@
 import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { advertisingApi, validMonth, type Cost, type Mutation } from '../api/advertising';
-import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
+import Link from 'next/link';
+import { getApiErrorMessage, storePath, useListPage, useResource } from '@/shared/lib';
 import { fromSpringPage, getSessionUserId } from '@/shared/api';
 import { notify } from '@/shared/notify';
 import {
@@ -79,38 +80,43 @@ function StorePage({
   const [error, setError] = useState(false);
   return (
     <div className="space-y-6">
-      <form
-        className="flex items-end gap-3"
-        noValidate
-        onSubmit={e => {
-          e.preventDefault();
-          if (!validMonth(input)) {
-            setError(true);
-            return;
-          }
-          setError(false);
-          setMonth(input);
-        }}
-      >
-        <div className="space-y-2">
-          <label htmlFor="advertising-month">対象月</label>
-          <Input
-            id="advertising-month"
-            type="month"
-            value={input}
-            required
-            aria-invalid={error}
-            aria-describedby={error ? 'advertising-month-error' : undefined}
-            onChange={e => setInput(e.target.value)}
-          />
-          {error && (
-            <p id="advertising-month-error" className="text-destructive-strong">
-              年月を入力してください。
-            </p>
-          )}
-        </div>
-        <Button type="submit">表示</Button>
-      </form>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <form
+          className="flex items-end gap-3"
+          noValidate
+          onSubmit={e => {
+            e.preventDefault();
+            if (!validMonth(input)) {
+              setError(true);
+              return;
+            }
+            setError(false);
+            setMonth(input);
+          }}
+        >
+          <div className="space-y-2">
+            <label htmlFor="advertising-month">対象月</label>
+            <Input
+              id="advertising-month"
+              type="month"
+              value={input}
+              required
+              aria-invalid={error}
+              aria-describedby={error ? 'advertising-month-error' : undefined}
+              onChange={e => setInput(e.target.value)}
+            />
+            {error && (
+              <p id="advertising-month-error" className="text-destructive-strong">
+                年月を入力してください。
+              </p>
+            )}
+          </div>
+          <Button type="submit">表示</Button>
+        </form>
+        <Button variant="outline" render={<Link href={storePath('/advertising-costs/media')} />}>
+          媒体を管理
+        </Button>
+      </div>
       <Tabs value={view} onValueChange={value => setView(String(value))}>
         <TabsList aria-label="広告費の表示">
           <TabsTrigger value="costs">費用記録</TabsTrigger>
